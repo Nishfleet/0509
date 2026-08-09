@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { createElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  digestMaterialityReason,
+  digestNextAction,
+  digestReviewerLabel,
+} from "~/lib/change-intelligence";
 import {
   buildDigestEmail,
   buildScanTroubleEmail,
@@ -891,6 +898,444 @@ describe("zero-noise triage digest emails (2026-08-06)", () => {
 		expect(email.html).toContain("Verified evidence");
 		expect(email.html).toContain("Suggested next action:");
 		expect(email.text).toContain("Suggested next action:");
+	});
+});
+
+describe("named owner, materiality reason, and next action (E2 2026-08-08)", () => {
+	function digestEmailInput(
+		overrides: Partial<Parameters<typeof buildDigestEmail>[0]> = {},
+	) {
+		return {
+			name: "Owner",
+			periodStart: "2026-06-01T00:00:00.000Z",
+			periodEnd: "2026-06-08T00:00:00.000Z",
+			cadence: "weekly" as const,
+			timeZone: "UTC",
+			items: [digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed")],
+			fullDigestUrl: "https://0509.io/app/digests",
+			manageFrequencyUrl: "https://0509.io/app/notifications",
+			supportEmail: "support@0509.io",
+			supportMailto: "mailto:support@0509.io",
+			unsubscribeUrl: null,
+			...overrides,
+		};
+	}
+
+	it("renders materiality reason, reviewer, and next action for a price change", () => {
+		const email = buildDigestEmail(
+			digestEmailInput({
+				items: [
+					{
+						...digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+						eventType: "landing_page_offer_changed",
+					},
+				],
+			}),
+		);
+
+		expect(email.html).toContain("<strong>Why this matters:</strong>");
+		expect(email.html).toContain("pricing or offers moved (1 change)");
+		expect(email.html).toContain("<strong>Accountable reviewer:</strong>");
+		expect(email.html).toContain("Accountable reviewer:</strong> Owner");
+		expect(email.html).toContain("<strong>Next action:</strong>");
+		expect(email.html).toContain("Review the changes in this brief before your next campaign decision.");
+		expect(email.text).toContain("Why this matters: This period matters because pricing or offers moved (1 change)");
+		expect(email.text).toContain("Accountable reviewer: Owner");
+		expect(email.text).toContain("Next action: Review the changes in this brief before your next campaign decision.");
+	});
+
+	it("names CTA movement as the materiality reason", () => {
+		const email = buildDigestEmail(
+			digestEmailInput({
+				items: [
+					{
+						...digestItem("boAt", "CTA changed", 80, "scan_backed"),
+						eventType: "landing_page_cta_changed",
+					},
+					{
+						...digestItem("Mamaearth", "CTA changed", 70, "scan_backed"),
+						eventType: "landing_page_cta_changed",
+					},
+				],
+			}),
+		);
+
+		expect(email.html).toContain("landing page CTAs changed (2)");
+		expect(email.text).toContain("This period matters because landing page CTAs changed (2)");
+		expect(email.text).toContain("Accountable reviewer: Owner");
+		expect(email.text).toContain("Next action:");
+	});
+
+	it("labels cosmetic-only periods without inventing pricing or CTA movement", () => {
+		const email = buildDigestEmail(
+			digestEmailInput({
+				items: [
+					{
+						...digestItem("Plum", "Headline changed", 65, "scan_backed"),
+						eventType: "landing_page_headline_changed",
+					},
+					{
+						...digestItem("Sugar", "Form changed", 60, "scan_backed"),
+						eventType: "landing_page_form_changed",
+					},
+					{
+						...digestItem("Wow", "Creative copy", 55, "scan_backed"),
+						eventType: "ad_new",
+						metadata: {
+							...digestItem("Wow", "Creative copy", 55, "scan_backed").metadata,
+							kind: "creative_copy",
+						},
+					},
+				],
+			}),
+		);
+
+		expect(email.html).toContain("Cosmetic-only changes this period (3 headline, form, or creative updates)");
+		expect(email.html).not.toContain("pricing or offers moved");
+		expect(email.html).toContain("Accountable reviewer:</strong> Owner");
+		expect(email.text).toContain("Accountable reviewer: Owner");
+		expect(email.text).toContain("Next action:");
+		expect(email.text).toContain("Review the changes in this brief before your next campaign decision.");
+	});
+
+	it("uses the shared triage explanation as the materiality reason for all-quiet periods", () => {
+		const email = buildDigestEmail(
+			digestEmailInput({
+				items: [],
+				heartbeat: {
+					runs: 7,
+					watchlistsChecked: 4,
+					adsSeen: 128,
+					triage: {
+						status: "all_quiet",
+						label: "All quiet",
+						explanation: "Checks completed and nothing changed across the sources that ran.",
+						checkedAt: "2026-06-08T04:00:00.000Z",
+						checksCompleted: 7,
+						suppressedChanges: 0,
+						suppressionReasons: [],
+						nextAction: "We check again at the next scheduled scan.",
+						noActionLine: "No action needed — nothing new to act on.",
+					},
+				},
+			}),
+		);
+
+		expect(email.html).toContain("Checks completed and nothing changed across the sources that ran.");
+		expect(email.html).toContain("Accountable reviewer:</strong> Owner");
+		expect(email.text).toContain("Why this matters: Checks completed and nothing changed across the sources that ran.");
+		expect(email.text).toContain("Accountable reviewer: Owner");
+		expect(email.text).toContain("Next action: We check again at the next scheduled scan.");
+	});
+
+	it("names the failed check as the materiality reason for failed-check periods", () => {
+		const email = buildDigestEmail(
+			digestEmailInput({
+				items: [],
+				heartbeat: {
+					runs: 7,
+					watchlistsChecked: 4,
+					adsSeen: 128,
+					triage: {
+						status: "evidence_failed",
+						label: "Evidence check failed",
+						explanation:
+							"An evidence check couldn't finish, so nothing is confirmed yet.",
+						checkedAt: "2026-06-08T04:00:00.000Z",
+						checksCompleted: 6,
+						suppressedChanges: 0,
+						suppressionReasons: [],
+						nextAction:
+							"We'll retry at the next scheduled check. If it persists, email support and we'll dig in.",
+						noActionLine: "No change is confirmed without proof.",
+					},
+				},
+			}),
+		);
+
+		expect(email.html).toContain(
+			"An evidence check couldn&#039;t finish, so nothing is confirmed yet.",
+		);
+		expect(email.text).toContain(
+			"Why this matters: An evidence check couldn't finish, so nothing is confirmed yet.",
+		);
+		expect(email.text).toContain(
+			"Next action: We'll retry at the next scheduled check. If it persists, email support and we'll dig in.",
+		);
+		expect(email.text).toContain("Accountable reviewer: Owner");
+	});
+
+	it("states the completed-check facts for legacy quiet heartbeats without a triage", () => {
+		const email = buildDigestEmail(
+			digestEmailInput({
+				items: [],
+				heartbeat: { runs: 3, watchlistsChecked: 2, adsSeen: 42 },
+			}),
+		);
+
+		expect(email.text).toContain(
+			"Why this matters: No action-worthy movement across 2 competitors — 3 checks completed and 42 ads reviewed.",
+		);
+		expect(email.text).toContain("Accountable reviewer: Owner");
+		expect(email.text).toContain("Next action: We check again at the next scheduled scan.");
+	});
+
+	it("falls back to the truthful Workspace owner label when the recipient name is blank", () => {
+		const email = buildDigestEmail(
+			digestEmailInput({
+				name: "",
+				items: [digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed")],
+			}),
+		);
+
+		expect(email.html).toContain("<strong>Accountable reviewer:</strong> Workspace owner");
+		expect(email.text).toContain("Accountable reviewer: Workspace owner");
+	});
+
+	it("never renders a generic digest for an empty period with no heartbeat — explicit failure state", () => {
+		const email = buildDigestEmail(
+			digestEmailInput({
+				items: [],
+				heartbeat: null,
+			}),
+		);
+
+		expect(email.subject).toBe("Your brief is missing its period record");
+		expect(email.html).toContain("This brief is missing its period record.");
+		expect(email.html).toContain("No materiality record for this period");
+		expect(email.html).toContain(
+			"Contact support — this brief is missing its period record and cannot be reviewed as filed.",
+		);
+		expect(email.html).toContain("<strong>Accountable reviewer:</strong> Owner");
+		expect(email.text).toContain("Why this matters: No materiality record for this period");
+		expect(email.text).toContain("Next action: Contact support");
+		expect(email.subject).not.toContain("0 changes found");
+		expect(email.html).not.toContain("0 changes found");
+	});
+
+	it("carries the same three values in the scan-trouble notice", () => {
+		const email = buildScanTroubleEmail({
+			watchlistNames: ["Nykaa", "boAt"],
+			watchlistsUrl: "https://0509.io/app/watchlists",
+			manageFrequencyUrl: "https://0509.io/app/notifications",
+			supportEmail: "support@0509.io",
+			supportMailto: "mailto:support@0509.io",
+			unsubscribeUrl: null,
+		});
+
+		expect(email.html).toContain("<strong>Why this matters:</strong>");
+		expect(email.html).toContain("We couldn&#039;t complete checks for Nykaa, boAt in this period.");
+		expect(email.html).toContain("<strong>Accountable reviewer:</strong> Workspace owner");
+		expect(email.html).toContain("<strong>Next action:</strong>");
+		expect(email.text).toContain("Why this matters: We couldn't complete checks for Nykaa, boAt in this period.");
+		expect(email.text).toContain("Accountable reviewer: Workspace owner");
+		expect(email.text).toContain(
+			"Next action: We'll try again at the next scheduled check — you don't need to do anything now.",
+		);
+	});
+
+	it("shares one truthful vocabulary between app and email surfaces", () => {
+		const items = [
+			{
+				...digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+				eventType: "landing_page_offer_changed",
+			},
+		];
+		expect(digestMaterialityReason({ items })).toBe(
+			"This period matters because pricing or offers moved (1 change) — compare before your next campaign decision.",
+		);
+		expect(digestNextAction({ items })).toBe(
+			"Review the changes in this brief before your next campaign decision.",
+		);
+		expect(digestReviewerLabel("Priya")).toBe("Priya");
+		expect(digestReviewerLabel("")).toBe("Workspace owner");
+		expect(digestReviewerLabel(null)).toBe("Workspace owner");
+		expect(digestMaterialityReason({ items: [], triage: { status: "all_quiet", explanation: "Checks completed and nothing changed across the sources that ran." } })).toBe(
+			"Checks completed and nothing changed across the sources that ran.",
+		);
+		expect(digestNextAction({ items: [], heartbeat: { runs: 3 } })).toBe(
+			"We check again at the next scheduled scan.",
+		);
+	});
+});
+
+describe("authenticated briefs route accountability (E2 2026-08-08)", () => {
+	type Props = { children?: ReactNode } & Record<string, unknown>;
+
+	function component(tag: string) {
+		return ({ children, ...props }: Props) => createElement(tag, props, children);
+	}
+
+	function mockDigestsRoute(loaderData: unknown) {
+		vi.doMock("react-router", async () => {
+			const actual = await vi.importActual<typeof import("react-router")>("react-router");
+			return {
+				...actual,
+				Form: component("form"),
+				Link: ({ children, to, ...props }: Props & { to?: string }) =>
+					createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+				useActionData: () => null,
+				useLoaderData: () => loaderData,
+				useNavigation: () => ({ state: "idle", location: null }),
+				useSearchParams: () => [new URLSearchParams(""), vi.fn()],
+			};
+		});
+
+		vi.doMock("~/components/dashboard-page", () => ({
+			DashboardPage: component("main"),
+			DashboardPageHeader: ({ title, lead }: { title: string; lead?: string }) =>
+				createElement("header", null, createElement("h1", null, title), lead),
+		}));
+		vi.doMock("~/components/dashboard-route-loading", () => ({
+			DashboardRouteError: component("div"),
+			DashboardRouteLoading: component("div"),
+		}));
+		vi.doMock("~/components/copy-button", () => ({ CopyButton: component("button") }));
+		vi.doMock("~/components/local-time", () => ({
+			LocalTime: ({ iso }: { iso: string }) => createElement("time", null, iso),
+		}));
+		vi.doMock("~/components/plan-limit-state", () => ({ PlanLimitState: component("div") }));
+		vi.doMock("~/components/submit-button", () => ({ SubmitButton: component("button") }));
+	}
+
+	function digestFixture(
+		items: Array<Record<string, unknown>>,
+		summary: Record<string, unknown> | null,
+		reviewerName: string | null,
+	) {
+		const digest = {
+			id: "digest-1",
+			periodStart: "2026-07-08T00:00:00.000Z",
+			periodEnd: "2026-07-15T00:00:00.000Z",
+			createdAt: "2026-07-15T09:14:00.000Z",
+			items,
+			summary,
+			delivery: null,
+		};
+		return {
+			digests: [digest],
+			digestAttemptsByDigestId: { "digest-1": [] },
+			selectedDigest: digest,
+			selectedDigestAttempts: [],
+			canAccessDigests: true,
+			reviewerName,
+		};
+	}
+
+	async function renderDigestsRoute(loaderData: unknown) {
+		await mockDigestsRoute(loaderData);
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		return renderToStaticMarkup(createElement(DigestsRoute));
+	}
+
+	beforeEach(() => vi.resetModules());
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.resetModules();
+	});
+
+	it("renders materiality reason, reviewer, and next action for a price change brief", async () => {
+		const markup = await renderDigestsRoute(
+			digestFixture(
+				[
+					{
+						id: "item-1",
+						watchlistName: "Nykaa",
+						eventType: "landing_page_offer_changed",
+						title: "Landing page offer changed",
+						summary: "The offer moved.",
+						metadata: {
+							priorityScore: 95,
+							priorityBand: "High priority",
+							recommendedAction: "Review before the next campaign decision.",
+							proofTrail: "Verified from a page snapshot",
+							sourceStatus: "proof_backed",
+						},
+					},
+				],
+				null,
+				"Priya",
+			),
+		);
+
+		expect(markup).toContain("Why this matters");
+		expect(markup).toContain("pricing or offers moved (1 change)");
+		expect(markup).toContain("Accountable reviewer");
+		expect(markup).toContain("Priya");
+		expect(markup).toContain("Next action");
+		expect(markup).toContain("Review the changes in this brief before your next campaign decision.");
+	});
+
+	it("renders the explicit failure state when no owner identity is available", async () => {
+		const markup = await renderDigestsRoute(
+			digestFixture([], null, null),
+		);
+
+		expect(markup).toContain(
+			"Reviewer not recorded — no workspace owner identity is on file.",
+		);
+		expect(markup).toContain("Why this matters");
+		expect(markup).toContain("Next action");
+	});
+
+	it("renders the shared triage copy for an all-quiet brief", async () => {
+		const markup = await renderDigestsRoute(
+			digestFixture(
+				[],
+				{
+					triage: {
+						status: "all_quiet",
+						label: "All quiet",
+						explanation: "Checks completed and nothing changed across the sources that ran.",
+						sourceStatus: "checked",
+						checkedAt: "2026-07-15T04:00:00.000Z",
+						checksCompleted: 7,
+						changesCaptured: 0,
+						suppressedChanges: 0,
+						suppressionReasons: [],
+						nextAction: "We check again at the next scheduled scan.",
+						noActionLine: "No action needed — nothing new to act on.",
+					},
+				},
+				"Priya",
+			),
+		);
+
+		expect(markup).toContain("Checks completed and nothing changed across the sources that ran.");
+		expect(markup).toContain("Priya");
+		expect(markup).toContain("We check again at the next scheduled scan.");
+	});
+
+	it("renders the failed-check period as a visible failure record, never all quiet", async () => {
+		const markup = await renderDigestsRoute(
+			digestFixture(
+				[],
+				{
+					triage: {
+						status: "evidence_failed",
+						label: "Evidence check failed",
+						explanation:
+							"An evidence check couldn't finish, so nothing is confirmed yet.",
+						sourceStatus: "evidence_failed",
+						checkedAt: null,
+						checksCompleted: 6,
+						changesCaptured: 0,
+						suppressedChanges: 0,
+						suppressionReasons: [],
+						nextAction:
+							"We'll retry at the next scheduled check. If it persists, email support and we'll dig in.",
+						noActionLine: "No change is confirmed without proof.",
+					},
+				},
+				"Priya",
+			),
+		);
+
+		expect(markup).toContain(
+			"An evidence check couldn&#x27;t finish, so nothing is confirmed yet.",
+		);
+		expect(markup).toContain("Priya");
+		expect(markup).toContain("We&#x27;ll retry at the next scheduled check.");
 	});
 });
 
