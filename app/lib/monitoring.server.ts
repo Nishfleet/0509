@@ -586,7 +586,7 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
       const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
       const delivery = await deliverWatchlistAlerts(env, {
         userId: watchlist.userId,
-        userName: profile?.name ?? watchlist.name,
+        userName: profile?.name ?? null,
         accountEmail: profile?.email ?? null,
         watchlist,
         events,
@@ -2197,7 +2197,7 @@ export async function runWatchlist(
       allEvents.length > 0
         ? await deliverWatchlistAlerts(env, {
             userId: watchlist.userId,
-            userName: userDeliveryProfile?.name ?? watchlist.name,
+            userName: userDeliveryProfile?.name ?? null,
             accountEmail: userDeliveryProfile?.email ?? null,
             watchlist,
             events: allEvents,
@@ -2387,7 +2387,7 @@ export async function runWatchlist(
         directWebsiteProofEvaluation.events.length > 0
           ? await deliverWatchlistAlerts(env, {
               userId: watchlist.userId,
-              userName: userDeliveryProfile?.name ?? watchlist.name,
+              userName: userDeliveryProfile?.name ?? null,
               accountEmail: userDeliveryProfile?.email ?? null,
               watchlist,
               events: directWebsiteProofEvaluation.events,

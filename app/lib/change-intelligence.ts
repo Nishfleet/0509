@@ -64,10 +64,12 @@ export interface DigestPeriodTruthInput {
 }
 
 /**
- * Exactly one accountable reviewer per brief: the workspace owner/recipient
- * name when one is known, else the truthful "Workspace owner" fallback.
- * Callers that hold no identity at all render {@link DIGEST_REVIEWER_UNAVAILABLE}
- * as the explicit failure state instead.
+ * Exactly one accountable reviewer per brief or alert: the workspace
+ * owner/recipient name when one is known, else the truthful "Workspace
+ * owner" fallback. Callers that hold no identity at all render
+ * {@link DIGEST_REVIEWER_UNAVAILABLE} as the explicit failure state instead.
+ * The reviewer identity is never invented from watchlist or event text —
+ * pass the workspace owner's own name, or nothing.
  */
 export function digestReviewerLabel(name?: string | null): string {
   const trimmed = typeof name === "string" ? name.trim() : "";
@@ -111,6 +113,50 @@ export function digestMaterialityReason(input: DigestPeriodTruthInput): string {
   }
 
   return DIGEST_MATERIALITY_UNAVAILABLE;
+}
+
+/**
+ * Non-empty, human-readable materiality reason for an instant alert (E2
+ * alert increment, 2026-08-08). Shares the same event classification as the
+ * digest vocabulary so an alert and a brief never disagree about what a
+ * change type means. Truthful states, in priority order:
+ * - provisional alerts (event still `detected`/`proof_pending`) say the
+ *   change is unconfirmed — never claim a verified move;
+ * - baseline first-scan alerts say they are the starting snapshot, not a new
+ *   competitor move;
+ * - confirmed changes are derived from the filed events, never invented;
+ * - a shape with no derivable statement renders an explicit fallback rather
+ *   than an empty reason.
+ */
+export function alertMaterialityReason(input: {
+  events?: ReadonlyArray<DigestPeriodTruthItem> | null;
+  provisional?: boolean;
+  baseline?: boolean;
+}): string {
+  if (input.provisional) {
+    return "This alert is provisional — the change is not yet confirmed by a fresh proof capture, so verify the source before acting.";
+  }
+
+  if (input.baseline) {
+    return "This alert is your starting snapshot — it anchors future alerts instead of marking a new competitor move.";
+  }
+
+  const items = input.events ?? [];
+  const clauses = materialityClausesFromItems(items);
+  if (clauses.length > 0) {
+    return `This alert matters because ${clauses.join(" and ")} — compare before your next campaign decision.`;
+  }
+
+  const counts = countEventClasses(items);
+  const cosmeticCount = counts.get("cosmetic") ?? 0;
+  const unclassifiedCount = counts.get("unclassified") ?? 0;
+  if (cosmeticCount > 0 && unclassifiedCount === 0) {
+    return `A tracked page changed its headline, form, or creative (${cosmeticCount} update${cosmeticCount === 1 ? "" : "s"}) — the competitor is iterating, and nothing in this alert touched pricing or CTA.`;
+  }
+  if (cosmeticCount > 0) {
+    return `${cosmeticCount + unclassifiedCount} change${cosmeticCount + unclassifiedCount === 1 ? "" : "s"} filed on this alert — headlines, forms, or creatives moved without pricing or CTA movement in this alert.`;
+  }
+  return "This alert matters because a change was detected on a tracked competitor page — review the evidence before your next decision.";
 }
 
 /** One next action per brief: shared triage copy first, then derived copy. */
@@ -169,11 +215,32 @@ function classifyDigestPeriodEvent(item: DigestPeriodTruthItem): DigestPeriodEve
 }
 
 function materialityFromItems(items: ReadonlyArray<DigestPeriodTruthItem>): string {
-  const counts = new Map<DigestPeriodEventClass, number>();
-  for (const item of items) {
-    const eventClass = classifyDigestPeriodEvent(item);
-    counts.set(eventClass, (counts.get(eventClass) ?? 0) + 1);
+  const clauses = materialityClausesFromItems(items);
+  if (clauses.length > 0) {
+    return `This period matters because ${clauses.join(" and ")} — compare before your next campaign decision.`;
   }
+
+  const counts = countEventClasses(items);
+  const cosmeticCount = counts.get("cosmetic") ?? 0;
+  const unclassifiedCount = counts.get("unclassified") ?? 0;
+  if (cosmeticCount > 0 && unclassifiedCount === 0) {
+    return `Cosmetic-only changes this period (${cosmeticCount} headline, form, or creative update${cosmeticCount === 1 ? "" : "s"}) — no pricing or CTA movement, so there is nothing new to weigh for positioning.`;
+  }
+  if (cosmeticCount > 0) {
+    return `${cosmeticCount + unclassifiedCount} change${cosmeticCount + unclassifiedCount === 1 ? "" : "s"} filed this period — headlines, forms, or creatives moved without pricing or CTA movement.`;
+  }
+  return `${items.length} change${items.length === 1 ? "" : "s"} filed this period — review the evidence before your next decision.`;
+}
+
+/**
+ * Shared materiality clauses for a set of filed events. Both the digest
+ * period reason and the instant-alert reason compose their sentences from
+ * the same clauses so the two surfaces never disagree about what changed.
+ */
+function materialityClausesFromItems(
+  items: ReadonlyArray<DigestPeriodTruthItem>,
+): string[] {
+  const counts = countEventClasses(items);
 
   const materialClauses: string[] = [];
   const priceCount = counts.get("price") ?? 0;
@@ -193,19 +260,18 @@ function materialityFromItems(items: ReadonlyArray<DigestPeriodTruthItem>): stri
     materialClauses.push(`destinations changed (${destinationCount})`);
   }
 
-  if (materialClauses.length > 0) {
-    return `This period matters because ${materialClauses.join(" and ")} — compare before your next campaign decision.`;
-  }
+  return materialClauses;
+}
 
-  const cosmeticCount = counts.get("cosmetic") ?? 0;
-  const unclassifiedCount = counts.get("unclassified") ?? 0;
-  if (cosmeticCount > 0 && unclassifiedCount === 0) {
-    return `Cosmetic-only changes this period (${cosmeticCount} headline, form, or creative update${cosmeticCount === 1 ? "" : "s"}) — no pricing or CTA movement, so there is nothing new to weigh for positioning.`;
+function countEventClasses(
+  items: ReadonlyArray<DigestPeriodTruthItem>,
+): Map<DigestPeriodEventClass, number> {
+  const counts = new Map<DigestPeriodEventClass, number>();
+  for (const item of items) {
+    const eventClass = classifyDigestPeriodEvent(item);
+    counts.set(eventClass, (counts.get(eventClass) ?? 0) + 1);
   }
-  if (cosmeticCount > 0) {
-    return `${cosmeticCount + unclassifiedCount} change${cosmeticCount + unclassifiedCount === 1 ? "" : "s"} filed this period — headlines, forms, or creatives moved without pricing or CTA movement.`;
-  }
-  return `${items.length} change${items.length === 1 ? "" : "s"} filed this period — review the evidence before your next decision.`;
+  return counts;
 }
 
 // Proof-trail timestamps default to UTC (global-first product); pass the

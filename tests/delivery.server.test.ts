@@ -3522,6 +3522,16 @@ describe("alert email content quality", () => {
     expect(payload.html).toContain("See the evidence");
     // WP-24: evidence link deep-links to the event row.
     expect(payload.html).toContain("/app/watchlists?watchlist=watch-1&event=event-1");
+    // E2 alert increment: every delivered alert names an accountable reviewer
+    // and a materiality reason before delivery.
+    expect(payload.html).toContain("<strong>Why this matters:</strong>");
+    expect(payload.html).toContain(
+      "A tracked page changed its headline, form, or creative (1 update) — the competitor is iterating, and nothing in this alert touched pricing or CTA.",
+    );
+    expect(payload.html).toContain("<strong>Accountable reviewer:</strong> Owner");
+    // Alerts already carry per-event "Suggested next action" lines; the
+    // accountability block must not duplicate a block-level next action.
+    expect(payload.html).not.toContain("<strong>Next action:</strong>");
   });
 
   it("does not label changed values Before/Now when capture times are missing", async () => {
@@ -3567,5 +3577,21 @@ describe("alert email content quality", () => {
     );
     expect(single.html).not.toContain(">Before<");
     expect(single.html).not.toContain(">Now<");
+    // E2 alert increment: even a bare content build names a materiality reason
+    // and the truthful default owner before anything is delivered.
+    expect(single.materialityReason).toContain(
+      "This alert matters because pricing or offers moved (1 change)",
+    );
+    expect(single.reviewerLabel).toBe("Workspace owner");
+    expect(single.html).toContain("<strong>Why this matters:</strong>");
+    expect(single.html).toContain(
+      "<strong>Accountable reviewer:</strong> Workspace owner",
+    );
+    expect(content.materialityReason).toContain(
+      "This alert matters because pricing or offers moved (2 changes)",
+    );
+    expect(content.html).toContain(
+      "<strong>Accountable reviewer:</strong> Workspace owner",
+    );
   });
 });
