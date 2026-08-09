@@ -319,6 +319,72 @@ describe("public search submission settle", () => {
     expect(errorMarkup).not.toContain('aria-busy="true"');
   });
 
+  it("keeps See ads pending after the cold-path request settles while the committed page is warming", async () => {
+    // Cold-path regression: the first anonymous query for an uncached
+    // advertiser returns the typed warming state immediately and the browser
+    // capture finishes in the background (waitUntil). The request has settled
+    // (navigation idle, URL committed) but the search is still running, so the
+    // submit must keep saying "Searching…" instead of flipping back to
+    // "See ads" next to the in-progress line.
+    loaderData = warmingLoaderData;
+    locationObj = { pathname: "/search", search: WARMING_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const markup = await renderMarkup();
+
+    expect(markup).toContain("Searching…");
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toContain("disabled");
+    expect(markup).toContain("Search in progress");
+  });
+
+  it("leaves Searching… when the warming poll lands results on the committed page", async () => {
+    loaderData = warmingLoaderData;
+    locationObj = { pathname: "/search", search: WARMING_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const { container, root, SearchRoute } = await mountRoute();
+
+    const pendingButton = container.querySelector('button[type="submit"]');
+    expect(pendingButton?.textContent).toContain("Searching…");
+    expect(pendingButton?.hasAttribute("disabled")).toBe(true);
+
+    // The background capture lands: the next poll revalidation returns the
+    // finished cache entry, and the submit leaves "Searching…".
+    loaderData = resultsLoaderData;
+    await act(async () => {
+      root.render(createElement(SearchRoute));
+    });
+
+    const settledButton = container.querySelector('button[type="submit"]');
+    expect(settledButton?.textContent).toContain("See ads");
+    expect(settledButton?.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("never leaves the submit disabled when a warming search does not resolve", async () => {
+    // The warming pending state shares the 5s x 12 poll budget: if the
+    // background capture never lands, the button re-enables after the budget
+    // instead of staying on "Searching…" forever.
+    loaderData = warmingLoaderData;
+    locationObj = { pathname: "/search", search: WARMING_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const { container } = await mountRoute();
+
+    const { SEARCH_WARMING_POLL_LIMIT } = await import("~/routes/search");
+    // Advance in poll-sized steps so each tick's re-render can schedule the
+    // next timer (a single 60s advance fires only the first tick).
+    for (let step = 0; step < SEARCH_WARMING_POLL_LIMIT; step += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+    }
+
+    const button = container.querySelector('button[type="submit"]');
+    expect(button?.textContent).toContain("See ads");
+    expect(button?.hasAttribute("disabled")).toBe(false);
+  });
+
   it("shows the recovery reload after 90 seconds on an uncommitted idle page, enables submit, and clears when navigation settles", async () => {
     loaderData = idleLoaderData;
     locationObj = { pathname: "/search", search: "", hash: "" };
