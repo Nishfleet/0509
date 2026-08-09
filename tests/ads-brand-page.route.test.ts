@@ -161,6 +161,8 @@ describe("/ads/:domain loader", () => {
     expect(result.ads).toHaveLength(1);
     expect(result.ads[0]?.metaAdId).toBe("meta-nykaa-1");
     expect(result.checkedAgo).toBe("about 2 hours ago");
+    // A capture hours old must NOT present itself as "right now".
+    expect(result.freshForLiveClaim).toBe(false);
     expect(result.teaser).toMatchObject({
       totalCount: 1,
       activeCount: 1,
@@ -176,6 +178,30 @@ describe("/ads/:domain loader", () => {
     expect(mocks.hasFreshDiscoveryCacheEntry).not.toHaveBeenCalled();
     expect(mocks.searchMetaLibraryByBrowser).not.toHaveBeenCalled();
     expect(mocks.searchMetaApiAds).not.toHaveBeenCalled();
+  });
+
+  it("marks the capture fresh for a live claim only while the check is under an hour old", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({ fetchedAt: isoAgo(5 * 60 * 1000) }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.checkedAgo).toBe("about 5 minutes ago");
+    expect(result.freshForLiveClaim).toBe(true);
+  });
+
+  it("withholds the live-claim freshness for a capture over an hour old", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({ fetchedAt: isoAgo(61 * 60 * 1000) }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.checkedAgo).toBe("about an hour ago");
+    expect(result.freshForLiveClaim).toBe(false);
   });
 
   it("renders the honest shell with noindex on a cache miss, with bounded cache lookups and zero provider calls", async () => {
@@ -366,14 +392,16 @@ describe("/ads/:domain meta", () => {
     teaser: null,
     noindex: false,
     canonicalPath: "/ads/nykaa.com",
+    freshForLiveClaim: false,
   };
 
   it("emits the brand title, honest description, and canonical URL without robots meta when indexable", async () => {
     installBrandPageMocks();
     const tags = await metaFor(richData);
 
+    // The capture is hours old — the title must not claim "right now".
     expect(tags).toContainEqual({
-      title: "Nykaa Facebook & Instagram ads right now | Five to Nine",
+      title: "Nykaa Facebook & Instagram ads — checked about 2 hours ago | Five to Nine",
     });
     expect(tags).toContainEqual({
       tagName: "link",
@@ -383,6 +411,25 @@ describe("/ads/:domain meta", () => {
     const description = tags.find((tag) => tag.name === "description")?.content ?? "";
     expect(description).toContain("public Ad Library check about 2 hours ago");
     expect(tags.some((tag) => tag.name === "robots")).toBe(false);
+  });
+
+  it('keeps the "right now" title only when the capture is fresh enough for a live claim', async () => {
+    installBrandPageMocks();
+    const tags = await metaFor({ ...richData, checkedAgo: "about 5 minutes ago", freshForLiveClaim: true });
+
+    expect(tags).toContainEqual({
+      title: "Nykaa Facebook & Instagram ads right now | Five to Nine",
+    });
+  });
+
+  it("never claims the capture is right now when the checked-ago stamp is missing", async () => {
+    installBrandPageMocks();
+    const tags = await metaFor({ ...richData, checkedAgo: null, freshForLiveClaim: true });
+
+    expect(tags.some((tag) => tag.title?.includes("right now"))).toBe(false);
+    expect(tags).toContainEqual({
+      title: "Nykaa Facebook & Instagram ads — checked recently | Five to Nine",
+    });
   });
 
   it("adds the robots noindex meta when the loader marked the page noindex", async () => {
@@ -405,6 +452,11 @@ describe("/ads/:domain meta", () => {
     const description = tags.find((tag) => tag.name === "description")?.content ?? "";
     expect(description).toContain("We haven't checked nykaa.com recently");
     expect(tags).toContainEqual({ name: "robots", content: "noindex" });
+    // The cache-miss shell must not claim the brand is running ads right now.
+    expect(tags.some((tag) => tag.title?.includes("right now"))).toBe(false);
+    expect(tags).toContainEqual({
+      title: "Nykaa Facebook & Instagram ads | Five to Nine",
+    });
   });
 
   it("noindexes when loader data is unavailable (error boundary)", async () => {
