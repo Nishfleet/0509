@@ -40,7 +40,9 @@ export function buildSearchAnswer(input: {
   const ads = result.ads ?? [];
   const adCount = ads.length;
   const domain = input.displayDomain?.trim() || null;
-  const landingPageCount = ads.filter((ad) => Boolean(ad.landingPage || ad.landingPageUrl)).length;
+  // Only a captured landing-page snapshot is a "Landing-page signal"; the
+  // ad's destination URL alone is not evidence the page was ever captured.
+  const landingPageCount = ads.filter((ad) => Boolean(ad.landingPage)).length;
   const verifiedCount = resolveVerifiedCount(result);
   const broaderCount = Math.max(
     0,
