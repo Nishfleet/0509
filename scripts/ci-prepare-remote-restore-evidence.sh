@@ -32,11 +32,25 @@ evidence_valid=false
 archive="$RESTORE_EVIDENCE_ARCHIVE"
 expected_archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
 
+report_evidence_available() {
+  # Machine-readable contract for the deploy workflow: whether this run
+  # produced a verified evidence archive. Written to GITHUB_OUTPUT when GitHub
+  # provides it (hermetic shell-level tests omit it) and echoed for the log.
+  printf 'restore_evidence_available=%s\n' "$1"
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    printf 'restore_evidence_available=%s\n' "$1" >> "$GITHUB_OUTPUT"
+  fi
+}
+
 if [ "$archive" != "$expected_archive" ] ||
   [ -e "$archive" ] ||
   [ -L "$archive" ]; then
-  printf '::error::Refusing an unexpected or pre-existing restore-evidence archive path.\n' >&2
-  exit 1
+  # A stale or planted file at the private archive path is never read; the
+  # deploy workflow generates a fresh exact evidence archive instead. Only
+  # tooling infrastructure failures (exit 2 below) remain hard stops.
+  printf '::error::Refusing an unexpected or pre-existing restore-evidence archive path; generating fresh evidence in this deploy.\n' >&2
+  report_evidence_available false
+  exit 0
 fi
 
 cleanup() {
@@ -327,40 +341,63 @@ fi
 
 rm -rf -- "$cache"
 if [ "$evidence_valid" != true ]; then
-  printf '::error::No valid pre-generated restore evidence is available. Run the D1 remote restore evidence workflow in its recovery window, then rerun this deploy.\n' >&2
-  exit 1
+  # No usable pre-generated evidence exists (none found, or the newest
+  # artifact does not verify against this exact candidate). This is not an
+  # infrastructure failure: the deploy workflow generates fresh exact-SHA
+  # evidence in this same run, and the exact verifier still gates the deploy.
+  # Only the exit-2 infrastructure failures above remain hard stops.
+  printf '::warning::No valid pre-generated restore evidence is available; this deploy will generate fresh exact evidence before release.\n' >&2
+  report_evidence_available false
+  exit 0
 fi
 
-verification_status=0
-verify_evidence || verification_status=$?
-if [ "$verification_status" -ne 0 ]; then
-  printf '::error::Restore evidence failed re-verification before packaging.\n' >&2
-  exit "$verification_status"
+# Package the verified evidence. Any packaging failure (re-verification,
+# staging, or publish) falls back to fresh generation instead of hard-failing
+# the deploy: the evidence is discarded and the workflow's generate job
+# produces a new exact archive on a fresh runner.
+package_verified_evidence() {
+  local verification_status=0
+  local evidence_dir
+  local evidence_name
+  local staged_archive
+  verify_evidence || verification_status=$?
+  if [ "$verification_status" -ne 0 ]; then
+    printf '::warning::Restore evidence failed re-verification before packaging; this deploy will generate fresh exact evidence.\n' >&2
+    return 1
+  fi
+  test "$(stat -c '%a' "$evidence")" = "600" || return 1
+  evidence_dir="${evidence%/*}"
+  evidence_name="${evidence##*/}"
+  archive_staging_dir="$(
+    mktemp -d \
+      "$RUNNER_TEMP/d1-remote-restore-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-XXXXXXXXXXXX"
+  )" || return 1
+  chmod 700 "$archive_staging_dir" || return 1
+  test ! -L "$archive_staging_dir" || return 1
+  test "$(stat -c '%u:%a:%F' -- "$archive_staging_dir")" = "$(id -u):700:directory" || return 1
+  staged_archive="$archive_staging_dir/restore-evidence.tar.gz"
+  tar --format=posix -czf "$staged_archive" \
+    -C "$evidence_dir" \
+    "$evidence_name" || return 1
+  chmod 600 "$staged_archive" || return 1
+  test ! -L "$staged_archive" || return 1
+  test -f "$staged_archive" || return 1
+  test "$(stat -c '%u:%a:%h:%F' -- "$staged_archive")" = "$(id -u):600:1:regular file" || return 1
+  test "$(tar -tzf "$staged_archive")" = "d1-remote-restore-evidence.json" || return 1
+  [[ "$(tar -tvzf "$staged_archive")" = -* ]] || return 1
+  test ! -e "$archive" || return 1
+  test ! -L "$archive" || return 1
+  mv -T -- "$staged_archive" "$archive" || return 1
+  test ! -L "$archive" || return 1
+  test -f "$archive" || return 1
+  test "$(stat -c '%u:%a:%h:%F' -- "$archive")" = "$(id -u):600:1:regular file" || return 1
+  return 0
+}
+
+if ! package_verified_evidence; then
+  printf '::warning::Verified restore evidence could not be packaged; this deploy will generate fresh exact evidence.\n' >&2
+  report_evidence_available false
+  exit 0
 fi
-test "$(stat -c '%a' "$evidence")" = "600"
-evidence_dir="${evidence%/*}"
-evidence_name="${evidence##*/}"
-archive_staging_dir="$(
-  mktemp -d \
-    "$RUNNER_TEMP/d1-remote-restore-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-XXXXXXXXXXXX"
-)"
-chmod 700 "$archive_staging_dir"
-test ! -L "$archive_staging_dir"
-test "$(stat -c '%u:%a:%F' -- "$archive_staging_dir")" = "$(id -u):700:directory"
-staged_archive="$archive_staging_dir/restore-evidence.tar.gz"
-tar --format=posix -czf "$staged_archive" \
-  -C "$evidence_dir" \
-  "$evidence_name"
-chmod 600 "$staged_archive"
-test ! -L "$staged_archive"
-test -f "$staged_archive"
-test "$(stat -c '%u:%a:%h:%F' -- "$staged_archive")" = "$(id -u):600:1:regular file"
-test "$(tar -tzf "$staged_archive")" = "d1-remote-restore-evidence.json"
-[[ "$(tar -tvzf "$staged_archive")" = -* ]]
-test ! -e "$archive"
-test ! -L "$archive"
-mv -T -- "$staged_archive" "$archive"
-test ! -L "$archive"
-test -f "$archive"
-test "$(stat -c '%u:%a:%h:%F' -- "$archive")" = "$(id -u):600:1:regular file"
+report_evidence_available true
 printf 'restore_evidence_archive=%s\n' "$archive"
