@@ -24,9 +24,10 @@
  * data exists (the score hides below the evidence floor, "What changed" hides
  * with no change events). Honesty is the brand — no invented figures.
  *
- * SITEMAP: /ads/* is deliberately NOT in the static sitemap. When adding it,
- * generate entries dynamically from cached-fresh pages only — see the
- * commented block above SITEMAP_XML in app/lib/seo.ts for the exact strategy.
+ * SITEMAP: /ads/* is NOT in the static sitemap in seo.ts. The dynamic
+ * sitemap (app/lib/sitemap.server.ts) lists only cached-fresh pages whose
+ * rows would render the indexable state — see the commented block above
+ * SITEMAP_XML in app/lib/seo.ts for the exact strategy.
  */
 
 import { Link, useLoaderData } from "react-router";

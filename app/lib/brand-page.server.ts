@@ -539,7 +539,14 @@ function deriveCacheLookup(
 
 type CacheEntry = Awaited<ReturnType<typeof readDiscoveryCacheEntryCacheOnly>>;
 
-function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot | null {
+/**
+ * Cache-row → public brand-page snapshot predicate: null when the row would
+ * NOT render a usable public page (wrong route context, demo source, no ads,
+ * too old), and a snapshot with `freshForIndexing` when it would. The dynamic
+ * sitemap reuses this so it lists exactly the domains whose /ads/:domain page
+ * would render the indexable state.
+ */
+export function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot | null {
   if (!entry) {
     return null;
   }

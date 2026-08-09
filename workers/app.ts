@@ -85,6 +85,16 @@ export default {
       return withSecurityHeaders(primaryDomainResponse, request);
     }
 
+    // Dynamic sitemap: the static URLs plus /ads/:domain entries whose cache
+    // rows would render the indexable brand-page state. Served here (before
+    // rate limiting) so crawlers are never throttled, and it is a pure D1
+    // cache read — sitemap generation never triggers live discovery. It
+    // degrades to the static 13 URLs when D1 is absent or the read fails.
+    if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/sitemap.xml") {
+      const { buildPublicSitemapFile } = await import("../app/lib/sitemap.server");
+      return publicFileResponse(request, await buildPublicSitemapFile(env));
+    }
+
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
     if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {
       return publicFileResponse(request, publicSeoFile);

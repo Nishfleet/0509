@@ -17,6 +17,7 @@ export {
   createLandingPageSnapshot,
   upsertDiscoveryCacheEntry,
   getDiscoveryCacheEntry,
+  listFreshPublicSearchCacheEntries,
   createDiscoveryFetchLog,
   upsertDiscoveryProviderState,
   getDiscoveryProviderState,

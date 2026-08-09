@@ -14,6 +14,7 @@ import {
 } from "~/lib/ad-persistence.server";
 import {
   execute as run,
+  queryAll,
   queryOne as one,
 } from "~/lib/data/d1.server";
 import {
@@ -276,6 +277,15 @@ export async function getDiscoveryCacheEntry(env: AppEnv, cacheKey: string) {
     return null;
   }
 
+  return toDiscoveryCacheEntry(row);
+}
+
+/**
+ * Map one `discovery_cache_entry` row to the shape callers read. Rows whose
+ * payload_json does not parse into a `SearchResponse` shape are dropped —
+ * the same contract `getDiscoveryCacheEntry` applies to a single row.
+ */
+function toDiscoveryCacheEntry(row: DiscoveryCacheEntryRow) {
   const payload = parseDiscoveryCachePayload(row.payload_json);
   if (!payload) {
     return null;
@@ -295,6 +305,63 @@ export async function getDiscoveryCacheEntry(env: AppEnv, cacheKey: string) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/**
+ * Cache-READ-ONLY listing for the dynamic sitemap: every discovery cache entry
+ * that could plausibly back an indexable public brand page. Callers still run
+ * the brand-page usability predicate (route context, demo source, ads present,
+ * 7-day indexing window) per row; this only bounds the read to the candidate
+ * set so the sitemap never scans the whole table. It never triggers discovery.
+ */
+export async function listFreshPublicSearchCacheEntries(
+  env: AppEnv,
+  input: { provider: AdDiscoveryProvider; fetchedAtSince: string; limit?: number },
+) {
+  if (!env.DB) {
+    return [];
+  }
+
+  try {
+    const rows = await queryAll<DiscoveryCacheEntryRow>(
+      env,
+      `
+        SELECT
+          cache_key,
+          provider,
+          route_context,
+          query_fingerprint,
+          country,
+          cursor,
+          payload_json,
+          fetched_at,
+          expires_at,
+          browser_ms_used,
+          created_at,
+          updated_at
+        FROM discovery_cache_entry
+        WHERE route_context = ?
+          AND provider = ?
+          AND fetched_at >= ?
+        ORDER BY fetched_at DESC
+        LIMIT ?
+      `,
+      "public_search",
+      input.provider,
+      input.fetchedAtSince,
+      input.limit ?? 2000,
+    );
+    return rows
+      .map(toDiscoveryCacheEntry)
+      .filter((entry): entry is NonNullable<ReturnType<typeof toDiscoveryCacheEntry>> =>
+        entry !== null,
+      );
+  } catch (error) {
+    if (isMissingTableError(error, "discovery_cache_entry")) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function createDiscoveryFetchLog(
