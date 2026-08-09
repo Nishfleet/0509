@@ -111,11 +111,21 @@ export function faqPageJsonLd(entries: ReadonlyArray<FaqJsonLdEntry>) {
  * site it belongs to. The audit found no structured data on /help, /docs or
  * /status; this closes that without asserting anything the visible page does
  * not already say.
+ *
+ * The optional fields follow the same rule — they are emitted ONLY when the
+ * visible page itself carries the claim:
+ * - `dateModified`: the ISO timestamp of the last content update the page
+ *   visibly stamps (e.g. the cached-check time on /ads/:domain). Omitted when
+ *   the page has no such stamp — never invented.
+ * - `aboutName`: the subject of the page when it is about a specific brand
+ *   (e.g. the /ads/:domain brand pages). Must match a name the page shows.
  */
 export function webPageJsonLd(input: {
   name: string;
   description: string;
   pathname: string;
+  dateModified?: string;
+  aboutName?: string;
 }) {
   return {
     "@context": "https://schema.org",
@@ -123,6 +133,10 @@ export function webPageJsonLd(input: {
     name: input.name,
     description: input.description,
     url: canonicalUrl(input.pathname),
+    ...(input.dateModified ? { dateModified: input.dateModified } : {}),
+    ...(input.aboutName
+      ? { about: { "@type": "Organization", name: input.aboutName } }
+      : {}),
     isPartOf: { "@type": "WebSite", name: SITE_NAME, url: SITE_ORIGIN },
     publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
   } as const;
