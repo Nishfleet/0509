@@ -3638,15 +3638,19 @@ one signal-green accent.
     grid-column: 2;
     grid-row: 1;
     justify-self: end;
-    /* Three account actions (Sign in, Open app, Sign up) no longer fit one
-       row beside the wordmark on small phones; wrap within the flexible
-       column so every action stays a ≥44px touch target and nothing
-       overlaps the wordmark. The brand column is `auto` so the wordmark
-       keeps its natural width. */
-    flex-wrap: wrap;
+    /* Sign up is the anonymous primary CTA. Keeping Sign in + Open app +
+       Sign up beside the wordmark wraps a second action row on phones and
+       pushes the homepage live-search below the Gate-B 375×812 fold. Hide
+       Open app here so Sign in + Sign up stay one ≥44px row; desktop keeps
+       all three. Brand column stays `auto` so the wordmark keeps its width. */
+    flex-wrap: nowrap;
     justify-content: flex-end;
     gap: 10px;
     font-size: 0.86rem;
+  }
+
+  .ld-nav-actions .ld-nav-open-app {
+    display: none;
   }
 
   .f9-home .ld-nav-actions .f9-link-arrow {
