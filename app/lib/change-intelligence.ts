@@ -16,6 +16,198 @@ export function digestCadenceLabel(cadence: DigestCadence | undefined) {
   return cadence === "daily" ? "daily brief" : "weekly digest";
 }
 
+/*
+ * Period truth for a monitoring brief (E2 increment, 2026-08-08): every
+ * customer-facing brief/digest must carry a materiality reason, exactly one
+ * accountable reviewer (or the explicit workspace owner), and one next
+ * action — or an explicit visible failure state. These helpers are the shared
+ * vocabulary: the digest email renderer and the authenticated briefs route
+ * read the same copy so app and email never diverge. The reviewer identity is
+ * never invented from event text: callers pass the already-available
+ * workspace owner/recipient identity, and the truthful fallback "Workspace
+ * owner" only applies where the product contract supports it (digests are
+ * filed under the workspace owner's account).
+ */
+
+/** Truthful explicit fallback where the product contract supports it. */
+export const DIGEST_REVIEWER_FALLBACK = "Workspace owner";
+
+/** Explicit failure state: no owner identity and no contract fallback applies. */
+export const DIGEST_REVIEWER_UNAVAILABLE =
+  "Reviewer not recorded — no workspace owner identity is on file.";
+
+/** Explicit failure state: the period's materiality cannot be judged. */
+export const DIGEST_MATERIALITY_UNAVAILABLE =
+  "No materiality record for this period — treat this brief as unverified until a fresh check files a record.";
+
+/** Explicit failure state: no truthful next action can be stated. */
+export const DIGEST_NEXT_ACTION_UNAVAILABLE =
+  "Contact support — this brief is missing its period record and cannot be reviewed as filed.";
+
+export interface DigestPeriodTruthItem {
+  eventType?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface DigestPeriodTruthInput {
+  items?: ReadonlyArray<DigestPeriodTruthItem> | null;
+  heartbeat?: {
+    runs?: number;
+    watchlistsChecked?: number;
+    adsSeen?: number;
+  } | null;
+  triage?: {
+    status?: string | null;
+    explanation?: string | null;
+    nextAction?: string | null;
+  } | null;
+}
+
+/**
+ * Exactly one accountable reviewer per brief: the workspace owner/recipient
+ * name when one is known, else the truthful "Workspace owner" fallback.
+ * Callers that hold no identity at all render {@link DIGEST_REVIEWER_UNAVAILABLE}
+ * as the explicit failure state instead.
+ */
+export function digestReviewerLabel(name?: string | null): string {
+  const trimmed = typeof name === "string" ? name.trim() : "";
+  return trimmed ? trimmed : DIGEST_REVIEWER_FALLBACK;
+}
+
+/**
+ * Non-empty, human-readable materiality reason for a digest period. The
+ * shared triage explanation wins for quiet/failed/routine periods; changed
+ * periods are derived from the filed events (never invented); legacy quiet
+ * heartbeats state the completed-check facts; and a period with no record at
+ * all renders the explicit failure state so a generic digest is never sent
+ * silently.
+ */
+export function digestMaterialityReason(input: DigestPeriodTruthInput): string {
+  const triage = input.triage ?? null;
+  const triageExplanation = triage?.explanation?.trim();
+  // The shared triage vocabulary is the most specific truthful statement for
+  // every non-changed period (all-quiet, routine-only, evidence-failed,
+  // evidence-pending, not-run). Changed periods carry items, whose derivation
+  // below is more specific than the generic "changes confirmed" line.
+  if (
+    triageExplanation &&
+    triage?.status &&
+    triage.status !== "changed"
+  ) {
+    return triageExplanation;
+  }
+
+  const items = input.items ?? [];
+  if (items.length > 0) {
+    return materialityFromItems(items);
+  }
+
+  const heartbeat = input.heartbeat ?? null;
+  if (heartbeat && (heartbeat.runs ?? 0) > 0) {
+    const watchlists = heartbeat.watchlistsChecked ?? 0;
+    const runs = heartbeat.runs ?? 0;
+    const adsSeen = heartbeat.adsSeen ?? 0;
+    return `No action-worthy movement across ${watchlists} competitor${watchlists === 1 ? "" : "s"} — ${runs} check${runs === 1 ? "" : "s"} completed and ${adsSeen} ad${adsSeen === 1 ? "" : "s"} reviewed.`;
+  }
+
+  return DIGEST_MATERIALITY_UNAVAILABLE;
+}
+
+/** One next action per brief: shared triage copy first, then derived copy. */
+export function digestNextAction(input: DigestPeriodTruthInput): string {
+  const triageNextAction = input.triage?.nextAction?.trim();
+  if (triageNextAction) {
+    return triageNextAction;
+  }
+
+  const items = input.items ?? [];
+  if (items.length > 0) {
+    return "Review the changes in this brief before your next campaign decision.";
+  }
+
+  const heartbeat = input.heartbeat ?? null;
+  if (heartbeat && (heartbeat.runs ?? 0) > 0) {
+    return "We check again at the next scheduled scan.";
+  }
+
+  return DIGEST_NEXT_ACTION_UNAVAILABLE;
+}
+
+type DigestPeriodEventClass =
+  | "price"
+  | "cta"
+  | "campaign"
+  | "destination"
+  | "cosmetic"
+  | "unclassified";
+
+const PRICE_EVENT_TYPES = new Set(["landing_page_offer_changed"]);
+const CTA_EVENT_TYPES = new Set(["landing_page_cta_changed"]);
+const CAMPAIGN_EVENT_TYPES = new Set(["ad_new", "ad_inactive"]);
+const DESTINATION_EVENT_TYPES = new Set(["landing_page_url_changed"]);
+const COSMETIC_EVENT_TYPES = new Set([
+  "landing_page_headline_changed",
+  "landing_page_form_changed",
+]);
+
+function classifyDigestPeriodEvent(item: DigestPeriodTruthItem): DigestPeriodEventClass {
+  const kind = (item.metadata as Record<string, unknown> | undefined)?.kind;
+  if (kind === "baseline" || kind === "creative_copy") {
+    // Baselines are starting snapshots; creative copy rewrites are cosmetic
+    // until they touch an offer, CTA, or campaign state.
+    return "cosmetic";
+  }
+  if (kind === "ad_new_aggregate") {
+    return "campaign";
+  }
+  if (PRICE_EVENT_TYPES.has(item.eventType ?? "")) return "price";
+  if (CTA_EVENT_TYPES.has(item.eventType ?? "")) return "cta";
+  if (CAMPAIGN_EVENT_TYPES.has(item.eventType ?? "")) return "campaign";
+  if (DESTINATION_EVENT_TYPES.has(item.eventType ?? "")) return "destination";
+  if (COSMETIC_EVENT_TYPES.has(item.eventType ?? "")) return "cosmetic";
+  return "unclassified";
+}
+
+function materialityFromItems(items: ReadonlyArray<DigestPeriodTruthItem>): string {
+  const counts = new Map<DigestPeriodEventClass, number>();
+  for (const item of items) {
+    const eventClass = classifyDigestPeriodEvent(item);
+    counts.set(eventClass, (counts.get(eventClass) ?? 0) + 1);
+  }
+
+  const materialClauses: string[] = [];
+  const priceCount = counts.get("price") ?? 0;
+  if (priceCount > 0) {
+    materialClauses.push(`pricing or offers moved (${priceCount} change${priceCount === 1 ? "" : "s"})`);
+  }
+  const ctaCount = counts.get("cta") ?? 0;
+  if (ctaCount > 0) {
+    materialClauses.push(`landing page CTA${ctaCount === 1 ? "" : "s"} changed (${ctaCount})`);
+  }
+  const campaignCount = counts.get("campaign") ?? 0;
+  if (campaignCount > 0) {
+    materialClauses.push(`ads started or stopped (${campaignCount})`);
+  }
+  const destinationCount = counts.get("destination") ?? 0;
+  if (destinationCount > 0) {
+    materialClauses.push(`destinations changed (${destinationCount})`);
+  }
+
+  if (materialClauses.length > 0) {
+    return `This period matters because ${materialClauses.join(" and ")} — compare before your next campaign decision.`;
+  }
+
+  const cosmeticCount = counts.get("cosmetic") ?? 0;
+  const unclassifiedCount = counts.get("unclassified") ?? 0;
+  if (cosmeticCount > 0 && unclassifiedCount === 0) {
+    return `Cosmetic-only changes this period (${cosmeticCount} headline, form, or creative update${cosmeticCount === 1 ? "" : "s"}) — no pricing or CTA movement, so there is nothing new to weigh for positioning.`;
+  }
+  if (cosmeticCount > 0) {
+    return `${cosmeticCount + unclassifiedCount} change${cosmeticCount + unclassifiedCount === 1 ? "" : "s"} filed this period — headlines, forms, or creatives moved without pricing or CTA movement.`;
+  }
+  return `${items.length} change${items.length === 1 ? "" : "s"} filed this period — review the evidence before your next decision.`;
+}
+
 // Proof-trail timestamps default to UTC (global-first product); pass the
 // workspace's delivery timezone when one is available at the call site.
 export function buildChangeIntelligenceSummary(

@@ -18,10 +18,17 @@ import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
 import { readDigestIntelligence } from "~/lib/change-intelligence";
+import {
+  DIGEST_REVIEWER_UNAVAILABLE,
+  digestMaterialityReason,
+  digestNextAction,
+  digestReviewerLabel,
+} from "~/lib/change-intelligence";
 import { toPublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import { formatWatchEventTypeLabel } from "~/lib/landing-page-display";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
 import { classifyDigestItemSource } from "~/lib/proof-classification";
+import { readTriageFromDigestSummary } from "~/lib/watch-period-triage";
 
 export const meta = () => [{ title: "Briefs | Five to Nine" }];
 
@@ -39,7 +46,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { PLAN_LIMITS, getUserPlan } = await import("~/lib/plan.server");
   const { getDigest, listDeliveryAttempts, listDigests } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const { workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { session, workspaceUserId, isMember, ownerName } =
+    await requireWorkspaceSession(env, request);
   const plan = await getUserPlan(env, workspaceUserId);
 
   if (!PLAN_LIMITS[plan].digests) {
@@ -65,6 +73,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     digests,
+    // E2 (2026-08-08): the accountable reviewer is the already-available
+    // workspace owner identity — never invented from event text. A workspace
+    // member has no claim to the owner's briefs, so their own name is only
+    // used when they are the owner (single-user workspace); a null name
+    // renders the explicit failure state in the UI.
+    reviewerName:
+      ownerName ??
+      (!isMember ? session.user.name ?? session.user.email ?? null : null),
     digestAttemptsByDigestId: Object.fromEntries(
       digests.map((digest) => [
         digest.id,
@@ -192,6 +208,31 @@ export default function DigestsRoute() {
   };
   const filterOptions = buildDigestFilterOptions(allItems);
   const visibleItems = applyDigestFilters(allItems, selectedFilters);
+  // E2 (2026-08-08): every brief carries one materiality reason, one
+  // accountable reviewer, and one next action — derived from the filed
+  // events and the persisted period triage, with the reviewer taken from the
+  // workspace owner identity only. Missing values render their explicit
+  // failure state instead of a silent generic brief.
+  const selectedTriage =
+    data.canAccessDigests && data.selectedDigest
+      ? readTriageFromDigestSummary(data.selectedDigest.summary ?? null)
+      : null;
+  const accountability =
+    data.canAccessDigests && data.selectedDigest
+      ? {
+          materialityReason: digestMaterialityReason({
+            items: data.selectedDigest.items,
+            triage: selectedTriage,
+          }),
+          reviewerLabel: data.reviewerName
+            ? digestReviewerLabel(data.reviewerName)
+            : DIGEST_REVIEWER_UNAVAILABLE,
+          nextAction: digestNextAction({
+            items: data.selectedDigest.items,
+            triage: selectedTriage,
+          }),
+        }
+      : null;
   const deliveryLabel =
     selectedDigestAttempts.length > 0
       ? selectedDigestAttempts
@@ -310,6 +351,28 @@ export default function DigestsRoute() {
             searchParams={searchParams}
             selected={selectedFilters}
           />
+
+          {accountability ? (
+            <section
+              aria-labelledby="brief-accountability-title"
+              className="f9-wk-sec"
+            >
+              <h2 className="f9-wk-kick" id="brief-accountability-title">
+                Why this matters
+              </h2>
+              <p>{accountability.materialityReason}</p>
+              <dl className="f9-wk-dl">
+                <div className="f9-wk-contents">
+                  <dt>Accountable reviewer</dt>
+                  <dd>{accountability.reviewerLabel}</dd>
+                </div>
+                <div className="f9-wk-contents">
+                  <dt>Next action</dt>
+                  <dd>{accountability.nextAction}</dd>
+                </div>
+              </dl>
+            </section>
+          ) : null}
 
           <DesignedDigestBrief
             actions={
