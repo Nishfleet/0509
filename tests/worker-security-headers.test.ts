@@ -31,11 +31,30 @@ describe("Worker security headers", () => {
       SECURITY_HEADERS["strict-transport-security"],
     );
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
-    expect(cspDirective(response, "script-src")).toBe("script-src 'self' 'unsafe-inline'");
+    expect(cspDirective(response, "script-src")).toBe(
+      "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com/beacon.min.js",
+    );
     expect(cspDirective(response, "connect-src")).toBe("connect-src 'self' https:");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("x-frame-options")).toBe("DENY");
     expect(response.headers.get("permissions-policy")).toContain("camera=()");
+  });
+
+  it("allows the Cloudflare Web Analytics beacon script on HTML responses", () => {
+    // Web Analytics is enabled for the zone with automatic injection: Cloudflare
+    // injects https://static.cloudflareinsights.com/beacon.min.js into HTML
+    // responses at the edge. If script-src drops the host, the beacon is
+    // blocked and analytics silently records zero page views. The beacon posts
+    // to the same origin (/cdn-cgi/rum), which connect-src 'self' covers.
+    const response = withSecurityHeaders(
+      htmlResponse(),
+      new Request("https://0509.io/"),
+    );
+    const scriptSrc = cspDirective(response, "script-src") ?? "";
+    expect(scriptSrc).toContain("https://static.cloudflareinsights.com/beacon.min.js");
+    expect(scriptSrc).toContain("'self'");
+    expect(cspDirective(response, "connect-src")).toContain("'self'");
+    expect(cspDirective(response, "connect-src")).toContain("https:");
   });
 
   it("allows the Site Rep script only on public widget HTML routes", () => {
@@ -59,11 +78,17 @@ describe("Worker security headers", () => {
     );
 
     expect(cspDirective(publicResponse, "script-src")).toBe(
-      "script-src 'self' 'unsafe-inline' https://siterep.net",
+      "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com/beacon.min.js https://siterep.net",
     );
-    expect(cspDirective(authResponse, "script-src")).toBe("script-src 'self' 'unsafe-inline'");
-    expect(cspDirective(appResponse, "script-src")).toBe("script-src 'self' 'unsafe-inline'");
-    expect(cspDirective(publicWithAuthCookieResponse, "script-src")).toBe("script-src 'self' 'unsafe-inline'");
+    expect(cspDirective(authResponse, "script-src")).toBe(
+      "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com/beacon.min.js",
+    );
+    expect(cspDirective(appResponse, "script-src")).toBe(
+      "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com/beacon.min.js",
+    );
+    expect(cspDirective(publicWithAuthCookieResponse, "script-src")).toBe(
+      "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com/beacon.min.js",
+    );
   });
 
   it("prevents stale cached public HTML from surviving a rebuild", () => {
