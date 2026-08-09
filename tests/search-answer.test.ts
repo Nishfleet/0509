@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import { buildSearchAnswer } from "~/lib/search-answer";
-import type { AdRecord, SearchResponse } from "~/lib/types";
+import type { AdRecord, LandingPageSnapshotData, SearchResponse } from "~/lib/types";
+
+function capturedLandingPage(input: Partial<LandingPageSnapshotData> = {}): LandingPageSnapshotData {
+  return {
+    rawUrl: input.rawUrl ?? "https://boat-lifestyle.com/sale",
+    canonicalUrl: input.canonicalUrl ?? "https://boat-lifestyle.com/sale",
+    rawHeadline: input.rawHeadline ?? "Bass bhi. Battery bhi.",
+    normalizedHeadline: input.normalizedHeadline ?? "bass bhi. battery bhi.",
+    normalizedHeadlineHash: input.normalizedHeadlineHash ?? "fnv1a-4d52f63b",
+    captureMethod: input.captureMethod ?? "manual",
+    capturedAt: input.capturedAt ?? "2026-03-28T09:00:00.000Z",
+  };
+}
 
 function ad(input: Partial<AdRecord> = {}): AdRecord {
   return {
@@ -53,6 +65,7 @@ describe("buildSearchAnswer", () => {
       result: response({
         ads: [
           ad({
+            landingPage: capturedLandingPage(),
             domainMatch: {
               level: "landing_page_domain",
               reason: "Landing page matches boat-lifestyle.com",
@@ -76,6 +89,61 @@ describe("buildSearchAnswer", () => {
     expect(answer.facts).toContainEqual({
       label: "Landing-page signal",
       value: "1/1",
+      detail: "Captured from ad destinations when available",
+    });
+  });
+
+  it("does not count destination URLs alone as captured landing-page signals", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer).toMatchObject({
+      state: "verified",
+      note: "Landing-page signals are missing, so treat the ad creative as the current signal.",
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Landing-page signal",
+      value: "0/1",
+      detail: "Not captured yet; use the ad cards as creative signals only",
+    });
+  });
+
+  it("counts only captured landing-page snapshots across mixed results", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [
+          ad({
+            metaAdId: "meta-captured",
+            landingPage: capturedLandingPage(),
+            domainMatch: {
+              level: "verified_advertiser_domain",
+              reason: "Advertiser matches boat-lifestyle.com",
+              matchedDomain: "boat-lifestyle.com",
+            },
+          }),
+          ad({ metaAdId: "meta-url-only" }),
+        ],
+        verifiedCount: 2,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer).toMatchObject({
+      state: "verified",
+      note: null,
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Landing-page signal",
+      value: "1/2",
       detail: "Captured from ad destinations when available",
     });
   });
