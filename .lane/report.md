@@ -100,3 +100,55 @@ correctly did not edit #440's lock/CI ownership. The green terminal run proves
 the external blocker is now cleared without gate weakening or cross-lane edits.
 
 The GitHub-installed Bugbot hook ran independently of this lane command and returned a neutral usage-limit result. The lane did not invoke Bugbot directly and followed the `bugbot-gate status` decision above.
+
+---
+# Deploy restore-evidence self-generation remediation
+
+**Status: implemented; full test suite and typecheck green; PR open, not merged.**
+
+Branch: `fix/deploy-restore-evidence-self-generate`
+Base: `origin/main` at `b5bf3ce7`
+Pull request: https://github.com/nish3451/0509/pull/545
+
+## Problem
+
+Deploy production failed 23 of the last 40 runs (runs 31278146322, 31224627211,
+31275731092, ...) with `##[error]No valid pre-generated restore evidence is
+available. Run the D1 remote restore evidence workflow in its recovery window,
+then rerun this deploy.` The pinned-SHA restore-evidence gate accepted only
+evidence artifacts produced by the separate `D1 remote restore evidence`
+workflow (nightly 20:47 UTC drill or manual dispatch), which covers a single
+main SHA per run. Every deploy of a migration-bearing or restore-critical main
+commit between drills failed with `remote_restore_candidate_mismatch` until a
+separate workflow ran at that exact SHA (verified in run logs: failures at
+19:58/20:57 unblocked only after the 20:58 drill dispatch uploaded evidence).
+
+## Fix
+
+The exact-SHA safety gate is unchanged; the deploy no longer depends on a
+separate workflow having run first.
+
+- `scripts/ci-prepare-remote-restore-evidence.sh`: missing/stale/corrupt/
+  non-matching evidence now reports `restore_evidence_available=false` and
+  exits 0 instead of hard-failing; only tooling infrastructure failures
+  (artifact lookup/download/verifier, exit 2) still stop the deploy. Packaging
+  failures fall back to fresh generation.
+- `.github/workflows/deploy-production.yml`: new `generate_restore_evidence`
+  job runs the same drill as the nightly workflow (fresh GitHub-hosted runner,
+  protected `production` environment, same approval markers, provider-lane
+  acquire/release, archive/upload) at the exact pinned SHA; new
+  `cleanup_restore_evidence` job deletes every run-scoped scratch database
+  including from a hard-killed generation attempt; the protected `deploy` job
+  proceeds only after the generated evidence passes the same exact verifier
+  and cleanup succeeded. Fast path (verified pre-generated artifact) skips
+  both new jobs.
+
+## Verification
+
+- Full Vitest: 421 files, 4772/4772 passed.
+- `npm run typecheck` (wrangler typegen + react-router typegen + tsc -b): passed.
+- `git diff --check`: clean.
+- Behavioral tests now lock: missing/corrupt/expired/oversized/publish-failure
+  evidence exits 0 with `restore_evidence_available=false` and no archive;
+  infrastructure failures still exit 2; workflow tests lock the
+  generate/cleanup wiring and deploy gating.
