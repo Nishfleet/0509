@@ -675,6 +675,44 @@ function normalizeExtractedBodyLine(line: string) {
     .toLowerCase();
 }
 
+/**
+ * Meta Ad Library card controls that are sometimes captured as the ad's CTA
+ * (the card overflow "Menu"/"Open Drop-down" button, "See ad details" links,
+ * the "More" expand control, "Report ad", or the "Meta Ad Library result"
+ * label). Exact-match only: real advertiser CTAs ("Shop now", "Get offer",
+ * …) never collide with these tokens.
+ */
+const AD_LIBRARY_CHROME_CTA_TOKENS = [
+  "menu",
+  "open drop-down",
+  "see ad details",
+  "see summary details",
+  "view ad details",
+  "meta ad library result",
+  "more",
+  "report ad",
+];
+
+/**
+ * True when a captured CTA value is pure Meta Ad Library chrome that must
+ * never render as the advertiser's call to action. Applied at the
+ * normalization choke point so no extraction path (session DOM, Quick
+ * Actions, Browserless, rendered-text) can surface it on public search.
+ */
+export function isAdLibraryChromeCta(
+  value: string | null | undefined,
+): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  return AD_LIBRARY_CHROME_CTA_TOKENS.includes(normalized);
+}
+
 export function isTextCardUiLine(line: string) {
   return (
     /^Active$/i.test(line) ||
