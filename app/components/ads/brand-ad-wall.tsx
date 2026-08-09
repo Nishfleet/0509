@@ -2,6 +2,7 @@ import { Link } from "react-router";
 
 import { AdCreative } from "~/components/ads/ad-creative";
 import { adLongevityDays, formatAdLongevityLabel, STRONG_LONGEVITY_DAYS } from "~/lib/ad-display";
+import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import type { AdRecord } from "~/lib/types";
 
 const WALL_VISIBLE_ADS = 5;
@@ -13,11 +14,17 @@ const NEW_AD_HOURS = 48;
  * more ads than fit, the final tile is an honest "+N more ads live" (or
  * "+N more ads on record" when the capture is no longer fresh enough for a
  * live claim) conversion cell carrying the domain to signup.
+ *
+ * OWNERSHIP HONESTY: every card is attributed to the creative's REAL
+ * advertiser as stored in the cache. A creative whose advertiser could not be
+ * captured renders "Advertiser unconfirmed" — never the page's brand name —
+ * because a domain-mode cache also holds other advertisers' ads, and claiming
+ * the brand runs a creative we cannot attribute is exactly the lie the page
+ * exists to avoid (see adIsBrandOwned in brand-page.server.ts).
  */
 export function BrandAdWall({
   ads,
   totalCount,
-  brandName,
   domain,
   fresh,
   signupPath,
@@ -25,7 +32,6 @@ export function BrandAdWall({
 }: {
   ads: AdRecord[];
   totalCount: number;
-  brandName: string;
   domain: string;
   fresh: boolean;
   signupPath: string;
@@ -38,7 +44,7 @@ export function BrandAdWall({
   return (
     <div className="f9-ads-wall">
       {visible.map((ad) => (
-        <BrandAdCard ad={ad} brandName={brandName} key={ad.metaAdId} now={now} />
+        <BrandAdCard ad={ad} key={ad.metaAdId} now={now} />
       ))}
       {remaining > 0 ? (
         <article className="f9-ads-card f9-ads-card-more">
@@ -55,14 +61,17 @@ export function BrandAdWall({
   );
 }
 
-function BrandAdCard({ ad, brandName, now }: { ad: AdRecord; brandName: string; now: Date }) {
+function BrandAdCard({ ad, now }: { ad: AdRecord; now: Date }) {
   const longevityDays = adLongevityDays(ad, now);
   const longevityLabel = formatAdLongevityLabel(ad, now);
   const strong = longevityDays !== null && longevityDays >= STRONG_LONGEVITY_DAYS;
   const isNew = isNewlySeen(ad, now);
   const savedLabel = isNew ? "New" : "Screenshot saved";
   const destination = destinationDomain(ad.landingPageUrl);
-  const advertiser = ad.advertiser?.trim() || brandName;
+  // The REAL advertiser, or the honest unconfirmed label — never the brand
+  // this page is about. A blank advertiser means discovery could not confirm
+  // who ran the ad, so branding it as the brand's own would be a guess.
+  const advertiser = formatAdvertiserLabel(ad.advertiser);
   const headline = ad.previewHeadline?.trim() || ad.hook?.trim() || advertiser;
   const hook = secondaryLine(ad);
 
