@@ -505,6 +505,19 @@ describe("D1 remote restore evidence automation", () => {
     expect(deployWorkflow).not.toContain(
       "npm run restore:d1:remote-evidence",
     );
+    // Missing evidence no longer blocks the deploy: the deploy workflow
+    // generates fresh exact-SHA evidence itself (direct node invocation, not
+    // the npm wrapper) and an independent cleanup job deletes every scratch
+    // database from the run, mirroring the drill workflow's cleanup.
+    expect(deployWorkflow).toContain("generate_restore_evidence:");
+    expect(deployWorkflow).toContain("cleanup_restore_evidence:");
+    expect(deployWorkflow).toContain(
+      "node scripts/d1-remote-restore-evidence.mjs",
+    );
+    expect(deployWorkflow).toContain(
+      "node scripts/d1-remote-restore-evidence.mjs --cleanup-only",
+    );
+    expect(deployWorkflow).toContain("restore_evidence_available");
     expect(deployWorkflow).not.toContain(
       "D1_REMOTE_RESTORE_EVIDENCE_JSON",
     );

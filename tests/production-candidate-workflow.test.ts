@@ -11,7 +11,7 @@ import { join, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
-import { parse } from "yaml";
+import { parse, stringify } from "yaml";
 
 type WorkflowStep = {
   name?: string;
@@ -133,7 +133,12 @@ describe("exact production candidate workflow", () => {
     const deploy = workflow.jobs.deploy;
     expect(prepare?.needs).toBe("pin_candidate");
     expect(prepare?.permissions).toEqual({ contents: "read", actions: "read" });
-    expect(deploy?.needs).toEqual(["pin_candidate", "prepare_remote_restore_evidence"]);
+    expect(deploy?.needs).toEqual([
+      "pin_candidate",
+      "prepare_remote_restore_evidence",
+      "generate_restore_evidence",
+      "cleanup_restore_evidence",
+    ]);
     expect(deploy?.permissions).toEqual({
       contents: "read",
       actions: "read",
@@ -182,6 +187,33 @@ describe("exact production candidate workflow", () => {
       "d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
     );
     expect(workflowSource).toContain("overwrite: true");
+  });
+
+  it("references only direct needs in the deploy workflow", () => {
+    // GitHub Actions exposes only the jobs listed in a job's `needs` key to
+    // its `needs` context; a transitive reference (e.g. an ancestor job that
+    // is not a declared dependency) silently evaluates to an empty string at
+    // runtime. That would disable the generate/cleanup wiring below while all
+    // checks still pass, so every `needs.<job>.` reference must name a
+    // declared direct dependency.
+    for (const [jobName, job] of Object.entries(workflow.jobs)) {
+      const declaredNeeds = new Set(
+        Array.isArray(job.needs) ? job.needs : job.needs ? [job.needs] : [],
+      );
+      const jobText = stringify(job) ?? "";
+      const referencedNeeds = new Set(
+        [...(jobText.match(/needs\.([A-Za-z0-9_-]+)\./g) ?? [])].map((ref) =>
+          ref.slice("needs.".length, -1),
+        ),
+      );
+      const undeclared = [...referencedNeeds].filter(
+        (ref) => !declaredNeeds.has(ref),
+      );
+      expect(
+        undeclared,
+        `${jobName} may reference only direct needs; undeclared: ${undeclared.join(", ")}`,
+      ).toEqual([]);
+    }
   });
 
   it("guards exact-SHA CI, secret scan, backup, and restore entrypoints", () => {

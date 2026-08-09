@@ -1465,7 +1465,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     );
     const prepareSection = workflow.slice(
       workflow.indexOf("prepare_remote_restore_evidence:"),
-      workflow.indexOf("\n  deploy:"),
+      workflow.indexOf("\n  generate_restore_evidence:"),
     );
     expect(prepareSection).not.toContain("environment: production");
     expect(prepareSection).not.toContain("CLOUDFLARE_API_TOKEN");
@@ -1473,15 +1473,77 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(prepareSection).not.toContain(
       "npm run restore:d1:remote-evidence",
     );
+    expect(prepareSection).not.toContain(
+      "node scripts/d1-remote-restore-evidence.mjs",
+    );
     expect(workflow).not.toContain("cleanup_remote_restore_scratch:");
-    expect(workflow.match(/^\s+environment:/gmu)).toHaveLength(1);
+    expect(workflow.match(/^\s+environment:/gmu)).toHaveLength(3);
+    // When no verified pre-generated evidence exists for the pinned candidate,
+    // the deploy itself generates fresh exact-SHA evidence on a fresh
+    // GitHub-hosted machine under the protected production environment, then
+    // cleans up every scratch database. The unprivileged preparation job never
+    // touches provider credentials or exports D1.
+    const generateSection = workflow.slice(
+      workflow.indexOf("generate_restore_evidence:"),
+      workflow.indexOf("\n  cleanup_restore_evidence:"),
+    );
+    const cleanupSection = workflow.slice(
+      workflow.indexOf("cleanup_restore_evidence:"),
+      workflow.indexOf("\n  deploy:"),
+    );
+    expect(generateSection).toContain("environment: production");
+    expect(generateSection).toContain("CLOUDFLARE_API_TOKEN");
+    expect(generateSection).toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(generateSection).toContain("timeout-minutes: 300");
+    expect(generateSection).toContain(
+      "node scripts/d1-remote-restore-evidence.mjs",
+    );
+    expect(generateSection).toContain(
+      "D1_REMOTE_RESTORE_AUTOMATION_APPROVED",
+    );
+    expect(generateSection).toContain(
+      "d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}",
+    );
+    expect(generateSection).toContain(
+      "needs.prepare_remote_restore_evidence.outputs.evidence_valid == 'false'",
+    );
+    expect(cleanupSection).toContain("environment: production");
+    expect(cleanupSection).toContain(
+      "node scripts/d1-remote-restore-evidence.mjs --cleanup-only",
+    );
+    expect(cleanupSection).toContain(
+      "needs.prepare_remote_restore_evidence.outputs.evidence_valid == 'false'",
+    );
+    // The preparation job reports availability to the workflow and only
+    // publishes an archive when the exact verifier accepted the evidence.
+    expect(workflow).toContain(
+      "evidence_valid: ${{ steps.verify_evidence.outputs.restore_evidence_available }}",
+    );
+    expect(workflow).toContain(
+      "if: env.BACKUP_PROOF_STATUS == 'required' && steps.verify_evidence.outputs.restore_evidence_available == 'true'",
+    );
+    // The protected deploy job waits for the generated evidence and the
+    // scratch cleanup when the generate path ran; the fast path skips both.
+    expect(workflow).toContain(
+      "needs.generate_restore_evidence.result == 'success'",
+    );
+    expect(workflow).toContain(
+      "needs.generate_restore_evidence.result == 'skipped'",
+    );
+    expect(workflow).toContain(
+      "needs.cleanup_restore_evidence.result == 'success'",
+    );
+    expect(workflow).toContain(
+      "needs.cleanup_restore_evidence.result == 'skipped'",
+    );
     const prepareScript = readFileSync(
       resolve("scripts/ci-prepare-remote-restore-evidence.sh"),
       "utf8",
     );
     expect(prepareScript).toContain(
-      "No valid pre-generated restore evidence is available.",
+      "No valid pre-generated restore evidence is available",
     );
+    expect(prepareScript).toContain("restore_evidence_available=");
     expect(prepareScript).toContain('if [ "$status" -ne 2 ]');
     expect(prepareScript).toContain("return 2");
     expect(prepareScript).toContain('archive="$RESTORE_EVIDENCE_ARCHIVE"');
@@ -1557,9 +1619,15 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(workflowText).not.toContain("<<'VERIFY_LANE'");
     expect(workflowText).not.toContain("/run/lock/0509/d1-remote-restore-evidence");
     expect(prepare.env?.RESTORE_EVIDENCE_ARCHIVE).toBeUndefined();
-    // Path pattern is authored once in the bind step; upload/cleanup use env.
+    // Path pattern is authored once in the prepare bind step; upload/cleanup
+    // use env. The generate job keeps its own run-scoped path in test-results,
+    // so the prepare pattern must not be duplicated anywhere.
+    const prepareSection = workflowText.slice(
+      workflowText.indexOf("prepare_remote_restore_evidence:"),
+      workflowText.indexOf("\n  generate_restore_evidence:"),
+    );
     expect(
-      workflowText.match(
+      prepareSection.match(
         /d1-remote-restore-evidence-\$\{GITHUB_SHA\}-\$\{GITHUB_RUN_ID\}/g,
       ) ?? [],
     ).toHaveLength(1);
@@ -1837,6 +1905,9 @@ exec /bin/mv "$@"
     expect(artifact.result.stdout).toContain(
       `restore_evidence_archive=${artifact.archivePath}`,
     );
+    expect(artifact.result.stdout).toContain(
+      "restore_evidence_available=true",
+    );
     expect(existsSync(artifact.archivePath)).toBe(true);
     expect(artifact.calls.filter((call) => call.startsWith("curl ")))
       .toHaveLength(2);
@@ -1845,11 +1916,20 @@ exec /bin/mv "$@"
     expect(artifact.calls.filter((call) => call.startsWith("tar ")))
       .toHaveLength(7);
 
+    // Missing or unusable evidence is no longer a hard stop: the deploy
+    // workflow generates fresh exact-SHA evidence in the same run. The
+    // script reports restore_evidence_available=false and exits cleanly
+    // without publishing an archive, so the generate job can run. Only
+    // tooling infrastructure failures (exit 2) remain hard stops.
     const unavailable = runMode("unavailable");
-    expect(unavailable.result.status).toBe(1);
+    expect(unavailable.result.status, unavailable.result.stderr).toBe(0);
     expect(unavailable.result.stderr).toContain(
-      "No valid pre-generated restore evidence is available.",
+      "No valid pre-generated restore evidence is available",
     );
+    expect(unavailable.result.stdout).toContain(
+      "restore_evidence_available=false",
+    );
+    expect(existsSync(unavailable.archivePath)).toBe(false);
     expect(
       unavailable.calls.some((call) =>
         call.includes("find-recent-remote-restore-artifact.mjs"),
@@ -1894,30 +1974,43 @@ exec /bin/mv "$@"
     ).toHaveLength(3);
 
     const corruptArtifact = runMode("corrupt_artifact");
-    expect(corruptArtifact.result.status).toBe(1);
+    expect(corruptArtifact.result.status, corruptArtifact.result.stderr).toBe(
+      0,
+    );
     expect(corruptArtifact.result.stderr).toContain(
-      "No valid pre-generated restore evidence is available.",
+      "No valid pre-generated restore evidence is available",
+    );
+    expect(corruptArtifact.result.stdout).toContain(
+      "restore_evidence_available=false",
     );
     expect(
       corruptArtifact.calls.filter((call) => call.startsWith("tar ")),
     ).toHaveLength(4);
 
     const invalidZipMember = runMode("invalid_zip_member");
-    expect(invalidZipMember.result.status).toBe(1);
+    expect(invalidZipMember.result.status, invalidZipMember.result.stderr).toBe(
+      0,
+    );
     expect(invalidZipMember.result.stderr).toContain(
       "Restore-evidence artifact zip has an unexpected member",
     );
     expect(invalidZipMember.result.stderr).toContain(
-      "No valid pre-generated restore evidence is available.",
+      "No valid pre-generated restore evidence is available",
     );
     expect(
       invalidZipMember.calls.filter((call) => call.startsWith("curl ")),
     ).toHaveLength(2);
 
     const preexistingArchive = runMode("preexisting_archive");
-    expect(preexistingArchive.result.status).toBe(1);
+    expect(
+      preexistingArchive.result.status,
+      preexistingArchive.result.stderr,
+    ).toBe(0);
     expect(preexistingArchive.result.stderr).toContain(
       "Refusing an unexpected or pre-existing restore-evidence archive path",
+    );
+    expect(preexistingArchive.result.stdout).toContain(
+      "restore_evidence_available=false",
     );
     expect(
       preexistingArchive.calls.some((call) =>
@@ -1933,23 +2026,33 @@ exec /bin/mv "$@"
     expect(non302.calls.some((call) => call.startsWith("unzip "))).toBe(false);
 
     const expired = runMode("expired_artifact");
-    expect(expired.result.status).toBe(1);
+    expect(expired.result.status, expired.result.stderr).toBe(0);
     expect(expired.result.stderr).toContain(
       "artifact expired before download",
+    );
+    expect(expired.result.stdout).toContain(
+      "restore_evidence_available=false",
     );
     expect(expired.calls.some((call) => call.startsWith("unzip "))).toBe(false);
 
     const oversizedDownload = runMode("oversized_download");
-    expect(oversizedDownload.result.status).toBe(1);
+    expect(oversizedDownload.result.status, oversizedDownload.result.stderr).toBe(
+      0,
+    );
     expect(oversizedDownload.result.stderr).toContain(
       "artifact zip exceeds its size bound",
+    );
+    expect(oversizedDownload.result.stdout).toContain(
+      "restore_evidence_available=false",
     );
     expect(
       oversizedDownload.calls.some((call) => call.startsWith("unzip ")),
     ).toBe(false);
 
     const oversizedMember = runMode("oversized_member");
-    expect(oversizedMember.result.status).toBe(1);
+    expect(oversizedMember.result.status, oversizedMember.result.stderr).toBe(
+      0,
+    );
     expect(oversizedMember.result.stderr).toContain(
       "artifact member exceeds its size bound",
     );
@@ -1960,9 +2063,9 @@ exec /bin/mv "$@"
     ).toBe(false);
 
     const compressedBomb = runMode("compressed_tar_bomb");
-    expect(compressedBomb.result.status).toBe(1);
+    expect(compressedBomb.result.status, compressedBomb.result.stderr).toBe(0);
     expect(compressedBomb.result.stderr).toContain(
-      "No valid pre-generated restore evidence is available.",
+      "No valid pre-generated restore evidence is available",
     );
     expect(
       compressedBomb.calls.some((call) =>
@@ -1971,7 +2074,10 @@ exec /bin/mv "$@"
     ).toBe(false);
 
     const publishFailure = runMode("publish_failure");
-    expect(publishFailure.result.status).toBe(1);
+    expect(publishFailure.result.status, publishFailure.result.stderr).toBe(0);
+    expect(publishFailure.result.stdout).toContain(
+      "restore_evidence_available=false",
+    );
     expect(existsSync(publishFailure.archivePath)).toBe(false);
   }, 30_000);
 

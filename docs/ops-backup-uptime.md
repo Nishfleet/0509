@@ -67,15 +67,28 @@ or lost-runner drill cannot leave production data parked. Mandatory provider
 list/delete operations retry three times with bounded backoff; exhausted
 cleanup failures remain deploy-blocking.
 
-Production deploys never export D1 or create scratch databases inline. Their
-unprivileged preparation job downloads and verifies the newest private
-restore-evidence artifact from the preceding eight days. Code-only deploys can
-reuse a verified drill for seven
-days only while the Wrangler configuration hash still matches. A
+Production deploys never export D1 or create scratch databases in their
+unprivileged preparation job, and the deploy itself still performs no restore
+mutation. The unprivileged preparation job downloads and verifies the newest
+private restore-evidence artifact from the preceding eight days. Code-only
+deploys can reuse a verified drill for the full 14-day freshness bound while
+the Wrangler configuration hash and migration ledger still match. A
 migration-bearing deploy or any change to restore workflows, scripts, runtime
-dependencies, or Wrangler configuration requires candidate-bound evidence
-from the preceding 24 hours. If no matching artifact exists, the deploy blocks
-with instructions to run the recovery workflow and then rerun the deploy.
+dependencies, or Wrangler configuration requires candidate-bound evidence that
+matches the pinned candidate exactly.
+If no matching artifact exists, the deploy no longer blocks waiting for a
+separate workflow: a `Generate D1 remote restore evidence` job in the deploy
+workflow performs the same fresh backup + isolated remote restore drill as the
+`D1 remote restore evidence` workflow, on a fresh GitHub-hosted machine under
+the same protected `production` environment, and publishes the evidence for the
+deploy job's exact verifier. An independent `if: always()` cleanup job then
+deletes every run-scoped scratch database, including any left by a hard-killed
+generation attempt. Only when that generated evidence passes the same exact
+verifier does the protected deploy job proceed; a failed drill or a failed
+cleanup still blocks the deploy. The nightly drill remains the primary
+evidence source, so the first deploy of a new migration-bearing or
+restore-critical main commit is the only one that normally pays for fresh
+generation.
 Already-applied migration files are immutable: modifying or deleting one
 relative to the last successful production deploy blocks preparation instead
 of allowing a fresh drill to certify the old production ledger by filename.
@@ -88,11 +101,12 @@ workflow runs without rotating a GitHub secret. Claude on the VPS needs only
 GitHub workflow-dispatch access to request a recovery-window drill; Cloudflare
 credentials stay inside the protected recovery environment.
 Artifact lookup distinguishes "none found" from GitHub/API infrastructure
-failure: absence blocks with a recovery-workflow instruction, while
-infrastructure errors retry three times and then fail loudly. Artifact download
-failures follow the same three-attempt, fail-loud contract. A runner without
-the GitHub CLI, or a downloaded artifact that fails content validation, also
-blocks without touching production D1.
+failure: absence is no longer a release stop (the deploy generates fresh exact
+evidence), while infrastructure errors retry three times and then fail loudly.
+Artifact download failures follow the same three-attempt, fail-loud contract.
+A runner without the GitHub CLI, or a downloaded artifact that fails content
+validation, is discarded and replaced by fresh generated evidence rather than
+touching production D1 with unproven state.
 Deploy preparation requires 12 hours of freshness headroom before accepting
 reused evidence. This covers the bounded cleanup and deploy-job windows while
 the deploy plan still re-checks freshness against real wall-clock time before
