@@ -82,7 +82,12 @@ export function parseSearchParams(
 ) {
   const mode = (searchParams.get("mode") === "keyword" ? "keyword" : "advertiser") as SearchMode;
   const filters = normalizeSearchFilters({
-    query: searchParams.get("query") ?? "",
+    // `q` is the conventional shared-link alias for the search term (the
+    // canonical product param is `query`). Shared/deep links such as
+    // /search?q=nykaa must run the same query with the same cache fingerprint
+    // as /search?query=nykaa; an explicit `query` always wins so canonical
+    // product links never change meaning.
+    query: searchParams.get("query") ?? searchParams.get("q") ?? "",
     country: searchParams.get("country") ?? defaults.country ?? "all",
     platform: searchParams.get("platform") ?? "all",
     creativeType: (searchParams.get("creativeType") ?? "all") as SearchFilters["creativeType"],

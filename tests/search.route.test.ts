@@ -330,6 +330,147 @@ describe("search loader", () => {
     });
   });
 
+  it("runs read-only live discovery for a logged-out visitor via the q= shared-link alias", async () => {
+    const env = { DB: {} };
+    const getOptionalSession = vi.fn().mockResolvedValue(null);
+    const listCollections = vi.fn();
+    const sourceResult = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const hydratedResult = {
+      ...sourceResult,
+      cacheStatus: "miss",
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: hydratedResult,
+      selectedAd: baseAd,
+    });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession,
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?q=nykaa"),
+    } as never);
+
+    expect(listCollections).not.toHaveBeenCalled();
+    expect(enforcePublicSearchRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      env,
+      undefined,
+    );
+    // The q= alias must run the same advertiser query as the canonical
+    // query= deep link — the shared link actually executes, never idles.
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        mode: "advertiser",
+        filters: expect.objectContaining({
+          query: "nykaa",
+          country: "all",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false, executionContext: null },
+    );
+    expect(prepareSearchResultSelection).toHaveBeenCalledWith(
+      env,
+      sourceResult,
+      null,
+      { enrichSelected: false, hydratePersisted: false },
+    );
+    expect(result).toMatchObject({
+      session: null,
+      filters: expect.objectContaining({ query: "nykaa" }),
+      result: hydratedResult,
+      selectedAd: baseAd,
+    });
+  });
+
+  it("stays on the idle page when a q= link carries no searchable term", async () => {
+    const env = { DB: {} };
+    const getOptionalSession = vi.fn().mockResolvedValue(null);
+    const listCollections = vi.fn();
+    const searchAdsViaSourceResolver = vi.fn();
+    const prepareSearchResultSelection = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession,
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?q="),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      inputError: null,
+      filters: expect.objectContaining({ query: "" }),
+      result: {
+        ads: [],
+        discoveryStatus: "disabled",
+      },
+    });
+  });
+
   it("infers the ad search from a valid website when the query is blank", async () => {
     const env = { DB: {} };
     const sourceResult = {
