@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSignalSql, buildSnapshot, parseD1Response, summarizeIssues } from "../scripts/market-signal-snapshot.mjs";
+import {
+  buildSignalSql,
+  buildSnapshot,
+  marketSignalFailureMessage,
+  parseD1Response,
+  summarizeIssues,
+} from "../scripts/market-signal-snapshot.mjs";
 
 const d1Payload = [
   {
@@ -74,5 +80,42 @@ describe("market signal snapshot", () => {
     const sql = buildSignalSql(new Date("2026-08-02T12:00:00Z"));
     expect(sql).toContain("2026-08-02T12:00:00.000Z");
     expect(sql).not.toContain("datetime('now')");
+  });
+
+  it("classifies the expired-credentials wrangler failure as an auth-required diagnostic", () => {
+    const message = marketSignalFailureMessage(
+      "In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN environment variable for wrangler to work.",
+    );
+    expect(message).toContain("market_signal_auth_required");
+    expect(message).toContain("wrangler login");
+    expect(message).toContain("CLOUDFLARE_API_TOKEN");
+    expect(message).not.toContain("market_signal_snapshot_failed");
+  });
+
+  it("classifies the expired-OAuth-session wrangler text as auth-required too", () => {
+    const message = marketSignalFailureMessage(
+      "Not logged in. Your auth token has expired and could not be refreshed, and the environment is non-interactive.",
+    );
+    expect(message).toContain("market_signal_auth_required");
+  });
+
+  it("keeps non-auth failures on the existing failure tag", () => {
+    const message = marketSignalFailureMessage("D1 signal query returned no successful result.");
+    expect(message).toBe("market_signal_snapshot_failed: D1 signal query returned no successful result.");
+  });
+
+  it("reports the JSON error payload wrangler prints under --json as auth-required", () => {
+    expect(() =>
+      parseD1Response({
+        error: {
+          text: "In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN environment variable for wrangler to work.",
+        },
+      }),
+    ).toThrow(/market_signal_auth_required/);
+  });
+
+  it("classifies an already-classified message unchanged", () => {
+    const classified = marketSignalFailureMessage("market_signal_auth_required: already explained");
+    expect(classified).toBe("market_signal_auth_required: already explained");
   });
 });
