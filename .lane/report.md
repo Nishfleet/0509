@@ -372,3 +372,85 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Dynamic brand-page sitemap candidate-round harvest
+
+**Status: harvested; branch pushed; PR open, not merged.**
+
+Branch: `harvest/dynamic-brand-sitemap`
+Base: `origin/main` at `5e682868`
+Pull request: https://github.com/nish3451/0509/pull/576
+
+## Item
+
+- [ ] Harvest the abandoned "dynamic-brand-sitemap" candidate round — 5
+  worktree(s) hold finished, uncommitted diffs.
+
+## Verdict
+
+The round's diffs were harvested and shipped as PR #576. Candidate 5 was
+judged the winner of five re-verified diffs (candidates 1–5 all pass
+typecheck, build, the full suite, and diff check on fresh origin/main;
+candidate 5 carries the most complete exclusion coverage and exact
+loader-key parity verification). The lane's seeded working tree was
+byte-identical to candidate 5's diff, confirming the round's intent.
+
+## What the harvest delivers
+
+The worker now serves `/sitemap.xml` dynamically, before rate limiting:
+
+- The 13 static URLs always render; `/ads/:domain` entries are appended only
+  for domains whose cache-only brand-page loader would serve indexable right
+  now, proven by exact loader-key parity (`brandPageCacheLookupKey` +
+  crawler-visible country fallbacks `'all'` then `'United States'`), verified
+  with one bounded D1 scan plus batched primary-key point reads.
+- Pure cache read — sitemap generation never triggers live discovery, Browser
+  Rendering, or any paid operation.
+- Every condition that would make the loader serve a noindex or honest-shell
+  page excludes the domain: emergency noindex flag, demo-only provider,
+  missing DB/table, malformed JSON/domains, demo ads, zero ads, stale/future
+  rows, wrong route context/provider/country/key, cursor pages,
+  customer-token-scoped keys, broader-scope keys, and any query error.
+- Any failure degrades to the unchanged static sitemap (HTTP 200); sitemap
+  availability never depends on D1 health.
+
+Files: `app/lib/brand-page-sitemap.server.ts` (new),
+`app/lib/brand-page.server.ts`, `app/lib/seo.ts`, `workers/app.ts`,
+`tests/dynamic-brand-sitemap.test.ts` (new, 23 tests),
+`tests/seo.test.ts` (1398 insertions, 11 deletions).
+
+## Relationship to PR #575
+
+PR #575 (`seo/dynamic-ads-sitemap`, open) implements the same feature via
+`app/lib/sitemap.server.ts` + `listFreshPublicSearchCacheEntries`. This
+harvest uses a sibling server-only module with exact loader-key point-read
+verification and covers more exclusions. This PR is independent of #575;
+reviewers may prefer one or fold the other.
+
+## Candidate provenance
+
+- 5 worktrees: `candidates/dynamic-brand-sitemap-{1..5}` on
+  `loop/dynamic-brand-sitemap-c{1..5}-20260810`, all based on `5e682868`
+  (the current `origin/main` tip, verified at harvest time).
+- Candidate diffs are mutually distinct variants (c1 1223 diff lines through
+  c5 1514 diff lines); all touch the same 6 files.
+
+## Verification
+
+- `npm run typecheck` — exit 0.
+- Focused: `npx vitest run tests/dynamic-brand-sitemap.test.ts
+  tests/seo.test.ts` — 2 files, 29/29 passed.
+- `npm run build` — exit 0.
+- Full Vitest: 424 files, **4789 passed / 59 failed** (20 failed files).
+  Baseline proof: a clean `origin/main` worktree run gives **4765 passed /
+  59 failed / 20 failed files**, and the failing-file sets are identical
+  (`comm` empty both directions); the 59 are pre-existing `act is not a
+  function` failures in react-test-renderer tests, documented identically in
+  PR #575's own verification. The +24 passing tests on this branch are the
+  new sitemap + seo tests.
+- `git diff --check` — clean.
+
+## Files
+
+- `.lane/report.md` — this evidence record.
