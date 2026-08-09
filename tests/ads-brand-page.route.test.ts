@@ -163,6 +163,8 @@ describe("/ads/:domain loader", () => {
     expect(result.checkedAgo).toBe("about 2 hours ago");
     // A capture hours old must NOT present itself as "right now".
     expect(result.freshForLiveClaim).toBe(false);
+    // The cached creative's advertiser ("Nykaa") is the brand itself.
+    expect(result.brandOwnedAdCount).toBe(1);
     expect(result.teaser).toMatchObject({
       totalCount: 1,
       activeCount: 1,
@@ -202,6 +204,54 @@ describe("/ads/:domain loader", () => {
     expect(result.hasCachedAds).toBe(true);
     expect(result.checkedAgo).toBe("about an hour ago");
     expect(result.freshForLiveClaim).toBe(false);
+  });
+
+  it("counts only the brand's own creatives as brand-owned when the cache mixes in other advertisers", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [
+            baseAd,
+            { ...baseAd, metaAdId: "meta-reseller-1", advertiser: "BeautyDeals Hub" },
+            { ...baseAd, metaAdId: "meta-reseller-2", advertiser: "BeautyDeals Hub" },
+          ],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.ads).toHaveLength(3);
+    // Only the "Nykaa" creative is the brand's own; the two "BeautyDeals Hub"
+    // creatives are other advertisers whose ads link to nykaa.com.
+    expect(result.brandOwnedAdCount).toBe(1);
+  });
+
+  it("reports zero brand-owned creatives when every cached ad is another advertiser's", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [
+            { ...baseAd, metaAdId: "meta-seller-1", advertiser: "BeautyDeals Hub" },
+            { ...baseAd, metaAdId: "meta-seller-2", advertiser: "Outlet City" },
+          ],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.brandOwnedAdCount).toBe(0);
   });
 
   it("renders the honest shell with noindex on a cache miss, with bounded cache lookups and zero provider calls", async () => {
@@ -393,6 +443,7 @@ describe("/ads/:domain meta", () => {
     noindex: false,
     canonicalPath: "/ads/nykaa.com",
     freshForLiveClaim: false,
+    brandOwnedAdCount: 1,
   };
 
   it("emits the brand title, honest description, and canonical URL without robots meta when indexable", async () => {
@@ -437,6 +488,37 @@ describe("/ads/:domain meta", () => {
     const tags = await metaFor({ ...richData, noindex: true });
 
     expect(tags).toContainEqual({ name: "robots", content: "noindex" });
+  });
+
+  it("never claims the brand owns ads when the cached creatives are other advertisers'", async () => {
+    installBrandPageMocks();
+    const tags = await metaFor({
+      ...richData,
+      brandOwnedAdCount: 0,
+    });
+
+    // The title describes the page honestly as ads linking to the domain,
+    // with the brand as the topic — never "{brand}'s ads".
+    expect(tags).toContainEqual({
+      title: "Nykaa: Meta ads linking to nykaa.com — checked about 2 hours ago | Five to Nine",
+    });
+    const description = tags.find((tag) => tag.name === "description")?.content ?? "";
+    expect(description).toContain("from other advertisers linking to nykaa.com");
+    expect(description).not.toContain("ads from Nykaa");
+    expect(tags.some((tag) => tag.title?.includes("Nykaa Facebook & Instagram ads"))).toBe(false);
+  });
+
+  it("states the brand/other-advertiser split in the meta when the cache mixes both", async () => {
+    installBrandPageMocks();
+    const tags = await metaFor({
+      ...richData,
+      ads: [baseAd, { ...baseAd, metaAdId: "meta-2" }],
+      brandOwnedAdCount: 1,
+    });
+
+    const description = tags.find((tag) => tag.name === "description")?.content ?? "";
+    expect(description).toContain("2 Meta ads linking to nykaa.com — 1 from Nykaa and 1 from other advertisers");
+    expect(tags.some((tag) => tag.title?.includes("Nykaa Facebook & Instagram ads"))).toBe(false);
   });
 
   it("describes the honest shell without fabricating ad data", async () => {

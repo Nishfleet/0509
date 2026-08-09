@@ -33,7 +33,10 @@ import {
 } from "~/lib/discovery-cache.server";
 import type { AppEnv } from "~/lib/env.server";
 import { fingerprintSavedQuery, normalizeSavedQuery, parseSearchParams } from "~/lib/normalize";
-import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
+import {
+  parseSearchInputFromWebsiteField,
+  registrableDomainFromHostname,
+} from "~/lib/search-query";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { buildSearchV2CacheKey, buildSearchV2SavedQuery } from "~/lib/search-v2.server";
 import type { AdRecord } from "~/lib/types";
@@ -190,6 +193,73 @@ export function buildBrandIntelTeaser(ads: AdRecord[], now: Date = new Date()): 
 }
 
 const MS_PER_DAY = 86_400_000;
+
+/**
+ * Cache-only "is this creative the brand's own ad?" test. A public brand page
+ * may only say "{brand} is running these ads" when the cached creatives are
+ * actually the brand's own Meta pages — a domain-mode search also returns ads
+ * from OTHER advertisers (resellers, affiliates, sellers) whose landing pages
+ * point at the brand's site. This never queries a provider; it reads signals
+ * already stored on each cached ad, in strength order:
+ *
+ *  1. `domainMatch.level` evidence from the search-v2 pipeline:
+ *     `verified_advertiser_domain` (the advertiser's own domain matched the
+ *     searched domain) or `verified_entity` (advertiser name carries a known
+ *     brand identity alias and the landing page matches). Landing-page-only
+ *     levels (`exact_hostname`, `registrable_domain`, `verified_alias`) are
+ *     deliberately NOT enough — they prove a connection, not ownership.
+ *  2. The advertiser page name carries the brand's own registrable domain as
+ *     a token (e.g. "Nykaa Beauty — nykaa.com").
+ *  3. The advertiser page name carries the brand's label as a whole word
+ *     (e.g. "Nykaa", "Nykaa Fashion") — the official-page naming convention.
+ *     Known boundary: a seller page named with the brand label ("Nykaa
+ *     Outlet") counts as the brand's, matching the ad-card display and the
+ *     search product's advertiser-alias convention; advertisers with
+ *     unrelated names never count.
+ *
+ * Anything else (unrelated advertiser pages that merely link to the brand,
+ * text-only matches, blank advertiser names) is NOT counted, so the page never
+ * claims the brand runs ads it cannot attribute.
+ */
+export function adIsBrandOwned(ad: AdRecord, brandDomain: string): boolean {
+  const matchLevel = ad.domainMatch?.level;
+  if (matchLevel === "verified_advertiser_domain" || matchLevel === "verified_entity") {
+    return true;
+  }
+
+  const advertiser = (ad.advertiser ?? "").trim();
+  if (!advertiser) {
+    return false;
+  }
+  const normalized = advertiser.toLowerCase();
+
+  const registrable = registrableDomainFromHostname(brandDomain);
+  if (registrable && wordBoundaryMatch(normalized, registrable)) {
+    return true;
+  }
+
+  // Short labels ("my", "in") are too ambiguous to trust for ownership.
+  const label = registrable?.split(".")[0];
+  if (label && label.length >= 3 && wordBoundaryMatch(normalized, label)) {
+    return true;
+  }
+
+  return false;
+}
+
+/** How many of the cached creatives are ads the brand itself runs. */
+export function countBrandOwnedAds(ads: AdRecord[], brandDomain: string): number {
+  return ads.filter((ad) => adIsBrandOwned(ad, brandDomain)).length;
+}
+
+/** Whole-word (case-insensitive) containment: "Nykaa" matches "Nykaa Fashion", not "Nykaam". */
+function wordBoundaryMatch(haystack: string, needle: string): boolean {
+  return new RegExp(`(^|[^a-z0-9])${escapeRegExp(needle)}($|[^a-z0-9])`).test(haystack);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 /**
  * Public-page read of the Ad Aggression Score, computed cache-only from the
@@ -361,7 +431,9 @@ function brandChangeMove(ad: AdRecord): string {
 
 function brandChangeWhy(ad: AdRecord): string {
   if (ad.variantCount && ad.variantCount > 1) {
-    return `Launched with ${ad.variantCount} variants — they're testing which creative wins.`;
+    // Advertiser-neutral: the cached creatives may not all be the brand's own
+    // ads, so the reason line must not imply the brand ran this one.
+    return `Launched with ${ad.variantCount} variants — the advertiser is testing which creative wins.`;
   }
   if (ad.offer?.trim()) {
     return `Carries a fresh offer — a demand push worth watching.`;
