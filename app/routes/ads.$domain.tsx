@@ -56,6 +56,11 @@ export interface BrandPageLoaderData {
   hasCachedAds: boolean;
   ads: AdRecord[];
   checkedAgo: string | null;
+  /**
+   * True only when the capture is young enough (≤ 1 hour) for the page to
+   * honestly say "right now"/"live". Older captures render past-tense copy.
+   */
+  freshForLiveClaim: boolean;
   teaser: BrandIntelTeaser | null;
   aggression: BrandPageAggression | null;
   changeEvents: BrandChangeEvent[];
@@ -122,6 +127,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     hasCachedAds: Boolean(snapshot),
     ads: snapshot?.ads ?? [],
     checkedAgo: snapshot ? formatBrandPageCheckedAgo(snapshot.fetchedAt, now) : null,
+    freshForLiveClaim: snapshot?.freshForLiveClaim ?? false,
     teaser: snapshot ? buildBrandIntelTeaser(snapshot.ads, now) : null,
     aggression: snapshot ? computeBrandPageAggressionScore(snapshot.ads, now) : null,
     changeEvents: snapshot ? buildBrandChangeFeed(snapshot.ads, now) : [],
@@ -138,7 +144,14 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
     ];
   }
 
-  const title = `${loaderData.brandName} Facebook & Instagram ads right now | Five to Nine`;
+  // "Right now" is a live-scrape claim — it must never appear when the page
+  // renders from a cache older than an hour, or on the cache-miss shell, and
+  // it needs the visible checked-ago stamp as its evidence.
+  const title = loaderData.hasCachedAds
+    ? loaderData.freshForLiveClaim && loaderData.checkedAgo
+      ? `${loaderData.brandName} Facebook & Instagram ads right now | Five to Nine`
+      : `${loaderData.brandName} Facebook & Instagram ads — checked ${loaderData.checkedAgo ?? "recently"} | Five to Nine`
+    : `${loaderData.brandName} Facebook & Instagram ads | Five to Nine`;
   const description = loaderData.hasCachedAds
     ? `See ${loaderData.ads.length} Meta ${loaderData.ads.length === 1 ? "ad" : "ads"} from ${loaderData.brandName} (${loaderData.domain}), from a public Ad Library check ${loaderData.checkedAgo}. Get an email when their ads or offer change.`
     : `We haven't checked ${loaderData.domain} recently. Run a free live Meta Ad Library search and track ${loaderData.brandName}'s ads with Five to Nine.`;
@@ -160,7 +173,9 @@ export default function BrandAdsRoute() {
 
   return (
     <main className="f9-home f9-ads-page">
-      {data.hasCachedAds ? <BrandTicker ads={data.ads} brandName={data.brandName} /> : null}
+      {data.hasCachedAds ? (
+        <BrandTicker ads={data.ads} brandName={data.brandName} fresh={data.freshForLiveClaim} />
+      ) : null}
       <MarketingNav />
 
       {data.hasCachedAds ? (
@@ -206,12 +221,12 @@ function BrandAdsResults({
                 ) : null}
               </p>
               <h1 className="f9-ads-headline" id="brand-ads-title">
-                {`${data.brandName} is running `}
+                {data.freshForLiveClaim ? `${data.brandName} is running ` : `${data.brandName} was running `}
                 <span className="f9-ads-hl">{`${totalCount} Meta ${adWord}`}</span>
-                {" right now."}
+                {data.freshForLiveClaim ? " right now." : " at the last check."}
               </h1>
               <p className="f9-ads-subline">
-                {heroDetailSentence(teaser)}
+                {heroDetailSentence(teaser, data.freshForLiveClaim)}
                 <b>Point us at your competitor and you'll never hear their next move from a client first.</b>
               </p>
             </div>
@@ -245,6 +260,7 @@ function BrandAdsResults({
           ads={data.ads}
           aggression={data.aggression}
           freshnessLabel={data.checkedAgo}
+          fresh={data.freshForLiveClaim}
           movesThisWeek={data.changeEvents.length}
           teaser={teaser}
         />
@@ -273,7 +289,9 @@ function BrandAdsResults({
         <div className="f9-container">
           <div className="f9-ads-sec-head">
             <div className="f9-ads-sec-head-left">
-              <span className="f9-ads-sec-eyebrow">Running right now</span>
+              <span className="f9-ads-sec-eyebrow">
+                {data.freshForLiveClaim ? "Running right now" : "From the last check"}
+              </span>
               <h2 id="brand-wall-title">{`All ${totalCount} ${adWord}, on the wall`}</h2>
             </div>
             <span className="f9-ads-sec-meta">
@@ -286,6 +304,7 @@ function BrandAdsResults({
             ads={data.ads}
             brandName={data.brandName}
             domain={data.domain}
+            fresh={data.freshForLiveClaim}
             signupPath={signupPath}
             totalCount={totalCount}
           />
@@ -320,7 +339,7 @@ function BrandAdsResults({
 }
 
 /** Real-data lead-in to the promise; drops clauses whose data is missing. */
-function heroDetailSentence(teaser: BrandIntelTeaser | null): string {
+function heroDetailSentence(teaser: BrandIntelTeaser | null, fresh: boolean): string {
   if (!teaser) return "";
   const parts: string[] = [];
   if (teaser.formats.length > 1) {
@@ -332,9 +351,14 @@ function heroDetailSentence(teaser: BrandIntelTeaser | null): string {
     );
   }
   if (parts.length === 0) {
-    return "They're advertising while your team is offline. ";
+    // Present tense is a live claim — keep it only while the capture is fresh.
+    return fresh
+      ? "They're advertising while your team is offline. "
+      : "They were advertising at the last check. ";
   }
-  return `They're testing ${parts.join(" and ")}. `;
+  return fresh
+    ? `They're testing ${parts.join(" and ")}. `
+    : `At the last check they were testing ${parts.join(" and ")}. `;
 }
 
 /**
