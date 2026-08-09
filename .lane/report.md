@@ -372,3 +372,76 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Named-owner/materiality candidate-round harvest (already complete via PR #546)
+
+**Status: already harvested and merged; this lane records the evidence only.**
+
+Branch: `report/lane1-named-owner-materiality-harvest-complete`
+Base: `origin/main` at `5e682868`
+
+## Item
+
+- [ ] Harvest the abandoned named-owner/materiality candidate round before its
+  three diffs rot (lane 1 checklist item; packet text truncated after the
+  overseer reference).
+
+## Verdict
+
+No product code change is warranted: the abandoned 2026-08-08 21:57 IST
+named-owner/materiality candidate round was already harvested, judged, merged,
+and deployed. PR #546 (`harvest/named-owner-materiality`) merged
+2026-08-09T05:10:48Z (10:40 IST) as squash commit `3484e7d8`, which is an
+ancestor of the current `origin/main` tip (`5e682868`, #567). Its own commit
+message records the harvest: candidate 4 was judged the winner of three
+re-verified diffs (candidates 1, 3, 4 all pass typecheck, build, the full
+suite, sgscan, and diff check on fresh origin/main).
+
+## What the merged harvest delivers
+
+Every customer-facing brief now carries one materiality reason, exactly one
+accountable reviewer, and one next action:
+
+- **Named owner**: the workspace owner identity, the truthful "Workspace
+  owner" role fallback, or an explicit visible failure state — no person is
+  ever invented from event text.
+- **Materiality reason**: a non-empty, kind-aware reason for changed,
+  all-quiet, and failed-check periods, plus an explicit failure state for
+  periods with no record at all (which render a failure email instead of a
+  silent generic digest).
+- **Next action**: exactly one actionable next step per brief.
+- Surfaces: digest email, the scan-trouble notice, and the authenticated
+  briefs route; all values escaped on every surface.
+
+Files merged: `app/lib/change-intelligence.ts`, `app/lib/digest-email.server.ts`,
+`app/routes/app.digests.tsx`, `tests/digest-email.test.ts` (840 insertions).
+
+## Code evidence on this tip
+
+- PR #546 state: `MERGED`, `mergedAt 2026-08-09T05:10:48Z`, merge commit
+  `3484e7d8`, base `main` — verified with `gh pr view 546`.
+- **Byte-identity of the abandoned diff vs. merged main**: `git diff
+  4cf54b68 3484e7d8 -- app/lib/change-intelligence.ts
+  app/lib/digest-email.server.ts app/routes/app.digests.tsx
+  tests/digest-email.test.ts` is **0 lines** — the local abandoned candidate
+  commit (`4cf54b68`, branch `harvest/named-owner-materiality`, based on
+  pre-#547 main) and the merged squash contain identical content, so nothing
+  from the round remains unmerged.
+- No other unmerged candidate branches from the round exist locally or on
+  origin (`git branch -a` / `git for-each-ref` show no candidate-1/candidate-3
+  leftovers; the round's stashes are unrelated funnel/improvement-loop work).
+- The harvest is also live in production: deploy dispatch
+  `docs/deploy-dispatch-2026-08-09.md` lists #546 among the customer fixes
+  that left the queue with the 2026-08-09 production deploy.
+
+## Checks
+
+- Focused regressions on this tip (fresh `origin/main` at `5e682868`):
+  `npx vitest run tests/digest-email.test.ts tests/digest-route-presentation.test.ts`
+  → 2 files, **57/57 passed**.
+- `git diff --check`: clean (markdown-only change; no product code touched).
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
