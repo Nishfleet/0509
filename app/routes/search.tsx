@@ -134,7 +134,7 @@ export {
 export type { SearchAccumulationState };
 
 const SEARCH_WARMING_POLL_MS = 5_000;
-const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
+export const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
 // Long-horizon escape hatch for the public submit hang: how long an in-flight
 // /search GET may keep the idle pre-search page spinning before the client
 // forces a fresh page load to the exact target URL. Exported so tests can pin
@@ -991,6 +991,7 @@ export default function SearchRoute() {
     !data.inputError;
   const discoverySummary = formatDiscoverySummary(visibleResult);
   const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
+  const isSearchWarming = visibleResult.discoveryProgress === "warming";
   // Candidate-3 root-cause fix for the public submit hang: the See ads button
   // stays pending only while a GET navigation to /search targets a URL that is
   // NOT the committed location.search. Once the server commits results or an
@@ -998,22 +999,34 @@ export default function SearchRoute() {
   // — the target matches the committed location and the button re-enables
   // instead of spinning forever. The long-horizon recovery overrides it so the
   // button is never stuck disabled behind a navigation that cannot settle.
+  // COLD-PATH (0509 lane 1): a settled request is not a finished search. The
+  // first anonymous query for an uncached advertiser returns the typed warming
+  // state immediately while the browser capture keeps running in the
+  // background, so the submit keeps saying "Searching…" until the committed
+  // page actually renders results or an error. It releases with the same 60s
+  // budget as the warming poll, so a background capture that never lands
+  // cannot leave the button disabled forever.
   const commandNavigationTarget =
     navigation.state === "loading" &&
     navigation.location?.pathname === "/search"
       ? (navigation.location.search ?? "")
       : null;
   const commandNavigationPending =
-    commandNavigationTarget !== null &&
-    commandNavigationTarget !== location.search &&
-    searchNavigationRecovery === null;
+    (commandNavigationTarget !== null &&
+      commandNavigationTarget !== location.search &&
+      searchNavigationRecovery === null) ||
+    (isSearchWarming &&
+      hasSearchQuery &&
+      !data.inputError &&
+      visibleAds.length === 0 &&
+      warmingPollCount < SEARCH_WARMING_POLL_LIMIT &&
+      searchNavigationRecovery === null);
   const displayDomain =
     data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
   const isDomainSearch = Boolean(
     displayDomain && competitorWebsite.normalizedUrl,
   );
   const isBroaderScope = data.searchScope === "broader";
-  const isSearchWarming = visibleResult.discoveryProgress === "warming";
   const formatFilterApproximate =
     (data.filters.creativeType === "video" ||
       data.filters.creativeType === "carousel") &&

@@ -99,7 +99,11 @@ describe("public search warming recovery", () => {
 		expect(markup).toContain("Usually under a minute");
 		expect(markup).toContain('role="status"');
 		expect(markup).toContain('aria-live="polite"');
-		expect(markup).not.toContain('aria-busy="true"');
+		// The submit stays pending ("Searching…") while warming: the request has
+		// settled but the background capture is still running, so the button
+		// reports that the search is not finished instead of an idle CTA.
+		expect(markup).toContain("Searching…");
+		expect(markup).toContain('aria-busy="true"');
 		// Auto-revalidate replaces the manual-only recovery path; retry may still
 		// appear for delayed states but warming itself is not "click to continue".
 		expect(markup).not.toContain("Live search is temporarily unavailable");
