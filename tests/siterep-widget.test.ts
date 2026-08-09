@@ -7,6 +7,7 @@ import {
   isSiteRepWidgetIsolatedPath,
   normalizeSiteRepWidgetPathname,
   SITE_REP_WIDGET,
+  SITE_REP_WIDGET_DELAY_MS,
   shouldLoadSiteRepWidget,
   shouldReloadForSiteRepWidgetDocument,
   siteRepWidgetForPathname,
@@ -220,6 +221,78 @@ describe("Site Rep widget install", () => {
         apiBase: SITE_REP_WIDGET.apiBase,
       },
     });
+  });
+
+  it("keeps the immediate install path when the delay is explicitly zero", () => {
+    const { appended, widgetDocument, widgetWindow } = fakeWidgetDom();
+
+    installSiteRepWidget(SITE_REP_WIDGET, widgetWindow as never, widgetDocument as never, {
+      delayMs: 0,
+    });
+
+    expect(appended).toHaveLength(1);
+    expect(widgetDocument.body.appendChild).toHaveBeenCalledTimes(1);
+  });
+
+  it("defers the widget install out of the initial-load window when a delay is configured", () => {
+    vi.useFakeTimers();
+    try {
+      const { appended, widgetDocument, widgetWindow } = fakeWidgetDom();
+
+      installSiteRepWidget(SITE_REP_WIDGET, widgetWindow as never, widgetDocument as never, {
+        delayMs: SITE_REP_WIDGET_DELAY_MS,
+      });
+
+      expect(appended).toHaveLength(0);
+      expect(widgetDocument.body.appendChild).not.toHaveBeenCalled();
+      expect(widgetWindow.siterep).toBeUndefined();
+
+      vi.advanceTimersByTime(SITE_REP_WIDGET_DELAY_MS - 1);
+      expect(appended).toHaveLength(0);
+
+      vi.advanceTimersByTime(1);
+      expect(appended).toHaveLength(1);
+      expect(widgetDocument.body.appendChild).toHaveBeenCalledTimes(1);
+      expect(widgetWindow.siterep).toEqual({
+        botId: SITE_REP_WIDGET.botId,
+        publicKey: SITE_REP_WIDGET.publicKey,
+        apiBase: SITE_REP_WIDGET.apiBase,
+      });
+      expect(appended[0]).toMatchObject({
+        src: SITE_REP_WIDGET.src,
+        defer: true,
+        dataset: {
+          siterepLoader: "0509",
+          botId: SITE_REP_WIDGET.botId,
+          publicKey: SITE_REP_WIDGET.publicKey,
+          apiBase: SITE_REP_WIDGET.apiBase,
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels a pending deferred install on cleanup", () => {
+    vi.useFakeTimers();
+    try {
+      const { appended, widgetDocument, widgetWindow } = fakeWidgetDom();
+
+      const cleanup = installSiteRepWidget(
+        SITE_REP_WIDGET,
+        widgetWindow as never,
+        widgetDocument as never,
+        { delayMs: SITE_REP_WIDGET_DELAY_MS },
+      );
+      cleanup?.();
+
+      vi.advanceTimersByTime(SITE_REP_WIDGET_DELAY_MS + 1000);
+      expect(appended).toHaveLength(0);
+      expect(widgetDocument.body.appendChild).not.toHaveBeenCalled();
+      expect(widgetWindow.siterep).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("tears down loader config, scripts, and owned widget nodes", () => {

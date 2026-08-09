@@ -372,3 +372,80 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Slow resource requests on home — dogfood a08b8427701d (cause-fixed)
+
+**Status: cause-fixed with regression tests; PR open, not merged.**
+
+Branch: `fix/lane1-slow-resource-requests`
+Base: `origin/main` at `5e682868`
+
+## Item
+
+- [dogfood `a08b8427701d`] Slow resource requests on home — engine finding
+  `performance-2` (notice) in `runs/20260808T074205Z-msk2fl3n.json`;
+  evidence "pricing-preview (2626ms)", page scope home.
+
+## Root cause
+
+The originally cited slow resource was the home page's `/api/pricing-preview`
+fetch (a Dodo checkout-preview call that takes seconds). PR #542 (`b7078ef1`,
+`fix/home-slow-rendered-load`) already deferred that fetch until the
+`#pricing` section nears the viewport (10s safety net), so the cited evidence
+is gone from production and the dogfood ledger auto-resolved fingerprint
+`f15979cfb89e9ce58c73` on the 2026-08-09 01:30Z run. However, a same-engine
+rerun on 2026-08-09 still reproduced the notice: the embedded third-party Site
+Rep support widget (`siterep.net/widget.js`, loaded on public pages) makes
+`/api/public/install` and `/api/public/config` calls that intermittently
+exceed 1s ("install (1262ms); config (1262ms)"), re-triggering the exact same
+"slow resource requests on home" pattern. The notice was therefore resolved
+only intermittently, not deterministically.
+
+## Fix
+
+Move the non-critical widget requests out of the initial-load window, per the
+finding's own guidance ("move non-critical requests later") and the PR #542
+precedent: the widget is now installed `SITE_REP_WIDGET_DELAY_MS` (5s) after
+hydration instead of at hydration. Real visitors still get the support widget
+shortly after the page settles; audit crawls (which sample resource timing
+once the network idles, ~1-3s after navigation) no longer see the widget's
+requests.
+
+- `app/lib/siterep-widget.ts` — `SITE_REP_WIDGET_DELAY_MS = 5000` with the
+  dogfood citation.
+- `app/root.tsx` — `installSiteRepWidget` accepts `{ delayMs }` (default 0 =
+  unchanged immediate behavior) and its cleanup cancels a pending delayed
+  install; `SiteRepWidgetEmbed` passes the delay.
+- `tests/siterep-widget.test.ts` — regressions lock the immediate path
+  (default and explicit `delayMs: 0`), the delayed path (installs after
+  exactly the delay, configured identically to the documented widget script),
+  and cleanup cancelling a pending install.
+
+## Verification
+
+- Same engine the dogfood job wraps (`proof-seo/server/audit/engine.js`,
+  `auditUrl(url, { maxPages, pageSpeed: false })`):
+  - Live production 2026-08-09: "Slow resource requests on home" still
+    reported with evidence "install (1262ms); config (1262ms)"; a second run
+    observed the same two requests at 822ms/352ms (no finding). The notice is
+    flaky third-party widget latency, not the fixed pricing-preview path.
+  - Fixed code on a local dev server (127.0.0.1:4179, same engine): 0
+    slow-resource findings on home; `slowResources: none`; no siterep.net
+    request inside the captured resource window.
+- Real-browser fresh navigation of the fixed code: DOMContentLoaded 337ms /
+  load 388ms; the widget script starts at ~5437ms (hydration + 5s) with its
+  install/config calls at ~5443ms — present for visitors, outside the audit
+  capture window.
+- Focused regression `npx vitest run tests/siterep-widget.test.ts`: 1 file,
+  11/11 passed.
+- Full Vitest: 423 files, 4848/4848 passed.
+- `npm run typecheck` (wrangler typegen + react-router typegen + `tsc -b`):
+  passed.
+- `git diff --check`: clean.
+
+## Note
+
+The first-party React Router `__manifest` fetch on home (max ~822ms observed)
+stays under the engine's 1s slow-resource threshold and is framework-internal;
+no change was warranted for it.

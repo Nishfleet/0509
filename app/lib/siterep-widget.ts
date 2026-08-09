@@ -7,6 +7,18 @@ export const SITE_REP_WIDGET = Object.freeze({
   src: "https://siterep.net/widget.js",
 });
 
+// PERF: install the embedded support widget this many milliseconds after
+// hydration. The widget script makes third-party API calls (siterep.net
+// /api/public/install and /api/public/config) that can take >1s, which kept
+// the home page's resource waterfall busy after render and re-triggered the
+// SEO Fix Kit "Slow resource requests on home" notice (dogfood a08b8427701d
+// from runs/20260808T074205Z-msk2fl3n.json, evidence "pricing-preview
+// (2626ms)" and later "install (1262ms); config (1262ms)"). Delaying the
+// install moves those non-critical requests out of the initial-load window —
+// the same "move non-critical requests later" fix the finding recommends —
+// while real visitors still get the widget shortly after the page settles.
+export const SITE_REP_WIDGET_DELAY_MS = 5000;
+
 export const SITE_REP_PUBLIC_WIDGET_PATHS = Object.freeze([
   "/",
   "/help",
