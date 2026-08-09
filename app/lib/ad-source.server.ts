@@ -649,18 +649,23 @@ export async function searchAdsViaSourceResolver(
   // COLD-PATH (0509 lane 1): the first public search for an uncached advertiser
   // used to keep the request open for the entire ~20s browser capture before
   // any useful response. When THIS request owns the discovery lease, run the
-  // capture in the background (waitUntil) and return the typed warming state
-  // right away; the search page's existing warming poll (5s x 12) picks up the
-  // finished cache entry. Only the true cold path qualifies - no usable cache
-  // entry, first page (no cursor), live browser provider, and a request
-  // ExecutionContext. Cached/stale, forceLive, API, cursor, and
+  // capture in the background (waitUntil) and return immediately; the search
+  // page's existing warming poll (5s x 12) picks up the finished cache entry.
+  // Two shapes qualify - a true miss (no usable cache entry) returns the typed
+  // warming state, and an expired-but-usable entry (no UNEXPIRED entry) returns
+  // the older results right away labeled cache_only while the background
+  // capture refreshes them. Without the expired-entry shape, the first query
+  // after a 15-minute public TTL expiry still ran the capture synchronously and
+  // the visitor waited the full ~20s again. forceLive, API, cursor, and
   // background-route behavior is unchanged. The lease owner check happens
   // after acquisition below.
   const wantsBackgroundWarm =
     provider === "meta_library_browser" &&
     routeContext === "public_search" &&
     !forceLive &&
-    !usableCached &&
+    // No FRESH usable entry: a true miss OR an expired-but-usable entry. When
+    // unexpiredCache exists the fresh hit above already returned.
+    !unexpiredCache &&
     !cursor &&
     typeof options.executionContext?.waitUntil === "function";
   const discoveryLease =
@@ -998,6 +1003,24 @@ export async function searchAdsViaSourceResolver(
         );
       }),
     );
+
+    if (usableCached) {
+      // Expired-but-usable entry: paint the older results immediately (labeled
+      // cache_only) instead of leaving the visitor on a blank page, and keep
+      // the warming flag so the client poll swaps in the finished capture when
+      // the background run lands instead of stranding them on old data.
+      return {
+        ...toServableDiscoveryPayload(usableCached.payload),
+        source: provider,
+        provider,
+        cacheStatus: "stale",
+        discoveryStatus: "cache_only",
+        discoveryProgress: "warming",
+        discoverySummary:
+          "Showing previously captured results while refreshing this query in the background.",
+        discoveryFailureClass: null,
+      };
+    }
 
     return {
       ads: [],
@@ -1387,6 +1410,32 @@ async function waitForDiscoveryLeaseResolution(
         discoverySummary: null,
         discoveryFailureClass: null,
       };
+    }
+
+    // Public-search waiter with an expired-but-usable entry: return it right
+    // away (labeled cache_only with the warming flag) instead of holding the
+    // request until the lease holder finishes or the wait budget expires. The
+    // holder is already refreshing this query, and the client's warming poll
+    // picks up the fresh entry when it lands. Non-public route contexts keep
+    // their existing behavior below (stale only via the provider-cooldown
+    // branch).
+    if (input.routeContext === "public_search") {
+      const staleCached = usableCachedEntries.find((entry) =>
+        isDiscoveryLeaseCacheFreshEnough(entry.fetchedAt, input.minFetchedAtMs),
+      );
+      if (staleCached) {
+        return {
+          ...toServableDiscoveryPayload(staleCached.payload),
+          source: staleCached.payload.source,
+          provider: staleCached.payload.provider,
+          cacheStatus: "stale",
+          discoveryStatus: "cache_only",
+          discoveryProgress: "warming",
+          discoverySummary:
+            "Showing previously captured results while this query refreshes in the background.",
+          discoveryFailureClass: null,
+        };
+      }
     }
 
     const providerState = await getDiscoveryProviderState(env, input.provider);

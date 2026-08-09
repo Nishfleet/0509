@@ -3646,6 +3646,211 @@ describe("searchAdsViaSourceResolver", () => {
     expect(heartbeatUpdates).toHaveLength(1);
   });
 
+  it("returns an expired-but-usable entry immediately and refreshes it in the background when this request owns the lease", async () => {
+    let resolveSearch!: (value: SearchResponse) => void;
+    const browserSearch = vi.fn().mockImplementation(
+      () =>
+        new Promise<SearchResponse>((resolve) => {
+          resolveSearch = resolve;
+        }),
+    );
+    const upsertDiscoveryCacheEntry = vi.fn();
+    const createDiscoveryFetchLog = vi.fn();
+    const upsertDiscoveryProviderState = vi.fn();
+    let insertedLeaseValues: unknown[] = [];
+    const prepare = vi.fn((sql: string) => ({
+      bind: vi.fn((...values: unknown[]) => {
+        if (sql.includes("INSERT OR IGNORE INTO discovery_query_lease")) {
+          insertedLeaseValues = values;
+        }
+
+        return {
+          run: vi.fn().mockResolvedValue({ success: true }),
+          first: vi.fn().mockImplementation(async () =>
+            sql.includes("SELECT holder_id, lease_expires_at")
+              ? {
+                  holder_id: insertedLeaseValues[3],
+                  lease_expires_at: insertedLeaseValues[4],
+                }
+              : null,
+          ),
+        };
+      }),
+    }));
+    const db = { prepare } as unknown as D1Database;
+    const expiredAt = new Date(Date.now() - 60 * 1000).toISOString();
+    const fetchedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_library_browser:fp-cold-stale:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-cold-stale",
+      country: "India",
+      cursor: null,
+      payload: {
+        ...buildLiveBrowserResult(),
+        discoveryEmptyReason: null,
+        discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+      },
+      fetchedAt,
+      expiresAt: expiredAt,
+      browserMsUsed: 12_000,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog,
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const waitUntil = vi.fn();
+    const query: NormalizedSavedQuery = {
+      mode: "keyword" as const,
+      filters: {
+        query: "cold-path-stale",
+        country: "India",
+        platform: "all",
+        creativeType: "all",
+        status: "all",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+    };
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      query,
+      null,
+      { purpose: "public_search", executionContext: { waitUntil } },
+    );
+
+    // The expired-but-usable ads are painted immediately, labeled honestly as
+    // stale/cache_only, with the warming flag so the client poll picks up the
+    // finished capture instead of stranding the visitor on old data.
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "stale",
+      discoveryStatus: "cache_only",
+      discoveryProgress: "warming",
+      discoveryFailureClass: null,
+      ads: [{ metaAdId: "meta-nykaa-1" }],
+    });
+    // The response is out while the refresh is still running: the browser
+    // promise is unresolved and the capture was handed to waitUntil.
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(upsertDiscoveryCacheEntry).not.toHaveBeenCalled();
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    const background = waitUntil.mock.calls[0]?.[0];
+    resolveSearch(buildLiveBrowserResult());
+    await background;
+
+    expect(upsertDiscoveryCacheEntry).toHaveBeenCalledTimes(1);
+    expect(createDiscoveryFetchLog).toHaveBeenCalledTimes(1);
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledTimes(1);
+    // The stale refresh uses the short cold-warm lease (60s) so a canceled
+    // background run self-heals, exactly like the true cold path.
+    const leaseExpiresAtMs = Date.parse(String(insertedLeaseValues[4]));
+    expect(leaseExpiresAtMs - Date.now()).toBeGreaterThan(55_000);
+    expect(leaseExpiresAtMs - Date.now()).toBeLessThanOrEqual(61_000);
+  });
+
+  it("returns an expired-but-usable entry with the warming flag while another isolate owns the live search", async () => {
+    const browserSearch = vi.fn();
+    const future = new Date(Date.now() + 180_000).toISOString();
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          run: vi.fn().mockResolvedValue({ success: true }),
+          first: vi.fn().mockResolvedValue({
+            holder_id: "other-isolate",
+            lease_expires_at: future,
+          }),
+        })),
+      })),
+    } as unknown as D1Database;
+    const expiredAt = new Date(Date.now() - 60 * 1000).toISOString();
+    const fetchedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_library_browser:fp-waiter-stale:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-waiter-stale",
+      country: "India",
+      cursor: null,
+      payload: {
+        ...buildLiveBrowserResult(),
+        discoveryEmptyReason: null,
+        discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+      },
+      fetchedAt,
+      expiresAt: expiredAt,
+      browserMsUsed: 12_000,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "waiter-stale",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search", executionContext: { waitUntil: vi.fn() } },
+    );
+
+    // The waiter returns the older results immediately instead of holding the
+    // request for the lease holder; the warming flag keeps the client poll
+    // alive so the fresh entry lands when the holder finishes.
+    expect(result).toMatchObject({
+      cacheStatus: "stale",
+      discoveryStatus: "cache_only",
+      discoveryProgress: "warming",
+      discoveryFailureClass: null,
+      ads: [{ metaAdId: "meta-nykaa-1" }],
+    });
+    expect(browserSearch).not.toHaveBeenCalled();
+  });
+
   it("keeps cursor (load-more) requests on the synchronous discovery path", async () => {
     const browserSearch = vi.fn().mockResolvedValue(buildLiveBrowserResult());
     const waitUntil = vi.fn();
