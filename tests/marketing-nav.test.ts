@@ -53,10 +53,23 @@ describe("MarketingNav (shared public nav)", () => {
 		expect(markup).toContain(MARKETING_TAGLINE);
 		// The signup CTA is the pill: one primary action for anonymous
 		// visitors, linking straight to /auth/signup. Sign in and Open app
-		// stay available as account links.
+		// stay in the markup as account links; Open app is CSS-hidden at
+		// ≤860px so the compact header stays a single action row.
 		expect(markup).toContain("class=\"ld-nav-pill\"");
+		expect(markup).toContain("class=\"f9-link-arrow ld-nav-open-app\"");
 		expect(markup).toContain("href=\"/auth/signup\"");
 		expect(markup).toContain(">Sign up</a>");
+	});
+
+	it("hides Open app on the compact ≤860px nav so the fold stays clear", () => {
+		const css = readFileSync("app/app.css", "utf8");
+		const compact = css.split("@media (max-width: 860px)")[1] ?? "";
+		expect(compact).toContain(".f9-home .ld-nav-actions .ld-nav-open-app");
+		expect(compact).toContain(".f9-legal-page .ld-nav-actions .ld-nav-open-app");
+		expect(compact).toMatch(
+			/\.f9-home\s+\.ld-nav-actions\s+\.ld-nav-open-app,\s*\.f9-legal-page\s+\.ld-nav-actions\s+\.ld-nav-open-app\s*\{\s*display:\s*none;/,
+		);
+		expect(compact).toMatch(/\.ld-nav-actions\s*\{[^}]*flex-wrap:\s*nowrap;/s);
 	});
 
 	it("is the header used by landing, both compare pages, and the legal doc shell", async () => {

@@ -20,8 +20,8 @@ export const MARKETING_TAGLINE = "Competitor change monitoring";
  *
  * The signup CTA is the pill so an anonymous visitor can reach /auth/signup
  * from any public page without scrolling or detouring through Sign in. On the
- * compact ≤860px row the actions wrap (app.css) so the pill stays a ≥44px
- * touch target at phone widths.
+ * compact ≤860px row, Open app is hidden (app.css) so Sign in + Sign up stay
+ * one ≥44px touch-target row and the homepage live-search stays above the fold.
  */
 export function MarketingNav() {
   return (
@@ -43,7 +43,7 @@ export function MarketingNav() {
         <Link className="f9-link-arrow" to="/auth/login">
           Sign in
         </Link>
-        <Link className="f9-link-arrow" to="/app">
+        <Link className="f9-link-arrow ld-nav-open-app" to="/app">
           Open app
         </Link>
         <Link className="ld-nav-pill" to="/auth/signup">
