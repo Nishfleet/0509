@@ -2292,8 +2292,8 @@ export default function SearchRoute() {
               Nothing searched yet
             </p>
             <p className="f9-wk-lede">
-              Paste a competitor website and press See ads. We read what they
-              are running on Meta right now, pull the offer off their landing
+              Paste a competitor website and press See ads. We check the Meta
+              Ad Library for their ads, capture the offer from their landing
               page, and keep the capture — so the next time that offer moves,
               you can prove it.
             </p>
