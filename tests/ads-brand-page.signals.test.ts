@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  adIsBrandOwned,
   buildBrandChangeFeed,
   computeBrandPageAggressionScore,
+  countBrandOwnedAds,
 } from "~/lib/brand-page.server";
 import type { AdRecord } from "~/lib/types";
 
@@ -106,5 +108,77 @@ describe("buildBrandChangeFeed", () => {
   it("ignores ads without a parseable first-seen date", () => {
     const ads = [ad({ metaAdId: "null-seen", firstSeenAt: null })];
     expect(buildBrandChangeFeed(ads, NOW)).toEqual([]);
+  });
+});
+
+describe("adIsBrandOwned / countBrandOwnedAds", () => {
+  it("counts an ad as the brand's own when the advertiser page carries the brand label", () => {
+    const ads = [
+      ad({ metaAdId: "a1", advertiser: "Nykaa" }),
+      ad({ metaAdId: "a2", advertiser: "Nykaa Fashion" }),
+    ];
+    expect(countBrandOwnedAds(ads, "nykaa.com")).toBe(2);
+    expect(adIsBrandOwned(ads[0]!, "nykaa.com")).toBe(true);
+  });
+
+  it("counts an ad whose advertiser page carries the brand's own domain token", () => {
+    const ads = [ad({ metaAdId: "a1", advertiser: "Nykaa Beauty — nykaa.com" })];
+    expect(countBrandOwnedAds(ads, "nykaa.com")).toBe(1);
+  });
+
+  it("trusts v2 advertiser evidence (verified_advertiser_domain / verified_entity) even when the name does not carry the label", () => {
+    const verifiedDomain = ad({
+      metaAdId: "a1",
+      advertiser: "Nykaa Group",
+      domainMatch: { level: "verified_advertiser_domain", reason: "Advertiser domain matches nykaa.com", matchedDomain: "nykaa.com" },
+    });
+    const verifiedEntity = ad({
+      metaAdId: "a2",
+      advertiser: "Nykaa Beauty Co",
+      domainMatch: { level: "verified_entity", reason: "Advertiser is linked to nykaa.com", matchedDomain: "nykaa.com" },
+    });
+    expect(adIsBrandOwned(verifiedDomain, "nykaa.com")).toBe(true);
+    expect(adIsBrandOwned(verifiedEntity, "nykaa.com")).toBe(true);
+  });
+
+  it("does not treat landing-page-only match levels as ownership", () => {
+    for (const level of ["exact_hostname", "registrable_domain", "verified_alias"]) {
+      const candidate = ad({
+        metaAdId: `a-${level}`,
+        advertiser: "BeautyDeals Hub",
+        domainMatch: { level, reason: "Landing page matches nykaa.com", matchedDomain: "nykaa.com" },
+      });
+      expect(adIsBrandOwned(candidate, "nykaa.com"), level).toBe(false);
+    }
+  });
+
+  it("never counts other advertisers' creatives as the brand's own", () => {
+    const ads = [
+      ad({ metaAdId: "a1", advertiser: "BeautyDeals Hub" }),
+      ad({ metaAdId: "a2", advertiser: "Outlet City" }),
+      ad({ metaAdId: "a3", advertiser: "Nykaam" }), // label only as a substring — no word boundary
+      ad({ metaAdId: "a4", advertiser: "" }),
+    ];
+    expect(countBrandOwnedAds(ads, "nykaa.com")).toBe(0);
+    expect(ads.every((candidate) => adIsBrandOwned(candidate, "nykaa.com") === false)).toBe(true);
+  });
+
+  it("attributes an advertiser page named with the brand label (official-page convention), matching the ad-card display", () => {
+    // Known boundary: a page named "Nykaa Outlet" or "Shop on Nykaa" counts as
+    // the brand's because the name carries the label as a whole word — the
+    // same convention the ad cards and the search product use. Advertisers
+    // with unrelated names never count.
+    expect(adIsBrandOwned(ad({ metaAdId: "a1", advertiser: "Shop on Nykaa" }), "nykaa.com")).toBe(true);
+    expect(adIsBrandOwned(ad({ metaAdId: "a2", advertiser: "Nykaa Outlet" }), "nykaa.com")).toBe(true);
+    expect(adIsBrandOwned(ad({ metaAdId: "a3", advertiser: "BeautyDeals Hub" }), "nykaa.com")).toBe(false);
+  });
+
+  it("counts only the brand's own ads in a mixed cache", () => {
+    const ads = [
+      ad({ metaAdId: "a1", advertiser: "Nykaa" }),
+      ad({ metaAdId: "a2", advertiser: "BeautyDeals Hub" }),
+      ad({ metaAdId: "a3", advertiser: "Nykaa" }),
+    ];
+    expect(countBrandOwnedAds(ads, "nykaa.com")).toBe(2);
   });
 });

@@ -31,6 +31,7 @@
 
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ReactNode } from "react";
 
 import { AdCreative } from "~/components/ads/ad-creative";
 import { BrandAdWall } from "~/components/ads/brand-ad-wall";
@@ -46,6 +47,7 @@ import type {
   BrandIntelTeaser,
   BrandPageAggression,
 } from "~/lib/brand-page.server";
+import { countBrandOwnedAds } from "~/lib/brand-page.server";
 import { canonicalUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
@@ -66,6 +68,13 @@ export interface BrandPageLoaderData {
    * honestly say "right now"/"live". Older captures render past-tense copy.
    */
   freshForLiveClaim: boolean;
+  /**
+   * How many of the cached creatives are ads the brand itself runs (advertiser
+   * page named after the brand, or v2 advertiser evidence). When this is less
+   * than the ad count, the rest are OTHER advertisers' ads that link to the
+   * domain — the page must not claim the brand owns or runs them.
+   */
+  brandOwnedAdCount: number;
   teaser: BrandIntelTeaser | null;
   aggression: BrandPageAggression | null;
   changeEvents: BrandChangeEvent[];
@@ -134,6 +143,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     checkedAgo: snapshot ? formatBrandPageCheckedAgo(snapshot.fetchedAt, now) : null,
     lastCheckedAt: snapshot?.fetchedAt ?? null,
     freshForLiveClaim: snapshot?.freshForLiveClaim ?? false,
+    brandOwnedAdCount: snapshot ? countBrandOwnedAds(snapshot.ads, brand.domain) : 0,
     teaser: snapshot ? buildBrandIntelTeaser(snapshot.ads, now) : null,
     aggression: snapshot ? computeBrandPageAggressionScore(snapshot.ads, now) : null,
     changeEvents: snapshot ? buildBrandChangeFeed(snapshot.ads, now) : [],
@@ -154,10 +164,18 @@ export function brandPageTitle(data: BrandPageLoaderData): string {
   if (!data.hasCachedAds) {
     return `${data.brandName} Facebook & Instagram ads | Five to Nine`;
   }
+  // "{Brand} ads" is an ownership claim — only safe when every cached creative
+  // is actually the brand's own. Mixed or other-advertiser captures describe
+  // the page honestly as "Meta ads linking to {domain}".
+  const allBrandOwned =
+    data.ads.length > 0 && data.brandOwnedAdCount === data.ads.length;
+  const subject = allBrandOwned
+    ? `${data.brandName} Facebook & Instagram ads`
+    : `${data.brandName}: Meta ads linking to ${data.domain}`;
   if (data.freshForLiveClaim && data.checkedAgo) {
-    return `${data.brandName} Facebook & Instagram ads right now | Five to Nine`;
+    return `${subject} right now | Five to Nine`;
   }
-  return `${data.brandName} Facebook & Instagram ads — checked ${data.checkedAgo ?? "recently"} | Five to Nine`;
+  return `${subject} — checked ${data.checkedAgo ?? "recently"} | Five to Nine`;
 }
 
 /**
@@ -165,9 +183,19 @@ export function brandPageTitle(data: BrandPageLoaderData): string {
  * <meta name="description"> and the WebPage JSON-LD `description`.
  */
 export function brandPageDescription(data: BrandPageLoaderData): string {
-  return data.hasCachedAds
-    ? `See ${data.ads.length} Meta ${data.ads.length === 1 ? "ad" : "ads"} from ${data.brandName} (${data.domain}), from a public Ad Library check ${data.checkedAgo}. Get an email when their ads or offer change.`
-    : `We haven't checked ${data.domain} recently. Run a free live Meta Ad Library search and track ${data.brandName}'s ads with Five to Nine.`;
+  if (!data.hasCachedAds) {
+    return `We haven't checked ${data.domain} recently. Run a free live Meta Ad Library search and track ${data.brandName}'s ads with Five to Nine.`;
+  }
+  const totalCount = data.ads.length;
+  const adWord = totalCount === 1 ? "ad" : "ads";
+  const otherCount = totalCount - data.brandOwnedAdCount;
+  if (totalCount > 0 && data.brandOwnedAdCount === totalCount) {
+    return `See ${totalCount} Meta ${adWord} from ${data.brandName} (${data.domain}), from a public Ad Library check ${data.checkedAgo}. Get an email when their ads or offer change.`;
+  }
+  if (data.brandOwnedAdCount === 0) {
+    return `See ${totalCount} Meta ${adWord} from other advertisers linking to ${data.domain}, from a public Ad Library check ${data.checkedAgo}. Get an email when the ads or offers change.`;
+  }
+  return `See ${totalCount} Meta ${adWord} linking to ${data.domain} — ${data.brandOwnedAdCount} from ${data.brandName} and ${otherCount} from other advertisers — from a public Ad Library check ${data.checkedAgo}. Get an email when the ads or offers change.`;
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
@@ -195,6 +223,8 @@ export default function BrandAdsRoute() {
   const liveSearchPath = `/search?website=${encodeURIComponent(data.domain)}`;
   const postSignupPath = `/app?website=${encodeURIComponent(data.domain)}#setup-checklist`;
   const signupPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
+  const allBrandOwned =
+    data.ads.length > 0 && data.brandOwnedAdCount === data.ads.length;
 
   return (
     <main className="f9-home f9-ads-page">
@@ -221,7 +251,13 @@ export default function BrandAdsRoute() {
         />
       ) : null}
       {data.hasCachedAds ? (
-        <BrandTicker ads={data.ads} brandName={data.brandName} fresh={data.freshForLiveClaim} />
+        <BrandTicker
+          ads={data.ads}
+          // The ticker tag names the brand only when the creatives are its
+          // own; otherwise it tags the domain the ads link to.
+          brandName={allBrandOwned ? data.brandName : data.domain}
+          fresh={data.freshForLiveClaim}
+        />
       ) : null}
       <MarketingNav />
 
@@ -249,6 +285,9 @@ function BrandAdsResults({
   const totalCount = teaser?.totalCount ?? data.ads.length;
   const adWord = totalCount === 1 ? "ad" : "ads";
   const watchLabel = `Watch ${data.domain}`;
+  const allBrandOwned = totalCount > 0 && data.brandOwnedAdCount === totalCount;
+  const noneBrandOwned = data.brandOwnedAdCount === 0;
+  const otherCount = totalCount - data.brandOwnedAdCount;
 
   return (
     <>
@@ -268,12 +307,10 @@ function BrandAdsResults({
                 ) : null}
               </p>
               <h1 className="f9-ads-headline" id="brand-ads-title">
-                {data.freshForLiveClaim ? `${data.brandName} is running ` : `${data.brandName} was running `}
-                <span className="f9-ads-hl">{`${totalCount} Meta ${adWord}`}</span>
-                {data.freshForLiveClaim ? " right now." : " at the last check."}
+                {brandHeadline(data, totalCount, adWord, allBrandOwned, noneBrandOwned)}
               </h1>
               <p className="f9-ads-subline">
-                {heroDetailSentence(teaser, data.freshForLiveClaim)}
+                {heroDetailSentence(teaser, data.freshForLiveClaim, allBrandOwned, noneBrandOwned, data.domain)}
                 <b>Point us at your competitor and you'll never hear their next move from a client first.</b>
               </p>
             </div>
@@ -362,7 +399,7 @@ function BrandAdsResults({
       <section className="f9-ads-closer">
         <div className="f9-container">
           <h2 className="f9-ads-closer-head">
-            {`${data.brandName} will change their next ad. `}
+            {closerHeadline(data, allBrandOwned, noneBrandOwned)}
             <span className="f9-ads-hl">Be the first to know.</span>
           </h2>
           <div className="f9-ads-closer-cta">
@@ -374,9 +411,7 @@ function BrandAdsResults({
             </Link>
           </div>
           <p className="f9-ads-honest">
-            {`Ad creatives are ${data.brandName}'s real ads from the public Meta Ad Library`}
-            {data.checkedAgo ? `, cached ${data.checkedAgo}` : ""}
-            {". This page never runs a live scrape — a live search refreshes it. Coverage and freshness are labeled and vary by source. The Ad Aggression Score is computed from a public formula. "}
+            {closerHonestyLine(data, allBrandOwned, noneBrandOwned, otherCount)}
             <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
           </p>
         </div>
@@ -385,8 +420,53 @@ function BrandAdsResults({
   );
 }
 
-/** Real-data lead-in to the promise; drops clauses whose data is missing. */
-function heroDetailSentence(teaser: BrandIntelTeaser | null, fresh: boolean): string {
+/**
+ * The H1 verdict. "{Brand} is running N Meta ads" is an ownership claim —
+ * it only applies when every cached creative is the brand's own ad. When the
+ * creatives are other advertisers' ads linking to the domain, the headline
+ * attributes them to the domain instead; a mixed capture names the split.
+ */
+function brandHeadline(
+  data: BrandPageLoaderData,
+  totalCount: number,
+  adWord: string,
+  allBrandOwned: boolean,
+  noneBrandOwned: boolean,
+): ReactNode {
+  const hl = (node: ReactNode) => <span className="f9-ads-hl">{node}</span>;
+  const countPhrase = `${totalCount} Meta ${adWord}`;
+
+  if (allBrandOwned) {
+    return data.freshForLiveClaim
+      ? <>{`${data.brandName} is running `}{hl(countPhrase)}{" right now."}</>
+      : <>{`${data.brandName} was running `}{hl(countPhrase)}{" at the last check."}</>;
+  }
+
+  if (noneBrandOwned) {
+    return data.freshForLiveClaim
+      ? <>{hl(countPhrase)}{` ${totalCount === 1 ? "is" : "are"} pointing at ${data.domain} right now.`}</>
+      : <>{`The last check found `}{hl(countPhrase)}{` pointing at ${data.domain}.`}</>;
+  }
+
+  const splitPhrase = `${data.brandOwnedAdCount} of these ${countPhrase}`;
+  return data.freshForLiveClaim
+    ? <>{`${data.brandName} is running `}{hl(splitPhrase)}{" right now."}</>
+    : <>{`${data.brandName} was running `}{hl(splitPhrase)}{" at the last check."}</>;
+}
+
+/**
+ * Real-data lead-in to the promise; drops clauses whose data is missing.
+ * Present tense is a live claim — kept only while the capture is fresh. The
+ * "they" of the brand is only safe when the creatives are the brand's own;
+ * other-advertiser captures attribute the texture to the advertisers instead.
+ */
+function heroDetailSentence(
+  teaser: BrandIntelTeaser | null,
+  fresh: boolean,
+  allBrandOwned: boolean,
+  noneBrandOwned: boolean,
+  domain: string,
+): string {
   if (!teaser) return "";
   const parts: string[] = [];
   if (teaser.formats.length > 1) {
@@ -397,15 +477,66 @@ function heroDetailSentence(teaser: BrandIntelTeaser | null, fresh: boolean): st
       `with one ad live for ${teaser.longestRunningDays} ${teaser.longestRunningDays === 1 ? "day" : "days"}`,
     );
   }
-  if (parts.length === 0) {
-    // Present tense is a live claim — keep it only while the capture is fresh.
+
+  if (allBrandOwned) {
+    if (parts.length === 0) {
+      return fresh
+        ? "They're advertising while your team is offline. "
+        : "They were advertising at the last check. ";
+    }
     return fresh
-      ? "They're advertising while your team is offline. "
-      : "They were advertising at the last check. ";
+      ? `They're testing ${parts.join(" and ")}. `
+      : `At the last check they were testing ${parts.join(" and ")}. `;
   }
-  return fresh
-    ? `They're testing ${parts.join(" and ")}. `
-    : `At the last check they were testing ${parts.join(" and ")}. `;
+
+  if (noneBrandOwned) {
+    if (parts.length === 0) {
+      return fresh
+        ? `Other advertisers are running ads that link to ${domain}. `
+        : `At the last check, other advertisers were running ads that link to ${domain}. `;
+    }
+    return fresh
+      ? `Other advertisers are testing ${parts.join(" and ")} on ads linking to ${domain}. `
+      : `At the last check, other advertisers were testing ${parts.join(" and ")} on ads linking to ${domain}. `;
+  }
+
+  // Mixed ownership: the headline already states the split — no extra claim.
+  return "";
+}
+
+/** The closer headline — attributes the future move honestly by ownership. */
+function closerHeadline(
+  data: BrandPageLoaderData,
+  allBrandOwned: boolean,
+  noneBrandOwned: boolean,
+): string {
+  if (allBrandOwned) {
+    return `${data.brandName} will change their next ad. `;
+  }
+  if (noneBrandOwned) {
+    return `The advertisers linking to ${data.domain} will change their next ad. `;
+  }
+  return `${data.brandName} and the other advertisers linking to ${data.domain} will change their next ad. `;
+}
+
+/** The closer honesty line — never claims the brand owns creatives it does not. */
+function closerHonestyLine(
+  data: BrandPageLoaderData,
+  allBrandOwned: boolean,
+  noneBrandOwned: boolean,
+  otherCount: number,
+): string {
+  const cached = data.checkedAgo ? `, cached ${data.checkedAgo}` : "";
+  const tail =
+    " This page never runs a live scrape — a live search refreshes it. Coverage and freshness are labeled and vary by source. The Ad Aggression Score is computed from a public formula. ";
+
+  if (allBrandOwned) {
+    return `Ad creatives are ${data.brandName}'s real ads from the public Meta Ad Library${cached}.${tail}`;
+  }
+  if (noneBrandOwned) {
+    return `Ad creatives are real Meta Ad Library ads from other advertisers linking to ${data.domain}${cached}.${tail}`;
+  }
+  return `Ad creatives are real Meta Ad Library ads linking to ${data.domain}${cached} — ${data.brandOwnedAdCount} run by ${data.brandName} and ${otherCount} by other advertisers.${tail}`;
 }
 
 /**
