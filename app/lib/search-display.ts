@@ -149,13 +149,36 @@ export function formatSearchSourceLabel(result: SearchResponse) {
   return "Source: search result";
 }
 
+/**
+ * True only when a result was produced by a genuinely LIVE Ad Library capture
+ * in this request: a cache miss served straight from a real Meta provider in a
+ * healthy, non-delayed check. Never true for demo sample data, a cached copy,
+ * a stale/expired entry, a delayed/degraded check, or a partial capture.
+ *
+ * This is the single gate behind which the public search page may make a
+ * fresh/live ("right now") claim. Everywhere else the freshness label says
+ * honestly what it is: cached, older, delayed, or partial.
+ */
+export function isProvenFreshLiveCapture(result: SearchResponse): boolean {
+  if (result.source === "demo" || result.provider === "demo") return false;
+  if (result.discoveryPartial) return false;
+  if (isDelayedDiscoveryStatus(result.discoveryStatus)) return false;
+  // Fail closed: only an explicitly healthy, undelayed check may be proven
+  // fresh-live. An absent/unknown discovery status cannot prove a live capture.
+  if (result.discoveryStatus !== "healthy") return false;
+  return result.cacheStatus === "miss";
+}
+
 export function formatSearchFreshnessLabel(result: SearchResponse) {
   if (result.discoveryPartial) return "Fresh partial result";
   if (isDelayedDiscoveryStatus(result.discoveryStatus))
     return "Fresh check delayed";
+  // The only state that may claim fresh/live: this request actually ran a live
+  // Ad Library capture (cache miss on a healthy, non-demo provider). Cached
+  // hits and stale entries are labeled as the cache they are instead.
+  if (isProvenFreshLiveCapture(result)) return "Fresh live result";
   if (result.cacheStatus === "hit") return "Recent cached result";
   if (result.cacheStatus === "stale") return "Older cached result";
-  if (result.cacheStatus === "miss") return "Fresh result";
   return "Freshness unavailable";
 }
 
