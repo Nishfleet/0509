@@ -46,23 +46,69 @@ SELECT
 }
 
 /**
+ * Cloudflare auth failure signatures in wrangler output. The two shapes seen
+ * in the wild: the JSON form wrangler prints under `--json` and the plain
+ * text form it prints otherwise, both when the host's OAuth session expired
+ * (as it did 2026-08-04) and no CLOUDFLARE_API_TOKEN is available.
+ */
+const AUTH_FAILURE_RE = /(CLOUDFLARE_API_TOKEN|non-interactive|Not logged in|auth token has expired)/i;
+
+/**
+ * Build a single-line, machine-greppable failure message for the market
+ * signal snapshot, classifying the known Cloudflare auth failure so a blocked
+ * morning run explains itself instead of dumping a raw command trace.
+ *
+ * @param {string} [detail]
+ * @returns {string}
+ */
+export function marketSignalFailureMessage(detail) {
+  const text = String(detail ?? "").trim();
+  if (text.startsWith("market_signal_auth_required") || text.startsWith("market_signal_snapshot_failed")) {
+    return text;
+  }
+  if (AUTH_FAILURE_RE.test(text)) {
+    return (
+      "market_signal_auth_required: wrangler cannot authenticate to Cloudflare D1 in this " +
+      "environment (missing CLOUDFLARE_API_TOKEN, or the host OAuth session expired and could " +
+      "not refresh). Recovery: run `wrangler login` once interactively as the owning account on " +
+      "this host, or set CLOUDFLARE_API_TOKEN in the cron environment, then rerun this command."
+    );
+  }
+  return `market_signal_snapshot_failed: ${text}`;
+}
+
+/**
  * @param {string} command
  * @param {string[]} args
  * @returns {any}
  */
 function runJson(command, args) {
-  const output = execFileSync(command, args, {
-    encoding: "utf8",
-    env: process.env,
-    maxBuffer: 4 * 1024 * 1024,
-    timeout: 30_000,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  let output;
+  try {
+    output = execFileSync(command, args, {
+      encoding: "utf8",
+      env: process.env,
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 30_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    const failure = /** @type {{ message?: unknown; stderr?: unknown; stdout?: unknown }} */ (error);
+    const detail = [
+      failure.message,
+      failure.stderr,
+      failure.stdout,
+    ]
+      .filter((part) => String(part).trim())
+      .join("\n");
+    throw new Error(marketSignalFailureMessage(detail.trim()));
+  }
   return JSON.parse(output);
 }
 
 /** @param {any} payload */
 export function parseD1Response(payload) {
+  if (payload?.error?.text) throw new Error(marketSignalFailureMessage(payload.error.text));
   const result = payload?.[0];
   const row = result?.results?.[0];
   if (!result?.success || !row) throw new Error("D1 signal query returned no successful result.");
@@ -173,7 +219,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     main();
   } catch (error) {
-    process.stderr.write(`market_signal_snapshot_failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`${marketSignalFailureMessage(error instanceof Error ? error.message : String(error))}\n`);
     process.exitCode = 1;
   }
 }
