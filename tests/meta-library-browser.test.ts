@@ -1788,13 +1788,12 @@ describe("searchMetaLibraryByBrowser", () => {
 
 		window.eval(extractionScript);
 		const payloadScript = window.document.getElementById("__0509_ad_library_payload");
-		const payload = JSON.parse(payloadScript?.textContent ?? "{}");
+		const payload = JSON.parse(payloadScript?.textContent ?? "{}") as {
+			cards?: Array<{ libraryId: string; cta: string | null }>;
+		};
 
 		const byId = new Map(
-			(payload.cards ?? []).map((card: { libraryId: string }) => [
-				card.libraryId,
-				card,
-			]),
+			(payload.cards ?? []).map((card) => [card.libraryId, card] as const),
 		);
 		expect(byId.get("1234567890")?.cta).toBe("Sign up");
 		// Chrome-only card: no CTA is honest; "Menu" must never render.
