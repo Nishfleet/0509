@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  alertMaterialityReason,
   digestMaterialityReason,
   digestNextAction,
   digestReviewerLabel,
@@ -1155,6 +1156,45 @@ describe("named owner, materiality reason, and next action (E2 2026-08-08)", () 
 		);
 		expect(digestNextAction({ items: [], heartbeat: { runs: 3 } })).toBe(
 			"We check again at the next scheduled scan.",
+		);
+	});
+
+	it("derives an alert materiality reason from the shared event vocabulary (E2 alert increment)", () => {
+		const offerChange = { eventType: "landing_page_offer_changed" };
+		const headlineChange = { eventType: "landing_page_headline_changed" };
+		const newAd = { eventType: "ad_new" };
+		const urlChange = { eventType: "landing_page_url_changed" };
+
+		expect(alertMaterialityReason({ events: [offerChange] })).toBe(
+			"This alert matters because pricing or offers moved (1 change) — compare before your next campaign decision.",
+		);
+		expect(alertMaterialityReason({ events: [offerChange, newAd] })).toBe(
+			"This alert matters because pricing or offers moved (1 change) and ads started or stopped (1) — compare before your next campaign decision.",
+		);
+		expect(alertMaterialityReason({ events: [urlChange] })).toBe(
+			"This alert matters because destinations changed (1) — compare before your next campaign decision.",
+		);
+	});
+
+	it("states provisional, baseline, and cosmetic-only alert truth explicitly", () => {
+		const offerChange = { eventType: "landing_page_offer_changed" };
+		const headlineChange = { eventType: "landing_page_headline_changed" };
+
+		// Provisional alerts never claim a verified move.
+		expect(alertMaterialityReason({ events: [offerChange], provisional: true })).toBe(
+			"This alert is provisional — the change is not yet confirmed by a fresh proof capture, so verify the source before acting.",
+		);
+		// Baseline first-scan alerts are starting snapshots, not new moves.
+		expect(alertMaterialityReason({ events: [offerChange], baseline: true })).toBe(
+			"This alert is your starting snapshot — it anchors future alerts instead of marking a new competitor move.",
+		);
+		// Cosmetic-only alerts name what moved without inventing a decision weight.
+		expect(alertMaterialityReason({ events: [headlineChange] })).toBe(
+			"A tracked page changed its headline, form, or creative (1 update) — the competitor is iterating, and nothing in this alert touched pricing or CTA.",
+		);
+		// Never an empty reason, whatever the shape.
+		expect(alertMaterialityReason({})).toBe(
+			"This alert matters because a change was detected on a tracked competitor page — review the evidence before your next decision.",
 		);
 	});
 });
