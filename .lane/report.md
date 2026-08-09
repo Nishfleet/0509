@@ -152,3 +152,30 @@ separate workflow having run first.
   evidence exits 0 with `restore_evidence_available=false` and no archive;
   infrastructure failures still exit 2; workflow tests lock the
   generate/cleanup wiring and deploy gating.
+
+## Follow-up: direct-needs wiring defect found and fixed
+
+Post-push review found one genuine wiring defect in the original workflow
+change. `prepare_remote_restore_evidence` declared its `backup_proof_status`
+output as `${{ needs.authorize_release.outputs.backup_proof_status }}` while
+its `needs` list contained only `pin_candidate`. GitHub Actions exposes only
+direct dependencies in a job's `needs` context: an empirical probe workflow
+(job c needing only job b, reading `needs.a.outputs.val`) ran on GitHub and
+printed `transitive_need_a=` (empty), while the direct reference printed
+`direct_need_b=required`. A transitive reference therefore evaluates to an
+empty string at runtime, which would have made the new
+`generate_restore_evidence` / `cleanup_restore_evidence` jobs silently skip
+their `backup_proof_status == 'required'` conditions and left the missing-
+evidence deploy hard-failing at the deploy job's own verification — the exact
+failure this lane removes.
+
+Fix: the output now reads `${{ needs.pin_candidate.outputs.backup_proof_status }}`
+(`pin_candidate` is a declared direct dependency and carries the identical
+value from `authorize_release`). A regression test now parses
+`deploy-production.yml` and asserts every `needs.<job>.` reference in every
+job names a declared direct dependency; it failed first against the broken
+wiring (`prepare_remote_restore_evidence ... undeclared: authorize_release`)
+and passes on the fix.
+
+Verification on this tip: full Vitest 421 files, 4773/4773 passed (new
+regression included); `npm run typecheck` passed; `git diff --check` clean.

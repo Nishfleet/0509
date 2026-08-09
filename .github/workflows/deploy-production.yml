@@ -116,7 +116,7 @@ jobs:
       contents: read
       actions: read
     outputs:
-      backup_proof_status: ${{ needs.authorize_release.outputs.backup_proof_status }}
+      backup_proof_status: ${{ needs.pin_candidate.outputs.backup_proof_status }}
       evidence_valid: ${{ steps.verify_evidence.outputs.restore_evidence_available }}
     env:
       PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
