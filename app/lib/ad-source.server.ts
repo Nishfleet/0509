@@ -1486,6 +1486,35 @@ async function waitForDiscoveryLeaseResolution(
       );
     }
 
+    // COLD-PATH (0509 lane 3): a public_search waiter with NO servable entry
+    // returns the typed warming state immediately instead of holding the
+    // request for the full 12s wait budget. The lease holder's capture cannot
+    // land inside that budget anyway (a true-miss capture takes the full
+    // fallback chain, far beyond the wait), so the polling loop can never win
+    // here: every public waiter without usable content was timing out empty
+    // and leaving the first anonymous query for an uncached advertiser waiting
+    // ~12s before any useful response. The client's existing 5s x 12 poll
+    // picks up the finished capture, exactly like the lease-owner warm path.
+    // Provider-cooldown handling above still runs first, so a cooldown summary
+    // is never masked by this generic warming copy. Non-public route contexts
+    // (watchlist scans, scheduled warmup) keep the full 25s polling loop below
+    // — they have no client poll and still benefit from catching a fresh entry
+    // mid-wait.
+    if (input.routeContext === "public_search") {
+      return {
+        ads: [],
+        nextCursor: null,
+        source: input.provider,
+        provider: input.provider,
+        cacheStatus: "miss",
+        discoveryStatus: "degraded",
+        discoveryProgress: "warming",
+        discoverySummary:
+          "Commercial discovery is already warming this query. Cached results should appear shortly.",
+        discoveryFailureClass: null,
+      };
+    }
+
     await sleep(DISCOVERY_QUERY_LEASE_POLL_MS);
   }
 
