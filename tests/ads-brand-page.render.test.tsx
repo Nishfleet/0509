@@ -106,6 +106,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-08-09T10:00:00.000Z",
     freshForLiveClaim: false,
+    brandOwnedAdCount: 6,
     teaser,
     aggression,
     changeEvents,
@@ -230,6 +231,60 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).not.toContain("Nike · live");
     expect(stale).not.toContain("Ads live");
     expect(stale).not.toContain("more ads live");
+  });
+
+  it("stops telling visitors the brand is running ads when the creatives are other advertisers'", async () => {
+    const stale = await render(populated({ brandOwnedAdCount: 0 }));
+    const fresh = await render(
+      populated({ brandOwnedAdCount: 0, checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+    );
+
+    // No brand-owned claim anywhere — the headline attributes to the domain.
+    expect(stale).toContain("The last check found ");
+    expect(stale).toContain("34 Meta ads");
+    expect(stale).toContain("pointing at nike.com");
+    expect(stale).toContain("nike.com · on record");
+    expect(stale).not.toContain("Nike was running ");
+    expect(stale).not.toContain("Nike is running ");
+    expect(stale).not.toContain("Nike · live");
+
+    // Fresh capture: same attribution, honest present tense for the capture.
+    expect(fresh).toContain("34 Meta ads");
+    expect(fresh).toContain("are pointing at nike.com right now.");
+    expect(fresh).toContain("Other advertisers are testing");
+    expect(fresh).toContain("nike.com · live");
+
+    // Closer never calls the creatives Nike's own ads.
+    expect(stale).toContain(
+      "Ad creatives are real Meta Ad Library ads from other advertisers linking to nike.com",
+    );
+    expect(stale).toContain("The advertisers linking to nike.com will change their next ad.");
+    expect(stale).not.toContain("Nike's real ads");
+  });
+
+  it("names the split when the cache mixes the brand's own ads with other advertisers'", async () => {
+    const stale = await render(populated({ brandOwnedAdCount: 2 }));
+    const fresh = await render(
+      populated({ brandOwnedAdCount: 2, checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+    );
+
+    expect(stale).toContain("Nike was running ");
+    expect(stale).toContain("2 of these 34 Meta ads");
+    expect(stale).toContain("at the last check.");
+    expect(fresh).toContain("Nike is running ");
+    expect(fresh).toContain("2 of these 34 Meta ads");
+    expect(fresh).toContain("right now.");
+
+    // The closer states exactly who runs what.
+    expect(stale).toContain(
+      "2 run by Nike and 32 by other advertisers",
+    );
+    expect(stale).toContain(
+      "Nike and the other advertisers linking to nike.com will change their next ad.",
+    );
+    // Mixed copy never over-claims a full brand-owned wall or the reverse.
+    expect(stale).not.toContain("Nike's real ads");
+    expect(stale).not.toContain("34 Meta ads are pointing at");
   });
 });
 
