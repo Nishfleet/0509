@@ -133,7 +133,12 @@ describe("exact production candidate workflow", () => {
     const deploy = workflow.jobs.deploy;
     expect(prepare?.needs).toBe("pin_candidate");
     expect(prepare?.permissions).toEqual({ contents: "read", actions: "read" });
-    expect(deploy?.needs).toEqual(["pin_candidate", "prepare_remote_restore_evidence"]);
+    expect(deploy?.needs).toEqual([
+      "pin_candidate",
+      "prepare_remote_restore_evidence",
+      "generate_restore_evidence",
+      "cleanup_restore_evidence",
+    ]);
     expect(deploy?.permissions).toEqual({
       contents: "read",
       actions: "read",
