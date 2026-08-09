@@ -147,7 +147,8 @@ afterEach(() => {
 
 describe("/ads/:domain loader", () => {
   it("renders cached ads with an honest freshness line and signup CTA data, without any provider call", async () => {
-    const mocks = installBrandPageMocks({ entry: cacheEntry() });
+    const entry = cacheEntry();
+    const mocks = installBrandPageMocks({ entry });
 
     const result = await runLoader("nykaa.com", mocks.env);
 
@@ -158,6 +159,8 @@ describe("/ads/:domain loader", () => {
       noindex: false,
       canonicalPath: "/ads/nykaa.com",
     });
+    // The machine-readable twin of the visible "Last checked" stamp.
+    expect(result.lastCheckedAt).toBe(entry.fetchedAt);
     expect(result.ads).toHaveLength(1);
     expect(result.ads[0]?.metaAdId).toBe("meta-nykaa-1");
     expect(result.checkedAgo).toBe("about 2 hours ago");
@@ -263,6 +266,7 @@ describe("/ads/:domain loader", () => {
       hasCachedAds: false,
       ads: [],
       checkedAgo: null,
+      lastCheckedAt: null,
       teaser: null,
       noindex: true,
     });
