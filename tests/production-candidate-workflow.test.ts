@@ -173,6 +173,19 @@ describe("exact production candidate workflow", () => {
     expect(finalCas).toBeGreaterThan(stepIndex(deploy, "Verify and extract private remote-restore evidence"));
     expect(firstProviderMutation).toBe(finalCas + 1);
     expect(deploySteps[finalCas]?.run).toBe("./scripts/ci-verify-production-candidate.sh");
+    // The post-gate reconfirm tolerates a mid-run move of main: the deploy
+    // ships exactly the verified pinned SHA, so drift must not kill the run
+    // after a fully green gate. The pre-gate verification stays fail-closed.
+    expect(deploySteps[finalCas]?.env).toMatchObject({
+      TOLERATE_MAIN_DRIFT: "1",
+    });
+    const preGateVerify = stepIndex(
+      deploy,
+      "Verify pinned candidate before repository and secret work",
+    );
+    expect(deploySteps[preGateVerify]?.env).not.toHaveProperty(
+      "TOLERATE_MAIN_DRIFT",
+    );
     const deployMutation = deploySteps[stepIndex(deploy, "Deploy")];
     expect(deployMutation?.env).toMatchObject({
       GH_TOKEN: "${{ github.token }}",
@@ -387,6 +400,7 @@ describe("exact production candidate workflow", () => {
       "utf8",
     );
     expect(verifier).toContain("ci-verify-provider-main-cas.sh");
+    expect(providerCas).toContain("TOLERATE_MAIN_DRIFT");
     // Nightly D1 backup (d1-backup-r2.yml schedule) uses this gate; schedule
     // must accept empty expected_sha and reject a smuggled one.
     expect(verifier).toContain("unexpected_schedule_expected_sha");
@@ -501,6 +515,25 @@ printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
       expect(run().status).not.toBe(0);
       git(work, "checkout", "--detach", candidateSha);
       expect(run({ FAKE_REMOTE_SHA: "f".repeat(40) }).status).not.toBe(0);
+      // Post-gate drift tolerance is opt-in and downgrades ONLY drift: with
+      // TOLERATE_MAIN_DRIFT=1 the run deploys the verified pinned SHA even
+      // though main moved, printing the explicit "behind main" note; without
+      // the flag drift still fails closed. Non-drift remote failures (e.g. a
+      // malformed provider SHA) stay hard even with the flag set.
+      const tolerated = run({
+        FAKE_REMOTE_SHA: "f".repeat(40),
+        TOLERATE_MAIN_DRIFT: "1",
+      });
+      expect(tolerated.status).toBe(0);
+      expect(tolerated.stderr).toContain("Deploying pinned SHA");
+      expect(tolerated.stderr).toContain(candidateSha);
+      expect(tolerated.stderr).toContain("f".repeat(40));
+      expect(
+        run({
+          FAKE_REMOTE_SHA: "not-a-sha",
+          TOLERATE_MAIN_DRIFT: "1",
+        }).status,
+      ).not.toBe(0);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

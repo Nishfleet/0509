@@ -499,6 +499,12 @@ jobs:
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           GH_TOKEN: ${{ github.token }}
+          # The full verification gate (typecheck, tests, restore evidence)
+          # already passed for this exact pinned SHA, and the deploy ships
+          # exactly PINNED_SHA. If main moved mid-run, record the drift and
+          # continue with the verified SHA instead of killing the run after a
+          # fully green gate. Every other CAS failure stays fail-closed.
+          TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/ci-verify-production-candidate.sh
 
       - name: Synchronize private canary token

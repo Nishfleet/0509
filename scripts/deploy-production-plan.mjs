@@ -284,6 +284,15 @@ export function buildProductionDeployPlan({
       id: "reconfirm_frozen_main_before_deploy",
       command: "./scripts/ci-verify-provider-main-cas.sh",
       args: [],
+      // Drift tolerance after the full verification gate: this step runs
+      // immediately before `wrangler deploy`, which ships exactly the pinned
+      // SHA that the gate validated. A mid-run move of main must not void a
+      // fully green deploy; the CAS script records the drift and continues.
+      // Other CAS failures (API unavailable, wrong repo/ref, malformed SHA)
+      // stay fail-closed.
+      env: {
+        TOLERATE_MAIN_DRIFT: "1",
+      },
     },
     {
       id: "deploy",

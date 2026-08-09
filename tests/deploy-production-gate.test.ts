@@ -243,6 +243,7 @@ describe("production deployment readiness gate", () => {
       id: "reconfirm_frozen_main_before_deploy",
       command: "./scripts/ci-verify-provider-main-cas.sh",
       args: [],
+      env: { TOLERATE_MAIN_DRIFT: "1" },
     });
     expect(plan[deployIndex + 1]).toMatchObject({
       id: "verify_worker_rollback_target",
@@ -410,7 +411,13 @@ describe("production deployment readiness gate", () => {
     });
   });
 
-  it("aborts on main drift after preflights and before wrangler deploy", () => {
+  it("aborts when the frozen-main reconfirm step fails and before wrangler deploy", () => {
+    // Remote-main drift alone no longer fails this step: after the full
+    // verification gate the deploy ships the exact pinned SHA even when main
+    // moved mid-run (the CAS script tolerates drift under
+    // TOLERATE_MAIN_DRIFT=1). Any other reconfirm failure — provider API
+    // unavailable, wrong repo/ref, malformed SHA, checkout drift — still
+    // aborts before the deploy mutation.
     const plan = buildProductionDeployPlan({
       manifestPath: "test-results/deploy-readiness-test.json",
       remoteRestoreEvidencePath,
@@ -422,10 +429,10 @@ describe("production deployment readiness gate", () => {
       executeProductionDeployPlan(plan, (step: any) => {
         executed.push(step.id);
         if (step.id === "reconfirm_frozen_main_before_deploy") {
-          throw new Error("provider_main_sha_mismatch");
+          throw new Error("provider_main_cas_unavailable");
         }
       }),
-    ).toThrow("provider_main_sha_mismatch");
+    ).toThrow("provider_main_cas_unavailable");
     expect(executed).toContain("capture_worker_rollback_target");
     expect(executed).toContain("reconfirm_frozen_main_before_deploy");
     expect(executed).not.toContain("deploy");
