@@ -449,3 +449,14 @@ requests.
 The first-party React Router `__manifest` fetch on home (max ~822ms observed)
 stays under the engine's 1s slow-resource threshold and is framework-internal;
 no change was warranted for it.
+
+## PR CI status
+
+GitHub runner checks on PR #569 did not start: all three gating jobs
+(`classify`, `Authorize exact secret-scan candidate`, `Authorize exact
+verification candidate`) were rejected with "The job was not started because
+recent account payments have failed or your spending limit needs to be
+increased." This is an account-level billing blocker — PR #567 merged ~1h
+earlier with the same checks green — not a finding against this change. Local
+verification above (full Vitest 423 files / 4848 tests, typecheck, same-engine
+crawl) stands as this lane's terminal evidence.
