@@ -50,6 +50,34 @@ describe("parseSearchParams", () => {
     expect(result.filters.query).toBe("shoes");
   });
 
+  it("accepts q as the shared-link alias for the search term", () => {
+    const params = new URLSearchParams({ q: "nykaa" });
+    const result = parseSearchParams(params);
+    expect(result.filters.query).toBe("nykaa");
+  });
+
+  it("lets an explicit query param win when both query and q are present", () => {
+    const params = new URLSearchParams({ query: "canonical", q: "shared" });
+    const result = parseSearchParams(params);
+    expect(result.filters.query).toBe("canonical");
+  });
+
+  it("treats an empty or whitespace q as absent", () => {
+    expect(parseSearchParams(new URLSearchParams({ q: "" })).filters.query).toBe("");
+    expect(
+      parseSearchParams(new URLSearchParams({ q: "   " })).filters.query,
+    ).toBe("");
+  });
+
+  it("fingerprints a q-param query identically to its canonical query form", () => {
+    const viaQ = parseSearchParams(new URLSearchParams({ q: "nykaa", mode: "advertiser" }));
+    const viaQuery = parseSearchParams(
+      new URLSearchParams({ query: "nykaa", mode: "advertiser" }),
+    );
+    expect(viaQ.filters).toEqual(viaQuery.filters);
+    expect(viaQ.fingerprint).toBe(viaQuery.fingerprint);
+  });
+
   it("defaults to advertiser mode when mode is absent or invalid", () => {
     const paramsNoMode = new URLSearchParams({ query: "test" });
     expect(parseSearchParams(paramsNoMode).mode).toBe("advertiser");
