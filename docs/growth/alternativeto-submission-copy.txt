@@ -1,0 +1,48 @@
+Five to Nine — AlternativeTo "Suggest new application" fields
+(exact approved copy, canonical; claims trace to https://0509.io live
+homepage, /llms.txt, and the public /search preview. No unverified
+review/traffic/ranking/superiority claims.)
+
+- Name: Five to Nine
+- Website URL: https://0509.io
+- Platforms: Web (Software as a Service)
+- Cost / License: Freemium, Proprietary
+
+- Short description (one line, from the live homepage meta description):
+  Watches competitors' Meta ads and landing pages, then sends screenshot
+  evidence and change alerts before your next meeting.
+
+- Full description (use the paragraphs below; each claim is live-verifiable):
+  Five to Nine monitors competitors' Meta ads and visible landing-page
+  changes and turns them into source-backed evidence. It checks what
+  changed — ads, offers, CTAs, and forms — and saves source-linked proof for
+  each confirmed change, so a pricing change or a new offer arrives with
+  screenshots instead of a rumor.
+
+  Data is public-source only: the public Meta Ad Library — the same public
+  archive anyone can open in a browser — plus the public landing pages those
+  ads link to. Five to Nine never logs in to anything and never reads
+  anything behind a login.
+
+  Cadence limits: paid plans run scheduled checks every 3–6 hours (Scout
+  every 6 hours, Starter every 3 hours, Agency every 3 hours for its first
+  25 watchlists with the rest every 6 hours). Starter and Agency can turn on
+  instant alerts, so a confirmed change emails you as soon as a check finds
+  it. The free plan watches one competitor with a weekly scheduled check and
+  a weekly email brief.
+
+- Tags (existing AlternativeTo vocabulary, verified live 2026-08-09):
+  Competitor analysis
+  competitive-intelligence
+  Social media monitoring
+
+- Optional supporting links (verify each still resolves before submitting):
+  https://0509.io/ (homepage)
+  https://0509.io/llms.txt (machine-readable product truth)
+  https://0509.io/search (public read-only search preview)
+
+No claims beyond: public-source Meta-ad + landing-page change monitoring,
+3–6 hour paid cadence with weekly free cadence, screenshot/source-linked
+evidence per confirmed change, instant alerts on Starter and Agency. No
+unverified review, traffic, ranking, superiority, spend/reach/impression
+benchmark, or price claims.

@@ -372,3 +372,61 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Manual AlternativeTo listing for Five to Nine (research-desk 2026-08-08, risk: green)
+
+**Status: prepared — venue submission is a manual account-owner step, per
+venue policy; no unattended signup or submission.**
+
+Branch: `docs/alternativeto-listing-20260809`
+Base: `origin/main` at `5e682868`
+
+## Outcome
+
+Prepared the complete manual AlternativeTo listing packet for Five to Nine
+per the backlog acceptance criteria: `docs/growth/alternativeto-listing-2026-08-09.md`
+(packet) + `docs/growth/alternativeto-submission-copy.txt` (exact approved
+copy). The listing describes Five to Nine as proof-backed competitor
+Meta-ad and landing-page change monitoring, links to `https://0509.io`,
+states the public-source and 3–6 hour cadence limits, and uses no
+unverified review, traffic, or superiority claims. Agent execution stops at
+preparation because AlternativeTo is a human submission venue (account +
+verified email + review backlog) and the venue-claim contract records
+`alternativeto.net` as `reviewed (unknown)` — no automation, no unattended
+signup. The account owner's two-minute manual submit path is documented.
+
+## Verification (this lane, 2026-08-09, live browser + machine gates)
+
+- Absence verified live in the browser: `alternativeto.net` search for
+  `five to nine` returns only unrelated fuzzy matches (Fliki, Ninimaths,
+  Pinboard, etc.); search for `0509` returns five unrelated
+  certificate/security tools. No Five to Nine page, no `0509.io` link.
+- Official policy re-verified live on `https://alternativeto.net/faq/`:
+  human "Suggest new application" flow (User icon → form → Submit the
+  application → review backlog), verified-email requirement before
+  submitting, optional $5 priority review "does not buy approval" (free
+  review-backlog path exists; $5 is NEEDS-NISH). Note: the 2026-08-08
+  research-desk "one-week new-account wait" sentence is not on the current
+  live FAQ — current gate is email verification; recorded as stale.
+- Canonical link targets all HTTP 200: `https://0509.io/`, `/llms.txt`,
+  `/search` (title "Search competitor Meta ads free | Five to Nine").
+- Copy claims trace to live truth: homepage meta description
+  ("Watches competitors' Meta ads and landing pages…"), `llms.txt`
+  (public-source only; never logs in), `app/routes/marketing.tsx`
+  (3–6 hour paid cadence by plan; weekly free cadence; instant alerts on
+  Starter/Agency).
+- Machine gate: `venue-claim check alternativeto.net 0509` → exit 0,
+  disposition `reviewed (unknown)`; `venue-claim claim …` → exit 4
+  ALLOWLIST/POLICY BLOCK, no ledger record written.
+- `git diff --check` clean; docs-only change (no product code, no
+  package files).
+
+## Files
+
+- `docs/growth/alternativeto-listing-2026-08-09.md` — listing packet
+  (baseline evidence, venue policy, gate receipts, submit path,
+  acceptance/rollback).
+- `docs/growth/alternativeto-submission-copy.txt` — exact approved copy for
+  the venue form.
+- `.lane/report.md` — evidence record only; no product code touched.
