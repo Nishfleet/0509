@@ -3598,7 +3598,7 @@ one signal-green accent.
 @media (max-width: 860px) {
   .ld-nav {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 10px;
     padding: 14px 20px;
   }
@@ -3638,6 +3638,13 @@ one signal-green accent.
     grid-column: 2;
     grid-row: 1;
     justify-self: end;
+    /* Three account actions (Sign in, Open app, Sign up) no longer fit one
+       row beside the wordmark on small phones; wrap within the flexible
+       column so every action stays a ≥44px touch target and nothing
+       overlaps the wordmark. The brand column is `auto` so the wordmark
+       keeps its natural width. */
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 10px;
     font-size: 0.86rem;
   }
