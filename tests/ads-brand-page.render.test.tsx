@@ -104,6 +104,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     hasCachedAds: true,
     ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
     checkedAgo: "about 2 hours ago",
+    lastCheckedAt: "2026-08-09T10:00:00.000Z",
     freshForLiveClaim: false,
     teaser,
     aggression,
@@ -229,5 +230,64 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).not.toContain("Nike · live");
     expect(stale).not.toContain("Ads live");
     expect(stale).not.toContain("more ads live");
+  });
+});
+
+describe("/ads/:domain — truthful WebPage JSON-LD", () => {
+  it("emits WebPage JSON-LD on an indexable page, mirroring the visible claims", async () => {
+    const markup = await render(populated());
+
+    expect(markup).toContain('type="application/ld+json"');
+    expect(markup).toContain('"@type":"WebPage"');
+    // name and description must match the meta title/description exactly.
+    expect(markup).toContain(
+      '"name":"Nike Facebook & Instagram ads — checked about 2 hours ago | Five to Nine"',
+    );
+    expect(markup).toContain(
+      '"description":"See 6 Meta ads from Nike (nike.com), from a public Ad Library check about 2 hours ago. Get an email when their ads or offer change."',
+    );
+    expect(markup).toContain('"url":"https://0509.io/ads/nike.com"');
+    // dateModified is the on-screen "Last checked" stamp, machine-readable.
+    expect(markup).toContain('"dateModified":"2026-08-09T10:00:00.000Z"');
+    // about names the brand the page is actually about; the publisher stays
+    // Five to Nine — the page never claims to BE the brand.
+    expect(markup).toContain('"about":{"@type":"Organization","name":"Nike"}');
+    expect(markup).toContain('"publisher":{"@type":"Organization","name":"Five to Nine"');
+    expect(markup).toContain('"isPartOf":{"@type":"WebSite","name":"Five to Nine"');
+  });
+
+  it("flips the JSON-LD name to the live-claim title only while the capture is fresh", async () => {
+    const markup = await render(
+      populated({ checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+    );
+
+    expect(markup).toContain(
+      '"name":"Nike Facebook & Instagram ads right now | Five to Nine"',
+    );
+  });
+
+  it("emits no JSON-LD on the noindex honest shell", async () => {
+    const markup = await render(
+      populated({
+        hasCachedAds: false,
+        ads: [],
+        checkedAgo: null,
+        lastCheckedAt: null,
+        teaser: null,
+        aggression: null,
+        changeEvents: [],
+        noindex: true,
+      }),
+    );
+
+    expect(markup).not.toContain("application/ld+json");
+    expect(markup).not.toContain("@type");
+  });
+
+  it("emits no JSON-LD when the emergency noindex brake is on", async () => {
+    const markup = await render(populated({ noindex: true }));
+
+    expect(markup).not.toContain("application/ld+json");
+    expect(markup).not.toContain("@type");
   });
 });
