@@ -32,6 +32,7 @@ import {
   hasNoResultsSignal,
   inferCta,
   inferPlatforms,
+  isAdLibraryChromeCta,
   parseRenderedMetaLibraryHtml,
   readStandaloneActiveStatus,
   stripHtml,
@@ -418,8 +419,9 @@ function delayMs(ms: number) {
 /**
  * DOM extraction script for session-based Ad Library scrapes.
  * Must stay a pure function (no outer closures) so page.evaluate can serialize it.
+ * Exported for unit tests that run the script against a DOM.
  */
-function createSessionCardExtractionScript() {
+export function createSessionCardExtractionScript() {
   return () => {
     const normalizeText = (value: string | null | undefined) =>
       (value ?? "")
@@ -435,13 +437,59 @@ function createSessionCardExtractionScript() {
       return lower.includes("fbcdn") || lower.includes("scontent");
     }
 
+    /**
+     * Pick the ad's real CTA button. FIX-14: the first `button`/`[role="button"]`
+     * in a card is Ad Library chrome (the overflow "Menu"/"Open Drop-down"
+     * button, "See ad details"), so plain first-match picks chrome as the CTA.
+     * Filter chrome by exact label, prefer a real CTA verb, and only then fall
+     * back to the first remaining candidate.
+     */
+    function pickCtaFromCard(
+      cardRoot: HTMLElement | null | undefined,
+    ): string | null {
+      if (!cardRoot) {
+        return null;
+      }
+      const candidates = Array.from(
+        cardRoot.querySelectorAll<HTMLElement>(
+          'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
+        ),
+      );
+      const labelOf = (element: HTMLElement) =>
+        (element.getAttribute("aria-label") ||
+          element.innerText ||
+          element.textContent ||
+          "")
+          .replace(/\u00a0/g, " ")
+          .split("\n")
+          .map((part) => part.trim())
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+      const isChromeLabel = (value: string) =>
+        /^(?:menu|open drop-down|see ad details|see summary details|view ad details|meta ad library result|more|report ad)$/i.test(
+          value,
+        );
+      const isCtaVerb = (value: string) =>
+        /^(?:shop now|learn more|sign up|apply now|book now|contact us)$/i.test(
+          value,
+        );
+      const usable = candidates.filter(
+        (element) => !isChromeLabel(labelOf(element)),
+      );
+      if (usable.length === 0) {
+        return null;
+      }
+      const verbCta = usable.find((element) => isCtaVerb(labelOf(element)));
+      return (verbCta ?? usable[0])?.innerText ?? null;
+    }
+
     function pickCreativeMediaFromCard(
       cardRoot: HTMLElement | null | undefined,
     ) {
       if (!cardRoot) {
         return { imageUrl: null as string | null, hasVideo: false };
       }
-
       const videos = Array.from(cardRoot.querySelectorAll("video"));
       const hasVideo = videos.length > 0;
       for (const video of videos) {
@@ -775,10 +823,7 @@ function createSessionCardExtractionScript() {
         const headline =
           card.querySelector<HTMLElement>("h1, h2, h3, [data-headline]")
             ?.innerText ?? null;
-        const cta =
-          card?.querySelector<HTMLElement>(
-            'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
-          )?.innerText ?? null;
+        const cta = pickCtaFromCard(card);
         const platformTokens = [
           "Instagram",
           "Facebook",
@@ -1518,12 +1563,7 @@ function buildQuickActionExtractionScript() {
         return pageNameByLibraryId.get(libraryId) || null;
       })();
       const headline = card?.querySelector("h1, h2, h3, [data-headline]")?.textContent ?? null;
-      const cta =
-        card
-          ?.querySelector(
-            'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
-          )
-          ?.textContent ?? null;
+      const cta = pickCtaFromCard(card);
       const platformTokens = [
         "Instagram",
         "Facebook",
@@ -1571,6 +1611,46 @@ function buildQuickActionExtractionScript() {
   function isCreativeCdnHost(host) {
     const lower = String(host || "").toLowerCase();
     return lower.includes("fbcdn") || lower.includes("scontent");
+  }
+
+  // FIX-14: the first button/[role="button"] in a card is Ad Library chrome
+  // (the overflow "Menu"/"Open Drop-down" button, "See ad details"), so a
+  // plain first-match picks chrome as the ad's CTA. Filter chrome by exact
+  // label, prefer a real CTA verb, then fall back to the first remaining
+  // candidate. Mirrors pickCtaFromCard in the session extractor.
+  function pickCtaFromCard(cardRoot) {
+    if (!cardRoot) {
+      return null;
+    }
+    const candidates = Array.from(
+      cardRoot.querySelectorAll(
+        'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
+      ),
+    );
+    const labelOf = (element) =>
+      (element.getAttribute("aria-label") || renderedText(element) || "")
+        .replace(/\\u00a0/g, " ")
+        .split("\\n")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+    const isChromeLabel = (value) =>
+      /^(?:menu|open drop-down|see ad details|see summary details|view ad details|meta ad library result|more|report ad)$/i.test(
+        value,
+      );
+    const isCtaVerb = (value) =>
+      /^(?:shop now|learn more|sign up|apply now|book now|contact us)$/i.test(
+        value,
+      );
+    const usable = candidates.filter(
+      (element) => !isChromeLabel(labelOf(element)),
+    );
+    if (usable.length === 0) {
+      return null;
+    }
+    const verbCta = usable.find((element) => isCtaVerb(labelOf(element)));
+    return (verbCta || usable[0]).textContent || null;
   }
 
   function resolveExternalLink(cardRoot) {
@@ -1985,6 +2065,11 @@ export function normalizeExtractedCard(
   const landingPageUrl = card.landingPageUrl;
   const platforms = card.platforms;
   const active = card.active ?? query.filters.status !== "inactive";
+  // FIX-14: Meta Ad Library card chrome (the "Menu" overflow button, "See ad
+  // details", …) can be captured as the ad CTA by DOM extraction. Drop pure
+  // chrome CTA values here so no extraction path renders them on public
+  // search; real advertiser CTAs always pass (exact match only).
+  const cta = isAdLibraryChromeCta(card.cta) ? "" : (card.cta || "");
 
   return withStructuredAnalysis({
     metaAdId: card.libraryId,
@@ -1995,7 +2080,7 @@ export function normalizeExtractedCard(
     previewSubhead,
     hook,
     offer,
-    cta: card.cta || "",
+    cta,
     format,
     languageLabel: inferLanguageLabel(`${previewHeadline} ${body}`),
     destinationType,

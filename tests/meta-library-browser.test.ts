@@ -1725,6 +1725,113 @@ describe("searchMetaLibraryByBrowser", () => {
 		expect(nonDnsFetchCalls(fetchSpy)).toHaveLength(1);
 	});
 
+	it("picks the real CTA button over Ad Library chrome in the Quick Actions script", async () => {
+		let extractionScript = "";
+		const fetchSpy = mockFetchWithDns(
+			vi.fn(async (_input, init) => {
+				const requestBody = JSON.parse(String(init?.body ?? "{}"));
+				extractionScript = requestBody.addScriptTag?.[0]?.content ?? "";
+				return new Response(
+					JSON.stringify({
+						success: true,
+						result: buildQuickActionContent(),
+					}),
+					{
+						status: 200,
+						headers: {
+							"Content-Type": "application/json",
+							"X-Browser-Ms-Used": "1234",
+						},
+					},
+				);
+			}) as never,
+		);
+
+		const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+		await searchMetaLibraryByBrowser(
+			{
+				BROWSER_RUN_ACCOUNT_ID: "acct-123",
+				BROWSER_RUN_API_TOKEN: "token-123",
+			},
+			buildQuery(),
+		);
+
+		// Live 2026-08-09 Ad Library DOM shape: the card's first button-like
+		// element is chrome (the overflow "Menu" button, then "See ad
+		// details"); the advertiser's real CTA button comes later. The
+		// extractor must skip chrome and pick the real CTA.
+		const window = new Window({ url: "https://www.facebook.com/ads/library/" });
+		window.document.body.innerHTML = `
+			<article role="article">
+				<div>Active</div>
+				<div>Library ID: 1234567890</div>
+				<div>Started running on 1 Jun 2026</div>
+				<div>Platforms</div>
+				<div>Sponsored</div>
+				<p>Flat 30% off on serums</p>
+				<div role="button" aria-label="Menu">Menu</div>
+				<div role="button">See ad details</div>
+				<div role="button">Sign up</div>
+				<a href="/ads/library/?id=1234567890">View ad details</a>
+			</article>
+			<article role="article">
+				<div>Active</div>
+				<div>Library ID: 9999999999</div>
+				<div>Sponsored</div>
+				<p>Text-only card with no CTA button</p>
+				<div role="button" aria-label="Menu">Menu</div>
+				<div role="button">See ad details</div>
+				<a href="/ads/library/?id=9999999999">View ad details</a>
+			</article>
+		`;
+
+		window.eval(extractionScript);
+		const payloadScript = window.document.getElementById("__0509_ad_library_payload");
+		const payload = JSON.parse(payloadScript?.textContent ?? "{}") as {
+			cards?: Array<{ libraryId: string; cta: string | null }>;
+		};
+
+		const byId = new Map(
+			(payload.cards ?? []).map((card) => [card.libraryId, card] as const),
+		);
+		expect(byId.get("1234567890")?.cta).toBe("Sign up");
+		// Chrome-only card: no CTA is honest; "Menu" must never render.
+		expect(byId.get("9999999999")?.cta).toBe("");
+		expect(nonDnsFetchCalls(fetchSpy)).toHaveLength(1);
+	});
+
+	it("skips Ad Library chrome buttons when the session extraction script picks the CTA", async () => {
+		const { createSessionCardExtractionScript } = await import(
+			"~/lib/meta-library-browser.server"
+		);
+
+		const window = new Window({ url: "https://www.facebook.com/ads/library/" });
+		window.document.body.innerHTML = `
+			<article role="article">
+				<div>Active</div>
+				<div>Library ID: 1234567890</div>
+				<div>Started running on 1 Jun 2026</div>
+				<div>Platforms</div>
+				<div>Sponsored</div>
+				<p>Flat 30% off on serums</p>
+				<div role="button" aria-label="Menu">Menu</div>
+				<div role="button">See ad details</div>
+				<div role="button">Get offer</div>
+				<a href="/ads/library/?id=1234567890">View ad details</a>
+			</article>
+		`;
+
+		const result = window.eval(
+			`(${createSessionCardExtractionScript().toString()})()`,
+		) as { cards: Array<{ libraryId: string; cta: string | null }> };
+
+		expect(result.cards[0]).toMatchObject({
+			libraryId: "1234567890",
+			cta: "Get offer",
+		});
+	});
+
   it("keeps the Quick Actions runner separate from the extraction payload", async () => {
     const launch = vi.fn();
     const sessions = vi.fn();
@@ -2227,6 +2334,62 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(ad.hook.toLowerCase()).not.toContain("library id");
   });
 
+  it("drops Ad Library chrome captured as the CTA (FIX-14)", async () => {
+    const { normalizeExtractedCard } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    for (const chromeCta of ["Menu", "Open Drop-down", "See ad details", "View ad details"]) {
+      const ad = normalizeExtractedCard(
+        {
+          libraryId: "123",
+          advertiser: "Nykaa",
+          body: "Real ad copy here",
+          previewHeadline: "Real headline",
+          previewSubhead: null,
+          cta: chromeCta,
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=123",
+          landingPageUrl: "https://www.nykaa.com",
+          platforms: ["Facebook"],
+          active: true,
+          imageUrl: null,
+          hasVideo: false,
+        },
+        buildQuery(),
+      );
+
+      expect(ad.cta).toBe("");
+    }
+  });
+
+  it("keeps a real advertiser CTA through normalization", async () => {
+    const { normalizeExtractedCard } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    for (const realCta of ["Sign up", "Shop now", "Get offer", "Learn more"]) {
+      const ad = normalizeExtractedCard(
+        {
+          libraryId: "123",
+          advertiser: "Nykaa",
+          body: "Real ad copy here",
+          previewHeadline: "Real headline",
+          previewSubhead: null,
+          cta: realCta,
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=123",
+          landingPageUrl: "https://www.nykaa.com",
+          platforms: ["Facebook"],
+          active: true,
+          imageUrl: null,
+          hasVideo: false,
+        },
+        buildQuery(),
+      );
+
+      expect(ad.cta).toBe(realCta);
+    }
+  });
+
   it("sets video format hint when the extracted card has a video surface", async () => {
     const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
 
@@ -2345,6 +2508,55 @@ describe("Ad Library page-chrome truncation", () => {
     expect(stripped).toContain("Real ad copy here");
     expect(stripped).not.toContain("Library ID");
     expect(stripped).not.toContain("System status");
+  });
+});
+
+describe("Ad Library chrome CTA guard", () => {
+  it("flags chrome-only CTA values that must never render as the ad CTA", async () => {
+    const { isAdLibraryChromeCta } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    for (const chrome of [
+      "Menu",
+      "menu",
+      "Open Drop-down",
+      "See ad details",
+      "See summary details",
+      "View ad details",
+      "Meta Ad Library result",
+      "More",
+      "Report ad",
+      " Menu ",
+    ]) {
+      expect(isAdLibraryChromeCta(chrome)).toBe(true);
+    }
+  });
+
+  it("never flags real advertiser CTAs", async () => {
+    const { isAdLibraryChromeCta } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    for (const realCta of [
+      "Shop now",
+      "Learn more",
+      "Sign up",
+      "Apply now",
+      "Book now",
+      "Contact us",
+      "Get offer",
+      "Buy now",
+      "Start free trial",
+      "Book demo",
+      "Order today",
+    ]) {
+      expect(isAdLibraryChromeCta(realCta)).toBe(false);
+    }
+
+    expect(isAdLibraryChromeCta(null)).toBe(false);
+    expect(isAdLibraryChromeCta("")).toBe(false);
+    expect(isAdLibraryChromeCta(undefined)).toBe(false);
   });
 });
 
