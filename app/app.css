@@ -3649,7 +3649,10 @@ one signal-green accent.
     font-size: 0.86rem;
   }
 
-  .ld-nav-actions .ld-nav-open-app {
+  /* Beat `.f9-home .ld-nav a { display: inline-flex }` (and the legal twin)
+     so Open app truly leaves the compact layout instead of overflowing. */
+  .f9-home .ld-nav-actions .ld-nav-open-app,
+  .f9-legal-page .ld-nav-actions .ld-nav-open-app {
     display: none;
   }
 
