@@ -48,6 +48,15 @@ export const BRAND_PAGE_MAX_CACHE_LOOKUPS = 4;
 export const BRAND_PAGE_MAX_CACHE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 /** Entries older than this still render but always carry noindex. */
 export const BRAND_PAGE_FRESH_FOR_INDEXING_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * Oldest capture that may still claim "right now"/"live" on a public brand
+ * page. Public pages render ONLY from the cache, so a present-tense claim is
+ * honest only while the check is inside the current hour (the freshness stamp
+ * reads "moments ago" / "about N minutes ago"). Older captures switch to
+ * past-tense copy ("was running … at the last check") with the explicit
+ * "Last checked N ago" stamp as the only time claim.
+ */
+export const BRAND_PAGE_LIVE_CLAIM_MAX_AGE_MS = 60 * 60 * 1000;
 /** Cap the number of ads rendered on a public page. */
 const BRAND_PAGE_MAX_ADS = 24;
 
@@ -68,6 +77,11 @@ export interface BrandPageCacheSnapshot {
   ageMs: number;
   /** True when young enough (≤ 7 days) to be indexable. */
   freshForIndexing: boolean;
+  /**
+   * True only while the capture is young enough (≤ 1 hour) that "right now" /
+   * "live" copy is honest. Older captures render past-tense copy.
+   */
+  freshForLiveClaim: boolean;
 }
 
 export interface BrandIntelTeaser {
@@ -490,5 +504,6 @@ function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot 
     country: entry.country,
     ageMs,
     freshForIndexing: ageMs <= BRAND_PAGE_FRESH_FOR_INDEXING_MS,
+    freshForLiveClaim: ageMs <= BRAND_PAGE_LIVE_CLAIM_MAX_AGE_MS,
   };
 }

@@ -10,14 +10,16 @@ const NEW_AD_HOURS = 48;
 /**
  * "All N ads, on the wall" — the grid of real creatives, ordered
  * longest-running → newest so proven runners land first. When the cache holds
- * more ads than fit, the final tile is an honest "+N more ads live" conversion
- * cell carrying the domain to signup.
+ * more ads than fit, the final tile is an honest "+N more ads live" (or
+ * "+N more ads on record" when the capture is no longer fresh enough for a
+ * live claim) conversion cell carrying the domain to signup.
  */
 export function BrandAdWall({
   ads,
   totalCount,
   brandName,
   domain,
+  fresh,
   signupPath,
   now = new Date(),
 }: {
@@ -25,6 +27,7 @@ export function BrandAdWall({
   totalCount: number;
   brandName: string;
   domain: string;
+  fresh: boolean;
   signupPath: string;
   now?: Date;
 }) {
@@ -41,7 +44,9 @@ export function BrandAdWall({
         <article className="f9-ads-card f9-ads-card-more">
           <Link to={signupPath}>
             <span className="f9-ads-more-num">{`+${remaining}`}</span>
-            <span className="f9-ads-more-label">more ads live</span>
+            <span className="f9-ads-more-label">
+              {fresh ? "more ads live" : "more ads on record"}
+            </span>
             <span className="f9-ads-more-cta">{`Watch ${domain} →`}</span>
           </Link>
         </article>

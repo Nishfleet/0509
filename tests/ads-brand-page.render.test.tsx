@@ -104,6 +104,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     hasCachedAds: true,
     ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
     checkedAgo: "about 2 hours ago",
+    freshForLiveClaim: false,
     teaser,
     aggression,
     changeEvents,
@@ -119,7 +120,7 @@ describe("/ads/:domain — Case File render", () => {
 
     // Sections present.
     expect(markup).toContain("ld-ticker"); // capture ticker
-    expect(markup).toContain("Nike is running");
+    expect(markup).toContain("Nike was running");
     expect(markup).toContain("34 Meta ads");
     expect(markup).toContain("Ad Aggression Score");
     expect(markup).toContain("f9-ads-watch-strip");
@@ -132,7 +133,7 @@ describe("/ads/:domain — Case File render", () => {
     // what-changed → ad wall → closer.
     const order = [
       "ld-ticker",
-      "Nike is running",
+      "Nike was running",
       "Ad Aggression Score",
       "f9-ads-watch-strip",
       "f9-ads-statline",
@@ -150,7 +151,7 @@ describe("/ads/:domain — Case File render", () => {
 
     // 34 total − 5 shown = +29 more.
     expect(markup).toContain("+29");
-    expect(markup).toContain("more ads live");
+    expect(markup).toContain("more ads on record");
     // Primary CTA carries the domain into the Overview setup card.
     expect(markup).toContain(
       "/auth/signup?redirectTo=%2Fapp%3Fwebsite%3Dnike.com%23setup-checklist",
@@ -165,7 +166,7 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("f9-ads-score-num");
     // Stat line still renders from the teaser, minus the score-derived cell.
     expect(markup).toContain("f9-ads-statline");
-    expect(markup).toContain("Ads live");
+    expect(markup).toContain("Ads on record");
     expect(markup).not.toContain("New this week");
   });
 
@@ -199,5 +200,34 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("ld-ticker");
     // The signup CTA still carries the domain.
     expect(markup).toContain("website%3Dnike.com");
+  });
+
+  it("claims right now/live only while the capture is fresh, and flips to past-tense honesty when it is hours old", async () => {
+    const fresh = await render(
+      populated({ checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+    );
+    const stale = await render(populated());
+
+    // Fresh capture: the present-tense acquisition claims are kept.
+    expect(fresh).toContain("Nike is running ");
+    expect(fresh).toContain("right now.");
+    expect(fresh).toContain("Running right now");
+    expect(fresh).toContain("Nike · live");
+    expect(fresh).toContain("Ads live");
+    expect(fresh).toContain("more ads live");
+
+    // Hours-old capture: every claim flips to an honest past tense, and the
+    // freshness stamp stays the page's only time claim.
+    expect(stale).toContain("Nike was running ");
+    expect(stale).toContain("at the last check.");
+    expect(stale).toContain("From the last check");
+    expect(stale).toContain("Nike · on record");
+    expect(stale).toContain("Ads on record");
+    expect(stale).toContain("more ads on record");
+    expect(stale).not.toContain("Nike is running ");
+    expect(stale).not.toContain("Running right now");
+    expect(stale).not.toContain("Nike · live");
+    expect(stale).not.toContain("Ads live");
+    expect(stale).not.toContain("more ads live");
   });
 });
