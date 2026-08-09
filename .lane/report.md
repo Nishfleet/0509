@@ -313,7 +313,7 @@ Loaded `https://0509.io/` in a real browser (Camoufox):
 
 Branch: `fix/search-thin-content`
 Base: `origin/main` at `2ebd8082`
-Pull request: <PR URL filled at push time>
+Pull request: https://github.com/nish3451/0509/pull/563
 
 ## Item
 
