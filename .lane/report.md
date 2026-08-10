@@ -530,6 +530,23 @@ registered in `app/routes.ts`, and membership in the static sitemap.
 - `git diff --check`: clean on the applied patch.
 - PR state: `gh pr view 572` → `mergeable: MERGEABLE`, `mergeStateStatus: BLOCKED` (required checks pending on the refreshed head), single rebased commit `7fe91563`.
 
+## Follow-up refresh (2026-08-10, lane continuation)
+
+origin/main advanced one docs-only commit after this lane's base
+(`1c4d8a3a` #601, `docs/deploy-dispatch-2026-08-09.md`), flipping PR #572 to
+`BEHIND` while all checks were green. This continuation merged `origin/main`
+into the branch (`e9f0fabb`, ort merge, no conflicts — six product files
+untouched, only `.lane/report.md` + the dispatch doc changed) and
+force-with-lease-pushed to `feat/competitor-monitoring-category-page`.
+
+- PR head: `e9f0fabb`; `gh pr view 572` → `mergeable: MERGEABLE`,
+  `mergeStateStatus: BLOCKED` (required CI checks re-queued on the new head;
+  `Authorize exact verification candidate` and `Authorize exact secret-scan
+  candidate` QUEUED at time of check). BEHIND cleared.
+- Product diff vs `7b618cdb` unchanged: 6 files, 586 insertions.
+- `git diff --check`: clean; no further verification rerun needed for a
+  docs-only main merge (report-only delta).
+
 ## Files
 
 - `.lane/report.md` — this evidence record; no product code touched by the report.
