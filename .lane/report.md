@@ -372,3 +372,94 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Deploy production restore-evidence gate: already resolved by PR #545; residual failures are a GitHub billing block
+
+**Status: item already resolved on main; residual deploy failures have a
+different, account-level root cause outside the repository. No product code
+change made. This lane records the evidence and surfaces the external blocker.**
+
+Branch: `report/lane6-restore-evidence-gate-already-resolved`
+Base: `origin/main` at `d109e2d2`
+
+## Item
+
+- [ ] Deploy production fails 23/40 runs: the pinned-SHA restore-evidence gate
+  hard-fails deploys until a separate workflow (the nightly/manual `D1 remote
+  restore evidence` drill) has run at that exact SHA first.
+
+## Verdict
+
+Two distinct failure epochs exist, and only the first is the item's described
+cause. That cause is already fixed and merged on `main`; the current failures
+are a GitHub account billing block that no repository code change can fix.
+
+### 1. The described pinned-SHA gate dependency is already fixed (PR #545, in `main`)
+
+- PR #545 (`fix/deploy-restore-evidence-self-generate`) merged 2026-08-09 as
+  commit `555a9448` ("fix(deploy): generate exact restore evidence inline
+  instead of hard-failing"), an ancestor of current `main` HEAD `d109e2d2`.
+  The lane report for #545 (earlier in this file) documents the original
+  23/40-run failures and the fix; this lane re-verified the fix is fully
+  present on current `main`:
+  - `deploy-production.yml` now has a `generate_restore_evidence` job that
+    runs the same fresh backup + isolated remote-restore drill at the exact
+    pinned SHA on a GitHub-hosted runner under the protected `production`
+    environment, and a `cleanup_restore_evidence` job that deletes every
+    run-scoped scratch database even from a hard-killed generation attempt.
+    The `deploy` job proceeds only when evidence is verified
+    (`generate_restore_evidence` success) or was already valid
+    (`skipped` fast path), and cleanup succeeded.
+  - `scripts/ci-prepare-remote-restore-evidence.sh` reports
+    `restore_evidence_available=false` (exit 0) for missing/stale/corrupt/
+    non-matching evidence instead of hard-failing; only tooling infrastructure
+    failures (exit 2) stop the deploy, so the deploy generates its own exact
+    evidence instead of waiting for a separate workflow.
+  - The direct-needs wiring fix from the #545 follow-up (`edd99519`) is
+    present: `prepare_remote_restore_evidence` sources its
+    `backup_proof_status` output from its declared direct need
+    `pin_candidate`. Regression tests lock the wiring:
+    `tests/deploy-production-gate.test.ts` and
+    `tests/production-candidate-workflow.test.ts` (direct-needs parser).
+
+  The item's acceptance ("deploy no longer hard-fails until a separate
+  workflow runs at the pinned SHA") is therefore already satisfied on `main`.
+
+### 2. Current failures are a GitHub account billing block, not the gate
+
+Verified 2026-08-10 against live GitHub Actions data:
+
+- Every failing `Deploy production` run since 2026-08-09 ~15:36Z fails at the
+  **first** job, `Authorize exact production candidate`, which does not depend
+  on restore evidence at all. The job reports zero executed steps, no runner
+  assigned, and completes in ~2 seconds.
+- The check-run annotation on those jobs reads verbatim: *"The job was not
+  started because recent account payments have failed or your spending limit
+  needs to be increased. Please check the 'Billing & plans' section in your
+  settings"* (e.g. deploy run 31411238685 job 93529554221; restore-drill
+  schedule run 31335978707 job 93301757235; backup schedule run 31335200133
+  job 93299800128).
+- The same annotation is failing **every** GitHub-hosted-runner job in the
+  repository, including plain CI that never touches D1: `ci.yml` runs
+  31416035734/31415995144/31415570166/... all fail identically. Last `ci.yml`
+  success was 31320617141 (2026-08-09T15:15:19Z); the first failure
+  (31321570259) began 2026-08-09T15:36:35Z and has been continuous since.
+- This is an account-level payment/spending-limit condition on the `nish3451`
+  GitHub account. It blocks job *startup* for every `ubuntu-latest` job in the
+  repository, so it cannot be worked around from workflow YAML or scripts;
+  only the self-hosted VPS verify job (`prepare_remote_restore_evidence`) can
+  still run, and the pipeline's authorize/pin/deploy jobs are GitHub-hosted by
+  design.
+
+## Required external action (Nish)
+
+Resolve the GitHub account billing state: fix the failed payment or raise the
+spending limit under GitHub **Settings → Billing & plans**, then rerun any
+deploy dispatch. Once hosted-runner jobs start again, the #545 self-generating
+evidence path means a deploy of any `main` SHA proceeds without waiting for the
+nightly drill — the original item stays closed.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
