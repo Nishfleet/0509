@@ -528,31 +528,35 @@ function renderTriageRecordText(
  * email carries — materiality reason, exactly one accountable reviewer, and
  * one next action. Values come from the shared period-truth vocabulary, so a
  * missing value renders its explicit failure state instead of dropping the
- * line.
+ * line. The next action is optional for surfaces that already carry their own
+ * action line per item (instant alerts); the two mandatory lines never drop.
  */
-function renderEmailAccountabilityBlock(input: {
+export function renderEmailAccountabilityBlock(input: {
   materialityReason: string;
   reviewerLabel: string;
-  nextAction: string;
+  nextAction?: string | null;
 }) {
+  const nextActionLine = input.nextAction
+    ? `<p style="margin: 0;"><strong>Next action:</strong> ${escapeHtml(input.nextAction)}</p>`
+    : "";
   return `
       <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
         <p style="margin: 0 0 6px;"><strong>Why this matters:</strong> ${escapeHtml(input.materialityReason)}</p>
         <p style="margin: 0 0 6px;"><strong>Accountable reviewer:</strong> ${escapeHtml(input.reviewerLabel)}</p>
-        <p style="margin: 0;"><strong>Next action:</strong> ${escapeHtml(input.nextAction)}</p>
+        ${nextActionLine}
       </div>
   `;
 }
 
-function renderEmailAccountabilityText(input: {
+export function renderEmailAccountabilityText(input: {
   materialityReason: string;
   reviewerLabel: string;
-  nextAction: string;
+  nextAction?: string | null;
 }): string[] {
   return [
     `Why this matters: ${input.materialityReason}`,
     `Accountable reviewer: ${input.reviewerLabel}`,
-    `Next action: ${input.nextAction}`,
+    ...(input.nextAction ? [`Next action: ${input.nextAction}`] : []),
     "",
   ];
 }
