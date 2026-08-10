@@ -107,7 +107,12 @@ import {
   withSearchScope,
   withTrackingContext,
 } from "~/lib/search-display";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
@@ -141,6 +146,7 @@ export const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
 // the exact grace window.
 export const SEARCH_NAVIGATION_SETTLE_GRACE_MS = 90_000;
 
+const searchTitle = "Search competitor Meta ads free | Five to Nine";
 const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
 const SEARCH_DELAY_SESSION_KEY = "f9.search.recent-delay.v1";
@@ -149,7 +155,7 @@ export const links: LinksFunction = () => canonicalLinks("/search");
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
-    title: "Search competitor Meta ads free | Five to Nine",
+    title: searchTitle,
     description: searchDescription,
     pathname: "/search",
   });
@@ -1408,6 +1414,19 @@ export default function SearchRoute() {
       userEmail={rootData.session?.user.email}
       userName={rootData.session?.user.name}
     >
+      {/* Truthful WebPage JSON-LD mirroring the meta head: same title,
+          same description, same canonical URL. It states only what the idle
+          page itself says — no result counts, prices, or rankings, which the
+          page has not produced yet. */}
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: searchTitle,
+            description: searchDescription,
+            pathname: "/search",
+          }),
+        )}
+      />
       <DashboardPage className="f9-wk-page">
         <WorkingHeader
           context={headerContext}
