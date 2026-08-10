@@ -64,6 +64,7 @@ export default [
   route("ads/:domain", "routes/ads.$domain.tsx"),
   route("compare/magicbrief", "routes/compare.magicbrief.tsx"),
   route("compare/meta-ad-library", "routes/compare.meta-ad-library.tsx"),
+  route("competitor-monitoring", "routes/competitor-monitoring.tsx"),
   route("team/accept", "routes/team.accept.tsx"),
 	route("share/:token/pdf", "routes/share.$token.pdf.ts"),
   route("share/:token", "routes/share.$token.tsx"),
