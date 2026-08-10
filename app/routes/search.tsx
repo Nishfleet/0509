@@ -2290,7 +2290,9 @@ export default function SearchRoute() {
              The scope copy below the fold is the response to the SEO engine's
              thin-content warning (dogfood 694ddbd68e95): honest, page-specific
              detail — what a search returns, proof, and the next step — without
-             decorating the instrument. */
+             decorating the instrument. The copy avoids claiming current
+             activity: the discovery cache can serve cached inventory, so the
+             "right now" promise stays gated (PR #567). */
           <>
             <section
               aria-labelledby="search-idle-title"
@@ -2300,8 +2302,8 @@ export default function SearchRoute() {
                 Nothing searched yet
               </p>
               <p className="f9-wk-lede">
-                Paste a competitor website and press See ads. We read what they
-                are running on Meta right now, pull the offer off their landing
+                Paste a competitor website and press See ads. We check the Meta
+                Ad Library for their ads, capture the offer from their landing
                 page, and keep the capture — so the next time that offer moves,
                 you can prove it.
               </p>
@@ -2322,10 +2324,10 @@ export default function SearchRoute() {
                 What a search returns
               </h2>
               <p className="f9-wk-lede">
-                The public preview searches Meta&rsquo;s Ad Library for ads the
-                competitor is running right now — across Facebook, Instagram,
-                Audience Network, and Messenger — and keeps what it finds, so
-                a later change is provable, not anecdotal.
+                The public preview searches Meta&rsquo;s Ad Library for the
+                competitor&rsquo;s ads — across Facebook, Instagram, Audience
+                Network, and Messenger — and keeps what it finds, so a later
+                change is provable, not anecdotal.
               </p>
               <ul className="f9-search-scope-list">
                 <li>
