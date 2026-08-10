@@ -319,7 +319,8 @@ describe("Site Rep widget install", () => {
         widgetDocument as never,
         { delayMs: SITE_REP_WIDGET_DELAY_MS },
       );
-      cleanup();
+      expect(cleanup).toBeTypeOf("function");
+      cleanup?.();
 
       vi.advanceTimersByTime(SITE_REP_WIDGET_DELAY_MS * 2);
       expect(widgetDocument.body.appendChild).not.toHaveBeenCalled();
