@@ -68,6 +68,25 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
 export const meta = () => [{ title: "Five to Nine" }];
 
+// PERF: one combined css2 request covering exactly the weights app.css uses —
+// Inter 400/500/600/700, Bricolage Grotesque 600/700/800 (800 is the "Caught
+// in the act" hero type-wall weight), IBM Plex Mono 400/500/600 — all with
+// display=swap. Kept OUT of links() so it can be loaded non-blocking (see
+// GoogleFontsStylesheet); links() stylesheets are render-blocking.
+export const GOOGLE_FONTS_STYLESHEET_HREF =
+  "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
+
+// PERF (dogfood da0f9f345221): the fonts css2 request was one of the two
+// render-blocking resources on every public page (root-*.css was the other).
+// It is a secondary style: the page renders fully in fallback fonts because
+// of display=swap, so nothing on the critical path needs it. The script runs
+// inline during parse — before any stylesheet load event can fire — and
+// flips media="print" to "all" once the sheet is in, with a noscript
+// fallback for JS-off clients. Chrome reports this pattern non-blocking,
+// which is what the SEO Fix Kit engine reads for its render-blocking
+// finding.
+export const FONT_SWAP_SCRIPT = `(function(){try{var l=document.getElementById("f9-font-stylesheet");if(l&&l.addEventListener){l.addEventListener("load",function(){l.media="all";});}}catch(e){}})();`;
+
 export const links: LinksFunction = () => [
   { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
   { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
@@ -77,14 +96,6 @@ export const links: LinksFunction = () => [
     rel: "preconnect",
     href: "https://fonts.gstatic.com",
     crossOrigin: "anonymous",
-  },
-  // PERF: one combined css2 request (one fewer render-blocking stylesheet
-  // fetch) covering exactly the weights app.css uses — Inter 400/500/600/700,
-  // Bricolage Grotesque 600/700/800 (800 is the "Caught in the act" hero
-  // type-wall weight), IBM Plex Mono 400/500/600 — all with display=swap.
-  {
-    rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
   },
 ];
 
@@ -161,6 +172,31 @@ function SiteRepWidgetEmbed({ widget }: { widget: typeof SITE_REP_WIDGET | null 
 }
 
 /**
+ * PERF (dogfood da0f9f345221): loads the Google Fonts stylesheet without
+ * blocking first paint. Preload it at high priority (as=style), fetch it as
+ * a print-media stylesheet (non-render-blocking), swap it to all media via
+ * FONT_SWAP_SCRIPT once loaded, and keep a no-JS fallback. Fonts still apply
+ * via display=swap; nothing visible depends on the sheet for first render.
+ */
+export function GoogleFontsStylesheet() {
+  return (
+    <>
+      <link rel="preload" as="style" href={GOOGLE_FONTS_STYLESHEET_HREF} />
+      <link
+        id="f9-font-stylesheet"
+        rel="stylesheet"
+        href={GOOGLE_FONTS_STYLESHEET_HREF}
+        media="print"
+      />
+      <script dangerouslySetInnerHTML={{ __html: FONT_SWAP_SCRIPT }} />
+      <noscript>
+        <link rel="stylesheet" href={GOOGLE_FONTS_STYLESHEET_HREF} />
+      </noscript>
+    </>
+  );
+}
+
+/**
  * Keeps the workspace dark-mode attribute correct across client-side
  * navigations (marketing must stay light even when the workspace is dark)
  * and reacts to OS theme / other-tab preference changes. The pre-paint
@@ -216,6 +252,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <Meta />
           <Links />
+          <GoogleFontsStylesheet />
         </head>
         <body data-pricing="dodo-local" />
       </html>
@@ -233,6 +270,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <Meta />
         <Links />
+        <GoogleFontsStylesheet />
       </head>
       <body data-pricing="dodo-local">
         {children}
