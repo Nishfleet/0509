@@ -372,3 +372,62 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Public /search "right now" promise gating (2026-08-10 lane 2) — already resolved by PR #567
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane2-right-now-promise-already-resolved`
+Base: `origin/main` at `d109e2d2`
+
+## Item
+
+- [ ] Gate public search's "right now" promise on a proven fresh-live Ad
+  Library capture (scout 2026-08-09, risk: green).
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main` as
+PR #567 — `5e682868` "fix(search): gate public /search 'right now' promise on
+a proven fresh-live Ad Library capture", merged 2026-08-09, an ancestor of the
+current `main` HEAD (`d109e2d2`). The PR's own description cites the same
+scout: "scout 2026-08-09: all six standard Meta probes resolved as Cached live
+results" while the idle state promised "We read what they are running on Meta
+right now".
+
+## Evidence on current main
+
+- **Single gate**: `isProvenFreshLiveCapture()` in `app/lib/search-display.ts`
+  returns true only for a cache miss (`cacheStatus === "miss"`) served from a
+  real (non-demo) provider with `discoveryStatus === "healthy"`, and fails
+  closed for partial captures, delayed/degraded checks, and absent/unknown
+  discovery status. The doc comment marks it as "the single gate behind which
+  the public search page may make a fresh/live ('right now') claim."
+- **Honest labels**: `formatSearchFreshnessLabel()` renders "Fresh live result"
+  only under that gate; otherwise "Recent cached result" (hit), "Older cached
+  result" (stale), "Fresh check delayed" (degraded/cache-only/warming),
+  "Fresh partial result" (partial), or "Freshness unavailable" (idle/demo).
+- **Route wiring**: `app/routes/search.tsx` renders
+  `formatSearchFreshnessLabel(visibleResult)` as the result-panel freshness
+  label; the idle state copy is now honest — "Paste a competitor website and
+  press See ads. We check the Meta Ad Library for their ads, capture the offer
+  from their landing page, and keep the capture…" — with no "right now"
+  promise before a search runs.
+- **Regression pins**: `tests/search-live-claim.test.tsx` (329 lines) pins
+  `isProvenFreshLiveCapture` over ten fixtures and asserts the rendered route
+  markup for idle, cached, and cached-degraded states never contains "right
+  now" or "Fresh live result", and that only the proven fresh-live fixture may
+  render the live-claim label.
+
+## Verification on this tip (origin/main `d109e2d2`)
+
+- `vitest run tests/search-live-claim.test.tsx`: 1 file, **7/7 passed**.
+- Full suite `npm test`: **423 files / 4848 tests passed**.
+- `git log origin/main --grep="right now" -i`: the only search-promise gating
+  commits are #567 (this item), #548/#550 (brand pages) — nothing ungated
+  remains.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
