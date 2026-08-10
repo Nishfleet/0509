@@ -481,3 +481,71 @@ advertisers.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Redirecting internal links on home / /help / /docs / /status (2026-08-11 lane 16) — fixed in flight by PR #570
+
+**Status: fix in flight on open PR #570; this lane re-validated it on current
+main and records the evidence only — no duplicate PR opened.**
+
+Branch: `lane16/ffcd440eda79-redirect-internal-links-evidence`
+Base: `origin/main` at `47db20f4`
+
+## Item
+
+- [ ] [dogfood `ffcd440eda79`] Redirecting internal links on home
+  (`runs/20260808T074205Z-msk2fl3n.json`).
+  - evidence: engine findings issue-3, issue-9, issue-11, issue-13 (notice);
+    page scopes home, /help, /docs, /status.
+  - observed: `0509.io/app` returned 200 -> 302 to
+    `/auth/login?redirectTo=%2Fapp` (and app/notifications, app/support,
+    app/billing, app/developer-access variants on /help and /docs).
+  - accept: resolve the rendered-audit notice on home, /help, /docs, /status
+    of https://0509.io so a rerun of the same SEO Fix Kit engine no longer
+    reports it.
+
+## Verdict
+
+No code change was warranted from this lane. The fix is already implemented
+and in flight on PR #570 (`fix/lane1-home-internal-link-redirects`, commit
+`08f05eac`, head `41b8474b` — merged main in at 19:31Z 2026-08-10, 0 commits
+behind `origin/main`):
+
+- `app/lib/app-link.ts` `appLinkTarget(appPath, session)`: signed-in visitors
+  keep the direct app URL; anonymous visitors (and crawlers) get
+  `/auth/login?redirectTo=<encoded app path>` — byte-identical to what the
+  app-route guard (`requireSession` in `app/lib/auth.server.ts`) would
+  redirect to, minus the redirect hop.
+- `app/components/marketing-nav.tsx` "Open app" (the only redirecting link on
+  home and /status), `app/routes/help.tsx` (all 6 app links), `app/routes/docs.tsx`
+  and `app/routes/api.docs.tsx` (developer-access).
+
+## Fresh validation on current main (2026-08-11)
+
+- Enumerated every auth-gated link on the four pages at `origin/main`
+  `47db20f4`: the only anonymous-visible `/app*` links are exactly the ones
+  PR #570 rewires. The home page's remaining direct link (`/app/billing?
+  source=top-up#top-ups` "Manage packs") renders only under
+  `rootData.session` (session-gated), so anonymous crawlers never see it and
+  it produces no redirect.
+- PR #570 head `41b8474b` is up to date with `origin/main` (0 commits
+  behind), so the fix applies cleanly to current main.
+- Focused suites on the PR tip, 9 files / 41 tests pass:
+  `app-link.test.ts`, `marketing-nav.test.ts`, `help-runtime-truth.test.ts`
+  (asserts anonymous `/auth/login?redirectTo=%2Fapp%2Fsupport%3F...` targets
+  in rendered markup), `public-doc-routes.test.ts`, `status.route.test.ts`,
+  `ads-brand-page.render.test.tsx`, `changelog-customer-value.test.ts`,
+  `compare-magicbrief.route.test.ts`, `compare-meta-ad-library.route.test.ts`.
+- `npm run typecheck`: exit 0.
+
+## Close-out
+
+The item's acceptance ("a rerun of the same SEO Fix Kit engine no longer
+reports the fingerprint") is met once PR #570 merges and deploys and the next
+dogfood rerun drops `ffcd440eda79` from active findings. Do not open a second
+PR with the same fix; lane 1 owns #570 and it is progressing (CI on
+vps-verify runners, CodeRabbit green).
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
