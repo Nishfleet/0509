@@ -83,4 +83,20 @@ export {
   upsertWatchlistDeliveryConfig,
 } from "~/lib/data/watchlist-delivery-config.server";
 
+export {
+  beginWebsiteSiteScan,
+  upsertWebsiteSiteScanPage,
+  upsertWebsitePageObservation,
+  finalizeWebsiteSiteScan,
+  listWebsiteSiteScanPagesForRun,
+  listWebsitePageObservationsForRun,
+  getLatestCompleteWebsiteScanBaseline,
+  type BeginWebsiteSiteScanInput,
+  type UpsertWebsiteSiteScanPageInput,
+  type UpsertWebsitePageObservationInput,
+  type FinalizeWebsiteSiteScanInput,
+  type WebsiteScanLease,
+  type WebsiteSiteScanBaseline,
+} from "~/lib/data/watchlist-site-pages.server";
+
 export type { ObservationRow } from "~/lib/data/watchlist-rows.server";
