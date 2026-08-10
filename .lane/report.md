@@ -372,3 +372,83 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Search: Meta Ad Library chrome ("Menu") rendered as the ad CTA (2026-08-10 lane 11) — already resolved by PR #552
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane11-search-meta-menu-cta-already-resolved`
+Base: `origin/main` at `5021807e`
+
+## Item
+
+- [ ] Stop Meta Ad Library chrome ("Menu") from rendering as the ad CTA on
+  public search [scout 2026-08-09, risk: amber]
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main` as
+PR #552 — `1ee24c70` "fix(search): stop Ad Library chrome ('Menu') from
+rendering as the ad CTA", merged 2026-08-09, an ancestor of the current `main`
+HEAD (`5021807e`). No later commit touches the involved files
+(`app/lib/meta-library-browser.server.ts`,
+`app/lib/meta-library-rendered-card-parser.server.ts`,
+`tests/meta-library-browser.test.ts`).
+
+## Evidence on current main
+
+The root cause was that the first `button`/`[role="button"]` inside an Ad
+Library card is Meta chrome — the overflow "Menu"/"Open Drop-down" button,
+"See ad details", "More", "Report ad", or the "Meta Ad Library result" label —
+so plain first-match CTA extraction surfaced it as the advertiser's call to
+action on public search. The merged fix stops this at every layer:
+
+- **DOM extraction** (`pickCtaFromCard` in
+  `app/lib/meta-library-browser.server.ts`): both the session script (line
+  ~447) and the Quick Actions script (line ~1621) now filter candidates by
+  exact chrome label (`menu`, `open drop-down`, `see ad details`, `see summary
+  details`, `view ad details`, `meta ad library result`, `more`, `report ad`),
+  prefer a real CTA verb (`shop now`, `learn more`, `sign up`, `apply now`,
+  `book now`, `contact us`), and only then fall back to the first remaining
+  candidate. A chrome-only card returns `null` — an honest "no CTA", never
+  "Menu".
+- **Normalization choke point** (`normalizeExtractedCard`, line ~2072): every
+  extraction path (session DOM, Quick Actions, Browserless, rendered-text
+  fallback) converges on `normalizeAndFilterExtractedCards`, so the CTA value
+  is run through `isAdLibraryChromeCta`
+  (`app/lib/meta-library-rendered-card-parser.server.ts`, exact-match token
+  list only — real advertiser CTAs like "Shop now" never collide) and a
+  pure-chrome value becomes `""` instead of rendering. The public `/search`
+  route renders `selectedAd.cta` from these normalized `AdRecord`s, so no raw
+  extraction value can reach the page.
+- **Body text** (`isTextCardUiLine` / FIX-13): standalone "Menu" and chrome
+  lines are also stripped from captured card body text before hook derivation,
+  so the chrome cannot leak into the ad copy either.
+
+## Regression pins (on this tip)
+
+`tests/meta-library-browser.test.ts`:
+- "picks the real CTA button over Ad Library chrome in the Quick Actions
+  script" — chrome-first DOM, real CTA still selected.
+- "skips Ad Library chrome buttons when the session extraction script picks
+  the CTA" — chrome-only card yields no CTA.
+- "drops Ad Library chrome captured as the CTA (FIX-14)" — "Menu", "Open
+  Drop-down", "See ad details", "View ad details" all normalize to `""`.
+- "Ad Library chrome CTA guard" — `isAdLibraryChromeCta` flags chrome tokens
+  (including case/whitespace variants) and never flags real CTAs.
+
+## Verification on this tip (origin/main `5021807e`)
+
+- `npx vitest run tests/meta-library-browser.test.ts`: 1 file, **73/73 passed**
+  (includes the Quick Actions, session-extraction, rendered-card-parser, and
+  chrome-CTA-guard suites).
+- `npx vitest run tests/search.route.test.ts tests/search-answer.test.ts`:
+  2 files, **50/50 passed** (public /search rendering + live-claim path).
+- `git log 1ee24c70..HEAD -- app/lib/meta-library-browser.server.ts
+  app/lib/meta-library-rendered-card-parser.server.ts
+  tests/meta-library-browser.test.ts`: no commits — the fix is intact on main.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
