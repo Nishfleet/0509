@@ -30,7 +30,7 @@ permissions: {}
 jobs:
   authorize_release:
     name: Authorize exact production candidate
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, vps-verify]
     permissions: {}
     outputs:
       sha: ${{ steps.authorize.outputs.sha }}
@@ -83,7 +83,7 @@ jobs:
     name: Pin exact production candidate
     if: needs.authorize_release.result == 'success'
     needs: authorize_release
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, vps-verify]
     permissions:
       contents: read
     outputs:
@@ -196,7 +196,7 @@ jobs:
     needs:
       - pin_candidate
       - prepare_remote_restore_evidence
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, vps-verify]
     timeout-minutes: 300
     environment: production
     permissions:
@@ -307,7 +307,7 @@ jobs:
       - pin_candidate
       - prepare_remote_restore_evidence
       - generate_restore_evidence
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, vps-verify]
     timeout-minutes: 120
     environment: production
     permissions:
@@ -390,7 +390,7 @@ jobs:
       - prepare_remote_restore_evidence
       - generate_restore_evidence
       - cleanup_restore_evidence
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, vps-verify]
     # Budget: 180m maximum deploy-window wait + 60m conservative pipeline +
     # 30m cancellation/release slack = 270m. With cancel-in-progress: false,
     # a queued deploy cannot drain until the running job (including its lock
@@ -462,7 +462,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: npx playwright install chromium firefox webkit
 
       - name: Typecheck
         run: npm run typecheck

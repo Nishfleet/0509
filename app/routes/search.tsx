@@ -1291,6 +1291,13 @@ export default function SearchRoute() {
   // refused by it.
   const instrumentUsed = hasSearchQuery && !data.inputError;
   const hasResults = visibleAds.length > 0;
+  // BL-031 round 3 — the refine disclosure counts only filters on a search
+  // that actually ran. The loader geo-defaults `country` to the visitor's
+  // country, so a pristine /search must not open the panel or print "1 on"
+  // for a filter nobody turned on — the pre-search screen stays one field
+  // and one button. A narrowed search that ran still opens with its count.
+  const refineDisclosureActive =
+    instrumentUsed && activeRefineFilters.length > 0;
   // One context line under the title (the v4 header contract): what this page
   // searches and what happens to a result. Provenance belongs to the capture,
   // so source and freshness are told once, in the evidence pane.
@@ -1461,11 +1468,11 @@ export default function SearchRoute() {
 
             <details
               className="f9-wk-refine"
-              open={activeRefineFilters.length > 0}
+              open={refineDisclosureActive}
             >
             <summary>
               Refine search
-              {activeRefineFilters.length > 0 ? (
+              {refineDisclosureActive ? (
                 <span className="f9-wk-refine-n">
                   {activeRefineFilters.length} on
                 </span>
