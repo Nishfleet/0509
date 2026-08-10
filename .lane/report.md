@@ -372,3 +372,90 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Public search cold path verification (no code change required)
+
+**Status: already resolved by PRs #543, #544, #547, #559, #567; this lane
+records the evidence only.**
+
+Branch: `report/lane8-public-search-cold-path-already-resolved`
+Base: `origin/main` at `5021807e`
+
+## Item
+
+- [ ] Public search cold path: first anonymous query for an uncached
+  advertiser takes ~20s before any useful result or page.
+
+## Verdict
+
+No code change was warranted. The ~20s block on the first anonymous query for
+an uncached advertiser is already fixed on `main` by five merged PRs, all
+ancestors of the current `main` HEAD (`5021807e`), with the client and server
+behavior locked by regression tests:
+
+- **PR #543 / `8b3e1e30`** (`fix/search-cold-path-warming`): the first
+  anonymous query now returns the typed warming state immediately; the browser
+  capture runs in the background via `ctx.waitUntil`. Test locks that the
+  response is out while the capture promise is still unresolved
+  (`tests/ad-source.test.ts` — "returns the warming state immediately and
+  finishes the capture in the background when this request owns the lease").
+- **PR #544 / `b5bf3ce7`** (`fix/search-cold-path-stale-entry-warm`): an
+  expired-but-usable cache entry is painted immediately (labeled
+  `cache_only` + warming flag) and refreshed in the background, instead of
+  re-running the ~20s capture synchronously after the 15-minute public TTL
+  expiry (locked by "returns an expired-but-usable entry immediately and
+  refreshes it in the background…").
+- **PR #547 / `5b053b14`** (`fix/search-cold-path-waiter-no-block`): a
+  `public_search` waiter that does NOT own the lease returns the warming state
+  immediately instead of burning its 12s wait budget (locked by "returns a
+  typed warming state immediately while another isolate owns the live
+  search"). The distributed discovery lease keeps the single-flight capture;
+  the short 60s cold-warm lease + 20s heartbeat self-heal when a `waitUntil`
+  run is canceled at the 30s cap.
+- **PR #559 / `90147b9b`**: the anonymous submit stays on "Searching…" while
+  the cold-path search resolves, so the visitor is never left with a
+  re-enabled button on a warming page (locked by
+  `tests/search-submission-settle.test.tsx`).
+- **PR #567 / `5e682868`**: the public /search "right now" promise is gated on
+  a proven fresh-live Ad Library capture, so the page cannot claim live
+  results it does not have.
+
+## How the first anonymous query behaves on this tip
+
+1. Anonymous GET `/search?…` for an uncached advertiser → the search loader
+   runs rate limiting (D1) then `searchAdsViaSourceResolver`
+   (`app/lib/ad-source.server.ts`).
+2. True cache miss → this request acquires the distributed discovery lease
+   (`discovery_query_lease`, migration `0009`) → it OWNS the capture.
+3. `wantsBackgroundWarm` (provider `meta_library_browser`, route
+   `public_search`, no fresh cache, no cursor, request `ctx.waitUntil`
+   present) → the ~20s browser capture is handed to `ctx.waitUntil` and the
+   loader returns the warming state page immediately (~sub-second response).
+4. The client renders "Search in progress / Checking the Ad Library now /
+   Usually under a minute" (`app/routes/search.tsx`) and auto-revalidates on a
+   5s × 12 = 60s poll; each poll that loses the lease returns warming
+   immediately (PR #547) until the background capture lands in the cache and
+   the poll serves the results.
+
+Production wiring is in place: `workers/app.ts` provides the request
+`ExecutionContext` (with `waitUntil`) in the router context, and the
+`BROWSER` binding resolves the provider to `meta_library_browser`, so the
+background-warm branch is the one production takes.
+
+## Verification on this tip
+
+- `npx vitest run tests/ad-source.test.ts tests/search-warming-state.test.ts`:
+  2 files, **85/85 passed** (cold-path owner-warm, expired-stale warm, lease
+  waiter, lease TTL/heartbeat/release, warming-state rendering).
+- `npx vitest run tests/search.route.test.ts tests/search-submission-settle.test.tsx
+  tests/search-live-claim.test.tsx tests/discovery-customer-copy.test.ts`
+  (pairwise with the suite above): all passed (151/151 combined; the one
+  batch-wide failure observed was a 10s test-timeout in a Meta-pagination
+  honesty test under parallel CPU contention — it passes standalone and in
+  every pairwise combination, and is unrelated to the cold path).
+- `git diff --check`: clean (markdown-only change; no product code touched).
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
