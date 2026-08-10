@@ -55,6 +55,10 @@ import {
 import { evaluateDeliveryPolicy, resolveDeliveryConfig } from "~/lib/delivery-policy.server";
 import { isEmailSendingConfigured, type AppEnv } from "~/lib/env.server";
 import {
+  resolveCustomerEvidenceState,
+  type CustomerEvidenceState,
+} from "~/lib/evidence-render-contract";
+import {
   isSlackDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
@@ -529,6 +533,21 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
       ? await loadAlertAdsById(env, input.events)
       : new Map<string, AdRecord>();
 
+  // P1 evidence truth (2026-08-10): instant-alert materiality may only claim a
+  // verified move for events whose customer evidence state resolves to
+  // `verified_change` — a confirmed status alone is a claim, not evidence.
+  // One bounded batched query resolves every batch up front (never an N+1);
+  // provisional batches and WhatsApp-only batches keep their existing copy,
+  // so the query only runs when a materiality reason will actually render.
+  const needsEvidenceResolution = batches.some(
+    (batch) =>
+      !batch.provisional &&
+      (batch.allowedChannels.includes("email") || batch.allowedChannels.includes("slack")),
+  );
+  const alertEvidenceByEventId = needsEvidenceResolution
+    ? await loadAlertEvidenceStates(env, input.userId, input.events)
+    : new Map<string, CustomerEvidenceState>();
+
   const attempts: InstantAttemptSummary[] = [];
 
   // E2 alert increment (2026-08-08): every delivered alert names exactly one
@@ -544,6 +563,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
       env,
       alertAdsById,
       reviewerLabel,
+      alertEvidenceByEventId,
     );
 
     if (batch.allowedChannels.includes("email")) {
@@ -3089,6 +3109,56 @@ async function loadAlertAdsById(env: AppEnv, events: WatchEventRecord[]) {
   }
 }
 
+/**
+ * P1 evidence truth (2026-08-10): resolves every alert event to its customer
+ * evidence state via the shared render contract, using one bounded batched
+ * query over the referenced proof captures. An event with no resolvable
+ * capture pair stays unverified — the contract fails closed, so missing,
+ * failed, or unordered evidence can never claim a verified move. A lookup
+ * failure (or a test adapter without the helper) degrades to no evidence,
+ * which makes the alert provisional — never blocks delivery and never
+ * invents evidence.
+ */
+async function loadAlertEvidenceStates(
+  env: AppEnv,
+  userId: string,
+  events: WatchEventRecord[],
+): Promise<Map<string, CustomerEvidenceState>> {
+  const states = new Map<string, CustomerEvidenceState>();
+  // The whole resolution is fail-closed: a missing helper on a test adapter
+  // (strict mocks throw on property access) or a failed lookup degrades to
+  // no evidence, which makes the alert provisional — it never blocks
+  // delivery and never invents evidence.
+  let pairs: Awaited<ReturnType<typeof deliveryData.listProofCapturePairsForEventIds>> = [];
+  try {
+    const listPairs = deliveryData.listProofCapturePairsForEventIds;
+    if (typeof listPairs !== "function") {
+      return states;
+    }
+    pairs = await listPairs(env, userId, events.map((event) => event.id));
+  } catch {
+    return states;
+  }
+  const byEventId = new Map(pairs.map((pair) => [pair.eventId, pair]));
+  for (const event of events) {
+    const pair = byEventId.get(event.id) ?? null;
+    states.set(
+      event.id,
+      resolveCustomerEvidenceState({
+        event,
+        proofCapture: pair?.current ?? null,
+        beforeCapturedAt: pair?.previous
+          ? (pair.previous.succeededAt ?? pair.previous.attemptedAt)
+          : null,
+        nowCapturedAt: pair?.current
+          ? (pair.current.succeededAt ?? pair.current.attemptedAt)
+          : null,
+      }),
+    );
+  }
+  return states;
+}
+
 // One creative image per alert email: the primary event's, only when a real
 // https creative URL was captured. Silent skip otherwise — no placeholders.
 function renderCreativeImageHtml(
@@ -3133,6 +3203,7 @@ export function buildInstantAlertContent(
   env: AppEnv,
   adsById?: Map<string, AdRecord>,
   reviewerLabel?: string | null,
+  evidenceByEventId?: ReadonlyMap<string, CustomerEvidenceState> | null,
 ): InstantAlertContent {
   const primaryEvent = events[0];
   const competitor = readCompetitorLabel(primaryEvent) ?? watchlist.name;
@@ -3149,9 +3220,17 @@ export function buildInstantAlertContent(
   const baseline =
     events.length === 1 &&
     ((primaryEvent.metadata ?? {}) as Record<string, unknown>).kind === "baseline";
+  // P1 (2026-08-10): only events whose evidence resolves to a verified change
+  // may contribute confirmed materiality copy. A confirmed status alone is a
+  // claim, not evidence — without a succeeded, ordered capture pair the alert
+  // stays provisional, and mixed batches derive copy from verified items only
+  // so one evidenced event never inflates a batch of unverified ones.
+  const verifiedEvents = events.filter(
+    (event) => evidenceByEventId?.get(event.id) === "verified_change",
+  );
   const materialityReason = alertMaterialityReason({
-    events,
-    provisional,
+    events: verifiedEvents,
+    provisional: provisional || (!baseline && verifiedEvents.length === 0),
     baseline,
   });
   const accountabilityBlock = renderEmailAccountabilityBlock({
