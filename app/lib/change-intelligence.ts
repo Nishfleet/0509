@@ -198,18 +198,26 @@ const COSMETIC_EVENT_TYPES = new Set([
 
 function classifyDigestPeriodEvent(item: DigestPeriodTruthItem): DigestPeriodEventClass {
   const kind = (item.metadata as Record<string, unknown> | undefined)?.kind;
-  if (kind === "baseline" || kind === "creative_copy") {
-    // Baselines are starting snapshots; creative copy rewrites are cosmetic
-    // until they touch an offer, CTA, or campaign state.
+  // Baselines are starting snapshots, never campaign movement. They ride the
+  // ad_new type because the watch_event CHECK constraint pins the type list,
+  // so the marker must win over the type-derived classes.
+  if (kind === "baseline") {
+    return "cosmetic";
+  }
+  // A real offer/price/CTA/campaign/destination event type wins over a
+  // generic creative-copy hint: a creative rewrite that carries an offer or
+  // CTA change is material movement, never a cosmetic touch-up.
+  if (PRICE_EVENT_TYPES.has(item.eventType ?? "")) return "price";
+  if (CTA_EVENT_TYPES.has(item.eventType ?? "")) return "cta";
+  if (CAMPAIGN_EVENT_TYPES.has(item.eventType ?? "")) return "campaign";
+  if (DESTINATION_EVENT_TYPES.has(item.eventType ?? "")) return "destination";
+  // Without a material event type behind it, creative copy stays cosmetic.
+  if (kind === "creative_copy") {
     return "cosmetic";
   }
   if (kind === "ad_new_aggregate") {
     return "campaign";
   }
-  if (PRICE_EVENT_TYPES.has(item.eventType ?? "")) return "price";
-  if (CTA_EVENT_TYPES.has(item.eventType ?? "")) return "cta";
-  if (CAMPAIGN_EVENT_TYPES.has(item.eventType ?? "")) return "campaign";
-  if (DESTINATION_EVENT_TYPES.has(item.eventType ?? "")) return "destination";
   if (COSMETIC_EVENT_TYPES.has(item.eventType ?? "")) return "cosmetic";
   return "unclassified";
 }

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  resolveCustomerEvidenceState,
+  type CustomerEvidenceState,
+} from "~/lib/evidence-render-contract";
+
 let emailSend = vi.fn();
 
 const emailEnv = {
@@ -3418,6 +3423,26 @@ describe("alert email content quality", () => {
     const sendMock = mockEmailSend("msg_diff_1");
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
+      // P1 evidence truth: the confirmed headline event carries a succeeded,
+      // correctly ordered capture pair, so its materiality may claim a
+      // verified (cosmetic-class) change rather than degrading to provisional.
+      listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([
+        {
+          eventId: "event-1",
+          current: {
+            id: "proof-1",
+            status: "succeeded",
+            attemptedAt: "2026-04-19T00:00:00.000Z",
+            succeededAt: "2026-04-19T00:00:00.000Z",
+          },
+          previous: {
+            id: "proof-0",
+            status: "succeeded",
+            attemptedAt: "2026-04-18T00:00:00.000Z",
+            succeededAt: "2026-04-18T00:00:00.000Z",
+          },
+        },
+      ]),
       createDeliveryAttempt: vi.fn().mockResolvedValue("attempt-1"),
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -3578,20 +3603,334 @@ describe("alert email content quality", () => {
     expect(single.html).not.toContain(">Before<");
     expect(single.html).not.toContain(">Now<");
     // E2 alert increment: even a bare content build names a materiality reason
-    // and the truthful default owner before anything is delivered.
-    expect(single.materialityReason).toContain(
-      "This alert matters because pricing or offers moved (1 change)",
+    // and the truthful default owner before anything is delivered. P1: a
+    // confirmed status without capture evidence is NOT a verified change, so
+    // the block must say the alert is provisional — never claim a verified
+    // pricing move from missing capture timestamps.
+    expect(single.materialityReason).toBe(
+      "This alert is provisional — the change is not yet confirmed by a fresh proof capture, so verify the source before acting.",
     );
     expect(single.reviewerLabel).toBe("Workspace owner");
     expect(single.html).toContain("<strong>Why this matters:</strong>");
     expect(single.html).toContain(
       "<strong>Accountable reviewer:</strong> Workspace owner",
     );
-    expect(content.materialityReason).toContain(
-      "This alert matters because pricing or offers moved (2 changes)",
+    expect(content.materialityReason).toBe(
+      "This alert is provisional — the change is not yet confirmed by a fresh proof capture, so verify the source before acting.",
     );
     expect(content.html).toContain(
       "<strong>Accountable reviewer:</strong> Workspace owner",
+    );
+  });
+
+  it("keeps a confirmed alert provisional when its proof capture is missing (P1)", async () => {
+    const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const event = {
+      id: "event-1",
+      watchlistId: "watch-1",
+      runId: "run-1",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId: null,
+      proofCaptureId: null,
+      title: "Offer changed",
+      summary: "The offer changed.",
+      metadata: { from: "20% off", to: "40% off" },
+      confirmedAt: "2026-04-19T00:00:00.000Z",
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+    } as const;
+    // The batch itself is not provisional (policy sees status "confirmed"),
+    // but the evidence map holds no entry for the event — fail closed.
+    const content = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [event],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+      undefined,
+      null,
+      new Map<string, CustomerEvidenceState>(),
+    );
+    expect(content.materialityReason).toBe(
+      "This alert is provisional — the change is not yet confirmed by a fresh proof capture, so verify the source before acting.",
+    );
+    expect(content.materialityReason).not.toContain("pricing or offers moved");
+  });
+
+  it("keeps a confirmed alert provisional when its proof capture failed (P1)", async () => {
+    const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const event = {
+      id: "event-1",
+      watchlistId: "watch-1",
+      runId: "run-1",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId: null,
+      proofCaptureId: "proof-1",
+      title: "Offer changed",
+      summary: "The offer changed.",
+      metadata: { from: "20% off", to: "40% off" },
+      confirmedAt: "2026-04-19T00:00:00.000Z",
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+    } as const;
+    const evidence = new Map<string, CustomerEvidenceState>([
+      [
+        "event-1",
+        resolveCustomerEvidenceState({
+          event,
+          proofCapture: {
+            id: "proof-1",
+            status: "failed",
+            attemptedAt: "2026-04-19T00:00:00.000Z",
+            succeededAt: null,
+          } as never,
+          beforeCapturedAt: "2026-04-18T00:00:00.000Z",
+          nowCapturedAt: "2026-04-19T00:00:00.000Z",
+        }),
+      ],
+    ]);
+    const content = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [event],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+      undefined,
+      null,
+      evidence,
+    );
+    expect(evidence.get("event-1")).toBe("provisional_signal");
+    expect(content.materialityReason).toBe(
+      "This alert is provisional — the change is not yet confirmed by a fresh proof capture, so verify the source before acting.",
+    );
+    expect(content.materialityReason).not.toContain("pricing or offers moved");
+  });
+
+  it("keeps a confirmed alert provisional when its capture pair is unordered (P1)", async () => {
+    const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const event = {
+      id: "event-1",
+      watchlistId: "watch-1",
+      runId: "run-1",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId: null,
+      proofCaptureId: "proof-1",
+      title: "Offer changed",
+      summary: "The offer changed.",
+      metadata: { from: "20% off", to: "40% off" },
+      confirmedAt: "2026-04-19T00:00:00.000Z",
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+    } as const;
+    const evidence = new Map<string, CustomerEvidenceState>([
+      [
+        "event-1",
+        resolveCustomerEvidenceState({
+          event,
+          proofCapture: {
+            id: "proof-1",
+            status: "succeeded",
+            attemptedAt: "2026-04-19T00:00:00.000Z",
+            succeededAt: "2026-04-19T00:00:00.000Z",
+          } as never,
+          // Corrupt evidence: the "before" capture is NEWER than the "now".
+          beforeCapturedAt: "2026-04-20T00:00:00.000Z",
+          nowCapturedAt: "2026-04-19T00:00:00.000Z",
+        }),
+      ],
+    ]);
+    const content = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [event],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+      undefined,
+      null,
+      evidence,
+    );
+    expect(evidence.get("event-1")).toBe("provisional_signal");
+    expect(content.materialityReason).toBe(
+      "This alert is provisional — the change is not yet confirmed by a fresh proof capture, so verify the source before acting.",
+    );
+    expect(content.materialityReason).not.toContain("pricing or offers moved");
+  });
+
+  it("renders confirmed materiality only for a succeeded ordered capture pair (P1)", async () => {
+    const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const event = {
+      id: "event-1",
+      watchlistId: "watch-1",
+      runId: "run-1",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId: null,
+      proofCaptureId: "proof-1",
+      title: "Offer changed",
+      summary: "The offer changed.",
+      metadata: { from: "20% off", to: "40% off" },
+      confirmedAt: "2026-04-19T00:00:00.000Z",
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+    } as const;
+    const evidence = new Map<string, CustomerEvidenceState>([
+      [
+        "event-1",
+        resolveCustomerEvidenceState({
+          event,
+          proofCapture: {
+            id: "proof-1",
+            status: "succeeded",
+            attemptedAt: "2026-04-19T00:00:00.000Z",
+            succeededAt: "2026-04-19T00:00:00.000Z",
+          } as never,
+          beforeCapturedAt: "2026-04-18T00:00:00.000Z",
+          nowCapturedAt: "2026-04-19T00:00:00.000Z",
+        }),
+      ],
+    ]);
+    const content = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [event],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+      undefined,
+      null,
+      evidence,
+    );
+    expect(evidence.get("event-1")).toBe("verified_change");
+    expect(content.materialityReason).toBe(
+      "This alert matters because pricing or offers moved (1 change) — compare before your next campaign decision.",
+    );
+  });
+
+  it("never marks a mixed batch verified when only one event has evidence (P1)", async () => {
+    const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const offerEvent = {
+      id: "event-1",
+      watchlistId: "watch-1",
+      runId: "run-1",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId: null,
+      proofCaptureId: "proof-1",
+      title: "Offer changed",
+      summary: "The offer changed.",
+      metadata: { from: "20% off", to: "40% off" },
+      confirmedAt: "2026-04-19T00:00:00.000Z",
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+    } as const;
+    const headlineEvent = {
+      ...offerEvent,
+      id: "event-2",
+      eventType: "landing_page_headline_changed",
+      proofCaptureId: null,
+      title: "Headline changed",
+      summary: "The headline changed.",
+      metadata: { from: "Glow Serum Sale", to: "Glow Serum Weekend Sale" },
+    } as const;
+    const evidence = new Map<string, CustomerEvidenceState>([
+      [
+        "event-1",
+        resolveCustomerEvidenceState({
+          event: offerEvent,
+          proofCapture: {
+            id: "proof-1",
+            status: "succeeded",
+            attemptedAt: "2026-04-19T00:00:00.000Z",
+            succeededAt: "2026-04-19T00:00:00.000Z",
+          } as never,
+          beforeCapturedAt: "2026-04-18T00:00:00.000Z",
+          nowCapturedAt: "2026-04-19T00:00:00.000Z",
+        }),
+      ],
+    ]);
+    const content = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [offerEvent, headlineEvent],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+      undefined,
+      null,
+      evidence,
+    );
+    // The headline event has no evidence entry, so the batch is a mixed
+    // verified/unverified batch: copy counts ONLY the verified offer change
+    // and never claims a second verified update. (The "made 2 changes"
+    // subject counts filed events — delivery semantics — while the derived
+    // materiality block stays verified-only.)
+    expect(content.materialityReason).toBe(
+      "This alert matters because pricing or offers moved (1 change) — compare before your next campaign decision.",
+    );
+    expect(content.materialityReason).not.toContain("2 changes");
+    expect(content.html).toContain("<strong>Why this matters:</strong>");
+    expect(content.html).not.toContain("headline, form, or creative (2 updates)");
+  });
+
+  it("says the alert is provisional when no event in the batch is verified (P1)", async () => {
+    const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const event = {
+      id: "event-1",
+      watchlistId: "watch-1",
+      runId: "run-1",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId: null,
+      proofCaptureId: "proof-1",
+      title: "Offer changed",
+      summary: "The offer changed.",
+      metadata: { from: "20% off", to: "40% off" },
+      confirmedAt: "2026-04-19T00:00:00.000Z",
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+    } as const;
+    // Two confirmed events, neither verified (both resolve provisional).
+    const evidence = new Map<string, CustomerEvidenceState>([
+      ["event-1", "provisional_signal"],
+      ["event-2", "provisional_signal"],
+    ]);
+    const content = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [event, { ...event, id: "event-2" }],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+      undefined,
+      null,
+      evidence,
+    );
+    expect(content.materialityReason).toBe(
+      "This alert is provisional — the change is not yet confirmed by a fresh proof capture, so verify the source before acting.",
     );
   });
 });
