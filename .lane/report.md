@@ -372,3 +372,80 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Anonymous search submit leaves "Searching…" after the request settles (2026-08-10 lane 13) — already resolved by PR #559
+
+**Status: already resolved; this lane records the fresh-validation evidence only.**
+
+Branch: `report/lane13-search-submit-settle-already-resolved`
+Base: `origin/main` at `5021807e`
+
+## Item
+
+- [ ] Make the anonymous search submit leave "Searching…" after the request
+  settles [research-desk 2026-08-09 01:27 IST, risk: amber] [parity-risk]
+  [requeued 2026-08-10 after the netcup cutover; requires fresh validation].
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main` as
+PR #559 — `90147b9b` "fix(search): anonymous submit stays on Searching… while
+the cold-path search resolves", merged 2026-08-09, an ancestor of the current
+`main` HEAD (`5021807e`). Its predecessors #507 (`55f108f3`, settle the submit
+once the committed URL matches the in-flight GET target) and #543
+(`8b3e1e30`, cold path returns the typed warming state while the browser
+capture runs in the background) are also ancestors of HEAD. No later commit
+touches the involved pending-state logic (`app/routes/search.tsx`,
+`app/components/submit-button.tsx`).
+
+## Evidence on current main
+
+- `commandNavigationPending` in `app/routes/search.tsx` drives
+  `SubmitButton pending pendingLabel="Searching…"`. It is pending while a GET
+  navigation to `/search` targets a URL that is NOT the committed
+  `location.search` (so the button releases the moment the request settles and
+  the URL/loader data commit), plus the deliberate cold-path hold: while the
+  committed page is warming with zero ads on screen, the submit keeps
+  "Searching…" until the 5s × 12 (60s) warming poll lands results/error or the
+  poll budget expires. A 90s settle-grace timer arms the reload-the-search
+  recovery for the never-commit case, so the button is never stuck disabled.
+- Regression pins on `main`: `tests/search-submission-settle.test.tsx`
+  (pending during loading; leaves "Searching…" once results or the error
+  commit even while `useNavigation` still says loading; holds while warming;
+  leaves when the poll lands results; re-enables after the 60s budget; 90s
+  recovery clears when navigation settles) and `tests/search-warming-state.test.ts`.
+
+## Fresh live validation (2026-08-10 ~23:30 IST, prod worker `24e18f13`)
+
+Deterministic Playwright, fresh anonymous context per run, real form flow at
+https://0509.io/search (fill `input[name="website"]`, click the submit), 500ms
+state sampling, console/request-failure capture:
+
+- **3/3 anonymous Nykaa submits** (`https://nykaa.com`): button showed
+  "Searching…" (disabled, `aria-busy`) while the GET was in flight, the
+  `search.data` request completed 200, the URL committed to
+  `/search?mode=advertiser&trackingRole=competitor&website=https%3A%2F%2Fnykaa.com…`,
+  the submit LEFT "Searching…" → "See ads" (enabled, not busy) **1.2–1.6 s
+  after the request settled**, and the result region rendered **30 ad rows**
+  ("ads found"). Zero console messages and zero failed requests in all three
+  runs.
+- **1/1 cold-path run** (uncached `https://wemakesites.com`): button stayed
+  "Searching…" while the committed page showed "Search in progress" (the #559
+  cold-path hold, capture running in the background), then left "Searching…" →
+  "See ads" at **~14.5 s** when the capture landed — well inside the 60s
+  warming budget — settling to the honest terminal state "No ads found for
+  this competitor" / "The search completed without returning visible ads."
+  No console messages or failed requests.
+- The never-commit recovery path is locked by the 90s-grace regression test
+  (the original 15s-stuck observation predates #543/#559 and was intermittent;
+  it is not reproducible on current prod across any of the four runs above).
+
+## Verification on this tip (origin/main `5021807e`)
+
+- `npx vitest run tests/search-submission-settle.test.tsx
+  tests/search-warming-state.test.ts`: **2 files, 14/14 passed**.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
