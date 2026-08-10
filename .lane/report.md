@@ -481,3 +481,55 @@ advertisers.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Competitor monitoring category page (research-desk 2026-08-08, backlog item d011a82125) — rebased, refreshed, green
+
+**Status: delivered — PR #572 refreshed onto current origin/main, mergeable, full suite + typecheck + build green.**
+
+Branch: `feat/competitor-monitoring-category-page` (this lane's working branch
+`feat/cm-category-page-rebase`, pushed to the PR branch)
+Base: `origin/main` at `7b618cdb`
+Pull request: https://github.com/nish3451/0509/pull/572
+Commit: `7fe91563` — `feat(seo): publish proof-backed /competitor-monitoring category page`
+
+## Item
+
+- [ ] Publish a proof-backed category landing page for "competitor monitoring
+  software" (research-desk 2026-08-08, risk field truncated in the packet).
+
+## Outcome
+
+The page work already existed as PR #572 from the 2026-08-09 lane, but the PR
+had gone `CONFLICTING`/`DIRTY`: origin/main advanced (10 commits, incl. the
+self-hosted runner CI move #581/#585 and the named-owner alert delivery #571)
+and `.lane/report.md` accumulated 109 new lines from other lanes. The six
+product files (`app/lib/seo.ts`, `app/routes.ts`,
+`app/routes/competitor-monitoring.tsx`, `docs/customer-claim-surface-registry.json`,
+`tests/competitor-monitoring-category.test.ts`,
+`tests/customer-claim-surface-registry.test.ts`) had zero upstream changes, so
+this lane rebased exactly those six files onto fresh origin/main, verified,
+and force-with-lease pushed the result to the PR branch. PR #572 is
+MERGEABLE again (verified via `gh pr view`); merge is BLOCKED only by the
+required CI checks now re-running on the refreshed head.
+
+The page itself is unchanged from the already-reviewed 2026-08-09 delivery and
+satisfies the research-desk item: truthful title/description/canonical,
+WebPage + FAQPage JSON-LD emitted from the same array as the visible FAQ,
+cadence claims matching plan entitlements, internal links to /search, /docs
+and /#pricing, every outside claim carrying its source URL and research-desk
+check date (2026-08-08), explicit freshness limits, a labeled illustrative
+sample, no hardcoded prices, no unsupported superiority claims, route
+registered in `app/routes.ts`, and membership in the static sitemap.
+
+## Verification (this lane, 2026-08-11)
+
+- `tests/competitor-monitoring-category.test.ts` (9) + `tests/customer-claim-surface-registry.test.ts` (6) + `tests/design-system-ratchet.test.ts` (7): 22/22 pass — covers the acceptance criteria and the G11 registry drift + contract re-pin.
+- Full Vitest on this tip: **424 files, 4872/4872 passed** (second run; the first run had one flaky 10s timeout in `tests/watchlists.route.test.ts` under full-suite load — the same file passes 62/62 in isolation and nothing in this diff touches watchlists).
+- `npm run typecheck`: exit 0. `npm run build`: exit 0, `competitor-monitoring` chunk present in the production bundle.
+- `git diff --check`: clean on the applied patch.
+- PR state: `gh pr view 572` → `mergeable: MERGEABLE`, `mergeStateStatus: BLOCKED` (required checks pending on the refreshed head), single rebased commit `7fe91563`.
+
+## Files
+
+- `.lane/report.md` — this evidence record; no product code touched by the report.
