@@ -1561,9 +1561,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(workflow).toContain(
       "runs-on: [self-hosted, linux, x64, vps-verify]",
     );
-    expect(workflow).toContain(
-      "runs-on: ubuntu-latest",
-    );
+    expect(workflow).not.toContain("runs-on: ubuntu-latest");
     expect(readFileSync(resolve(".github/workflows/ci.yml"), "utf8")).toContain(
       "runs-on: [self-hosted, linux, x64, vps-verify]",
     );
