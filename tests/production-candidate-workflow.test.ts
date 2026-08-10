@@ -82,7 +82,7 @@ describe("exact production candidate workflow", () => {
     expect(workflow.permissions).toEqual({});
 
     const authorize = workflow.jobs.authorize_release;
-    expect(authorize?.["runs-on"]).toBe("ubuntu-latest");
+    expect(authorize?.["runs-on"]).toEqual(["self-hosted", "linux", "x64", "vps-verify"]);
     expect(authorize?.permissions).toEqual({});
     expect(authorize?.environment).toBeUndefined();
     expect(authorize?.outputs?.sha).toBe("${{ steps.authorize.outputs.sha }}");
@@ -105,7 +105,7 @@ describe("exact production candidate workflow", () => {
 
     const pin = workflow.jobs.pin_candidate;
     expect(pin?.needs).toBe("authorize_release");
-    expect(pin?.["runs-on"]).toBe("ubuntu-latest");
+    expect(pin?.["runs-on"]).toEqual(["self-hosted", "linux", "x64", "vps-verify"]);
     expect(pin?.permissions).toEqual({ contents: "read" });
     expect(pin?.environment).toBeUndefined();
     expect(pin?.outputs?.sha).toBe("${{ steps.pin.outputs.sha }}");
@@ -242,8 +242,8 @@ describe("exact production candidate workflow", () => {
         `${name} expected_sha`,
       ).toMatchObject({ required: true, type: "string" });
       const authorize = parsed.jobs.authorize_release;
-      expect(authorize?.["runs-on"], `${name} authorizer runner`).toBe(
-        "ubuntu-latest",
+      expect(authorize?.["runs-on"], `${name} authorizer runner`).toEqual(
+        ["self-hosted", "linux", "x64", "vps-verify"],
       );
       expect(authorize?.permissions, `${name} authorizer permissions`).toEqual(
         {},

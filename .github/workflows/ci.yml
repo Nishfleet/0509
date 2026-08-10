@@ -19,7 +19,7 @@ jobs:
   authorize_release:
     name: Authorize exact verification candidate
     if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, vps-verify]
     permissions: {}
     outputs:
       sha: ${{ steps.authorize.outputs.sha }}
