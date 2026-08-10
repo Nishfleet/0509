@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 import { publicSeoFileForPathname } from "~/lib/seo";
 
 describe("public SEO files", () => {
-  it("publishes the public funnel surfaces in the sitemap", () => {
-    const sitemap = publicSeoFileForPathname("/sitemap.xml");
+  it("publishes the public funnel surfaces in the sitemap", async () => {
+    const sitemap = await publicSeoFileForPathname("/sitemap.xml");
 
     expect(sitemap?.body).toContain("https://0509.io/");
     expect(sitemap?.body).toContain("https://0509.io/help");
@@ -25,10 +25,34 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain(
       "<url><loc>https://0509.io/compare/meta-ad-library</loc></url>",
     );
+    // The /ads/:domain brand pages are NEVER statically listed — they enter
+    // the sitemap dynamically from the discovery cache (see below).
+    expect(sitemap?.body).not.toContain("/ads/");
   });
 
-	it("disallows auth-only surfaces in robots.txt but keeps /share crawlable", () => {
-		const robots = publicSeoFileForPathname("/robots.txt");
+  it("appends indexable /ads/:domain brand pages to the sitemap when supplied", () => {
+    const sitemap = publicSeoFileForPathname("/sitemap.xml", [
+      "/ads/nykaa.com",
+      "/ads/meesho.com",
+    ]);
+
+    // Dynamic brand-page entries…
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/ads/nykaa.com</loc></url>");
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/ads/meesho.com</loc></url>");
+    // …alongside the unchanged static funnel surfaces.
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/search</loc></url>");
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/terms</loc></url>");
+  });
+
+  it("stays static when no indexable brand pages are supplied", () => {
+    const sitemap = publicSeoFileForPathname("/sitemap.xml");
+
+    expect(sitemap?.body).not.toContain("/ads/");
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/search</loc></url>");
+  });
+
+  it("disallows auth-only surfaces in robots.txt but keeps /share crawlable", async () => {
+    const robots = await publicSeoFileForPathname("/robots.txt");
 
 		expect(robots?.body).toContain("Disallow: /app/");
 		// Bare /app (the URL users actually link to) needs its own rule — the
@@ -55,8 +79,8 @@ describe("public SEO files", () => {
     expect(rootSecurity).not.toContain("0509.in");
   });
 
-  it("keeps the cached social card customer-facing", () => {
-    const card = publicSeoFileForPathname("/social-card.svg");
+  it("keeps the cached social card customer-facing", async () => {
+    const card = await publicSeoFileForPathname("/social-card.svg");
 
     expect(card?.body).toContain("Watch ads and landing pages with sources.");
     expect(card?.body).toContain("Saved evidence");

@@ -19,7 +19,7 @@ import {
   PUBLIC_MARKDOWN,
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
-import { publicSeoFileForPathname } from "../app/lib/seo";
+import { publicSeoFileForPathname, type PublicSeoFile } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import {
   observeScheduledTask,
@@ -65,7 +65,7 @@ function markdownResponse(request: Request, body: string): Response {
   );
 }
 
-function publicFileResponse(request: Request, file: NonNullable<ReturnType<typeof publicSeoFileForPathname>>): Response {
+function publicFileResponse(request: Request, file: PublicSeoFile): Response {
   return withSecurityHeaders(
     new Response(request.method === "HEAD" ? null : file.body, {
       headers: {
@@ -77,6 +77,29 @@ function publicFileResponse(request: Request, file: NonNullable<ReturnType<typeo
   );
 }
 
+/**
+ * /ads/:domain paths whose pages currently render in the indexable state, for
+ * the dynamic half of the sitemap (strategy note above SITEMAP_PATHS in
+ * app/lib/seo.ts). This is a bounded discovery-cache READ at sitemap-render
+ * time — it never triggers live discovery, and any hiccup degrades to the
+ * static sitemap rather than failing the request.
+ */
+async function loadBrandPageSitemapPaths(env: Env): Promise<string[]> {
+  if (!env.DB) {
+    return [];
+  }
+  try {
+    const { loadIndexableBrandPageDomains } = await import("../app/lib/brand-page.server");
+    const domains = await loadIndexableBrandPageDomains(env);
+    return domains.map((domain) => `/ads/${domain}`);
+  } catch (error) {
+    console.warn("Brand-page sitemap paths failed; publishing the static sitemap.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    return [];
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -85,7 +108,10 @@ export default {
       return withSecurityHeaders(primaryDomainResponse, request);
     }
 
-    const publicSeoFile = publicSeoFileForPathname(url.pathname);
+    const publicSeoFile = publicSeoFileForPathname(
+      url.pathname,
+      url.pathname === "/sitemap.xml" ? await loadBrandPageSitemapPaths(env) : [],
+    );
     if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {
       return publicFileResponse(request, publicSeoFile);
     }

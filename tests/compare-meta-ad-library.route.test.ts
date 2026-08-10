@@ -82,7 +82,7 @@ describe("compare meta-ad-library route", () => {
     );
 
     const { publicSeoFileForPathname } = await import("~/lib/seo");
-    const sitemap = publicSeoFileForPathname("/sitemap.xml");
+    const sitemap = await publicSeoFileForPathname("/sitemap.xml");
     expect(sitemap?.body).toContain(
       "<url><loc>https://0509.io/compare/meta-ad-library</loc></url>",
     );

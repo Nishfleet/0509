@@ -39,7 +39,7 @@ import {
 } from "~/lib/search-query";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { buildSearchV2CacheKey, buildSearchV2SavedQuery } from "~/lib/search-v2.server";
-import type { AdRecord } from "~/lib/types";
+import type { AdRecord, SearchResponse } from "~/lib/types";
 
 /** Path params beyond this length are rejected before any parsing. */
 const BRAND_PAGE_DOMAIN_MAX_LENGTH = 80;
@@ -539,34 +539,85 @@ function deriveCacheLookup(
 
 type CacheEntry = Awaited<ReturnType<typeof readDiscoveryCacheEntryCacheOnly>>;
 
-function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot | null {
-  if (!entry) {
-    return null;
-  }
-  // Interactive public_search cache only — scheduled scan/warmup entries are
-  // shallow and must not back a public page.
-  if (!isDiscoveryCacheRouteCompatible("public_search", entry.routeContext)) {
-    return null;
-  }
+/**
+ * Structural slice of a discovery-cache entry the indexable-state checks
+ * below need. Both the full loader entries and the raw sitemap query rows
+ * satisfy it.
+ */
+interface BrandPageCacheEntryProbe {
+  routeContext: string | null | undefined;
+  payload: {
+    source?: string;
+    provider?: string;
+    ads?: unknown;
+  };
+  fetchedAt: string;
+}
 
-  const payload = entry.payload;
-  // Never present demo/sample data as a brand's real ads on a public page.
-  if (payload.source === "demo" || payload.provider === "demo") {
-    return null;
-  }
-  const ads = Array.isArray(payload.ads)
-    ? payload.ads.filter((ad) => ad && ad.source !== "demo")
+/** The cache's real (non-demo) creatives, or null when none exist. */
+function brandPageAdsFromEntry(entry: BrandPageCacheEntryProbe): AdRecord[] | null {
+  const ads = Array.isArray(entry.payload.ads)
+    ? (entry.payload.ads as AdRecord[]).filter((ad) => ad && ad.source !== "demo")
     : [];
-  if (ads.length === 0) {
-    return null;
-  }
+  return ads.length > 0 ? ads : null;
+}
 
+function cacheEntryAgeMs(entry: BrandPageCacheEntryProbe, now: Date): number | null {
   const fetchedMs = Date.parse(entry.fetchedAt);
   if (!Number.isFinite(fetchedMs)) {
     return null;
   }
-  const ageMs = now.getTime() - fetchedMs;
-  if (ageMs < 0 || ageMs > BRAND_PAGE_MAX_CACHE_AGE_MS) {
+  return now.getTime() - fetchedMs;
+}
+
+/**
+ * Shared row-level checks for "this cache entry would render a REAL cached
+ * snapshot on the public /ads/:domain page": interactive public_search route
+ * context, non-demo source, at least one real ad, and fetched within the
+ * 30-day usable window. Used by both the page loader (`toUsableSnapshot`)
+ * and the dynamic sitemap (`loadIndexableBrandPageDomains`) so the sitemap
+ * can never point at a page that renders the honest shell.
+ */
+function isBrandPageCacheEntryUsable(entry: BrandPageCacheEntryProbe, now: Date): boolean {
+  // Interactive public_search cache only — scheduled scan/warmup entries are
+  // shallow and must not back a public page.
+  if (!isDiscoveryCacheRouteCompatible("public_search", entry.routeContext)) {
+    return false;
+  }
+  // Never present demo/sample data as a brand's real ads on a public page.
+  if (entry.payload.source === "demo" || entry.payload.provider === "demo") {
+    return false;
+  }
+  if (!brandPageAdsFromEntry(entry)) {
+    return false;
+  }
+  const ageMs = cacheEntryAgeMs(entry, now);
+  return ageMs !== null && ageMs >= 0 && ageMs <= BRAND_PAGE_MAX_CACHE_AGE_MS;
+}
+
+/**
+ * The sitemap's exact bar: usable (see above) AND young enough (≤ 7 days) for
+ * the page to render WITHOUT the always-noindex stale state. A domain whose
+ * every qualifying row fails this is never sitemapped.
+ */
+function isBrandPageCacheEntryIndexable(entry: BrandPageCacheEntryProbe, now: Date): boolean {
+  if (!isBrandPageCacheEntryUsable(entry, now)) {
+    return false;
+  }
+  const ageMs = cacheEntryAgeMs(entry, now);
+  return ageMs !== null && ageMs <= BRAND_PAGE_FRESH_FOR_INDEXING_MS;
+}
+
+function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot | null {
+  if (!entry) {
+    return null;
+  }
+  if (!isBrandPageCacheEntryUsable(entry, now)) {
+    return null;
+  }
+  const ads = brandPageAdsFromEntry(entry) ?? [];
+  const ageMs = cacheEntryAgeMs(entry, now);
+  if (ageMs === null) {
     return null;
   }
 
@@ -578,4 +629,160 @@ function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot 
     freshForIndexing: ageMs <= BRAND_PAGE_FRESH_FOR_INDEXING_MS,
     freshForLiveClaim: ageMs <= BRAND_PAGE_LIVE_CLAIM_MAX_AGE_MS,
   };
+}
+
+/** Cache-key prefix of the search-v2 domain pipeline (see search-v2.server.ts). */
+const SEARCH_V2_DOMAIN_KEY_PREFIX = "search-v2:domain:";
+/**
+ * Upper bound on the sitemap's cache read (rows), well under the 50k-entry
+ * sitemap limit while keeping the render bounded.
+ */
+export const BRAND_SITEMAP_MAX_ROWS = 10_000;
+
+/**
+ * Domains whose /ads/:domain page would render in the indexable state right
+ * now — the dynamic half of the sitemap (see the strategy note above
+ * SITEMAP_PATHS in app/lib/seo.ts).
+ *
+ * A domain qualifies when the shared discovery cache holds a row that BOTH:
+ *   1. is exactly the row the /ads loader would read for that domain
+ *      (search-v2 domain cache key, exact scope, page-1 cursor, written by
+ *      the provider the loader resolves to — customer-scoped rows are never
+ *      read by the public page and are excluded), AND
+ *   2. passes `isBrandPageCacheEntryIndexable` (public_search route context,
+ *      non-demo source, real ads present, fetched within the 7-day indexing
+ *      window).
+ * Only then can the page genuinely serve 200 without robots noindex to a
+ * crawler. This is a single bounded cache READ at sitemap-render time — it
+ * never triggers live discovery, and any DB hiccup degrades to the static
+ * sitemap rather than failing the request.
+ */
+export async function loadIndexableBrandPageDomains(
+  env: AppEnv,
+  options: { now?: Date; maxRows?: number } = {},
+): Promise<string[]> {
+  const provider = resolveCommercialDiscoveryProvider(env);
+  if (provider === "demo" || !env.DB) {
+    // No commercial discovery configured (or no D1): /ads pages render the
+    // honest shell, so there are no indexable brand pages to publish.
+    return [];
+  }
+
+  const now = options.now ?? new Date();
+  const cutoffIso = new Date(now.getTime() - BRAND_PAGE_FRESH_FOR_INDEXING_MS).toISOString();
+  const maxRows = Math.min(
+    Math.max(1, Math.floor(options.maxRows ?? BRAND_SITEMAP_MAX_ROWS)),
+    BRAND_SITEMAP_MAX_ROWS,
+  );
+
+  let rows: Array<{ cache_key: string; payload_json: string; fetched_at: string }> = [];
+  try {
+    const result = await env.DB.prepare(
+      `SELECT cache_key, payload_json, fetched_at
+         FROM discovery_cache_entry
+        WHERE route_context = 'public_search'
+          AND provider != 'demo'
+          AND fetched_at >= ?
+        ORDER BY fetched_at DESC
+        LIMIT ?`,
+    )
+      .bind(cutoffIso, maxRows)
+      .all<{ cache_key: string; payload_json: string; fetched_at: string }>();
+    rows = result.results ?? [];
+  } catch (error) {
+    // Same honesty rule as the page loader: a cache-read hiccup must degrade
+    // to the static sitemap, never fail the request.
+    console.warn("Brand sitemap cache read failed; publishing the static sitemap.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    return [];
+  }
+
+  const domains = new Set<string>();
+  for (const row of rows) {
+    const domain = indexableDomainFromCacheRow(row, provider, now);
+    if (domain) {
+      domains.add(domain);
+    }
+  }
+
+  return [...domains].sort();
+}
+
+/**
+ * Map one cache row to the /ads/:domain param it would render, or null. The
+ * cached payload is raw (the v2 post-filter runs after the cache write), so
+ * the domain can only come from the cache-key prefix — never from payload
+ * fields. The page loader reads only exact-scope page-1 rows written by the
+ * provider it resolves to, so any other shape is excluded even when its
+ * payload looks indexable.
+ */
+function indexableDomainFromCacheRow(
+  row: { cache_key: string; payload_json: string; fetched_at: string },
+  provider: string,
+  now: Date,
+): string | null {
+  const domain = brandPageDomainFromCacheKey(row.cache_key, provider);
+  if (!domain) {
+    return null;
+  }
+
+  const payload = parseSitemapCachePayload(row.payload_json);
+  if (!payload) {
+    return null;
+  }
+
+  if (
+    !isBrandPageCacheEntryIndexable(
+      { routeContext: "public_search", payload, fetchedAt: row.fetched_at },
+      now,
+    )
+  ) {
+    return null;
+  }
+
+  return domain;
+}
+
+/**
+ * Extract the registrable domain from a `search-v2:domain:{domain}:{scope}:
+ * {provider}:{country}:{cursor}` cache key and validate it as an /ads/:domain
+ * path param. Exactly 7 segments: customer-scoped keys append
+ * `:customer_meta:{hash}` (the public page never reads those) and are
+ * excluded; domains cannot contain ":".
+ */
+function brandPageDomainFromCacheKey(cacheKey: string, provider: string): string | null {
+  if (!cacheKey.startsWith(SEARCH_V2_DOMAIN_KEY_PREFIX)) {
+    return null;
+  }
+  const segments = cacheKey.split(":");
+  if (segments.length !== 7 || segments[1] !== "domain") {
+    return null;
+  }
+  const [, , domain, scope, keyProvider, , cursor] = segments;
+  if (scope !== "exact" || keyProvider !== provider || cursor !== "page-1") {
+    return null;
+  }
+  return normalizeBrandPageDomain(domain)?.domain ?? null;
+}
+
+/**
+ * Lightweight payload parse for sitemap rows: enough to run the indexable
+ * checks (source/provider/ads). Mirrors the resolver's raw cache payloads.
+ */
+function parseSitemapCachePayload(value: string): Pick<SearchResponse, "source" | "provider" | "ads"> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  const candidate = parsed as Partial<SearchResponse>;
+  if (!Array.isArray(candidate.ads) || typeof candidate.source !== "string") {
+    return null;
+  }
+  return candidate as Pick<SearchResponse, "source" | "provider" | "ads">;
 }
