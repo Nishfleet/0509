@@ -481,3 +481,227 @@ advertisers.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Alert named owner + materiality reason (2026-08-11 lane 1) — already resolved by PR #571
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane1-alert-owner-materiality-already-resolved`
+Base: `origin/main` at `7b618cdb`
+
+## Item
+
+- [ ] Add a named owner and materiality reason to every alert before
+  delivery [research-desk 2026-08-08, risk: amber]
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main`:
+
+- PR #571 — `47db20f4` "feat(alerts): named owner and materiality reason on
+  every delivered alert", merged 2026-08-11 (commit date 2026-08-11 00:34
+  +0530, before this worktree was created at 01:20). The resolving commit is
+  an ancestor of the current `main` HEAD (`7b618cdb`), and no later commit
+  touches the involved files (`app/lib/change-intelligence.ts`,
+  `app/lib/delivery.server.ts`, `app/lib/digest-email.server.ts`,
+  `app/lib/monitoring.server.ts`).
+
+## Evidence on current main
+
+The E2 alert increment (research-desk 2026-08-08) extended the briefs
+accountability contract (PR #546, digest named owner + materiality reason +
+next action, deployed 2026-08-09) to instant watchlist alerts. Every
+customer-facing delivered alert now carries exactly one named owner and a
+non-empty materiality reason before delivery:
+
+- **Named owner**: `digestReviewerLabel` (in `change-intelligence.ts`)
+  resolves exactly one accountable reviewer — the workspace owner identity
+  when a profile name is known, else the truthful "Workspace owner" role
+  fallback. The watchlist/competitor name is never used as the user identity
+  (`monitoring.server.ts` now passes `profile?.name ?? null` instead of
+  `?? watchlist.name`). Both `deliverWatchlistAlerts` (instant alerts) and
+  every digest builder in `digest-email.server.ts` (changed, quiet,
+  failed-check, no-record, presence) route through this one resolver.
+- **Materiality reason**: `alertMaterialityReason` shares the digest event
+  classification (`materialityClausesFromItems`), so an alert and a brief
+  never disagree about what a change type means:
+  - provisional alerts say the change is unconfirmed;
+  - baseline snapshots say they are the starting point;
+  - confirmed changes name what moved, derived from the filed events only;
+  - a shape with no derivable statement renders an explicit fallback rather
+    than an empty reason.
+  The P1 follow-up (same PR) fails closed on unevidenced materiality:
+  `deliverWatchlistAlerts` resolves every event to its customer evidence
+  state via one bounded batched query (`listProofCapturePairsForEventIds`),
+  and `buildInstantAlertContent` derives confirmed copy from `verified_change`
+  items only — a confirmed status alone, missing/failed proof, an unordered
+  capture pair, or an evidence-lookup failure all render the provisional
+  block and never block delivery.
+- **Every delivery channel**: alert emails render the labeled accountability
+  block (Why this matters + Accountable reviewer) via the shared
+  digest-email renderer; Slack alerts carry the same two lines
+  (`renderInstantSlackText`); digest emails render the same block in every
+  state including the explicit no-record failure state. WhatsApp is
+  template-bound and not customer-facing in this codebase
+  (`isWhatsAppDeliveryCustomerFacing()` is hardcoded `false` in
+  `app/lib/ga-customer-surface.ts`), so no customer receives a WhatsApp
+  alert without the contract; operator/internal alerts (cron failure,
+  watchlist-failure, customer-at-risk, scheduled-work gap) are
+  operator-facing infrastructure pages, not customer alert deliveries.
+
+## Regression pins (on this tip)
+
+- `tests/delivery.server.test.ts` — single/batched instant alert emails
+  render "Why this matters" + "Accountable reviewer" (named owner identity
+  and "Workspace owner" fallback); P1 evidence truth: confirmed alerts stay
+  provisional when proof capture is missing, failed, or unordered; confirmed
+  materiality renders only for a succeeded ordered capture pair; a mixed
+  batch is never marked verified when only one event has evidence; a batch
+  with no verified event says the alert is provisional.
+- `tests/digest-email.test.ts` — briefs render materiality reason, reviewer,
+  and next action (price change, CTA movement, shared triage explanation,
+  failed-check periods); truthful "Workspace owner" fallback for blank
+  recipient names; explicit failure state for an empty period with no
+  heartbeat; alert materiality derived from the shared event vocabulary.
+- `tests/change-intelligence.test.ts` does not exist as a standalone file;
+  the shared classification is covered through the two suites above.
+
+## Verification on this tip (origin/main `7b618cdb`)
+
+- `tests/delivery.server.test.ts` + `tests/digest-email.test.ts`: 2 files,
+  90/90 tests pass (2026-08-11 lane run).
+- `tests/instant-alert-delivery-claims.test.ts` +
+  `tests/instant-channel-delivery-claims.test.ts` +
+  `tests/digest-intelligence.test.ts`: 3 files, 35/35 tests pass.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# BetaList manual listing (2026-08-11 lane 1) — already resolved by PR #577
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane1-betalist-listing-already-resolved`
+Base: `origin/main` at `86a154b1`
+
+## Item
+
+- [ ] Prepare a manual BetaList listing for Five to Nine
+  [scout 2026-08-09, risk: green] [traction] [unreviewed-by-grok]
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main`:
+
+- PR #577 — `7b618cdb` "docs(launch): prepare manual BetaList listing for Five
+  to Nine", merged 2026-08-11 (commit date 2026-08-11 01:10 +0530, before this
+  worktree was created at 02:45). The resolving commit is an ancestor of the
+  current `main` HEAD (`86a154b1`), and no later commit touches
+  `docs/betalist-listing-2026-08-10.md` (single-commit file history).
+- The companion SaaSHub listing (PR #607, `86a154b1`, merged 02:30) reuses the
+  same canonical copy and explicitly cross-references the BetaList
+  preparation, so this package is already the repo's launch-directory
+  baseline rather than a throwaway draft.
+
+## Evidence on current main
+
+`docs/betalist-listing-2026-08-10.md` (210 lines) is a paste-ready submission
+package: eligibility table against BetaList's submission guidelines,
+ready-to-paste form fields (name, URL, tagline with alternates, two
+description versions, five topics, freemium pricing value, launch-status
+wording), honesty guardrails sourced from the repo's canonical product copy,
+asset checklist, submission process notes (verified from the BetaList FAQ),
+and an owner-decision list covering the personal fields the form requires
+(founder name, location, contact email) plus plan tier and launch wording.
+
+## Re-verification on this tip (2026-08-11, live checks)
+
+Every BetaList claim in the doc was re-verified live on 2026-08-11 by this
+lane; the package is still current and accurate:
+
+- `https://betalist.com/criteria` — live; the page's five guideline groups
+  (relatively new product, not featured on BetaList before, technology
+  startup, distinct decent-looking landing page, visitors able to sign up)
+  match the doc's eligibility table row for row, including the
+  "Launched weeks ago or longer" less-suitable note the doc's
+  launch-status-wording section weighs.
+- All five topic URLs resolve (HTTP 200) with the exact names the doc lists:
+  `/browse/data-analytics/competitive-intelligence`,
+  `/browse/marketing/advertising`, `/browse/data-analytics/tracking`,
+  `/browse/data-analytics/marketing-analytic`,
+  `/browse/marketing/brand-monitoring`.
+- Recommended tagline matches the live homepage SEO title —
+  `app/routes/marketing.tsx:40` → "Five to Nine | Know when competitors
+  change the offer".
+- Signup claim holds: `/auth/signup` route exists (`app/routes.ts:21`,
+  `app/routes/auth.signup.tsx`), so the "visitors can sign up" guideline is
+  satisfied by a working route, not just a landing page.
+- Logo asset `brand/five-to-nine-colored-logo.svg` present in the repo as the
+  doc's asset checklist requires.
+- `support@0509.io` exists (`app/lib/support.ts:13`) as a candidate for the
+  form's contact-email field (owner still confirms the inbox).
+- Launch-age analysis is unchanged: live in public early access since
+  2026-06-15 (~8 weeks), so the doc's recommendation (option A: submit as
+  "recently launched / early access", paid plan, refund if not featured)
+  still holds. The one-day gap between the doc (2026-08-10) and this
+  re-check does not change any field value.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Stale open PRs #573/#574/#584 (2026-08-11 lane 1) — already merged / superseded, closed
+
+**Status: resolved; this lane closed the stale PRs and records the evidence.**
+
+Branch: `report/lane1-stale-prs-573-574-584-closed`
+Base: `origin/main` at `69cfcbc0`
+
+## Item
+
+- [ ] Close open PRs #573/#574/#584 as superseded — their exact content
+  already merged, and rebasing them would just re-apply already-merged
+  changes.
+
+## Verdict
+
+All three PRs were already resolved on `origin/main`; no code change was
+warranted. #573 and #584 were open and are now closed (with evidence
+comments); #574 had already merged before this lane started.
+
+- PR #574 — "docs(marketing): prepare manual SaaSHub listing for Five to
+  Nine" — **already MERGED** 2026-08-10T22:41:29Z as `69cfcbc0`, the current
+  `main` HEAD. `docs/saashub-listing.md` on the PR branch is byte-identical
+  to `origin/main`. Nothing to close.
+- PR #573 — "docs(traction): prepare the manual AlternativeTo listing" —
+  **superseded by PR #606** (`adceefdd`, merged 2026-08-10T21:30:53Z):
+  `docs/alternativeto-listing-2026-08-11.md` (327 lines) is the newer,
+  complete listing packet for the same research-desk item (FAQ-verified
+  eligibility, ready-to-paste form fields, submission process, honesty
+  guardrails). The PR's `docs/growth/*` files are the earlier draft; the
+  `docs/growth/` directory no longer exists on main. Closed 2026-08-11.
+- PR #584 — "fix(search): make the BL-031 refine-disclosure tests
+  typecheck-clean (TS2698)" — **fix already on main**: commit `5021807e`
+  (PR #585, merged 2026-08-10) added the `as Record<string, unknown>` casts
+  at both spread sites in `tests/search-submission-settle.test.tsx` (lines
+  541 and 560 on current main). The only diff between the branch and main
+  is formatting (single-line vs multi-line spread); runtime behavior is
+  identical. Closed 2026-08-11.
+
+## Evidence on current main
+
+- `git diff origin/main origin/docs/saashub-listing -- docs/saashub-listing.md`
+  → empty (PR #574 content identical to main).
+- `git show origin/main:tests/search-submission-settle.test.tsx` → lines 541
+  and 560 already carry `... (resultsLoaderData.filters as Record<string,
+  unknown>), ...`; `git log -S` attributes them to `5021807e` (#585).
+- `git log origin/main --oneline -- docs/alternativeto-listing-2026-08-11.md`
+  → `adceefdd` (#606), ancestor of current main HEAD.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
