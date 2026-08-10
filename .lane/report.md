@@ -372,3 +372,58 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Homepage top-nav signup CTA + magic-link next-step re-verification (lane 12, no code change required)
+
+**Status: already resolved by PR #554 (follow-up #558); evidence for the same
+item was previously merged as PR #562. This lane re-verifies on a newer
+`origin/main` tip and records the evidence only.**
+
+Branch: `report/lane12-nav-signup-cta-reverified`
+Base: `origin/main` at `5021807e`
+
+## Item
+
+- [ ] Homepage top nav has no signup CTA; signup is below-fold or an extra hop
+  via Sign in, and the magic-link step is [opaque/unclear] (lane 12 checklist
+  item, packet text truncated after "the magic-link step is o…").
+
+## Verdict
+
+No code change was warranted. Both halves of the item — a top-nav signup CTA
+that reaches `/auth/signup` directly, and plain-words next-step guidance for
+the signup magic-link flow — were already implemented, merged to `main`, and
+are live in production. The lane-1 record above (merged as PR #562) covers the
+same item; this section re-confirms the evidence on the current tip
+(`5021807e`, 2026-08-10):
+
+- **Top-nav signup CTA**: PR #554 / commit `49ed0e28`
+  (`ux(nav): give anonymous visitors a Sign up CTA in the public header`) and
+  PR #558 / commit `834da2df` (`fix(nav): stop Gate-B mobile fold fail from
+  three-action header wrap`) are both ancestors of the current `main` HEAD.
+  `MarketingNav` — the single header shared by the homepage
+  (`marketing.tsx:532`), `/ads/*` brand pages, compare pages, and the
+  legal/doc shell — renders a "Sign up" pill CTA → `/auth/signup` beside
+  "Sign in" and "Open app": above the fold on every public surface, no
+  scrolling and no detour through Sign in. On the compact ≤860px row, "Open
+  app" is hidden so "Sign in" + "Sign up" stay one ≥44px touch-target row
+  (app.css `.ld-nav-actions` at 3637–3663).
+- **Hero CTA**: the homepage hero's primary action is also direct —
+  `primaryCta = rootData.session ? "/app" : "/auth/signup"` with label
+  "Create account" (`marketing.tsx:349-350`) — so signup is never a
+  below-fold-only or Sign-in-detour path.
+- **Magic-link next-step guidance**: `app/components/auth-form.tsx` signup
+  mode states the next step pre-submit ("Use a work email. We'll send a setup
+  link to that inbox — open it to verify, then add a competitor and start
+  tracking."), the submit button reads "Send setup link", and the post-send
+  recovery state adds timing + spam/promotions guidance ("It usually arrives
+  within a minute. If it's slow, check your spam and promotions folders
+  before resending."). Login-mode copy is untouched (locked by tests).
+
+## Checks
+
+- Focused regressions `npx vitest run tests/marketing-nav.test.ts
+  tests/auth-form-signup-guidance.test.ts`: 2 files, 8/8 passed on this tip
+  (`5021807e`).
+- `git diff --check`: clean (markdown-only change; no product code touched).
