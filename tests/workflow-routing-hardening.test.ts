@@ -41,27 +41,28 @@ describe("workflow routing hardening", () => {
     }
   });
 
-  it("uses dedicated immutable runner labels for verification and GitHub-hosted trusted operations", () => {
+  it("uses dedicated immutable runner labels for every job", () => {
+    // 2026-08-10: trusted operations moved off GitHub-hosted runners too. The
+    // account billing outage kills hosted jobs at start, and the split never
+    // bought real isolation: this VPS already deploys production directly
+    // (fleet-auto-deploy) and holds full credential parity by Nish's standing
+    // order, so "hosted = trusted" was a boundary in prose only.
     for (const [file, id] of [
       ["ci.yml", "codex-node-checks"],
       ["cross-browser-matrix.yml", "matrix"],
       ["d1-backup-validate.yml", "validate"],
       ["deploy-production.yml", "prepare_remote_restore_evidence"],
       ["secret-scan.yml", "gitleaks"],
-    ] as const) {
-      expect(job(file, id)["runs-on"]).toEqual(verificationRunner);
-    }
-    for (const [file, id] of [
       ["d1-backup-r2.yml", "backup"],
       ["d1-remote-restore-evidence.yml", "apply_and_restore"],
       ["d1-remote-restore-evidence.yml", "restore"],
       ["d1-remote-restore-evidence.yml", "cleanup"],
       ["deploy-production.yml", "deploy"],
       ["finalize-production-soak.yml", "finalize"],
+      ["uptime-health.yml", "health"],
     ] as const) {
-      expect(job(file, id)["runs-on"]).toBe("ubuntu-latest");
+      expect(job(file, id)["runs-on"]).toEqual(verificationRunner);
     }
-    expect(job("uptime-health.yml", "health")["runs-on"]).toBe("ubuntu-latest");
   });
 
   it("keeps production secrets and production environments out of verification jobs", () => {
