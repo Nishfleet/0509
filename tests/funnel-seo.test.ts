@@ -184,7 +184,47 @@ describe("search page title", () => {
     const title = "Search competitor Meta ads free | Five to Nine";
 
     expect(title.length).toBeLessThanOrEqual(60);
-    expect(searchSource).toContain(`title: "${title}"`);
+    // The title lives in one shared constant so the visible meta title and the
+    // WebPage JSON-LD name can never drift apart.
+    expect(searchSource).toContain(`searchTitle = "${title}"`);
+    expect(searchSource).toContain("title: searchTitle");
     expect(searchSource).not.toContain('title: "Search | Five to Nine"');
+  });
+});
+
+describe("search page structured data (JSON-LD)", () => {
+  it("emits a plain WebPage entity mirroring the visible meta title and description", async () => {
+    const { webPageJsonLd } = await import("~/lib/seo");
+    const page = JSON.parse(
+      JSON.stringify(
+        webPageJsonLd({
+          name: "Search competitor Meta ads free | Five to Nine",
+          description:
+            "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.",
+          pathname: "/search",
+        }),
+      ),
+    );
+
+    expect(page["@type"]).toBe("WebPage");
+    expect(page.name).toBe("Search competitor Meta ads free | Five to Nine");
+    expect(page.url).toBe("https://0509.io/search");
+    expect(page.isPartOf["@type"]).toBe("WebSite");
+    expect(page.publisher["@type"]).toBe("Organization");
+    // Nothing invented: no price amounts, no dateModified (the page stamps no
+    // update time), no about (the searched website is user input, not a
+    // verified brand).
+    expect(JSON.stringify(page)).not.toMatch(/price|dateModified|"about"/i);
+    expect(JSON.stringify(page)).not.toMatch(/[$₹€£]\s?\d/);
+  });
+
+  it("wires the JSON-LD script on /search from the shared title and description constants", async () => {
+    const searchSource = readFileSync("app/routes/search.tsx", "utf8");
+
+    expect(searchSource).toContain("jsonLdScriptProps(");
+    expect(searchSource).toContain("webPageJsonLd({");
+    expect(searchSource).toContain("name: searchTitle,");
+    expect(searchSource).toContain("description: searchDescription,");
+    expect(searchSource).toContain('pathname: "/search",');
   });
 });
