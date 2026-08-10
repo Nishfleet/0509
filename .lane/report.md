@@ -372,3 +372,98 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Deploy production remote_main_drift post-gate death (2026-08-10 lane 3) — already resolved by PR #556
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane3-deploy-drift-already-resolved`
+Base: `origin/main` at `d109e2d2`
+
+## Item
+
+- [ ] Stop Deploy production from dying on remote_main_drift after a full
+  green gate when main moves mid-run [scout 2026-08-09].
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main` as
+PR #556 — `c3539abb` "fix(deploy): stop remote_main_drift from killing a
+deploy after a fully green gate", merged 2026-08-09 14:40:48 IST (09:10:48Z),
+an ancestor of the current `main` HEAD (`d109e2d2`). The PR's commit message
+cites the same failure pattern: "A mid-run move of main (the fleet merges
+around the clock while a deploy runs ~25 min) made the post-gate provider-main
+CAS checks fail with `provider_main_cas_invalid: remote_main_drift`, voiding an
+otherwise fully green-gated deploy (4 of the last 6 failures)."
+
+## Confirmed incident (matches the scout exactly)
+
+Both 2026-08-09 scout incidents died inside the deploy plan's
+`reconfirm_frozen_main_before_deploy` step, which runs immediately before
+`wrangler deploy` — i.e. AFTER the full green gate:
+
+- Run 194 (`31297786931`, candidate `d863fd18`, the run documented in
+  `docs/deploy-dispatch-2026-08-09.md`): Gate B 3/3 passed, restore evidence
+  `{"ok":true}`, public-home check passed, partial-refund preflight passed,
+  rollback target captured — all green at 06:20:56–06:21:01Z; then
+  `provider_main_cas_invalid: remote_main_drift` at 06:21:01Z from
+  `./scripts/ci-verify-provider-main-cas.sh failed`.
+- Run 195 (`31298895978`, candidate `25392ca2`): same sequence, gate fully
+  green at 06:51:18–06:51:21Z; then `remote_main_drift` at 06:51:23Z in the
+  same step. Both predate the fix by ~2h20m.
+
+## Evidence on current main
+
+- `scripts/ci-verify-provider-main-cas.sh` (lines 51–62): with
+  `TOLERATE_MAIN_DRIFT=1`, drift between `remote_sha` and `PINNED_SHA` prints
+  "Deploying pinned SHA ... behind main: provider main moved to ... while the
+  exact candidate was verified" and exits 0. Every other failure (wrong
+  repo/ref, head mismatch, non-detached checkout, API unavailable, malformed
+  SHA) stays fail-closed — the flag only downgrades the drift condition.
+- `.github/workflows/deploy-production.yml` (steps 497–508): the deploy job's
+  post-gate "Reconfirm frozen main before provider mutation" step runs
+  `ci-verify-production-candidate.sh` with `TOLERATE_MAIN_DRIFT: "1"`, with a
+  comment stating the gate rationale (ships exactly `PINNED_SHA`; drift must
+  not kill a fully green run; every other CAS failure stays fail-closed).
+- `scripts/deploy-production-plan.mjs` (steps 283–296): the plan's
+  `reconfirm_frozen_main_before_deploy` step, immediately before `wrangler
+  deploy`, runs `ci-verify-provider-main-cas.sh` with `TOLERATE_MAIN_DRIFT:
+  "1"` under the same rationale.
+- Pre-gate checks keep hard drift semantics by design (per #556's commit
+  message): `pin_candidate`, `prepare_remote_restore_evidence`, the deploy
+  job's "Verify pinned candidate before repository and secret work" step, and
+  the restore workflow's pre-mutation reconfirms have no tolerance flag.
+
+## Regression pins on current main
+
+- `tests/production-candidate-workflow.test.ts` (lines 170–188): asserts the
+  post-gate reconfirm step runs `ci-verify-production-candidate.sh` with
+  `TOLERATE_MAIN_DRIFT: "1"` and sits immediately before the first provider
+  mutation ("Synchronize private canary token"), while the pre-gate verify
+  step has no `TOLERATE_MAIN_DRIFT` property; lines 519–534 pin the plan's
+  `reconfirm_frozen_main_before_deploy` step env.
+- `tests/deploy-production-gate.test.ts` (lines 414–440): a non-drift
+  reconfirm failure (provider API unavailable) still aborts before the deploy
+  mutation and before the rollback path.
+- Focused suites on this tip: `tests/deploy-production-gate.test.ts` +
+  `tests/production-candidate-workflow.test.ts` — 2 files, 47/47 passed.
+
+## Live proof since the fix merged
+
+- No Deploy production run since `c3539abb` merged has died on
+  `remote_main_drift` after a green gate.
+- Runs 200–203 (2026-08-09 10:56Z–14:56Z, post-fix candidates) all completed
+  **success**, passing the now-tolerant post-gate reconfirm.
+- The post-fix failures (runs 199, 204–213) are a different, designed
+  fail-closed path: the pre-gate authorizer / pre-gate candidate verification
+  rejected dispatches whose `expected_sha` was already stale at run start
+  (main moved before the run began). Those runs never reached the green gate
+  and must keep failing closed — out of scope for this item.
+
+## Checks
+
+- `npx vitest run tests/deploy-production-gate.test.ts
+  tests/production-candidate-workflow.test.ts`: 2 files, 47/47 passed on this
+  tip.
+- `git diff --check`: clean (markdown-only change; no product code touched).
