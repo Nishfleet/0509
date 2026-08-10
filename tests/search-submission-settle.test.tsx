@@ -511,3 +511,65 @@ describe("public search submission settle", () => {
     expect(revalidatorRef.revalidate).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("refine disclosure state (BL-031 round 3)", () => {
+  it("keeps the refine disclosure shut with no count on a pristine /search even when the loader geo-defaults the visitor country", async () => {
+    // The loader defaults `country` to the visitor's country (cf-ipcountry),
+    // so `filters.country` is non-"all" on a plain /search load with no URL
+    // params. BL-031: the pre-search screen is one field and one button — the
+    // disclosure must not open or print "1 on" for a filter nobody set.
+    loaderData = {
+      ...idleLoaderData,
+      filters: { ...idleLoaderData.filters, country: "Germany" },
+    };
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const markup = await renderMarkup();
+
+    expect(markup).toContain("Refine search");
+    expect(markup).not.toContain('f9-wk-refine" open=""');
+    expect(markup).not.toContain("f9-wk-refine-n");
+    expect(markup).not.toMatch(/\d+ on<\/span>/);
+  });
+
+  it("keeps the active-filter count visible once a narrowed search has actually run", async () => {
+    // A committed country-scoped search is a real narrowing: the disclosure
+    // opens and the summary still says how many filters are on.
+    loaderData = {
+      ...resultsLoaderData,
+      filters: { ...resultsLoaderData.filters, country: "Germany" },
+    };
+    locationObj = {
+      pathname: "/search",
+      search: "?mode=advertiser&query=nykaa.com&country=Germany",
+      hash: "",
+    };
+    navigationState = { state: "idle", location: null };
+
+    const markup = await renderMarkup();
+
+    expect(markup).toContain('f9-wk-refine" open=""');
+    expect(markup).toContain("f9-wk-refine-n");
+    expect(markup).toContain("1 on");
+  });
+
+  it("keeps the refine disclosure shut for a broad search with no active filters", async () => {
+    loaderData = {
+      ...resultsLoaderData,
+      filters: { ...resultsLoaderData.filters, country: "all" },
+    };
+    locationObj = {
+      pathname: "/search",
+      search: "?mode=advertiser&query=nykaa.com&country=all",
+      hash: "",
+    };
+    navigationState = { state: "idle", location: null };
+
+    const markup = await renderMarkup();
+
+    expect(markup).toContain("Refine search");
+    expect(markup).not.toContain('f9-wk-refine" open=""');
+    expect(markup).not.toContain("f9-wk-refine-n");
+  });
+});
