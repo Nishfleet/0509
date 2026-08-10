@@ -33,6 +33,7 @@ export function MarketingFooter() {
         <Link to="/privacy">Privacy</Link>
         <Link to="/terms">Terms</Link>
         <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>
+        <a href="https://inish.in/">Nish's daily reads</a>
       </nav>
       <nav className="ld-footer-compare" aria-label="Compare">
         <span className="ld-footer-group-label">Compare</span>
