@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  alertMaterialityReason,
   digestMaterialityReason,
   digestNextAction,
   digestReviewerLabel,
@@ -980,7 +981,7 @@ describe("named owner, materiality reason, and next action (E2 2026-08-08)", () 
 					},
 					{
 						...digestItem("Wow", "Creative copy", 55, "scan_backed"),
-						eventType: "ad_new",
+						eventType: "landing_page_headline_changed",
 						metadata: {
 							...digestItem("Wow", "Creative copy", 55, "scan_backed").metadata,
 							kind: "creative_copy",
@@ -990,6 +991,9 @@ describe("named owner, materiality reason, and next action (E2 2026-08-08)", () 
 			}),
 		);
 
+		// P2: creative copy stays cosmetic only when no material event type
+		// backs it (an ad_new event with creative-copy metadata is a campaign
+		// type, so this period deliberately carries no campaign event).
 		expect(email.html).toContain("Cosmetic-only changes this period (3 headline, form, or creative updates)");
 		expect(email.html).not.toContain("pricing or offers moved");
 		expect(email.html).toContain("Accountable reviewer:</strong> Owner");
@@ -1155,6 +1159,110 @@ describe("named owner, materiality reason, and next action (E2 2026-08-08)", () 
 		);
 		expect(digestNextAction({ items: [], heartbeat: { runs: 3 } })).toBe(
 			"We check again at the next scheduled scan.",
+		);
+	});
+
+	it("derives an alert materiality reason from the shared event vocabulary (E2 alert increment)", () => {
+		const offerChange = { eventType: "landing_page_offer_changed" };
+		const headlineChange = { eventType: "landing_page_headline_changed" };
+		const newAd = { eventType: "ad_new" };
+		const urlChange = { eventType: "landing_page_url_changed" };
+
+		expect(alertMaterialityReason({ events: [offerChange] })).toBe(
+			"This alert matters because pricing or offers moved (1 change) — compare before your next campaign decision.",
+		);
+		expect(alertMaterialityReason({ events: [offerChange, newAd] })).toBe(
+			"This alert matters because pricing or offers moved (1 change) and ads started or stopped (1) — compare before your next campaign decision.",
+		);
+		expect(alertMaterialityReason({ events: [urlChange] })).toBe(
+			"This alert matters because destinations changed (1) — compare before your next campaign decision.",
+		);
+	});
+
+	it("states provisional, baseline, and cosmetic-only alert truth explicitly", () => {
+		const offerChange = { eventType: "landing_page_offer_changed" };
+		const headlineChange = { eventType: "landing_page_headline_changed" };
+
+		// Provisional alerts never claim a verified move.
+		expect(alertMaterialityReason({ events: [offerChange], provisional: true })).toBe(
+			"This alert is provisional — the change is not yet confirmed by a fresh proof capture, so verify the source before acting.",
+		);
+		// Baseline first-scan alerts are starting snapshots, not new moves.
+		expect(alertMaterialityReason({ events: [offerChange], baseline: true })).toBe(
+			"This alert is your starting snapshot — it anchors future alerts instead of marking a new competitor move.",
+		);
+		// Cosmetic-only alerts name what moved without inventing a decision weight.
+		expect(alertMaterialityReason({ events: [headlineChange] })).toBe(
+			"A tracked page changed its headline, form, or creative (1 update) — the competitor is iterating, and nothing in this alert touched pricing or CTA.",
+		);
+		// Never an empty reason, whatever the shape.
+		expect(alertMaterialityReason({})).toBe(
+			"This alert matters because a change was detected on a tracked competitor page — review the evidence before your next decision.",
+		);
+	});
+
+	it("classifies offer-bearing creative copy as price movement, not cosmetic (P2)", () => {
+		const offerCreativeCopy = {
+			eventType: "landing_page_offer_changed",
+			metadata: { kind: "creative_copy" },
+		};
+		// The explicit offer event type wins over the generic creative-copy
+		// hint: a hook/offer rewrite on a known ad is pricing movement.
+		expect(alertMaterialityReason({ events: [offerCreativeCopy] })).toBe(
+			"This alert matters because pricing or offers moved (1 change) — compare before your next campaign decision.",
+		);
+		expect(digestMaterialityReason({ items: [offerCreativeCopy] })).toBe(
+			"This period matters because pricing or offers moved (1 change) — compare before your next campaign decision.",
+		);
+	});
+
+	it("classifies CTA-bearing creative copy as CTA movement (P2)", () => {
+		const ctaCreativeCopy = {
+			eventType: "landing_page_cta_changed",
+			metadata: { kind: "creative_copy" },
+		};
+		expect(alertMaterialityReason({ events: [ctaCreativeCopy] })).toBe(
+			"This alert matters because landing page CTA changed (1) — compare before your next campaign decision.",
+		);
+		expect(digestMaterialityReason({ items: [ctaCreativeCopy] })).toBe(
+			"This period matters because landing page CTA changed (1) — compare before your next campaign decision.",
+		);
+	});
+
+	it("classifies campaign-type creative copy as campaign movement (P2)", () => {
+		const newAdCreativeCopy = {
+			eventType: "ad_new",
+			metadata: { kind: "creative_copy" },
+		};
+		// ad_new is a campaign event type, so creative-copy metadata on it can
+		// never degrade the event to cosmetic.
+		expect(alertMaterialityReason({ events: [newAdCreativeCopy] })).toBe(
+			"This alert matters because ads started or stopped (1) — compare before your next campaign decision.",
+		);
+	});
+
+	it("keeps creative copy cosmetic when no material event type backs it (P2)", () => {
+		const headlineCreativeCopy = {
+			eventType: "landing_page_headline_changed",
+			metadata: { kind: "creative_copy" },
+		};
+		expect(alertMaterialityReason({ events: [headlineCreativeCopy] })).toBe(
+			"A tracked page changed its headline, form, or creative (1 update) — the competitor is iterating, and nothing in this alert touched pricing or CTA.",
+		);
+		expect(digestMaterialityReason({ items: [headlineCreativeCopy] })).toBe(
+			"Cosmetic-only changes this period (1 headline, form, or creative update) — no pricing or CTA movement, so there is nothing new to weigh for positioning.",
+		);
+	});
+
+	it("keeps baselines as starting snapshots even though they ride the ad_new type (P2)", () => {
+		const baselineEvent = { eventType: "ad_new", metadata: { kind: "baseline" } };
+		expect(alertMaterialityReason({ events: [baselineEvent], baseline: true })).toBe(
+			"This alert is your starting snapshot — it anchors future alerts instead of marking a new competitor move.",
+		);
+		// Classified cosmetic at the vocabulary level: never "ads started or
+		// stopped" for a first-scan baseline.
+		expect(digestMaterialityReason({ items: [baselineEvent] })).toBe(
+			"Cosmetic-only changes this period (1 headline, form, or creative update) — no pricing or CTA movement, so there is nothing new to weigh for positioning.",
 		);
 	});
 });
