@@ -372,3 +372,61 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Public /search `?q=` deep links (2026-08-10 lane 1) — already resolved by PR #565
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane1-q-shared-link-already-resolved`
+Base: `origin/main` at `d109e2d2`
+
+## Item
+
+- [ ] Honor `?q=` on public `/search` so shared/deep links actually run (or
+  honestly reject) the query [scout 2026-08-09].
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main` as
+PR #565 — `f1327522` "fix(search): honor ?q= deep links on public /search so
+shared queries actually run", merged 2026-08-09, an ancestor of the current
+`main` HEAD (`d109e2d2`). No later commit touches the involved files
+(`app/lib/normalize.ts`, `tests/normalize.test.ts`, `tests/search.route.test.ts`).
+
+## Evidence on current main
+
+- **Single alias point**: `parseSearchParams()` in `app/lib/normalize.ts`
+  resolves the term as `searchParams.get("query") ?? searchParams.get("q") ?? ""`
+  — `q` is the conventional shared-link alias; an explicit `query` always wins
+  so canonical product links never change meaning; empty/whitespace `q` is
+  treated as absent.
+- **Same cache fingerprint**: `fingerprintSavedQuery` runs over the normalized
+  filters, so `/search?q=nykaa` and `/search?query=nykaa` produce byte-identical
+  fingerprints (pinned by a test) — shared links hit the same warm cache entry
+  instead of re-running discovery.
+- **Route wiring**: `app/routes/search.tsx` loader feeds `url.searchParams`
+  straight into `parseSearchParams`, so a logged-out visitor opening
+  `/search?q=nykaa` actually executes live discovery (`searchAdsViaSourceResolver`
+  called with `filters.query: "nykaa"`), never idles. The client renders the
+  term from loader data (`data.filters.query`), so the box is pre-filled and a
+  pristine `/search` keeps the refine disclosure shut (BL-031 guard intact).
+- **Honest rejection**: a `q` link with no searchable term (`/search?q=`) stays
+  on the idle page — no discovery call, no fake result.
+- **Regression pins**: `tests/normalize.test.ts` (alias, query-wins,
+  empty/whitespace, fingerprint parity) and `tests/search.route.test.ts`
+  (logged-out live discovery via `q=`, idle on empty `q=`).
+
+## Verification on this tip (origin/main `d109e2d2`)
+
+- `vitest run tests/search.route.test.ts tests/normalize.test.ts`: 2 files,
+  **59/59 passed**.
+- Full suite `npm test`: **423 files / 4848 tests passed** (a transient
+  single-test blip on a first run cleared on rerun; the rerun is the
+  authoritative tip state).
+- `git log f1327522..HEAD -- app/lib/normalize.ts tests/normalize.test.ts
+  tests/search.route.test.ts`: no commits — the fix is intact on main.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
