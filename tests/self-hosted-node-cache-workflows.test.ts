@@ -58,15 +58,12 @@ describe("runner-routed setup-node cache workflows", () => {
 
     expect(runnerRoutedJobs).toHaveLength(12);
     for (const { workflowPath, jobName, job } of runnerRoutedJobs) {
-      const isVerificationJob = new Set([
-        ".github/workflows/ci.yml:codex-node-checks",
-        ".github/workflows/cross-browser-matrix.yml:matrix",
-        ".github/workflows/d1-backup-validate.yml:validate",
-        ".github/workflows/deploy-production.yml:prepare_remote_restore_evidence",
-        ".github/workflows/secret-scan.yml:gitleaks",
-      ]).has(`${workflowPath}:${jobName}`);
+      // 2026-08-10: every routed job runs on the VPS verification runner;
+      // the hosted/self-hosted split died with the billing outage. The
+      // runner.environment cache expressions below stay: they are what keeps
+      // Actions cache scoped to GitHub-hosted if any job ever moves back.
       expect(job?.["runs-on"], `${workflowPath}:${jobName}`).toEqual(
-        isVerificationJob ? verificationRunner : "ubuntu-latest",
+        verificationRunner,
       );
     }
 
