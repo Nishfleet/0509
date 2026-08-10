@@ -538,7 +538,10 @@ describe("refine disclosure state (BL-031 round 3)", () => {
     // opens and the summary still says how many filters are on.
     loaderData = {
       ...resultsLoaderData,
-      filters: { ...resultsLoaderData.filters, country: "Germany" },
+      filters: {
+        ...(resultsLoaderData.filters as Record<string, unknown>),
+        country: "Germany",
+      },
     };
     locationObj = {
       pathname: "/search",
@@ -557,7 +560,10 @@ describe("refine disclosure state (BL-031 round 3)", () => {
   it("keeps the refine disclosure shut for a broad search with no active filters", async () => {
     loaderData = {
       ...resultsLoaderData,
-      filters: { ...resultsLoaderData.filters, country: "all" },
+      filters: {
+        ...(resultsLoaderData.filters as Record<string, unknown>),
+        country: "all",
+      },
     };
     locationObj = {
       pathname: "/search",
