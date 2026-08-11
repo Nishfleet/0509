@@ -470,7 +470,7 @@ export async function action(args: ActionFunctionArgs) {
           current: result.current,
           message:
             result.limit <= 1
-              ? "Free includes 1 watchlist with a weekly check and weekly email brief. Upgrade for 3–6 hour checks and more competitors."
+              ? "Free includes 1 watchlist, 1 Collection, and a weekly proof-backed brief. Upgrade for 3–6 hour checks and more competitors."
               : "You've reached your competitor tracking limit — pause another watchlist first.",
         }),
         intent,
