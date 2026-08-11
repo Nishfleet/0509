@@ -210,7 +210,19 @@ describe("/ads/:domain loader", () => {
     expect(result.adLibraryCountry).toBeNull();
   });
 
-  it("marks the capture fresh for a live claim only while the check is under an hour old", async () => {
+  it("marks the capture fresh for a live claim only while the check is still in the moments-ago window", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({ fetchedAt: isoAgo(90 * 1000) }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.checkedAgo).toBe("moments ago");
+    expect(result.freshForLiveClaim).toBe(true);
+  });
+
+  it("withholds the live-claim freshness for a capture minutes old — not just hours", async () => {
     const mocks = installBrandPageMocks({
       entry: cacheEntry({ fetchedAt: isoAgo(5 * 60 * 1000) }),
     });
@@ -219,7 +231,8 @@ describe("/ads/:domain loader", () => {
 
     expect(result.hasCachedAds).toBe(true);
     expect(result.checkedAgo).toBe("about 5 minutes ago");
-    expect(result.freshForLiveClaim).toBe(true);
+    // A capture up to an hour old must never present itself as "right now".
+    expect(result.freshForLiveClaim).toBe(false);
   });
 
   it("withholds the live-claim freshness for a capture over an hour old", async () => {
@@ -496,7 +509,7 @@ describe("/ads/:domain meta", () => {
 
   it('keeps the "right now" title only when the capture is fresh enough for a live claim', async () => {
     installBrandPageMocks();
-    const tags = await metaFor({ ...richData, checkedAgo: "about 5 minutes ago", freshForLiveClaim: true });
+    const tags = await metaFor({ ...richData, checkedAgo: "moments ago", freshForLiveClaim: true });
 
     expect(tags).toContainEqual({
       title: "Nykaa Facebook & Instagram ads right now | Five to Nine",
