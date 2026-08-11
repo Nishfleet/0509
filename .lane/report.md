@@ -705,3 +705,83 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# AlternativeTo manual listing — assets completed + package re-checked (2026-08-12 lane 12)
+
+**Status: preparation complete; submission still waits on the owner step.**
+
+Branch: `docs/alternativeto-listing-assets`
+Base: `origin/main` at `389c0e55`
+Pull request: opened by this lane (number recorded in the PR body)
+
+## Item
+
+- [ ] Prepare a manual AlternativeTo listing for Five to Nine
+  [research-desk 2026-08-08, risk: green] [traction]
+
+## Verdict
+
+The listing package was already prepared on `origin/main` (PR #606,
+`docs/alternativeto-listing-2026-08-11.md`, merged 2026-08-10; status
+recorded in `docs/venue-submissions-status-2026-08-11.md` via PR #624 as
+NEEDS_NISH_STEP). The one part of the preparation that no previous lane had
+produced was the **asset checklist** (squared icon + screenshots). This lane
+produced and committed every asset that does not require an account, wired
+them into the listing doc, and re-checked the package. The only remaining
+blocker is the owner step (create/verify the AlternativeTo account and fill
+the ~15-minute form) — no worker can do that without the owner's account.
+
+## What this lane delivered
+
+- `docs/assets/alternativeto/five-to-nine-icon-512.png` — squared 512x512
+  transparent icon (59 mark, gradient + glow + shadow identical to the
+  brand lockup), verified pixel-level (corners alpha 0, gradient stops
+  present, tile solid) on 2026-08-12. Exceeds AlternativeTo's 280x280+
+  spec. Squared SVG source committed alongside
+  (`five-to-nine-icon.svg`) for SVG upload preference.
+- `docs/assets/alternativeto/screenshot-homepage.png` — live homepage hero,
+  1280x900, captured 2026-08-12 from `https://0509.io/`.
+- `docs/assets/alternativeto/screenshot-search-results.png` — live
+  no-account public search with a real example query (flipkart.com; results
+  confirmed rendered: "30 ads found"), captured 2026-08-12.
+- `docs/assets/alternativeto/screenshot-search-preview.png` — the search
+  form state (bonus shot).
+- `docs/alternativeto-listing-2026-08-11.md` — asset checklist updated
+  (3/5 done + verification item done; brief/watchlist shots remain optional
+  and need an account), Icon/Screenshots sections point at the committed
+  files, Owner-decision 5 updated, and a dated "Asset & re-verification
+  update (2026-08-12)" section added.
+- `docs/venue-submissions-status-2026-08-11.md` — AlternativeTo row notes
+  the assets are ready.
+- `.lane/report.md` — this evidence record.
+
+## Re-verification on this tip (2026-08-12)
+
+- `https://0509.io` — HTTP 200 (verified by direct fetch and by the live
+  screenshots above).
+- AlternativeTo pages (`/software/five-to-nine/` name check, tag pages,
+  competitor pages) could NOT be re-fetched from this VPS: AlternativeTo
+  serves Cloudflare Turnstile challenges to this datacenter IP (verified
+  via curl, webfetch, and headless Chrome — all returned the "Just a
+  moment..." challenge). The 2026-08-11 verification recorded in the doc
+  therefore stands as the last confirmed state; nothing about it is
+  date-sensitive between the two dates. Reported honestly rather than
+  re-asserted.
+
+## Checks
+
+- Icon verified programmatically: 512x512 RGBA, all four corners alpha 0,
+  117k solid-gradient tile pixels, green/amber/purple gradient stops and
+  white "59" glyph present (pixel analysis of the committed PNG).
+- Screenshots verified non-blank (color standard deviation 22–78 across
+  the three committed shots) and content-confirmed (search page body text
+  contained "30 ads found" at capture time).
+- `git diff --check`: clean on the branch tip.
+
+## Files
+
+- `docs/assets/alternativeto/*` — committed assets (new).
+- `docs/alternativeto-listing-2026-08-11.md` — updated.
+- `docs/venue-submissions-status-2026-08-11.md` — updated.
+- `.lane/report.md` — this record.
