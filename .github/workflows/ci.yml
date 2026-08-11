@@ -96,7 +96,13 @@ jobs:
       - name: Build
         run: ./scripts/deploy-window-lock.sh run -- npm run build
       - name: Test
-        run: ./scripts/deploy-window-lock.sh run -- npm run test
+        # Vitest 4.1.x hardcodes the forks-worker startup budget (90s ready /
+        # 60s handshake) and the suite forks one worker per file, so a load
+        # spike on the shared vps-verify runner can intermittently kill the
+        # step with "[vitest-pool]: Timeout starting forks runner." The wrapper
+        # retries once only on that exact startup-timeout signature; every real
+        # test failure still fails the step immediately.
+        run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-vitest-run.sh
       - name: Typecheck
         env:
           # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while
