@@ -330,6 +330,234 @@ describe("search loader", () => {
     });
   });
 
+  it("does not commit the visitor geo country into an anonymous search", async () => {
+    // Regression: a visitor in Germany who never picked a country must get
+    // the global ("all countries") search. Geo-defaulting `country` into the
+    // anonymous search silently scoped results to a market nobody chose and
+    // baked `country=Germany` into the result links.
+    const env = { DB: {} };
+    const getOptionalSession = vi.fn().mockResolvedValue(null);
+    const listCollections = vi.fn();
+    const sourceResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: null,
+    });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession,
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa", {
+        headers: { "cf-ipcountry": "DE" },
+      }),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          query: "nykaa",
+          country: "all",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false, executionContext: null },
+    );
+    expect(result).toMatchObject({
+      session: null,
+      filters: expect.objectContaining({ country: "all" }),
+    });
+  });
+
+  it("keeps an explicitly chosen country on an anonymous search", async () => {
+    // Picking a country in the refine picker is a deliberate narrowing and
+    // must still scope the anonymous search — only the implicit geo default
+    // is withheld.
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: null,
+    });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa&country=Germany", {
+        headers: { "cf-ipcountry": "DE" },
+      }),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          query: "nykaa",
+          country: "Germany",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false, executionContext: null },
+    );
+    expect(result).toMatchObject({
+      filters: expect.objectContaining({ country: "Germany" }),
+    });
+  });
+
+  it("keeps the visitor-geo country default for signed-in searches without an explicit country", async () => {
+    // Signed-in visitors keep the geo preselection (refine picker and
+    // onboarding use it); only anonymous searches must not silently commit it.
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: null,
+    });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa", {
+        headers: { "cf-ipcountry": "DE" },
+      }),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          query: "nykaa",
+          country: "Germany",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false, executionContext: null },
+    );
+    expect(result).toMatchObject({
+      filters: expect.objectContaining({ country: "Germany" }),
+    });
+  });
+
   it("runs read-only live discovery for a logged-out visitor via the q= shared-link alias", async () => {
     const env = { DB: {} };
     const getOptionalSession = vi.fn().mockResolvedValue(null);
