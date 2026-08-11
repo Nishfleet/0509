@@ -54,12 +54,15 @@ export const BRAND_PAGE_FRESH_FOR_INDEXING_MS = 7 * 24 * 60 * 60 * 1000;
 /**
  * Oldest capture that may still claim "right now"/"live" on a public brand
  * page. Public pages render ONLY from the cache, so a present-tense claim is
- * honest only while the check is inside the current hour (the freshness stamp
- * reads "moments ago" / "about N minutes ago"). Older captures switch to
- * past-tense copy ("was running … at the last check") with the explicit
- * "Last checked N ago" stamp as the only time claim.
+ * honest only while the freshness stamp still reads "moments ago" (i.e. the
+ * check happened within the last couple of minutes). Any capture older than
+ * that — even "about 5 minutes ago" — switches to past-tense copy ("was
+ * running … at the last check") with the explicit "Last checked N ago" stamp
+ * as the only time claim. Tied to the same constant the stamp uses, so the
+ * two boundaries can never drift.
  */
-export const BRAND_PAGE_LIVE_CLAIM_MAX_AGE_MS = 60 * 60 * 1000;
+export const BRAND_PAGE_MOMENTS_AGO_MS = 2 * 60 * 1000;
+export const BRAND_PAGE_LIVE_CLAIM_MAX_AGE_MS = BRAND_PAGE_MOMENTS_AGO_MS;
 /** Cap the number of ads rendered on a public page. */
 const BRAND_PAGE_MAX_ADS = 24;
 
@@ -471,8 +474,8 @@ export function formatBrandPageCheckedAgo(fetchedAt: string, now: Date = new Dat
   }
 
   const elapsedMs = Math.max(0, now.getTime() - fetchedMs);
+  if (elapsedMs < BRAND_PAGE_MOMENTS_AGO_MS) return "moments ago";
   const minutes = Math.floor(elapsedMs / 60_000);
-  if (minutes < 2) return "moments ago";
   if (minutes < 60) return `about ${minutes} minutes ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 2) return "about an hour ago";
@@ -480,6 +483,25 @@ export function formatBrandPageCheckedAgo(fetchedAt: string, now: Date = new Dat
   const days = Math.floor(hours / 24);
   if (days === 1) return "about a day ago";
   return `about ${days} days ago`;
+}
+
+/**
+ * Honest Ad Library country label for public page copy, derived from the
+ * snapshot's `country` ("India", "United States", … or "all"). The Meta Ad
+ * Library is country-scoped — a page that renders cached ads must name the
+ * country whose library they came from instead of letting the visitor-geo
+ * defaulted lookup speak silently. "all" (the all-countries view) is spelled
+ * out as "all countries" so the copy never implies a single market. Returns
+ * null when there is no cached snapshot.
+ */
+export function brandPageAdLibraryCountryLabel(
+  country: string | null | undefined,
+): string | null {
+  const trimmed = country?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.toLowerCase() === ALL_COUNTRIES_VALUE ? "all countries" : trimmed;
 }
 
 function candidateCountries(visitorCountry: string): string[] {
