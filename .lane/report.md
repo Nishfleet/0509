@@ -705,3 +705,98 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Deploy production remote_main_drift post-gate death (2026-08-12 lane 9) — resolved on main by PRs #556 + #630
+
+**Status: already resolved on `origin/main`; this lane records the evidence
+only, updated to the post-#630 state.**
+
+Branch: `report/lane9-deploy-drift-resolved`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Stop Deploy production from dying on remote_main_drift after a full
+  green gate when main moves mid-run [scout 2026-08-09].
+
+## Verdict
+
+No code change was warranted: the fix is fully landed on `origin/main` as two
+PRs, both ancestors of the current `main` HEAD (`389c0e55`):
+
+- PR #556 — `c3539abb` "fix(deploy): stop remote_main_drift from killing a
+  deploy after a fully green gate", merged 2026-08-09. Added the opt-in
+  `TOLERATE_MAIN_DRIFT=1` downgrade to `scripts/ci-verify-provider-main-cas.sh`
+  and set it on the two post-gate checks that existed then (deploy job's
+  "Reconfirm frozen main before provider mutation" and the plan's
+  `reconfirm_frozen_main_before_deploy`).
+- PR #630 — `f5aabf14` "ci(deploy): unblock production CAS mid-pipeline drift
+  and canary sync", merged 2026-08-11. Found #556's coverage **incomplete**
+  ("CAS drift livelock"): after `pin_candidate` pins tip T, the later jobs
+  (`prepare_remote_restore_evidence`, `generate_restore_evidence`, and the
+  deploy job's entry step) re-ran the CAS verifiers *without*
+  `TOLERATE_MAIN_DRIFT=1` while main advanced during the 19–40 minute
+  prepare/evidence window — so the run still died on drift. #630 set
+  `TOLERATE_MAIN_DRIFT=1` on **every** post-pin step that re-verifies and
+  ships/uses the already-pinned SHA.
+
+The 2026-08-10 lane 3 record for this item
+(`report/lane3-deploy-drift-already-resolved`, commit `826cd6d5`) was never
+merged and predates #630; it incorrectly asserted the deploy entry step and
+prepare/generate reconfirms should keep hard drift semantics. #630 is the
+completion of this item, and this record supersedes lane 3's stale one.
+
+## Drift-tolerance coverage on current main
+
+Every post-pin CAS invocation in Deploy production now carries
+`TOLERATE_MAIN_DRIFT=1`; the initial pin stays fail-closed on drift by design
+(the candidate must be an exact main tip at pin time), as does every non-drift
+CAS failure everywhere:
+
+- `pin_candidate` "Verify and pin exact main candidate"
+  (`deploy-production.yml` line 110): **no** tolerance — correct, the initial
+  pin must fail closed if main moved before the run.
+- `prepare_remote_restore_evidence` "Verify pinned candidate before
+  self-hosted work" (line 134, env line 143): `TOLERATE_MAIN_DRIFT: "1"`.
+- `generate_restore_evidence` "Reconfirm frozen main before evidence mutation"
+  (line 251, env line 260): `TOLERATE_MAIN_DRIFT: "1"`.
+- `deploy` "Verify pinned candidate before repository and secret work"
+  (line 431, env line 440): `TOLERATE_MAIN_DRIFT: "1"`.
+- `deploy` "Reconfirm frozen main before provider mutation" (line 525, env
+  line 535): `TOLERATE_MAIN_DRIFT: "1"`.
+- plan `reconfirm_frozen_main_before_deploy`, immediately before
+  `wrangler deploy` (`deploy-production-plan.mjs` lines 283–296):
+  `TOLERATE_MAIN_DRIFT: "1"` in the step env.
+- `scripts/ci-verify-provider-main-cas.sh` (lines 51–62): drift between
+  `remote_sha` and `PINNED_SHA` prints "Deploying pinned SHA … behind main:
+  provider main moved to … while the exact candidate was verified" and exits
+  0. Wrong repo/ref, head mismatch, non-detached checkout, API unavailable,
+  and malformed SHA all stay fail-closed even with the flag.
+
+## Regression pins on current main
+
+- `tests/production-candidate-workflow.test.ts` (lines 125–230): the initial
+  pin step has **no** `TOLERATE_MAIN_DRIFT` property (line 133), while every
+  post-pin reconfirm step asserts `TOLERATE_MAIN_DRIFT: "1"` (lines 179, 201,
+  215, 226); line 442 asserts the provider-main verifier content; lines
+  558–573 pin the drift-tolerant plan step.
+- `tests/deploy-production-gate.test.ts` (lines 240–250, 410–440): the plan's
+  reconfirm runs `ci-verify-provider-main-cas.sh` with
+  `TOLERATE_MAIN_DRIFT=1`; a non-drift reconfirm failure (provider API
+  unavailable) still aborts before the deploy mutation and before the rollback
+  path. Line 1626 pins the workflow's drift-tolerant reconfirm env.
+
+## Verification on this tip (`origin/main` `389c0e55`)
+
+- `npx vitest run tests/deploy-production-gate.test.ts
+  tests/production-candidate-workflow.test.ts`: 2 files, **47/47 passed**.
+- Live proof since #630 merged: the drift livelock pattern (post-pin jobs
+  re-verifying without tolerance) no longer exists in the workflow; every CAS
+  verifier invocation in `deploy-production.yml` and
+  `deploy-production-plan.mjs` carries the flag except the initial pin, which
+  must keep failing closed.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
