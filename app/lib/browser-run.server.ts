@@ -353,6 +353,23 @@ export async function captureBrowserlessProofSnapshot(
   return null;
 }
 
+type BrowserlessProofPayload = {
+  data?: {
+    html?: {
+      html?: string;
+    };
+        screenshot?: {
+          base64?: string;
+        };
+        documentRequests?: Array<{
+          url?: string;
+        }>;
+        url?: {
+          url?: string;
+        };
+  };
+} | null;
+
 async function attemptBrowserlessProofSnapshot(
   env: AppEnv,
   targetUrl: string,
@@ -383,24 +400,9 @@ async function attemptBrowserlessProofSnapshot(
     if (!responseText) {
       return { snapshot: null, retryable: true };
     }
-    let payload: {
-      data?: {
-        html?: {
-          html?: string;
-        };
-            screenshot?: {
-              base64?: string;
-            };
-            documentRequests?: Array<{
-              url?: string;
-            }>;
-            url?: {
-              url?: string;
-            };
-      };
-    } | null = null;
+    let payload: BrowserlessProofPayload = null;
     try {
-      payload = JSON.parse(responseText) as typeof payload;
+      payload = JSON.parse(responseText) as BrowserlessProofPayload;
     } catch {
       return { snapshot: null, retryable: true };
     }
@@ -536,7 +538,10 @@ export async function captureBrowserRunQuickActionScrape(
  * The final error is preserved so callers can classify it honestly.
  */
 async function fetchQuickActionWithRetry<TPayload, TResult>(
-  env: AppEnv,
+  env: {
+    BROWSER_RUN_ACCOUNT_ID: string;
+    BROWSER_RUN_API_TOKEN: string;
+  },
   endpoint: string,
   body: unknown,
   onResolved: (

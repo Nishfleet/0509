@@ -170,7 +170,7 @@ page monitoring`, `change alerts`, `competitor analysis`, `growth teams`,
 - **Screenshots:** SaaSHub captures the landing page automatically after
   submission. For manual uploads, 1280×800 shots of the homepage and the
   public search preview (`/search`) are the two highest-value screens; the
-  sample public brief at `/api/demo-proof` is an optional third.
+  live proof brief at `/api/demo-proof` (real cached captures, never sample data) is an optional third.
 - **Badge:** after approval, the SaaSHub "approved" badge can be embedded
   from the product's badge page (optional; not required for the listing).
 
