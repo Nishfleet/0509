@@ -7,6 +7,17 @@ scout item `[traction]` (risk: green, unreviewed-by-grok).
 
 **Target:** https://www.saashub.com — submit at https://www.saashub.com/services/submit
 
+## Submission status (recorded 2026-08-11)
+
+**NEEDS_NISH_STEP — not submitted.** Recorded 2026-08-11. This document is
+superseded by the canonical `docs/saashub-listing-2026-08-11.md` (see its
+[Submission status section](saashub-listing-2026-08-11.md) for the full
+receipt); in brief: the `support@0509.io` verification mailbox was proven
+working on 2026-08-11 (live Gmail → Agentic Inbox delivery test), and the
+SaaSHub submission page is open in Nish's logged-in browser with
+`https://0509.io` filled — nothing has been submitted. Exact next step:
+Nish confirms the venue terms, then the browser run can continue.
+
 ---
 
 ## 1. Submission facts (form fields)
