@@ -94,16 +94,23 @@ function parseSitemapCachePayload(value: string): SitemapCachePayload | null {
  */
 export function brandDomainFromSitemapCacheRow(row: SitemapCacheRow): string | null {
   const keyParts = row.cache_key.split(":");
-  if (
-    keyParts.length >= 4 &&
-    keyParts[0] === "search-v2" &&
-    keyParts[1] === "domain" &&
-    keyParts[3] === "exact" &&
-    keyParts[2]
-  ) {
+  if (keyParts[0] === "search-v2" && keyParts[1] === "domain") {
+    // The key embeds the registrable domain and the search scope:
+    // `search-v2:domain:<registrable-domain>:<scope>:<provider>:<country>:<cursor>`.
+    // Only `exact` scope qualifies — the brand-page loader derives its lookup
+    // key with scope "exact" (deriveCacheLookup in brand-page.server.ts), so a
+    // broader row would render the noindex shell, never an indexable page.
+    // Explicitly NOT falling through to the payload below: the scope in the
+    // key is the authoritative render-scope fact.
+    if (keyParts[3] !== "exact" || !keyParts[2]) {
+      return null;
+    }
     return normalizeBrandPageDomain(keyParts[2])?.domain ?? null;
   }
 
+  // Legacy-shaped keys carry no scope; a v2 payload on such a row is the only
+  // lossless signal (legacy fingerprint keys have no recoverable domain and
+  // are skipped — never guessed).
   const payload = parseSitemapCachePayload(row.payload_json);
   if (payload?.searchIntent === "domain") {
     const display = payload.displayDomain;
