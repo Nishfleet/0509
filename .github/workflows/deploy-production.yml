@@ -465,6 +465,15 @@ jobs:
         run: npx playwright install chromium firefox webkit
 
       - name: Typecheck
+        env:
+          # Same fix ci.yml already carries, which this workflow never got:
+          # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while
+          # this project's composite TypeScript build needs more headroom.
+          # Without it every production deploy aborts here with exit 134
+          # (heap limit reached) - three in a row on 2026-08-11, which left
+          # 32 merged commits sitting undeployed.
+          # Keep it below MemoryHigh/MemoryMax so systemd still fails closed.
+          NODE_OPTIONS: --max-old-space-size=2048
         run: npm run typecheck
 
       - name: Test
