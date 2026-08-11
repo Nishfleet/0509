@@ -558,7 +558,9 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   const needsEvidenceResolution = batches.some(
     (batch) =>
       !batch.provisional &&
-      (batch.allowedChannels.includes("email") || batch.allowedChannels.includes("slack")),
+      (batch.allowedChannels.includes("email") ||
+        batch.allowedChannels.includes("slack") ||
+        batch.allowedChannels.includes("teams")),
   );
   const alertEvidenceByEventId = needsEvidenceResolution
     ? await loadAlertEvidenceStates(env, input.userId, input.events)

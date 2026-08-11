@@ -14,6 +14,7 @@ import {
   TEAMS_PROVIDER,
 } from "~/lib/teams-webhook.server";
 export {
+  normalizeTeamsWebhookUrl,
   sendTeamsWebhookMessage,
   TEAMS_PROVIDER,
 } from "~/lib/teams-webhook.server";

@@ -352,13 +352,16 @@ export async function handleWatchlistsAction({ context, request }: ActionFunctio
     }
 
     const requestedChannel = String(formData.get("channel") ?? "");
-    if (requestedChannel === "slack" && !isSlackWebhookDeliveryCustomerFacing()) {
-      return { ok: false, message: slackDeliveryUnavailableMessage() };
-    }
-    if (requestedChannel === "teams" && !isTeamsWebhookDeliveryCustomerFacing()) {
+    if (requestedChannel === "slack" || requestedChannel === "teams") {
+      // Webhooks connect at workspace scope on the Notifications page (that
+      // flow stores the encrypted webhook and sends the setup test). This
+      // watchlist-scoped path was email-only before GA and stays honest:
+      // accepting a bare slack/teams value here would create a target that
+      // can never deliver.
       return {
         ok: false,
-        message: "Teams delivery isn’t available. Nothing was saved — use email delivery instead.",
+        message:
+          "Connect Slack or Teams delivery from the Notifications page — watchlist-scoped webhook targets aren't supported.",
       };
     }
 
@@ -623,13 +626,13 @@ export async function handleWatchlistsAction({ context, request }: ActionFunctio
     }
 
     const requestedChannel = target.channel;
-    if (requestedChannel === "slack" && !isSlackWebhookDeliveryCustomerFacing()) {
-      return { ok: false, message: slackDeliveryUnavailableMessage() };
-    }
-    if (requestedChannel === "teams" && !isTeamsWebhookDeliveryCustomerFacing()) {
+    if (requestedChannel === "slack" || requestedChannel === "teams") {
+      // See add-delivery-target: watchlist-scoped webhook targets never
+      // existed — a stray pause/resume of one gets the honest answer.
       return {
         ok: false,
-        message: "Teams delivery isn’t available. Nothing was saved — use email delivery instead.",
+        message:
+          "Manage Slack or Teams delivery from the Notifications page — watchlist-scoped webhook targets aren't supported.",
       };
     }
 

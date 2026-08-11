@@ -146,7 +146,9 @@ describe("watchlists save-delivery-config gates", () => {
 
     expect(result).toMatchObject({
       ok: false,
-      message: "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
+      error: "plan_gated",
+      feature: "slack_delivery",
+      message: "This capability is not included in your current plan.",
     });
   });
 
