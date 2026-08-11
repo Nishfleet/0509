@@ -9,6 +9,17 @@ repo's canonical product copy. Submission requires a paid BetaList plan and an
 owner decision on a few personal fields (founder name, location, contact
 email) plus launch-status wording — see [Owner decisions](#owner-decisions).
 
+## Submission status (recorded 2026-08-11)
+
+**SKIPPED_PAID — not submitted.** Recorded 2026-08-11:
+
+- BetaList's official Support page currently states that **all submissions
+  are paid** and there is **no free submission option**. With no free tier,
+  this venue is skipped rather than pursued; the prepared copy above stays
+  on file if the paid tier ever becomes a separate owner decision (see
+  [Launch-status wording](#launch-status-wording-owner-decision) and
+  [Owner decisions](#owner-decisions)).
+
 ## Eligibility check against BetaList submission guidelines
 
 Verified against `https://betalist.com/criteria` (2026-08-10). Five to Nine
