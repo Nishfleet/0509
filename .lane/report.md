@@ -705,3 +705,82 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Homepage top nav signup CTA + magic-link next-step (2026-08-12 lane 3) — already resolved by PRs #554 and #558
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane3-nav-signup-cta-already-resolved`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Homepage top nav has no signup CTA; signup is below-fold or an extra hop
+  via Sign in, and the magic-link step is o[paque/unclear — packet
+  `packet-homepage-nav-signup-1.md` reads the tail as: the signup magic-link
+  step must state the next step in plain words before and after send (check
+  email; what to do if slow/spam).
+
+## Verdict
+
+No product code change was warranted. Both halves of the item are already
+fixed and live on `origin/main` and in production:
+
+- PR #554 (`49ed0e28`) added the **Sign up pill CTA** to the single shared
+  `MarketingNav` (`app/components/marketing-nav.tsx`), linking straight to
+  `/auth/signup` — anonymous visitors reach signup from the top nav of every
+  public surface (landing, `/ads/*`, compare pages, legal/doc shell) without
+  scrolling or detouring through Sign in — and added the signup-mode AuthForm
+  next-step guidance pre-send and post-send (check inbox + spam/slow recovery
+  copy).
+- PR #558 (`834da2df`) fixed the compact ≤860px nav so the three-action row
+  (Sign in / Open app / Sign up) stays above the fold on phones, hiding "Open
+  app" at phone widths so Sign in + Sign up remain one ≥44px touch-target row.
+- Both commits are ancestors of the current `origin/main` HEAD (`389c0e55`).
+- Prior lanes already recorded the same verdict on this exact item
+  (2026-08-09 lane 1: `311bf87f` / `2ebd8082`, PR #562; 2026-08-10 lane 12:
+  `940516fe`).
+
+## Evidence on current main
+
+- `app/components/marketing-nav.tsx:49-51` — the pill `<Link
+  className="ld-nav-pill" to="/auth/signup">Sign up</Link>`, alongside
+  "Sign in" (`/auth/login`) and "Open app" (`/app`).
+- `app/components/auth-form.tsx:68-70` — signup-mode pre-submit copy:
+  "Use a work email. We'll send a setup link to that inbox — open it to
+  verify, then add a competitor and start tracking."
+- `app/components/auth-form.tsx:78-83` — signup-mode post-send recovery copy:
+  "It usually arrives within a minute. If it's slow, check your spam and
+  promotions folders before resending." plus the resend-link form.
+- `tests/marketing-nav.test.ts:38-40,58-61` — pins the signup CTA:
+  `{ href: "/auth/signup", label: "Sign up" }` in the shared link set,
+  `class="ld-nav-pill"`, `href="/auth/signup"`, `>Sign up</a>`.
+- `tests/marketing-nav.test.ts:64-73` — pins the compact ≤860px CSS (Open app
+  hidden, actions row `flex-wrap: nowrap`).
+- `tests/auth-form-signup-guidance.test.ts` — pins the signup-mode guidance
+  (next-step preview + spam/slow deliverability recovery) and that login copy
+  stays untouched.
+- Live check `https://0509.io` (2026-08-12): the top header renders Sign in /
+  Open app / Sign up above the fold, `/auth/signup` shows the "Send setup
+  link" form, and the `?sent=1` state renders "Check your email", "Link sent
+  to …", and "usually arrives within a minute … check your spam and
+  promotions folders before resending."
+
+## Regression pins (on this tip)
+
+- `tests/marketing-nav.test.ts` — 3 tests: shared link set incl. Sign up CTA,
+  compact mobile CSS, MarketingNav used by all public surfaces.
+- `tests/auth-form-signup-guidance.test.ts` — 5 tests: signup guidance
+  pre/post send + login copy isolation.
+
+## Verification on this tip (origin/main `389c0e55`)
+
+- `test-gate npx vitest run tests/marketing-nav.test.ts
+  tests/auth-form-signup-guidance.test.ts` → 2 files / **8 passed**.
+- `git diff --check` → clean (no code diff produced by this lane).
+- No auth/session/magic-link-send/OAuth code was touched.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
