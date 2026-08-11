@@ -69,6 +69,44 @@ describe("public SEO files", () => {
 		expect(robots?.body).not.toContain("Disallow: /share");
 	});
 
+	it("denies AI training crawlers in robots.txt but keeps AI answer engines allowed (docs/ai-crawler-policy.md)", () => {
+		const robots = publicSeoFileForPathname("/robots.txt");
+
+		// Training/fine-tuning crawlers are denied with their own group.
+		for (const agent of [
+			"Amazonbot",
+			"Applebot-Extended",
+			"Bytespider",
+			"CCBot",
+			"ClaudeBot",
+			"CloudflareBrowserRenderingCrawler",
+			"Google-Extended",
+			"GPTBot",
+			"meta-externalagent",
+		]) {
+			expect(robots?.body, `${agent} should be denied`).toContain(
+				`User-agent: ${agent}\nDisallow: /`,
+			);
+		}
+
+		// AI answer/reference engines are NOT named in any deny group; they
+		// fall through to the wildcard allow group.
+		for (const agent of [
+			"PerplexityBot",
+			"OAI-SearchBot",
+			"ChatGPT-User",
+			"Claude-By-Cloudflare",
+			"Googlebot",
+		]) {
+			expect(robots?.body, `${agent} should not be denied`).not.toContain(
+				`User-agent: ${agent}`,
+			);
+		}
+
+		// The wildcard group still allows the public crawl for everyone else.
+		expect(robots?.body).toContain("Allow: /\nSitemap:");
+	});
+
   it("keeps security.txt canonical and contact addresses on the io domain", () => {
     const rootSecurity = readFileSync("public/security.txt", "utf8");
     const wellKnownSecurity = readFileSync("public/.well-known/security.txt", "utf8");

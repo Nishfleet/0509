@@ -208,7 +208,35 @@ const STATIC_SITEMAP_XML = sitemapXmlBody([...SITEMAP_PATHS]);
 // treat the line as a harmless literal, and "/app/" still covers subpaths.
 // A bare "Disallow: /app" is NOT used because it would also block any future
 // public path starting with "app" (e.g. /apply).
-const ROBOTS_TXT = `User-agent: *
+// AI crawler policy — decision recorded in docs/ai-crawler-policy.md
+// ("answers yes, training no"): search and AI-answer/reference engines are
+// welcome (they match the wildcard group below: Googlebot + AI Overviews,
+// Bingbot, PerplexityBot, OAI-SearchBot, ChatGPT-User, Claude-By-Cloudflare,
+// ...), while AI training/fine-tuning crawlers are denied (ai-train=no).
+// The Cloudflare edge managed robots.txt enforces the same deny list at the
+// zone; this file carries the policy in repo so the stance survives edge
+// feature changes. Keep the lists in sync with the zone config.
+const AI_TRAINING_CRAWLERS = [
+  "Amazonbot",
+  "Applebot-Extended",
+  "Bytespider",
+  "CCBot",
+  "ClaudeBot",
+  "CloudflareBrowserRenderingCrawler",
+  "Google-Extended",
+  "GPTBot",
+  "meta-externalagent",
+] as const;
+
+const AI_TRAINING_BLOCK = AI_TRAINING_CRAWLERS.map(
+  (agent) => `User-agent: ${agent}\nDisallow: /`,
+).join("\n\n");
+
+const ROBOTS_TXT = `# AI training/fine-tuning crawlers are denied (ai-train=no).
+# AI answer/reference engines are allowed by the wildcard group below.
+${AI_TRAINING_BLOCK}
+
+User-agent: *
 Allow: /api/docs
 Disallow: /app$
 Disallow: /app/
