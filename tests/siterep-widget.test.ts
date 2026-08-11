@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   canUseSiteRepWidgetScript,
@@ -7,6 +7,7 @@ import {
   isSiteRepWidgetIsolatedPath,
   normalizeSiteRepWidgetPathname,
   SITE_REP_WIDGET,
+  SITE_REP_WIDGET_DELAY_MS,
   shouldLoadSiteRepWidget,
   shouldReloadForSiteRepWidgetDocument,
   siteRepWidgetForPathname,
@@ -251,5 +252,79 @@ describe("Site Rep widget install", () => {
     expect(ownedNode.remove).toHaveBeenCalled();
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  describe("deferred install (dogfood a08b8427701d: slow resource requests on home)", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("still installs synchronously by default and with an explicit zero delay", () => {
+      const defaultDom = fakeWidgetDom();
+      installSiteRepWidget(SITE_REP_WIDGET, defaultDom.widgetWindow as never, defaultDom.widgetDocument as never);
+      expect(defaultDom.widgetDocument.body.appendChild).toHaveBeenCalledTimes(1);
+
+      const explicitZeroDom = fakeWidgetDom();
+      installSiteRepWidget(
+        SITE_REP_WIDGET,
+        explicitZeroDom.widgetWindow as never,
+        explicitZeroDom.widgetDocument as never,
+        { delayMs: 0 },
+      );
+      expect(explicitZeroDom.widgetDocument.body.appendChild).toHaveBeenCalledTimes(1);
+    });
+
+    it("installs the documented widget script exactly SITE_REP_WIDGET_DELAY_MS after the call", () => {
+      vi.useFakeTimers();
+      const { appended, widgetDocument, widgetWindow } = fakeWidgetDom();
+
+      const cleanup = installSiteRepWidget(
+        SITE_REP_WIDGET,
+        widgetWindow as never,
+        widgetDocument as never,
+        { delayMs: SITE_REP_WIDGET_DELAY_MS },
+      );
+      expect(cleanup).toBeTypeOf("function");
+      expect(widgetDocument.body.appendChild).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(SITE_REP_WIDGET_DELAY_MS - 1);
+      expect(widgetDocument.body.appendChild).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+      expect(widgetDocument.body.appendChild).toHaveBeenCalledTimes(1);
+      expect(widgetWindow.siterep).toEqual({
+        botId: SITE_REP_WIDGET.botId,
+        publicKey: SITE_REP_WIDGET.publicKey,
+        apiBase: SITE_REP_WIDGET.apiBase,
+      });
+      expect(appended[0]).toMatchObject({
+        src: SITE_REP_WIDGET.src,
+        defer: true,
+        dataset: {
+          siterepLoader: "0509",
+          botId: SITE_REP_WIDGET.botId,
+          publicKey: SITE_REP_WIDGET.publicKey,
+          apiBase: SITE_REP_WIDGET.apiBase,
+        },
+      });
+    });
+
+    it("cleanup cancels a pending deferred install so nothing is appended later", () => {
+      vi.useFakeTimers();
+      const { widgetDocument, widgetWindow } = fakeWidgetDom();
+
+      const cleanup = installSiteRepWidget(
+        SITE_REP_WIDGET,
+        widgetWindow as never,
+        widgetDocument as never,
+        { delayMs: SITE_REP_WIDGET_DELAY_MS },
+      );
+      expect(cleanup).toBeTypeOf("function");
+      cleanup?.();
+
+      vi.advanceTimersByTime(SITE_REP_WIDGET_DELAY_MS * 2);
+      expect(widgetDocument.body.appendChild).not.toHaveBeenCalled();
+      expect(widgetWindow.siterep).toBeUndefined();
+    });
   });
 });
