@@ -146,6 +146,7 @@ export const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
 // the exact grace window.
 export const SEARCH_NAVIGATION_SETTLE_GRACE_MS = 90_000;
 
+const searchTitle = "Search competitor Meta ads free | Five to Nine";
 const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
 const SEARCH_DELAY_SESSION_KEY = "f9.search.recent-delay.v1";
@@ -154,7 +155,7 @@ export const links: LinksFunction = () => canonicalLinks("/search");
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
-    title: "Search competitor Meta ads free | Five to Nine",
+    title: searchTitle,
     description: searchDescription,
     pathname: "/search",
   });
@@ -1296,6 +1297,13 @@ export default function SearchRoute() {
   // refused by it.
   const instrumentUsed = hasSearchQuery && !data.inputError;
   const hasResults = visibleAds.length > 0;
+  // BL-031 round 3 — the refine disclosure counts only filters on a search
+  // that actually ran. The loader geo-defaults `country` to the visitor's
+  // country, so a pristine /search must not open the panel or print "1 on"
+  // for a filter nobody turned on — the pre-search screen stays one field
+  // and one button. A narrowed search that ran still opens with its count.
+  const refineDisclosureActive =
+    instrumentUsed && activeRefineFilters.length > 0;
   // One context line under the title (the v4 header contract): what this page
   // searches and what happens to a result. Provenance belongs to the capture,
   // so source and freshness are told once, in the evidence pane.
@@ -1413,7 +1421,7 @@ export default function SearchRoute() {
       <script
         {...jsonLdScriptProps(
           webPageJsonLd({
-            name: "Search competitor Meta ads free | Five to Nine",
+            name: searchTitle,
             description: searchDescription,
             pathname: "/search",
           }),
@@ -1479,11 +1487,11 @@ export default function SearchRoute() {
 
             <details
               className="f9-wk-refine"
-              open={activeRefineFilters.length > 0}
+              open={refineDisclosureActive}
             >
             <summary>
               Refine search
-              {activeRefineFilters.length > 0 ? (
+              {refineDisclosureActive ? (
                 <span className="f9-wk-refine-n">
                   {activeRefineFilters.length} on
                 </span>
