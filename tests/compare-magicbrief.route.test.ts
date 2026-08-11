@@ -80,6 +80,52 @@ describe("compare magicbrief route", () => {
     expect(description).not.toContain("Bring your saved work");
   });
 
+  it("targets the search intent of displaced MagicBrief buyers in title and description", async () => {
+    const { meta } = await import("~/routes/compare.magicbrief");
+
+    const tags = meta({} as never) as Array<Record<string, string>>;
+    const title = tags.find((tag) => "title" in tag)?.title;
+    const description = tags.find((tag) => "name" in tag && tag.name === "description")?.content;
+
+    expect(title).toContain("MagicBrief alternative");
+    expect(description).toContain("MagicBrief alternative");
+    expect(description).toBeDefined();
+    expect(description!.length).toBeLessThanOrEqual(155);
+  });
+
+  it("answers the wind-down questions buyers search for, honestly", async () => {
+    const markup = await renderRouteMarkup();
+
+    expect(markup).toContain("MagicBrief wind-down questions, answered honestly.");
+    expect(markup).toContain("What happened to MagicBrief?");
+    expect(markup).toContain("closed on 31 July 2026");
+    expect(markup).toContain("Is Five to Nine a MagicBrief alternative?");
+    expect(markup).toContain("What actually moves from MagicBrief?");
+    expect(markup).toContain("What does switching cost?");
+    // The honest limits stay: no full migration promise in the FAQ answers.
+    expect(markup).not.toContain("we move everything by hand");
+  });
+
+  it("emits one FAQPage JSON-LD block covering every visible FAQ entry", async () => {
+    const markup = await renderRouteMarkup();
+
+    const ldBlocks = [...markup.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
+    const faqBlocks = ldBlocks
+      .map((match) => JSON.parse(match[1]))
+      .filter((data) => data["@type"] === "FAQPage");
+
+    expect(faqBlocks).toHaveLength(1);
+    const mainEntity = faqBlocks[0].mainEntity as Array<{ name: string }>;
+    expect(mainEntity.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining([
+        "What happened to MagicBrief?",
+        "Is Five to Nine a MagicBrief alternative?",
+        "What actually moves from MagicBrief?",
+        "What does switching cost?",
+      ]),
+    );
+  });
+
   it("keeps the public search CTA and support contact", async () => {
     const markup = await renderRouteMarkup();
 
