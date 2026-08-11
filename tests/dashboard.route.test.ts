@@ -1444,7 +1444,7 @@ describe("dashboard same-session first value", () => {
     expect(markup).toContain("First sweep is running now");
   });
 
-  it("announces the created count from the setup handoff", async () => {
+  it("announces the created count and started scan from the setup handoff", async () => {
     const loaderData = {
       collections: [],
       watchlists: [],
@@ -1487,7 +1487,7 @@ describe("dashboard same-session first value", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("Created 2 competitor watchlists");
-    expect(markup).toContain("first live scan has started");
+    expect(markup).toContain("first live scan is running now");
   });
 
   it("reads the created count from the loader handoff query", async () => {
