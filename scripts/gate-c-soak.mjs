@@ -19,7 +19,7 @@ import { execFileSync } from "node:child_process";
 import { checkHealthEndpoint, DEFAULT_CANARY_HEALTH_BASE_URLS } from "./prod-canary.lib.mjs";
 import {
   buildRunningSoakJournal,
-  collectGitHubSoakEvidence,
+  collectLivenessSoakEvidence,
   readSafePrivateJson,
   resolveSafeEvidencePath,
   sha256File,
@@ -122,8 +122,8 @@ async function finalize() {
   const currentHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   if (currentHead !== journal.candidate.headCommit) throw new Error("soak_candidate_head_drift");
   await verifyLiveIdentity(journal.deployment.workerVersionId);
-  const initialGitHubSoak = await collectGitHubSoakEvidence(journal);
-  if (!initialGitHubSoak.passed) throw new Error("github_uptime_soak_failed");
+  const initialLivenessSoak = await collectLivenessSoakEvidence(journal);
+  if (!initialLivenessSoak.passed) throw new Error("liveness_soak_failed");
   const token = process.env.CANARY_BYPASS_TOKEN?.trim();
   if (!token) throw new Error("canary_bypass_token_missing");
   const response = await fetch("https://0509.io/api/release-soak", {
@@ -161,8 +161,8 @@ async function finalize() {
   if (!gateC.passed) throw new Error("soak_final_gate_c_failed");
 
   validateFinalGateCForSoak(journal, gateC.journal, finalGateRunId, new Date());
-  const githubSoak = await collectGitHubSoakEvidence(journal);
-  if (!githubSoak.passed) throw new Error("github_uptime_soak_failed");
+  const livenessSoak = await collectLivenessSoakEvidence(journal);
+  if (!livenessSoak.passed) throw new Error("liveness_soak_failed");
   const completedAt = new Date().toISOString();
   const finalGateCSha256 = sha256File(resolveSafeEvidencePath(finalGateCPath));
   const final = {
@@ -178,7 +178,7 @@ async function finalize() {
       blockers: [],
       releaseSoak: validatedPayload,
       releaseSoakSha256: createHash("sha256").update(JSON.stringify(validatedPayload)).digest("hex"),
-      githubUptime: githubSoak,
+      livenessEvidence: livenessSoak,
       finalGateCPath,
       finalGateCSha256,
       finalGateCGeneratedAt: gateC.journal.generatedAt,

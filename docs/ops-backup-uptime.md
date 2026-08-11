@@ -25,9 +25,12 @@ The three verification units use distinct non-login accounts, a capped
 state under `/run/lock/0509`. They cannot read
 `/home/nish`, use passwordless sudo, or inherit the interactive Claude, Codex,
 Hermes, or GitHub operator credentials. Privileged backup, restore, finalization,
-production deployment, and public uptime jobs use fresh GitHub-hosted machines;
+and production deployment jobs use fresh GitHub-hosted machines;
 no repository-level VPS runner is eligible to receive production secrets or
 trusted operational work.
+(Public uptime detection is not a GitHub job at all: it runs as the
+`0509-liveness` systemd timer on the VPS — see the Uptime monitoring section —
+so it keeps firing while every runner is busy or offline.)
 
 Do not restore runner-variable fallback expressions or add trusted jobs to the
 repository-level self-hosted fleet.
@@ -207,29 +210,58 @@ Nish's explicit go-ahead.
 
 ## Uptime monitoring
 
-### Repo-configured GitHub health workflow
+### VPS liveness probe (primary, 2026-08-11)
 
-`.github/workflows/uptime-health.yml` checks `https://0509.io/api/health`
-on an offset five-minute schedule and can be run manually from GitHub Actions.
-It uses no secrets or private canary tokens. The check passes only when the endpoint
-returns HTTP 200 JSON with `status: "ok"` and `app: "0509"`.
+Production liveness detection runs as the `0509-liveness` systemd timer on the
+fleet VPS, completely outside GitHub Actions. It replaces the previous
+Actions-scheduled health workflow, whose "offset five-minute" cron was never a
+real detector: over 300 scheduled runs (2026-07-25..2026-08-11) the interval
+between firings had a median of 63 minutes and was never under 15 minutes, and
+each run then queued behind CI on the three-runner FIFO (runs observed queued
+49 minutes). GitHub Actions' shortest cron interval is five minutes, but in
+practice a 5-minute schedule does not fire on a 5-minute cadence.
 
-Since 2026-07-13 the same run also probes `https://0509.io/api/health/deep`
-(a `SELECT 1` against D1) and fails unless it returns HTTP 200 with
-`checks.d1: "ok"` — so a sustained D1 outage now fails this workflow even
-while the shallow edge check stays green. curl retries (3 attempts) absorb
-single blips before a run goes red.
+What is installed (see `ops/liveness/`):
 
-GitHub documents 5 minutes as the shortest scheduled workflow interval, with
-scheduled workflows running on the latest default-branch commit. GitHub also
-routes scheduled-workflow notifications based on the workflow creator or the
-user who last changes the cron schedule. Because of that, this repo-configured
-check is not fully proven until an owner/operator confirms:
+- `0509-liveness-probe.sh` — checks `https://0509.io/api/health` (shallow:
+  Worker edge alive, `status: "ok"`, `app: "0509"`, exact `workerVersionId`,
+  `searchRolloutMode: "shadow"`) and `https://0509.io/api/health/deep` (D1
+  `SELECT 1` + scheduled-work check). curl retries (3 attempts) absorb single
+  blips before a sample goes red. No secrets, no GitHub tokens, no Cloudflare
+  credentials.
+- `0509-liveness.service` — DynamicUser oneshot unit; a failed probe leaves
+  the unit failed and the reason in journald (`journalctl -u 0509-liveness`).
+- `0509-liveness.timer` — fires at minutes `2,7,12,...` (the old offset, so
+  history stays comparable) at a true five-minute cadence.
+- `provision-production-liveness.sh` — root installer: copies the probe to
+  `/opt/0509-liveness/`, installs the units, smoke-runs the probe, enables the
+  timer, and prints the next fire time. Run with
+  `sudo ops/liveness/provision-production-liveness.sh`.
 
-1. Done: the workflow exists on `main`.
-2. Done: manual run `28540913266` passed.
-3. Done: scheduled runs `28548096175`, `28552452662`, and `28555610571` passed on `main`.
-4. Failed-run notifications reach the intended inbox.
+Evidence written per probe run:
+
+- `/var/lib/0509-liveness/probes.jsonl` — one JSON record per probe
+  (`ts`, `ok`, `workerVersionId`, `searchRolloutMode`, `d1`,
+  `scheduledWork`, `error`); retention 30 days. World-readable: the release
+  soak finalizer (`finalize-production-soak.yml`) verifies exact-worker
+  evidence from these records while running as an unprivileged runner account.
+- `/var/lib/0509-liveness/latest.json` — `"status": "ok"` or `"status":
+  "degraded"` marker with the last probe time, version, and error. This is the
+  operator/watchdog integration point.
+
+The release-soak gate (`scripts/gate-c-soak.mjs finalize` via
+`collectLivenessSoakEvidence`) now requires at least 276 successful probe
+samples over the 24-hour soak window with no observation gap over 15 minutes,
+every sample carrying the exact deployed worker version — the same density the
+GitHub cron was supposed to provide but never did.
+
+### Repo-configured GitHub health workflow (manual only)
+
+`.github/workflows/uptime-health.yml` is kept for on-demand probes
+(`workflow_dispatch`). It runs the same two probes (shallow + deep) with the
+same validations and uploads a worker-version evidence artifact. It has no
+schedule: the five-minute cadence lives in the VPS timer above. The workflow
+uses no secrets or private canary tokens.
 
 ### Independent external monitor option
 
@@ -247,17 +279,26 @@ The endpoint is public and unauthenticated by design. `/api/health` does **not**
 
 ### Owner verification (no API token)
 
-This stronger independent gate cannot be automated from the repo without an UptimeRobot API key. Nish verifies manually:
+The VPS probe is the primary detector; verify it stays healthy:
 
-1. Sign in to the [UptimeRobot dashboard](https://uptimerobot.com/dashboard).
-2. Confirm a monitor named for 0509 (or similar) targets **`https://0509.io/api/health`**.
-3. Interval: **5 minutes**; monitor type: HTTP(s) with keyword **`ok`** in response body.
-4. Open the monitor → **Response times** — the latest check should be **Up** (green) within the last 5 minutes.
-5. Optional smoke: pause the monitor for one interval, confirm the alert email arrives, then resume.
-6. From any machine: `curl -fsS https://0509.io/api/health` should print JSON with `"status":"ok"` and HTTP 200.
+1. `sudo systemctl is-active 0509-liveness.timer` → `active`.
+2. `systemctl list-timers 0509-liveness.timer` — the next fire should be
+   within six minutes.
+3. `sudo journalctl -u 0509-liveness --since "6 minutes ago"` — recent probes,
+   zero failures.
+4. `cat /var/lib/0509-liveness/latest.json` → `"status":"ok"` with a fresh
+   timestamp.
+5. Failure drill (optional, restores itself): stop production for a minute
+   (or point `HEALTH_URL` at a dead host in a manual run) and confirm the unit
+   exits non-zero, `latest.json` flips to `"degraded"`, and a probe record with
+   `"ok":false` lands in `probes.jsonl`.
+6. From any machine: `curl -fsS https://0509.io/api/health` should print JSON
+   with `"status":"ok"` and HTTP 200.
 7. Record the verification date in `docs/ga-launch-scorecard.md` (Ops readiness / UptimeRobot row).
 
-If sign-up is undesirable, the fallback is a health-ping cron inside the
+The stronger independent UptimeRobot gate cannot be automated from the repo
+without an UptimeRobot API key; see the external-monitor section above. If
+sign-up is undesirable, the fallback is a health-ping cron inside the
 `0509-support-inbox` Worker (it has an EMAIL send binding) — that repo had
 uncommitted local changes on 2026-06-12, so the cron was deliberately not
 added; revisit once that working tree is clean.

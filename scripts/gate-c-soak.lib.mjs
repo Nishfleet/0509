@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { readDeployedWorkerVersionId } from "./deploy-production-plan.mjs";
 import {
@@ -56,15 +56,7 @@ const REQUIRED_GATE_C_STEPS = Object.freeze([
  * @property {string} token
  * @property {typeof fetch | undefined} [fetchImpl]
  */
-/**
- * @typedef {object} WorkflowArtifactQuery
- * @property {string} repository
- * @property {string} name
- * @property {string} token
- * @property {typeof fetch | undefined} [fetchImpl]
- */
 /** @typedef {(query: WorkflowRunQuery) => Promise<any[]>} WorkflowRunLister */
-/** @typedef {(query: WorkflowArtifactQuery) => Promise<any[]>} WorkflowArtifactLister */
 
 /** @param {string} path */
 export function sha256File(path) {
@@ -449,59 +441,52 @@ export function validateReleaseSoakPayload(payload, journal) {
 }
 
 /**
- * @param {any[]} runs
- * @param {{ startedAtMs: number, endedAtMs: number, expectedHead: string }} input
+ * @param {Array<Record<string, any>>} samples
+ * @param {{ startedAtMs: number, endedAtMs: number, expectedWorkerVersionId: string }} input
  */
-export function evaluateUptimeWorkflowRuns(runs, input) {
+export function evaluateLivenessSamples(samples, input) {
   const blockers = new Set();
-  const byId = new Map();
-  for (const run of Array.isArray(runs) ? runs : []) {
-    const id = Number(run?.id);
-    const createdAt = parseRunTime(run?.created_at);
-    if (!Number.isSafeInteger(id) || id <= 0 || createdAt === null) {
-      blockers.add("uptime_run_shape_invalid");
+  const byTs = new Map();
+  for (const sample of Array.isArray(samples) ? samples : []) {
+    // Probe records carry numeric ms when they come from parseLivenessRecords
+    // and ISO strings when passed raw; accept both.
+    const ts = typeof sample?.ts === "number" && Number.isFinite(sample.ts)
+      ? sample.ts
+      : parseRunTime(sample?.ts);
+    if (ts === null || typeof sample?.ok !== "boolean") {
+      blockers.add("liveness_sample_shape_invalid");
       continue;
     }
-    if (byId.has(id)) blockers.add("uptime_run_identity_duplicate");
-    byId.set(id, {
-      id,
-      createdAt,
-      headSha: run.head_sha,
-      event: run.event,
-      status: run.status,
-      conclusion: run.conclusion,
-      attempt: run.run_attempt,
-    });
+    if (byTs.has(ts)) blockers.add("liveness_sample_identity_duplicate");
+    byTs.set(ts, { ...sample, ts });
   }
-  const selected = [...byId.values()].filter((run) =>
-    run.createdAt >= input.startedAtMs && run.createdAt <= input.endedAtMs + GATE_C_SOAK_SETTLE_MS
+  const selected = [...byTs.values()].filter((sample) =>
+    sample.ts >= input.startedAtMs && sample.ts <= input.endedAtMs + GATE_C_SOAK_SETTLE_MS
   );
-  if (selected.length < GATE_C_UPTIME_MIN_SAMPLES) blockers.add("uptime_sample_coverage_failed");
-  for (const run of selected) {
-    if (run.event !== "schedule") blockers.add("uptime_run_event_invalid");
-    if (run.headSha !== input.expectedHead) blockers.add("uptime_candidate_head_drift");
-    if (run.status !== "completed" || run.conclusion !== "success") blockers.add("uptime_run_failed");
-    if (run.attempt !== 1) blockers.add("uptime_run_retried");
+  if (selected.length < GATE_C_UPTIME_MIN_SAMPLES) blockers.add("liveness_sample_coverage_failed");
+  for (const sample of selected) {
+    if (sample.ok !== true) blockers.add("liveness_sample_failed");
+    if (sample.workerVersionId !== input.expectedWorkerVersionId) blockers.add("liveness_worker_version_drift");
+    if (sample.searchRolloutMode !== "shadow") blockers.add("liveness_rollout_mode_invalid");
   }
   const points = [
     input.startedAtMs,
-    ...selected.map((run) => Math.min(run.createdAt, input.endedAtMs)),
+    ...selected.map((sample) => Math.min(sample.ts, input.endedAtMs)),
     input.endedAtMs,
   ].sort((left, right) => left - right);
   let maxGapMs = 0;
   for (let index = 1; index < points.length; index += 1) {
     maxGapMs = Math.max(maxGapMs, points[index] - points[index - 1]);
   }
-  if (maxGapMs > GATE_C_UPTIME_MAX_GAP_MS) blockers.add("uptime_observation_gap_failed");
-  const canonicalRuns = selected
-    .map((run) => ({
-      id: run.id,
-      createdAt: new Date(run.createdAt).toISOString(),
-      headSha: run.headSha,
-      conclusion: run.conclusion,
-      attempt: run.attempt,
+  if (maxGapMs > GATE_C_UPTIME_MAX_GAP_MS) blockers.add("liveness_observation_gap_failed");
+  const canonicalSamples = selected
+    .map((sample) => ({
+      ts: new Date(sample.ts).toISOString(),
+      ok: sample.ok,
+      workerVersionId: sample.workerVersionId,
+      error: sample.error ?? null,
     }))
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id - right.id);
+    .sort((left, right) => left.ts.localeCompare(right.ts));
   return {
     passed: blockers.size === 0,
     blockers: [...blockers].sort(),
@@ -509,11 +494,63 @@ export function evaluateUptimeWorkflowRuns(runs, input) {
     minimumSamples: GATE_C_UPTIME_MIN_SAMPLES,
     maxGapMs,
     allowedMaxGapMs: GATE_C_UPTIME_MAX_GAP_MS,
-    firstObservedAt: canonicalRuns[0]?.createdAt ?? null,
-    lastObservedAt: canonicalRuns.at(-1)?.createdAt ?? null,
-    observedRunIds: canonicalRuns.map((run) => run.id),
-    runSetSha256: sha256Json(canonicalRuns),
+    firstObservedAt: canonicalSamples[0]?.ts ?? null,
+    lastObservedAt: canonicalSamples.at(-1)?.ts ?? null,
+    observedSampleTs: canonicalSamples.map((sample) => sample.ts),
+    sampleSetSha256: sha256Json(canonicalSamples),
   };
+}
+
+/**
+ * Parses the probe JSONL stream written by ops/liveness/0509-liveness-probe.sh.
+ * Malformed lines are counted (they block the soak) but never crash the parse.
+ * @param {string} source
+ */
+export function parseLivenessRecords(source) {
+  /** @type {Array<Record<string, any>>} */
+  const records = [];
+  let invalid = 0;
+  for (const line of source.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      invalid += 1;
+      continue;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      invalid += 1;
+      continue;
+    }
+    const ts = parseRunTime(parsed.ts);
+    if (ts === null || typeof parsed.ok !== "boolean") {
+      invalid += 1;
+      continue;
+    }
+    if (parsed.ok === true) {
+      if (typeof parsed.workerVersionId !== "string" || !SAFE_VERSION.test(parsed.workerVersionId)) {
+        invalid += 1;
+        continue;
+      }
+      if (parsed.searchRolloutMode !== "shadow") {
+        invalid += 1;
+        continue;
+      }
+    } else if (parsed.error !== null && parsed.error !== undefined && typeof parsed.error !== "string") {
+      invalid += 1;
+      continue;
+    }
+    records.push({
+      ts,
+      ok: parsed.ok,
+      workerVersionId: parsed.workerVersionId ?? null,
+      searchRolloutMode: parsed.searchRolloutMode ?? null,
+      error: parsed.error ?? null,
+    });
+  }
+  return { records, invalid };
 }
 
 /** @param {WorkflowRunQuery} input */
@@ -544,97 +581,61 @@ async function listWorkflowRuns({ repository, workflow, event, startedAt, endedA
   return runs;
 }
 
-/** @param {WorkflowArtifactQuery} input */
-async function listWorkflowArtifacts({ repository, name, token, fetchImpl = fetch }) {
-  /** @type {any[]} */
-  const artifacts = [];
-  for (let page = 1; page <= 10; page += 1) {
-    const url = new URL(`https://api.github.com/repos/${repository}/actions/artifacts`);
-    url.searchParams.set("name", name);
-    url.searchParams.set("per_page", "100");
-    url.searchParams.set("page", String(page));
-    /** @type {Record<string, string>} */
-    const headers = {
-      accept: "application/vnd.github+json",
-      "user-agent": "0509-gate-c-soak",
-      "x-github-api-version": "2022-11-28",
-    };
-    if (token) headers.authorization = `Bearer ${token}`;
-    const response = await fetchImpl(url, { headers, redirect: "error" });
-    if (!response.ok) throw new Error("github_workflow_artifacts_unavailable");
-    const payload = await response.json();
-    if (!Array.isArray(payload?.artifacts)) throw new Error("github_workflow_artifacts_invalid");
-    artifacts.push(...payload.artifacts);
-    if (payload.artifacts.length < 100) break;
-    if (page === 10) throw new Error("github_workflow_artifacts_pagination_exceeded");
-  }
-  return artifacts;
+/** @param {string} path */
+function readLivenessStateFile(path) {
+  return readFileSync(path, "utf8");
 }
 
 /**
+ * Collects the exact-worker liveness soak evidence.
+ *
+ * The liveness stream is the VPS systemd-timer probe
+ * (ops/liveness/0509-liveness-probe.sh): one JSON record per five-minute probe
+ * of https://0509.io/api/health and /api/health/deep, appended to
+ * $LIVENESS_STATE_DIR/probes.jsonl (default /var/lib/0509-liveness) and
+ * world-readable so this finalizer can verify it from an unprivileged GitHub
+ * runner account on the same host. The GitHub Actions uptime schedule is gone:
+ * over 300 scheduled runs (2026-07-25..2026-08-11) it fired at a median 63
+ * minutes, never within 15 minutes, so it could never certify a soak.
+ *
+ * The deploy-drift check still uses the GitHub API: no later deploy attempt
+ * may start during the soak window.
+ *
  * @param {JsonRecord} journal
  * @param {{
  *   repository?: string,
  *   token?: string,
+ *   stateDir?: string,
  *   now?: Date | number | string,
+ *   readFileImpl?: (path: string) => string | Promise<string>,
  *   listWorkflowRuns?: WorkflowRunLister,
- *   listWorkflowArtifacts?: WorkflowArtifactLister,
  *   fetchImpl?: typeof fetch,
  * }} [dependencies]
  */
-export async function collectGitHubSoakEvidence(journal, dependencies = {}) {
+export async function collectLivenessSoakEvidence(journal, dependencies = {}) {
   const repository = dependencies.repository ?? process.env.GITHUB_REPOSITORY ?? "nish3451/0509";
   if (repository !== "nish3451/0509") throw new Error("github_soak_repository_invalid");
-  const token = dependencies.token ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "";
+  const stateDir = dependencies.stateDir ?? process.env.LIVENESS_STATE_DIR ?? "/var/lib/0509-liveness";
   const startedAt = journal.window.startedAt;
   const endedAt = new Date(Date.parse(journal.window.endedAt) + GATE_C_SOAK_SETTLE_MS).toISOString();
   const collectedAt = new Date(dependencies.now ?? Date.now());
   if (!Number.isFinite(collectedAt.getTime())) throw new Error("github_soak_collection_time_invalid");
-  const listRuns = dependencies.listWorkflowRuns ?? listWorkflowRuns;
-  const uptimeRuns = await listRuns({
-    repository,
-    workflow: "uptime-health.yml",
-    event: "schedule",
-    startedAt,
-    endedAt,
-    token,
-    fetchImpl: dependencies.fetchImpl,
-  });
-  const uptime = evaluateUptimeWorkflowRuns(uptimeRuns, {
+  const readFileImpl = dependencies.readFileImpl ?? readLivenessStateFile;
+  let source;
+  try {
+    source = await readFileImpl(join(stateDir, "probes.jsonl"));
+  } catch {
+    throw new Error("liveness_evidence_unavailable");
+  }
+  if (typeof source !== "string") throw new Error("liveness_evidence_invalid");
+  const parsed = parseLivenessRecords(source);
+  const liveness = evaluateLivenessSamples(parsed.records, {
     startedAtMs: Date.parse(journal.window.startedAt),
     endedAtMs: Date.parse(journal.window.endedAt),
-    expectedHead: journal.candidate.headCommit,
+    expectedWorkerVersionId: journal.deployment.workerVersionId,
   });
-  const expectedArtifactName = `uptime-worker-${journal.deployment.workerVersionId}`;
-  const listArtifacts = dependencies.listWorkflowArtifacts ?? listWorkflowArtifacts;
-  const workerArtifacts = await listArtifacts({
-    repository,
-    name: expectedArtifactName,
-    token,
-    fetchImpl: dependencies.fetchImpl,
-  });
-  const expectedRunIds = new Set(uptime.observedRunIds);
-  /** @type {Map<number, Array<{ id: number, runId: number, createdAt: string }>>} */
-  const artifactsByRun = new Map();
-  let invalidWorkerArtifacts = 0;
-  for (const artifact of Array.isArray(workerArtifacts) ? workerArtifacts : []) {
-    const id = Number(artifact?.id);
-    const runId = Number(artifact?.workflow_run?.id);
-    const createdAt = parseRunTime(artifact?.created_at);
-    if (
-      !Number.isSafeInteger(id) || id <= 0 ||
-      !Number.isSafeInteger(runId) || runId <= 0 ||
-      createdAt === null || artifact?.name !== expectedArtifactName ||
-      artifact?.expired === true
-    ) {
-      invalidWorkerArtifacts += 1;
-      continue;
-    }
-    if (!expectedRunIds.has(runId)) continue;
-    const entries = artifactsByRun.get(runId) ?? [];
-    entries.push({ id, runId, createdAt: new Date(createdAt).toISOString() });
-    artifactsByRun.set(runId, entries);
-  }
+  const token = dependencies.token ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "";
+  const listRuns = dependencies.listWorkflowRuns ?? listWorkflowRuns;
   const deployRuns = await listRuns({
     repository,
     workflow: "deploy-production.yml",
@@ -668,25 +669,19 @@ export async function collectGitHubSoakEvidence(journal, dependencies = {}) {
       attempt === journal.deployment.githubWorkflowRunAttempt;
     if (!isOriginalDeployment) laterDeployAttempts += 1;
   }
-  const blockers = [...uptime.blockers];
-  if (invalidWorkerArtifacts > 0) blockers.push("uptime_worker_evidence_invalid");
-  if (uptime.observedRunIds.some((runId) => !artifactsByRun.has(runId))) {
-    blockers.push("uptime_worker_version_evidence_missing");
-  }
-  if ([...artifactsByRun.values()].some((entries) => entries.length !== 1)) {
-    blockers.push("uptime_worker_version_evidence_duplicate");
-  }
+  const blockers = [...liveness.blockers];
+  if (parsed.invalid > 0) blockers.push("liveness_evidence_invalid");
   if (invalidDeployRuns > 0) blockers.push("deployment_evidence_invalid");
   if (laterDeployAttempts > 0) blockers.push("deployment_drift_during_soak");
   return {
-    ...uptime,
+    ...liveness,
     repository,
     collectedAt: collectedAt.toISOString(),
     candidateHead: journal.candidate.headCommit,
-    workflow: "uptime-health.yml",
+    source: "vps-liveness",
+    stateDir,
     workerVersionId: journal.deployment.workerVersionId,
-    observedWorkerArtifacts: artifactsByRun.size,
-    workerArtifactSetSha256: sha256Json([...artifactsByRun.values()].flat().sort((left, right) => left.runId - right.runId)),
+    observedInvalidRecords: parsed.invalid,
     laterDeployAttempts,
     passed: blockers.length === 0,
     blockers: [...new Set(blockers)].sort(),

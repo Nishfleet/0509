@@ -1,6 +1,6 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
@@ -29,11 +29,14 @@ describe("uptime health workflow", () => {
     };
   };
 
-  it("checks the public health endpoint on an offset five-minute GitHub schedule", () => {
+  it("is manual dispatch only; the five-minute cadence lives in the VPS liveness timer", () => {
     expect(parsed.on.workflow_dispatch).toBeDefined();
-    expect(parsed.on.schedule).toEqual([
-      { cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *" },
-    ]);
+    // The GitHub Actions 5-minute cron fired about once an hour (median 63
+    // minutes between runs over 300 observations, 2026-07-25..2026-08-11), so
+    // liveness detection moved to the 0509-liveness systemd timer on the VPS.
+    expect(parsed.on.schedule).toBeUndefined();
+    expect(workflow).toContain("ops/liveness/");
+    expect(workflow).toContain("0509-liveness");
     expect(parsed.jobs.health?.["runs-on"]).toEqual([
       "self-hosted",
       "linux",
@@ -128,5 +131,81 @@ describe("uptime health workflow", () => {
     expect(workflow).not.toContain("CANARY_BYPASS_TOKEN");
     expect(workflow).not.toContain("CLOUDFLARE_API_TOKEN");
     expect(workflow).not.toContain("DODO");
+  });
+
+  it("executes the VPS liveness probe for healthy and degraded payloads", () => {
+    const probe = readFileSync("ops/liveness/0509-liveness-probe.sh", "utf8");
+    expect(probe).toContain("https://0509.io/api/health");
+    expect(probe).toContain('payload.get("status") != "ok"');
+    expect(probe).toContain('payload.get("app") != "0509"');
+    expect(probe).toContain('checks.get("d1") != "ok"');
+    expect(probe).toContain('checks.get("scheduledWork") != "ok"');
+    const root = mkdtempSync(join(tmpdir(), "0509-liveness-probe-"));
+    const state = join(root, "state");
+    mkdirSync(state, { recursive: true });
+    const curl = join(root, "curl");
+    writeFileSync(curl, `#!/bin/sh
+for last; do :; done
+case "$last" in
+  *"/api/health/deep") printf '%s\\n' "$FAKE_DEEP_PAYLOAD" ;;
+  *) printf '%s\\n' "$FAKE_SHALLOW_PAYLOAD" ;;
+esac
+`);
+    chmodSync(curl, 0o755);
+    const run = (shallow: unknown, deep: unknown) => spawnSync(
+      "bash",
+      [resolve("ops/liveness/0509-liveness-probe.sh")],
+      {
+        env: {
+          ...process.env,
+          PATH: `${root}:${process.env.PATH ?? ""}`,
+          LIVENESS_STATE_DIR: state,
+          HEALTH_URL: "https://0509.io/api/health",
+          DEEP_HEALTH_URL: "https://0509.io/api/health/deep",
+          FAKE_SHALLOW_PAYLOAD: JSON.stringify(shallow),
+          FAKE_DEEP_PAYLOAD: JSON.stringify(deep),
+        },
+        encoding: "utf8",
+      },
+    );
+    const healthy = {
+      status: "ok",
+      app: "0509",
+      releaseIdentity: { workerVersionId: "worker-v1", searchRolloutMode: "shadow" },
+    };
+    const healthyDeep = {
+      status: "ok",
+      checks: { d1: "ok", scheduledWork: "ok" },
+      releaseIdentity: { workerVersionId: "worker-v1", searchRolloutMode: "shadow" },
+    };
+    const lastRecord = () => {
+      const lines = readFileSync(join(state, "probes.jsonl"), "utf8").trim().split("\n");
+      return JSON.parse(lines[lines.length - 1]!);
+    };
+
+    try {
+      expect(run(healthy, healthyDeep).status).toBe(0);
+      expect(lastRecord()).toMatchObject({
+        ok: true,
+        workerVersionId: "worker-v1",
+        searchRolloutMode: "shadow",
+        d1: "ok",
+        scheduledWork: "ok",
+        error: null,
+      });
+      expect(JSON.parse(readFileSync(join(state, "latest.json"), "utf8")).status).toBe("ok");
+
+      expect(run({ ...healthy, status: "degraded" }, healthyDeep).status).not.toBe(0);
+      expect(lastRecord()).toMatchObject({ ok: false, error: "shallow_payload_invalid" });
+      expect(run(healthy, { ...healthyDeep, checks: { d1: "error", scheduledWork: "ok" } }).status)
+        .not.toBe(0);
+      expect(run(healthy, {
+        ...healthyDeep,
+        releaseIdentity: { workerVersionId: "other", searchRolloutMode: "shadow" },
+      }).status).not.toBe(0);
+      expect(JSON.parse(readFileSync(join(state, "latest.json"), "utf8")).status).toBe("degraded");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

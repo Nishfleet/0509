@@ -14,12 +14,21 @@ Items below are a dated owner-action ledger, not a current Gate B/C or Gate D pa
 
 ### External uptime monitoring
 
-**Status:** REPO CONFIGURED — FIRST RUN / ALERT PROOF STILL OWNER-VERIFIED
+**Status:** VPS TIMER DETECTOR — ALERT PROOF STILL OWNER-VERIFIED
 
-1. `.github/workflows/uptime-health.yml` checks `https://0509.io/api/health` on an offset five-minute schedule without secrets.
-2. Done: manual run `28540913266` passed on `main`.
-3. Dated scheduled runs `28548096175`, `28552452662`, and `28555610571` later passed on `main`.
-4. Confirm failed-run notifications reach the intended inbox; this remains Gate C external operational proof.
+1. The primary detector is the `0509-liveness` systemd timer on the VPS
+   (`ops/liveness/`, installed by `sudo ops/liveness/provision-production-liveness.sh`):
+   probes `https://0509.io/api/health` and `/api/health/deep` every five
+   minutes at a true cadence (the previous Actions cron fired about once an
+   hour in practice) and writes evidence to `/var/lib/0509-liveness/`.
+2. `.github/workflows/uptime-health.yml` remains for manual on-demand probes
+   (`workflow_dispatch`) with the same validations; it has no schedule.
+3. Done: historical manual run `28540913266` and dated scheduled runs
+   `28548096175`, `28552452662`, and `28555610571` passed on `main` under the
+   old schedule.
+4. Confirm the VPS probe keeps a fresh `ok` in `/var/lib/0509-liveness/latest.json`
+   and that a failed probe marks the unit failed; alert receipt on the new
+   path remains Gate C external operational proof.
 5. If a separate external service is required, create an UptimeRobot (or equivalent) HTTP monitor for `https://0509.io/api/health`: 5 minute interval, keyword check `ok`, alert Nish on non-200 or missing `{ "status": "ok" }`.
 6. Record verification date in `docs/ga-launch-scorecard.md`.
 

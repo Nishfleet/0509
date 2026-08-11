@@ -1,14 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   GATE_C_SOAK_DURATION_MS,
   GATE_C_SOAK_SETTLE_MS,
-  collectGitHubSoakEvidence,
-  evaluateUptimeWorkflowRuns,
+  collectLivenessSoakEvidence,
+  evaluateLivenessSamples,
   buildRunningSoakJournal,
   validateFinalGateCForSoak,
   validateReleaseSoakPayload,
@@ -252,149 +252,179 @@ describe("Gate C scheduled-work soak journal", () => {
     )).toThrow("soak_referenced_evidence_drift");
   });
 
-  it("requires dense successful non-retried uptime runs on the exact candidate and no later deploy", async () => {
+  it("requires dense successful liveness samples on the exact Worker version and no later deploy", async () => {
     const { journal } = fixture();
-    const runs = Array.from({ length: 288 }, (_, index) => ({
-      id: index + 1,
-      created_at: new Date(STARTED_AT.getTime() + 2 * 60_000 + index * 5 * 60_000).toISOString(),
-      head_sha: HEAD,
-      event: "schedule",
-      status: "completed",
-      conclusion: "success",
-      run_attempt: 1,
+    const root = mkdtempSync(resolve("test-results", "gate-c-liveness-test-"));
+    roots.push(root);
+    const stateDir = root;
+    const stateFile = join(stateDir, "probes.jsonl");
+
+    const samples: Array<Record<string, unknown>> = Array.from({ length: 288 }, (_, index) => ({
+      ts: new Date(STARTED_AT.getTime() + 2 * 60_000 + index * 5 * 60_000).toISOString(),
+      ok: true,
+      workerVersionId: WORKER_VERSION,
+      searchRolloutMode: "shadow",
+      error: null,
     }));
-    const artifacts = runs.map((run, index) => ({
-      id: index + 10_000,
-      name: `uptime-worker-${WORKER_VERSION}`,
-      expired: false,
-      created_at: run.created_at,
-      workflow_run: { id: run.id },
-    }));
-    const evaluation = evaluateUptimeWorkflowRuns(runs, {
+    const writeSamples = (records: unknown[]) => {
+      writeFileSync(stateFile, `${records.map((sample) => JSON.stringify(sample)).join("\n")}\n`);
+      chmodSync(stateFile, 0o644);
+    };
+    writeSamples(samples);
+
+    const evaluation = evaluateLivenessSamples(samples, {
       startedAtMs: STARTED_AT.getTime(),
       endedAtMs: STARTED_AT.getTime() + GATE_C_SOAK_DURATION_MS,
-      expectedHead: HEAD,
+      expectedWorkerVersionId: WORKER_VERSION,
     });
     expect(evaluation).toMatchObject({ passed: true, blockers: [], observedSamples: 288 });
 
-    const failed = runs.map((run) => ({ ...run }));
-    failed[10]!.conclusion = "failure";
-    expect(evaluateUptimeWorkflowRuns(failed, {
+    const failed = samples.map((sample) => ({ ...sample }));
+    failed[10]!.ok = false;
+    failed[10]!.error = "shallow_http_failed";
+    expect(evaluateLivenessSamples(failed, {
       startedAtMs: STARTED_AT.getTime(),
       endedAtMs: STARTED_AT.getTime() + GATE_C_SOAK_DURATION_MS,
-      expectedHead: HEAD,
-    }).blockers).toContain("uptime_run_failed");
+      expectedWorkerVersionId: WORKER_VERSION,
+    }).blockers).toContain("liveness_sample_failed");
 
-    const listWorkflowRuns = async ({ workflow }: { workflow: string }) =>
-      workflow === "uptime-health.yml" ? runs : [];
-    const listWorkflowArtifacts = async () => artifacts;
     const collectionTime = new Date(Date.parse(journal.window.endedAt) + GATE_C_SOAK_SETTLE_MS);
-    const collected = await collectGitHubSoakEvidence(journal, {
-      listWorkflowRuns,
-      listWorkflowArtifacts,
+    const collected = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [],
       now: collectionTime,
     });
     expect(collected.passed).toBe(true);
     expect(collected.laterDeployAttempts).toBe(0);
-    expect(collected.observedWorkerArtifacts).toBe(288);
+    expect(collected.observedSamples).toBe(288);
+    expect(collected.source).toBe("vps-liveness");
 
-    const withDeploy = await collectGitHubSoakEvidence(journal, {
-      listWorkflowRuns: async ({ workflow }: { workflow: string }) => workflow === "uptime-health.yml"
-        ? runs
-        : [{
-            id: 9002,
-            run_attempt: 1,
-            created_at: journal.window.startedAt,
-            run_started_at: journal.window.startedAt,
-            updated_at: journal.window.startedAt,
-          }],
-      listWorkflowArtifacts,
+    const withDeploy = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [{
+        id: 9002,
+        run_attempt: 1,
+        created_at: journal.window.startedAt,
+        run_started_at: journal.window.startedAt,
+        updated_at: journal.window.startedAt,
+      }],
       now: collectionTime,
     });
     expect(withDeploy.blockers).toContain("deployment_drift_during_soak");
 
-    const withFailedDeploy = await collectGitHubSoakEvidence(journal, {
-      listWorkflowRuns: async ({ workflow }: { workflow: string }) => workflow === "uptime-health.yml"
-        ? runs
-        : [{
-            id: 9003,
-            run_attempt: 1,
-            created_at: "2026-07-18T03:00:00.000Z",
-            run_started_at: "2026-07-18T03:00:00.000Z",
-            updated_at: "2026-07-18T03:01:00.000Z",
-          }],
-      listWorkflowArtifacts,
+    const withFailedDeploy = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [{
+        id: 9003,
+        run_attempt: 1,
+        created_at: "2026-07-18T03:00:00.000Z",
+        run_started_at: "2026-07-18T03:00:00.000Z",
+        updated_at: "2026-07-18T03:01:00.000Z",
+      }],
       now: collectionTime,
     });
     expect(withFailedDeploy.laterDeployAttempts).toBe(1);
     expect(withFailedDeploy.blockers).toContain("deployment_drift_during_soak");
 
-    const withWorkerDrift = await collectGitHubSoakEvidence(journal, {
-      listWorkflowRuns,
-      listWorkflowArtifacts: async () => artifacts.slice(1),
+    const withWorkerDrift = samples.map((sample, index) =>
+      index === 10 ? { ...sample, workerVersionId: "other-version" } : sample,
+    );
+    writeSamples(withWorkerDrift);
+    const drifted = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [],
       now: collectionTime,
     });
-    expect(withWorkerDrift.blockers).toContain("uptime_worker_version_evidence_missing");
+    expect(drifted.blockers).toContain("liveness_worker_version_drift");
+    writeSamples(samples);
 
-    const originalDeployment = await collectGitHubSoakEvidence(journal, {
-      listWorkflowRuns: async ({ workflow }: { workflow: string }) => workflow === "uptime-health.yml"
-        ? runs
-        : [{
-            id: DEPLOY_RUN_ID,
-            run_attempt: DEPLOY_RUN_ATTEMPT,
-            created_at: new Date(STARTED_AT.getTime() - 60_000).toISOString(),
-            run_started_at: new Date(STARTED_AT.getTime() - 30_000).toISOString(),
-            updated_at: new Date(STARTED_AT.getTime() + 60_000).toISOString(),
-          }],
-      listWorkflowArtifacts,
+    const originalDeployment = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [{
+        id: DEPLOY_RUN_ID,
+        run_attempt: DEPLOY_RUN_ATTEMPT,
+        created_at: new Date(STARTED_AT.getTime() - 60_000).toISOString(),
+        run_started_at: new Date(STARTED_AT.getTime() - 30_000).toISOString(),
+        updated_at: new Date(STARTED_AT.getTime() + 60_000).toISOString(),
+      }],
       now: collectionTime,
     });
     expect(originalDeployment.laterDeployAttempts).toBe(0);
 
-    const preSoakDeploymentCompletedLate = await collectGitHubSoakEvidence(journal, {
-      listWorkflowRuns: async ({ workflow }: { workflow: string }) => workflow === "uptime-health.yml"
-        ? runs
-        : [{
-            id: 8000,
-            run_attempt: 1,
-            created_at: new Date(STARTED_AT.getTime() - 120_000).toISOString(),
-            run_started_at: new Date(STARTED_AT.getTime() - 60_000).toISOString(),
-            updated_at: new Date(STARTED_AT.getTime() + 60_000).toISOString(),
-          }],
-      listWorkflowArtifacts,
+    const preSoakDeploymentCompletedLate = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [{
+        id: 8000,
+        run_attempt: 1,
+        created_at: new Date(STARTED_AT.getTime() - 120_000).toISOString(),
+        run_started_at: new Date(STARTED_AT.getTime() - 60_000).toISOString(),
+        updated_at: new Date(STARTED_AT.getTime() + 60_000).toISOString(),
+      }],
       now: collectionTime,
     });
     expect(preSoakDeploymentCompletedLate.laterDeployAttempts).toBe(0);
 
-    const rerun = await collectGitHubSoakEvidence(journal, {
-      listWorkflowRuns: async ({ workflow }: { workflow: string }) => workflow === "uptime-health.yml"
-        ? runs
-        : [{
-            id: DEPLOY_RUN_ID,
-            run_attempt: DEPLOY_RUN_ATTEMPT + 1,
-            created_at: new Date(STARTED_AT.getTime() - 60_000).toISOString(),
-            run_started_at: new Date(STARTED_AT.getTime() + 30_000).toISOString(),
-            updated_at: new Date(STARTED_AT.getTime() + 60_000).toISOString(),
-          }],
-      listWorkflowArtifacts,
+    const rerun = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [{
+        id: DEPLOY_RUN_ID,
+        run_attempt: DEPLOY_RUN_ATTEMPT + 1,
+        created_at: new Date(STARTED_AT.getTime() - 60_000).toISOString(),
+        run_started_at: new Date(STARTED_AT.getTime() + 30_000).toISOString(),
+        updated_at: new Date(STARTED_AT.getTime() + 60_000).toISOString(),
+      }],
       now: collectionTime,
     });
     expect(rerun.blockers).toContain("deployment_drift_during_soak");
 
-    const lateDeploy = await collectGitHubSoakEvidence(journal, {
-      listWorkflowRuns: async ({ workflow }: { workflow: string }) => workflow === "uptime-health.yml"
-        ? runs
-        : [{
-            id: 9004,
-            run_attempt: 1,
-            created_at: new Date(Date.parse(journal.window.endedAt) + 30 * 60_000).toISOString(),
-            run_started_at: new Date(Date.parse(journal.window.endedAt) + 30 * 60_000).toISOString(),
-            updated_at: new Date(Date.parse(journal.window.endedAt) + 31 * 60_000).toISOString(),
-          }],
-      listWorkflowArtifacts,
+    const lateDeploy = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [{
+        id: 9004,
+        run_attempt: 1,
+        created_at: new Date(Date.parse(journal.window.endedAt) + 30 * 60_000).toISOString(),
+        run_started_at: new Date(Date.parse(journal.window.endedAt) + 30 * 60_000).toISOString(),
+        updated_at: new Date(Date.parse(journal.window.endedAt) + 31 * 60_000).toISOString(),
+      }],
       now: new Date(Date.parse(journal.window.endedAt) + 60 * 60_000),
     });
     expect(lateDeploy.blockers).toContain("deployment_drift_during_soak");
+
+    // A contiguous missing block opens a >15-minute observation gap.
+    const sparse = samples.filter((_, index) => index < 50 || index > 100);
+    writeSamples(sparse);
+    const gap = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [],
+      now: collectionTime,
+    });
+    expect(gap.blockers).toContain("liveness_observation_gap_failed");
+    writeSamples(samples);
+
+    writeSamples(samples.slice(0, 100));
+    const coverage = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [],
+      now: collectionTime,
+    });
+    expect(coverage.blockers).toContain("liveness_sample_coverage_failed");
+    writeSamples(samples);
+
+    writeSamples([...samples.slice(0, 5), "not-json", ...samples.slice(5)]);
+    const invalid = await collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [],
+      now: collectionTime,
+    });
+    expect(invalid.blockers).toContain("liveness_evidence_invalid");
+    writeSamples(samples);
+
+    rmSync(stateFile);
+    await expect(collectLivenessSoakEvidence(journal, {
+      stateDir,
+      listWorkflowRuns: async () => [],
+      now: collectionTime,
+    })).rejects.toThrow("liveness_evidence_unavailable");
   });
 
   it("accepts only a complete exact-window release-soak payload", () => {

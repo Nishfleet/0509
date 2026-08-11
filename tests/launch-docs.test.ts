@@ -45,7 +45,11 @@ describe("final launch documentation", () => {
     expect(ownerActions).toContain("SCHEDULED PASS / ALERT UNPROVEN");
     expect(backupUptime).toContain(".github/workflows/uptime-health.yml");
     expect(uptimeWorkflow).toContain("https://0509.io/api/health");
-    expect(uptimeWorkflow).toContain('cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"');
+    // The five-minute cadence moved to the VPS liveness timer; the GitHub
+    // workflow no longer carries a schedule at all.
+    expect(uptimeWorkflow).not.toMatch(/^\s*schedule:/m);
+    expect(uptimeWorkflow).toContain("0509-liveness");
+    expect(backupUptime).toContain("ops/liveness/provision-production-liveness.sh");
     expect(ownerActions).toContain("D1-to-R2 scheduled backup");
     expect(ownerActions).toContain("PROVEN DISPATCH 2026-07-13 / FUTURE OBSERVATION OPEN");
     expect(scorecard).toContain("Restore drill");
