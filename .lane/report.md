@@ -705,3 +705,82 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# AI Answer Readiness: rendered pages lack extractable detail — dogfood 69e1b4be47bf (2026-08-12 lane 7) — fix ready, unmerged, finding still live
+
+**Status: finding still live on production; fix verified to clear it but not
+merged. Item cannot advance further from a lane: the loop's twin-PR item
+forbids a third content-depth PR and lane packets forbid pushing to main.
+Remaining steps are owner-side: merge exactly one of PR #563 / #602, deploy,
+rerun the dogfood engine.**
+
+Branch: `report/lane7-ai-answer-readiness-content-depth`
+Base: `origin/main` at `389c0e55`
+Pull request: https://github.com/nish3451/0509/pull/6XX (opened by this lane)
+
+## Item
+
+- [dogfood `69e1b4be47bf`] AI Answer Readiness: rendered pages lack extractable
+  detail (`ai-answer-readiness-content-depth`, warning) from
+  `runs/20260808T074205Z-msk2fl3n.json`; page scope `/search`.
+- Ledger `finding-ledger.json` entry `28028634d54e8bc82d28`: `active: true`,
+  `resolvedAt: null`, last seen `2026-08-09T01:30:17Z` (run
+  `20260809T013017Z-msl4lamt`).
+
+## Why this lane exists
+
+PR #566 (2026-08-09) already recorded that this finding clears via the in-flight
+fix. That fix never merged, so the finding stayed live and the loop re-dispatched
+the item to lane 7 of 2026-08-12.
+
+## Live state re-verified 2026-08-12 (same engine the dogfood job wraps)
+
+Engine: `proof-seo/server/audit/engine.js` (checkout
+`/home/nish/workspaces/products/proof-seo`), `auditUrl(url, { maxPages: 6,
+pageSpeed: false })` — identical options to the dogfood pipeline.
+
+- **Live production https://0509.io/search:** finding **present today** —
+  `ai-answer-readiness-content-depth` warning, evidence verbatim: "1 rendered
+  page has fewer than 250 words, led by /search with 241 words.";
+  `contentDepth.status = needs_repair`; lowContentPages = `/search`
+  (**241 rendered words**); readinessScore 72, repairOpportunityCount 1,
+  pagesWithEnoughText 4.
+- **Fixed code re-verified against today's main** (`bed61814`, PR #602 head —
+  same content as PR #563; cherry-picked onto `origin/main` `389c0e55` and
+  confirmed patch-identical, applied cleanly): local dev server `/search`
+  renders **429 words**; `contentDepth.status = passed`, `lowContentPages =
+  []`, `pagesWithEnoughText = 5`, readinessScore **100**, repairOpportunityCount
+  **0**, **zero** `ai-answer-readiness-content-depth` findings.
+- Full Vitest on the fixed tree: **428 files / 4896 tests passed**.
+  `npm run typecheck` passed. Focused content-depth regressions (search
+  submission settle, search language, auth login content depth): 3 files,
+  29/29 passed.
+
+## Why this lane opens no third product PR
+
+- Two open PRs already carry the verified fix, both MERGEABLE with green
+  codex-node-checks: PR #563 (`fix/search-thin-content`, original) and PR #602
+  (`fix/ai-answer-content-depth-land`, fresh re-land that explicitly targets
+  dogfood 69e1b4be47bf). Their product file sets are identical.
+- The improvement-loop backlog item "Close the twin content-depth PR"
+  (2026-08-11 scout, grok-checked) accepts **only** "exactly one of #563/#602
+  merges; the other is closed with a one-line 'duplicate of #X' comment (no
+  rebase of the loser); **no third content-depth PR is opened**."
+- Lane authority: this packet forbids pushing to main and merging is not a
+  lane action; closing/rebasing #563/#602 belongs to the twin-item owner.
+
+## Remaining owner-side steps (what closes the item)
+
+1. Merge exactly one of PR #563 / #602 (prefer the fresh re-land #602; both
+   verified identical in product content and both CI-green).
+2. Deploy (production worker currently predates the fix — live `/search` still
+   renders 241 words).
+3. Rerun the dogfood batch; the `ai-answer-readiness-content-depth` fingerprint
+   drops out of active findings and ledger entry `28028634d54e8bc82d28`
+   resolves. Acceptance per the item: "the page has at least 250 rendered words
+   with visible, page-specific detail" — engine-verified above (429 words).
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
