@@ -14,6 +14,12 @@ place to check where submission stands.
 Nothing was submitted on 2026-08-11: SaaSHub and AlternativeTo both wait on
 a Nish step, and BetaList was deliberately skipped.
 
+Re-verified 2026-08-12 (lane 12 second pass): `https://0509.io` is live
+(HTTP 200) and all AlternativeTo assets pass non-blank checks; AlternativeTo
+itself remains Turnstile-blocked from the VPS, so the 2026-08-11
+AlternativeTo-side verification stands. The AlternativeTo assets PR #664 is
+open and mergeable — submission still waits only on the owner step.
+
 ## Receipts
 
 - `docs/saashub-listing-2026-08-11.md` — SaaSHub receipt (canonical; the

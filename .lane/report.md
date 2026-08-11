@@ -705,3 +705,61 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# AlternativeTo manual listing — package complete; only the owner step remains (2026-08-12 lane 12, second pass)
+
+**Status: preparation complete; submission still waits on the owner step.**
+
+Branch: `report/lane12-alternativeto-prepared-owner-step`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Prepare a manual AlternativeTo listing for Five to Nine
+  [research-desk 2026-08-08, risk: green] [traction]
+
+## Verdict
+
+The listing package is fully prepared and nothing worker-doable remains:
+
+- **Ready-to-paste fields** are on `origin/main` since PR #606 (`adceefdd`,
+  merged 2026-08-10): `docs/alternativeto-listing-2026-08-11.md` carries
+  every "Suggest new application" form field (name, URL, platforms,
+  license, origin, languages, pricing wording, short/full descriptions,
+  verified tags, features, icon/screenshot pointers), the eligibility
+  check against the official AlternativeTo FAQ, honesty guardrails, and
+  the post-approval "suggest as alternative" target list.
+- **Assets** (squared 512x512 transparent icon PNG + SVG source, live
+  homepage screenshot, live no-account search results + form screenshots)
+  are committed on PR #664 (`docs/alternativeto-listing-assets`), which is
+  **OPEN and MERGEABLE** as of this run. Once #664 merges, `main` holds the
+  complete submission package.
+- **Submission itself cannot be done by any worker**: it requires Nish's
+  AlternativeTo account (new or existing) with a verified email — recorded
+  as NEEDS_NISH_STEP in `docs/venue-submissions-status-2026-08-11.md`.
+  After the owner signs in, the submission is a ~15-minute form fill using
+  the fields in the listing doc; the optional $5 priority review is skipped.
+
+## Fresh re-verification on this tip (2026-08-12)
+
+- `https://0509.io` — HTTP 200, ~0.08s (direct curl, browser UA). Live
+  product claim in the listing holds.
+- AlternativeTo itself — still **not reachable from this VPS**: every
+  probed page (`/software/five-to-nine/` name-404 check,
+  `/tag/competitive-intelligence/`, `/software/facebook-ad-library/`,
+  `/software/kompyte/`) returns HTTP 403 with the Cloudflare Turnstile
+  "Just a moment..." challenge (curl and webfetch both). The 2026-08-11
+  AlternativeTo-side verification recorded in the listing doc therefore
+  stands as the last confirmed state; nothing in the prepared field values
+  depends on a change between the two dates.
+- All four committed assets re-checked on this tip: icon 512x512 RGBA PNG,
+  screenshots 1280x900; all four non-blank (full 256/256 byte diversity in
+  the decompressed pixel stream; corner-transparency and content checks
+  were verified pixel-level by the assets lane on 2026-08-12).
+
+## Files
+
+- `.lane/report.md` — this evidence record.
+- `docs/venue-submissions-status-2026-08-11.md` — dated re-verification
+  note added (row itself unchanged; the assets row edit lives in PR #664).
