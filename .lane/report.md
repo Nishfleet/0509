@@ -713,7 +713,7 @@ comments); #574 had already merged before this lane started.
 
 Branch: `docs/alternativeto-listing-assets`
 Base: `origin/main` at `389c0e55`
-Pull request: opened by this lane (number recorded in the PR body)
+Pull request: https://github.com/nish3451/0509/pull/664
 
 ## Item
 
