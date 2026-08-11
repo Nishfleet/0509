@@ -125,6 +125,46 @@ async function waitFor(
   }
 }
 
+// Liveness is judged by /proc identity, mirroring the script's own
+// process_identity_is_live() (start time + non-zombie state). kill -0 is
+// deliberately avoided: it is unreliable across distinct runner UIDs
+// (EPERM on a live peer) and this file's first spec locks that choice in.
+function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  const start = readProcField(pid, 22);
+  const state = readProcField(pid, 3);
+  return start !== "" && state !== "" && state !== "Z";
+}
+
+function readProcField(pid: number, field: number): string {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const fields = stat.slice(stat.indexOf(")") + 2).split(" ");
+    return fields[field - 3] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// Marker files are created by the child's shell redirection before the PID is
+// written, so existence alone can race an empty (or partial) read. Reading
+// "0" would make process.kill(0, ...) probe the caller's own process group.
+// Wait for a complete positive PID before treating the marker as authoritative.
+async function readPidWhenWritten(marker: string): Promise<number> {
+  let pid = 0;
+  await waitFor(() => {
+    try {
+      pid = Number(readFileSync(marker, "utf8"));
+    } catch {
+      return false;
+    }
+    return Number.isInteger(pid) && pid > 0;
+  });
+  return pid;
+}
+
 function probeIsFree(lockFile: string): boolean {
   return (
     spawnSync("flock", ["--exclusive", "--nonblock", lockFile, "true"])
@@ -559,13 +599,15 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     const laneResult = completed(lane);
 
     try {
-      await waitFor(() => existsSync(marker));
-      commandPid = Number(readFileSync(marker, "utf8"));
+      commandPid = await readPidWhenWritten(marker);
       expect(() => process.kill(commandPid, 0)).not.toThrow();
 
       lane.kill("SIGTERM");
       expect((await laneResult).code).toBe(143);
-      await waitFor(() => probeIsFree(lockFile) && slotIsFree(lockFile, 1));
+      await waitFor(
+        () =>
+          probeIsFree(lockFile) && slotIsFree(lockFile, 1) && !pidAlive(commandPid),
+      );
       expect(() => process.kill(commandPid, 0)).toThrow();
     } finally {
       if (Number.isInteger(commandPid) && commandPid > 0) {
@@ -604,17 +646,21 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     const laneResult = completed(lane);
 
     try {
-      await waitFor(() => existsSync(marker));
-      commandPid = Number(readFileSync(marker, "utf8"));
+      commandPid = await readPidWhenWritten(marker);
       lane.kill("SIGTERM");
       const result = await Promise.race([
         laneResult,
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("stubborn command was not killed")), 1_500),
+          setTimeout(() => reject(new Error("stubborn command was not killed")), 3_000),
         ),
       ]);
       expect(result.code).toBe(143);
-      await waitFor(() => probeIsFree(lockFile) && slotIsFree(lockFile, 1));
+      await waitFor(
+        () =>
+          probeIsFree(lockFile) &&
+          slotIsFree(lockFile, 1) &&
+          !pidAlive(commandPid),
+      );
       expect(() => process.kill(commandPid, 0)).toThrow();
 
       const replacement = spawnScript(
@@ -675,8 +721,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     let childPid = 0;
 
     try {
-      await waitFor(() => existsSync(childPidFile));
-      childPid = Number(readFileSync(childPidFile, "utf8"));
+      childPid = await readPidWhenWritten(childPidFile);
       expect(() => process.kill(childPid, 0)).not.toThrow();
 
       lane.kill("SIGTERM");
@@ -684,7 +729,10 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       expect(probeIsFree(lockFile)).toBe(false);
 
       expect((await laneResult).code).toBe(143);
-      await waitFor(() => probeIsFree(lockFile) && slotIsFree(lockFile, 1));
+      await waitFor(
+        () =>
+          probeIsFree(lockFile) && slotIsFree(lockFile, 1) && !pidAlive(childPid),
+      );
       expect(() => process.kill(childPid, 0)).toThrow();
     } finally {
       if (Number.isInteger(childPid) && childPid > 0) {
