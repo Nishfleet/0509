@@ -705,3 +705,90 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Alert named owner + materiality reason (2026-08-12 lane 10) — re-verified already resolved on origin/main
+
+**Status: already resolved; this lane independently re-verifies the evidence on the current tip and records it.**
+
+Branch: `report/lane10-alert-owner-materiality-reverified`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Add a named owner and materiality reason to every alert before
+  delivery [research-desk 2026-08-08, risk: amber]
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main`:
+
+- PR #571 — `47db20f4` "feat(alerts): named owner and materiality reason on
+  every delivered alert" — is an ancestor of the current `main` HEAD
+  (`389c0e55`, verified via `git merge-base --is-ancestor 47db20f4 origin/main`).
+- No later commit touches the involved files: `git log 47db20f4..HEAD --`
+  over `app/lib/change-intelligence.ts`, `app/lib/delivery.server.ts`,
+  `app/lib/digest-email.server.ts`, `app/lib/monitoring.server.ts` is empty.
+- This re-verification adds one surface the 2026-08-11 lane-1 report did not
+  name explicitly (the customer scan-trouble notice); it also carries the
+  contract.
+
+## Evidence on current main (independent re-check, 2026-08-12)
+
+Every LIVE customer-facing delivered alert/brief carries exactly one named
+owner and a non-empty materiality reason before delivery:
+
+- **Instant watchlist alerts** (`buildInstantAlertContent` in
+  `delivery.server.ts`, called from `deliverWatchlistAlerts` before any
+  provider send): email renders the labeled accountability block (Why this
+  matters + Accountable reviewer) via `renderEmailAccountabilityBlock` in
+  both the single-event and batched shapes; Slack renders the same two lines
+  via `renderInstantSlackText`.
+- **Named owner**: `digestReviewerLabel` (`change-intelligence.ts`) resolves
+  exactly one accountable reviewer — the workspace owner/recipient name when
+  known, else the truthful `DIGEST_REVIEWER_FALLBACK` ("Workspace owner").
+  `monitoring.server.ts` passes `profile?.name ?? null` to
+  `deliverWatchlistAlerts` — the watchlist-name-as-user-identity fallback is
+  gone.
+- **Materiality**: `alertMaterialityReason` shares the digest event
+  classification (`materialityClausesFromItems`), so an alert and a brief
+  never disagree about what a change type means. P1 fail-closed behavior
+  (added in review `dc089bd8`): confirmed copy derives from
+  `verified_change` events only (evidence resolved via the bounded batched
+  `listProofCapturePairsForEventIds` query); confirmed-but-unevidenced,
+  missing/failed/unordered proof, or an evidence-lookup failure all render
+  the provisional block and never block delivery. Baseline snapshots and
+  provisional alerts state their truthful status; a shape with no derivable
+  statement renders an explicit fallback, never an empty reason.
+- **Digests** (`digest-email.server.ts`): every builder — changed,
+  all-quiet, failed-check, and the explicit no-record failure state — routes
+  through `digestReviewerLabel` + `digestMaterialityReason` and renders the
+  accountability block in HTML and text.
+- **Scan-trouble notice** (`buildScanTroubleEmail` in `digest-email.server.ts`,
+  delivered customer-lane via `deliverScanTroubleNotice`): renders the same
+  accountability block — materiality "We couldn't complete checks for X in
+  this period", reviewer via `digestReviewerLabel()`, and a next action.
+- **Presence digest** (`sendPresenceDigestEmail` /
+  `deliverPresenceDigestForUser`): not a live delivery surface — no call
+  sites anywhere in `app/` or `workers/` (only its own module and test) and
+  `PRESENCE_DIGEST_ROLLOUT` is `"disabled"` in `wrangler.jsonc` (production).
+- **Operator/internal alerts** (cron-failure, watchlist-failure,
+  customer-at-risk, weekly business, scheduled-observation-gap): all route
+  through `sendOperatorAlertEmail[Detailed]` with `lane: "internal"` to
+  `LAUNCH_CANARY_EMAIL` — the operator's inbox, not a customer delivery
+  target. They are operator-facing infrastructure pages, outside this item's
+  customer-alert scope.
+- **WhatsApp**: `isWhatsAppDeliveryCustomerFacing()` is hardcoded `false` in
+  `app/lib/ga-customer-surface.ts`; no customer receives a WhatsApp alert.
+
+## Regression pins (on this tip, re-run 2026-08-12)
+
+- `tests/delivery.server.test.ts` + `tests/digest-email.test.ts` +
+  `tests/instant-alert-delivery-claims.test.ts` +
+  `tests/instant-channel-delivery-claims.test.ts` +
+  `tests/digest-intelligence.test.ts`: 5 files, **125/125 tests pass**.
+- `npm run typecheck`: exit 0.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
