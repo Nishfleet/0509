@@ -717,7 +717,7 @@ rerun the dogfood engine.**
 
 Branch: `report/lane7-ai-answer-readiness-content-depth`
 Base: `origin/main` at `389c0e55`
-Pull request: https://github.com/nish3451/0509/pull/6XX (opened by this lane)
+Pull request: https://github.com/nish3451/0509/pull/660 (opened by this lane)
 
 ## Item
 
