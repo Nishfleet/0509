@@ -1587,6 +1587,45 @@ describe("search loader", () => {
     })).toBe("1 ad found");
   });
 
+  it("scopes the results panel title to the searched country", async () => {
+    const legacyResult: SearchResponse = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+
+    const { formatResultsPanelTitle } = await import("~/routes/search");
+
+    // The verdict title names the market that actually ran, so the same
+    // competitor cannot read as contradictory across country filters.
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+      country: "India",
+    })).toBe("1 ad found in India");
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+      country: "all",
+    })).toBe("1 ad found across all countries");
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: true,
+      country: "India",
+    })).toBe("1 verified ad linked to nykaa.com in India");
+  });
+
   it("allows only tokened canary probes to force fresh live discovery", async () => {
     const env = { DB: {}, CANARY_BYPASS_TOKEN: "secret-token" };
     const sourceResult = {

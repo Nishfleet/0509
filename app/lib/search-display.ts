@@ -6,6 +6,7 @@
  */
 
 import { formatAdsFoundLabel } from "~/lib/analysis-display";
+import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import type {
@@ -469,6 +470,7 @@ export function formatEmptyResultHeadline(
     isDomainSearch?: boolean;
     isBroaderScope?: boolean;
     relevanceApplied?: boolean;
+    country?: string | null;
   } = {},
 ) {
   if (result.discoveryStatus === "disabled") {
@@ -491,10 +493,13 @@ export function formatEmptyResultHeadline(
     context.displayDomain &&
     !context.isBroaderScope
   ) {
-    return `No verified ads found for ${context.displayDomain}`;
+    return withMarketScope(
+      `No verified ads found for ${context.displayDomain}`,
+      context.country,
+    );
   }
 
-  return "No ads found for this competitor";
+  return withMarketScope("No ads found for this competitor", context.country);
 }
 
 export function isDelayedDiscoveryStatus(
@@ -510,6 +515,7 @@ export function formatResultsPanelTitle(
     isDomainSearch?: boolean;
     isBroaderScope?: boolean;
     relevanceApplied?: boolean;
+    country?: string | null;
   } = {},
 ) {
   if (result.ads.length > 0) {
@@ -520,7 +526,10 @@ export function formatResultsPanelTitle(
       !context.isBroaderScope
     ) {
       const verifiedNoun = result.ads.length === 1 ? "ad" : "ads";
-      return `${result.ads.length} verified ${verifiedNoun} linked to ${context.displayDomain}`;
+      return withMarketScope(
+        `${result.ads.length} verified ${verifiedNoun} linked to ${context.displayDomain}`,
+        context.country,
+      );
     }
 
     if (context.isBroaderScope && context.displayDomain) {
@@ -529,11 +538,17 @@ export function formatResultsPanelTitle(
       const relatedNoun = relatedCount === 1 ? "match" : "matches";
       const broaderNoun = result.ads.length === 1 ? "match" : "matches";
       return verifiedCount > 0
-        ? `${verifiedCount} verified and ${relatedCount} related ${relatedNoun} for ${context.displayDomain}`
-        : `${result.ads.length} broader ${broaderNoun} for ${context.displayDomain}`;
+        ? withMarketScope(
+            `${verifiedCount} verified and ${relatedCount} related ${relatedNoun} for ${context.displayDomain}`,
+            context.country,
+          )
+        : withMarketScope(
+            `${result.ads.length} broader ${broaderNoun} for ${context.displayDomain}`,
+            context.country,
+          );
     }
 
-    return formatAdsFoundLabel(result.ads.length);
+    return withMarketScope(formatAdsFoundLabel(result.ads.length), context.country);
   }
 
   if (
@@ -548,10 +563,44 @@ export function formatResultsPanelTitle(
     context.displayDomain &&
     !context.isBroaderScope
   ) {
-    return `No verified ads for ${context.displayDomain}`;
+    return withMarketScope(
+      `No verified ads for ${context.displayDomain}`,
+      context.country,
+    );
   }
 
-  return formatAdsFoundLabel(0);
+  return withMarketScope(formatAdsFoundLabel(0), context.country);
+}
+
+/**
+ * Market-scope phrase for search verdict copy, from the searched country
+ * filter ("India", "United States", … or "all"). The Meta Ad Library is
+ * country-scoped, so a verdict about a competitor must name the market the
+ * search actually ran in: the same competitor can legitimately show ads in
+ * one market and none in another, and unqualified copy ("No verified ads
+ * found for X") would contradict the country-filtered answer for the same
+ * competitor. "all" (the all-countries view) is spelled "across all
+ * countries" so the copy never implies a single market. Returns null when no
+ * country was passed, leaving legacy callers with unscoped copy.
+ */
+export function formatSearchMarketScope(
+  country: string | null | undefined,
+): string | null {
+  const trimmed = country?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.toLowerCase() === ALL_COUNTRIES_VALUE
+    ? "across all countries"
+    : `in ${trimmed}`;
+}
+
+function withMarketScope(
+  title: string,
+  country: string | null | undefined,
+): string {
+  const scope = formatSearchMarketScope(country);
+  return scope ? `${title} ${scope}` : title;
 }
 
 export function canCreateAdvertiserWatchlist(
