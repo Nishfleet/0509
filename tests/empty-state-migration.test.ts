@@ -33,7 +33,7 @@ describe("deferred empty-state consolidation", () => {
 		expect(watchlists).toContain(
 			"Add your first competitor and its first check starts immediately.",
 		);
-		expect(watchlists).toContain("See a sample brief");
+		expect(watchlists).toContain("See a proof brief");
 	});
 
 	it("gives the brief desk quiet empty and defensive-locked states instead of boxes", () => {
