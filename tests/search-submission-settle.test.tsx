@@ -385,6 +385,64 @@ describe("public search submission settle", () => {
     expect(button?.hasAttribute("disabled")).toBe(false);
   });
 
+  it("shows an honest end state when the warming check outlives the poll budget and re-arms it on retry", async () => {
+    // The 5s x 12 poll budget is also the auto-refresh promise. When the
+    // background capture outlives it, the page must stop claiming "we'll
+    // refresh automatically": it says the check is taking longer, retracts
+    // the auto-refresh, and a same-URL retry starts a fresh budget so the
+    // promise is honest again for the new check.
+    loaderData = warmingLoaderData;
+    locationObj = { pathname: "/search", search: WARMING_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const { container, root, SearchRoute } = await mountRoute();
+
+    expect(container.textContent).toContain("Checking the Ad Library now");
+    expect(container.textContent).toContain("Usually under a minute");
+
+    const { SEARCH_WARMING_POLL_LIMIT } = await import("~/routes/search");
+    for (let step = 0; step < SEARCH_WARMING_POLL_LIMIT; step += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+    }
+
+    // Budget spent with the check still warming: the promised auto-refresh
+    // is gone and an honest end state says what happened and what to do.
+    expect(container.textContent).toContain(
+      "The check is taking longer than a minute",
+    );
+    expect(container.textContent).toContain("We stopped auto-refreshing");
+    expect(container.textContent).not.toContain("Usually under a minute");
+    expect(container.textContent).not.toContain("refresh automatically");
+
+    // Retry is a same-URL navigation: the loader runs a fresh check, and the
+    // committed page must re-arm the auto-refresh promise for it.
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: WARMING_SEARCH },
+    };
+    await act(async () => {
+      root.render(createElement(SearchRoute));
+    });
+    navigationState = { state: "idle", location: null };
+    await act(async () => {
+      root.render(createElement(SearchRoute));
+    });
+
+    expect(container.textContent).toContain("Checking the Ad Library now");
+    expect(container.textContent).toContain("Usually under a minute");
+
+    // The fresh budget polls again: the next tick fires a revalidation.
+    const revalidationsBeforeRetry = revalidatorRef.revalidate.mock.calls.length;
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(revalidatorRef.revalidate.mock.calls.length).toBe(
+      revalidationsBeforeRetry + 1,
+    );
+  });
+
   it("shows the recovery reload after 90 seconds on an uncommitted idle page, enables submit, and clears when navigation settles", async () => {
     loaderData = idleLoaderData;
     locationObj = { pathname: "/search", search: "", hash: "" };
