@@ -197,10 +197,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       }
     : { showPresenceNav: false };
   const url = new URL(request.url);
-  const visitorCountry = defaultCountryForVisitor(
-    cloudflare?.country ??
-      request.headers.get("cf-ipcountry"),
-  );
+  // The visitor-geo country is a UI preselection, never a silently committed
+  // filter. An anonymous visitor who never picked a country gets the global
+  // search ("all countries"): committing cf-ipcountry into an anonymous
+  // search scopes results to a market nobody chose and bakes that country
+  // into the result links. Signed-in visitors keep the geo default so the
+  // refine picker and onboarding can preselect their market.
+  const visitorCountry = session
+    ? defaultCountryForVisitor(
+        cloudflare?.country ??
+          request.headers.get("cf-ipcountry"),
+      )
+    : ALL_COUNTRIES_VALUE;
   const competitorWebsite = normalizeCompetitorWebsiteInput(
     url.searchParams.get("website") ?? "",
   );
