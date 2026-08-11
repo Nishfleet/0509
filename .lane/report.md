@@ -705,3 +705,73 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+---
+# Slow resource requests on home — dogfood a08b8427701d already resolved (2026-08-12 lane 8)
+
+**Status: already resolved on current main; no product change warranted; evidence recorded.**
+
+Branch: `report/lane8-slow-resource-requests-already-resolved`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] [dogfood a08b8427701d] Slow resource requests on home [dogfood 20260808T074205Z-msk2fl3n]
+  - observed: pricing-preview (2626ms)
+
+## Verdict
+
+The engine finding is **already resolved on current `origin/main`**. The
+original evidence (`pricing-preview (2626ms)`) and the re-triggering
+third-party requests (siterep.net widget `install`/`config`, ~1262ms each)
+both have landed fixes, and the finding ledger marks the fingerprint
+inactive (`active: false`, `resolvedAt 2026-08-09T01:30:17Z`, resolved run
+`20260809T013017Z-msl4lamt`). No product code change was warranted from this
+lane.
+
+## Resolution history (all ancestors of current main HEAD `389c0e55`)
+
+1. **PR #542 (`b7078ef1`)** — "fix: defer pricing-preview fetch on home until
+   the pricing section nears the viewport". Root cause of the original
+   evidence: the home page eagerly fetched `/api/pricing-preview` (a Dodo
+   checkout-preview call measured at 2626ms) on mount. The loader now returns
+   `pricingPreview: noPricingPreview` and the client fetches only once the
+   `#pricing` section approaches the viewport — the engine's own recommended
+   fix ("move non-critical requests later").
+2. **PR #603 (`1ced110d`)** — "fix(perf): move non-critical Site Rep widget
+   requests out of home's initial-load window (dogfood a08b8427701d)". The
+   widget script (`siterep.net/widget.js`) makes `/api/public/install` and
+   `/api/public/config` calls that can take >1s; the install is now deferred
+   `SITE_REP_WIDGET_DELAY_MS` (5s) after hydration with cleanup cancellation,
+   so those requests never sit in the initial-load window.
+3. **PR #611 (`0f7573f0`) + PR #647 (`389c0e55`)** — Google Fonts `css2`
+   stylesheet moved out of the render-blocking path (print-media swap +
+   preload + `suppressHydrationWarning`). Adjacent perf work on the same page.
+4. **Finding ledger**: `a08b8427701d` is `active: false`,
+   `resolvedAt 2026-08-09T01:30:17.237Z`, `resolvedRunId 20260809T013017Z-msl4lamt`
+   — the 2026-08-09 dogfood run no longer reported "Slow resource requests
+   on home".
+
+## Fresh evidence on this tip (`389c0e55`)
+
+- `git log b7078ef1..HEAD -- app/routes/marketing.tsx tests/marketing-pricing-fetch.test.tsx`
+  is **empty** — nothing has touched the pricing-preview fix or its
+  regression since it landed.
+- `git log 1ced110d..HEAD -- app/lib/siterep-widget.ts` is **empty** — the
+  deferred widget install is intact. The only later commit touching
+  `tests/siterep-widget.test.ts` is `6f640c0f` (typecheck-clean cleanup
+  assertion, behavior-neutral); later `app/root.tsx` commits are the fonts
+  work `0f7573f0` and `389c0e55`, not regressions of the delay.
+- `npx vitest run --configLoader runner tests/siterep-widget.test.ts tests/marketing-pricing-fetch.test.tsx tests/root-fonts-async.test.ts`:
+  **3 files, 18/18 passed** — including the three tests under "deferred
+  install (dogfood a08b8427701d: slow resource requests on home)" in
+  `tests/siterep-widget.test.ts` (synchronous default, install exactly
+  `SITE_REP_WIDGET_DELAY_MS` after the call, cleanup cancels a pending
+  deferred install).
+- Live `https://0509.io/` (2026-08-12): **HTTP 200 in ~76ms**; the served
+  HTML contains **zero** references to `widget.js` or `pricing-preview` — no
+  eager slow third-party request in the initial document load. The widget
+  install and the pricing-preview fetch are client-side and deferred.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
