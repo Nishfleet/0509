@@ -167,7 +167,7 @@ describe("/ads/:domain — Case File render", () => {
     );
     // The closer honesty line names it too.
     expect(markup).toContain(
-      "Ad creatives are real ads from the public India Ad Library linking to nike.com",
+      "Ad creatives are Nike&#x27;s real ads from the public India Ad Library, cached about 2 hours ago.",
     );
     // And the meta description / JSON-LD description.
     expect(markup).toContain(
