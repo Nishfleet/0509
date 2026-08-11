@@ -58,4 +58,16 @@ label SSR parity), #638 (Meta ads graduation).
 
 ## Result
 
-To be appended once the deploy run reaches a conclusion.
+**Success** — run 31534318744 completed green at 2026-08-12 02:50 IST
+(2026-08-11 21:20:23Z), dispatching `389c0e55` to production.
+
+- All six jobs finished: authorize, pin, prepare D1 remote restore evidence,
+  and Deploy Worker succeeded (29m47s); generate/cleanup restore evidence
+  skipped as expected because pre-generated exact evidence was valid.
+- Release evidence archived and preserved:
+  `production-release-evidence-389c0e55…-31534318744-1` and
+  `d1-remote-restore-evidence-389c0e55…-31534318744` artifacts uploaded.
+- The three customer fixes tracked by the 2026-08-09 scout (#583, #582, #567)
+  plus all 32 commits since `8a3b9daa` are now live. Verified at the time of
+  writing: `https://0509.io/` serves HTTP 200 (www redirects to apex as
+  configured).
