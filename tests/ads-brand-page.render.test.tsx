@@ -239,7 +239,7 @@ describe("/ads/:domain — Case File render", () => {
 
   it("claims right now/live only while the capture is fresh, and flips to past-tense honesty when it is hours old", async () => {
     const fresh = await render(
-      populated({ checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+      populated({ checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
     const stale = await render(populated());
 
@@ -269,7 +269,7 @@ describe("/ads/:domain — Case File render", () => {
   it("stops telling visitors the brand is running ads when the creatives are other advertisers'", async () => {
     const stale = await render(populated({ brandOwnedAdCount: 0 }));
     const fresh = await render(
-      populated({ brandOwnedAdCount: 0, checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+      populated({ brandOwnedAdCount: 0, checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
 
     // No brand-owned claim anywhere — the headline attributes to the domain.
@@ -298,7 +298,7 @@ describe("/ads/:domain — Case File render", () => {
   it("names the split when the cache mixes the brand's own ads with other advertisers'", async () => {
     const stale = await render(populated({ brandOwnedAdCount: 2 }));
     const fresh = await render(
-      populated({ brandOwnedAdCount: 2, checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+      populated({ brandOwnedAdCount: 2, checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
 
     expect(stale).toContain("Nike was running ");
@@ -362,7 +362,7 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
 
   it("flips the JSON-LD name to the live-claim title only while the capture is fresh", async () => {
     const markup = await render(
-      populated({ checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+      populated({ checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
 
     expect(markup).toContain(
