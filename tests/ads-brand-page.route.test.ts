@@ -36,6 +36,7 @@ function cacheEntry(
   overrides: Partial<{
     routeContext: string;
     fetchedAt: string;
+    country: string;
     payload: Record<string, unknown>;
   }> = {},
 ) {
@@ -44,7 +45,7 @@ function cacheEntry(
     provider: "meta_library_browser",
     routeContext: overrides.routeContext ?? "public_search",
     queryFingerprint: "fnv1a-test",
-    country: "all",
+    country: overrides.country ?? "all",
     cursor: null,
     payload: overrides.payload ?? {
       ads: [baseAd],
@@ -159,6 +160,10 @@ describe("/ads/:domain loader", () => {
       noindex: false,
       canonicalPath: "/ads/nykaa.com",
     });
+    // The all-countries cache view is spelled out — the page must name the
+    // Ad Library country it renders from, never hide it behind the geo
+    // defaulted lookup.
+    expect(result.adLibraryCountry).toBe("all countries");
     // The machine-readable twin of the visible "Last checked" stamp.
     expect(result.lastCheckedAt).toBe(entry.fetchedAt);
     expect(result.ads).toHaveLength(1);
@@ -183,6 +188,26 @@ describe("/ads/:domain loader", () => {
     expect(mocks.hasFreshDiscoveryCacheEntry).not.toHaveBeenCalled();
     expect(mocks.searchMetaLibraryByBrowser).not.toHaveBeenCalled();
     expect(mocks.searchMetaApiAds).not.toHaveBeenCalled();
+  });
+
+  it("names the country of the Ad Library the cached creatives came from", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({ country: "India" }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.adLibraryCountry).toBe("India");
+  });
+
+  it("keeps the Ad Library country honest on the cache-miss shell", async () => {
+    const mocks = installBrandPageMocks({ entry: null });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(false);
+    expect(result.adLibraryCountry).toBeNull();
   });
 
   it("marks the capture fresh for a live claim only while the check is under an hour old", async () => {
@@ -444,6 +469,7 @@ describe("/ads/:domain meta", () => {
     ads: [baseAd],
     checkedAgo: "about 2 hours ago",
     teaser: null,
+    adLibraryCountry: "India",
     noindex: false,
     canonicalPath: "/ads/nykaa.com",
     freshForLiveClaim: false,
@@ -464,7 +490,7 @@ describe("/ads/:domain meta", () => {
       href: "https://0509.io/ads/nykaa.com",
     });
     const description = tags.find((tag) => tag.name === "description")?.content ?? "";
-    expect(description).toContain("public Ad Library check about 2 hours ago");
+    expect(description).toContain("a public check of the India Ad Library about 2 hours ago");
     expect(tags.some((tag) => tag.name === "robots")).toBe(false);
   });
 
