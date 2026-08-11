@@ -12,6 +12,21 @@ verification, and owner approval of a few personal fields plus tagline and
 description — see [Owner decisions](#owner-decisions). The optional paid
 `$99/month` featured listing is a separate decision and is NOT required.
 
+## Submission status (recorded 2026-08-11)
+
+**NEEDS_NISH_STEP — not submitted.** Recorded 2026-08-11:
+
+- **Mailbox prerequisite cleared.** A live Gmail → Agentic Inbox delivery
+  test to `support@0509.io` succeeded on 2026-08-11, so the SaaSHub
+  ownership-verification requirement (an inbox on the `0509.io` domain) is
+  satisfied.
+- **Form open, nothing submitted.** The SaaSHub submission page is open in
+  Nish's logged-in Mac browser with `https://0509.io` filled in. The next
+  **Continue** button explicitly accepts the SaaSHub Terms and Privacy —
+  do not call it submitted. Exact next step: **Nish confirms the venue
+  terms, then the browser run can continue** and finish the form with the
+  fields below.
+
 ## Eligibility check against SaaSHub submission guidelines
 
 Verified against `https://www.saashub.com/services/submit` (2026-08-11). Five
