@@ -110,6 +110,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     teaser,
     aggression,
     changeEvents,
+    adLibraryCountry: "India",
     noindex: false,
     canonicalPath: "/ads/nike.com",
     ...overrides,
@@ -146,6 +147,38 @@ describe("/ads/:domain — Case File render", () => {
     const sorted = [...order].sort((a, b) => a - b);
     expect(order).toEqual(sorted);
     expect(order.every((index) => index >= 0)).toBe(true);
+  });
+
+  it("names the country of the Ad Library the cached creatives came from", async () => {
+    const markup = await render(populated());
+
+    // The wall source line names the India Ad Library, never a bare
+    // "the Meta Ad Library" that hides the country-scoped source.
+    expect(markup).toContain(
+      "real creatives from the India Ad Library · cached about 2 hours ago",
+    );
+    // The closer honesty line names it too.
+    expect(markup).toContain(
+      "Ad creatives are real ads from the public India Ad Library linking to nike.com",
+    );
+    // And the meta description / JSON-LD description.
+    expect(markup).toContain(
+      '"description":"See 6 Meta ads from Nike (nike.com), from a public check of the India Ad Library about 2 hours ago. Get an email when their ads or offer change."',
+    );
+  });
+
+  it("spells out the all-countries view instead of implying a single market", async () => {
+    const markup = await render(populated({ adLibraryCountry: "all countries" }));
+
+    expect(markup).toContain(
+      "real creatives from the Meta Ad Library across all countries · cached about 2 hours ago",
+    );
+    expect(markup).toContain(
+      '"description":"See 6 Meta ads from Nike (nike.com), from a public check of the Meta Ad Library across all countries about 2 hours ago. Get an email when their ads or offer change."',
+    );
+    // No single country is implied anywhere in the source lines.
+    expect(markup).not.toContain("the India Ad Library");
+    expect(markup).not.toContain("the public India Ad Library");
   });
 
   it("shows the honest overflow tile and the signup CTA carrying the domain", async () => {
@@ -256,7 +289,7 @@ describe("/ads/:domain — Case File render", () => {
 
     // Closer never calls the creatives Nike's own ads.
     expect(stale).toContain(
-      "Ad creatives are real Meta Ad Library ads from other advertisers linking to nike.com",
+      "Ad creatives are real ads from the public India Ad Library, run by other advertisers linking to nike.com",
     );
     expect(stale).toContain("The advertisers linking to nike.com will change their next ad.");
     expect(stale).not.toContain("Nike's real ads");
@@ -315,7 +348,7 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
       '"name":"Nike Facebook & Instagram ads — checked about 2 hours ago | Five to Nine"',
     );
     expect(markup).toContain(
-      '"description":"See 6 Meta ads from Nike (nike.com), from a public Ad Library check about 2 hours ago. Get an email when their ads or offer change."',
+      '"description":"See 6 Meta ads from Nike (nike.com), from a public check of the India Ad Library about 2 hours ago. Get an email when their ads or offer change."',
     );
     expect(markup).toContain('"url":"https://0509.io/ads/nike.com"');
     // dateModified is the on-screen "Last checked" stamp, machine-readable.

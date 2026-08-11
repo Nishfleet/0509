@@ -482,6 +482,25 @@ export function formatBrandPageCheckedAgo(fetchedAt: string, now: Date = new Dat
   return `about ${days} days ago`;
 }
 
+/**
+ * Honest Ad Library country label for public page copy, derived from the
+ * snapshot's `country` ("India", "United States", … or "all"). The Meta Ad
+ * Library is country-scoped — a page that renders cached ads must name the
+ * country whose library they came from instead of letting the visitor-geo
+ * defaulted lookup speak silently. "all" (the all-countries view) is spelled
+ * out as "all countries" so the copy never implies a single market. Returns
+ * null when there is no cached snapshot.
+ */
+export function brandPageAdLibraryCountryLabel(
+  country: string | null | undefined,
+): string | null {
+  const trimmed = country?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.toLowerCase() === ALL_COUNTRIES_VALUE ? "all countries" : trimmed;
+}
+
 function candidateCountries(visitorCountry: string): string[] {
   const candidates = [
     visitorCountry?.trim() || ALL_COUNTRIES_VALUE,

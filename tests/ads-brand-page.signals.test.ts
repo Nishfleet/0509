@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   adIsBrandOwned,
+  brandPageAdLibraryCountryLabel,
   buildBrandChangeFeed,
   computeBrandPageAggressionScore,
   countBrandOwnedAds,
@@ -180,5 +181,23 @@ describe("adIsBrandOwned / countBrandOwnedAds", () => {
       ad({ metaAdId: "a3", advertiser: "Nykaa" }),
     ];
     expect(countBrandOwnedAds(ads, "nykaa.com")).toBe(2);
+  });
+});
+
+describe("brandPageAdLibraryCountryLabel", () => {
+  it("passes a named catalog country through for page copy", () => {
+    expect(brandPageAdLibraryCountryLabel("India")).toBe("India");
+    expect(brandPageAdLibraryCountryLabel("United States")).toBe("United States");
+  });
+
+  it('spells out the "all" (all-countries) view as "all countries" so the copy never implies a single market', () => {
+    expect(brandPageAdLibraryCountryLabel("all")).toBe("all countries");
+    expect(brandPageAdLibraryCountryLabel("ALL")).toBe("all countries");
+  });
+
+  it("returns null when there is no snapshot country", () => {
+    expect(brandPageAdLibraryCountryLabel(null)).toBeNull();
+    expect(brandPageAdLibraryCountryLabel(undefined)).toBeNull();
+    expect(brandPageAdLibraryCountryLabel("  ")).toBeNull();
   });
 });
