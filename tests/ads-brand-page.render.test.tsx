@@ -103,6 +103,10 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     brandName: "Nike",
     hasCachedAds: true,
     ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
+    // Every fixture creative links to nike.com (landing page), so the whole
+    // capture carries verified link evidence by default — mirror the loader's
+    // verifiedLinkedAds output for the same fixture set.
+    verifiedLinkedAds: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-08-09T10:00:00.000Z",
     freshForLiveClaim: false,
