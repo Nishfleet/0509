@@ -7957,6 +7957,19 @@ reds soften --- */
   color: var(--ink-faint);
 }
 
+/* The stored before/after screenshot pair inside a diff plate's panes. The
+   frame is the capture's own edge, never a live re-render: same 1px rule
+   weight as the plate, and the image keeps its aspect ratio at any width. */
+.f9-evidence-diff-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 4px;
+  border: 1px solid var(--ed-rule);
+  border-radius: 6px;
+  background: var(--ed-surface);
+}
+
 /* --- §6.8 specimen empty state --- */
 
 .f9-evidence-specimen-body {
