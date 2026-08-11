@@ -705,3 +705,81 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+---
+# Public /search "right now" promise gating verification (no code change required)
+
+**Status: already resolved by PR #567; this lane records the evidence only.**
+
+Branch: `report/lane6-search-right-now-gate-already-resolved`
+Base: `origin/main` at `ac393f02`
+
+## Item
+
+- [ ] Gate public search's "right now" promise on a proven fresh-live Ad Library
+  capture [scout 2026-08-09, risk: green]
+
+## Verdict
+
+No code change was warranted. The anonymous public `/search` page's
+"right now" promise is already gated on a proven fresh-live Ad Library capture,
+merged to `origin/main` on 2026-08-09 as PR #567 (`5e682868`,
+`fix(search): gate public /search 'right now' promise on a proven fresh-live Ad
+Library capture`), an ancestor of current `main` HEAD (`ac393f02`).
+
+The 2026-08-09 scout observed all six standard Meta probes resolving as
+"Cached live results" while the page's idle copy unconditionally promised "We
+read what they are running on Meta right now" (issue #19). PR #567 closed that
+gap; the same-day merge is confirmed in `main` history, and a prior lane-2
+evidence record (PR #587) was closed unmerged, so this lane re-verifies the
+gate on current `main` rather than assuming the earlier record landed.
+
+## Code evidence on this tip (origin/main `ac393f02`)
+
+- **The single gate** — `isProvenFreshLiveCapture()` in
+  `app/lib/search-display.ts` (lines 162–170): true only for a cache miss
+  (`cacheStatus === "miss"`) on a healthy, non-delayed, non-partial, non-demo
+  provider. Demo source/provider, `discoveryPartial`, delayed status
+  (`degraded` / `cache_only`), and an absent/unknown discovery status all fail
+  closed. The docstring states this is "the single gate behind which the public
+  search page may make a fresh/live ('right now') claim."
+- **Honest labels** — `formatSearchFreshnessLabel()` (lines 172–183) renders
+  "Fresh live result" only under that gate; cached hits stay "Recent cached
+  result", stale stays "Older cached result", delayed/degraded stays "Fresh
+  check delayed", partial stays "Fresh partial result", and everything else
+  "Freshness unavailable". Wired into the route result panel at
+  `app/routes/search.tsx:2015`.
+- **Idle copy is honest** — `app/routes/search.tsx` lines 2379–2382 now read
+  "Paste a competitor website and press See ads. We check the Meta Ad Library
+  for their ads, capture the offer from their landing page, and keep the
+  capture — so the next time that offer moves, you can prove it." No "right
+  now" promise before a search runs. The route meta description is likewise
+  hedged ("Provider coverage and freshness vary").
+- **Regression pins** — `tests/search-live-claim.test.tsx` (329 lines) pins
+  `isProvenFreshLiveCapture` over ten fixtures (fresh-live true; idle, cached
+  hit, stale+cache-only, degraded, warming, partial, demo, healthy+hit, and
+  unknown-status all false) and asserts rendered route markup for idle, cached,
+  and cached-degraded states never contains "right now" or "Fresh live result",
+  and that only the proven fresh-live fixture may render the live-claim label.
+- **Sibling surfaces already gated** — brand pages (`/ads/:domain`) gate
+  "right now"/"live" copy behind `freshForLiveClaim` (moments-ago window only)
+  via PRs #548 (`d863fd18`), #550 (`159edbd8`), and #620 (`5e63f1df`), all
+  ancestors of current `main`.
+
+## Verification on this tip
+
+- `npx vitest run tests/search-live-claim.test.tsx --configLoader runner`:
+  1 file, **7/7 passed**.
+- `npx vitest run tests/search-display tests/search-live-claim.test.tsx
+  --configLoader runner`: 2 files, **11/11 passed**.
+- `git merge-base --is-ancestor 5e682868 origin/main` → ancestor confirmed.
+- `git show origin/main:app/lib/search-display.ts` and
+  `git show origin/main:app/routes/search.tsx` → gate, honest labels, and
+  honest idle copy all present at `main` HEAD.
+- `git log origin/main --grep="right now" -i` → the only search-promise gating
+  commits are #567 (this item) and the brand-page family #548/#550/#620; no
+  un-gated live promise remains in public search.
+- `git diff --check`: clean (markdown-only change; no product code touched).
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
