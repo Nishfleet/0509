@@ -1006,6 +1006,12 @@ export default function SearchRoute() {
   const discoverySummary = formatDiscoverySummary(visibleResult);
   const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
   const isSearchWarming = visibleResult.discoveryProgress === "warming";
+  // When the check outlives the 5s x 12 = 60s warming poll budget, the
+  // promised auto-refresh stops silently: the page must say so and hand the
+  // visitor a working retry instead of leaving "we'll refresh automatically"
+  // up forever next to a still-warming server state.
+  const warmingPollExhausted =
+    isSearchWarming && warmingPollCount >= SEARCH_WARMING_POLL_LIMIT;
   // Candidate-3 root-cause fix for the public submit hang: the See ads button
   // stays pending only while a GET navigation to /search targets a URL that is
   // NOT the committed location.search. Once the server commits results or an
@@ -1176,6 +1182,23 @@ export default function SearchRoute() {
     // Reset warming poll budget when the query identity changes.
     setWarmingPollCount(0);
   }, [searchKey]);
+
+  // A retry ("Retry this search") or a same-query re-submit navigates to the
+  // same URL, so the searchKey does not change and the exhausted poll budget
+  // would otherwise carry into the fresh check — leaving it without any
+  // auto-refresh while its capture runs. Once a navigation commits, start a
+  // fresh budget so the honest end state's retry actually re-arms the poll.
+  // Revalidations never touch navigation.state, so polling itself never
+  // resets here.
+  const navigationInFlightRef = useRef(false);
+  useEffect(() => {
+    if (navigation.state === "loading") {
+      navigationInFlightRef.current = true;
+    } else if (navigation.state === "idle" && navigationInFlightRef.current) {
+      navigationInFlightRef.current = false;
+      setWarmingPollCount(0);
+    }
+  }, [navigation.state]);
 
   // Long-horizon recovery: while a /search GET is genuinely loading and the
   // committed page is still the untouched idle pre-search form, arm a 90s
@@ -1791,13 +1814,32 @@ export default function SearchRoute() {
                   <div className="f9-wk-empty">
                     {isSearchWarming ? (
                       <div aria-live="polite" role="status">
-                        <p className="f9-wk-lede">
-                          Checking the Ad Library now
-                        </p>
-                        <p className="f9-wk-note">
-                          Usually under a minute — we&rsquo;ll refresh
-                          automatically.
-                        </p>
+                        {warmingPollExhausted ? (
+                          /* Honest end state: the check outlived the 60s
+                             warming poll budget, so the promised auto-refresh
+                             is off. Say that plainly and point at the retry
+                             (which re-arms a fresh budget) instead of leaving
+                             "we'll refresh automatically" up forever. */
+                          <>
+                            <p className="f9-wk-lede">
+                              The check is taking longer than a minute
+                            </p>
+                            <p className="f9-wk-note">
+                              We stopped auto-refreshing. Retry this search to
+                              check again.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="f9-wk-lede">
+                              Checking the Ad Library now
+                            </p>
+                            <p className="f9-wk-note">
+                              Usually under a minute — we&rsquo;ll refresh
+                              automatically.
+                            </p>
+                          </>
+                        )}
                       </div>
                     ) : !searchAnswer ? (
                       <p className="f9-wk-note">
