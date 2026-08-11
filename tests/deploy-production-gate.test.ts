@@ -1444,8 +1444,16 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(synchronizeCanaryStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
+    // The pipeline deploys with classic `wrangler deploy` (see
+    // deploy-production-plan.mjs), so the canary token must sync through the
+    // classic `wrangler secret put` path. `wrangler versions secret put`
+    // re-fetches the worker and reparses multipart FormData, which broke with
+    // "Failed to parse body as FormData" (run 31514742997).
     expect(synchronizeCanaryStep).toContain(
-      "./node_modules/.bin/wrangler versions secret put CANARY_BYPASS_TOKEN --name 0509",
+      "./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509",
+    );
+    expect(synchronizeCanaryStep).not.toContain(
+      "./node_modules/.bin/wrangler versions secret put",
     );
     expect(deployStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
@@ -1610,6 +1618,13 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(candidateVerifierStep.run).toBe(
       "./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh",
     );
+    // Post-pin drift tolerance: this step re-verifies the exact SHA
+    // pin_candidate already pinned, so a mid-run move of main must not fail
+    // the run (same rationale as the deploy job's post-gate reconfirm). Every
+    // other CAS failure stays fail-closed.
+    expect(candidateVerifierStep.env).toMatchObject({
+      TOLERATE_MAIN_DRIFT: "1",
+    });
     expect(bindArchiveStep.run).toContain(
       'printf \'RESTORE_EVIDENCE_ARCHIVE=%s\\n\' "$archive" >> "$GITHUB_ENV"',
     );
