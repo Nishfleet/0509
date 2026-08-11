@@ -125,6 +125,16 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance, same rationale as deploy-production.yml's
+          # post-gate reconfirm (#630): this step re-verifies the exact SHA the
+          # authorize step already pinned. A push landing during the run's
+          # npm-ci/lane-acquire window must not abort the unattended nightly
+          # drill - it would leave the night with no fresh restore evidence,
+          # which is exactly what stranded releases on 2026-08-11. The CAS
+          # script records the move loudly; every other CAS failure stays
+          # fail-closed, and the schedule's empty-expected_sha contract in
+          # authorize still forbids smuggling a chosen commit.
+          TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/ci-verify-provider-main-cas.sh
       - name: Create pre-migration D1-to-R2 backup
         id: pre_migration_backup
@@ -141,6 +151,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance (same rationale as the step above): the
+          # apply targets exactly the pinned SHA's migrations, so a mid-run
+          # move of main is recorded, not fatal.
+          TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/ci-verify-provider-main-cas.sh
       - name: Apply exact repository migrations remotely
         if: success() && steps.pre_migration_backup.outcome == 'success'
@@ -218,6 +232,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance (same rationale as the apply job's
+          # reconfirms): the restore evidence is generated for exactly the
+          # pinned SHA, so a mid-run move of main is recorded, not fatal.
+          TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/ci-verify-provider-main-cas.sh
       - name: Create fresh backup and prove an isolated remote restore
         env:
