@@ -319,6 +319,53 @@ describe("public search submission settle", () => {
     expect(errorMarkup).not.toContain('aria-busy="true"');
   });
 
+  it("suppresses the stale validation error while a re-submit navigation is in flight", async () => {
+    // Committed page: the previous submission was refused with a validation
+    // error, and its alert is live on the page.
+    loaderData = errorLoaderData;
+    locationObj = { pathname: "/search", search: ERROR_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const committedMarkup = await renderMarkup();
+    expect(committedMarkup).toContain(
+      "That website looks incomplete. Add the full domain, like brand.com.",
+    );
+    expect(committedMarkup).toContain('aria-invalid="true"');
+
+    // The visitor corrects the website and re-submits. The GET navigation to
+    // the new target is in flight but the committed page still holds the OLD
+    // loader data — asserting the old error now would lie about the input
+    // being searched, so the form must show the search state instead and let
+    // the fresh loader result (error or results) take over on commit.
+    loaderData = errorLoaderData;
+    locationObj = { pathname: "/search", search: ERROR_SEARCH, hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: TARGET_SEARCH },
+    };
+
+    const inFlightMarkup = await renderMarkup();
+
+    expect(inFlightMarkup).toContain("Searching…");
+    expect(inFlightMarkup).not.toContain(
+      "That website looks incomplete. Add the full domain, like brand.com.",
+    );
+    expect(inFlightMarkup).toContain('aria-invalid="false"');
+    expect(inFlightMarkup).not.toContain('role="alert"');
+
+    // The re-submit commits a fresh error for the new input: the alert is
+    // live again because it now describes the committed submission.
+    loaderData = errorLoaderData;
+    locationObj = { pathname: "/search", search: ERROR_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const settledMarkup = await renderMarkup();
+    expect(settledMarkup).toContain(
+      "That website looks incomplete. Add the full domain, like brand.com.",
+    );
+    expect(settledMarkup).toContain('aria-invalid="true"');
+  });
+
   it("keeps See ads pending after the cold-path request settles while the committed page is warming", async () => {
     // Cold-path regression: the first anonymous query for an uncached
     // advertiser returns the typed warming state immediately and the browser

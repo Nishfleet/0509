@@ -373,6 +373,15 @@ export function formatSearchResultsAnnouncement(
     return "Loading more search results…";
   }
 
+  // A "disabled" result means no search ran: the idle pre-search page, an
+  // input the instrument refused (invalid website), or a throttled search.
+  // Claiming "Search complete" for any of them would be a lie — the status
+  // region says what to do instead of asserting a completion that never
+  // happened.
+  if (result.discoveryStatus === "disabled") {
+    return "Enter a competitor website to start.";
+  }
+
   const resultCount = result.ads.length;
   const resultLabel = resultCount === 1 ? "result" : "results";
   const completion = result.nextCursor
