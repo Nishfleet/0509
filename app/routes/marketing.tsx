@@ -576,8 +576,8 @@ export default function MarketingRoute() {
     <h1 className="ld-wall">
       <span className="ld-row">“{truncateHook(heroTopHook, 30)}”</span>
       <span className="ld-row">
-        is the hook on {proofBrief.adCount} Meta ads{" "}
-        <i className="ld-flag">{heroProofTime}</i>
+        {proofBrief.freshForLiveClaim ? "is the hook on" : "was the hook on"} {proofBrief.adCount}{" "}
+        Meta ads <i className="ld-flag">{heroProofTime}</i>
       </span>
       <span className="ld-row ld-row-indent">linking to {proofBrief.website}.</span>
       <span className="ld-row">We saved the proof.</span>

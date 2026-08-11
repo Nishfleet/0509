@@ -13,10 +13,10 @@ const liveBrief = {
   summary:
     "6 public Meta ads link to nykaa.com in the India Ad Library. Every source below opens the same page any visitor can open.",
   decision: {
-    subject: "4 of 6 cached ads are active right now",
+    subject: "4 of 6 cached ads are active on record",
     whatChanged: "The most repeated hook is “Routine-first bundle”, the CTA “Build your routine”.",
     whyItMatters:
-      "These creatives are the live angle Nykaa is testing on the Meta Ad Library — review the same pages before your next campaign refresh.",
+      "These creatives are the angle Nykaa has on record in the Meta Ad Library — review the same pages before your next campaign refresh.",
     priority: "Review before the next campaign refresh",
     proofStatus: "Captured from the India Ad Library on Aug 11, 10:17 PM",
     source: "Meta Ad Library (public archive) — the India Ad Library",

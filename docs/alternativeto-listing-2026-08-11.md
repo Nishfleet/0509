@@ -283,7 +283,7 @@ homepage copy in `app/routes/marketing.tsx`, and AlternativeTo FAQ rules:
 - [ ] Screenshot: homepage hero (`https://0509.io/`).
 - [ ] Screenshot: public search preview with an example query
       (`https://0509.io/search`), which needs no account.
-- [ ] Screenshot: sample brief / morning-brief preview section on the
+- [ ] Screenshot: proof brief / morning-brief preview section on the
       homepage, or a real digest from an existing account.
 - [ ] Screenshot: watchlist surface showing baseline + change evidence
       (account needed; use an internal account).
