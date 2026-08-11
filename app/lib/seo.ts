@@ -211,7 +211,10 @@ ${SITEMAP_PATHS.map((path) => `  <url><loc>${canonicalUrl(path)}</loc></url>`).j
 // The Cloudflare edge managed robots.txt enforces the same deny list at the
 // zone; this file carries the policy in repo so the stance survives edge
 // feature changes. Keep the lists in sync with the zone config.
-const AI_TRAINING_CRAWLERS = [
+// Single source of truth for the AI training-crawler deny list (shared with
+// the llms.txt "AI access" section in app/lib/public-markdown.ts so the two
+// public surfaces can never drift apart). Policy: docs/ai-crawler-policy.md.
+export const AI_TRAINING_CRAWLERS = [
   "Amazonbot",
   "Applebot-Extended",
   "Bytespider",
