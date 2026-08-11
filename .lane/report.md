@@ -705,3 +705,59 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Home slow-rendered-load dogfood re-verification, lane 5 (2026-08-12)
+
+**Status: already resolved in production; this lane re-verifies on the current
+`origin/main` tip and records fresh evidence. No product code change.**
+
+Branch: `report/lane5-home-load-reverify`
+Base: `origin/main` at `389c0e55` (HEAD of this worktree)
+
+## Item
+
+- [dogfood `c99ff5d9b87b`] Slow rendered load on home — "Rendered audit reached
+  network idle in 5136ms", page scope: home
+  (`runs/20260808T074205Z-msk2fl3n.json`).
+
+## Prior resolution (already in main)
+
+- PR #542 / commit `b7078ef1`
+  (`fix: defer pricing-preview fetch on home until the pricing section nears
+  the viewport`) fixed the root cause: the home page eagerly fetched
+  `/api/pricing-preview` (a Dodo checkout-preview call that can take seconds)
+  on mount, keeping the rendered document from reaching network idle.
+- PR #560 / commit `0508dae0` recorded the initial resolution evidence, and
+  lane 14 of 2026-08-10 re-verified it on `5021807e` (docs-only, recorded in
+  this file above).
+
+## Re-verification on this tip (2026-08-12)
+
+- `b7078ef1` is an ancestor of current `origin/main` HEAD `389c0e55`;
+  `git log b7078ef1..HEAD -- app/routes/marketing.tsx
+  tests/marketing-pricing-fetch.test.tsx` is empty — no commit has touched the
+  home route or its pricing-preview regression suite since the fix, so the
+  deferred behavior is intact on main.
+- Code evidence: `app/routes/marketing.tsx` loader returns
+  `pricingPreview: noPricingPreview` (no server fetch); the only client fetch
+  of `/api/pricing-preview` sits inside `startPricingPreview`, gated by an
+  `IntersectionObserver` on `#pricing` (rootMargin `0px 0px 100%`) with a
+  10s safety-net timer — it never runs during the initial document load.
+- Regression suite `tests/marketing-pricing-fetch.test.tsx` passes on this tip:
+  1 file, **4/4 passed** (off-screen = no fetch; one fetch when the section
+  approaches the viewport; no double-fetch; 10s fallback).
+- Live `https://0509.io/` (2026-08-12): HTTP 200 in ~89ms; the served HTML
+  contains zero `pricing-preview` references, confirming no eager preview
+  request in the document load.
+- Adjacent, already handled separately: dogfood `a08b8427701d` (slow
+  resource requests from the Site Rep widget on home) was fixed by commit
+  `1ced110d` (PR #603), which defers the widget install until after the
+  initial-load window; that commit is also an ancestor of the current tip.
+
+## Checks
+
+- `npx vitest run tests/marketing-pricing-fetch.test.tsx`: 1 file, 4/4 passed.
+- `curl -s -o /dev/null -w "%{http_code} %{time_total}" https://0509.io/`:
+  `200 0.088593`; served HTML has zero `pricing-preview` occurrences.
+- `git diff --check`: clean (markdown-only change; no product code touched).
