@@ -72,8 +72,9 @@ export interface BrandPageLoaderData {
    */
   lastCheckedAt: string | null;
   /**
-   * True only when the capture is young enough (≤ 1 hour) for the page to
-   * honestly say "right now"/"live". Older captures render past-tense copy.
+   * True only when the capture is young enough (still in the "moments ago"
+   * bucket) for the page to honestly say "right now"/"live". Older captures —
+   * even ones from a few minutes ago — render past-tense copy.
    */
   freshForLiveClaim: boolean;
   /**
@@ -203,8 +204,9 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
  */
 export function brandPageTitle(data: BrandPageLoaderData): string {
   // "Right now" is a live-scrape claim — it must never appear when the page
-  // renders from a cache older than an hour, or on the cache-miss shell, and
-  // it needs the visible checked-ago stamp as its evidence.
+  // renders from a cache older than the "moments ago" window, or on the
+  // cache-miss shell, and it needs the visible checked-ago stamp as its
+  // evidence.
   if (!data.hasCachedAds) {
     return `${data.brandName} Facebook & Instagram ads | Five to Nine`;
   }
