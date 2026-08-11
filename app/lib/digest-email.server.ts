@@ -1,8 +1,12 @@
 import {
   type DigestCadence,
+  DIGEST_CONFIDENCE_UNAVAILABLE,
+  DIGEST_EXPIRY_UNAVAILABLE,
   DIGEST_MATERIALITY_UNAVAILABLE,
   DIGEST_NEXT_ACTION_UNAVAILABLE,
   digestCadenceLabel,
+  digestConfidenceLabel,
+  digestFreshUntilLabel,
   digestMaterialityReason,
   digestNextAction,
   digestReviewerLabel,
@@ -14,6 +18,7 @@ import {
   landingPageChangedFieldLabel,
 } from "~/lib/change-mark";
 import { buildDigestTrendRollups } from "~/lib/insight-depth";
+import type { ScheduledScanCadence } from "~/lib/plan-entitlements";
 import {
   classifyDigestItemSource,
   isDigestDecisionCandidate,
@@ -92,6 +97,13 @@ export interface DigestEmailInput {
 	// renders nothing at all — the email is byte-identical without it.
 	strategyParagraph?: string | null;
   cadence?: DigestCadence;
+  /**
+   * E3 (2026-08-11): the workspace's scheduled scan cadence (plan
+   * entitlement), resolved by the delivery layer. Drives the "Fresh until"
+   * line so the brief names the workspace's real next check. Absent falls
+   * back to the digest cadence's own slot.
+   */
+  scanCadence?: ScheduledScanCadence | null;
   timeZone?: string | null;
   fullDigestUrl: string;
   manageFrequencyUrl: string;
@@ -146,10 +158,20 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
 	const strategyParagraph = input.strategyParagraph?.trim() || null;
   // E2 (2026-08-08): one materiality reason, one accountable reviewer, one
   // next action per brief — derived from the filed events, never invented.
+  // E3 (2026-08-11): the brief as a retention loop — the same block also
+  // states how confident the period's claims are and when they stop being
+  // fresh (the workspace's next scheduled check).
   const accountability = {
     materialityReason: digestMaterialityReason({ items: input.items }),
     reviewerLabel: digestReviewerLabel(input.name),
     nextAction: digestNextAction({ items: input.items }),
+    confidence: digestConfidenceLabel({ items: input.items }),
+    freshUntil: digestFreshUntilLabel({
+      cadence: input.cadence,
+      scanCadence: input.scanCadence ?? null,
+      after: input.periodEnd,
+      timeZone: input.timeZone,
+    }),
   };
 
   const html = `
@@ -306,6 +328,13 @@ function buildDigestRecordFailureEmail(input: DigestEmailInput): DigestEmailMode
         materialityReason: DIGEST_MATERIALITY_UNAVAILABLE,
         reviewerLabel: digestReviewerLabel(input.name),
         nextAction: DIGEST_NEXT_ACTION_UNAVAILABLE,
+        confidence: DIGEST_CONFIDENCE_UNAVAILABLE,
+        freshUntil: digestFreshUntilLabel({
+          cadence: input.cadence,
+          scanCadence: input.scanCadence ?? null,
+          after: input.periodEnd,
+          timeZone: input.timeZone,
+        }),
       })}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Open the briefs page</a>
@@ -325,6 +354,13 @@ function buildDigestRecordFailureEmail(input: DigestEmailInput): DigestEmailMode
       materialityReason: DIGEST_MATERIALITY_UNAVAILABLE,
       reviewerLabel: digestReviewerLabel(input.name),
       nextAction: DIGEST_NEXT_ACTION_UNAVAILABLE,
+      confidence: DIGEST_CONFIDENCE_UNAVAILABLE,
+      freshUntil: digestFreshUntilLabel({
+        cadence: input.cadence,
+        scanCadence: input.scanCadence ?? null,
+        after: input.periodEnd,
+        timeZone: input.timeZone,
+      }),
     }),
     `Open the briefs page: ${input.fullDigestUrl}`,
     `Manage frequency: ${input.manageFrequencyUrl}`,
@@ -355,11 +391,19 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const recordText = triage ? renderTriageRecordText(triage, input.timeZone) : null;
   // E2 (2026-08-08): the all-quiet period still names why it is quiet, who
   // reviews it, and what happens next — or the failure state when no period
-  // truth exists to state.
+  // truth exists to state. E3 (2026-08-11): confidence and freshness ride
+  // the same block; the quiet claim is only as strong as the checks that ran.
   const accountability = {
     materialityReason: digestMaterialityReason({ heartbeat, triage }),
     reviewerLabel: digestReviewerLabel(input.name),
     nextAction: digestNextAction({ heartbeat, triage }),
+    confidence: digestConfidenceLabel({ heartbeat, triage }),
+    freshUntil: digestFreshUntilLabel({
+      cadence: input.cadence,
+      scanCadence: input.scanCadence ?? null,
+      after: triage?.checkedAt ?? input.periodEnd,
+      timeZone: input.timeZone,
+    }),
   };
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
@@ -457,10 +501,19 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const recordText = renderTriageRecordText(triage, input.timeZone);
   // E2 (2026-08-08): the shared triage vocabulary is the materiality reason
   // and next action; the recipient identity is the accountable reviewer.
+  // E3 (2026-08-11): confidence comes from the same triage record, and the
+  // freshness line names the workspace's next scheduled check.
   const accountability = {
     materialityReason: digestMaterialityReason({ heartbeat, triage }),
     reviewerLabel: digestReviewerLabel(input.name),
     nextAction: digestNextAction({ heartbeat, triage }),
+    confidence: digestConfidenceLabel({ heartbeat, triage }),
+    freshUntil: digestFreshUntilLabel({
+      cadence: input.cadence,
+      scanCadence: input.scanCadence ?? null,
+      after: triage?.checkedAt ?? input.periodEnd,
+      timeZone: input.timeZone,
+    }),
   };
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
@@ -530,20 +583,33 @@ function renderTriageRecordText(
  * missing value renders its explicit failure state instead of dropping the
  * line. The next action is optional for surfaces that already carry their own
  * action line per item (instant alerts); the two mandatory lines never drop.
+ * E3 (2026-08-11): confidence and freshness are optional lines rendered only
+ * when a brief passes them — instant alerts keep their byte-identical block,
+ * while every digest brief carries all five values.
  */
 export function renderEmailAccountabilityBlock(input: {
   materialityReason: string;
   reviewerLabel: string;
   nextAction?: string | null;
+  confidence?: string | null;
+  freshUntil?: string | null;
 }) {
   const nextActionLine = input.nextAction
     ? `<p style="margin: 0;"><strong>Next action:</strong> ${escapeHtml(input.nextAction)}</p>`
+    : "";
+  const confidenceLine = input.confidence
+    ? `<p style="margin: 0 0 6px;"><strong>Confidence:</strong> ${escapeHtml(input.confidence)}</p>`
+    : "";
+  const freshUntilLine = input.freshUntil
+    ? `<p style="margin: 0;"><strong>Fresh until:</strong> ${escapeHtml(input.freshUntil)}</p>`
     : "";
   return `
       <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
         <p style="margin: 0 0 6px;"><strong>Why this matters:</strong> ${escapeHtml(input.materialityReason)}</p>
         <p style="margin: 0 0 6px;"><strong>Accountable reviewer:</strong> ${escapeHtml(input.reviewerLabel)}</p>
         ${nextActionLine}
+        ${confidenceLine}
+        ${freshUntilLine}
       </div>
   `;
 }
@@ -552,11 +618,15 @@ export function renderEmailAccountabilityText(input: {
   materialityReason: string;
   reviewerLabel: string;
   nextAction?: string | null;
+  confidence?: string | null;
+  freshUntil?: string | null;
 }): string[] {
   return [
     `Why this matters: ${input.materialityReason}`,
     `Accountable reviewer: ${input.reviewerLabel}`,
     ...(input.nextAction ? [`Next action: ${input.nextAction}`] : []),
+    ...(input.confidence ? [`Confidence: ${input.confidence}`] : []),
+    ...(input.freshUntil ? [`Fresh until: ${input.freshUntil}`] : []),
     "",
   ];
 }

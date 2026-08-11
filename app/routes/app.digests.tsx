@@ -20,13 +20,15 @@ import { WorkingHeader } from "~/components/workspace/working-header";
 import { readDigestIntelligence } from "~/lib/change-intelligence";
 import {
   DIGEST_REVIEWER_UNAVAILABLE,
+  digestConfidenceLabel,
+  digestFreshUntilLabel,
   digestMaterialityReason,
   digestNextAction,
   digestReviewerLabel,
 } from "~/lib/change-intelligence";
 import { toPublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import { formatWatchEventTypeLabel } from "~/lib/landing-page-display";
-import { canUsePlanFeature } from "~/lib/plan-entitlements";
+import { canUsePlanFeature, getPlanEntitlements } from "~/lib/plan-entitlements";
 import { classifyDigestItemSource } from "~/lib/proof-classification";
 import { readTriageFromDigestSummary } from "~/lib/watch-period-triage";
 
@@ -73,6 +75,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     digests,
+    // E3 (2026-08-11): the brief as a retention loop — every brief states
+    // how confident its claims are and when the workspace's next scheduled
+    // check refreshes them. The scan cadence comes from the plan
+    // entitlements, the digest cadence from the filed period span.
+    scanCadence: getPlanEntitlements(plan).scheduledScanCadence,
+    selectedDigestCadence: selectedDigest
+      ? digestCadenceFromPeriod(selectedDigest.periodStart, selectedDigest.periodEnd)
+      : null,
     // E2 (2026-08-08): the accountable reviewer is the already-available
     // workspace owner identity — never invented from event text. A workspace
     // member has no claim to the owner's briefs, so their own name is only
@@ -213,6 +223,9 @@ export default function DigestsRoute() {
   // events and the persisted period triage, with the reviewer taken from the
   // workspace owner identity only. Missing values render their explicit
   // failure state instead of a silent generic brief.
+  // E3 (2026-08-11): the brief as a retention loop — confidence and the
+  // next-check freshness line ride the same block, so a reader always knows
+  // what to trust and when the brief's claims get refreshed.
   const selectedTriage =
     data.canAccessDigests && data.selectedDigest
       ? readTriageFromDigestSummary(data.selectedDigest.summary ?? null)
@@ -230,6 +243,15 @@ export default function DigestsRoute() {
           nextAction: digestNextAction({
             items: data.selectedDigest.items,
             triage: selectedTriage,
+          }),
+          confidenceLabel: digestConfidenceLabel({
+            items: data.selectedDigest.items,
+            triage: selectedTriage,
+          }),
+          freshUntilLabel: digestFreshUntilLabel({
+            cadence: data.selectedDigestCadence ?? null,
+            scanCadence: data.scanCadence ?? null,
+            after: selectedTriage?.checkedAt ?? data.selectedDigest.periodEnd,
           }),
         }
       : null;
@@ -369,6 +391,14 @@ export default function DigestsRoute() {
                 <div className="f9-wk-contents">
                   <dt>Next action</dt>
                   <dd>{accountability.nextAction}</dd>
+                </div>
+                <div className="f9-wk-contents">
+                  <dt>Confidence</dt>
+                  <dd>{accountability.confidenceLabel}</dd>
+                </div>
+                <div className="f9-wk-contents">
+                  <dt>Fresh until</dt>
+                  <dd>{accountability.freshUntilLabel}</dd>
                 </div>
               </dl>
             </section>
@@ -555,6 +585,15 @@ function digestFilterResetHref(searchParams: URLSearchParams) {
   const digestId = searchParams.get("digest");
   if (digestId) next.set("digest", digestId);
   return `/app/digests${next.size > 0 ? `?${next.toString()}` : ""}`;
+}
+
+/** Daily digests cover one day; anything longer is the weekly brief. */
+function digestCadenceFromPeriod(
+  periodStart: string,
+  periodEnd: string,
+): "daily" | "weekly" {
+  const spanMs = new Date(periodEnd).getTime() - new Date(periodStart).getTime();
+  return Number.isFinite(spanMs) && spanMs <= 36 * 60 * 60 * 1000 ? "daily" : "weekly";
 }
 
 export function newestVisibleDigestCreatedAt(
