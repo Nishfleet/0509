@@ -173,7 +173,11 @@ function buildDecision(
   const topCta = firstText(ads.map((ad) => ad.cta));
   const topOffer = firstText(ads.map((ad) => ad.offer));
   const activePhrase = ads.filter((ad) => ad.active).length;
-  const subject = `${activePhrase} of ${ads.length} cached ads are active right now`;
+  // "right now" is a live claim — honest only while the capture is young
+  // enough for the live-claim window (same discipline as /ads/:domain pages).
+  const subject = `${activePhrase} of ${ads.length} cached ads ${
+    input.freshForLiveClaim ? "are active right now" : "are active on record"
+  }`;
   const whatChangedParts = [
     topHook ? `The most repeated hook is “${topHook}”` : null,
     topCta ? `the CTA “${topCta}”` : null,
@@ -183,7 +187,9 @@ function buildDecision(
     whatChangedParts.length > 0
       ? whatChangedParts.join(", ") + "."
       : `${ads.length} creatives are on record with captured text.`;
-  const whyItMatters = `These creatives are the live angle ${displayNameForWebsite(input.website)} is testing on the Meta Ad Library — review the same pages before your next campaign refresh.`;
+  const whyItMatters = `These creatives are the angle ${displayNameForWebsite(input.website)} ${
+    input.freshForLiveClaim ? "is testing" : "has on record"
+  } in the Meta Ad Library — review the same pages before your next campaign refresh.`;
   const sourceUrl = trail.find((item) => item.sourceUrl)?.sourceUrl ?? null;
   const countryPhrase =
     input.country === "all" ? "the Meta Ad Library" : `the ${input.country} Ad Library`;
