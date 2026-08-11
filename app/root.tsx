@@ -21,6 +21,7 @@ import {
   canUseSiteRepWidgetScript,
   hasSiteRepAuthCookie,
   SITE_REP_WIDGET,
+  SITE_REP_WIDGET_DELAY_MS,
   shouldReloadForSiteRepWidgetDocument,
   siteRepWidgetForRequestState,
 } from "~/lib/siterep-widget";
@@ -33,6 +34,7 @@ export {
   isSiteRepWidgetIsolatedPath,
   normalizeSiteRepWidgetPathname,
   SITE_REP_WIDGET,
+  SITE_REP_WIDGET_DELAY_MS,
   shouldLoadSiteRepWidget,
   shouldReloadForSiteRepWidgetDocument,
   siteRepWidgetForPathname,
@@ -136,26 +138,45 @@ export function installSiteRepWidget(
     typeof window === "undefined" ? undefined : (window as SiteRepWidgetRuntimeWindow),
   widgetDocument: SiteRepWidgetRuntimeDocument | undefined =
     typeof document === "undefined" ? undefined : document,
+  options: { delayMs?: number } = {},
 ) {
   teardownSiteRepWidget(widgetWindow, widgetDocument);
   if (!widgetWindow || !widgetDocument) return undefined;
 
-  widgetWindow.siterep = {
-    botId: widget.botId,
-    publicKey: widget.publicKey,
-    apiBase: widget.apiBase,
+  const delayMs = options.delayMs && options.delayMs > 0 ? Math.floor(options.delayMs) : 0;
+
+  const install = () => {
+    widgetWindow.siterep = {
+      botId: widget.botId,
+      publicKey: widget.publicKey,
+      apiBase: widget.apiBase,
+    };
+
+    const script = widgetDocument.createElement("script");
+    script.src = widget.src;
+    script.defer = true;
+    script.dataset.siterepLoader = "0509";
+    script.dataset.botId = widget.botId;
+    script.dataset.publicKey = widget.publicKey;
+    script.dataset.apiBase = widget.apiBase;
+    widgetDocument.body.appendChild(script);
   };
 
-  const script = widgetDocument.createElement("script");
-  script.src = widget.src;
-  script.defer = true;
-  script.dataset.siterepLoader = "0509";
-  script.dataset.botId = widget.botId;
-  script.dataset.publicKey = widget.publicKey;
-  script.dataset.apiBase = widget.apiBase;
-  widgetDocument.body.appendChild(script);
+  let pendingTimer: ReturnType<typeof setTimeout> | undefined;
+  if (delayMs > 0) {
+    // PERF: the widget is a non-critical support surface whose script makes
+    // third-party API calls that can take >1s (dogfood a08b8427701d: slow
+    // resource requests on home). Install it after the page has settled so
+    // those requests never sit in the initial-load window.
+    pendingTimer = setTimeout(install, delayMs);
+  } else {
+    install();
+  }
 
-  return () => teardownSiteRepWidget(widgetWindow, widgetDocument);
+  return () => {
+    if (pendingTimer !== undefined) clearTimeout(pendingTimer);
+    teardownSiteRepWidget(widgetWindow, widgetDocument);
+  };
 }
 
 function SiteRepWidgetEmbed({ widget }: { widget: typeof SITE_REP_WIDGET | null }) {
@@ -165,7 +186,9 @@ function SiteRepWidgetEmbed({ widget }: { widget: typeof SITE_REP_WIDGET | null 
       return undefined;
     }
 
-    return installSiteRepWidget(widget);
+    return installSiteRepWidget(widget, undefined, undefined, {
+      delayMs: SITE_REP_WIDGET_DELAY_MS,
+    });
   }, [widget]);
 
   return null;
