@@ -672,7 +672,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       {
         limitMessage: ({ limit }) =>
           limit <= 1
-            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+            ? "Free includes 1 watchlist and 1 Collection. Upgrade for scheduled scans and more competitors."
             : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       },
@@ -752,7 +752,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         current: watchlistResult.current,
         message:
           watchlistResult.limit <= 1
-            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+            ? "Free includes 1 watchlist and 1 Collection. Upgrade for scheduled scans and more competitors."
             : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       });
@@ -799,9 +799,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     // Server-side plan gate. Fail CLOSED for a free plan with no Collection
-    // yet (the save targets an existing board; a missing/foreign board id
-    // would 500 inside addAdToCollection). Free includes exactly 1 Collection,
-    // so saving into it is allowed; the UI guides the create-first step.
+    // yet (the save targets an existing Collection; a missing/foreign id
+    // would 500 inside addAdToCollection). Free includes exactly 1
+    // Collection, so saving into it is allowed; the UI guides the
+    // create-first step.
     let savePlan: "free" | "scout" | "starter" | "agency";
     try {
       const { getUserPlan } = await import("~/lib/plan.server");
