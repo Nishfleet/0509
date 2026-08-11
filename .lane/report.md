@@ -705,3 +705,103 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Render-blocking resources on home — dogfood da0f9f345221 already resolved (2026-08-12 lane 2)
+
+**Status: already resolved in production; this lane re-verifies on the current
+`origin/main` tip and records fresh evidence. No product code change.**
+
+Branch: `report/lane2-render-blocking-resolved`
+Base: `origin/main` at `389c0e55` (HEAD of this worktree)
+
+## Item
+
+- [ ] [dogfood da0f9f345221] Render-blocking resources on home
+  [dogfood 20260809T013017Z-msl4lamt]
+  - observed: root-CFFOOhp2.css (274ms); css2 (92ms)
+  - evidence: engine finding(s) performance-1, performance-3, performance-6,
+    performance-8, performance-10, performance-12 in
+    `runs/20260809T013017Z-msl4lamt.json`; page scope(s): home, /search,
+    /help, /docs, /status, /auth/login
+  - accept: a rerun of the same SEO Fix Kit engine no longer reports it
+
+## Verdict
+
+The engine finding is **already resolved on current `origin/main` and in live
+production**. The two render-blocking resources observed in the dogfood
+evidence were the app CSS bundle (`root-*.css`) and the Google Fonts `css2`
+stylesheet. The `css2` request is now loaded non-blocking (preload `as=style`
++ print-media stylesheet swapped to `all` on load, with a noscript fallback),
+so the page carries exactly **one** render-blocking candidate — the app CSS
+bundle, which styles the first paint itself and is deliberately kept
+blocking. The engine only fires the finding at **two or more** render-blocking
+candidates, so "Render-blocking resources on home" no longer fires, on home
+or on any of the other five pages in the fingerprint (the fix is global in
+the Layout head).
+
+## Resolution history (all ancestors of current main HEAD `389c0e55`)
+
+1. **PR #611 (`0f7573f0`)** — "fix(perf): load the Google Fonts stylesheet
+   without blocking first render (dogfood da0f9f345221)". Removed the `css2`
+   stylesheet from `links()` (render-blocking) and replaced it with
+   `GoogleFontsStylesheet`: `<link rel="preload" as="style">` for a
+   high-priority fetch, a `media="print"` stylesheet (Chrome reports it
+   non-blocking) swapped to `all` by the inline `FONT_SWAP_SCRIPT` when
+   loaded, plus a `<noscript>` fallback. `root-*.css` intentionally stays
+   blocking because it styles the first paint itself. Also added the
+   `tests/root-fonts-async.test.ts` regression suite.
+2. **PR #647 (`389c0e55`, current HEAD)** — "fix(fonts): stop print→all
+   stylesheet swap from failing hydration". Added `suppressHydrationWarning`
+   on the stylesheet link and made the swap script idempotent for the
+   already-cached case (`l.sheet` check), so the pre-hydrate `media` flip
+   cannot fail closed on `browser_hydration_error:console`.
+
+## Re-verification on this tip (2026-08-12)
+
+- Engine run (same SEO Fix Kit rendered audit engine the traction-dogfood
+  batch invokes — `shared/audit-engine.js` via the local Playwright adapter
+  `server/audit/engine.js`, `SEOFIXKIT_PAGESPEED_DISABLED=1`,
+  `pageSpeed:false`) against **live https://0509.io/**:
+  - home: `resourceWaterfall.status: ready`;
+    `renderBlockingCandidates: 1` — exactly `https://0509.io/assets/root-Dqn4hcrt.css`
+    (stylesheet, Chrome `renderBlockingStatus: blocking`, 80ms). The Google
+    Fonts `css2` request reports `renderBlockingStatus: non-blocking`.
+    Findings for the page contain **no** render-blocking item; the only
+    performance finding is the separate, already-filed "Redirecting internal
+    links on home" notice (its own backlog item).
+  - `/search`: same result — `renderBlockingCandidates: 1` (the shared
+    `root-*.css`), no render-blocking finding. `/help`, `/docs`, `/status`,
+    `/auth/login` share the same global Layout head, so they carry the same
+    single-candidate state.
+  - This matches the engine's own threshold in
+    `resource-waterfall.js`: the finding fires only when
+    `renderBlockingCandidates.length >= 2` — with one candidate it does not
+    report, which is the acceptance criterion in the backlog item.
+- Code evidence on `origin/main` at `389c0e55`: `0f7573f0` and `389c0e55`
+  are both ancestors of HEAD; `app/root.tsx` carries `GOOGLE_FONTS_STYLESHEET_HREF`,
+  `FONT_SWAP_SCRIPT`, and the `GoogleFontsStylesheet` component; the `css2`
+  href is absent from `links()`.
+- Regression suite `tests/root-fonts-async.test.ts` passes on this tip:
+  1 file, **3/3 passed** (links() keeps font preconnects and drops the
+  stylesheet descriptor; rendered head contains the preload + print-media +
+  swap-script + noscript sequence; no render-blocking googleapis stylesheet
+  remains).
+- Ledger note: `finding-ledger.json` still lists the fingerprint
+  `da0f9f345221` as `active: true` only because the ledger's last completed
+  dogfood run (`20260809T013017Z-msl4lamt`, 2026-08-09) predates the
+  Aug-11 fix; the scheduled weekly dogfood rerun will flip it to resolved
+  (the ledger lives outside this repo, so this lane records the evidence
+  here instead of editing it).
+
+## Checks
+
+- `git merge-base --is-ancestor 0f7573f0 HEAD` → yes
+- `git merge-base --is-ancestor 389c0e55 HEAD` → yes
+- Engine audit of live https://0509.io/ and https://0509.io/search → no
+  render-blocking findings; 1 candidate each (app CSS bundle only)
+- `npm test -- --run tests/root-fonts-async.test.ts` → 3/3 passed
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
