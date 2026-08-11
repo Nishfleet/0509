@@ -705,3 +705,76 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Redirecting internal links on home — dogfood ffcd440eda79 (2026-08-12 lane 9, evidence on main)
+
+**Status: fix implemented, CI-green, and re-verified on open PR #570
+(`fix/lane1-home-internal-link-redirects`); not merged. This lane records the
+re-verification evidence on `main` (the only prior records live inside PR
+#570's branch). The item ticks after PR #570 merges, deploys, and the
+SEO Fix Kit rerun confirms the fingerprint drops — all steps outside this
+lane's scope (merging pushes to main; the kit audits the live site).**
+
+Branch: `lane9/ffcd440eda79-evidence`
+Base: `origin/main` at `389c0e55` (#647)
+Fix pull request: https://github.com/nish3451/0509/pull/570 (head `dc726b24`,
+0 commits behind `origin/main`)
+
+## Item
+
+- [ ] [dogfood ffcd440eda79] Redirecting internal links on home
+  [dogfood 20260808T074205Z-msk2fl3n]
+
+## Verdict
+
+Dogfood patternKey `ffcd440eda79` ("Redirecting internal links") flags the
+auth-gated internal links on the public pages — home, /help, /docs, /status —
+that bounce anonymous crawlers through a 302 to
+`/auth/login?redirectTo=...` (findings issue-3/issue-9/issue-11/issue-13 in
+`runs/20260808T074205Z-msk2fl3n.json`). The fix is fully implemented on PR
+#570 (commit `08f05eac`): a shared `appLinkTarget` helper
+(`app/lib/app-link.ts`) rewires every anonymous-visible auth-gated link to
+the byte-identical login destination — `/auth/login?redirectTo=<encoded app
+path>` — the same final URL the app-route guard produces, minus the redirect
+hop. Per the improvement-loop convention for items with an in-flight fix PR
+("do not open a duplicate PR" — recorded by lane 16 and the earlier lane-9
+refresh for this same item), this lane makes no duplicate product change.
+
+## Re-verification on current main (`389c0e55`) and PR head (`dc726b24`)
+
+- `origin/main` has not moved since the PR branch was refreshed
+  (`389c0e55`; PR head `dc726b24` merges it in — 0 commits behind).
+- PR #570 is `MERGEABLE` / `CLEAN`; required checks all green at head:
+  `codex-node-checks` success, `Gitleaks` success, secret-scan
+  authorizations success (Bugbot neutral: Cursor usage limit, not a
+  failure).
+- The only anonymous-visible auth-gated links on the four public pages are
+  exactly the ones #570 rewires: MarketingNav "Open app" (`/app`) plus the
+  in-content links in `help.tsx` (`/app/notifications`, `/app/support*`,
+  `/app/billing`) and `docs.tsx` / `api.docs.tsx`
+  (`/app/developer-access`). Home's "Manage packs"
+  (`/app/billing?source=top-up#top-ups`, `marketing.tsx`) is session-gated
+  (`rootData.session && hasBundlePrice(...)`), so anonymous crawlers never
+  see it; the marketing footer and `status.tsx` have no auth-gated links.
+- First-hand run on the PR head (`/tmp` worktree at `dc726b24`): focused
+  suites for every touched surface pass — `app-link.test.ts`,
+  `marketing-nav.test.ts`, `help-runtime-truth.test.ts`,
+  `public-doc-routes.test.ts`, `status.route.test.ts`,
+  `ads-brand-page.render.test.tsx`, `changelog-customer-value.test.ts`,
+  `compare-magicbrief.route.test.ts`,
+  `compare-meta-ad-library.route.test.ts` — **9 files / 43 tests pass**.
+- `marketing-nav.test.ts` asserts the exact contract: anonymous render emits
+  `href="/auth/login?redirectTo=%2Fapp"` for Open app; signed-in render
+  emits `href="/app"`.
+
+## Acceptance note
+
+The item's verify step ("rerun the dogfood batch and confirm the fingerprint
+drops out of active findings") can only tick after PR #570 merges and the
+deploy reaches production: the SEO Fix Kit engine audits the live
+https://0509.io site, which still serves the 302-bouncing links until then.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
