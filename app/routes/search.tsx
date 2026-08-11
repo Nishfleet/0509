@@ -1000,18 +1000,6 @@ export default function SearchRoute() {
   const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
   const inferredWatchlistName =
     (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
-  const canTrackCurrentCompetitor =
-    Boolean(data.filters.query || competitorWebsite.normalizedUrl) &&
-    !data.inputError;
-  const discoverySummary = formatDiscoverySummary(visibleResult);
-  const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
-  const isSearchWarming = visibleResult.discoveryProgress === "warming";
-  // When the check outlives the 5s x 12 = 60s warming poll budget, the
-  // promised auto-refresh stops silently: the page must say so and hand the
-  // visitor a working retry instead of leaving "we'll refresh automatically"
-  // up forever next to a still-warming server state.
-  const warmingPollExhausted =
-    isSearchWarming && warmingPollCount >= SEARCH_WARMING_POLL_LIMIT;
   // Candidate-3 root-cause fix for the public submit hang: the See ads button
   // stays pending only while a GET navigation to /search targets a URL that is
   // NOT the committed location.search. Once the server commits results or an
@@ -1031,13 +1019,33 @@ export default function SearchRoute() {
     navigation.location?.pathname === "/search"
       ? (navigation.location.search ?? "")
       : null;
+  // A committed validation error describes the PREVIOUS submission, not the
+  // input being searched right now. While a re-submit GET navigation to a new
+  // /search target is in flight, stop asserting the old error as an alert:
+  // the honest state is "Searching…", and the fresh loader result (error or
+  // results) takes over once it commits.
+  const searchCommandInFlight =
+    commandNavigationTarget !== null &&
+    commandNavigationTarget !== location.search &&
+    searchNavigationRecovery === null;
+  const liveInputError = searchCommandInFlight ? null : data.inputError;
+  const canTrackCurrentCompetitor =
+    Boolean(data.filters.query || competitorWebsite.normalizedUrl) &&
+    !liveInputError;
+  const discoverySummary = formatDiscoverySummary(visibleResult);
+  const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
+  const isSearchWarming = visibleResult.discoveryProgress === "warming";
+  // When the check outlives the 5s x 12 = 60s warming poll budget, the
+  // promised auto-refresh stops silently: the page must say so and hand the
+  // visitor a working retry instead of leaving "we'll refresh automatically"
+  // up forever next to a still-warming server state.
+  const warmingPollExhausted =
+    isSearchWarming && warmingPollCount >= SEARCH_WARMING_POLL_LIMIT;
   const commandNavigationPending =
-    (commandNavigationTarget !== null &&
-      commandNavigationTarget !== location.search &&
-      searchNavigationRecovery === null) ||
+    searchCommandInFlight ||
     (isSearchWarming &&
       hasSearchQuery &&
-      !data.inputError &&
+      !liveInputError &&
       visibleAds.length === 0 &&
       warmingPollCount < SEARCH_WARMING_POLL_LIMIT &&
       searchNavigationRecovery === null);
@@ -1326,7 +1334,7 @@ export default function SearchRoute() {
   // that sits above the first record. "Used" means a search actually ran and
   // was accepted; an invalid domain has not used the instrument, it has been
   // refused by it.
-  const instrumentUsed = hasSearchQuery && !data.inputError;
+  const instrumentUsed = hasSearchQuery && !liveInputError;
   const hasResults = visibleAds.length > 0;
   // BL-031 round 3 — the refine disclosure counts only filters on a search
   // that actually ran. The loader geo-defaults `country` to the visitor's
@@ -1357,7 +1365,7 @@ export default function SearchRoute() {
   // already holds the domain you searched does not need to be told what to
   // paste into it.
   const commandHint =
-    data.inputError ?? (instrumentUsed ? null : "Paste one competitor website.");
+    liveInputError ?? (instrumentUsed ? null : "Paste one competitor website.");
   // ONE heading per state, and it is the sentence that state actually wants
   // to say. The search answer's title is the strongest when there is one (it
   // is what the old page rendered as the answer panel's h3, directly under a
@@ -1480,7 +1488,7 @@ export default function SearchRoute() {
             <label className="f9-wk-field is-lead">
               <span className="f9-wk-lab">Competitor website</span>
               <input
-                aria-invalid={Boolean(data.inputError)}
+                aria-invalid={Boolean(liveInputError)}
                 aria-describedby={commandHint ? "search-command-hint" : undefined}
                 autoComplete="url"
                 className="f9-wk-in"
@@ -1507,10 +1515,10 @@ export default function SearchRoute() {
                 same thing 200px apart. */}
             {commandHint ? (
               <p
-                aria-live={data.inputError ? "assertive" : undefined}
-                className={`f9-wk-hint${data.inputError ? " is-bad" : ""}`}
+                aria-live={liveInputError ? "assertive" : undefined}
+                className={`f9-wk-hint${liveInputError ? " is-bad" : ""}`}
                 id="search-command-hint"
-                role={data.inputError ? "alert" : undefined}
+                role={liveInputError ? "alert" : undefined}
               >
                 {commandHint}
               </p>
