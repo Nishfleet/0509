@@ -302,8 +302,11 @@ describe("/ads/:domain loader", () => {
     expect(result.hasCachedAds).toBe(true);
     // The wall carries both creatives…
     expect(result.ads).toHaveLength(2);
-    // …but only one carries verified link evidence.
+    // …but only one carries verified link evidence, and the loader exposes
+    // exactly that subset for the client (which must never re-derive it from
+    // the server-only evidence module).
     expect(result.verifiedLinkCount).toBe(1);
+    expect(result.verifiedLinkedAds.map((ad) => ad.metaAdId)).toEqual(["meta-nykaa-1"]);
     expect(result.unverifiedMatchCount).toBe(1);
     expect(result.brandOwnedAdCount).toBe(1);
     // The teaser/score/change feed speak only about the verified capture. The

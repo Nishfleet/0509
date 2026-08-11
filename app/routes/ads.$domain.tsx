@@ -47,7 +47,6 @@ import type {
   BrandIntelTeaser,
   BrandPageAggression,
 } from "~/lib/brand-page.server";
-import { countBrandOwnedAds, countVerifiedLinkedAds, adHasVerifiedDomainLink } from "~/lib/brand-page.server";
 import { canonicalUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
@@ -57,6 +56,15 @@ export interface BrandPageLoaderData {
   brandName: string;
   hasCachedAds: boolean;
   ads: AdRecord[];
+  /**
+   * The subset of `ads` that carry VERIFIED link evidence to the domain
+   * (landing-page or advertiser-domain match). Attribution copy, the stat
+   * line, and analytics are built ONLY from this subset — creatives that
+   * merely match the search text are rendered but never described as linking.
+   * Computed in the loader so the client bundle never touches the server-only
+   * evidence module.
+   */
+  verifiedLinkedAds: AdRecord[];
   checkedAgo: string | null;
   /**
    * ISO timestamp of the underlying Ad Library check — the machine-readable
@@ -123,10 +131,12 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   }
 
   const {
+    adHasVerifiedDomainLink,
     brandPageAdLibraryCountryLabel,
     buildBrandChangeFeed,
     buildBrandIntelTeaser,
     computeBrandPageAggressionScore,
+    countBrandOwnedAds,
     formatBrandPageCheckedAgo,
     loadBrandPageCacheSnapshot,
   } = await import("~/lib/brand-page.server");
@@ -170,6 +180,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     brandName: brand.displayName,
     hasCachedAds: Boolean(snapshot),
     ads: snapshotAds,
+    verifiedLinkedAds,
     checkedAgo: snapshot ? formatBrandPageCheckedAgo(snapshot.fetchedAt, now) : null,
     lastCheckedAt: snapshot?.fetchedAt ?? null,
     freshForLiveClaim: snapshot?.freshForLiveClaim ?? false,
@@ -420,10 +431,10 @@ function BrandAdsResults({
         </div>
       </section>
 
-      {/* 3. STAT LINE */}
+      {/* 3. STAT LINE — built only from verified-linked creatives (see loader) */}
       {teaser ? (
         <BrandStatLine
-          ads={data.ads.filter((ad) => adHasVerifiedDomainLink(ad, data.domain))}
+          ads={data.verifiedLinkedAds}
           aggression={data.aggression}
           freshnessLabel={data.checkedAgo}
           fresh={data.freshForLiveClaim}
