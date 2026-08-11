@@ -705,3 +705,70 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Public /search `?q=` deep links (2026-08-12 lane 7) — already resolved by PR #565
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane7-q-shared-link-already-resolved`
+Base: `origin/main` at `ac393f02`
+
+## Item
+
+- [ ] Honor `?q=` on public `/search` so shared/deep links actually run (or
+  honestly reject) the query [scout 2026-08-09].
+
+## Verdict
+
+No product code change was warranted. The item landed on `origin/main` as
+PR #565 — `f1327522` "fix(search): honor ?q= deep links on public /search so
+shared queries actually run", merged 2026-08-09, an ancestor of the current
+`main` HEAD (`ac393f02`). The alias core (`app/lib/normalize.ts` and
+`tests/normalize.test.ts`) has zero commits since `f1327522`; the loader
+wiring in `app/routes/search.tsx` still feeds `url.searchParams` into
+`parseSearchParams` and the route-level `q=` pins still pass.
+
+This item was also assigned to lane 1 of 2026-08-10, which recorded the same
+verdict in commit `99e80367` (branch `report/lane1-q-shared-link-already-resolved`).
+That evidence branch was never merged to `main`; this lane carries the
+evidence forward on the current tip.
+
+## Evidence on current main
+
+- **Single alias point**: `parseSearchParams()` in `app/lib/normalize.ts`
+  resolves the term as `searchParams.get("query") ?? searchParams.get("q") ?? ""`
+  — `q` is the conventional shared-link alias; an explicit `query` always wins
+  so canonical product links never change meaning; empty/whitespace `q` is
+  treated as absent.
+- **Same cache fingerprint**: `fingerprintSavedQuery` runs over the normalized
+  filters, so `/search?q=nykaa` and `/search?query=nykaa` produce byte-identical
+  fingerprints (pinned by a test) — shared links hit the same warm cache entry
+  instead of re-running discovery.
+- **Route wiring**: `app/routes/search.tsx` loader feeds `url.searchParams`
+  straight into `parseSearchParams`, so a logged-out visitor opening
+  `/search?q=nykaa` actually executes live discovery
+  (`searchAdsViaSourceResolver` called with `filters.query: "nykaa"`), never
+  idles. The client renders the term from loader data (`data.filters.query`),
+  so the box is pre-filled and a pristine `/search` keeps the refine
+  disclosure shut (BL-031 guard intact).
+- **Honest rejection**: a `q` link with no searchable term (`/search?q=`) stays
+  on the idle page — no discovery call, no fake result.
+- **Regression pins**: `tests/normalize.test.ts` (alias acceptance, explicit
+  query wins, empty/whitespace-as-absent, fingerprint parity) and
+  `tests/search.route.test.ts` (logged-out live discovery via `q=`, idle on
+  empty `q=`).
+
+## Verification on this tip (origin/main `ac393f02`)
+
+- `vitest run tests/search.route.test.ts tests/normalize.test.ts`: 2 files,
+  **62/62 passed**.
+- `git log f1327522..origin/main -- app/lib/normalize.ts tests/normalize.test.ts`
+  → empty — the alias implementation and its pins are byte-identical to #565.
+- `git log origin/main --oneline -- tests/search.route.test.ts` → only
+  `9f0805d0` (#616, visitor-geo) touched the route tests since #565; the two
+  `q=` route pins are unchanged and pass.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
