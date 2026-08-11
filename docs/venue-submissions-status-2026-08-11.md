@@ -9,7 +9,7 @@ place to check where submission stands.
 |---|---|---|
 | SaaSHub | **NEEDS_NISH_STEP** (not submitted) | Nish confirms the SaaSHub Terms and Privacy on the open submission page in his logged-in Mac browser (`https://0509.io` is filled), then the browser run can continue. Mailbox prerequisite cleared: live Gmail → Agentic Inbox delivery test to `support@0509.io` succeeded 2026-08-11. |
 | BetaList | **SKIPPED_PAID** (not submitted) | None — BetaList's official Support page says all submissions are paid and there is no free submission option; the venue is skipped and the prepared copy stays on file. |
-| AlternativeTo | **NEEDS_NISH_STEP** (not submitted) | Nish signs in (or creates and verifies) the AlternativeTo account, then the prepared suggestion can be submitted. The optional $5 priority review is skipped. |
+| AlternativeTo | **NEEDS_NISH_STEP** (not submitted) | Nish signs in (or creates and verifies) the AlternativeTo account, then the prepared suggestion can be submitted. The optional $5 priority review is skipped. Assets (squared icon + homepage and public-search screenshots) are committed under `docs/assets/alternativeto/` since 2026-08-12 — nothing else blocks submission. |
 
 Nothing was submitted on 2026-08-11: SaaSHub and AlternativeTo both wait on
 a Nish step, and BetaList was deliberately skipped.
