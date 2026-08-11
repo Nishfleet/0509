@@ -689,7 +689,7 @@ export default function AppDashboardRoute() {
         <FeedbackStrip
           actions={
             <Link className="f9-wk-lnk" to="/app/billing?source=evidence#top-ups">
-              Review check packs <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+              Review proof capture packs <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           }
           label="Evidence usage"
