@@ -5,6 +5,7 @@ verbatim below.
 
 - [MONEY silent-failure remediation](#money-silent-failure-remediation) — PR #445, branch `fix/silent-fixmoney` (landed on `main`)
 - [Silent-failure observability remediation](#silent-failure-observability-remediation) — PR #447, branch `fix/silent-fixobserve`
+- [Anonymous search form error/status states (2026-08-12 lane 3)](#anonymous-search-form-errorstatus-states-2026-08-12-lane-3--already-resolved-by-pr-579) — already resolved; evidence record only
 
 ---
 # MONEY silent-failure remediation
@@ -701,6 +702,65 @@ comments); #574 had already merged before this lane started.
   unknown>), ...`; `git log -S` attributes them to `5021807e` (#585).
 - `git log origin/main --oneline -- docs/alternativeto-listing-2026-08-11.md`
   → `adceefdd` (#606), ancestor of current main HEAD.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Anonymous search form error/status states (2026-08-12 lane 3) — already resolved by PR #579
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane3-anonymous-search-form-error-status-already-resolved`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Make the anonymous search form's error/status states honest (stale
+  validation error during re-submit; "Search comp… — the lane item text is
+  truncated at this point in the source system, but the two dishonest states
+  it opens with are exactly the pair PR #579 fixed)
+
+## Verdict
+
+No code change was warranted. Both described dishonest states on the
+anonymous /search command form are already fixed and live on `origin/main`
+via PR #579 (`1d00f084`, merged 2026-08-11, ancestor of current main HEAD):
+
+- Re-submit kept the previous submission's validation error live as an
+  assertive alert with `aria-invalid=true` for the whole in-flight GET
+  navigation, even after the visitor corrected the input and the new search
+  was running. The committed error now yields to the in-flight search state
+  ("Searching…"/aria-busy) and returns on the fresh commit:
+  `liveInputError = searchCommandInFlight ? null : data.inputError`.
+- A refused or never-run search (invalid website → `discoveryStatus`
+  "disabled") used to announce "No search results found. Search complete."
+  in the polite status region — a search that never ran claimed as complete.
+  The status region now says "Enter a competitor website to start." for
+  disabled/never-run searches and reserves "Search complete." for genuinely
+  completed searches.
+
+## Evidence on current main
+
+- `app/routes/search.tsx:1031` — `liveInputError` is suppressed while a
+  re-submit navigation is in flight; `:1022-1031` documents the rationale
+  (a committed validation error describes the PREVIOUS submission).
+- `app/lib/search-display.ts:395-396` — `discoveryStatus === "disabled"`
+  returns "Enter a competitor website to start."; `:432` keeps "No search
+  results found. Search complete." only for a real completed empty search.
+- `tests/search-submission-settle.test.tsx` — "suppresses the stale
+  validation error while a re-submit navigation is in flight", including the
+  alert returning once the fresh commit lands.
+- `tests/search-load-more.test.ts` — asserts the disabled state says "Enter
+  a competitor website to start." and not "No search results found. Search
+  complete."
+- `git log origin/main --oneline -- app/routes/search.tsx app/lib/search-display.ts`
+  → `1d00f084` (PR #579) is the change that introduced both behaviors, and no
+  later commit reverted them.
+- Verification on this tip: search-display/execution/live-claim/load-more/
+  route/paint-fast/submission-settle/v2/warming-state/query/ad-source
+  300/300; `npm run typecheck` exit 0. No product code change was warranted.
 
 ## Files
 
