@@ -36,6 +36,7 @@ function cacheEntry(
   overrides: Partial<{
     routeContext: string;
     fetchedAt: string;
+    country: string;
     payload: Record<string, unknown>;
   }> = {},
 ) {
@@ -44,7 +45,7 @@ function cacheEntry(
     provider: "meta_library_browser",
     routeContext: overrides.routeContext ?? "public_search",
     queryFingerprint: "fnv1a-test",
-    country: "all",
+    country: overrides.country ?? "all",
     cursor: null,
     payload: overrides.payload ?? {
       ads: [baseAd],
@@ -159,6 +160,10 @@ describe("/ads/:domain loader", () => {
       noindex: false,
       canonicalPath: "/ads/nykaa.com",
     });
+    // The all-countries cache view is spelled out — the page must name the
+    // Ad Library country it renders from, never hide it behind the geo
+    // defaulted lookup.
+    expect(result.adLibraryCountry).toBe("all countries");
     // The machine-readable twin of the visible "Last checked" stamp.
     expect(result.lastCheckedAt).toBe(entry.fetchedAt);
     expect(result.ads).toHaveLength(1);
@@ -185,7 +190,39 @@ describe("/ads/:domain loader", () => {
     expect(mocks.searchMetaApiAds).not.toHaveBeenCalled();
   });
 
-  it("marks the capture fresh for a live claim only while the check is under an hour old", async () => {
+  it("names the country of the Ad Library the cached creatives came from", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({ country: "India" }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.adLibraryCountry).toBe("India");
+  });
+
+  it("keeps the Ad Library country honest on the cache-miss shell", async () => {
+    const mocks = installBrandPageMocks({ entry: null });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(false);
+    expect(result.adLibraryCountry).toBeNull();
+  });
+
+  it("marks the capture fresh for a live claim only while the check is still in the moments-ago window", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({ fetchedAt: isoAgo(90 * 1000) }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.checkedAgo).toBe("moments ago");
+    expect(result.freshForLiveClaim).toBe(true);
+  });
+
+  it("withholds the live-claim freshness for a capture minutes old — not just hours", async () => {
     const mocks = installBrandPageMocks({
       entry: cacheEntry({ fetchedAt: isoAgo(5 * 60 * 1000) }),
     });
@@ -194,7 +231,8 @@ describe("/ads/:domain loader", () => {
 
     expect(result.hasCachedAds).toBe(true);
     expect(result.checkedAgo).toBe("about 5 minutes ago");
-    expect(result.freshForLiveClaim).toBe(true);
+    // A capture up to an hour old must never present itself as "right now".
+    expect(result.freshForLiveClaim).toBe(false);
   });
 
   it("withholds the live-claim freshness for a capture over an hour old", async () => {
@@ -444,6 +482,7 @@ describe("/ads/:domain meta", () => {
     ads: [baseAd],
     checkedAgo: "about 2 hours ago",
     teaser: null,
+    adLibraryCountry: "India",
     noindex: false,
     canonicalPath: "/ads/nykaa.com",
     freshForLiveClaim: false,
@@ -464,13 +503,13 @@ describe("/ads/:domain meta", () => {
       href: "https://0509.io/ads/nykaa.com",
     });
     const description = tags.find((tag) => tag.name === "description")?.content ?? "";
-    expect(description).toContain("public Ad Library check about 2 hours ago");
+    expect(description).toContain("a public check of the India Ad Library about 2 hours ago");
     expect(tags.some((tag) => tag.name === "robots")).toBe(false);
   });
 
   it('keeps the "right now" title only when the capture is fresh enough for a live claim', async () => {
     installBrandPageMocks();
-    const tags = await metaFor({ ...richData, checkedAgo: "about 5 minutes ago", freshForLiveClaim: true });
+    const tags = await metaFor({ ...richData, checkedAgo: "moments ago", freshForLiveClaim: true });
 
     expect(tags).toContainEqual({
       title: "Nykaa Facebook & Instagram ads right now | Five to Nine",

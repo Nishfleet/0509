@@ -64,8 +64,9 @@ export interface BrandPageLoaderData {
    */
   lastCheckedAt: string | null;
   /**
-   * True only when the capture is young enough (≤ 1 hour) for the page to
-   * honestly say "right now"/"live". Older captures render past-tense copy.
+   * True only when the capture is young enough (still in the "moments ago"
+   * bucket) for the page to honestly say "right now"/"live". Older captures —
+   * even ones from a few minutes ago — render past-tense copy.
    */
   freshForLiveClaim: boolean;
   /**
@@ -78,6 +79,13 @@ export interface BrandPageLoaderData {
   teaser: BrandIntelTeaser | null;
   aggression: BrandPageAggression | null;
   changeEvents: BrandChangeEvent[];
+  /**
+   * Country of the Ad Library the cached creatives came from ("India",
+   * "United States", …) — or "all countries" for the all-countries view.
+   * The Meta Ad Library is country-scoped, so this always names the library
+   * the page's ads are actually from. Null on the cache-miss shell.
+   */
+  adLibraryCountry: string | null;
   noindex: boolean;
   canonicalPath: string;
 }
@@ -104,6 +112,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   }
 
   const {
+    brandPageAdLibraryCountryLabel,
     buildBrandChangeFeed,
     buildBrandIntelTeaser,
     computeBrandPageAggressionScore,
@@ -147,6 +156,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     teaser: snapshot ? buildBrandIntelTeaser(snapshot.ads, now) : null,
     aggression: snapshot ? computeBrandPageAggressionScore(snapshot.ads, now) : null,
     changeEvents: snapshot ? buildBrandChangeFeed(snapshot.ads, now) : [],
+    adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
     canonicalPath: `/ads/${brand.domain}`,
   };
@@ -159,8 +169,9 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
  */
 export function brandPageTitle(data: BrandPageLoaderData): string {
   // "Right now" is a live-scrape claim — it must never appear when the page
-  // renders from a cache older than an hour, or on the cache-miss shell, and
-  // it needs the visible checked-ago stamp as its evidence.
+  // renders from a cache older than the "moments ago" window, or on the
+  // cache-miss shell, and it needs the visible checked-ago stamp as its
+  // evidence.
   if (!data.hasCachedAds) {
     return `${data.brandName} Facebook & Instagram ads | Five to Nine`;
   }
@@ -179,8 +190,37 @@ export function brandPageTitle(data: BrandPageLoaderData): string {
 }
 
 /**
+ * Honest Ad Library source phrase for page copy, from the snapshot country:
+ * "the India Ad Library" for a named country, "the Meta Ad Library across
+ * all countries" for the all-countries view. The Meta Ad Library is
+ * country-scoped, so this always names the library the cached creatives
+ * actually came from (the loader geo-defaults the lookup — the copy must
+ * not). The fallback never renders for a populated page; it exists only to
+ * keep the copy grammatical if a snapshot ever lacks a country.
+ */
+function adLibrarySourcePhrase(adLibraryCountry: string | null): string {
+  if (adLibraryCountry && adLibraryCountry !== "all countries") {
+    return `the ${adLibraryCountry} Ad Library`;
+  }
+  return "the Meta Ad Library across all countries";
+}
+
+/**
+ * The same source phrase with the "public" qualifier used by the closer
+ * honesty line: "the public India Ad Library" / "the public Meta Ad Library
+ * across all countries".
+ */
+function publicAdLibrarySourcePhrase(adLibraryCountry: string | null): string {
+  if (adLibraryCountry && adLibraryCountry !== "all countries") {
+    return `the public ${adLibraryCountry} Ad Library`;
+  }
+  return "the public Meta Ad Library across all countries";
+}
+
+/**
  * Single source of truth for the meta description — shared by the
- * <meta name="description"> and the WebPage JSON-LD `description`.
+ * <meta name="description"> and the WebPage JSON-LD `description`. The copy
+ * names the country of the Ad Library the cached creatives came from.
  */
 export function brandPageDescription(data: BrandPageLoaderData): string {
   if (!data.hasCachedAds) {
@@ -189,13 +229,14 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
   const totalCount = data.ads.length;
   const adWord = totalCount === 1 ? "ad" : "ads";
   const otherCount = totalCount - data.brandOwnedAdCount;
+  const check = `a public check of ${adLibrarySourcePhrase(data.adLibraryCountry)} ${data.checkedAgo}`;
   if (totalCount > 0 && data.brandOwnedAdCount === totalCount) {
-    return `See ${totalCount} Meta ${adWord} from ${data.brandName} (${data.domain}), from a public Ad Library check ${data.checkedAgo}. Get an email when their ads or offer change.`;
+    return `See ${totalCount} Meta ${adWord} from ${data.brandName} (${data.domain}), from ${check}. Get an email when their ads or offer change.`;
   }
   if (data.brandOwnedAdCount === 0) {
-    return `See ${totalCount} Meta ${adWord} from other advertisers linking to ${data.domain}, from a public Ad Library check ${data.checkedAgo}. Get an email when the ads or offers change.`;
+    return `See ${totalCount} Meta ${adWord} from other advertisers linking to ${data.domain}, from ${check}. Get an email when the ads or offers change.`;
   }
-  return `See ${totalCount} Meta ${adWord} linking to ${data.domain} — ${data.brandOwnedAdCount} from ${data.brandName} and ${otherCount} from other advertisers — from a public Ad Library check ${data.checkedAgo}. Get an email when the ads or offers change.`;
+  return `See ${totalCount} Meta ${adWord} linking to ${data.domain} — ${data.brandOwnedAdCount} from ${data.brandName} and ${otherCount} from other advertisers — from ${check}. Get an email when the ads or offers change.`;
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
@@ -380,8 +421,8 @@ function BrandAdsResults({
             </div>
             <span className="f9-ads-sec-meta">
               {data.checkedAgo
-                ? `real creatives from the Meta Ad Library · cached ${data.checkedAgo}`
-                : "real creatives from the Meta Ad Library"}
+                ? `real creatives from ${adLibrarySourcePhrase(data.adLibraryCountry)} · cached ${data.checkedAgo}`
+                : `real creatives from ${adLibrarySourcePhrase(data.adLibraryCountry)}`}
             </span>
           </div>
           <BrandAdWall
@@ -526,16 +567,17 @@ function closerHonestyLine(
   otherCount: number,
 ): string {
   const cached = data.checkedAgo ? `, cached ${data.checkedAgo}` : "";
+  const source = publicAdLibrarySourcePhrase(data.adLibraryCountry);
   const tail =
     " This page never runs a live scrape — a live search refreshes it. Coverage and freshness are labeled and vary by source. The Ad Aggression Score is computed from a public formula. ";
 
   if (allBrandOwned) {
-    return `Ad creatives are ${data.brandName}'s real ads from the public Meta Ad Library${cached}.${tail}`;
+    return `Ad creatives are ${data.brandName}'s real ads from ${source}${cached}.${tail}`;
   }
   if (noneBrandOwned) {
-    return `Ad creatives are real Meta Ad Library ads from other advertisers linking to ${data.domain}${cached}.${tail}`;
+    return `Ad creatives are real ads from ${source}, run by other advertisers linking to ${data.domain}${cached}.${tail}`;
   }
-  return `Ad creatives are real Meta Ad Library ads linking to ${data.domain}${cached} — ${data.brandOwnedAdCount} run by ${data.brandName} and ${otherCount} by other advertisers.${tail}`;
+  return `Ad creatives are real ads from ${source} linking to ${data.domain}${cached} — ${data.brandOwnedAdCount} run by ${data.brandName} and ${otherCount} by other advertisers.${tail}`;
 }
 
 /**
