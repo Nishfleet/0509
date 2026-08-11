@@ -54,12 +54,15 @@ export const BRAND_PAGE_FRESH_FOR_INDEXING_MS = 7 * 24 * 60 * 60 * 1000;
 /**
  * Oldest capture that may still claim "right now"/"live" on a public brand
  * page. Public pages render ONLY from the cache, so a present-tense claim is
- * honest only while the check is inside the current hour (the freshness stamp
- * reads "moments ago" / "about N minutes ago"). Older captures switch to
- * past-tense copy ("was running … at the last check") with the explicit
- * "Last checked N ago" stamp as the only time claim.
+ * honest only while the freshness stamp still reads "moments ago" (i.e. the
+ * check happened within the last couple of minutes). Any capture older than
+ * that — even "about 5 minutes ago" — switches to past-tense copy ("was
+ * running … at the last check") with the explicit "Last checked N ago" stamp
+ * as the only time claim. Tied to the same constant the stamp uses, so the
+ * two boundaries can never drift.
  */
-export const BRAND_PAGE_LIVE_CLAIM_MAX_AGE_MS = 60 * 60 * 1000;
+export const BRAND_PAGE_MOMENTS_AGO_MS = 2 * 60 * 1000;
+export const BRAND_PAGE_LIVE_CLAIM_MAX_AGE_MS = BRAND_PAGE_MOMENTS_AGO_MS;
 /** Cap the number of ads rendered on a public page. */
 const BRAND_PAGE_MAX_ADS = 24;
 
@@ -471,8 +474,8 @@ export function formatBrandPageCheckedAgo(fetchedAt: string, now: Date = new Dat
   }
 
   const elapsedMs = Math.max(0, now.getTime() - fetchedMs);
+  if (elapsedMs < BRAND_PAGE_MOMENTS_AGO_MS) return "moments ago";
   const minutes = Math.floor(elapsedMs / 60_000);
-  if (minutes < 2) return "moments ago";
   if (minutes < 60) return `about ${minutes} minutes ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 2) return "about an hour ago";
