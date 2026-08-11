@@ -696,14 +696,20 @@ describe("captureLandingPageSnapshot", () => {
       vi.fn(async () => new Response("blocked", { status: 500 })) as never,
     );
 
-    const snapshot = await captureLandingPageSnapshot(
+    const snapshotPromise = captureLandingPageSnapshot(
       {},
       "https://example.com/glow",
       { allowRenderedFallback: false },
     );
+    // The transient 500 is retried once (bounded retry); advance the fake
+    // clock through the retry delay so the second attempt can run.
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    const snapshot = await snapshotPromise;
 
     expect(snapshot).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
   });
 
   it("reports a stable reason code when a blocked landing page cannot be captured", async () => {
