@@ -705,3 +705,59 @@ comments); #574 had already merged before this lane started.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Half-dead JSON-LD PR #564 + twin slow-resource PRs #569/#603 (2026-08-11 lane 1) — merged, resolved
+
+**Status: resolved; all three PRs merged, superseded, or closed. Evidence recorded.**
+
+Branches: `fix/lane1-search-structured-data` (PR #564, merged), `lane1-564-auth-login-jsonld` (PR #618, closed as redundant), `fix/lane15-slow-resource-requests` (PR #603, merged)
+Base: `origin/main` at `67c11c1c` (post-#603), merged to `1fdecda3`
+
+## Item
+
+- [ ] Resolve the half-dead JSON-LD PR #564 and the twin slow-resource PRs
+  #569/#603 before the loop burns two lanes on them.
+
+## Verdict
+
+All three PRs are resolved on `origin/main`; the lane verified and recorded
+the evidence. No further code change is warranted.
+
+- PR #603 — "fix(perf): move non-critical Site Rep widget requests out of
+  home's initial-load window (dogfood a08b8427701d)" — **MERGED**
+  2026-08-11T00:27:20Z as `67c11c1c` (current main).
+- PR #569 — "fix(perf): move non-critical Site Rep widget requests out of
+  home's initial-load window (dogfood a08b8427701d)" — the twin with
+  identical purpose; **CLOSED** 2026-08-11T00:06:53Z as superseded once
+  #603 merged.
+- PR #564 — "fix(seo): add truthful WebPage JSON-LD" — the half-dead
+  JSON-LD PR. Its `/search` half already merged via #600
+  (`fix(seo): emit truthful WebPage JSON-LD on /search`, merged
+  2026-08-10T18:48:57Z as `03bd3809`). The remaining net delta — the
+  `/auth/login` markup-only WebPage JSON-LD plus
+  `tests/auth-login-structured-data.test.ts` and
+  `tests/search-structured-data.test.ts` — was **MERGED** 2026-08-11T00:37:07Z
+  as `1fdecda3` (merge of `3285e098`), with CI green (codex-node-checks
+  success). The lane independently validated the identical tree on a fresh
+  `origin/main` branch (focused vitest 4/4, typecheck pass) as PR #618 and
+  closed it as redundant (identical tree `f8dfd546`).
+
+## Evidence on current main
+
+- `git show 1fdecda3 --stat` → `app/routes/auth.login.tsx` (14 +-),
+  `tests/auth-login-structured-data.test.ts` (+103),
+  `tests/search-structured-data.test.ts` (+140) — the exact net #564 delta.
+- `git rev-parse 1fdecda3^{tree}` == `git rev-parse d5a85d46^{tree}` →
+  merged #564 tree byte-identical to lane-validated branch tree
+  (`f8dfd546…`).
+- `npx vitest run tests/search-structured-data.test.ts
+  tests/auth-login-structured-data.test.ts` → 2 files, 4 tests passed on
+  `origin/main` head before merge.
+- `git log origin/main --oneline -- app/routes/search.tsx` → `03bd3809`
+  (#600), ancestor of main; `git log origin/main --oneline -3` →
+  `1fdecda3` (#564), `67c11c1c` (#603).
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
