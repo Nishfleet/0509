@@ -471,3 +471,134 @@ describe("buildSearchAnswer", () => {
     });
   });
 });
+
+describe("buildSearchAnswer market scope", () => {
+  it("names the searched country in verified verdicts", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "India",
+    });
+
+    expect(answer.title).toBe(
+      "1 verified ad linked to boat-lifestyle.com in India",
+    );
+  });
+
+  it("spells the all-countries view explicitly in verified verdicts", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "all",
+    });
+
+    expect(answer.title).toBe(
+      "1 verified ad linked to boat-lifestyle.com across all countries",
+    );
+  });
+
+  it("names the market in no-verified verdicts so country filters cannot contradict", () => {
+    const india = buildSearchAnswer({
+      result: response({
+        ads: [],
+        broaderCandidateCount: 2,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "India",
+    });
+    const all = buildSearchAnswer({
+      result: response({
+        ads: [],
+        broaderCandidateCount: 2,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "all",
+    });
+
+    expect(india.title).toBe(
+      "No verified ads found for boat-lifestyle.com in India",
+    );
+    expect(all.title).toBe(
+      "No verified ads found for boat-lifestyle.com across all countries",
+    );
+  });
+
+  it("names the market in broader-match verdicts", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad({ landingPageUrl: null })],
+        broaderCandidateCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: true,
+      country: "India",
+    });
+
+    expect(answer.title).toBe(
+      "1 broader match for boat-lifestyle.com in India",
+    );
+  });
+
+  it("names the market in empty keyword verdicts", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [],
+      }),
+      displayDomain: null,
+      isDomainSearch: false,
+      isBroaderScope: false,
+      country: "India",
+    });
+
+    expect(answer.title).toBe("No ads found for this competitor in India");
+  });
+
+  it("names the market in partial-page verdicts", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+        nextCursor: "cursor-2",
+        discoveryPartial: true,
+        discoverySummary: "Some additional Meta results could not be loaded.",
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "India",
+    });
+
+    expect(answer.title).toBe(
+      "1 verified ad loaded so far for boat-lifestyle.com in India",
+    );
+  });
+
+  it("keeps the unscoped copy when no country is provided", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer.title).toBe("1 verified ad linked to boat-lifestyle.com");
+  });
+});
