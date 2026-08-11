@@ -11,6 +11,17 @@ cost option is an optional one-time $5 priority review fee. Submission
 requires a free AlternativeTo account with a verified email, plus owner
 decisions on a few fields — see [Owner decisions](#owner-decisions).
 
+## Submission status (recorded 2026-08-11)
+
+**NEEDS_NISH_STEP — not submitted.** Recorded 2026-08-11:
+
+- **Free submission is available**, but it requires a **new or existing
+  AlternativeTo account plus email verification**. The optional one-time
+  $5 priority review is **skipped** — the free backlog queue is accepted.
+- Exact next step: **Nish signs in (or creates and verifies) the
+  AlternativeTo account**, then the prepared suggestion can be submitted
+  with the fields below.
+
 ## How AlternativeTo listing works (verified from official FAQ, 2026-08-11)
 
 AlternativeTo is a free, crowd-sourced software directory. Anyone can add
