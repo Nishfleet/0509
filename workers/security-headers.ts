@@ -3,7 +3,16 @@ import { canUseSiteRepWidgetScript, hasSiteRepAuthCookie } from "../app/lib/site
 // Baseline security headers applied to every response. CSP allows Google Fonts
 // (used in app/root.tsx) and inline <script>/<style> emitted by React Router's
 // <Scripts /> / <Links /> during SSR hydration. Tighten to nonces in a follow-up.
-const BASE_SCRIPT_SRC = "script-src 'self' 'unsafe-inline'";
+//
+// Cloudflare Web Analytics is enabled for this zone with automatic (edge)
+// injection, so Cloudflare inserts its RUM beacon script into every HTML
+// response as it passes the edge. Without the beacon host in script-src the
+// beacon is blocked by the CSP and analytics silently records zero page views.
+// The beacon posts to /cdn-cgi/rum on the same origin, which connect-src 'self'
+// already permits — see the Cloudflare Web Analytics CSP guidance:
+// https://developers.cloudflare.com/web-analytics/faq/#what-do-i-need-to-add-to-my-content-security-policy-csp
+const CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC = "https://static.cloudflareinsights.com/beacon.min.js";
+const BASE_SCRIPT_SRC = `script-src 'self' 'unsafe-inline' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC}`;
 const SITE_REP_WIDGET_SCRIPT_SRC = `${BASE_SCRIPT_SRC} https://siterep.net`;
 
 export const SECURITY_HEADERS: Record<string, string> = {

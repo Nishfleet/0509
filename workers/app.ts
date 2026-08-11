@@ -58,7 +58,7 @@ function markdownResponse(request: Request, body: string): Response {
       headers: {
         "content-type": "text/markdown; charset=utf-8",
         "vary": "Accept",
-        "content-signal": "search=yes, ai-input=yes",
+        "content-signal": "search=yes, ai-input=yes, ai-train=no, use=reference",
       },
     }),
     request,
