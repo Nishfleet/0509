@@ -5,6 +5,7 @@ verbatim below.
 
 - [MONEY silent-failure remediation](#money-silent-failure-remediation) — PR #445, branch `fix/silent-fixmoney` (landed on `main`)
 - [Silent-failure observability remediation](#silent-failure-observability-remediation) — PR #447, branch `fix/silent-fixobserve`
+- [Anonymous search submit stays on "Searching…" after the request settles (2026-08-12 lane 4)](#anonymous-search-submit-stays-on-searching-after-the-request-settles-2026-08-12-lane-4--already-resolved-by-pr-559) — already resolved; evidence record only
 
 ---
 # MONEY silent-failure remediation
@@ -648,6 +649,104 @@ lane; the package is still current and accurate:
   "recently launched / early access", paid plan, refund if not featured)
   still holds. The one-day gap between the doc (2026-08-10) and this
   re-check does not change any field value.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Anonymous search submit stays on "Searching…" after the request settles (2026-08-12 lane 4) — already resolved by PR #559
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane4-anonymous-search-submit-searching-already-resolved`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Make the anonymous search submit leave "Searching…" after the request
+  settles [research-desk 2026-08-09 01:27 IST]
+
+## Verdict
+
+No code change was warranted. The anonymous /search submit already stays on
+"Searching…" after the request settles: the first anonymous query for an
+uncached advertiser returns the typed warming state immediately, the browser
+capture finishes in the background, and the submit keeps its pending label
+until the committed page actually renders results or an error — not when the
+network request merely settles. The resolving commits are all ancestors of the
+current `main` HEAD (`389c0e55`):
+
+- PR #559 / `90147b9b` (2026-08-09 16:00 IST) — "fix(search): anonymous submit
+  stays on Searching… while the cold-path search resolves". This is the exact
+  item, landed the same day the research-desk filed it (01:27 IST). It made
+  the See ads button stay pending while the cold-path search resolves, and
+  release with the same 5s x 12 = 60s budget as the warming poll so a
+  background capture that never lands cannot leave the button disabled
+  forever.
+- PR #612 / `90cea3a5` (2026-08-11) — honest end state when the anonymous
+  check outlives the 60s warming cap ("The check is taking longer than a
+  minute", auto-refresh retracted, working retry).
+- PR #579 / `1d00f084` (2026-08-11) — honest anonymous form error/status
+  states: a re-submit in flight suppresses the previous submission's
+  validation error in favor of "Searching…"/aria-busy, and the fresh loader
+  result (error or results) takes over on commit.
+- Adjacent honesty work in the same area: PR #567 / `5e682868` (public /search
+  "right now" promise gated on a proven fresh-live capture), PR #625 /
+  `3b542b79` (SSR/client parity for the proof capture label), PR #616 /
+  `9f0805d0` (anonymous search no longer commits visitor geo country).
+
+## Why the item was re-assigned
+
+Lane 12 (2026-08-12) covered the sibling cold-path item (first anonymous query
+takes ~20s before any useful result) and recorded its evidence in this file
+(`1542d53a` on branch `report/lane12-public-search-cold-path-already-resolved`,
+PR open at the time of writing). The submit-label half of that record (PR #559)
+is precisely this lane-4 item; no lane had recorded evidence for the submit
+label itself, so it stayed unchecked in the tracker and was assigned as lane
+4. This record closes that gap, re-verified on the current tip.
+
+## Evidence on current main
+
+- **Submit pending derivation** (`app/routes/search.tsx`,
+  `commandNavigationPending`): the See ads button stays pending when (a) a GET
+  navigation to a /search target that is NOT the committed location.search is
+  in flight (`searchCommandInFlight`), or (b) the committed page is warming —
+  `discoveryProgress === "warming"` with a search query, no visible ads, and
+  the warming poll budget not yet exhausted. So a settled request (navigation
+  idle, URL committed) does NOT flip the submit back to "See ads" while the
+  cold-path search is still running; it releases only when the committed page
+  renders results or an error, or when the 60s budget exhausts (and the
+  poll-exhausted path never leaves the button disabled forever).
+- The submit is wired with `pendingLabel="Searching…"` and `aria-busy` while
+  pending; the status region shows "Search in progress" alongside.
+
+## Regression pins (on this tip)
+
+- `tests/search-submission-settle.test.tsx` — "keeps See ads pending while a
+  new GET navigation to /search is loading", "renders results or the error
+  for the committed target and enables submit even when useNavigation still
+  says loading", "suppresses the stale validation error while a re-submit
+  navigation is in flight", "keeps See ads pending after the cold-path request
+  settles while the committed page is warming" (the exact item), "leaves
+  Searching… when the warming poll lands results on the committed page",
+  "never leaves the submit disabled when a warming search does not resolve",
+  "shows an honest end state when the warming check outlives the poll budget
+  and re-arms it on retry".
+- `tests/search-warming-state.test.ts` — submit stays on "Searching…" while
+  warming (request settled, search running).
+- `tests/ad-source.test.ts` — server returns the typed warming state
+  immediately while the background capture runs (lease + `waitUntil`).
+
+## Verification on this tip (origin/main `389c0e55`)
+
+- `tests/ad-source.test.ts` + `tests/search-warming-state.test.ts` +
+  `tests/search.route.test.ts` + `tests/search-v2.test.ts` +
+  `tests/e2e-search.server.test.ts` + `tests/search-execution.test.ts` +
+  `tests/search-live-claim.test.tsx` + `tests/search-load-more.test.ts` +
+  `tests/search-selection.paint-fast.test.ts` +
+  `tests/search-submission-settle.test.tsx`: 10 files, 182/182 passed.
+- `npm run typecheck`: exit 0.
 
 ## Files
 
