@@ -707,6 +707,7 @@ comments); #574 had already merged before this lane started.
 - `.lane/report.md` — evidence record only; no product code touched.
 
 ---
+
 # Daily market-signal D1 snapshot restore (five days stale)
 
 **Status: implemented; full Vitest green; PR open, not merged.**
@@ -779,3 +780,65 @@ commit the snapshot to `ops/market-signal/0509-market-signal.json` on `main`.
 The next scheduled run (or a manual `workflow_dispatch` on `main`) produces a
 fresh snapshot immediately; Hermes consumes it from `ops/market-signal/` with
 no host Cloudflare credential required.
+
+---
+
+# Brand "is running"/owns-Meta-ads claims on visitor pages (2026-08-12 lane 1) — re-verified already resolved by PRs #550/#561/#567/#620/#621
+
+**Status: already resolved on `origin/main`; this lane re-verified on the current tip and records the evidence only.**
+
+Branch: `report/lane1-brand-owns-ads-reverified`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Stop telling visitors a brand "is running" / owns Meta ads when the
+  cached creatives are other advertisers selling
+
+## Verdict
+
+No code change was warranted. The item is landed on `origin/main` and was
+previously recorded as resolved by lane 10 (2026-08-10, PR #597). This lane
+re-verified the claim on the current tip (`389c0e55`) and found it still holds:
+no commit since lane 10's base (`f2c583ef`) regressed the involved files, and
+the only later touches tightened honesty further:
+
+- PR #550 — `159edbd8` "fix(ads): brand pages stop claiming the brand
+  runs/owns ads from other advertisers", merged 2026-08-09.
+- PR #561 — `6f1026f3` "fix(ads): ad wall never labels an unconfirmed
+  creative with the brand name", merged 2026-08-09.
+- PR #567 — `5e682868` (search "right now" promise gating), merged 2026-08-09.
+- PR #620 — `5e63f1df` "fix(ads): live claim only within the moments-ago
+  window, not the whole hour", merged after lane 10's base.
+- PR #621 — `62381001` "fix(brand-pages): name the Ad Library country on
+  /ads/:domain", merged after lane 10's base (country labeling, unrelated).
+
+All five are ancestors of current `HEAD` (= `origin/main` `389c0e55`).
+`git log f2c583ef..HEAD -- app/lib/brand-page.server.ts app/routes/ads.$domain.tsx
+app/components/ads/` shows only #620 and #621, both honesty improvements.
+
+## Re-verification on this tip (2026-08-12)
+
+- `git merge-base --is-ancestor` confirms #550/#561/#567/#620/#621 are in HEAD.
+- `npx vitest run tests/ads-brand-page.signals.test.ts
+  tests/ads-brand-page.route.test.ts tests/ads-brand-page.render.test.tsx
+  tests/search-live-claim.test.tsx tests/ad-longevity-pill.test.tsx` — 5 files,
+  68/68 passed. These pin: ownership counting (v2 evidence, domain token, brand
+  label whole word), landing-only levels never count, unrelated sellers never
+  count, "stops telling visitors the brand is running ads when the creatives
+  are other advertisers'", mixed-split copy, unconfirmed-advertiser card
+  labels, and the live-claim tense flip.
+- Sweep of every public route on this tip (`ads.$domain`, `search`,
+  `marketing`, `compare/*`, `docs`, `changelog`, `help`, `privacy`, `terms`,
+  `trust`, `status`, `not-found`) plus `app/lib` email/display helpers found no
+  remaining unconditional brand-ownership claim about cached creatives. The
+  only "{Brand} is running" instances left in `ads.$domain.tsx` sit inside the
+  all-owned / mixed branches (both gated by `brandOwnedAdCount`); the
+  none-owned branch attributes to the advertisers/domain; `brand-ad-wall.tsx`
+  labels every card with the REAL cached advertiser (or "Advertiser
+  unconfirmed"); `competitor-list-display.ts` explicitly documents "it must not
+  claim a capture is running".
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
