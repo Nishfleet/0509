@@ -47,7 +47,7 @@ describe("marketing pricing SSR", () => {
     }));
     vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
 
-    const { loader } = await import("~/routes/marketing");
+    const { headers, loader } = await import("~/routes/marketing");
     const response = (await loader({
       context: { cloudflare: { env: {} } },
       request: new Request("https://0509.io/"),
@@ -60,6 +60,15 @@ describe("marketing pricing SSR", () => {
     // for another visitor.
     expect(response.headers.get("cache-control")).toBe("private, max-age=300");
     expect(response.headers.get("vary")).toContain("cookie");
+    // React Router only merges Set-Cookie from loader responses into the
+    // document; the route-level headers export must carry the rest through.
+    const documentHeaders = headers({
+      loaderHeaders: response.headers,
+      parentHeaders: new Headers(),
+      actionHeaders: new Headers(),
+      errorHeaders: undefined,
+    });
+    expect(documentHeaders.get("cache-control")).toBe("private, max-age=300");
     await expect(response.json()).resolves.toEqual({
       pricingPreview: availablePreview,
       commercialLaunch,
