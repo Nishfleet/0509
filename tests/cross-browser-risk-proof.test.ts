@@ -97,7 +97,7 @@ describe("risk-based cross-browser release proof", () => {
   it("installs every browser engine required by the protected-main deploy gate", () => {
     const workflow = readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8");
     expect(workflow).toContain(
-      "npx playwright install --with-deps chromium firefox webkit",
+      "npx playwright install chromium firefox webkit",
     );
   });
 

@@ -1,10 +1,16 @@
 import {
+  alertMaterialityReason,
   buildChangeIntelligenceSummary,
   type DigestCadence,
   digestCadenceLabel,
+  digestReviewerLabel,
   readDigestIntelligence,
 } from "~/lib/change-intelligence";
-import { buildDigestEmail, buildScanTroubleEmail } from "~/lib/digest-email.server";
+import {
+  buildDigestEmail,
+  buildScanTroubleEmail,
+  renderEmailAccountabilityBlock,
+} from "~/lib/digest-email.server";
 import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
@@ -48,6 +54,10 @@ import {
 } from "~/lib/delivery-email-core.server";
 import { evaluateDeliveryPolicy, resolveDeliveryConfig } from "~/lib/delivery-policy.server";
 import { isEmailSendingConfigured, type AppEnv } from "~/lib/env.server";
+import {
+  resolveCustomerEvidenceState,
+  type CustomerEvidenceState,
+} from "~/lib/evidence-render-contract";
 import {
   isSlackDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
@@ -179,7 +189,10 @@ export interface DeliverWeeklyDigestInput {
 
 export interface DeliverWatchlistAlertsInput {
   userId: string;
-  userName: string;
+  /** Workspace owner identity for the alert's accountable reviewer; null
+   * renders the truthful "Workspace owner" fallback — never the watchlist
+   * or competitor name. */
+  userName: string | null;
   accountEmail: string | null;
   watchlist: Pick<WatchlistRecord, "id" | "userId" | "name">;
   events: WatchEventRecord[];
@@ -520,7 +533,27 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
       ? await loadAlertAdsById(env, input.events)
       : new Map<string, AdRecord>();
 
+  // P1 evidence truth (2026-08-10): instant-alert materiality may only claim a
+  // verified move for events whose customer evidence state resolves to
+  // `verified_change` — a confirmed status alone is a claim, not evidence.
+  // One bounded batched query resolves every batch up front (never an N+1);
+  // provisional batches and WhatsApp-only batches keep their existing copy,
+  // so the query only runs when a materiality reason will actually render.
+  const needsEvidenceResolution = batches.some(
+    (batch) =>
+      !batch.provisional &&
+      (batch.allowedChannels.includes("email") || batch.allowedChannels.includes("slack")),
+  );
+  const alertEvidenceByEventId = needsEvidenceResolution
+    ? await loadAlertEvidenceStates(env, input.userId, input.events)
+    : new Map<string, CustomerEvidenceState>();
+
   const attempts: InstantAttemptSummary[] = [];
+
+  // E2 alert increment (2026-08-08): every delivered alert names exactly one
+  // accountable reviewer — the workspace owner identity when one is known,
+  // else the truthful "Workspace owner" fallback. Never the watchlist name.
+  const reviewerLabel = digestReviewerLabel(input.userName);
 
   for (const batch of batches) {
     const content = buildInstantAlertContent(
@@ -529,6 +562,8 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
       batch.provisional,
       env,
       alertAdsById,
+      reviewerLabel,
+      alertEvidenceByEventId,
     );
 
     if (batch.allowedChannels.includes("email")) {
@@ -2933,6 +2968,10 @@ type InstantAlertContent = {
   subject: string;
   html: string;
   watchlistUrl: string | null;
+  /** E2 alert increment: why this alert matters, derived never invented. */
+  materialityReason: string;
+  /** E2 alert increment: exactly one accountable reviewer per alert. */
+  reviewerLabel: string;
 };
 
 function buildInstantAlertBatches(input: {
@@ -3070,6 +3109,56 @@ async function loadAlertAdsById(env: AppEnv, events: WatchEventRecord[]) {
   }
 }
 
+/**
+ * P1 evidence truth (2026-08-10): resolves every alert event to its customer
+ * evidence state via the shared render contract, using one bounded batched
+ * query over the referenced proof captures. An event with no resolvable
+ * capture pair stays unverified — the contract fails closed, so missing,
+ * failed, or unordered evidence can never claim a verified move. A lookup
+ * failure (or a test adapter without the helper) degrades to no evidence,
+ * which makes the alert provisional — never blocks delivery and never
+ * invents evidence.
+ */
+async function loadAlertEvidenceStates(
+  env: AppEnv,
+  userId: string,
+  events: WatchEventRecord[],
+): Promise<Map<string, CustomerEvidenceState>> {
+  const states = new Map<string, CustomerEvidenceState>();
+  // The whole resolution is fail-closed: a missing helper on a test adapter
+  // (strict mocks throw on property access) or a failed lookup degrades to
+  // no evidence, which makes the alert provisional — it never blocks
+  // delivery and never invents evidence.
+  let pairs: Awaited<ReturnType<typeof deliveryData.listProofCapturePairsForEventIds>> = [];
+  try {
+    const listPairs = deliveryData.listProofCapturePairsForEventIds;
+    if (typeof listPairs !== "function") {
+      return states;
+    }
+    pairs = await listPairs(env, userId, events.map((event) => event.id));
+  } catch {
+    return states;
+  }
+  const byEventId = new Map(pairs.map((pair) => [pair.eventId, pair]));
+  for (const event of events) {
+    const pair = byEventId.get(event.id) ?? null;
+    states.set(
+      event.id,
+      resolveCustomerEvidenceState({
+        event,
+        proofCapture: pair?.current ?? null,
+        beforeCapturedAt: pair?.previous
+          ? (pair.previous.succeededAt ?? pair.previous.attemptedAt)
+          : null,
+        nowCapturedAt: pair?.current
+          ? (pair.current.succeededAt ?? pair.current.attemptedAt)
+          : null,
+      }),
+    );
+  }
+  return states;
+}
+
 // One creative image per alert email: the primary event's, only when a real
 // https creative URL was captured. Silent skip otherwise — no placeholders.
 function renderCreativeImageHtml(
@@ -3113,12 +3202,41 @@ export function buildInstantAlertContent(
   provisional: boolean,
   env: AppEnv,
   adsById?: Map<string, AdRecord>,
+  reviewerLabel?: string | null,
+  evidenceByEventId?: ReadonlyMap<string, CustomerEvidenceState> | null,
 ): InstantAlertContent {
   const primaryEvent = events[0];
   const competitor = readCompetitorLabel(primaryEvent) ?? watchlist.name;
   // WP-24: deep-link the primary change so "See the evidence" lands on the row.
   const watchlistUrl = buildWatchlistUrl(env, watchlist.id, primaryEvent?.id ?? null);
   const creativeImageHtml = renderCreativeImageHtml(primaryEvent, adsById);
+  // E2 alert increment (2026-08-08): every alert carries a named owner and a
+  // materiality reason before delivery. The reviewer is the workspace owner
+  // identity (truthful "Workspace owner" fallback, never invented from
+  // watchlist/event text); the materiality reason is derived from the filed
+  // events — provisional alerts say they are unconfirmed, baseline snapshots
+  // say they are starting points, confirmed changes say what moved.
+  const reviewer = digestReviewerLabel(reviewerLabel);
+  const baseline =
+    events.length === 1 &&
+    ((primaryEvent.metadata ?? {}) as Record<string, unknown>).kind === "baseline";
+  // P1 (2026-08-10): only events whose evidence resolves to a verified change
+  // may contribute confirmed materiality copy. A confirmed status alone is a
+  // claim, not evidence — without a succeeded, ordered capture pair the alert
+  // stays provisional, and mixed batches derive copy from verified items only
+  // so one evidenced event never inflates a batch of unverified ones.
+  const verifiedEvents = events.filter(
+    (event) => evidenceByEventId?.get(event.id) === "verified_change",
+  );
+  const materialityReason = alertMaterialityReason({
+    events: verifiedEvents,
+    provisional: provisional || (!baseline && verifiedEvents.length === 0),
+    baseline,
+  });
+  const accountabilityBlock = renderEmailAccountabilityBlock({
+    materialityReason,
+    reviewerLabel: reviewer,
+  });
 
   if (events.length === 1) {
     const isBaseline =
@@ -3141,6 +3259,8 @@ export function buildInstantAlertContent(
       shortChange,
       subject,
       watchlistUrl,
+      materialityReason,
+      reviewerLabel: reviewer,
       html: `
         <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
           <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
@@ -3149,6 +3269,7 @@ export function buildInstantAlertContent(
           <p style="margin: 0 0 8px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
           <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #5b6577;">${escapeHtml(intelligence.priorityBand)}</p>
           <p style="margin: 0 0 16px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
+          ${accountabilityBlock}
           ${renderEventDiffHtml(primaryEvent)}
           ${creativeImageHtml}
           ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 20px; border-radius:8px; font-weight:600; font-size:15px;">See the evidence</a></p>` : ""}
@@ -3172,11 +3293,14 @@ export function buildInstantAlertContent(
     shortChange: `${events.length} watchlist changes`,
     subject,
     watchlistUrl,
+    materialityReason,
+    reviewerLabel: reviewer,
     html: `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
         <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
         <h1 style="${EMAIL_H1_STYLE}">${escapeHtml(subject)}</h1>
         ${batchedAdvertiserNote}
+        ${accountabilityBlock}
         ${creativeImageHtml}
         <ul style="padding-left: 18px;">
           ${events
@@ -3213,6 +3337,13 @@ function renderInstantSlackText(content: InstantAlertContent, events: WatchEvent
   if (events.length > 6) {
     lines.push(`+${events.length - 6} more changes.`);
   }
+
+  // E2 alert increment (2026-08-08): Slack alerts carry the same named owner
+  // and materiality reason as the email — before delivery, on every channel.
+  lines.push(
+    `Why this matters: ${escapeSlackText(content.materialityReason)}`,
+    `Accountable reviewer: ${escapeSlackText(content.reviewerLabel)}`,
+  );
 
   if (content.watchlistUrl) {
     lines.push(`<${content.watchlistUrl}|View watchlist>`);
