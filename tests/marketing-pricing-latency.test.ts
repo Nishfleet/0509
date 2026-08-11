@@ -30,6 +30,9 @@ describe("marketing pricing latency", () => {
       getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
     }));
     vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+    vi.doMock("~/lib/public-proof.server", () => ({
+      loadPublicProofBrief: vi.fn().mockResolvedValue(null),
+    }));
 
     const { loader } = await import("~/routes/marketing");
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -51,6 +54,7 @@ describe("marketing pricing latency", () => {
       expect(result).toEqual({
         pricingPreview: { available: false },
         commercialLaunch,
+        proofBrief: null,
       });
       expect(previewDodo0509PlanPrices).not.toHaveBeenCalled();
       expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({

@@ -1511,8 +1511,11 @@ describe("searchMetaLibraryByBrowser", () => {
     );
     const liveFetches = nonDnsFetchCalls(fetch);
 
+    // The Quick Action content call times out and is retried once (bounded
+    // retry), then the pipeline falls through to the Browserless fallback.
     expect(String(liveFetches[0]?.[0])).toContain("/browser-rendering/content");
-    expect(String(liveFetches[1]?.[0])).toContain("/stealth/bql?token=browserless-token");
+    expect(String(liveFetches[1]?.[0])).toContain("/browser-rendering/content");
+    expect(String(liveFetches[2]?.[0])).toContain("/stealth/bql?token=browserless-token");
     expect(result.ads).toEqual([
       expect.objectContaining({
         metaAdId: "1234567890",
@@ -2958,5 +2961,150 @@ describe("Ad Library relay page-identity parsing", () => {
       pageId: "15087023444",
       pageName: "Nykaa",
     });
+  });
+});
+
+describe("Browser Run Quick Action capture retries", () => {
+  it("retries a transient 429 once (honoring Retry-After) and succeeds on the retry", async () => {
+    const fetch = mockFetchWithDns(
+      vi.fn(async (input) => {
+        if (!String(input).includes("/browser-rendering/content")) {
+          throw new Error("unexpected endpoint");
+        }
+        if (fetch.mock.calls.filter(([call]) => String(call).includes("/browser-rendering/content")).length === 1) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              errors: [{ message: "Too many requests" }],
+            }),
+            {
+              status: 429,
+              headers: {
+                "Content-Type": "application/json",
+                "Retry-After": "1",
+              },
+            },
+          );
+        }
+        return new Response(
+          JSON.stringify({ success: true, result: "captured content" }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "123",
+            },
+          },
+        );
+      }) as never,
+    );
+
+    const { captureBrowserRunQuickActionContent } = await import("~/lib/browser-run.server");
+    const result = await captureBrowserRunQuickActionContent(
+      {
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+      },
+      { url: "https://example.com/glow" },
+    );
+
+    const contentFetches = nonDnsFetchCalls(fetch).filter(([input]) =>
+      String(input).includes("/browser-rendering/content"),
+    );
+    expect(contentFetches).toHaveLength(2);
+    expect(result).toEqual({
+      browserMsUsed: 123,
+      content: "captured content",
+    });
+  });
+
+  it("keeps the final 429 error with its Retry-After when both attempts are rate limited", async () => {
+    const fetch = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ message: "Too many requests" }],
+          }),
+          {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": "10",
+            },
+          },
+        ),
+      ) as never,
+    );
+
+    const { captureBrowserRunQuickActionContent, BrowserRunQuickActionError } = await import(
+      "~/lib/browser-run.server"
+    );
+
+    await expect(
+      captureBrowserRunQuickActionContent(
+        {
+          BROWSER_RUN_ACCOUNT_ID: "acct-123",
+          BROWSER_RUN_API_TOKEN: "token-123",
+        },
+        { url: "https://example.com/glow" },
+      ),
+    ).rejects.toBeInstanceOf(BrowserRunQuickActionError);
+    const contentFetches = nonDnsFetchCalls(fetch).filter(([input]) =>
+      String(input).includes("/browser-rendering/content"),
+    );
+    expect(contentFetches).toHaveLength(2);
+    try {
+      await captureBrowserRunQuickActionContent(
+        {
+          BROWSER_RUN_ACCOUNT_ID: "acct-123",
+          BROWSER_RUN_API_TOKEN: "token-123",
+        },
+        { url: "https://example.com/glow" },
+      );
+      throw new Error("expected the second call to reject");
+    } catch (error) {
+      expect(error).toMatchObject({
+        status: 429,
+        retryAfterSeconds: 10,
+      });
+    }
+  });
+
+  it("does not retry a permanent 4xx failure", async () => {
+    const fetch = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ message: "Not authorized" }],
+          }),
+          {
+            status: 403,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      ) as never,
+    );
+
+    const { captureBrowserRunQuickActionContent, BrowserRunQuickActionError } = await import(
+      "~/lib/browser-run.server"
+    );
+
+    await expect(
+      captureBrowserRunQuickActionContent(
+        {
+          BROWSER_RUN_ACCOUNT_ID: "acct-123",
+          BROWSER_RUN_API_TOKEN: "token-123",
+        },
+        { url: "https://example.com/glow" },
+      ),
+    ).rejects.toBeInstanceOf(BrowserRunQuickActionError);
+    const contentFetches = nonDnsFetchCalls(fetch).filter(([input]) =>
+      String(input).includes("/browser-rendering/content"),
+    );
+    expect(contentFetches).toHaveLength(1);
   });
 });
