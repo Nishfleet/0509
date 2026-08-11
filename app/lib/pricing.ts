@@ -15,7 +15,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   const features: string[] = [];
 
   if (plan === "scout") {
-    features.push("Sample competitor brief before signup");
+    features.push("Proof brief before signup");
   }
 
   features.push(`${entitlements.watchlists} active watchlists`);
