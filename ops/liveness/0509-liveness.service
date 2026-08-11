@@ -1,0 +1,21 @@
+[Unit]
+Description=0509 production liveness probe (shallow + deep health)
+Documentation=https://github.com/nish3451/0509/blob/main/docs/ops-backup-uptime.md
+# Deliberately independent of any GitHub Actions runner or fleet service: the
+# probe must keep firing while every runner is busy or offline. It uses no
+# secrets and only needs outbound HTTPS to 0509.io.
+
+[Service]
+Type=oneshot
+# Dynamic user: no login account, no inherited credentials, network only.
+DynamicUser=yes
+StateDirectory=0509-liveness
+ExecStart=/opt/0509-liveness/0509-liveness-probe.sh
+# Hard bounds: one probe must finish well inside one 5-minute slot.
+TimeoutStartSec=180
+# A failed probe must leave the unit failed for operators and watchdogs;
+# do not restart into a tight failure loop.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
