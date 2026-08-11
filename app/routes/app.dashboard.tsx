@@ -760,18 +760,7 @@ export default function AppDashboardRoute() {
         <ActionFeedback data={actionData} intent="close-counter-move" />
       </div>
 
-      {setupCreatedCount > 0 ? (
-        <div className="f9-wk-sec">
-          <FeedbackStrip label="Setup complete">
-            Created {setupCreatedCount} competitor{" "}
-            {setupCreatedCount === 1 ? "watchlist" : "watchlists"}. The first
-            live scan has started — your first mini-brief lands on this page
-            automatically.
-          </FeedbackStrip>
-        </div>
-      ) : null}
-
-      {awaitingFirstScan ? (
+      {setupCreatedCount > 0 || awaitingFirstScan ? (
         <div className="f9-wk-sec">
           <FeedbackStrip
             actions={
@@ -780,11 +769,32 @@ export default function AppDashboardRoute() {
                 <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
               </Link>
             }
-            label="First scan live"
+            label={awaitingFirstScan ? "First scan live" : "Setup complete"}
           >
-            Your first scan is running now. This page refreshes automatically —
-            the first mini-brief and any proof-backed evidence land here the
-            moment the scan completes.
+            {setupCreatedCount > 0 ? (
+              awaitingFirstScan ? (
+                <>
+                  Created {setupCreatedCount} competitor{" "}
+                  {setupCreatedCount === 1 ? "watchlist" : "watchlists"} — the
+                  first live scan is running now. This page refreshes
+                  automatically, and your first mini-brief lands here the
+                  moment it completes.
+                </>
+              ) : (
+                <>
+                  Created {setupCreatedCount} competitor{" "}
+                  {setupCreatedCount === 1 ? "watchlist" : "watchlists"} — the
+                  first live scan has started. Your first mini-brief lands in
+                  the brief below as soon as it completes.
+                </>
+              )
+            ) : (
+              <>
+                Your first scan is running now. This page refreshes
+                automatically — the first mini-brief and any proof-backed
+                evidence land here the moment the scan completes.
+              </>
+            )}
           </FeedbackStrip>
         </div>
       ) : null}
