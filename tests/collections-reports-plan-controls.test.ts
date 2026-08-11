@@ -98,31 +98,26 @@ afterEach(() => {
 });
 
 describe("collection plan controls", () => {
-  it("locks collection creation before click for Free", async () => {
+  it("lets Free create its first Collection instead of gating", async () => {
     const markup = await renderCollections("free", []);
 
-    // BL-033a: a quiet v4 explanation and one filled upgrade action, with no
-    // dashed specimen theatre or shadow card.
-    expect(markup).toContain("f9-library-locked");
-    expect(markup).toContain("Collections start on Scout");
-    expect(markup).toContain(
-      "Saved evidence stays attached to its source, recorded date, and team notes.",
-    );
-    expect(markup).not.toContain("source, capture time, and team notes");
-    expect(markup).toContain("Upgrade to Scout");
-    expect(markup).toContain('href="/app/billing?source=collections#plans"');
-    expect(markup).not.toContain('name="intent" value="create-collection"');
-    expect(markup).not.toContain('placeholder="Nykaa competitors"');
+    // Honest 1-coll: Free includes exactly one Collection, so the empty
+    // Library shows the first-run create panel, not an upgrade wall.
+    expect(markup).not.toContain("f9-library-locked");
+    expect(markup).not.toContain("Collections start on Scout");
+    expect(markup).toContain('name="intent" value="create-collection"');
+    expect(markup).toContain("Start your first collection");
     expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
-    expect(markup).not.toContain("f9-evidence-specimen");
   });
 
-  it("keeps downgraded Free evidence visible without claiming a zero-item limit", async () => {
+  it("keeps a downgraded Free Collection visible and honestly reports the 1-Collection limit", async () => {
     const markup = await renderCollections("free");
 
     expect(markup).toContain("Launch proof");
-    expect(markup).toContain("New collections start on Scout");
-    expect(markup).toContain("Your saved evidence remains available");
+    expect(markup).toContain("Collection limit reached");
+    expect(markup).toContain("You are using all 1 Collection on this plan.");
+    expect(markup).not.toContain("New collections start on Scout");
+    expect(markup).not.toContain("Free does not include new collections");
     expect(markup).not.toContain("using all 0 collections");
     expect(markup).not.toContain('name="intent" value="create-collection"');
     expect(markup).toContain("View upgrade options");

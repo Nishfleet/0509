@@ -169,7 +169,7 @@ describe("collections Rank-1 budget (brief §5)", () => {
   });
 
   it.each([
-    ["free gate", { collections: [], plan: "free", selectedCollection: null }, 1],
+    ["free first run", { collections: [], plan: "free", selectedCollection: null }, 1],
     ["first run", { collections: [], plan: "agency", selectedCollection: null }, 1],
     ["selected but empty", {}, 1],
     ["populated", { items: [savedItem()] }, 1],
