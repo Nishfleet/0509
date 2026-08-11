@@ -50,6 +50,7 @@ const workspaceDeliveryConfig: WorkspaceDeliveryConfigRecord = {
   emailEnabled: true,
   whatsappEnabled: false,
   slackEnabled: true,
+  teamsEnabled: true,
   quietHours: null,
   timezone: "UTC",
   createdAt: "2026-04-10T00:00:00.000Z",
@@ -72,6 +73,7 @@ describe("delivery entitlement helpers", () => {
       emailEnabled: true,
       whatsappEnabled: false,
       slackEnabled: true,
+      teamsEnabled: true,
       quietHours: null,
       timezone: "UTC",
       createdAt: "2026-04-10T00:00:00.000Z",
@@ -82,6 +84,7 @@ describe("delivery entitlement helpers", () => {
       ...config,
       instantEnabled: false,
       slackEnabled: false,
+      teamsEnabled: false,
       emailEnabled: true,
     });
   });
@@ -90,6 +93,7 @@ describe("delivery entitlement helpers", () => {
     const config = {
       instantEnabled: true,
       slackEnabled: true,
+      teamsEnabled: true,
       emailEnabled: true,
     };
 

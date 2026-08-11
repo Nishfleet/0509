@@ -59,6 +59,7 @@ const workspaceDeliveryConfig: WorkspaceDeliveryConfigRecord = {
   emailEnabled: true,
   whatsappEnabled: false,
   slackEnabled: false,
+  teamsEnabled: false,
   quietHours: null,
   timezone: "Asia/Kolkata",
   createdAt: "2026-04-18T00:00:00.000Z",
@@ -75,6 +76,7 @@ const watchlistDeliveryConfig: WatchlistDeliveryConfigRecord = {
   emailEnabled: true,
   whatsappEnabled: true,
   slackEnabled: false,
+  teamsEnabled: false,
   quietHours: {
     startHour: 22,
     endHour: 8,

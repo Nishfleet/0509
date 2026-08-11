@@ -140,6 +140,7 @@ export interface WatchlistDeliveryConfigRow {
   email_enabled: number;
   whatsapp_enabled: number;
   slack_enabled: number;
+  teams_enabled: number;
   quiet_hours_json: string | null;
   timezone: string | null;
   created_at: string;
