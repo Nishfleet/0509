@@ -104,6 +104,9 @@ jobs:
           PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
           EMIT_PINNED_SHA: "1"
           GH_TOKEN: ${{ github.token }}
+          # Initial pin: fail-closed on ANY CAS failure, including remote-main
+          # drift. TOLERATE_MAIN_DRIFT is only granted to post-pin steps that
+          # re-verify the already-pinned SHA after the gate validated it.
         run: ./scripts/ci-verify-production-candidate.sh
 
   prepare_remote_restore_evidence:
@@ -133,6 +136,11 @@ jobs:
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance: pin_candidate already verified this
+          # exact SHA and this job checks out and works on exactly
+          # PINNED_SHA, so a mid-run move of main must not fail the run.
+          # Every other CAS failure stays fail-closed.
+          TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -244,6 +252,12 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance: this job exists only to publish evidence
+          # for the exact SHA pin_candidate already verified, and it checks
+          # out exactly PINNED_SHA. A mid-run move of main does not change the
+          # SHA the evidence belongs to, so drift must not fail the run.
+          # Every other CAS failure stays fail-closed.
+          TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/ci-verify-provider-main-cas.sh
       - name: Create fresh backup and prove an isolated remote restore
         env:
@@ -419,6 +433,11 @@ jobs:
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance: pin_candidate already verified this
+          # exact SHA and the deploy ships exactly PINNED_SHA, so a mid-run
+          # move of main must not fail the run after the gate validated the
+          # pinned candidate. Every other CAS failure stays fail-closed.
+          TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/ci-verify-production-candidate.sh
 
       - name: Acquire deploy window
@@ -525,8 +544,13 @@ jobs:
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
         run: |
           set -euo pipefail
+          # Classic `wrangler secret put` matches the classic `wrangler deploy`
+          # this pipeline uses (deploy-production-plan.mjs). `wrangler versions
+          # secret put` re-fetches the worker and reparses multipart FormData,
+          # which broke with "Failed to parse body as FormData" (run
+          # 31514742997) while the classic path keeps working.
           printf '%s' "$CANARY_BYPASS_TOKEN" |
-            ./node_modules/.bin/wrangler versions secret put CANARY_BYPASS_TOKEN --name 0509
+            ./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509
 
       - name: Deploy
         env:
