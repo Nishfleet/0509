@@ -95,6 +95,7 @@ import {
   formatOfferLabel,
   formatProofCaptureLabel,
   formatResultsPanelTitle,
+  formatSearchCaptureAgeLabel,
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
   formatSearchSourceLabel,
@@ -232,6 +233,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
       collections: [],
@@ -259,6 +261,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
       collections: [],
@@ -389,6 +392,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           fingerprint: parsed.fingerprint,
           result: buildIdleSearchResult(),
           selectedAd: null,
+          resultCaptureAgeLabel: null,
           stealSummary: null,
           selectionEnrichmentPending: false,
           collections,
@@ -415,6 +419,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
       collections,
@@ -546,6 +551,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     fingerprint: parsed.fingerprint,
     result: hydratedResult,
     selectedAd,
+    resultCaptureAgeLabel: formatSearchCaptureAgeLabel(
+      hydratedResult.cacheFetchedAt,
+      new Date(),
+    ),
     stealSummary,
     selectionEnrichmentPending: Boolean(selectionEnrichmentPending),
     collections,
@@ -1708,6 +1717,15 @@ export default function SearchRoute() {
                     <h2 className="f9-wk-sec-title">
                       {sectionHeadline}
                     </h2>
+                    {/* Snapshot age: a cache-served result names how old the
+                        capture is, so a stale per-country snapshot is
+                        self-evidently stale instead of looking current. The
+                        label is computed once in the loader (hydration-safe). */}
+                    {data.resultCaptureAgeLabel ? (
+                      <p className="f9-wk-sec-sub f9-wk-sec-capture-age">
+                        {data.resultCaptureAgeLabel}
+                      </p>
+                    ) : null}
                     {/* One sub-line, and the search answer's own sentence
                         wins it when there is one — the panel below then
                         carries only the facts it uniquely knows. */}
