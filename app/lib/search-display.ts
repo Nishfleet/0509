@@ -8,6 +8,7 @@
 import { formatAdsFoundLabel } from "~/lib/analysis-display";
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import { normalizeSavedQuery } from "~/lib/normalize";
+import { scrubBrokenUnicode } from "~/lib/text-safe";
 import type {
   AdRecord,
   SearchFilters,
@@ -212,11 +213,11 @@ export function formatProofCaptureLabel(ad: AdRecord) {
 }
 
 export function formatHookLabel(hook: string) {
-  return hook.trim() || "Hook not detected.";
+  return scrubBrokenUnicode(hook).trim() || "Hook not detected.";
 }
 
 export function formatOfferLabel(offer: string) {
-  return offer.trim() || "No explicit offer detected.";
+  return scrubBrokenUnicode(offer).trim() || "No explicit offer detected.";
 }
 
 export function formatCreativeFormatLabel(format: AdRecord["format"]) {
@@ -292,7 +293,10 @@ function firstDistinctDisplayText(
 }
 
 function cleanDisplayText(value: string | null | undefined) {
-  const lines = String(value ?? "")
+  // Scrub already-persisted corruption (U+FFFD / lone surrogates) so a stale
+  // cache entry can never render the broken-emoji glyph on /search. Real
+  // emoji (well-formed surrogate pairs) pass through untouched.
+  const lines = scrubBrokenUnicode(String(value ?? ""))
     .split(/\n+/)
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
