@@ -27,6 +27,8 @@ import { ClientRoomWriteConflictError } from "~/lib/data/customer-api-rooms.serv
 import type { AppEnv } from "~/lib/env.server";
 import type { OwnedReportDataSource } from "~/lib/report-loader.server";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
+import { buildCourtPack } from "~/lib/court-pack-builder.server";
+import { CourtPackView } from "~/components/court-pack-view";
 import type { PlanFamily } from "~/lib/plan-entitlements";
 import { createReportId, parseReportId } from "~/lib/report";
 import {
@@ -141,11 +143,21 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ),
   ]);
   const memories = uniqueAgentMemories([...recentMemories, ...roomMemories]);
+  const reportData = await import("~/lib/data.server");
+  const packs = canUsePlanFeature(plan, "client_reports")
+    ? await Promise.all(currentRoomStates.map(({ room }) => buildCourtPack(
+        env,
+        workspaceUserId,
+        room,
+        reportData,
+      )))
+    : [];
 
   return {
     plan,
     canManageClientRooms: canUsePlanFeature(plan, "client_reports"),
     rooms: currentRoomStates.map((state) => safeClientRoomForUi(state.room)),
+    packs,
     roomsMayBeTruncated: rooms.length >= CLIENT_ROOM_DISPLAY_LIMIT,
     roomMemoryUnavailable,
     approvalUnavailableRoomIds: currentRoomStates
@@ -762,6 +774,7 @@ export default function ClientsRoute() {
               memories={memoriesByClientRoomId.get(room.id) ?? []}
               roomMemoryUnavailable={data.roomMemoryUnavailable}
               room={room}
+              pack={data.packs.find((candidate) => candidate.roomId === room.id)}
             />
           ))}
           {activeRooms.length === 0 ? (
@@ -1147,6 +1160,7 @@ function ClientRoomCard({
   memories: Array<{ key: string }>;
   roomMemoryUnavailable: boolean;
   room: ClientRoomRecord;
+  pack?: Awaited<ReturnType<typeof buildCourtPack>>;
 }) {
   const handoff = summarizeClientRoomHandoff(
     room,
@@ -1190,6 +1204,7 @@ function ClientRoomCard({
           </div>
         </dl>
 
+        {pack ? <CourtPackView pack={pack} /> : null}
         <div className="f9-rooms-actions">
           {room.resourceRefs.map((ref) => (
             <Link className="f9-wk-lnk" key={`${ref.resourceType}:${ref.resourceId}`} to={resourceHref(ref)}>
