@@ -170,9 +170,6 @@ export function DashboardShell({
             {railNote}
 
             <div className="f9-dash-rail-footer">
-              <Link prefetch="intent" to="/help">
-                Help
-              </Link>
               <Link prefetch="intent" to="/docs">
                 Docs
               </Link>
