@@ -47,7 +47,7 @@ describe("uptime health workflow", () => {
     expect(healthStep?.run).toContain("curl --fail --show-error --silent --max-time 20 --retry 2");
     expect(healthStep?.run).toContain('payload.get("status") != "ok"');
     expect(healthStep?.run).toContain('payload.get("app") != "0509"');
-    expect(healthStep?.run).toContain('identity.get("searchRolloutMode") != "shadow"');
+    expect(healthStep?.run).toContain('identity.get("searchRolloutMode") != "v2"');
     expect(healthStep?.run).toContain("worker_version=");
   });
 
@@ -86,7 +86,7 @@ describe("uptime health workflow", () => {
     const healthy = {
       status: "ok",
       checks: { d1: "ok", scheduledWork: "ok" },
-      releaseIdentity: { workerVersionId: "worker-v1", searchRolloutMode: "shadow" },
+      releaseIdentity: { workerVersionId: "worker-v1", searchRolloutMode: "v2" },
     };
 
     try {
@@ -98,7 +98,7 @@ describe("uptime health workflow", () => {
       expect(run({ ...healthy, status: "degraded" }).status).not.toBe(0);
       expect(run({
         ...healthy,
-        releaseIdentity: { workerVersionId: "other", searchRolloutMode: "shadow" },
+        releaseIdentity: { workerVersionId: "other", searchRolloutMode: "v2" },
       }).status).not.toBe(0);
     } finally {
       rmSync(root, { recursive: true, force: true });
