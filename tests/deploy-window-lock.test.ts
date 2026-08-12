@@ -128,7 +128,10 @@ async function waitFor(
 // Liveness is judged by /proc identity, mirroring the script's own
 // process_identity_is_live() (start time + non-zombie state). kill -0 is
 // deliberately avoided: it is unreliable across distinct runner UIDs
-// (EPERM on a live peer) and this file's first spec locks that choice in.
+// (EPERM on a live peer), and it reports a dead-but-unreaped zombie as
+// alive (kill(pid, 0) succeeds on state "Z"), so a waitFor on
+// !pidAlive(...) can still be followed by a successful kill -0. This
+// file's first spec locks the /proc-identity choice in.
 function pidAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false;
@@ -600,7 +603,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
 
     try {
       commandPid = await readPidWhenWritten(marker);
-      expect(() => process.kill(commandPid, 0)).not.toThrow();
+      expect(pidAlive(commandPid)).toBe(true);
 
       lane.kill("SIGTERM");
       expect((await laneResult).code).toBe(143);
@@ -608,7 +611,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
         () =>
           probeIsFree(lockFile) && slotIsFree(lockFile, 1) && !pidAlive(commandPid),
       );
-      expect(() => process.kill(commandPid, 0)).toThrow();
+      expect(pidAlive(commandPid)).toBe(false);
     } finally {
       if (Number.isInteger(commandPid) && commandPid > 0) {
         try {
@@ -661,7 +664,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
           slotIsFree(lockFile, 1) &&
           !pidAlive(commandPid),
       );
-      expect(() => process.kill(commandPid, 0)).toThrow();
+      expect(pidAlive(commandPid)).toBe(false);
 
       const replacement = spawnScript(
         lockFile,
@@ -722,7 +725,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
 
     try {
       childPid = await readPidWhenWritten(childPidFile);
-      expect(() => process.kill(childPid, 0)).not.toThrow();
+      expect(pidAlive(childPid)).toBe(true);
 
       lane.kill("SIGTERM");
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
@@ -733,7 +736,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
         () =>
           probeIsFree(lockFile) && slotIsFree(lockFile, 1) && !pidAlive(childPid),
       );
-      expect(() => process.kill(childPid, 0)).toThrow();
+      expect(pidAlive(childPid)).toBe(false);
     } finally {
       if (Number.isInteger(childPid) && childPid > 0) {
         try {
