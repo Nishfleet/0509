@@ -282,7 +282,7 @@ describe("launch readiness canary cycle", () => {
       ...healthBaseUrls,
     ]);
     expect(checkHealthImpl.mock.calls.every(([input]) =>
-      input.expectedSearchRolloutMode === "shadow"
+      input.expectedSearchRolloutMode === "v2"
     )).toBe(true);
     expect(delayImpl).toHaveBeenCalledTimes(2);
   });
