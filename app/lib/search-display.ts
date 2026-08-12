@@ -183,14 +183,28 @@ export function formatSearchFreshnessLabel(result: SearchResponse) {
   return "Freshness unavailable";
 }
 
+/**
+ * Deterministic formatter for the "Landing page checked …" proof label.
+ * Locale and timezone are pinned so the server-rendered label equals the
+ * hydrated client copy: `toLocaleString(undefined, …)` picks the runtime's
+ * default locale and timezone, which differ between SSR (UTC) and the
+ * visitor's browser (their local zone and language) and would fire a React
+ * hydration mismatch. UTC is the stored instant's canonical timezone; the
+ * label spells it out so the timestamp is not mistaken for local time.
+ */
+const PROOF_CAPTURE_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "UTC",
+});
+
 export function formatProofCaptureLabel(ad: AdRecord) {
   if (ad.landingPage?.capturedAt) {
     const capturedAt = new Date(ad.landingPage.capturedAt);
     if (!Number.isNaN(capturedAt.getTime())) {
-      return `Landing page checked ${capturedAt.toLocaleString(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })}`;
+      return `Landing page checked ${PROOF_CAPTURE_DATE_FORMATTER.format(
+        capturedAt,
+      )} UTC`;
     }
   }
   return ad.landingPageUrl
