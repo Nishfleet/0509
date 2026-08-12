@@ -29,6 +29,7 @@ const parsed = parse(source) as {
     environment?: string | { name?: string };
     "timeout-minutes"?: number;
     if?: string;
+    permissions?: Record<string, string>;
     env?: Record<string, string>;
     steps?: Step[];
   }>;
@@ -41,6 +42,10 @@ describe("daily market-signal D1 snapshot workflow", () => {
   it("runs on a daily morning schedule and supports an immediate manual restore", () => {
     expect(parsed.on?.schedule).toEqual([{ cron: "7 0 * * *" }]);
     expect(parsed.on?.workflow_dispatch).toBeDefined();
+  });
+
+  it("grants the snapshot job read access to issues so the gh API call can list repository issues", () => {
+    expect(job.permissions).toMatchObject({ issues: "read" });
   });
 
   it("generates the snapshot with Cloudflare token secrets on the self-hosted production-environment job", () => {

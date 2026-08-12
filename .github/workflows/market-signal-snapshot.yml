@@ -40,6 +40,14 @@ jobs:
     runs-on: [self-hosted, linux, x64, vps-verify]
     timeout-minutes: 30
     environment: production
+    # The script lists repository issues through gh; the default GITHUB_TOKEN
+    # with only contents: write refuses that with HTTP 403 "Resource not
+    # accessible by integration", which failed every dispatch since #586.
+    # contents: read is enough for the gh call; the commit step uses the
+    # workflow-level contents: write above.
+    permissions:
+      contents: read
+      issues: read
     # Scheduled runs execute on the default branch; manual dispatches must also
     # name main so a branch dispatch cannot push the snapshot from a fork.
     if: github.ref == 'refs/heads/main'
