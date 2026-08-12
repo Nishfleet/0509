@@ -1,0 +1,113 @@
+name: Lane evidence gate
+
+# Lane evidence used to be appended to one shared tracked file
+# (.lane/report.md). On 2026-08-12, 25 of 61 open PRs edited it and ~20 were
+# merge-conflicted purely from colliding appends. Evidence now lives in one
+# file per record under .lane/reports/, and this gate makes the collision
+# impossible by construction:
+#
+#   1. .lane/report.md is a frozen index: any edit that grows or rewrites it
+#      fails. Only net-removing migrations (records moved out to reports/)
+#      pass.
+#   2. A .lane/reports/<slug>.md file must be owned by exactly one open PR:
+#      the first PR to claim a slug owns it, and any second writer fails and
+#      must pick a fresh slug (see .lane/README.md).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: lane-evidence-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, linux, x64, vps-verify]
+    timeout-minutes: 10
+    steps:
+      - name: Reject colliding lane-evidence edits
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          REPO="$REPO" PR="$PR" python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          repo = os.environ["REPO"]
+          pr = os.environ["PR"]
+          shared = ".lane/report.md"
+          prefix = ".lane/reports/"
+
+          def gh(*args):
+              return subprocess.run(
+                  ["gh", *args], capture_output=True, text=True, check=True
+              ).stdout
+
+          def fail(message):
+              print(f"::error::{message}")
+              sys.exit(1)
+
+          files = json.loads(gh("pr", "view", pr, "--repo", repo, "--json", "files"))["files"]
+          mine = set()
+          for f in files:
+              mine.add(f["path"])
+              if f.get("previous_filename"):
+                  mine.add(f["previous_filename"])
+
+          entry = next((f for f in files if f["path"] == shared), None)
+          if entry is not None:
+              if entry["additions"] >= entry["deletions"]:
+                  fail(
+                      f"{shared} is a frozen index; this PR grew or rewrote it "
+                      f"(+{entry['additions']}/-{entry['deletions']}). Lane evidence goes in a "
+                      f"NEW file under .lane/reports/<kebab-slug>.md, one record per file, "
+                      f"per .lane/README.md. Only net-removing migrations of records out of "
+                      f"{shared} are allowed."
+                  )
+
+          records = sorted(p for p in mine if p.startswith(prefix))
+          if not records:
+              print("No lane-evidence record files in this PR; gate passed.")
+              sys.exit(0)
+
+          open_prs = json.loads(
+              gh("pr", "list", "--repo", repo, "--state", "open", "--base", "main", "--json", "number")
+          )
+          clashes = []
+          for other in open_prs:
+              number = str(other["number"])
+              if number == pr:
+                  continue
+              try:
+                  other_files = json.loads(
+                      gh("pr", "view", number, "--repo", repo, "--json", "files")
+                  )["files"]
+              except subprocess.CalledProcessError:
+                  continue
+              other_records = set()
+              for f in other_files:
+                  other_records.add(f["path"])
+                  if f.get("previous_filename"):
+                      other_records.add(f["previous_filename"])
+              for path in records:
+                  if path in other_records:
+                      clashes.append((number, path))
+          if clashes:
+              detail = "; ".join(f"PR #{number} already touches {path}" for number, path in clashes)
+              fail(
+                  f"Lane-evidence slug collision: {detail}. One record = one file; "
+                  f"pick a fresh .lane/reports/<kebab-slug>.md for this PR (see "
+                  f".lane/README.md)."
+              )
+          print(f"{len(records)} lane-evidence record file(s), all unique to this PR; gate passed.")
+          PY

@@ -37,3 +37,10 @@ worker-configuration.d.ts
 .codex/environments/*
 !.codex/environments/environment.toml
 .gstack/
+
+# Lane evidence records under .lane/reports/ are tracked repo content. The
+# shared VPS .git/info/exclude hides .lane/ scratch from git status; re-include
+# the records directory so new per-record evidence files stay visible and
+# committable in every worktree.
+!.lane/
+!.lane/reports/
