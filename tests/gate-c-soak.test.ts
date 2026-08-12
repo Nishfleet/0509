@@ -70,7 +70,7 @@ function gateBManifest(artifacts: Array<{ name: string; bytes: number; sha256: s
     postflight: {
       launchConfig: {
         wranglerWorktreeSha256: "c".repeat(64),
-        productionSearchRolloutMode: "shadow",
+        productionSearchRolloutMode: "v2",
         providerNetworkDeny: true,
         retries: 0,
         workers: 1,
@@ -85,7 +85,7 @@ function passingGateCJournal() {
   return {
     schemaVersion: 1,
     workerVersionId: WORKER_VERSION,
-    searchRolloutMode: "shadow",
+    searchRolloutMode: "v2",
     status: "passed",
     errors: [],
     steps: Object.fromEntries(
@@ -151,7 +151,7 @@ function fixture() {
     postflight: {
       launchConfig: {
         wranglerWorktreeSha256: "c".repeat(64),
-        productionSearchRolloutMode: "shadow",
+        productionSearchRolloutMode: "v2",
         providerNetworkDeny: true,
         retries: 0,
         workers: 1,
@@ -165,7 +165,7 @@ function fixture() {
   privateJson(gateC, {
     schemaVersion: 1,
     workerVersionId: WORKER_VERSION,
-    searchRolloutMode: "shadow",
+    searchRolloutMode: "v2",
     status: "passed",
     errors: [],
     steps: Object.fromEntries([
@@ -208,7 +208,7 @@ describe("Gate C scheduled-work soak journal", () => {
       candidate: { headCommit: HEAD, candidateFingerprint: "b".repeat(64) },
       deployment: {
         workerVersionId: WORKER_VERSION,
-        searchRolloutMode: "shadow",
+        searchRolloutMode: "v2",
         githubWorkflowRunId: DEPLOY_RUN_ID,
         githubWorkflowRunAttempt: DEPLOY_RUN_ATTEMPT,
       },
@@ -426,7 +426,7 @@ describe("Gate C scheduled-work soak journal", () => {
         schemaVersion: 1,
         evidenceClass: "exact_worker_scheduled_observation",
         workerVersionId: WORKER_VERSION,
-        searchRolloutMode: "shadow",
+        searchRolloutMode: "v2",
         window: {
           startedAt: targetJournal.window.startedAt,
           endedAt: targetJournal.window.endedAt,
@@ -511,7 +511,7 @@ describe("Gate C scheduled-work soak journal", () => {
     const gateC = {
       schemaVersion: 1,
       workerVersionId: WORKER_VERSION,
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       gateRunId: runId,
       generatedAt: endedAt,
       completedAt: new Date(Date.parse(endedAt) + 1_000).toISOString(),
@@ -575,7 +575,7 @@ describe("Gate C scheduled-work soak journal", () => {
     privateJson(resolve(gateC), {
       schemaVersion: 1,
       workerVersionId: WORKER_VERSION,
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       status: "passed",
       errors: [],
       steps: Object.fromEntries([
@@ -647,7 +647,7 @@ describe("Gate C scheduled-work soak journal", () => {
     privateJson(resolve(gateC), {
       schemaVersion: 1,
       workerVersionId: WORKER_VERSION,
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       status: "passed",
       errors: [],
       steps: Object.fromEntries([
@@ -711,7 +711,7 @@ describe("Gate C scheduled-work soak journal", () => {
     privateJson(resolve(gateC), {
       schemaVersion: 1,
       workerVersionId: WORKER_VERSION,
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       status: "passed",
       errors: [],
       steps: Object.fromEntries([
@@ -779,7 +779,7 @@ describe("Gate C scheduled-work soak journal", () => {
     privateJson(resolve(gateC), {
       schemaVersion: 1,
       workerVersionId: WORKER_VERSION,
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       status: "passed",
       errors: [],
       steps: Object.fromEntries([
