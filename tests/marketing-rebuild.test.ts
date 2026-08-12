@@ -201,6 +201,14 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Brief export");
   });
 
+  it("never injects raw digest-markdown syntax into the homepage markup", () => {
+    expect(marketingRoute).toContain("renderDigestMarkdownPreview");
+    expect(marketingRoute).not.toContain("*Nykaa changed the routine bundle angle*");
+    expect(marketingRoute).not.toContain(
+      '<p className="ld-export">{demoProof.exports.digestMarkdown}</p>',
+    );
+  });
+
   it("keeps unsupported social and internal implementation claims out of homepage copy", () => {
     for (const unsupported of ["Slack", "WhatsApp", "Reddit", "LinkedIn", "Twitter"]) {
       expect(marketingRoute).not.toContain(unsupported);
