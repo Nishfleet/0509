@@ -18,7 +18,13 @@ permissions: {}
 jobs:
   authorize_release:
     name: Authorize exact verification candidate
-    if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    # No job-level fork guard here: a fork PR must produce a real job outcome,
+    # never a skip (GitHub accepts skipped required contexts as satisfied).
+    # The fork guard lives in the authorize step below, which refuses fork PRs
+    # with a real failure. This job is not itself a required context; the
+    # required codex-node-checks job below turns any failed authorization into
+    # a real failure via its "Require authorization gate" step.
+    if: github.repository == 'nish3451/0509'
     runs-on: [self-hosted, linux, x64, vps-verify]
     permissions: {}
     outputs:
@@ -54,10 +60,13 @@ jobs:
           printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
   codex-node-checks:
+    # Required context. It runs unconditionally (never skips on a fork PR):
+    # the "Require authorization gate" step below turns any failed or skipped
+    # authorization (fork PRs included) into a real job failure. A gate that
+    # cannot verify must say no, never render as green.
     if: >-
       github.repository == 'nish3451/0509' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
-      needs.authorize_release.result == 'success'
+      !cancelled()
     needs: authorize_release
     runs-on: [self-hosted, linux, x64, vps-verify]
     permissions:
@@ -66,6 +75,14 @@ jobs:
     # one 180m total budget shared between its lane slot and the deploy gate.
     timeout-minutes: 270
     steps:
+      - name: Require authorization gate
+        if: needs.authorize_release.result != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::error::codex-node-checks refused: authorize_release concluded '${{ needs.authorize_release.result }}' (expected 'success'). Fork PRs and unapproved dispatch candidates are never verified."
+          exit 1
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.authorize_release.outputs.sha }}
