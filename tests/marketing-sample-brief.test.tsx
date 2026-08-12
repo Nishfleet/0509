@@ -190,4 +190,23 @@ describe("anonymous homepage sample brief", () => {
     expect(sampleProofValue("   ")).toBe("Not available in this sample");
     expect(sampleProofValue("  A value  ")).toBe("A value");
   });
+
+  it("renders the brief-export preview without leaking raw markdown syntax", async () => {
+    const markup = await renderMarketing();
+
+    expect(markup).toContain("Brief export");
+    expect(markup).toContain("<strong>Nykaa changed the routine bundle angle</strong>");
+    expect(markup).not.toContain("*Nykaa changed the routine bundle angle*");
+    expect(markup).toContain("Priority: Review before next campaign refresh");
+    expect(markup).toContain(
+      "Sources: illustrative sample captures — landing-page snapshot, page text capture, Meta Ad Library capture",
+    );
+  });
+
+  it("keeps the API digest-markdown fixture raw for /api/demo-proof", async () => {
+    const { demoProof } = await import("~/lib/demo-proof");
+
+    expect(demoProof.exports.digestMarkdown).toContain("*Nykaa changed the routine bundle angle*");
+    expect(demoProof.exports.digestMarkdown).toContain("\nPriority:");
+  });
 });
