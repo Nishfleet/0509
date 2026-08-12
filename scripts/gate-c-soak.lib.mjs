@@ -111,7 +111,7 @@ export function validateGateBManifest(manifest) {
     !SHA256.test(manifest?.candidateFingerprint ?? "") ||
     !config ||
     !SHA256.test(config.wranglerWorktreeSha256 ?? "") ||
-    config.productionSearchRolloutMode !== "shadow" ||
+    config.productionSearchRolloutMode !== "v2" ||
     config.providerNetworkDeny !== true ||
     config.retries !== 0 ||
     config.workers !== 1 ||
@@ -131,7 +131,7 @@ export function validateImmediateGateCJournal(journal, workerVersionId) {
   if (
     journal?.schemaVersion !== 1 ||
     journal?.workerVersionId !== workerVersionId ||
-    journal?.searchRolloutMode !== "shadow" ||
+    journal?.searchRolloutMode !== "v2" ||
     journal?.status !== "passed" ||
     !Array.isArray(journal?.errors) ||
     journal.errors.length !== 0 ||
@@ -206,7 +206,7 @@ export function buildRunningSoakJournal({
     },
     deployment: {
       workerVersionId,
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       githubWorkflowRunId: deploymentWorkflowRunId,
       githubWorkflowRunAttempt: deploymentWorkflowRunAttempt,
       wranglerOutputPath,
@@ -242,7 +242,7 @@ function validateSoakJournalIdentityAndReferences(journal) {
     journal?.schemaVersion !== GATE_C_SOAK_SCHEMA_VERSION ||
     journal?.kind !== "gate-c-exact-worker-scheduled-soak" ||
     journal?.status !== "running" ||
-    journal?.deployment?.searchRolloutMode !== "shadow" ||
+    journal?.deployment?.searchRolloutMode !== "v2" ||
     !SAFE_VERSION.test(journal?.deployment?.workerVersionId ?? "") ||
     !Number.isSafeInteger(journal?.deployment?.githubWorkflowRunId) ||
     journal.deployment.githubWorkflowRunId <= 0 ||
@@ -372,7 +372,7 @@ export function validateReleaseSoakPayload(payload, journal) {
     value.ok !== true || value.passed !== true || value.schemaVersion !== 1 ||
     value.evidenceClass !== "exact_worker_scheduled_observation" ||
     value.workerVersionId !== journal.deployment.workerVersionId ||
-    value.searchRolloutMode !== "shadow" ||
+    value.searchRolloutMode !== "v2" ||
     !window || window.startedAt !== journal.window.startedAt || window.endedAt !== journal.window.endedAt ||
     window.durationMs !== GATE_C_SOAK_DURATION_MS ||
     !slo || slo.maxTaskDurationMs !== GATE_C_MAX_TASK_DURATION_MS ||
