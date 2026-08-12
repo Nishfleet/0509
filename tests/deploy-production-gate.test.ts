@@ -124,7 +124,7 @@ function passingEvidence() {
       launchConfig: {
         identity: "c".repeat(64),
         wranglerWorktreeSha256: wranglerHash,
-        productionSearchRolloutMode: "shadow",
+        productionSearchRolloutMode: "v2",
         localProofSearchRolloutMode: "v2",
         providerNetworkDeny: true,
         authProvider: "better-auth",
@@ -178,7 +178,7 @@ function passingRemoteRestoreEvidence() {
     migrationCount: 2,
     planRowCount: 5,
     dodoLinkedPlanRowCount: 5,
-    productionSearchRolloutMode: "shadow",
+    productionSearchRolloutMode: "v2",
     integrity: "ok",
     foreignKeyViolations: 0,
     exactRowCounts: true,
@@ -2199,7 +2199,7 @@ exec /bin/mv "$@"
     expect(validateDeployReadiness(evidence)).toEqual({ ok: true, issues: [] });
 
     evidence.manifest.postflight.launchConfig.productionSearchRolloutMode =
-      "v2";
+      "legacy";
     expect(validateDeployReadiness(evidence)).toMatchObject({
       ok: false,
       issues: expect.arrayContaining(["postflight_config_identity"]),

@@ -306,7 +306,7 @@ function hashValue(value) {
 }
 
 function safeRolloutMode(mode) {
-  return mode === "shadow" ? "shadow" : "non_shadow_or_missing";
+  return mode === "v2" ? "v2" : "non_v2_or_missing";
 }
 
 function resolveCandidateBranch(cwd, head) {
@@ -357,10 +357,10 @@ function createReport(cwd, args) {
     versionHash: args.deployedVersion === null ? null : hashValue(args.deployedVersion),
     configFingerprint: args.deployedConfigFingerprint,
   };
-  const committedModeIsShadow = committedWrangler.mode === "shadow";
-  const worktreeModeIsShadow = worktreeWrangler.mode === "shadow";
+  const committedModeIsV2 = committedWrangler.mode === "v2";
+  const worktreeModeIsV2 = worktreeWrangler.mode === "v2";
   const blockers = [];
-  if (!committedModeIsShadow || !worktreeModeIsShadow) blockers.push("search_rollout_mode_not_shadow");
+  if (!committedModeIsV2 || !worktreeModeIsV2) blockers.push("search_rollout_mode_not_v2");
   if (!fingerprintMatchesExpected) blockers.push("candidate_fingerprint_mismatch");
   return {
     ok: blockers.length === 0,
