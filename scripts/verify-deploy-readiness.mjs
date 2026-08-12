@@ -154,7 +154,7 @@ export function validateDeployReadiness({ manifest, candidate, root = process.cw
     !SHA256_HEX.test(config?.identity ?? "") ||
     !SHA256_HEX.test(config?.wranglerWorktreeSha256 ?? "") ||
     config?.wranglerWorktreeSha256 !== candidate?.wrangler?.worktreeSha256 ||
-    config?.productionSearchRolloutMode !== "shadow" ||
+    config?.productionSearchRolloutMode !== "v2" ||
     config?.providerNetworkDeny !== true ||
     config?.browserProject !== "local-release" ||
     config?.retries !== 0 ||
