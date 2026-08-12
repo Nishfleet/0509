@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -86,6 +86,10 @@ describe("production auth origin guard", () => {
   });
 
   it("rejects session cookies scoped to a subdomain of the canonical host", () => {
+    // mkdtemp requires its parent to exist. Create .auth here instead of
+    // relying on a sibling test file to have created it as a side effect,
+    // so this file passes standalone and in any file order.
+    mkdirSync(join(process.cwd(), ".auth"), { recursive: true, mode: 0o700 });
     const dir = mkdtempSync(join(process.cwd(), ".auth", "origin-guard-"));
     const statePath = join(dir, "state.json");
     const metaPath = join(dir, "state.meta.json");
