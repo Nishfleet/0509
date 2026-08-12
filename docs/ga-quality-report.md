@@ -39,7 +39,7 @@ Generated: 2026-06-24 (branch `cursor/ga-launch-customer-delight-20260624`)
 |------|------|------------|
 | Inline monitoring capacity | Agency watchlists may delay | Fan-out activation ladder |
 | No bounce webhooks | List hygiene manual | Cloudflare dashboard |
-| Meta ads beta | Source lane labeled beta | Canaries + honest copy |
+| Meta ads source lane | Graduated 2026-08-12 (canary green on live worker) | Canary-gated; re-add beta caveat if canary turns red |
 | WhatsApp not launch-scoped | Misleading if claimed | Hidden from marketing |
 
 ## Manual QA checklist (operator)

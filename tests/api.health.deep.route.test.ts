@@ -41,7 +41,7 @@ describe("deep health route", () => {
           tag: "release-2026-07-19",
           timestamp: "2026-07-19T06:00:00.000Z",
         },
-        SEARCH_ROLLOUT_MODE: "shadow",
+        SEARCH_ROLLOUT_MODE: "v2",
       }),
       request: new Request("https://0509.io/api/health/deep"),
     } as never);
@@ -64,7 +64,7 @@ describe("deep health route", () => {
         workerVersionId: "worker-version-123",
         tag: "release-2026-07-19",
         timestamp: "2026-07-19T06:00:00.000Z",
-        searchRolloutMode: "shadow",
+        searchRolloutMode: "v2",
       },
     });
   });
