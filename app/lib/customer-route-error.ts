@@ -8,6 +8,15 @@ export interface CustomerRouteError {
   recoveryAction?: "retry" | "support" | "upgrade" | "sign_in";
 }
 
+/**
+ * Truthful recovery message for the anonymous public-search limiter
+ * (20 searches / 10 minutes per IP, see enforcePublicSearchRateLimit).
+ * Single source of truth: the /search loader puts it in the thrown 429 body
+ * and the 429 mapping below renders it (or the body's own message) verbatim.
+ */
+export const PUBLIC_SEARCH_RATE_LIMIT_MESSAGE =
+  "You've hit the anonymous search limit. Free search allows 20 searches per 10 minutes — wait a few minutes and try again.";
+
 const INTERNAL_INFRA_PATTERN =
   /\b(d1|sql|sqlite|workflow|binding|wrangler|cloudflare|oauth|token|secret|stack trace)\b/i;
 const INTERNAL_ROLLOUT_PATTERN = /\binternal\b.*\b(workspace|pilot|rollout)\b/i;
@@ -101,6 +110,26 @@ export function mapCustomerRouteError(error: unknown): CustomerRouteError {
         retryable: false,
         category: "plan_limit",
         recoveryAction: "upgrade",
+      };
+    }
+    if (status === 429) {
+      // Anonymous free-search throttling: show the limiter's own truthful
+      // recovery message when the thrown 429 body carries one (React Router
+      // puts the parsed body on RouteErrorResponse.data), otherwise the
+      // shared default. Never the generic "Request failed" fallthrough.
+      const thrownMessage = messageFromUnknown(
+        error && typeof error === "object" && "data" in error
+          ? (error as { data?: unknown }).data
+          : null,
+      );
+      return {
+        title: "Too many searches",
+        message: sanitizeCustomerMessage(
+          thrownMessage ?? PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+        ),
+        retryable: true,
+        category: "unavailable",
+        recoveryAction: "retry",
       };
     }
     if (status === 503 && statusText === "Authentication temporarily unavailable") {
