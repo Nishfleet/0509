@@ -43,8 +43,8 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(parsed.on?.workflow_dispatch).toBeDefined();
   });
 
-  it("generates the snapshot with Cloudflare token secrets on a GitHub-hosted production-environment job", () => {
-    expect(job["runs-on"]).toBe("ubuntu-latest");
+  it("generates the snapshot with Cloudflare token secrets on the self-hosted production-environment job", () => {
+    expect(job["runs-on"]).toEqual(["self-hosted", "linux", "x64", "vps-verify"]);
     expect(job.environment).toBe("production");
     expect(job["timeout-minutes"]).toBe(30);
     expect(job.if).toBe("github.ref == 'refs/heads/main'");
