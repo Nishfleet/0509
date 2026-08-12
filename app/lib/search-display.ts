@@ -184,6 +184,39 @@ export function formatSearchFreshnessLabel(result: SearchResponse) {
 }
 
 /**
+ * Coarse honest age of the snapshot a cache-served result is showing, e.g.
+ * "Captured about 3 hours ago". Per-country discovery cache entries age
+ * independently (each country is its own key with its own TTL), so two
+ * country filters can legitimately show different counts at one moment — the
+ * result view must render each snapshot's age so a stale country view is
+ * self-evidently stale instead of looking current.
+ *
+ * Deterministic per call with an explicit `now`: the search loader computes
+ * the label once at request time and ships the string, so the server-rendered
+ * and hydrated client copy can never differ (the proof-label UTC rule).
+ * Returns null when no capture timestamp exists (live captures, demo, errors).
+ */
+export function formatSearchCaptureAgeLabel(
+  fetchedAt: string | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  if (!fetchedAt) return null;
+  const fetchedMs = Date.parse(fetchedAt);
+  if (!Number.isFinite(fetchedMs)) return null;
+
+  const elapsedMs = Math.max(0, now.getTime() - fetchedMs);
+  const minutes = Math.floor(elapsedMs / 60_000);
+  if (minutes < 1) return "Captured moments ago";
+  if (minutes < 60) return `Captured about ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 2) return "Captured about an hour ago";
+  if (hours < 24) return `Captured about ${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Captured about a day ago";
+  return `Captured about ${days} days ago`;
+}
+
+/**
  * Deterministic formatter for the "Landing page checked …" proof label.
  * Locale and timezone are pinned so the server-rendered label equals the
  * hydrated client copy: `toLocaleString(undefined, …)` picks the runtime's
