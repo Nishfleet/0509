@@ -759,6 +759,7 @@ comments); #574 had already merged before this lane started.
 - `.lane/report.md` — evidence record only; no product code touched.
 
 ---
+
 # Daily market-signal D1 snapshot restore (five days stale)
 
 **Status: implemented; full Vitest green; PR open, not merged.**
@@ -831,3 +832,65 @@ commit the snapshot to `ops/market-signal/0509-market-signal.json` on `main`.
 The next scheduled run (or a manual `workflow_dispatch` on `main`) produces a
 fresh snapshot immediately; Hermes consumes it from `ops/market-signal/` with
 no host Cloudflare credential required.
+
+---
+
+# BL-031 refine-disclosure fix from the paused lane-1 self-directed cycle (2026-08-12 lane 1) — already landed by PRs #583/#585
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane1-bl031-refine-disclosure-already-resolved`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Land the stranded BL-031 refine-disclosure fix from the paused
+  lane-1 self-directed cycle — the complete +71/-2 diff (keep the refine
+  disclosure shut on a pristine /search).
+
+## Verdict
+
+No code change was warranted. The item is already fully landed on
+`origin/main`: the +71/-2 diff itself landed as PR #583 (`d109e2d2`,
+merged 2026-08-10), and the typecheck break its test additions
+introduced (TS2698 — spreading `unknown` filters) was repaired on main
+by `5021807e` (PR #585, merged 2026-08-10). The dedicated repair PR
+#584 (`d01b21eb`) was closed as superseded by the owner
+(2026-08-10T23:02:59Z) with a comment recording that the casts were
+already on main and only formatting differed. Current main HEAD
+(`389c0e55`) passes the repo's real type gate and the BL-031
+refine-disclosure tests.
+
+- PR #583 — "fix(search): keep the refine disclosure shut on a pristine
+  /search (BL-031)" — **MERGED** as `d109e2d2`; the exact +71/-2 diff
+  of the item (`app/routes/search.tsx` 11 changed, 2 removed;
+  `tests/search-submission-settle.test.tsx` 62 added). The resolving
+  commit is an ancestor of the current main HEAD.
+- PR #584 — "fix(search): make the BL-031 refine-disclosure tests
+  typecheck-clean (TS2698)" — **CLOSED as superseded**; its content is
+  on main via `5021807e` (PR #585).
+
+## Evidence on current main (HEAD `389c0e55`)
+
+- `git merge-base --is-ancestor d109e2d2 origin/main` → yes (the +71/-2
+  fix is in main's history).
+- `app/routes/search.tsx:1317-1345` carries the full BL-031 round-3
+  disclosure contract: `refineDisclosureActive = instrumentUsed &&
+  activeRefineFilters.length > 0` (line 1344), used at lines 1529/1533
+  for the `<details open>` state and the "N on" badge — the panel stays
+  shut on a pristine /search and a narrowed search that ran still opens
+  with its count.
+- `tests/search-submission-settle.test.tsx:646` and `:665` already
+  carry `...(resultsLoaderData.filters as Record<string, unknown>)`;
+  `git log -S "as Record<string, unknown>"` attributes both sites to
+  `5021807e` (PR #585).
+- `npm run typecheck` — EXIT 0 at HEAD `389c0e55` (cf-typegen +
+  react-router typegen + `tsc -b`), re-run by this lane on
+  2026-08-12.
+- `npx vitest run --configLoader runner tests/search-submission-settle.test.tsx`
+  — 14/14 passed, including the "refine disclosure state (BL-031 round
+  3)" block.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
