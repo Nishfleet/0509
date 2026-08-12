@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { EXPECTED_PUBLIC_HOME_CACHE_CONTROL } from "../scripts/check-live-public-home.mjs";
 import {
+  EXPECTED_PUBLIC_HOME_CACHE_CONTROL,
+  EXPECTED_SCRIPT_SRC_BEACON_HOST,
+} from "../scripts/check-live-public-home.mjs";
+import {
+  CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC,
   HTML_NO_STORE_HEADERS,
   PUBLIC_HTML_CACHE_CONTROL,
   SECURITY_HEADERS,
   withSecurityHeaders,
 } from "../workers/security-headers";
 
-const CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC = "https://static.cloudflareinsights.com/beacon.min.js";
 const BASE_SCRIPT_SRC = `script-src 'self' 'unsafe-inline' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC}`;
 
 function htmlResponse(init: ResponseInit & { headers?: Record<string, string> } = {}) {
@@ -240,6 +243,15 @@ describe("Worker security headers", () => {
       // public, max-age=300), deploys would fail on a policy that is actually
       // correct. Import both constants and assert they can never diverge.
       expect(EXPECTED_PUBLIC_HOME_CACHE_CONTROL).toBe(PUBLIC_HTML_CACHE_CONTROL);
+    });
+
+    it("keeps the live deploy gate's beacon-CSP contract coupled to the product policy", () => {
+      // The gate asserts the LIVE script-src still allows the Cloudflare Web
+      // Analytics beacon (PR #610). If the product CSP ever drops the beacon
+      // host without the gate moving with it, deploys would pass while analytics
+      // silently records zero page views. Import both constants and assert they
+      // can never diverge.
+      expect(EXPECTED_SCRIPT_SRC_BEACON_HOST).toBe(CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC);
     });
   });
 
