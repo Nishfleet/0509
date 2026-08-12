@@ -777,7 +777,7 @@ describe("Gate-B Playwright release manifest reporter", () => {
       launchConfig: {
         identity: "a".repeat(64),
         wranglerWorktreeSha256: "b".repeat(64),
-        productionSearchRolloutMode: "shadow",
+        productionSearchRolloutMode: "v2",
         localProofSearchRolloutMode: "v2",
         providerNetworkDeny: true,
         authProvider: "better-auth",
@@ -812,7 +812,7 @@ describe("Gate-B Playwright release manifest reporter", () => {
     expect(readManifest(outputPath)).toEqual(recorded);
     expect(() => recordManifestPostflight(outputPath, {
       ...evidence,
-      launchConfig: { ...evidence.launchConfig, productionSearchRolloutMode: "v2" },
+      launchConfig: { ...evidence.launchConfig, productionSearchRolloutMode: "legacy" },
     })).toThrow("invalid_manifest_postflight");
     expect(() => recordManifestPostflight(outputPath, {
       ...evidence,
