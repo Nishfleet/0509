@@ -11311,6 +11311,14 @@ textarea.f9-wk-in {
   font-size: 13px;
 }
 
+/* Snapshot age under the results title: muted so the count and the answer
+   sentence stay the primary reads, but present so a stale cache-served
+   result can never look current. */
+.f9-wk-sec-capture-age {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
 .f9-wk-sec-acts {
   display: flex;
   flex: none;
