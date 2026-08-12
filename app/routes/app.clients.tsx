@@ -29,6 +29,7 @@ import type { OwnedReportDataSource } from "~/lib/report-loader.server";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
 import { buildCourtPack } from "~/lib/court-pack-builder.server";
 import { CourtPackView } from "~/components/court-pack-view";
+import type { CourtPack } from "~/lib/court-pack";
 import type { PlanFamily } from "~/lib/plan-entitlements";
 import { createReportId, parseReportId } from "~/lib/report";
 import {
@@ -143,14 +144,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ),
   ]);
   const memories = uniqueAgentMemories([...recentMemories, ...roomMemories]);
-  const reportData = await import("~/lib/data.server");
   const packs = canUsePlanFeature(plan, "client_reports")
-    ? await Promise.all(currentRoomStates.map(({ room }) => buildCourtPack(
-        env,
-        workspaceUserId,
-        room,
-        reportData,
-      )))
+    ? await buildActiveRoomCourtPacks(env, workspaceUserId, currentRoomStates)
     : [];
 
   return {
@@ -774,7 +769,9 @@ export default function ClientsRoute() {
               memories={memoriesByClientRoomId.get(room.id) ?? []}
               roomMemoryUnavailable={data.roomMemoryUnavailable}
               room={room}
-              pack={data.packs.find((candidate) => candidate.roomId === room.id)}
+              pack={
+                data.packs?.find((candidate) => candidate.roomId === room.id)
+              }
             />
           ))}
           {activeRooms.length === 0 ? (
@@ -1151,6 +1148,7 @@ function ClientRoomCard({
   canManage,
   initiallyOpen,
   memories,
+  pack,
   roomMemoryUnavailable,
   room,
 }: {
@@ -1160,7 +1158,7 @@ function ClientRoomCard({
   memories: Array<{ key: string }>;
   roomMemoryUnavailable: boolean;
   room: ClientRoomRecord;
-  pack?: Awaited<ReturnType<typeof buildCourtPack>>;
+  pack?: CourtPack;
 }) {
   const handoff = summarizeClientRoomHandoff(
     room,
@@ -1697,6 +1695,27 @@ async function loadOwnedRoomReport(
     requireActiveWatchlist: true,
     verifyReportIdentity: true,
   });
+}
+
+/**
+ * Court Pack assembly is wiring-only: active rooms that actually link reports
+ * (the only rooms that render a pack). Archived and report-less rooms skip the
+ * work, and the existing `client_reports` plan gate stays in front of it.
+ */
+async function buildActiveRoomCourtPacks(
+  env: AppEnv,
+  userId: string,
+  roomStates: Array<{ room: ClientRoomRecord; approvalUnavailable: boolean }>,
+) {
+  const data = await import("~/lib/data.server");
+  return Promise.all(
+    roomStates
+      .filter(({ room }) => room.status === "active")
+      .filter(({ room }) =>
+        room.resourceRefs.some((ref) => ref.resourceType === "report"),
+      )
+      .map(({ room }) => buildCourtPack(env, userId, room, data)),
+  );
 }
 
 function toMemorySummary(
