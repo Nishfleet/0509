@@ -114,7 +114,7 @@ export function validateCrossBrowserRiskManifest({
     !SHA256_HEX.test(config?.identity ?? "") ||
     !SHA256_HEX.test(config?.wranglerWorktreeSha256 ?? "") ||
     config?.wranglerWorktreeSha256 !== candidate?.wrangler?.worktreeSha256 ||
-    config?.productionSearchRolloutMode !== "shadow" ||
+    config?.productionSearchRolloutMode !== "v2" ||
     config?.localProofSearchRolloutMode !== "v2" ||
     config?.providerNetworkDeny !== true ||
     config?.authProvider !== "better-auth" ||
