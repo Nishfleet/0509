@@ -5,6 +5,7 @@ verbatim below.
 
 - [MONEY silent-failure remediation](#money-silent-failure-remediation) — PR #445, branch `fix/silent-fixmoney` (landed on `main`)
 - [Silent-failure observability remediation](#silent-failure-observability-remediation) — PR #447, branch `fix/silent-fixobserve`
+- [Anonymous search honest end state after 60s warming cap (2026-08-12 lane 1)](#anonymous-search-honest-end-state-after-60s-warming-cap-2026-08-12-lane-1) — PR #612, commit `90cea3a5` (landed on `main`)
 
 ---
 # MONEY silent-failure remediation
@@ -724,7 +725,58 @@ lane; the package is still current and accurate:
 - `.lane/report.md` — evidence record only; no product code touched.
 
 ---
-# Stale open PRs #573/#574/#584 (2026-08-11 lane 1) — already merged / superseded, closed
+# Anonymous search honest end state after 60s warming cap (2026-08-12 lane 1) — already resolved via PR #612
+
+**Status: resolved; evidence record only, no product code touched.**
+
+Branch: `report/lane1-612-anonymous-search-60s-cap-honest-end`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Give anonymous search an honest end state when the check outlives the 60s warming cap (silent stop of the promised auto-refresh).
+
+## Verdict
+
+Already resolved on `origin/main` by **PR #612** (`90cea3a5`,
+"fix(search): honest end state when the anonymous check outlives the 60s
+warming cap", merged 2026-08-11). The commit is an ancestor of the current
+`main` tip (`389c0e55`) and its full content is present on this worktree's
+HEAD. No code change was warranted.
+
+The warming poll (5s × 12 = 60s cap) is also the auto-refresh promise.
+Previously, when a background capture outlived the budget, polling stopped
+silently but the empty state kept saying "Usually under a minute — we'll
+refresh automatically" next to a still-warming server state. PR #612:
+
+- `app/routes/search.tsx` — adds `warmingPollExhausted` (warming AND poll
+  budget spent) and an honest end state: "The check is taking longer than a
+  minute / We stopped auto-refreshing. Retry this search to check again."
+- Re-arms the poll on same-URL retry/re-submit via a navigation-commit
+  budget reset (`navigationInFlightRef`), because the searchKey is unchanged
+  and the exhausted budget would otherwise carry into the fresh check.
+- `tests/search-submission-settle.test.tsx` — regression test: after 12
+  poll ticks the page retracts the auto-refresh promise, and a same-URL
+  retry re-arms the promise with a fresh budget.
+
+## Evidence on current main (`389c0e55`)
+
+- `git log --oneline -S "warmingPollExhausted" -- app/routes/search.tsx` →
+  `90cea3a5` (PR #612) is the introducing commit.
+- `git log --oneline -S "SEARCH_WARMING_POLL_LIMIT" -- app/routes/search.tsx`
+  → `90147b9b` (#559) introduced the poll; `90cea3a5` (#612) the honest end
+  state.
+- `git merge-base --is-ancestor 90cea3a5 origin/main` → exit 0.
+- The exact regression test from #612 is present in
+  `tests/search-submission-settle.test.tsx` on this tip.
+- Test evidence on this worktree: `vitest run tests/search-submission-settle.test.tsx`
+  → **14/14 passed** (includes "shows an honest end state when the warming
+  check outlives the poll budget and re-arms it on retry"). Full unit suite:
+  **427 files / 4892 tests passed**.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
 
 **Status: resolved; this lane closed the stale PRs and records the evidence.**
 
