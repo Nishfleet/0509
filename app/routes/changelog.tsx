@@ -22,6 +22,22 @@ export default function ChangelogRoute() {
       title="What changed in Five to Nine."
       intro="A short record of customer-visible changes. We keep planned work and unverified provider actions out until they are proven."
     >
+      <PublicDocBlock title="2026-08-10">
+        <ul className="f9-doc-list">
+          <li>The signed-in workspace was rebuilt in the landing page&apos;s visual language, with calmer layouts and one consistent style across Competitors, Overview, Search, Collections, Reports, Briefs, Presence, notifications, shares, and account settings.</li>
+          <li>Workspace navigation now has five destinations — Today, Watch, Library, Deliver, and Settings — with fewer items on mobile and every member page still at its stable URL.</li>
+          <li>Public search no longer stalls on a first-time query: it shows a warming state while the Ad Library capture runs in the background, and a shared search link with a query now runs that query directly.</li>
+          <li>Search only promises &quot;right now&quot; results when the capture is fresh enough to prove it; on older captures it says plainly when the check ran.</li>
+          <li>Brand pages at /ads/:domain now attribute every ad to its real advertiser, never label an unconfirmed creative with the brand name, and only use live wording on fresh captures.</li>
+          <li>Every brief now says why the period matters, names one accountable reviewer, and gives one next action — including when a check failed or a period has no record.</li>
+          <li>Monitoring periods are now told apart honestly: meaningful changes, routine activity, quiet periods, and pending or failed evidence are each named instead of being mixed into one count.</li>
+          <li>Landing-page changes can show before/after evidence in the Overview and in digests when the data supports it; otherwise the page says the evidence is pending or unavailable.</li>
+          <li>Monthly plan cards and the public sample brief describe only what the product currently supports; the MagicBrief migration page says exactly what it can import.</li>
+          <li>The home page loads faster by fetching the pricing preview only when the pricing section nears the viewport.</li>
+          <li>Visitors now see a Sign up button in the public header, and the header keeps its touch targets on small phones.</li>
+        </ul>
+      </PublicDocBlock>
+
       <PublicDocBlock title="2026-07-20">
         <ul className="f9-doc-list">
           <li>Search results now show real creative thumbnails when the Ad Library returns image or video media.</li>
