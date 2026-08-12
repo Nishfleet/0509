@@ -20,7 +20,7 @@ export function buildRemoteRestoreCandidateManifest(candidate) {
     !COMMIT_PATTERN.test(candidate?.headCommit ?? "") ||
     !SHA256_PATTERN.test(candidate?.fingerprint ?? "") ||
     !SHA256_PATTERN.test(candidate?.wrangler?.worktreeSha256 ?? "") ||
-    candidate?.wrangler?.worktreeSearchRolloutMode !== "shadow"
+    candidate?.wrangler?.worktreeSearchRolloutMode !== "v2"
   ) {
     throw new Error("remote_restore_candidate_manifest_invalid");
   }
