@@ -12,6 +12,7 @@ import {
 } from "react-router";
 import type {
   ActionFunctionArgs,
+  HeadersFunction,
   LinksFunction,
   LoaderFunctionArgs,
   MetaFunction,
@@ -61,6 +62,7 @@ import {
   SUPPORTED_COUNTRIES,
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
+import { PUBLIC_SEARCH_RATE_LIMIT_MESSAGE } from "~/lib/customer-route-error";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
@@ -160,6 +162,18 @@ export const meta: MetaFunction = () =>
     description: searchDescription,
     pathname: "/search",
   });
+
+// When the search loader throws a 429 (anonymous limiter), React Router only
+// merges cookies from the thrown response's headers onto the final document
+// response unless the boundary route forwards them. Copy Retry-After through
+// here so the rate-limited document keeps the limiter's recovery signal. For
+// every other request errorHeaders is undefined and nothing is added.
+export const headers: HeadersFunction = ({ errorHeaders }) => {
+  const documentHeaders: Record<string, string> = {};
+  const retryAfter = errorHeaders?.get("retry-after");
+  if (retryAfter) documentHeaders["Retry-After"] = retryAfter;
+  return documentHeaders;
+};
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
@@ -340,7 +354,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       cloudflare?.ctx,
     );
     if (rateLimitResponse) {
-      throw rateLimitResponse;
+      // Anonymous throttling is a normal, recoverable product state, not an
+      // internal failure: throw an explicit in-product 429 document whose
+      // body names the limit and the recovery path, and keep the limiter's
+      // Retry-After signal so the client and the document response both know
+      // when the window clears. The route-level headers() export below
+      // forwards that header onto the final document response.
+      const retryAfterSeconds = rateLimitResponse.headers.get("retry-after");
+      throw new Response(
+        JSON.stringify({
+          error: "rate_limited",
+          message: PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+        }),
+        {
+          status: 429,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "no-store",
+            ...(retryAfterSeconds ? { "retry-after": retryAfterSeconds } : {}),
+          },
+        },
+      );
     }
   }
 
