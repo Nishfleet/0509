@@ -71,7 +71,7 @@ export interface PlanEntitlements {
    */
   priorityScanSlots: number | null;
   monitoringQueuePriority: MonitoringQueuePriority;
-  metaSourceStatus: "unavailable" | "beta_limited" | "beta_priority";
+  metaSourceStatus: "unavailable" | "limited" | "priority";
   features: ReadonlySet<PlanFeature>;
 }
 
@@ -146,7 +146,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     scheduledScanCadence: "every_6h",
     priorityScanSlots: null,
     monitoringQueuePriority: 2,
-    metaSourceStatus: "beta_limited",
+    metaSourceStatus: "limited",
     features: new Set(SCOUT_FEATURES),
   },
   starter: {
@@ -159,7 +159,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     scheduledScanCadence: "every_3h",
     priorityScanSlots: null,
     monitoringQueuePriority: 1,
-    metaSourceStatus: "beta_limited",
+    metaSourceStatus: "limited",
     features: new Set(STARTER_FEATURES),
   },
   agency: {
@@ -173,7 +173,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     // First 25 at 3h; watchlists 26–75 only on 6h-aligned cron slots.
     priorityScanSlots: 25,
     monitoringQueuePriority: 0,
-    metaSourceStatus: "beta_priority",
+    metaSourceStatus: "priority",
     features: new Set(AGENCY_FEATURES),
   },
 };

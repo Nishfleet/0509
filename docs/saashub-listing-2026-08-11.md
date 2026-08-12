@@ -220,7 +220,7 @@ live homepage copy in `app/routes/marketing.tsx`:
 - **Public data only** — every capture is from the public Meta Ad Library and
   public landing pages; nothing behind a login.
 - **Coverage and freshness are labeled and can vary by source** — Meta ads
-  tracking remains beta until the production canary graduates.
+  tracking graduated from beta 2026-08-12, gated on a green production canary.
 - **Use `0509.io` everywhere** — `0509.in` is legacy redirect-only and must
   not appear in listing copy, links, or images.
 

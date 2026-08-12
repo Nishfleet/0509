@@ -14,7 +14,7 @@
 | Surface | Current | GA target |
 |---------|---------|-----------|
 | Homepage announcement | "Early access" | "Now available" or remove pill |
-| Homepage honest note | Meta ads beta caveat | Keep until Meta canary graduates |
+| Homepage honest note | Meta ads beta caveat | GRADUATED 2026-08-12: canary green (Gate C pass on live worker) — no beta caveat in served hero copy; keep the freshness-labeling note |
 | `/status` | Lists limited surfaces | Reflect GA availability per plan |
 | README launch framing | Pilot-ready language | GA-ready when ops gates green |
 
