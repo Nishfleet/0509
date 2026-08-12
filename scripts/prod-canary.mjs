@@ -16,7 +16,7 @@ function parseArgs(args) {
     baseUrl: process.env.CANARY_BASE_URL || undefined,
     expectedApp: process.env.CANARY_EXPECTED_APP || DEFAULT_CANARY_EXPECTED_APP,
     expectedWorkerVersionId: process.env.CANARY_EXPECTED_WORKER_VERSION_ID || null,
-    expectedSearchRolloutMode: process.env.CANARY_EXPECTED_SEARCH_ROLLOUT_MODE || "shadow",
+    expectedSearchRolloutMode: process.env.CANARY_EXPECTED_SEARCH_ROLLOUT_MODE || "v2",
     queries: [],
     json: false,
     searchTimeoutMs: parsePositiveInteger(process.env.CANARY_SEARCH_TIMEOUT_MS),
