@@ -1230,7 +1230,7 @@ describe("D1 remote restore evidence automation", () => {
       status: { hasChanges: false },
       wrangler: {
         worktreeSha256: wranglerHash,
-        worktreeSearchRolloutMode: "shadow",
+        worktreeSearchRolloutMode: "v2",
       },
     });
     expect(manifest).toEqual({
@@ -1250,7 +1250,7 @@ describe("D1 remote restore evidence automation", () => {
         status: { hasChanges: true },
         wrangler: {
           worktreeSha256: wranglerHash,
-          worktreeSearchRolloutMode: "shadow",
+          worktreeSearchRolloutMode: "v2",
         },
       }),
     ).toThrow("remote_restore_candidate_manifest_invalid");
@@ -1467,7 +1467,7 @@ describe("D1 remote restore evidence automation", () => {
         fingerprint,
         wrangler: {
           worktreeSha256: wranglerHash,
-          worktreeSearchRolloutMode: "shadow",
+          worktreeSearchRolloutMode: "v2",
           worktreeD1Database: {
             binding: "DB",
             name: "0509",
@@ -1502,7 +1502,7 @@ describe("D1 remote restore evidence automation", () => {
       migrationLedgerNames: ["0001_first.sql", "0002_second.sql"],
       migrationLedgerNamesSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
       migrationLedgerBaselineSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
-      productionSearchRolloutMode: "shadow",
+      productionSearchRolloutMode: "v2",
       integrity: "ok",
       foreignKeyViolations: 0,
       exactRowCounts: true,

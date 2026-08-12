@@ -96,7 +96,7 @@ function normalizeExpectedWorkerVersionId(value) {
 /** @param {unknown} value */
 function normalizeExpectedSearchRolloutMode(value) {
   if (typeof value !== "string" || !value.trim()) {
-    return "shadow";
+    return "v2";
   }
   return normalizeSafeMode(value);
 }
@@ -272,7 +272,7 @@ export async function checkHealthEndpoint(options = {}) {
  * propagation; canary failures themselves are never retried. Shared by the
  * launch-readiness cycle (pre-mutation waiter) and the post-deploy Gate C
  * identity anchor (identity_pre / identity_post) so both use one bounded,
- * consecutive-sampling, all-alias, exact-worker + shadow-mode assertion rather
+ * consecutive-sampling, all-alias, exact-worker + v2-rollout assertion rather
  * than a single fresh-connection snapshot that can hit a lagging edge colo.
  * @param {{ baseUrl?: string, healthBaseUrls?: string[], expectedWorkerVersionId: string, checkHealthImpl?: typeof checkHealthEndpoint, delayImpl?: (ms: number) => Promise<void>, maxSamples?: number, maxWaitMs?: number, requiredConsecutive?: number }} input
  */
@@ -309,7 +309,7 @@ export async function waitForExpectedWorkerVersion({
           resolvedHealthBaseUrls.map((healthBaseUrl) => checkHealthImpl({
             baseUrl: healthBaseUrl,
             expectedWorkerVersionId,
-            expectedSearchRolloutMode: "shadow",
+            expectedSearchRolloutMode: "v2",
           })),
         ),
         deadlinePromise,
