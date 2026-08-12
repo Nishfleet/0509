@@ -15,7 +15,7 @@
     "AUTH_PROVIDER": "better-auth",
     "E2E_PROVIDER_NETWORK_DENY": "1",
     "E2E_TEST_MODE": "1",
-    "SEARCH_ROLLOUT_MODE": "shadow",
+    "SEARCH_ROLLOUT_MODE": "v2",
     "MONITORING_FANOUT_MODE": "inline",
     "PRESENCE_WEBSITE_ROLLOUT": "disabled",
     "PRESENCE_DIGEST_ROLLOUT": "disabled",
