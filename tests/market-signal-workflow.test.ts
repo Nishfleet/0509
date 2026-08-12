@@ -57,7 +57,7 @@ describe("daily market-signal D1 snapshot workflow", () => {
   });
 
   it("keeps heavyweight commands inside the shared runner lane", () => {
-    const commands = job.steps?.map((step) => step.run).filter(Boolean) ?? [];
+    const commands = job.steps?.map((step) => step.run).filter((run): run is string => Boolean(run)) ?? [];
     for (const command of commands) {
       if (/\bnpm (?:ci|run)\b/u.test(command)) {
         expect(command, command).toContain("./scripts/deploy-window-lock.sh run --");
