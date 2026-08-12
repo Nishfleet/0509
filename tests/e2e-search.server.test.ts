@@ -7,7 +7,7 @@ import {
   resolveE2ELocalSearchEnv,
 } from "~/lib/e2e-search.server";
 
-const baseEnv = { E2E_TEST_MODE: "1", SEARCH_ROLLOUT_MODE: "shadow" } as AppEnv;
+const baseEnv = { E2E_TEST_MODE: "1", SEARCH_ROLLOUT_MODE: "v2" } as AppEnv;
 
 function request(url: string, enabled = true) {
   return new Request(url, {
@@ -142,11 +142,12 @@ describe("local E2E search rollout", () => {
   it.each([
     ["production host", request("https://0509.io/search")],
     ["missing request header", request("http://127.0.0.1:4189/search", false)],
-  ])("keeps the protected shadow rollout for %s", async (_label, testRequest) => {
-    expect((await resolveE2ELocalSearchEnv(baseEnv, testRequest)).SEARCH_ROLLOUT_MODE).toBe("shadow");
+  ])("keeps the configured v2 rollout for %s", async (_label, testRequest) => {
+    expect((await resolveE2ELocalSearchEnv(baseEnv, testRequest)).SEARCH_ROLLOUT_MODE).toBe("v2");
   });
 
-  it("keeps shadow mode unless the dedicated local rollout flag is exactly v2", async () => {
-    expect((await resolveE2ELocalSearchEnv(baseEnv, request("http://127.0.0.1:4189/search"), "shadow")).SEARCH_ROLLOUT_MODE).toBe("shadow");
+  it("does not enable fixture search unless the dedicated local rollout flag is exactly v2", async () => {
+    expect((await resolveE2ELocalSearchEnv(baseEnv, request("http://127.0.0.1:4189/search"), "shadow")).SEARCH_ROLLOUT_MODE).toBe("v2");
+    expect((await resolveE2ELocalSearchContext(baseEnv, request("http://127.0.0.1:4189/search"), "shadow")).enabled).toBe(false);
   });
 });
