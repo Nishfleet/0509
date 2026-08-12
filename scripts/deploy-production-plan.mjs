@@ -505,7 +505,7 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   ) {
     issues.push("remote_restore_config_mismatch");
   }
-  if (value.productionSearchRolloutMode !== "shadow")
+  if (value.productionSearchRolloutMode !== "v2")
     issues.push("remote_restore_rollout_mode");
   if (expected.allowedMigrationStates) {
     const migrationBaselineMatches = expected.allowedMigrationStates.some(
