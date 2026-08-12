@@ -82,12 +82,17 @@ export const GOOGLE_FONTS_STYLESHEET_HREF =
 // render-blocking resources on every public page (root-*.css was the other).
 // It is a secondary style: the page renders fully in fallback fonts because
 // of display=swap, so nothing on the critical path needs it. The script runs
-// inline during parse — before any stylesheet load event can fire — and
-// flips media="print" to "all" once the sheet is in, with a noscript
-// fallback for JS-off clients. Chrome reports this pattern non-blocking,
-// which is what the SEO Fix Kit engine reads for its render-blocking
-// finding.
-export const FONT_SWAP_SCRIPT = `(function(){try{var l=document.getElementById("f9-font-stylesheet");if(l&&l.addEventListener){l.addEventListener("load",function(){l.media="all";});}}catch(e){}})();`;
+// inline during parse and flips media="print" to "all" once the sheet is in
+// (including the already-cached case where `link.sheet` is set before the
+// load listener can fire), with a noscript fallback for JS-off clients.
+// Chrome reports this pattern non-blocking, which is what the SEO Fix Kit
+// engine reads for its render-blocking finding.
+//
+// Hydration: the swap can land before React hydrates (cached css2 + preload),
+// so the DOM attribute no longer matches the SSR markup. That is intentional
+// and mirrored by suppressHydrationWarning on the stylesheet link — the same
+// pattern Layout already uses for THEME_BOOT_SCRIPT's pre-hydrate DOM writes.
+export const FONT_SWAP_SCRIPT = `(function(){try{var l=document.getElementById("f9-font-stylesheet");if(!l)return;function apply(){l.media="all";}if(l.addEventListener){l.addEventListener("load",apply);}if(l.sheet){apply();}}catch(e){}})();`;
 
 export const links: LinksFunction = () => [
   { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
@@ -205,11 +210,18 @@ export function GoogleFontsStylesheet() {
   return (
     <>
       <link rel="preload" as="style" href={GOOGLE_FONTS_STYLESHEET_HREF} />
+      {/*
+        suppressHydrationWarning: FONT_SWAP_SCRIPT may flip media="print" →
+        "all" before React hydrates when the stylesheet is already cached.
+        Without this, release readiness fails closed on
+        browser_hydration_error:console (attribute mismatch on this link).
+      */}
       <link
         id="f9-font-stylesheet"
         rel="stylesheet"
         href={GOOGLE_FONTS_STYLESHEET_HREF}
         media="print"
+        suppressHydrationWarning
       />
       <script dangerouslySetInnerHTML={{ __html: FONT_SWAP_SCRIPT }} />
       <noscript>

@@ -251,7 +251,7 @@ homepage copy in `app/routes/marketing.tsx`, and AlternativeTo FAQ rules:
 - **Public data only** — every capture is from the public Meta Ad Library
   and public landing pages; nothing behind a login.
 - **Coverage and freshness are labeled and can vary by source** — Meta ads
-  tracking remains beta until the production canary graduates.
+  tracking graduated from beta 2026-08-12, gated on a green production canary.
 - **No AI-tool framing** — OCR/translation is internal plumbing; describing
   the product as an "AI tool" or "AI wrapper" risks the decline list.
 - **No "India-only" framing** — geo policy risk; position as globally

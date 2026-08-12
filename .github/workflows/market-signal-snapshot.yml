@@ -1,0 +1,92 @@
+name: Daily market-signal D1 snapshot
+
+# Restores the daily 0509 market-signal D1 snapshot after the host cron's
+# wrangler OAuth session expired 2026-08-04T13:26:24Z and could not refresh in
+# a non-interactive cron (no CLOUDFLARE_API_TOKEN there), which left the
+# snapshot stale for five mornings (scout 2026-08-09; see PR #557 for the
+# self-diagnosing failure classifier). This workflow generates the snapshot on
+# the repository's self-hosted verify runner using the production-environment
+# Cloudflare token secrets and commits it to main, so the host Hermes job
+# never needs a Cloudflare credential at all.
+#
+# The runner must be self-hosted like every other workflow in this repository
+# (d1-backup-r2, d1-remote-restore-evidence, uptime-health, ...): GitHub-hosted
+# jobs are intermittently refused with "recent account payments have failed or
+# your spending limit needs to be increased", which is exactly how the snapshot
+# went stale before. The lane-wrapped commands below and the conditional npm
+# cache are the same self-hosted-aware pattern the d1-backup workflows use.
+#
+# The commit is a no-op when the snapshot is unchanged, and no workflow in this
+# repository triggers on push to main, so a snapshot commit cannot cascade CI
+# or deploys.
+on:
+  schedule:
+    # Daily 00:07 UTC = 05:37 IST: before the Hermes morning report reads the
+    # snapshot, and outside the 20:07/20:47 UTC provider-mutation windows.
+    - cron: "7 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: 0509-market-signal-snapshot
+  cancel-in-progress: false
+  queue: max
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    name: Generate and commit market-signal snapshot
+    runs-on: [self-hosted, linux, x64, vps-verify]
+    timeout-minutes: 30
+    environment: production
+    # Scheduled runs execute on the default branch; manual dispatches must also
+    # name main so a branch dispatch cannot push the snapshot from a fork.
+    if: github.ref == 'refs/heads/main'
+    env:
+      SNAPSHOT_PATH: ops/market-signal/0509-market-signal.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - name: Install pinned dependencies
+        run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+      - name: Generate market-signal D1 snapshot
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/deploy-window-lock.sh run -- npm run signal:market -- --output "$SNAPSHOT_PATH"
+      - name: Verify snapshot freshness
+        run: |
+          node -e "
+            const fs = require('fs');
+            const snapshot = JSON.parse(fs.readFileSync(process.env.SNAPSHOT_PATH, 'utf8'));
+            const generatedAt = Date.parse(snapshot.generatedAt);
+            if (!Number.isFinite(generatedAt)) {
+              console.error('market_signal_snapshot_invalid: generatedAt missing');
+              process.exit(1);
+            }
+            if (Math.abs(Date.now() - generatedAt) > 60 * 60 * 1000) {
+              console.error('market_signal_snapshot_stale: ' + snapshot.generatedAt);
+              process.exit(1);
+            }
+            console.log('market_signal_snapshot_fresh ' + snapshot.generatedAt);
+          "
+      - name: Commit snapshot to main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$SNAPSHOT_PATH"
+          if git diff --cached --quiet; then
+            echo "market_signal_snapshot_unchanged"
+            exit 0
+          fi
+          git commit -m "chore(automation): daily market-signal D1 snapshot $(date -u +%Y-%m-%d)"
+          git push origin HEAD:main

@@ -61,7 +61,7 @@ const differences = [
   {
     title: "Honest limits",
     detail:
-      "Meta ads tracking is labeled beta until it is reliable on your competitors. Results are always marked fresh, recent, or sample.",
+      "Meta ads tracking is live on your competitors and gated by a production canary. Results are always marked fresh, recent, or sample.",
   },
 ] as const;
 
