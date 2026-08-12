@@ -1,5 +1,5 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
@@ -326,6 +326,25 @@ function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBund
 // degrades to the explicit unavailable state instead of an empty label.
 export function sampleProofValue(value: string): string {
   return value.trim() || "Not available in this sample";
+}
+
+// The sample digest export is stored as markdown for the raw-export API
+// contract. On the homepage, render the small supported subset — bold
+// emphasis and line breaks — instead of leaking raw markdown syntax into
+// the visible "Brief export" preview.
+export function renderDigestMarkdownPreview(markdown: string): ReactNode {
+  const lines = markdown.split("\n");
+  return lines.map((line, index) => (
+    <span key={index}>
+      {renderDigestMarkdownLine(line)}
+      {index < lines.length - 1 ? <br /> : null}
+    </span>
+  ));
+}
+
+function renderDigestMarkdownLine(line: string): ReactNode {
+  const emphasis = line.match(/^\*(.+)\*$/);
+  return emphasis ? <strong>{emphasis[1]}</strong> : line;
 }
 
 export function planIntentPath(
@@ -780,7 +799,7 @@ export default function MarketingRoute() {
             </article>
             <article>
               <span className="ld-kicker">Brief export</span>
-              <p className="ld-export">{demoProof.exports.digestMarkdown}</p>
+              <p className="ld-export">{renderDigestMarkdownPreview(demoProof.exports.digestMarkdown)}</p>
             </article>
           </div>
         </div>
