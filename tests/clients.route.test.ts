@@ -2,6 +2,11 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  COURT_PACK_EXCLUSION_REASON_CODES,
+  type CourtPack,
+} from "~/lib/court-pack";
+
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<
   string,
@@ -77,6 +82,211 @@ function mockAuth(plan: "free" | "scout" | "starter" | "agency" = "agency") {
   vi.doMock("~/lib/plan.server", () => ({
     getUserPlan: vi.fn(async () => plan),
   }));
+  // The Court Pack loader path assembles packs via `buildCourtPack`, which
+  // looks up optional workspace branding through the leaf
+  // `~/lib/data/workspace-branding.server` module (real D1 access). Stub it
+  // so loader tests never touch the D1 binding; branding is optional by
+  // contract, so `null` is the honest default. Registered exactly once per
+  // test here — never re-registered inside a test body (see
+  // tests/mock-registration-race.test.ts).
+  const getWorkspaceBranding = vi.fn(async () => null);
+  vi.doMock("~/lib/data/workspace-branding.server", () => ({
+    getWorkspaceBranding,
+  }));
+  return { getWorkspaceBranding };
+}
+
+function clientRoomFixture() {
+  return {
+    id: "room-1",
+    name: "Nykaa weekly desk",
+    clientLabel: "Nykaa",
+    status: "active",
+    notes: {
+      goal: "Weekly proof review.",
+      reportApprovals: {
+        "watchlist:watchlist-1": {
+          evidenceFingerprint: "fixture-approved-evidence",
+          reviewedAt: new Date(Date.now() - 60_000).toISOString(),
+          approvalExpiresAt: new Date(
+            Date.now() + 60 * 60 * 1000,
+          ).toISOString(),
+        },
+      },
+    },
+    resourceRefs: [
+      {
+        resourceType: "watchlist",
+        resourceId: "watchlist-1",
+        label: "Nykaa watchlist",
+      },
+      {
+        resourceType: "report",
+        resourceId: "watchlist:watchlist-1",
+        label: "Nykaa watchlist report",
+      },
+    ],
+    createdAt: "2026-06-20T00:00:00.000Z",
+    updatedAt: "2026-06-20T00:00:00.000Z",
+  };
+}
+
+function courtPackReportDocument() {
+  return {
+    kind: "report" as const,
+    reportId: "watchlist:watchlist-1",
+    resourceType: "watchlist" as const,
+    resourceId: "watchlist-1",
+    title: "Nykaa watchlist",
+    subtitle: "advertiser · Nykaa",
+    summary: "2 verified-evidence watch events.",
+    generatedAt: "2026-07-15T08:00:00.000Z",
+    stats: [{ label: "Events", value: "2" }],
+    insightDepth: {
+      topHooks: [],
+      mediaMix: [],
+      campaignDurations: [],
+      metricProof: [],
+      creativeTimeline: [],
+      landingPageHistory: [],
+    },
+    rows: [
+      {
+        id: "row-1",
+        advertiser: "Nykaa",
+        previewHeadline: "New offer",
+        offer: "Buy one get one",
+        cta: "Shop now",
+        formatLabel: "Image",
+        languageLabel: "English",
+        previewImageUrl: null,
+        creativeText: "A proven message.",
+        translatedText: null,
+        landingPage: {
+          url: "https://nykaa.example/offer",
+          headline: "Offer headline",
+          captureLabel: "Browser proof",
+          capturedAt: "2026-07-15T07:55:00.000Z",
+          signals: [{ label: "CTA", value: "Shop now" }],
+        },
+        analysisFields: [{ label: "hook", value: "A proven message." }],
+        tags: [],
+        note: null,
+        event: {
+          typeLabel: "Offer",
+          title: "Offer changed",
+          summary: "The offer changed on the landing page.",
+          createdAt: "2026-07-15T08:00:00.000Z",
+          priorityScore: 80,
+          priorityBand: "high",
+          recommendedAction: "Review the new offer",
+          proofTrail: "Saved evidence: browser capture",
+          proofStatusLabel: "Verified evidence",
+          sourceTypeLabel: "Saved evidence",
+          sourceUrl: "https://evidence.example/capture/1",
+          metaAdId: "ad-1",
+        },
+      },
+    ],
+  };
+}
+
+function approvedCourtPackFixture(): CourtPack {
+  const report = courtPackReportDocument();
+  return {
+    roomId: "room-1",
+    roomName: "Nykaa weekly desk",
+    clientLabel: "Nykaa",
+    preparedBy: null,
+    branding: null,
+    generatedAt: "2026-08-12T08:00:00.000Z",
+    sections: [
+      {
+        reportId: "watchlist:watchlist-1",
+        resourceType: "watchlist",
+        title: report.title,
+        subtitle: report.subtitle,
+        summary: report.summary,
+        generatedAt: report.generatedAt,
+        reviewedAt: new Date(Date.now() - 60_000).toISOString(),
+        approvalExpiresAt: new Date(
+          Date.now() + 60 * 60 * 1000,
+        ).toISOString(),
+        evidenceFingerprint: "fixture-approved-evidence",
+        report,
+      },
+    ],
+    plates: [
+      {
+        plateNumber: 1,
+        reportId: "watchlist:watchlist-1",
+        resourceType: "watchlist",
+        resourceLabel: "Nykaa watchlist report",
+        title: report.title,
+        advertiser: "Nykaa",
+        headline: "New offer",
+        capturedAt: "2026-07-15T07:55:00.000Z",
+        proofStatusLabel: "Verified evidence",
+        sourceUrl: "https://evidence.example/capture/1",
+        event: report.rows[0].event ?? null,
+        analysisFields: report.rows[0].analysisFields,
+        captureLabel: "Browser proof",
+      },
+    ],
+    excluded: [],
+    coverage: {
+      approvedReports: 1,
+      includedSections: 1,
+      excluded: 0,
+      excludedByReason: {
+        no_approval: 0,
+        approval_invalid: 0,
+        approval_expired: 0,
+        fingerprint_mismatch: 0,
+        readiness_failed: 0,
+        load_failed: 0,
+      },
+      plates: 1,
+    },
+    hasNothingToPack: false,
+  };
+}
+
+function emptyCourtPackFixture(): CourtPack {
+  return {
+    roomId: "room-1",
+    roomName: "Nykaa weekly desk",
+    clientLabel: "Nykaa",
+    preparedBy: null,
+    branding: null,
+    generatedAt: "2026-08-12T08:00:00.000Z",
+    sections: [],
+    plates: [],
+    excluded: [
+      {
+        reportId: "watchlist:watchlist-1",
+        resourceType: "watchlist",
+        resourceLabel: "Nykaa watchlist report",
+        reasonCode: COURT_PACK_EXCLUSION_REASON_CODES.noApproval,
+        reason: "This report has not been approved for client review yet.",
+      },
+    ],
+    coverage: {
+      approvedReports: 0,
+      includedSections: 0,
+      excluded: 1,
+      excludedByReason: {
+        no_approval: 1,
+        approval_invalid: 0,
+        approval_expired: 0,
+        fingerprint_mismatch: 0,
+        readiness_failed: 0,
+        load_failed: 0,
+      },
+      plates: 0,
+    },
+    hasNothingToPack: true,
+  };
 }
 
 describe("clients route agent memory", () => {
@@ -649,6 +859,63 @@ describe("clients route agent memory", () => {
     expect(markup).not.toContain("f9-primary-button");
   });
 
+  it("renders a populated Court Pack on a report-linked client room", async () => {
+    await mockRouter({
+      rooms: [clientRoomFixture()],
+      watchlists: [],
+      collections: [],
+      memories: [],
+      packs: [approvedCourtPackFixture()],
+      plan: "agency",
+      canManageClientRooms: true,
+      roomMemoryUnavailable: false,
+      approvalUnavailableRoomIds: [],
+    });
+
+    const { default: ClientsRoute } = await import("~/routes/app.clients");
+    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+
+    expect(markup).toContain('data-testid="court-pack"');
+    expect(markup).toContain("Agency Court Pack");
+    expect(markup).toContain("Evidence plate 1: Nykaa watchlist");
+    expect(markup).toContain("Nykaa watchlist report");
+    expect(markup).toContain(
+      "Five to Nine · Read-only HTML for browser printing",
+    );
+    expect(markup).toContain("Ready for client review");
+    expect(markup).not.toContain("No approved reports yet");
+  });
+
+  it("renders the honest Court Pack empty state when the room has nothing to pack", async () => {
+    await mockRouter({
+      rooms: [{ ...clientRoomFixture(), notes: { goal: "Weekly proof review." } }],
+      watchlists: [],
+      collections: [],
+      memories: [],
+      packs: [emptyCourtPackFixture()],
+      plan: "agency",
+      canManageClientRooms: true,
+      roomMemoryUnavailable: false,
+      approvalUnavailableRoomIds: [],
+    });
+
+    const { default: ClientsRoute } = await import("~/routes/app.clients");
+    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+
+    expect(markup).toContain('data-testid="court-pack"');
+    expect(markup).toContain("No approved reports yet");
+    expect(markup).toContain(
+      "Review and approve current report evidence to prepare this Court Pack.",
+    );
+    expect(markup).toContain("Excluded from verified evidence");
+    expect(markup).toContain(
+      "Nykaa watchlist report: This report has not been approved for client review yet.",
+    );
+    expect(markup).toContain(
+      "Five to Nine · Read-only HTML for browser printing",
+    );
+  });
+
   it("labels the saved-context preview honestly when more than eight loaded memories exist", async () => {
     await mockRouter({
       rooms: [],
@@ -988,6 +1255,92 @@ describe("clients route agent memory", () => {
 
     expect(result.rooms[0].resourceRefs).toEqual([]);
     expect(JSON.stringify(result.rooms[0])).not.toContain("Synthetic");
+  });
+
+  it("returns an honest empty Court Pack for a report-linked room without approvals", async () => {
+    const { getWorkspaceBranding } = mockAuth();
+    vi.doMock("~/lib/data.server", () => ({
+      listAgentMemory: vi.fn().mockResolvedValue([]),
+      listAgentMemoryForClientRooms: vi.fn().mockResolvedValue([]),
+      listClientRooms: vi.fn().mockResolvedValue([
+        {
+          id: "room-1",
+          userId: "user-1",
+          name: "Nykaa weekly desk",
+          clientLabel: "Nykaa",
+          status: "active",
+          notes: {},
+          resourceRefs: [
+            {
+              resourceType: "report",
+              resourceId: "watchlist:watchlist-1",
+              label: "Nykaa watchlist report",
+            },
+          ],
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ]),
+      listCollections: vi.fn().mockResolvedValue([]),
+      listWatchlists: vi.fn().mockResolvedValue([
+        {
+          id: "watchlist-1",
+          isActive: true,
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ]),
+      getLatestDigestRunSummaryForWatchlist: vi.fn(),
+      listAdsByIds: vi.fn(),
+      listCollectionItems: vi.fn(),
+      listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([]),
+      listWatchEvents: vi.fn(),
+      getCollection: vi.fn(),
+      getWatchlist: vi.fn(),
+    }));
+
+    const { loader } = await import("~/routes/app.clients");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/clients"),
+    } as never);
+
+    // The loader's Court Pack assembly reaches the branding lookup through
+    // the stubbed leaf module — never real D1.
+    expect(getWorkspaceBranding).toHaveBeenCalledWith({}, "user-1");
+    expect(result.packs).toHaveLength(1);
+    expect(result.packs[0]).toMatchObject({
+      roomId: "room-1",
+      roomName: "Nykaa weekly desk",
+      clientLabel: "Nykaa",
+      preparedBy: null,
+      branding: null,
+      hasNothingToPack: true,
+      sections: [],
+      plates: [],
+      coverage: {
+        approvedReports: 0,
+        includedSections: 0,
+        excluded: 1,
+        plates: 0,
+      },
+    });
+    expect(result.packs[0].excluded).toEqual([
+      {
+        reportId: "watchlist:watchlist-1",
+        resourceType: "watchlist",
+        resourceLabel: "Nykaa watchlist report",
+        reasonCode: COURT_PACK_EXCLUSION_REASON_CODES.noApproval,
+        reason: "This report has not been approved for client review yet.",
+      },
+    ]);
+    expect(result.packs[0].coverage.excludedByReason).toEqual({
+      [COURT_PACK_EXCLUSION_REASON_CODES.noApproval]: 1,
+      approval_invalid: 0,
+      approval_expired: 0,
+      fingerprint_mismatch: 0,
+      readiness_failed: 0,
+      load_failed: 0,
+    });
   });
 
   it("fails closed instead of approving evidence from an inactive watchlist", async () => {
