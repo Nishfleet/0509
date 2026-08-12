@@ -63,6 +63,7 @@ describe("Google Fonts stylesheet loading (dogfood da0f9f345221)", () => {
     const {
       default: RootApp,
       GOOGLE_FONTS_STYLESHEET_HREF,
+      FONT_SWAP_SCRIPT,
       GoogleFontsStylesheet,
     } = await import("~/root");
     void RootApp;
@@ -72,11 +73,24 @@ describe("Google Fonts stylesheet loading (dogfood da0f9f345221)", () => {
 
     // High-priority preload so the sheet still fetches early.
     expect(markup).toContain(`<link rel="preload" as="style" href="${href}"/>`);
-    // Loaded print-only (non-render-blocking), then swapped to all on load.
+    // Loaded print-only (non-render-blocking), then swapped to all on load
+    // (and immediately when the sheet is already cached).
     expect(markup).toContain(
       `<link id="f9-font-stylesheet" rel="stylesheet" href="${href}" media="print"/>`,
     );
-    expect(markup).toContain('l.addEventListener("load",function(){l.media="all";})');
+    expect(FONT_SWAP_SCRIPT).toContain('l.addEventListener("load",apply)');
+    expect(FONT_SWAP_SCRIPT).toContain("if(l.sheet){apply();}");
+    // The stylesheet link must suppress hydration warnings: FONT_SWAP_SCRIPT
+    // can flip media before React hydrates when css2 is cached.
+    const tree = GoogleFontsStylesheet();
+    const stylesheetLink = (tree.props.children as ReactNode[]).find(
+      (child) =>
+        child !== null &&
+        typeof child === "object" &&
+        "props" in child &&
+        (child as { props: { id?: string } }).props.id === "f9-font-stylesheet",
+    ) as { props: { suppressHydrationWarning?: boolean } } | undefined;
+    expect(stylesheetLink?.props.suppressHydrationWarning).toBe(true);
     // JS-off fallback still applies the sheet as a normal stylesheet.
     expect(markup).toContain(`<noscript><link rel="stylesheet" href="${href}"/></noscript>`);
   });
@@ -93,7 +107,8 @@ describe("Google Fonts stylesheet loading (dogfood da0f9f345221)", () => {
     expect(head).toContain(
       `<link id="f9-font-stylesheet" rel="stylesheet" href="${href}" media="print"/>`,
     );
-    expect(head).toContain('l.addEventListener("load",function(){l.media="all";})');
+    expect(head).toContain('l.addEventListener("load",apply)');
+    expect(head).toContain("if(l.sheet){apply();}");
     expect(head).toContain(`<noscript><link rel="stylesheet" href="${href}"/></noscript>`);
 
     // No render-blocking googleapis stylesheet remains anywhere in the head
