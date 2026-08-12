@@ -25,7 +25,7 @@ Billing + email canaries passed on production during the 2026-06-24 integration 
 | 7 | Plan-specific UX | DONE | Email-only GA copy; Agency held gate |
 | 8 | Monitoring fan-out | HELD | `inline` in prod; simulated PASS; live ladder NOT RUN |
 | 9 | Public pricing page | PASS | `/api/pricing-preview` live |
-| 10 | Remove beta | PARTIAL | Product-wide beta graduated; Meta ads still beta-labeled |
+| 10 | Remove beta | DONE 2026-08-12 | Product-wide beta graduated; Meta ads graduated after the production canary went green (Gate C pass on the live worker) |
 | 11 | Support | DONE | `docs/ga-support-runbook.md` |
 | 12 | Ops readiness | PARTIAL | Health 200; email gate in code; UptimeRobot owner gate |
 | 13 | Analytics | DONE | `docs/ga-metrics.md` |
