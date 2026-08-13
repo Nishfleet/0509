@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  mapCustomerRouteError,
+  PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+} from "~/lib/customer-route-error";
 import type { AdRecord, SearchResponse } from "~/lib/types";
 
 const baseAd: AdRecord = {
@@ -327,6 +331,234 @@ describe("search loader", () => {
       session: null,
       result: hydratedResult,
       selectedAd: baseAd,
+    });
+  });
+
+  it("does not commit the visitor geo country into an anonymous search", async () => {
+    // Regression: a visitor in Germany who never picked a country must get
+    // the global ("all countries") search. Geo-defaulting `country` into the
+    // anonymous search silently scoped results to a market nobody chose and
+    // baked `country=Germany` into the result links.
+    const env = { DB: {} };
+    const getOptionalSession = vi.fn().mockResolvedValue(null);
+    const listCollections = vi.fn();
+    const sourceResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: null,
+    });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession,
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa", {
+        headers: { "cf-ipcountry": "DE" },
+      }),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          query: "nykaa",
+          country: "all",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false, executionContext: null },
+    );
+    expect(result).toMatchObject({
+      session: null,
+      filters: expect.objectContaining({ country: "all" }),
+    });
+  });
+
+  it("keeps an explicitly chosen country on an anonymous search", async () => {
+    // Picking a country in the refine picker is a deliberate narrowing and
+    // must still scope the anonymous search — only the implicit geo default
+    // is withheld.
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: null,
+    });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa&country=Germany", {
+        headers: { "cf-ipcountry": "DE" },
+      }),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          query: "nykaa",
+          country: "Germany",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false, executionContext: null },
+    );
+    expect(result).toMatchObject({
+      filters: expect.objectContaining({ country: "Germany" }),
+    });
+  });
+
+  it("keeps the visitor-geo country default for signed-in searches without an explicit country", async () => {
+    // Signed-in visitors keep the geo preselection (refine picker and
+    // onboarding use it); only anonymous searches must not silently commit it.
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: null,
+    });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa", {
+        headers: { "cf-ipcountry": "DE" },
+      }),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          query: "nykaa",
+          country: "Germany",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false, executionContext: null },
+    );
+    expect(result).toMatchObject({
+      filters: expect.objectContaining({ country: "Germany" }),
     });
   });
 
@@ -1088,9 +1320,24 @@ describe("search loader", () => {
     );
   });
 
-  it("stops anonymous public searches when the route limiter blocks them", async () => {
+  it("stops anonymous public searches with a labeled 429 that keeps Retry-After and shows a truthful recovery message", async () => {
     const env = { DB: {} };
-    const rateLimitedResponse = new Response("Too many requests", { status: 429 });
+    // Deterministically drive the public limiter: a blocked anonymous search
+    // must surface as an explicit in-product 429 document — never a generic
+    // "Request failed" page — preserving the limiter's Retry-After signal.
+    const rateLimitedResponse = new Response(
+      JSON.stringify({
+        error: "rate_limited",
+        message: "Too many requests. Please try again shortly.",
+      }),
+      {
+        status: 429,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "retry-after": "600",
+        },
+      },
+    );
     const searchAdsViaSourceResolver = vi.fn();
     const prepareSearchResultSelection = vi.fn();
     const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(rateLimitedResponse);
@@ -1124,12 +1371,30 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    await expect(
-      loader({
-        context: createContext(env),
-        request: new Request("http://localhost/search?query=nykaa"),
-      } as never),
-    ).rejects.toBe(rateLimitedResponse);
+    const blocked = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa"),
+    } as never).catch((error: unknown) => error);
+
+    // Status and the limiter's recovery signal survive onto the document.
+    expect(blocked).toBeInstanceOf(Response);
+    expect((blocked as Response).status).toBe(429);
+    expect((blocked as Response).headers.get("retry-after")).toBe("600");
+
+    // Labeled visible state: the thrown body names the limit and the recovery
+    // path (this is what the 429 error surface renders verbatim), instead of
+    // the bare "Too many requests" limiter text or the generic fallthrough.
+    await expect((blocked as Response).json()).resolves.toMatchObject({
+      error: "rate_limited",
+      message: PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+    });
+
+    // The 429 mapping renders a labeled rate-limit surface, never the generic
+    // "Request failed" catch-all that shipped with the original defect.
+    const mapped = mapCustomerRouteError(blocked);
+    expect(mapped.title).toBe("Too many searches");
+    expect(mapped.message).toBe(PUBLIC_SEARCH_RATE_LIMIT_MESSAGE);
+    expect(mapped.retryable).toBe(true);
 
     expect(enforcePublicSearchRateLimit).toHaveBeenCalledWith(
       expect.any(Request),
@@ -1138,6 +1403,20 @@ describe("search loader", () => {
     );
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+  });
+
+  it("forwards the limiter's Retry-After onto the 429 document response", async () => {
+    // React Router only carries cookies from a thrown loader response onto
+    // the final document unless the boundary route re-exports the header;
+    // this is the exact signal the original defect dropped on the wire.
+    const { headers } = await import("~/routes/search");
+    expect(
+      headers({
+        errorHeaders: new Headers({ "retry-after": "600" }),
+      } as never),
+    ).toEqual({ "Retry-After": "600" });
+    // No error headers → no header surgery on ordinary documents.
+    expect(headers({} as never)).toEqual({});
   });
 
   it("does not spend live discovery on anonymous HEAD searches", async () => {

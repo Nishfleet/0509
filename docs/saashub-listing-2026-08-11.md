@@ -12,6 +12,30 @@ verification, and owner approval of a few personal fields plus tagline and
 description — see [Owner decisions](#owner-decisions). The optional paid
 `$99/month` featured listing is a separate decision and is NOT required.
 
+## Submission status (recorded 2026-08-11)
+
+**NEEDS_NISH_STEP — not submitted.** Recorded 2026-08-11:
+
+- **Mailbox prerequisite cleared.** A live Gmail → Agentic Inbox delivery
+  test to `support@0509.io` succeeded on 2026-08-11, so the SaaSHub
+  ownership-verification requirement (an inbox on the `0509.io` domain) is
+  satisfied.
+- **Form open, nothing submitted.** The SaaSHub submission page is open in
+  Nish's logged-in Mac browser with `https://0509.io` filled in. The next
+  **Continue** button explicitly accepts the SaaSHub Terms and Privacy —
+  do not call it submitted. Exact next step: **Nish confirms the venue
+  terms, then the browser run can continue** and finish the form with the
+  fields below.
+- **Re-verified 2026-08-12.** Freshness pass before this lane closed the
+  scout item: submission URL, all five category pages, the Ad Spy
+  substitute, every listed competitor slug, and the India startup page
+  re-checked (HTTP 200); plan facts (Free 1 watchlist + weekly brief; Scout
+  3 watchlists/6-hour checks; Starter 10/3-hour + daily briefs; Agency 75)
+  re-checked against `app/lib/plan-entitlements.ts`. One fix landed:
+  `PrimeSpy.net`'s SaaSHub page is `https://www.saashub.com/primespy-net`.
+  Everything else remains ready to paste; only the owner decisions below
+  still stand between this document and the submission.
+
 ## Eligibility check against SaaSHub submission guidelines
 
 Verified against `https://www.saashub.com/services/submit` (2026-08-11). Five
@@ -94,7 +118,8 @@ unlimited monitoring, no channel claims we cannot make.
 
 ### Categories
 
-All verified live on SaaSHub 2026-08-11 (HTTP 200 on the category pages):
+All verified live on SaaSHub 2026-08-11 (HTTP 200 on the category pages);
+re-verified 2026-08-12:
 
 1. `Competitor Monitoring` — `https://www.saashub.com/best-competitor-monitoring-software` — **primary** (exact-fit category; 15 products listed, including Visualping, Crayon, Klue, Kompyte)
 2. `Competitive Intelligence` — `https://www.saashub.com/best-competitive-intelligence-software`
@@ -111,7 +136,9 @@ categories. You may check your competitors' categories for inspiration."
 
 The submission form warns: "The submission will be slowed down and put to the
 bottom of the queue if there are not listed competitors." List generously.
-All names below were verified to have live SaaSHub pages on 2026-08-11:
+All names below were verified to have live SaaSHub pages on 2026-08-11
+(re-verified 2026-08-12; one slug corrected — `PrimeSpy.net` lives at
+`https://www.saashub.com/primespy-net`, not `primespy.net`):
 
 Direct category peers:
 
@@ -131,7 +158,8 @@ Ad-intelligence peers (Meta/creative focus):
 - `BigSpy` (Meta/TikTok ad spy)
 - `SocialPeta` (ad intelligence platform)
 - `Adligator` (AI ad spy for competitor creatives)
-- `PrimeSpy.net` (Meta Ad Library research)
+- `PrimeSpy.net` — `https://www.saashub.com/primespy-net` (Meta Ad Library
+  research)
 - `Pipiads` (TikTok ad spy)
 - `SOCIALFUEL` (Meta/Google/TikTok ad intelligence)
 - `LandingSpy` (ad landing-page spy)
@@ -205,7 +233,7 @@ live homepage copy in `app/routes/marketing.tsx`:
 - **Public data only** — every capture is from the public Meta Ad Library and
   public landing pages; nothing behind a login.
 - **Coverage and freshness are labeled and can vary by source** — Meta ads
-  tracking remains beta until the production canary graduates.
+  tracking graduated from beta 2026-08-12, gated on a green production canary.
 - **Use `0509.io` everywhere** — `0509.in` is legacy redirect-only and must
   not appear in listing copy, links, or images.
 

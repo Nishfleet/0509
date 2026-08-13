@@ -2,6 +2,20 @@
 
 Narrative records moved out of `CLAUDE.md` so per-session guidance stays operational. Entries below preserve the original wording and are organized by the date of the event.
 
+## 2026-08-12
+
+### Meta ads beta graduation
+
+- Meta ads discovery reliability graduated from beta: the production canary for the live worker `24e18f13-f932-4b23-a6c1-d0eb218747f0` is green (post-deploy Gate-C canary passed 2026-08-09, run 31319791367, `{"passed":true,"errors":[]}`; re-verified live 2026-08-11 during the stale `codex:prod-canary` triage; worker still live 2026-08-12 with no regression). Public `/search` serves honest fresh/recent/sample labels with `isProvenFreshLiveCapture()` since #567.
+- Customer-facing changes: the MagicBrief compare page no longer says Meta ads tracking is "labeled beta" — it states tracking is live and gated by a production canary; the served marketing hero keeps its Meta ads claim (now honest) with freshness labeling intact; `app/lib/plan-entitlements.ts` `metaSourceStatus` values renamed `beta_limited`/`beta_priority` → `limited`/`priority`; README and the GA positioning/scorecard/customer-journey audit docs record the graduation.
+- Rollback: if the production canary turns red (launch-readiness `meta_ads_beta:*` blockers, Gate C failing, or fresh-live probe degradation), restore the beta caveat in `app/routes/compare.magicbrief.tsx`, `README.md`, and `docs/ga-positioning.md` before any customer-facing Meta claim.
+
+## 2026-08-11
+
+### Stale codex:prod-canary issue triage
+
+- Closed the last two open `codex:prod-canary` issues (#19, #27), deferred from the 2026-08-06 triage pending a live-canary truth check. Both are stale: every probe in their evidence targets the retired `0509.in` domain (now 308-redirect-only; `0509.io` is the canonical primary domain per `CLAUDE.md` and `workers/primary-domain.ts`), and both track the pre-#567 silent cached-degraded discovery behavior — public `/search` overpromising "right now" while serving cached inventory — which PR #567 (merged 2026-08-09) resolved by gating fresh/live wording on `isProvenFreshLiveCapture()` and labeling cached results honestly. The Post Merge Guard automation that filed #27 was removed in #150 (2026-06-12), so no new evidence can arrive on either issue. Live truth check 2026-08-11: `0509.io`, `www.0509.io`, and `api.0509.io` each return health 200 with app `0509` on the post-#567 worker version `24e18f13-f932-4b23-a6c1-d0eb218747f0` (search rollout `shadow`); the post-deploy Gate-C canary for that version passed (`{"passed":true,"errors":[]}`, run 31319791367, 2026-08-09). Each issue got a one-line resolution comment and was closed (not deleted). Rollback: reopen the issue.
+
 ## 2026-08-06
 
 ### Stale codex:rollback issue triage

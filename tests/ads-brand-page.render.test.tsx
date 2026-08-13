@@ -110,6 +110,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     teaser,
     aggression,
     changeEvents,
+    adLibraryCountry: "India",
     noindex: false,
     canonicalPath: "/ads/nike.com",
     ...overrides,
@@ -148,6 +149,38 @@ describe("/ads/:domain — Case File render", () => {
     expect(order.every((index) => index >= 0)).toBe(true);
   });
 
+  it("names the country of the Ad Library the cached creatives came from", async () => {
+    const markup = await render(populated());
+
+    // The wall source line names the India Ad Library, never a bare
+    // "the Meta Ad Library" that hides the country-scoped source.
+    expect(markup).toContain(
+      "real creatives from the India Ad Library · cached about 2 hours ago",
+    );
+    // The closer honesty line names it too.
+    expect(markup).toContain(
+      "Ad creatives are real ads from the public India Ad Library linking to nike.com",
+    );
+    // And the meta description / JSON-LD description.
+    expect(markup).toContain(
+      '"description":"See 6 Meta ads from Nike (nike.com), from a public check of the India Ad Library about 2 hours ago. Get an email when their ads or offer change."',
+    );
+  });
+
+  it("spells out the all-countries view instead of implying a single market", async () => {
+    const markup = await render(populated({ adLibraryCountry: "all countries" }));
+
+    expect(markup).toContain(
+      "real creatives from the Meta Ad Library across all countries · cached about 2 hours ago",
+    );
+    expect(markup).toContain(
+      '"description":"See 6 Meta ads from Nike (nike.com), from a public check of the Meta Ad Library across all countries about 2 hours ago. Get an email when their ads or offer change."',
+    );
+    // No single country is implied anywhere in the source lines.
+    expect(markup).not.toContain("the India Ad Library");
+    expect(markup).not.toContain("the public India Ad Library");
+  });
+
   it("shows the honest overflow tile and the signup CTA carrying the domain", async () => {
     const markup = await render(populated());
 
@@ -158,6 +191,29 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).toContain(
       "/auth/signup?redirectTo=%2Fapp%3Fwebsite%3Dnike.com%23setup-checklist",
     );
+  });
+
+  it("dates every visible wall card with its own capture date, so months-old creatives read as old", async () => {
+    const markup = await render(populated());
+
+    // Each of the 5 visible cards carries the date its creative was first
+    // observed (its firstSeenAt), not just a page-level "cached N ago" stamp
+    // — a Diwali/Navratri/Pay Day creative from months back is visibly dated.
+    // Exactly 5: the 6th ad hides behind the overflow tile, which is a
+    // conversion cell, not a card.
+    expect((markup.match(/Since 1 Jun 2026/g) ?? []).length).toBe(5);
+    expect(markup).toContain("+29");
+  });
+
+  it("renders no capture-date pill when the creative's first-seen proof is missing", async () => {
+    const ads = [ad({ metaAdId: "ad-no-date", firstSeenAt: null })];
+    const markup = await render(
+      populated({ ads, brandOwnedAdCount: 1, teaser: { ...teaser, totalCount: 1 } }),
+    );
+
+    // The card still renders — but never invents a date it does not know.
+    expect(markup).toContain("Run through summer with gear that can take the heat.");
+    expect(markup).not.toContain("Since ");
   });
 
   it("hides the score card and states why when the evidence floor is not met", async () => {
@@ -206,7 +262,7 @@ describe("/ads/:domain — Case File render", () => {
 
   it("claims right now/live only while the capture is fresh, and flips to past-tense honesty when it is hours old", async () => {
     const fresh = await render(
-      populated({ checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+      populated({ checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
     const stale = await render(populated());
 
@@ -233,10 +289,28 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).not.toContain("more ads live");
   });
 
+  it("keeps the stat-strip context public (no signed-in 'marked active' language)", async () => {
+    const fresh = await render(
+      populated({ checkedAgo: "moments ago", freshForLiveClaim: true }),
+    );
+    const stale = await render(populated());
+
+    // "Active" is the ad's observed Ad Library status, stated publicly —
+    // never "marked active", which implies a signed-in viewer action.
+    expect(fresh).not.toContain("marked active");
+    expect(stale).not.toContain("marked active");
+
+    // Fresh capture reads present tense; stale capture reads "at the last
+    // check", mirroring the hero line and the caption flip above.
+    expect(fresh).toContain(">28 active<");
+    expect(stale).toContain("28 active at last check");
+    expect(stale).not.toContain(">28 active<");
+  });
+
   it("stops telling visitors the brand is running ads when the creatives are other advertisers'", async () => {
     const stale = await render(populated({ brandOwnedAdCount: 0 }));
     const fresh = await render(
-      populated({ brandOwnedAdCount: 0, checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+      populated({ brandOwnedAdCount: 0, checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
 
     // No brand-owned claim anywhere — the headline attributes to the domain.
@@ -256,7 +330,7 @@ describe("/ads/:domain — Case File render", () => {
 
     // Closer never calls the creatives Nike's own ads.
     expect(stale).toContain(
-      "Ad creatives are real Meta Ad Library ads from other advertisers linking to nike.com",
+      "Ad creatives are real ads from the public India Ad Library, run by other advertisers linking to nike.com",
     );
     expect(stale).toContain("The advertisers linking to nike.com will change their next ad.");
     expect(stale).not.toContain("Nike's real ads");
@@ -265,7 +339,7 @@ describe("/ads/:domain — Case File render", () => {
   it("names the split when the cache mixes the brand's own ads with other advertisers'", async () => {
     const stale = await render(populated({ brandOwnedAdCount: 2 }));
     const fresh = await render(
-      populated({ brandOwnedAdCount: 2, checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+      populated({ brandOwnedAdCount: 2, checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
 
     expect(stale).toContain("Nike was running ");
@@ -315,7 +389,7 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
       '"name":"Nike Facebook & Instagram ads — checked about 2 hours ago | Five to Nine"',
     );
     expect(markup).toContain(
-      '"description":"See 6 Meta ads from Nike (nike.com), from a public Ad Library check about 2 hours ago. Get an email when their ads or offer change."',
+      '"description":"See 6 Meta ads from Nike (nike.com), from a public check of the India Ad Library about 2 hours ago. Get an email when their ads or offer change."',
     );
     expect(markup).toContain('"url":"https://0509.io/ads/nike.com"');
     // dateModified is the on-screen "Last checked" stamp, machine-readable.
@@ -329,7 +403,7 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
 
   it("flips the JSON-LD name to the live-claim title only while the capture is fresh", async () => {
     const markup = await render(
-      populated({ checkedAgo: "about 5 minutes ago", freshForLiveClaim: true }),
+      populated({ checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
 
     expect(markup).toContain(

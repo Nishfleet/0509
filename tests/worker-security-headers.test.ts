@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { EXPECTED_PUBLIC_HOME_CACHE_CONTROL } from "../scripts/check-live-public-home.mjs";
 import {
+  EXPECTED_PUBLIC_HOME_CACHE_CONTROL,
+  EXPECTED_SCRIPT_SRC_BEACON_HOST,
+} from "../scripts/check-live-public-home.mjs";
+import {
+  CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC,
   HTML_NO_STORE_HEADERS,
   PUBLIC_HTML_CACHE_CONTROL,
   SECURITY_HEADERS,
   withSecurityHeaders,
 } from "../workers/security-headers";
+
+const BASE_SCRIPT_SRC = `script-src 'self' 'unsafe-inline' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC}`;
 
 function htmlResponse(init: ResponseInit & { headers?: Record<string, string> } = {}) {
   return new Response("<!doctype html>", {
@@ -31,11 +37,33 @@ describe("Worker security headers", () => {
       SECURITY_HEADERS["strict-transport-security"],
     );
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
-    expect(cspDirective(response, "script-src")).toBe("script-src 'self' 'unsafe-inline'");
+    expect(cspDirective(response, "script-src")).toBe(BASE_SCRIPT_SRC);
     expect(cspDirective(response, "connect-src")).toBe("connect-src 'self' https:");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("x-frame-options")).toBe("DENY");
     expect(response.headers.get("permissions-policy")).toContain("camera=()");
+  });
+
+  it("allows the Cloudflare Web Analytics beacon script on HTML responses", () => {
+    // Web Analytics is enabled for this zone with automatic (edge) injection:
+    // Cloudflare inserts https://static.cloudflareinsights.com/beacon.min.js into
+    // HTML responses as they pass the edge. If script-src drops the host, the
+    // beacon is blocked and analytics silently records zero page views. The
+    // beacon posts to /cdn-cgi/rum on the same origin, which connect-src 'self'
+    // covers.
+    // A non-public route (not the Site Rep widget homepage) so script-src is the
+    // exact baseline without the widget host appended.
+    const response = withSecurityHeaders(
+      htmlResponse(),
+      new Request("https://0509.io/app"),
+    );
+    const scriptSrc = cspDirective(response, "script-src") ?? "";
+    expect(scriptSrc).toBe(BASE_SCRIPT_SRC);
+    expect(scriptSrc).toContain("'self'");
+    expect(scriptSrc).toContain("'unsafe-inline'");
+    expect(scriptSrc).toContain(CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC);
+    expect(cspDirective(response, "connect-src")).toBe("connect-src 'self' https:");
+    expect(cspDirective(response, "connect-src")).toContain("'self'");
   });
 
   it("allows the Site Rep script only on public widget HTML routes", () => {
@@ -59,11 +87,11 @@ describe("Worker security headers", () => {
     );
 
     expect(cspDirective(publicResponse, "script-src")).toBe(
-      "script-src 'self' 'unsafe-inline' https://siterep.net",
+      `${BASE_SCRIPT_SRC} https://siterep.net`,
     );
-    expect(cspDirective(authResponse, "script-src")).toBe("script-src 'self' 'unsafe-inline'");
-    expect(cspDirective(appResponse, "script-src")).toBe("script-src 'self' 'unsafe-inline'");
-    expect(cspDirective(publicWithAuthCookieResponse, "script-src")).toBe("script-src 'self' 'unsafe-inline'");
+    expect(cspDirective(authResponse, "script-src")).toBe(BASE_SCRIPT_SRC);
+    expect(cspDirective(appResponse, "script-src")).toBe(BASE_SCRIPT_SRC);
+    expect(cspDirective(publicWithAuthCookieResponse, "script-src")).toBe(BASE_SCRIPT_SRC);
   });
 
   it("prevents stale cached public HTML from surviving a rebuild", () => {
@@ -215,6 +243,15 @@ describe("Worker security headers", () => {
       // public, max-age=300), deploys would fail on a policy that is actually
       // correct. Import both constants and assert they can never diverge.
       expect(EXPECTED_PUBLIC_HOME_CACHE_CONTROL).toBe(PUBLIC_HTML_CACHE_CONTROL);
+    });
+
+    it("keeps the live deploy gate's beacon-CSP contract coupled to the product policy", () => {
+      // The gate asserts the LIVE script-src still allows the Cloudflare Web
+      // Analytics beacon (PR #610). If the product CSP ever drops the beacon
+      // host without the gate moving with it, deploys would pass while analytics
+      // silently records zero page views. Import both constants and assert they
+      // can never diverge.
+      expect(EXPECTED_SCRIPT_SRC_BEACON_HOST).toBe(CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC);
     });
   });
 

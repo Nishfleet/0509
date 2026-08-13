@@ -319,6 +319,53 @@ describe("public search submission settle", () => {
     expect(errorMarkup).not.toContain('aria-busy="true"');
   });
 
+  it("suppresses the stale validation error while a re-submit navigation is in flight", async () => {
+    // Committed page: the previous submission was refused with a validation
+    // error, and its alert is live on the page.
+    loaderData = errorLoaderData;
+    locationObj = { pathname: "/search", search: ERROR_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const committedMarkup = await renderMarkup();
+    expect(committedMarkup).toContain(
+      "That website looks incomplete. Add the full domain, like brand.com.",
+    );
+    expect(committedMarkup).toContain('aria-invalid="true"');
+
+    // The visitor corrects the website and re-submits. The GET navigation to
+    // the new target is in flight but the committed page still holds the OLD
+    // loader data — asserting the old error now would lie about the input
+    // being searched, so the form must show the search state instead and let
+    // the fresh loader result (error or results) take over on commit.
+    loaderData = errorLoaderData;
+    locationObj = { pathname: "/search", search: ERROR_SEARCH, hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: TARGET_SEARCH },
+    };
+
+    const inFlightMarkup = await renderMarkup();
+
+    expect(inFlightMarkup).toContain("Searching…");
+    expect(inFlightMarkup).not.toContain(
+      "That website looks incomplete. Add the full domain, like brand.com.",
+    );
+    expect(inFlightMarkup).toContain('aria-invalid="false"');
+    expect(inFlightMarkup).not.toContain('role="alert"');
+
+    // The re-submit commits a fresh error for the new input: the alert is
+    // live again because it now describes the committed submission.
+    loaderData = errorLoaderData;
+    locationObj = { pathname: "/search", search: ERROR_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const settledMarkup = await renderMarkup();
+    expect(settledMarkup).toContain(
+      "That website looks incomplete. Add the full domain, like brand.com.",
+    );
+    expect(settledMarkup).toContain('aria-invalid="true"');
+  });
+
   it("keeps See ads pending after the cold-path request settles while the committed page is warming", async () => {
     // Cold-path regression: the first anonymous query for an uncached
     // advertiser returns the typed warming state immediately and the browser
@@ -383,6 +430,64 @@ describe("public search submission settle", () => {
     const button = container.querySelector('button[type="submit"]');
     expect(button?.textContent).toContain("See ads");
     expect(button?.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("shows an honest end state when the warming check outlives the poll budget and re-arms it on retry", async () => {
+    // The 5s x 12 poll budget is also the auto-refresh promise. When the
+    // background capture outlives it, the page must stop claiming "we'll
+    // refresh automatically": it says the check is taking longer, retracts
+    // the auto-refresh, and a same-URL retry starts a fresh budget so the
+    // promise is honest again for the new check.
+    loaderData = warmingLoaderData;
+    locationObj = { pathname: "/search", search: WARMING_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const { container, root, SearchRoute } = await mountRoute();
+
+    expect(container.textContent).toContain("Checking the Ad Library now");
+    expect(container.textContent).toContain("Usually under a minute");
+
+    const { SEARCH_WARMING_POLL_LIMIT } = await import("~/routes/search");
+    for (let step = 0; step < SEARCH_WARMING_POLL_LIMIT; step += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+    }
+
+    // Budget spent with the check still warming: the promised auto-refresh
+    // is gone and an honest end state says what happened and what to do.
+    expect(container.textContent).toContain(
+      "The check is taking longer than a minute",
+    );
+    expect(container.textContent).toContain("We stopped auto-refreshing");
+    expect(container.textContent).not.toContain("Usually under a minute");
+    expect(container.textContent).not.toContain("refresh automatically");
+
+    // Retry is a same-URL navigation: the loader runs a fresh check, and the
+    // committed page must re-arm the auto-refresh promise for it.
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: WARMING_SEARCH },
+    };
+    await act(async () => {
+      root.render(createElement(SearchRoute));
+    });
+    navigationState = { state: "idle", location: null };
+    await act(async () => {
+      root.render(createElement(SearchRoute));
+    });
+
+    expect(container.textContent).toContain("Checking the Ad Library now");
+    expect(container.textContent).toContain("Usually under a minute");
+
+    // The fresh budget polls again: the next tick fires a revalidation.
+    const revalidationsBeforeRetry = revalidatorRef.revalidate.mock.calls.length;
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(revalidatorRef.revalidate.mock.calls.length).toBe(
+      revalidationsBeforeRetry + 1,
+    );
   });
 
   it("shows the recovery reload after 90 seconds on an uncommitted idle page, enables submit, and clears when navigation settles", async () => {

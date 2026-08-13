@@ -20,6 +20,7 @@ import {
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
 import { publicSeoFileForPathname } from "../app/lib/seo";
+import { publicSitemapFile } from "../app/lib/sitemap.server";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import {
   observeScheduledTask,
@@ -58,7 +59,7 @@ function markdownResponse(request: Request, body: string): Response {
       headers: {
         "content-type": "text/markdown; charset=utf-8",
         "vary": "Accept",
-        "content-signal": "search=yes, ai-input=yes",
+        "content-signal": "search=yes, ai-input=yes, ai-train=no, use=reference",
       },
     }),
     request,
@@ -83,6 +84,17 @@ export default {
     const primaryDomainResponse = primaryDomainRedirect(request);
     if (primaryDomainResponse) {
       return withSecurityHeaders(primaryDomainResponse, request);
+    }
+
+    // /sitemap.xml is dynamic: the static funnel paths plus the indexable
+    // /ads/:domain brand pages backed by the discovery cache — see
+    // app/lib/sitemap.server.ts. It degrades to the static list when D1 is
+    // absent; robots.txt and the social card below stay fully static.
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      url.pathname === "/sitemap.xml"
+    ) {
+      return publicFileResponse(request, await publicSitemapFile(env));
     }
 
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
