@@ -104,3 +104,5 @@ jobs:
           # Keep it below MemoryHigh/MemoryMax so systemd still fails closed.
           NODE_OPTIONS: --max-old-space-size=2048
         run: ./scripts/deploy-window-lock.sh run -- npm run typecheck
+
+# integrity-context-proof: synthetic protected-file touch for sol-sweep packet
