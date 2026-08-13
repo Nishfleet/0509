@@ -307,6 +307,11 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       null,
       {
         purpose: "scheduled_warmup",
+        // Warmup passes the resolved owner plan tier and (when a scheduled
+        // ExecutionContext is supplied) the real context for telemetry
+        // waitUntil completion; without a caller context this stays null.
+        planTier: "agency",
+        executionContext: null,
       },
     );
     expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
