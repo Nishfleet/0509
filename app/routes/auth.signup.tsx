@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 
 import { AuthForm } from "~/components/auth-form";
 import { BrandWordmark } from "~/components/brand-wordmark";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 
 const signupDescription =
   "Create a Five to Nine account to search competitor ads, save useful examples, and monitor offer changes.";
@@ -104,6 +104,18 @@ export default function SignupRoute() {
 
   return (
     <main className="f9-auth-page">
+      {/* Truthful WebPage JSON-LD mirroring the meta head: same title, same
+          description, same canonical URL. Markup only — it never claims
+          session state, link delivery, or provider status. */}
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "Create account | Five to Nine",
+            description: signupDescription,
+            pathname: "/auth/signup",
+          }),
+        )}
+      />
       <div className="f9-container f9-auth-layout">
         <section className="f9-auth-story">
           <Link className="f9-brand f9-auth-brand" to="/" aria-label="Five to Nine home">
@@ -133,6 +145,30 @@ export default function SignupRoute() {
               <p>Use change summaries to move copy, pricing, and sales responses faster.</p>
             </div>
           </div>
+          <div className="f9-auth-proof-list">
+            <div>
+              <strong>Free weekly watch</strong>
+              <p>Your free account watches one competitor: an activation scan when you add it, then a weekly check with
+              a weekly email brief. No card needed.</p>
+            </div>
+            <div>
+              <strong>Proof on paid plans</strong>
+              <p>Paid plans save every confirmed change with the screenshot, page text, and original link — evidence
+              your next call can cite.</p>
+            </div>
+            <div>
+              <strong>Faster checks</strong>
+              <p>Paid plans check every 3–6 hours — Scout every 6, Starter every 3, and Agency with its top 25
+              competitors every 3 and the rest every 6 — and add collections; exports and daily briefs join on
+              Starter and Agency.</p>
+            </div>
+          </div>
+          <p>
+            No password to invent — the setup link arrives by email and verifies your work address. Open it, add one
+            competitor website, and the first scan starts; the brief then arrives on your plan&rsquo;s schedule —
+            weekly on free and Scout, daily and weekly on Starter and Agency. You can pause or remove a watchlist any
+            time.
+          </p>
         </section>
 
         <AuthForm
