@@ -245,6 +245,13 @@ describe("search load-more accessibility", () => {
     expect(formatSearchResultsAnnouncement(result({ ads: [], nextCursor: null }))).toBe(
       "No search results found. Search complete.",
     );
+    // A "disabled" result means no search ran (idle pre-search page or an
+    // input the instrument refused). It must never be announced as complete.
+    expect(
+      formatSearchResultsAnnouncement(
+        result({ ads: [], nextCursor: null, discoveryStatus: "disabled" }),
+      ),
+    ).toBe("Enter a competitor website to start.");
     expect(formatSearchResultsAnnouncement(result({ ads: [], nextCursor: null }))).not.toMatch(
       /Error|Failed|D1|binding/i,
     );

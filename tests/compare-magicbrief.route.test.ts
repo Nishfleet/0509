@@ -33,7 +33,8 @@ describe("compare magicbrief route", () => {
     const markup = await renderRouteMarkup();
 
     expect(markup).toContain("Moving from MagicBrief?");
-    expect(markup).toContain("Meta ads tracking is labeled beta");
+    expect(markup).toContain("Meta ads tracking is live on your competitors");
+    expect(markup).not.toContain("labeled beta");
     expect(markup).toContain("Receipts for every move");
     expect(markup).not.toContain("Evidence over vibes");
     expect(markup).not.toContain("No screenshots, no claim");
