@@ -16,21 +16,25 @@ concurrency:
 permissions: {}
 
 jobs:
-  authorize_release:
-    name: Authorize exact verification candidate
-    # No job-level fork guard here: a fork PR must produce a real job outcome,
-    # never a skip (GitHub accepts skipped required contexts as satisfied).
-    # The fork guard lives in the authorize step below, which refuses fork PRs
-    # with a real failure. This job is not itself a required context; the
-    # required codex-node-checks job below turns any failed authorization into
-    # a real failure via its "Require authorization gate" step.
-    if: github.repository == 'nish3451/0509'
+  codex-node-checks:
+    # Required context (branch protection). It must be structurally incapable
+    # of concluding SKIPPED: GitHub counts a skipped required context as
+    # satisfying branch protection, so there is NO job-level `if:` and NO
+    # `needs` here (a job with needs is skipped when its dependency fails;
+    # an if: can skip on cancellation or any future condition edit). The
+    # authorizer is step 1 of THIS job, so a fork PR or unapproved dispatch
+    # candidate fails the required check with a real failure - a gate that
+    # cannot verify must say no, never render green or skipped.
     runs-on: [self-hosted, linux, x64, vps-verify]
-    permissions: {}
-    outputs:
-      sha: ${{ steps.authorize.outputs.sha }}
+    permissions:
+      contents: read
+    # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
+    # one 180m total budget shared between its lane slot and the deploy gate.
+    timeout-minutes: 270
     steps:
-      - name: Authorize verification request
+      - name: Authorize exact verification candidate
+        # Fork guard as a step, not a job: it refuses fork PRs and unapproved
+        # dispatch candidates with a real failure of the required job.
         id: authorize
         shell: bash
         env:
@@ -59,33 +63,9 @@ jobs:
           esac
           printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
-  codex-node-checks:
-    # Required context. It runs unconditionally (never skips on a fork PR):
-    # the "Require authorization gate" step below turns any failed or skipped
-    # authorization (fork PRs included) into a real job failure. A gate that
-    # cannot verify must say no, never render as green.
-    if: >-
-      github.repository == 'nish3451/0509' &&
-      !cancelled()
-    needs: authorize_release
-    runs-on: [self-hosted, linux, x64, vps-verify]
-    permissions:
-      contents: read
-    # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
-    # one 180m total budget shared between its lane slot and the deploy gate.
-    timeout-minutes: 270
-    steps:
-      - name: Require authorization gate
-        if: needs.authorize_release.result != 'success'
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "::error::codex-node-checks refused: authorize_release concluded '${{ needs.authorize_release.result }}' (expected 'success'). Fork PRs and unapproved dispatch candidates are never verified."
-          exit 1
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.authorize_release.outputs.sha }}
+          ref: ${{ steps.authorize.outputs.sha }}
           fetch-depth: 0
           clean: true
           persist-credentials: false
@@ -93,7 +73,7 @@ jobs:
       - name: Verify authorized checkout
         shell: bash
         env:
-          AUTHORIZED_SHA: ${{ needs.authorize_release.outputs.sha }}
+          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
         run: |
           set -euo pipefail
           test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
