@@ -108,13 +108,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
-          # The decision logic is fetched from the BASE branch (never from the
-          # candidate tree), so the candidate cannot run its own script.
+          # The decision logic is fetched from the BASE branch's current ref
+          # (never from the candidate tree), so the candidate cannot run its
+          # own script. The default-branch ref (not base.sha) is used because
+          # base.sha is the PR-creation-time base commit and can predate the
+          # gate's landing for PRs that were already open; the workflow YAML
+          # GitHub evaluates for pull_request_target is the base branch's
+          # current file, so the current ref is the matching source of truth.
           script="$RUNNER_TEMP/required-verifier-integrity.sh"
-          gh api "repos/$REPO/contents/.github/scripts/required-verifier-integrity.sh?ref=$BASE_SHA" \
+          gh api "repos/$REPO/contents/.github/scripts/required-verifier-integrity.sh?ref=$BASE_REF" \
             --jq '.content' | base64 -d > "$script"
           test -s "$script"
           bash "$script" < "$RUNNER_TEMP/context-bundle.json"
@@ -124,11 +129,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
           fixture="$RUNNER_TEMP/test-required-verifier-integrity.sh"
-          gh api "repos/$REPO/contents/.github/scripts/test-required-verifier-integrity.sh?ref=$BASE_SHA" \
+          gh api "repos/$REPO/contents/.github/scripts/test-required-verifier-integrity.sh?ref=$BASE_REF" \
             --jq '.content' | base64 -d > "$fixture"
           test -s "$fixture"
           bash "$fixture"
