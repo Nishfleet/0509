@@ -84,8 +84,10 @@ export interface BrandPageCacheSnapshot {
   /** True when young enough (≤ 7 days) to be indexable. */
   freshForIndexing: boolean;
   /**
-   * True only while the capture is young enough (≤ 1 hour) that "right now" /
-   * "live" copy is honest. Older captures render past-tense copy.
+   * True only while the capture is still in the "moments ago" bucket (same
+   * boundary as the freshness stamp) that "right now" / "live" copy is
+   * honest. Any older capture — even one from a few minutes ago — renders
+   * past-tense copy.
    */
   freshForLiveClaim: boolean;
 }
@@ -598,6 +600,9 @@ function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot 
     country: entry.country,
     ageMs,
     freshForIndexing: ageMs <= BRAND_PAGE_FRESH_FOR_INDEXING_MS,
-    freshForLiveClaim: ageMs <= BRAND_PAGE_LIVE_CLAIM_MAX_AGE_MS,
+    // Strictly below the moments-ago boundary: at the boundary itself the
+    // stamp already reads "about N minutes ago", so "right now"/"live" must
+    // already be off. Keeps claim and stamp from ever disagreeing.
+    freshForLiveClaim: ageMs < BRAND_PAGE_LIVE_CLAIM_MAX_AGE_MS,
   };
 }
