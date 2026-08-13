@@ -16,15 +16,25 @@ concurrency:
 permissions: {}
 
 jobs:
-  authorize_release:
-    name: Authorize exact verification candidate
-    if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+  codex-node-checks:
+    # Required context (branch protection). It must be structurally incapable
+    # of concluding SKIPPED: GitHub counts a skipped required context as
+    # satisfying branch protection, so there is NO job-level `if:` and NO
+    # `needs` here (a job with needs is skipped when its dependency fails;
+    # an if: can skip on cancellation or any future condition edit). The
+    # authorizer is step 1 of THIS job, so a fork PR or unapproved dispatch
+    # candidate fails the required check with a real failure - a gate that
+    # cannot verify must say no, never render green or skipped.
     runs-on: [self-hosted, linux, x64, vps-verify]
-    permissions: {}
-    outputs:
-      sha: ${{ steps.authorize.outputs.sha }}
+    permissions:
+      contents: read
+    # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
+    # one 180m total budget shared between its lane slot and the deploy gate.
+    timeout-minutes: 270
     steps:
-      - name: Authorize verification request
+      - name: Authorize exact verification candidate
+        # Fork guard as a step, not a job: it refuses fork PRs and unapproved
+        # dispatch candidates with a real failure of the required job.
         id: authorize
         shell: bash
         env:
@@ -53,22 +63,9 @@ jobs:
           esac
           printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
-  codex-node-checks:
-    if: >-
-      github.repository == 'nish3451/0509' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
-      needs.authorize_release.result == 'success'
-    needs: authorize_release
-    runs-on: [self-hosted, linux, x64, vps-verify]
-    permissions:
-      contents: read
-    # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
-    # one 180m total budget shared between its lane slot and the deploy gate.
-    timeout-minutes: 270
-    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.authorize_release.outputs.sha }}
+          ref: ${{ steps.authorize.outputs.sha }}
           fetch-depth: 0
           clean: true
           persist-credentials: false
@@ -76,7 +73,7 @@ jobs:
       - name: Verify authorized checkout
         shell: bash
         env:
-          AUTHORIZED_SHA: ${{ needs.authorize_release.outputs.sha }}
+          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
         run: |
           set -euo pipefail
           test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"

@@ -5,6 +5,7 @@ verbatim below.
 
 - [MONEY silent-failure remediation](#money-silent-failure-remediation) — PR #445, branch `fix/silent-fixmoney` (landed on `main`)
 - [Silent-failure observability remediation](#silent-failure-observability-remediation) — PR #447, branch `fix/silent-fixobserve`
+- [Anonymous search honest end state after 60s warming cap (2026-08-12 lane 1)](#anonymous-search-honest-end-state-after-60s-warming-cap-2026-08-12-lane-1) — PR #612, commit `90cea3a5` (landed on `main`)
 
 ---
 # MONEY silent-failure remediation
@@ -483,6 +484,76 @@ advertisers.
 - `.lane/report.md` — evidence record only; no product code touched.
 
 ---
+
+# Structured data opportunity on /search (2026-08-12 lane 6) — already resolved by PR #564 (+ duplicate #600)
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane6-search-structured-data-already-resolved`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] [dogfood `fce4fa3c00f1`] Structured data opportunity on /search
+  [dogfood 20260808T074205Z-msk2fl3n]
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main` and
+live in production:
+
+- PR #564 — `d1c8bd43` "fix(seo): add truthful WebPage JSON-LD", merged
+  2026-08-09, is an ancestor of the current `main` HEAD (`389c0e55`) and is
+  the commit that introduced the truthful WebPage JSON-LD into BOTH halves of
+  the finding's scope — `app/routes/search.tsx` and
+  `app/routes/auth.login.tsx` (`git log HEAD -S "Truthful WebPage JSON-LD" --`
+  attributes the auth/login block to `d1c8bd43`).
+- PR #600 — `fix/lane15-search-structured-data`, merged 2026-08-10, is a
+  duplicate of the `/search` half; the improvement-loop backlog note around
+  `backlog.md:1042` flagged that the `/auth/login` half "looks covered by
+  #600" while PR #618 (evidence-only docs lane, closed 2026-08-11) stayed
+  unmerged. Neither gap exists: `d1c8bd43` itself covers `/auth/login` on
+  main, so the concern is fully resolved.
+- Regression pins on this tip: `tests/search-structured-data.test.ts` and
+  `tests/auth-login-structured-data.test.ts` both exist on `main` and pass
+  4/4.
+
+## Evidence on current main + live production (2026-08-12)
+
+- `git merge-base --is-ancestor d1c8bd43 HEAD` → 0 (ancestor).
+- Live `https://0509.io/search` (HTTP 200) renders exactly one
+  `application/ld+json` WebPage block: `name`/`description`/`url` match the
+  document head, `isPartOf` WebSite, `publisher` Organization; no prices,
+  ratings, result counts, or live-scrape claims.
+- Live `https://0509.io/auth/login` (HTTP 200) renders exactly one truthful
+  WebPage JSON-LD with the same minimal shape.
+- Same-engine rerun (the engine the dogfood job wraps, `auditUrl` from
+  `proof-seo/server/audit/engine.js`, `maxPages: 6`, `pageSpeed: false` —
+  identical options to the dogfood pipeline):
+  - `https://0509.io/search` crawl → page `schemaTypes: ["WebPage"]`,
+    `schemaErrors: []`; the `enhancement-7` "Structured data opportunity on
+    /search" finding is gone from the result (the engine's check at
+    `shared/audit-engine.js:1724` fires only when `schemaTypes` is empty or
+    `invalid-json`).
+  - `https://0509.io/auth/login` → no structured-data finding on
+    `/auth/login`; `enhancement-16` no longer appears.
+- Focused regressions `tests/search-structured-data.test.ts`
+  `tests/auth-login-structured-data.test.ts` via test-gate: 2 files, 4/4
+  passed on this tip.
+
+## Observed residual (out of scope, noted for honesty)
+
+The same-engine rerun of `/auth/login` surfaced a NEW "Structured data
+opportunity on /auth/signup" notice — `/auth/signup` was never in
+`fce4fa3c00f1`'s scope (`enhancement-7` = /search, `enhancement-16` =
+/auth/login; the 2026-08-08 run did not crawl /auth/signup). It will be filed
+as a separate finding by the dogfood job if the next audit still sees it, and
+the open PR #627 already lifts `/auth/signup` content. No change made here.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
+---
 # Alert named owner + materiality reason (2026-08-11 lane 1) — already resolved by PR #571
 
 **Status: already resolved; this lane records the evidence only.**
@@ -654,7 +725,58 @@ lane; the package is still current and accurate:
 - `.lane/report.md` — evidence record only; no product code touched.
 
 ---
-# Stale open PRs #573/#574/#584 (2026-08-11 lane 1) — already merged / superseded, closed
+# Anonymous search honest end state after 60s warming cap (2026-08-12 lane 1) — already resolved via PR #612
+
+**Status: resolved; evidence record only, no product code touched.**
+
+Branch: `report/lane1-612-anonymous-search-60s-cap-honest-end`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Give anonymous search an honest end state when the check outlives the 60s warming cap (silent stop of the promised auto-refresh).
+
+## Verdict
+
+Already resolved on `origin/main` by **PR #612** (`90cea3a5`,
+"fix(search): honest end state when the anonymous check outlives the 60s
+warming cap", merged 2026-08-11). The commit is an ancestor of the current
+`main` tip (`389c0e55`) and its full content is present on this worktree's
+HEAD. No code change was warranted.
+
+The warming poll (5s × 12 = 60s cap) is also the auto-refresh promise.
+Previously, when a background capture outlived the budget, polling stopped
+silently but the empty state kept saying "Usually under a minute — we'll
+refresh automatically" next to a still-warming server state. PR #612:
+
+- `app/routes/search.tsx` — adds `warmingPollExhausted` (warming AND poll
+  budget spent) and an honest end state: "The check is taking longer than a
+  minute / We stopped auto-refreshing. Retry this search to check again."
+- Re-arms the poll on same-URL retry/re-submit via a navigation-commit
+  budget reset (`navigationInFlightRef`), because the searchKey is unchanged
+  and the exhausted budget would otherwise carry into the fresh check.
+- `tests/search-submission-settle.test.tsx` — regression test: after 12
+  poll ticks the page retracts the auto-refresh promise, and a same-URL
+  retry re-arms the promise with a fresh budget.
+
+## Evidence on current main (`389c0e55`)
+
+- `git log --oneline -S "warmingPollExhausted" -- app/routes/search.tsx` →
+  `90cea3a5` (PR #612) is the introducing commit.
+- `git log --oneline -S "SEARCH_WARMING_POLL_LIMIT" -- app/routes/search.tsx`
+  → `90147b9b` (#559) introduced the poll; `90cea3a5` (#612) the honest end
+  state.
+- `git merge-base --is-ancestor 90cea3a5 origin/main` → exit 0.
+- The exact regression test from #612 is present in
+  `tests/search-submission-settle.test.tsx` on this tip.
+- Test evidence on this worktree: `vitest run tests/search-submission-settle.test.tsx`
+  → **14/14 passed** (includes "shows an honest end state when the warming
+  check outlives the poll budget and re-arms it on retry"). Full unit suite:
+  **427 files / 4892 tests passed**.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
 
 **Status: resolved; this lane closed the stale PRs and records the evidence.**
 
