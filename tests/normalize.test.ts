@@ -18,6 +18,66 @@ describe("normalizeHeadline", () => {
       hash: normalizeHeadline("50% off! shop now").hash,
     });
   });
+
+  it("keeps countdown timer ticks from changing the comparison hash", () => {
+    expect(normalizeHeadline("Deal ends in 00:59:59").hash).toBe(
+      normalizeHeadline("Deal ends in 00:58:21").hash,
+    );
+    expect(normalizeHeadline("Offer valid till 12:30").hash).toBe(
+      normalizeHeadline("Offer valid till 12:31").hash,
+    );
+  });
+
+  it("keeps rolling calendar dates from changing the comparison hash", () => {
+    expect(normalizeHeadline("Offer ends aug 12").hash).toBe(
+      normalizeHeadline("Offer ends aug 13").hash,
+    );
+    expect(normalizeHeadline("Flash sale until 2026-08-12").hash).toBe(
+      normalizeHeadline("Flash sale until 2026-08-13").hash,
+    );
+    expect(normalizeHeadline("Diwali deals 10/20/2026").hash).toBe(
+      normalizeHeadline("Diwali deals 10/21/2026").hash,
+    );
+  });
+
+  it("keeps live inventory and audience counters from changing the comparison hash", () => {
+    expect(normalizeHeadline("Only 3 left at this price").hash).toBe(
+      normalizeHeadline("Only 2 left at this price").hash,
+    );
+    expect(normalizeHeadline("120 sold today").hash).toBe(
+      normalizeHeadline("137 sold today").hash,
+    );
+    expect(normalizeHeadline("12 people viewing now").hash).toBe(
+      normalizeHeadline("9 people viewing now").hash,
+    );
+  });
+
+  it("keeps the full text visible in raw and normalized while hashing is churn-stable", () => {
+    const result = normalizeHeadline("Deal ends in 00:59:59");
+    expect(result.raw).toBe("Deal ends in 00:59:59");
+    expect(result.normalized).toBe("deal ends in 00:59:59");
+  });
+
+  it("still fires when the headline copy actually changes", () => {
+    expect(normalizeHeadline("Glow Serum Sale").hash).not.toBe(
+      normalizeHeadline("Glow Serum Mega Sale").hash,
+    );
+    expect(normalizeHeadline("Buy one get one").hash).not.toBe(
+      normalizeHeadline("Buy two get one").hash,
+    );
+    expect(normalizeHeadline("50% off everything").hash).not.toBe(
+      normalizeHeadline("50% off sale items").hash,
+    );
+  });
+
+  it("does not mistake static percentages or offers for churn", () => {
+    expect(normalizeHeadline("50% off this week").hash).toBe(
+      normalizeHeadline("50% off this week").hash,
+    );
+    expect(normalizeHeadline("Buy 2 Get 1 Free").hash).toBe(
+      normalizeHeadline("Buy 2 Get 1 Free").hash,
+    );
+  });
 });
 
 describe("fingerprintSavedQuery", () => {
