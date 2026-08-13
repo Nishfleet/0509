@@ -40,7 +40,13 @@ export function BrandStatLine({
     key: "ads-live",
     value: String(teaser.totalCount),
     caption: fresh ? "Ads live" : "Ads on record",
-    context: `${teaser.activeCount} marked active`,
+    // Public-page copy: "active" is the ad's observed Ad Library status
+    // (ad_active_status), never a viewer's marking — that is signed-in
+    // language. Stale captures read "at the last check", mirroring the
+    // page's past-tense honesty convention.
+    context: fresh
+      ? `${teaser.activeCount} active`
+      : `${teaser.activeCount} active at last check`,
   });
 
   if (aggression) {
