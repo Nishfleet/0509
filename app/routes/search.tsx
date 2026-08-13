@@ -12,6 +12,7 @@ import {
 } from "react-router";
 import type {
   ActionFunctionArgs,
+  HeadersFunction,
   LinksFunction,
   LoaderFunctionArgs,
   MetaFunction,
@@ -61,6 +62,7 @@ import {
   SUPPORTED_COUNTRIES,
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
+import { PUBLIC_SEARCH_RATE_LIMIT_MESSAGE } from "~/lib/customer-route-error";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
@@ -95,6 +97,7 @@ import {
   formatOfferLabel,
   formatProofCaptureLabel,
   formatResultsPanelTitle,
+  formatSearchCaptureAgeLabel,
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
   formatSearchSourceLabel,
@@ -160,6 +163,18 @@ export const meta: MetaFunction = () =>
     pathname: "/search",
   });
 
+// When the search loader throws a 429 (anonymous limiter), React Router only
+// merges cookies from the thrown response's headers onto the final document
+// response unless the boundary route forwards them. Copy Retry-After through
+// here so the rate-limited document keeps the limiter's recovery signal. For
+// every other request errorHeaders is undefined and nothing is added.
+export const headers: HeadersFunction = ({ errorHeaders }) => {
+  const documentHeaders: Record<string, string> = {};
+  const retryAfter = errorHeaders?.get("retry-after");
+  if (retryAfter) documentHeaders["Retry-After"] = retryAfter;
+  return documentHeaders;
+};
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
@@ -197,10 +212,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       }
     : { showPresenceNav: false };
   const url = new URL(request.url);
-  const visitorCountry = defaultCountryForVisitor(
-    cloudflare?.country ??
-      request.headers.get("cf-ipcountry"),
-  );
+  // The visitor-geo country is a UI preselection, never a silently committed
+  // filter. An anonymous visitor who never picked a country gets the global
+  // search ("all countries"): committing cf-ipcountry into an anonymous
+  // search scopes results to a market nobody chose and bakes that country
+  // into the result links. Signed-in visitors keep the geo default so the
+  // refine picker and onboarding can preselect their market.
+  const visitorCountry = session
+    ? defaultCountryForVisitor(
+        cloudflare?.country ??
+          request.headers.get("cf-ipcountry"),
+      )
+    : ALL_COUNTRIES_VALUE;
   const competitorWebsite = normalizeCompetitorWebsiteInput(
     url.searchParams.get("website") ?? "",
   );
@@ -224,6 +247,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
       collections: [],
@@ -251,6 +275,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
       collections: [],
@@ -329,7 +354,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       cloudflare?.ctx,
     );
     if (rateLimitResponse) {
-      throw rateLimitResponse;
+      // Anonymous throttling is a normal, recoverable product state, not an
+      // internal failure: throw an explicit in-product 429 document whose
+      // body names the limit and the recovery path, and keep the limiter's
+      // Retry-After signal so the client and the document response both know
+      // when the window clears. The route-level headers() export below
+      // forwards that header onto the final document response.
+      const retryAfterSeconds = rateLimitResponse.headers.get("retry-after");
+      throw new Response(
+        JSON.stringify({
+          error: "rate_limited",
+          message: PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+        }),
+        {
+          status: 429,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "no-store",
+            ...(retryAfterSeconds ? { "retry-after": retryAfterSeconds } : {}),
+          },
+        },
+      );
     }
   }
 
@@ -381,6 +426,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           fingerprint: parsed.fingerprint,
           result: buildIdleSearchResult(),
           selectedAd: null,
+          resultCaptureAgeLabel: null,
           stealSummary: null,
           selectionEnrichmentPending: false,
           collections,
@@ -407,6 +453,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
       collections,
@@ -538,6 +585,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     fingerprint: parsed.fingerprint,
     result: hydratedResult,
     selectedAd,
+    resultCaptureAgeLabel: formatSearchCaptureAgeLabel(
+      hydratedResult.cacheFetchedAt,
+      new Date(),
+    ),
     stealSummary,
     selectionEnrichmentPending: Boolean(selectionEnrichmentPending),
     collections,
@@ -992,12 +1043,6 @@ export default function SearchRoute() {
   const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
   const inferredWatchlistName =
     (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
-  const canTrackCurrentCompetitor =
-    Boolean(data.filters.query || competitorWebsite.normalizedUrl) &&
-    !data.inputError;
-  const discoverySummary = formatDiscoverySummary(visibleResult);
-  const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
-  const isSearchWarming = visibleResult.discoveryProgress === "warming";
   // Candidate-3 root-cause fix for the public submit hang: the See ads button
   // stays pending only while a GET navigation to /search targets a URL that is
   // NOT the committed location.search. Once the server commits results or an
@@ -1017,13 +1062,33 @@ export default function SearchRoute() {
     navigation.location?.pathname === "/search"
       ? (navigation.location.search ?? "")
       : null;
+  // A committed validation error describes the PREVIOUS submission, not the
+  // input being searched right now. While a re-submit GET navigation to a new
+  // /search target is in flight, stop asserting the old error as an alert:
+  // the honest state is "Searching…", and the fresh loader result (error or
+  // results) takes over once it commits.
+  const searchCommandInFlight =
+    commandNavigationTarget !== null &&
+    commandNavigationTarget !== location.search &&
+    searchNavigationRecovery === null;
+  const liveInputError = searchCommandInFlight ? null : data.inputError;
+  const canTrackCurrentCompetitor =
+    Boolean(data.filters.query || competitorWebsite.normalizedUrl) &&
+    !liveInputError;
+  const discoverySummary = formatDiscoverySummary(visibleResult);
+  const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
+  const isSearchWarming = visibleResult.discoveryProgress === "warming";
+  // When the check outlives the 5s x 12 = 60s warming poll budget, the
+  // promised auto-refresh stops silently: the page must say so and hand the
+  // visitor a working retry instead of leaving "we'll refresh automatically"
+  // up forever next to a still-warming server state.
+  const warmingPollExhausted =
+    isSearchWarming && warmingPollCount >= SEARCH_WARMING_POLL_LIMIT;
   const commandNavigationPending =
-    (commandNavigationTarget !== null &&
-      commandNavigationTarget !== location.search &&
-      searchNavigationRecovery === null) ||
+    searchCommandInFlight ||
     (isSearchWarming &&
       hasSearchQuery &&
-      !data.inputError &&
+      !liveInputError &&
       visibleAds.length === 0 &&
       warmingPollCount < SEARCH_WARMING_POLL_LIMIT &&
       searchNavigationRecovery === null);
@@ -1169,6 +1234,23 @@ export default function SearchRoute() {
     setWarmingPollCount(0);
   }, [searchKey]);
 
+  // A retry ("Retry this search") or a same-query re-submit navigates to the
+  // same URL, so the searchKey does not change and the exhausted poll budget
+  // would otherwise carry into the fresh check — leaving it without any
+  // auto-refresh while its capture runs. Once a navigation commits, start a
+  // fresh budget so the honest end state's retry actually re-arms the poll.
+  // Revalidations never touch navigation.state, so polling itself never
+  // resets here.
+  const navigationInFlightRef = useRef(false);
+  useEffect(() => {
+    if (navigation.state === "loading") {
+      navigationInFlightRef.current = true;
+    } else if (navigation.state === "idle" && navigationInFlightRef.current) {
+      navigationInFlightRef.current = false;
+      setWarmingPollCount(0);
+    }
+  }, [navigation.state]);
+
   // Long-horizon recovery: while a /search GET is genuinely loading and the
   // committed page is still the untouched idle pre-search form, arm a 90s
   // grace timer. If the target never commits (server settled but the SPA
@@ -1295,7 +1377,7 @@ export default function SearchRoute() {
   // that sits above the first record. "Used" means a search actually ran and
   // was accepted; an invalid domain has not used the instrument, it has been
   // refused by it.
-  const instrumentUsed = hasSearchQuery && !data.inputError;
+  const instrumentUsed = hasSearchQuery && !liveInputError;
   const hasResults = visibleAds.length > 0;
   // BL-031 round 3 — the refine disclosure counts only filters on a search
   // that actually ran. The loader geo-defaults `country` to the visitor's
@@ -1326,7 +1408,7 @@ export default function SearchRoute() {
   // already holds the domain you searched does not need to be told what to
   // paste into it.
   const commandHint =
-    data.inputError ?? (instrumentUsed ? null : "Paste one competitor website.");
+    liveInputError ?? (instrumentUsed ? null : "Paste one competitor website.");
   // ONE heading per state, and it is the sentence that state actually wants
   // to say. The search answer's title is the strongest when there is one (it
   // is what the old page rendered as the answer panel's h3, directly under a
@@ -1449,7 +1531,7 @@ export default function SearchRoute() {
             <label className="f9-wk-field is-lead">
               <span className="f9-wk-lab">Competitor website</span>
               <input
-                aria-invalid={Boolean(data.inputError)}
+                aria-invalid={Boolean(liveInputError)}
                 aria-describedby={commandHint ? "search-command-hint" : undefined}
                 autoComplete="url"
                 className="f9-wk-in"
@@ -1476,10 +1558,10 @@ export default function SearchRoute() {
                 same thing 200px apart. */}
             {commandHint ? (
               <p
-                aria-live={data.inputError ? "assertive" : undefined}
-                className={`f9-wk-hint${data.inputError ? " is-bad" : ""}`}
+                aria-live={liveInputError ? "assertive" : undefined}
+                className={`f9-wk-hint${liveInputError ? " is-bad" : ""}`}
                 id="search-command-hint"
-                role={data.inputError ? "alert" : undefined}
+                role={liveInputError ? "alert" : undefined}
               >
                 {commandHint}
               </p>
@@ -1662,6 +1744,15 @@ export default function SearchRoute() {
                     <h2 className="f9-wk-sec-title">
                       {sectionHeadline}
                     </h2>
+                    {/* Snapshot age: a cache-served result names how old the
+                        capture is, so a stale per-country snapshot is
+                        self-evidently stale instead of looking current. The
+                        label is computed once in the loader (hydration-safe). */}
+                    {data.resultCaptureAgeLabel ? (
+                      <p className="f9-wk-sec-sub f9-wk-sec-capture-age">
+                        {data.resultCaptureAgeLabel}
+                      </p>
+                    ) : null}
                     {/* One sub-line, and the search answer's own sentence
                         wins it when there is one — the panel below then
                         carries only the facts it uniquely knows. */}
@@ -1783,13 +1874,32 @@ export default function SearchRoute() {
                   <div className="f9-wk-empty">
                     {isSearchWarming ? (
                       <div aria-live="polite" role="status">
-                        <p className="f9-wk-lede">
-                          Checking the Ad Library now
-                        </p>
-                        <p className="f9-wk-note">
-                          Usually under a minute — we&rsquo;ll refresh
-                          automatically.
-                        </p>
+                        {warmingPollExhausted ? (
+                          /* Honest end state: the check outlived the 60s
+                             warming poll budget, so the promised auto-refresh
+                             is off. Say that plainly and point at the retry
+                             (which re-arms a fresh budget) instead of leaving
+                             "we'll refresh automatically" up forever. */
+                          <>
+                            <p className="f9-wk-lede">
+                              The check is taking longer than a minute
+                            </p>
+                            <p className="f9-wk-note">
+                              We stopped auto-refreshing. Retry this search to
+                              check again.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="f9-wk-lede">
+                              Checking the Ad Library now
+                            </p>
+                            <p className="f9-wk-note">
+                              Usually under a minute — we&rsquo;ll refresh
+                              automatically.
+                            </p>
+                          </>
+                        )}
                       </div>
                     ) : !searchAnswer ? (
                       <p className="f9-wk-note">

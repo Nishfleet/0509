@@ -213,6 +213,19 @@ test.describe("public production-safe E2E smoke", () => {
     expect(llms.ok()).toBeTruthy();
     expect(await llms.text()).toContain("Five to Nine");
 
+    // AI crawler policy (docs/ai-crawler-policy.md, "answers yes, training
+    // no"): training crawlers are denied while AI answer engines stay
+    // allowed by the wildcard group — robots.txt and llms.txt must agree.
+    const robots = await request.get(new URL("/robots.txt", baseURL).toString());
+    expect(robots.ok()).toBeTruthy();
+    const robotsText = await robots.text();
+    expect(robotsText).toContain("User-agent: GPTBot");
+    expect(robotsText).toContain("User-agent: ClaudeBot");
+    expect(robotsText).toContain("User-agent: Google-Extended");
+    expect(robotsText).toContain("Disallow: /");
+    expect(robotsText).not.toContain("User-agent: PerplexityBot");
+    expect(robotsText).not.toContain("User-agent: OAI-SearchBot");
+
     const invalidShare = await gotoPublicPage(page, "/share/not-a-real-share-token");
     expect(invalidShare?.status()).toBe(404);
     await expect(
@@ -242,10 +255,6 @@ test.describe("public production-safe E2E smoke", () => {
     test.skip(
       isProductionBaseURL(baseURL),
       "Branch search fixtures are local-only; production proof uses the authorized live canary gate.",
-    );
-    test.skip(
-      process.env.E2E_SEARCH_V2 !== "1",
-      "Local rendered proof runs only during the explicit V2 candidate check; the committed rollout stays in shadow.",
     );
 
     await page.setViewportSize({ width: 375, height: 812 });
