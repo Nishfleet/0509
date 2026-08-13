@@ -2269,6 +2269,8 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       vi.doMock("~/lib/ga-customer-surface", () => ({
         isWhatsAppDeliveryCustomerFacing: () => true,
         isSlackDeliveryCustomerFacing: () => true,
+        isSlackWebhookDeliveryCustomerFacing: () => true,
+        isTeamsWebhookDeliveryCustomerFacing: () => true,
       }));
 
       let providerStarted = false;
@@ -2442,10 +2444,18 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
     },
   );
 
-  it("does not send instant alerts to dormant Slack or WhatsApp targets", async () => {
+  it("sends instant alerts to live Slack but never to dormant WhatsApp targets", async () => {
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-hidden-channel");
     const sendInstantWhatsApp = vi.fn();
-    const sendSlackWebhookMessage = vi.fn();
+    const sendSlackWebhookUrl = vi.fn().mockResolvedValue({
+      provider: "slack_incoming_webhook",
+      status: "sent",
+      webhookStatus: "delivered",
+      providerMessageId: null,
+      providerStatusLastSeenAt: "2026-04-19T00:00:00.000Z",
+      errorMessage: null,
+      deliveredAt: "2026-04-19T00:00:00.000Z",
+    });
     const listDeliveryTargets = vi.fn().mockImplementation(async (_env, _userId, options) => {
       if (options?.channel === "whatsapp") {
         return [whatsappTarget()];
@@ -2495,6 +2505,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
         emailEnabled: false,
         whatsappEnabled: true,
         slackEnabled: true,
+        teamsEnabled: false,
         quietHours: null,
         timezone: "Asia/Kolkata",
         createdAt: "2026-04-19T00:00:00.000Z",
@@ -2504,6 +2515,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets,
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
@@ -2511,8 +2523,14 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       sendDigestWhatsApp: vi.fn(),
       sendInstantWhatsApp,
     }));
-    vi.doMock("~/lib/slack.server", () => ({
-      sendSlackWebhookMessage,
+    vi.doMock("~/lib/slack-webhook.server", () => ({
+      SLACK_PROVIDER: "slack_incoming_webhook",
+      prepareSlackWebhookTarget: vi.fn().mockResolvedValue({
+        ok: true,
+        webhookUrl: "https://hooks.slack.test/services/redacted",
+      }),
+      sendSlackWebhookUrl,
+      sendSlackWebhookMessage: vi.fn(),
     }));
 
     const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
@@ -2560,23 +2578,32 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
     );
 
     expect(result).toEqual({
-      attempts: 0,
-      channels: [],
-      details: [],
+      attempts: 1,
+      channels: ["slack"],
+      details: [
+        {
+          channel: "slack",
+          claimedByThisRun: true,
+          deliveredAt: "2026-04-19T00:00:00.000Z",
+          duplicate: false,
+          errorMessage: null,
+          outcome: "provider_accepted",
+          providerAttemptedByThisRun: true,
+          providerMessageId: null,
+          source: "current_claim",
+          status: "sent",
+          targetValue: "slack:[redacted]",
+        },
+      ],
     });
     expect(listDeliveryTargets).not.toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
       expect.objectContaining({ channel: "whatsapp" }),
     );
-    expect(listDeliveryTargets).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({ channel: "slack" }),
-    );
+    expect(sendSlackWebhookUrl).toHaveBeenCalledTimes(1);
     expect(sendInstantWhatsApp).not.toHaveBeenCalled();
-    expect(sendSlackWebhookMessage).not.toHaveBeenCalled();
-    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(createDeliveryAttempt).toHaveBeenCalledTimes(1);
   });
 
   it("embeds the primary event's creative image when the referenced ad has one captured", async () => {
