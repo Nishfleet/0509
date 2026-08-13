@@ -1,4 +1,5 @@
 name: Deploy production
+# verifier-integrity synthetic proof (no approval): fix/integrity-scope-excludes-deploy-gate
 
 on:
   workflow_dispatch:
