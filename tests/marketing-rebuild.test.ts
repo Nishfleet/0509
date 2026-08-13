@@ -92,7 +92,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("night.");
     expect(marketingRoute).toContain("Sample proof-backed brief");
     expect(marketingRoute).toContain("A rival page changed while your team was offline");
-    expect(marketingRoute).toContain("Your team would&rsquo;ve found out from a client.");
+    expect(marketingRoute).toContain("Your growth team would&rsquo;ve found out from a client.");
     expect(marketingRoute).toContain("Meta ads and landing pages");
     expect(marketingRoute).toContain("before your alarm goes off");
     expect(marketingRoute).not.toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
