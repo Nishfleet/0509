@@ -964,3 +964,104 @@ refine-disclosure tests.
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+
+# PR #685 v2 promotion in runtime (2026-08-14 lane 1) — already live in production
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane1-685-v2-promotion-runtime-already-resolved`
+Base: `origin/main` at `bceec022`
+Pull request: opened by this lane.
+
+## Item
+
+- [ ] PR #685's v2 promotion is in the commit but NOT in the runtime:
+      worker `1dec2c91` (head SHA `40e718ce`, wrangler.jsonc).
+
+## Verdict
+
+Already resolved on `origin/main`. PR #685 (`70faea05`,
+"feat(search): promote public search from shadow to v2 rollout", merged
+2026-08-12) is the resolving commit: it flips `SEARCH_ROLLOUT_MODE` from
+`shadow` to `v2` in both `wrangler.jsonc` and `wrangler.e2e.jsonc` and
+updates every release-tooling gate that pinned the expected production
+mode to `shadow` (prod canary, Gate C soak journals/evidence, deploy
+readiness, remote-restore evidence, uptime-health workflow, release-soak
+route). The current production worker, deployed after that merge,
+reports `searchRolloutMode: "v2"` on both `/api/health` and
+`/api/health/deep`; the previously-flagged worker `1dec2c91` (built
+from `40e718ce`) has been superseded by a newer deploy and is no
+longer the live traffic-serving version. No code change was warranted.
+
+## Live evidence on 2026-08-14 (this lane's verification)
+
+`curl -s --max-time 10 https://0509.io/api/health` →
+```json
+{
+  "status": "ok",
+  "app": "0509",
+  "timestamp": "2026-08-13T20:04:50.582Z",
+  "releaseIdentity": {
+    "workerVersionId": "b414ab47-cfef-4f65-91f2-a213c8393c27",
+    "tag": null,
+    "timestamp": "2026-08-13T14:46:24.242352Z",
+    "searchRolloutMode": "v2"
+  }
+}
+```
+
+`curl -s --max-time 10 https://0509.io/api/health/deep` → status `ok`,
+checks `{edge: ok, d1: ok, scheduledWork: ok}`, and the same
+`releaseIdentity.searchRolloutMode: "v2"`. Both endpoints therefore
+report `v2`, which is the value PR #685 promoted `wrangler.jsonc` to
+and which the upstream `uptime-health.yml` gate (lines 49 and 114)
+requires.
+
+## Evidence on current main (HEAD `bceec022`)
+
+- `git merge-base --is-ancestor 70faea05 HEAD` → 0 (PR #685 is an
+  ancestor of the current main HEAD).
+- `wrangler.jsonc` line 81: `"SEARCH_ROLLOUT_MODE": "v2"` —
+  `git log --oneline -S "SEARCH_ROLLOUT_MODE" -- wrangler.jsonc`
+  attributes the `v2` literal to `70faea05` (PR #685). Prior to
+  PR #685, the file carried `"SEARCH_ROLLOUT_MODE": "shadow"`.
+- `wrangler.e2e.jsonc` line 18: `"SEARCH_ROLLOUT_MODE": "v2"` — same
+  attribution to `70faea05`.
+- `git show 40e718ce:wrangler.jsonc` already returns `v2` because
+  `70faea05` (2026-08-12 20:12:19 +0530) is an ancestor of `40e718ce`
+  (2026-08-13 01:13:20 +0530). The earlier worker `1dec2c91` flagged in
+  the item text predates the current production worker
+  (`b414ab47-cfef-4f65-91f2-a213c8393c27`, timestamp
+  `2026-08-13T14:46:24.242352Z`) and is no longer the live
+  traffic-serving version.
+- Every release-tooling gate PR #685 was required to update now
+  requires `v2` on this tip:
+  - `scripts/customer-readiness-candidate.mjs:363` pushes the
+    `search_rollout_mode_not_v2` blocker only when
+    `committedModeIsV2` / `worktreeModeIsV2` is false; both are true on
+    the current wrangler.jsonc / wrangler.e2e.jsonc.
+  - `tests/prod-canary.test.ts:10` expects `EXPECTED_SEARCH_ROLLOUT_MODE = "v2"`.
+  - `tests/api.health.deep.route.test.ts:44-67` and
+    `tests/api.release-soak.route.test.ts:139` drive
+    `SEARCH_ROLLOUT_MODE: "v2"` through the canary release-identity
+    surface and assert it round-trips as `searchRolloutMode: "v2"`.
+  - `.github/workflows/uptime-health.yml:49` and `:114` exit non-zero
+    when `identity.get("searchRolloutMode") != "v2"`; the live run
+    above shows the gate passes.
+
+## Verification on this tip
+
+- Live `https://0509.io/api/health` and `/api/health/deep` both return
+  `searchRolloutMode: "v2"` with status 200 (one curl per endpoint,
+  2026-08-14 lane run).
+- `git diff --check` clean (markdown-only change; no product code
+  touched).
+- No file in `app/`, `workers/`, `scripts/`, `wrangler.jsonc`,
+  `wrangler.e2e.jsonc`, or `.github/workflows/` was modified by this
+  lane. The lane touched `.lane/report.md` only.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
