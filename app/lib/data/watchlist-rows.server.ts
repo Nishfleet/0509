@@ -140,6 +140,7 @@ export interface WatchlistDeliveryConfigRow {
   email_enabled: number;
   whatsapp_enabled: number;
   slack_enabled: number;
+  teams_enabled: number;
   quiet_hours_json: string | null;
   timezone: string | null;
   created_at: string;
@@ -318,6 +319,7 @@ export function toWatchlistDeliveryConfigRecord(
     emailEnabled: row.email_enabled === 1,
     whatsappEnabled: row.whatsapp_enabled === 1,
     slackEnabled: row.slack_enabled === 1,
+    teamsEnabled: row.teams_enabled === 1,
     quietHours: parseJson<DeliveryQuietHours | null>(row.quiet_hours_json, null),
     timezone: row.timezone,
     createdAt: row.created_at,

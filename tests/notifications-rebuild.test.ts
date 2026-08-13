@@ -32,16 +32,22 @@ function ownedLayer() {
 }
 
 describe("BL-039 notifications rebuild", () => {
-  it("keeps the loader/action surface minimal after the subtraction pass", () => {
+  it("keeps the loader/action surface live after webhook delivery reactivation", () => {
     // The BL-039 byte-freeze served the reskin era; the design-unification
-    // subtraction pass (S1) deliberately edits this module. What must hold
-    // now: no dormant-channel handler code returns, and the loader exposes
-    // only the live delivery surface.
-    expect(route).not.toContain("saveSlackWebhookTarget");
-    expect(route).not.toContain("saveWhatsAppDeliveryTarget");
-    expect(route).not.toContain("listDeliveryTargets");
+    // subtraction pass (S1) deliberately edited this module, and the 2026-08-12
+    // Slack/Teams webhook-delivery decision re-added the live handlers. What
+    // must hold now: WhatsApp stays dormant (honest unavailable answer only),
+    // and the loader exposes exactly the live delivery surface.
+    expect(route).toContain("save-slack-webhook");
+    expect(route).toContain("save-teams-webhook");
+    expect(route).toContain("saveSlackWebhookTarget");
+    expect(route).toContain("saveTeamsWebhookTarget");
+    expect(route).toContain("listDeliveryTargets");
     expect(route).toContain("save-digest-cadence");
-    expect(route).toContain("slackDeliveryUnavailableMessage");
+    // WhatsApp remains a dormant GA channel: only the honest unavailable
+    // answer may exist, never a live handler.
+    expect(route).not.toContain("saveWhatsAppDeliveryTarget");
+    expect(route).toContain("whatsappDeliveryUnavailableMessage");
   });
 
   it("uses the shared working header and removes the old card dashboard", () => {

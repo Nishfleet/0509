@@ -31,6 +31,7 @@ export const ROUTE_FEATURE_REQUIREMENTS = [
   { routeId: "app.watchlists", action: "add-delivery-target", feature: "slack_delivery" as PlanFeature },
   { routeId: "app.watchlists", action: "send-test-email", feature: "email_delivery" as PlanFeature },
   { routeId: "app.notifications", action: "save-slack-webhook", feature: "slack_delivery" as PlanFeature },
+  { routeId: "app.notifications", action: "save-teams-webhook", feature: "teams_delivery" as PlanFeature },
   { routeId: "app.account", action: "save-report-branding", feature: "agency_branding" as PlanFeature },
   { routeId: "share.$token", feature: "agency_branding" as PlanFeature },
 	{ routeId: "share.$token.pdf", feature: "pdf_reports" as PlanFeature },
@@ -43,6 +44,7 @@ export const ROUTE_FEATURE_REQUIREMENTS = [
 export interface DeliveryConfigSaveInput {
   instantEnabled?: boolean;
   slackEnabled?: boolean;
+  teamsEnabled?: boolean;
   emailEnabled?: boolean;
   channel?: string;
 }
@@ -50,6 +52,7 @@ export interface DeliveryConfigSaveInput {
 export interface DeliveryConfigShape {
   instantEnabled: boolean;
   slackEnabled: boolean;
+  teamsEnabled: boolean;
   emailEnabled: boolean;
 }
 
@@ -122,7 +125,12 @@ export async function requireCustomerAgentActionFeature(
   }
 
   if (actionName === "delivery_settings.update" || actionName === "delivery_target.update") {
-    if (readBoolean(input, "slackEnabled") || readString(input, "channel") === "slack") {
+    if (
+      readBoolean(input, "slackEnabled") ||
+      readString(input, "channel") === "slack" ||
+      readBoolean(input, "teamsEnabled") ||
+      readString(input, "channel") === "teams"
+    ) {
       const gate = await requireWorkspacePlanFeature(env, workspaceUserId, "slack_delivery");
       if (!gate.ok) return gate;
     }
@@ -161,6 +169,7 @@ export async function requireDeliveryConfigSave(
 ) {
   const checks: Array<[boolean, PlanFeature]> = [
     [Boolean(input.slackEnabled) || input.channel === "slack", "slack_delivery"],
+    [Boolean(input.teamsEnabled) || input.channel === "teams", "teams_delivery"],
     [Boolean(input.instantEnabled), "high_priority_alerts"],
     [Boolean(input.emailEnabled), "email_delivery"],
   ];
@@ -183,6 +192,7 @@ export function applyDeliveryEntitlements<T extends DeliveryConfigShape>(
   return {
     ...config,
     slackEnabled: config.slackEnabled && canUsePlanFeature(plan, "slack_delivery"),
+    teamsEnabled: config.teamsEnabled && canUsePlanFeature(plan, "teams_delivery"),
     instantEnabled: config.instantEnabled && canUsePlanFeature(plan, "high_priority_alerts"),
     emailEnabled: config.emailEnabled && canUsePlanFeature(plan, "email_delivery"),
   };

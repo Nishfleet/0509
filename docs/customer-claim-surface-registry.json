@@ -17,15 +17,42 @@
     "driftReopensEvidence": true
   },
   "coverage": [
-    { "surface": "public_routes_and_copy", "status": "assessed_pending_reproof" },
-    { "surface": "authenticated_routes_and_navigation", "status": "assessed_pending_reproof" },
-    { "surface": "roles_plans_and_entitlements", "status": "assessed_pending_reproof" },
-    { "surface": "email_templates_and_delivery", "status": "assessed_open_missing_external_email_proof" },
-    { "surface": "cron_workflows_and_operator_recovery", "status": "assessed_gate_c_pending" },
-    { "surface": "providers_and_integrations", "status": "assessed_gate_c_pending" },
-    { "surface": "api_mcp_and_agent_actions", "status": "assessed_pending_reproof" },
-    { "surface": "browser_device_geography_locale", "status": "assessed_open_missing_cross_browser_at" },
-    { "surface": "data_lifecycle_and_rights", "status": "assessed_open_missing_lifecycle_proof" }
+    {
+      "surface": "public_routes_and_copy",
+      "status": "assessed_pending_reproof"
+    },
+    {
+      "surface": "authenticated_routes_and_navigation",
+      "status": "assessed_pending_reproof"
+    },
+    {
+      "surface": "roles_plans_and_entitlements",
+      "status": "assessed_pending_reproof"
+    },
+    {
+      "surface": "email_templates_and_delivery",
+      "status": "assessed_open_missing_external_email_proof"
+    },
+    {
+      "surface": "cron_workflows_and_operator_recovery",
+      "status": "assessed_gate_c_pending"
+    },
+    {
+      "surface": "providers_and_integrations",
+      "status": "assessed_gate_c_pending"
+    },
+    {
+      "surface": "api_mcp_and_agent_actions",
+      "status": "assessed_pending_reproof"
+    },
+    {
+      "surface": "browser_device_geography_locale",
+      "status": "assessed_open_missing_cross_browser_at"
+    },
+    {
+      "surface": "data_lifecycle_and_rights",
+      "status": "assessed_open_missing_lifecycle_proof"
+    }
   ],
   "claims": [
     {
@@ -34,7 +61,10 @@
       "surface": "plan catalog, marketing, dashboard and watchlists",
       "audience": "buyers and signed-in customers",
       "owner": "product and monitoring",
-      "source": ["app/lib/plan-entitlements.ts", "docs/plan-catalog.md"],
+      "source": [
+        "app/lib/plan-entitlements.ts",
+        "docs/plan-catalog.md"
+      ],
       "requiredGate": "G360-P1-WORKFLOW,G11-CAPACITY-SLO",
       "requiredEvidence": "same-fingerprint schedule, dispatch, completion, retry and deployed scan-health evidence",
       "status": "assessed_pending_reproof",
@@ -48,7 +78,11 @@
       "surface": "billing, pricing and plan catalog",
       "audience": "buyers and billing owners",
       "owner": "billing",
-      "source": ["app/lib/pricing.ts", "app/routes/app.billing.tsx", "docs/plan-catalog.md"],
+      "source": [
+        "app/lib/pricing.ts",
+        "app/routes/app.billing.tsx",
+        "docs/plan-catalog.md"
+      ],
       "requiredGate": "G360-P1-BILLING",
       "requiredEvidence": "current Dodo lifecycle, usage-ledger, cancellation retention and top-up spend canaries",
       "status": "assessed_pending_reproof",
@@ -62,7 +96,10 @@
       "surface": "pricing, billing and plan-gated customer navigation",
       "audience": "buyers and signed-in customers",
       "owner": "product and entitlements",
-      "source": ["app/lib/plan-entitlements.ts", "app/lib/pricing.ts"],
+      "source": [
+        "app/lib/plan-entitlements.ts",
+        "app/lib/pricing.ts"
+      ],
       "requiredGate": "G11-INVENTORY,G360-P1-BACKBONE",
       "requiredEvidence": "executable catalog parity plus same-fingerprint plan-boundary and pre-click denial proof",
       "status": "assessed_pending_reproof",
@@ -76,7 +113,10 @@
       "surface": "pricing feature copy",
       "audience": "buyers",
       "owner": "product and provider runtime",
-      "source": ["app/lib/pricing.ts", "app/lib/translation.server.ts"],
+      "source": [
+        "app/lib/pricing.ts",
+        "app/lib/translation.server.ts"
+      ],
       "requiredGate": "G11-LOCALE-TIME,G11-RUNTIME-IDENTITY",
       "requiredEvidence": "bounded language corpus plus deployed Workers AI model/binding and fallback evidence",
       "status": "removed_from_product_contract",
@@ -86,11 +126,15 @@
     },
     {
       "claimId": "FREE-ACTIVATION-ONLY",
-      "text": "Free includes one weekly Competitor Watch watchlist — an activation scan, then a weekly Monday scan feeding a weekly brief email — without instant alerts, evidence checks, collections or exports.",
+      "text": "Free includes one weekly Competitor Watch watchlist \u2014 an activation scan, then a weekly Monday scan feeding a weekly brief email \u2014 without instant alerts, evidence checks, collections or exports.",
       "surface": "dashboard, watchlists, Help and public documentation",
       "audience": "free users and buyers",
       "owner": "activation",
-      "source": ["app/routes/app.dashboard.tsx", "app/routes/app.watchlists.tsx", "app/lib/public-markdown.ts"],
+      "source": [
+        "app/routes/app.dashboard.tsx",
+        "app/routes/app.watchlists.tsx",
+        "app/lib/public-markdown.ts"
+      ],
       "requiredGate": "J2-A-C,J3-A-C",
       "requiredEvidence": "authoritative first-scan completion/recovery, weekly-scan and weekly-brief delivery, cap and pre-click plan-boundary proof",
       "status": "assessed_pending_reproof",
@@ -104,7 +148,9 @@
       "surface": "watchlist activation",
       "audience": "new signed-in users",
       "owner": "monitoring and operations",
-      "source": ["app/routes/app.watchlists.tsx"],
+      "source": [
+        "app/routes/app.watchlists.tsx"
+      ],
       "requiredGate": "G360-P1-WORKFLOW,G11-CAPACITY-SLO",
       "requiredEvidence": "predeclared p75/p95 configuration-to-proof soak with delayed/failure/recovery truth",
       "status": "removed_from_product_contract",
@@ -118,7 +164,11 @@
       "surface": "watchlist delivery UI and API/MCP action",
       "audience": "customers and API/MCP users",
       "owner": "delivery",
-      "source": ["app/routes/app.watchlists.tsx", "app/lib/delivery-policy.server.ts", "app/lib/customer-agent-actions.server.ts"],
+      "source": [
+        "app/routes/app.watchlists.tsx",
+        "app/lib/delivery-policy.server.ts",
+        "app/lib/customer-agent-actions.server.ts"
+      ],
       "requiredGate": "G11-LOCALE-TIME",
       "requiredEvidence": "invalid-input rejection, legacy UTC fallback, DST-boundary exactly-once delivery and deployed internal receipt",
       "status": "assessed_pending_reproof",
@@ -132,7 +182,10 @@
       "surface": "dashboard and source access",
       "audience": "signed-in customers",
       "owner": "source providers",
-      "source": ["app/routes/app.dashboard.tsx", "app/routes/app.source-access.ui.tsx"],
+      "source": [
+        "app/routes/app.dashboard.tsx",
+        "app/routes/app.source-access.ui.tsx"
+      ],
       "requiredGate": "G360-P1-STATES,G360-P1-PROOF-PARITY",
       "requiredEvidence": "current provider health/retest, encrypted owner-only token and degraded recovery on exact deployed version",
       "status": "assessed_pending_reproof",
@@ -146,7 +199,11 @@
       "surface": "dashboard navigation, public markdown and sitemap",
       "audience": "public visitors and signed-in customers",
       "owner": "product navigation and public web",
-      "source": ["app/lib/dashboard-navigation.ts", "app/lib/public-markdown.ts", "app/lib/seo.ts"],
+      "source": [
+        "app/lib/dashboard-navigation.ts",
+        "app/lib/public-markdown.ts",
+        "app/lib/seo.ts"
+      ],
       "requiredGate": "G11-INVENTORY,G11-SELF-SERVE-PARITY",
       "requiredEvidence": "executable exported-catalog parity plus same-fingerprint public/authenticated route and access-boundary proof",
       "status": "assessed_pending_reproof",
@@ -156,15 +213,20 @@
     },
     {
       "claimId": "DELIVERY-CHANNEL-GATES",
-      "text": "Email is the GA delivery channel; Slack and WhatsApp are not supported customer channels until separately enabled and proven.",
+      "text": "Email is the default delivery channel. Slack and Teams incoming-webhook delivery of confirmed changes are live Starter+ customer channels (2026-08-12 decision); WhatsApp remains unsupported until separately enabled and proven.",
       "surface": "notifications, public docs, API/MCP and delivery runtime",
       "audience": "customers and integrators",
       "owner": "delivery",
-      "source": ["app/routes/app.notifications.ui.tsx", "app/lib/ga-customer-surface.ts", "app/lib/delivery.server.ts"],
+      "source": [
+        "app/routes/app.notifications.ui.tsx",
+        "app/lib/ga-customer-surface.ts",
+        "app/lib/delivery.server.ts",
+        "app/lib/teams-webhook.server.ts"
+      ],
       "requiredGate": "G11-EMAIL,G11-SELF-SERVE-PARITY",
-      "requiredEvidence": "no dormant-channel leak plus exact-version controlled inbox delivery/open/link, suppression where provider-supported, retry/dedupe/unsubscribe and recipient privacy proof",
+      "requiredEvidence": "no dormant-channel leak plus exact-version controlled inbox delivery/open/link, suppression where provider-supported, retry/dedupe/unsubscribe and recipient privacy proof; Slack/Teams webhook acceptance recorded as delivered only on 2xx",
       "status": "assessed_open_missing_external_email_proof",
-      "assessment": "Unsupported channels are fail-closed in source. Final configured-sender authentication, controlled inbox, suppression/retry/dedupe/unsubscribe and safe HTML/plain-text evidence remains open; undeclared client/dark-mode permutations are not required.",
+      "assessment": "Slack/Teams webhook delivery is fail-closed: 2xx acceptance is the only delivery proof, unknown outcomes are recorded as provider_unknown, and provisional changes are labelled unconfirmed. Final configured-sender authentication, controlled inbox, suppression/retry/dedupe/unsubscribe and safe HTML/plain-text email evidence remains open.",
       "classification": "known",
       "expiry": "channel flag, provider, UI, API/MCP or delivery change"
     },
@@ -174,7 +236,10 @@
       "surface": "team settings and plan catalog",
       "audience": "Agency owners and members",
       "owner": "workspace",
-      "source": ["app/routes/app.team.tsx", "app/lib/plan-entitlements.ts"],
+      "source": [
+        "app/routes/app.team.tsx",
+        "app/lib/plan-entitlements.ts"
+      ],
       "requiredGate": "J6-A-C,G360-P1-BACKBONE",
       "requiredEvidence": "seat-cap, invite/revoke/resend, owner/member concurrency and recovery on exact deployment",
       "status": "assessed_pending_reproof",
@@ -188,7 +253,9 @@
       "surface": "client delivery",
       "audience": "Agency users",
       "owner": "reports and client delivery",
-      "source": ["app/routes/app.clients.tsx"],
+      "source": [
+        "app/routes/app.clients.tsx"
+      ],
       "requiredGate": "J4-A-C,G360-P1-PROOF-PARITY",
       "requiredEvidence": "current evidence, review approval, downgrade read-only, revoke/re-review and cleanup proof",
       "status": "assessed_pending_reproof",
@@ -202,7 +269,10 @@
       "surface": "public API catalog and developer access",
       "audience": "developers and agents",
       "owner": "API and agent platform",
-      "source": ["app/routes/api.v1.ts", "app/routes/app.developer-access.ui.tsx"],
+      "source": [
+        "app/routes/api.v1.ts",
+        "app/routes/app.developer-access.ui.tsx"
+      ],
       "requiredGate": "G11-SELF-SERVE-PARITY,G360-P1-API-LIMITS",
       "requiredEvidence": "deployed auth, workspace ownership, post-auth limits, revocation, payload bounds, versioning, idempotency and audit parity",
       "status": "assessed_pending_reproof",
@@ -216,7 +286,11 @@
       "surface": "API v1, MCP and public markdown",
       "audience": "developers and agents",
       "owner": "API and agent platform",
-      "source": ["app/routes/api.v1.ts", "app/routes/api.mcp.ts", "app/lib/public-markdown.ts"],
+      "source": [
+        "app/routes/api.v1.ts",
+        "app/routes/api.mcp.ts",
+        "app/lib/public-markdown.ts"
+      ],
       "requiredGate": "G11-SELF-SERVE-PARITY,G360-P1-BACKBONE",
       "requiredEvidence": "owner/member reads, action replay, redaction, rate/output bounds, revoked-key fence and deployed parity",
       "status": "assessed_pending_reproof",
@@ -230,7 +304,10 @@
       "surface": "account, Help, privacy, trust and terms",
       "audience": "account owners",
       "owner": "privacy and support",
-      "source": ["app/routes/app.account.tsx", "app/routes/help.tsx"],
+      "source": [
+        "app/routes/app.account.tsx",
+        "app/routes/help.tsx"
+      ],
       "requiredGate": "G11-DATA-RIGHTS",
       "requiredEvidence": "approved export/settlement/deletion/retention/backup/provider cleanup runbook and audited execution",
       "status": "assessed_open_missing_lifecycle_proof",
@@ -244,7 +321,10 @@
       "surface": "billing, pricing, Help and terms",
       "audience": "buyers and billing owners",
       "owner": "billing",
-      "source": ["app/routes/app.billing.tsx", "docs/launch-owner-actions.md"],
+      "source": [
+        "app/routes/app.billing.tsx",
+        "docs/launch-owner-actions.md"
+      ],
       "requiredGate": "J5-A-C,G360-P1-BILLING",
       "requiredEvidence": "provider retrieval plus checkout, change, failed payment, cancel/reversal, refund, receipt and exact cleanup canaries",
       "status": "assessed_pending_reproof",
@@ -258,7 +338,10 @@
       "surface": "billing and pricing",
       "audience": "buyers and billing owners",
       "owner": "billing and evidence usage",
-      "source": ["app/routes/app.billing.tsx", "app/lib/pricing.ts"],
+      "source": [
+        "app/routes/app.billing.tsx",
+        "app/lib/pricing.ts"
+      ],
       "requiredGate": "G360-P1-BILLING,G360-P1-BACKBONE",
       "requiredEvidence": "atomic usage ledger, replay, top-up spend and cancellation-retention proof",
       "status": "assessed_pending_reproof",
@@ -272,7 +355,10 @@
       "surface": "Presence and public markdown",
       "audience": "customers and buyers",
       "owner": "Presence/source providers",
-      "source": ["app/routes/app.presence.tsx", "app/lib/public-markdown.ts"],
+      "source": [
+        "app/routes/app.presence.tsx",
+        "app/lib/public-markdown.ts"
+      ],
       "requiredGate": "G11-INVENTORY,G11-SELF-SERVE-PARITY",
       "requiredEvidence": "deployed connector rollout, plan caps, failure/recovery and explicit unsupported-source truth",
       "status": "assessed_pending_reproof",
@@ -286,7 +372,9 @@
       "surface": "MagicBrief comparison page",
       "audience": "prospective buyers",
       "owner": "growth and support",
-      "source": ["app/routes/compare.magicbrief.tsx"],
+      "source": [
+        "app/routes/compare.magicbrief.tsx"
+      ],
       "requiredGate": "G11-SELF-SERVE-PARITY,G11-SUPPORT-COMMS",
       "requiredEvidence": "documented bounded migration procedure and internal completion timing; otherwise remove the time promise",
       "status": "removed_from_product_contract",
@@ -300,7 +388,10 @@
       "surface": "metadata, robots, sitemap and security headers",
       "audience": "search engines and public visitors",
       "owner": "public web",
-      "source": ["app/lib/seo.ts", "workers/security-headers.ts"],
+      "source": [
+        "app/lib/seo.ts",
+        "workers/security-headers.ts"
+      ],
       "requiredGate": "G11-SEO",
       "requiredEvidence": "queryful search policy, private/token noindex, structured data, redirects and deployed social/crawl checks",
       "status": "assessed_pending_reproof",
@@ -314,7 +405,10 @@
       "surface": "email delivery and lifecycle messaging",
       "audience": "customers and operators",
       "owner": "email and support",
-      "source": ["app/lib/delivery-email-core.server.ts", "app/lib/better-auth.server.ts"],
+      "source": [
+        "app/lib/delivery-email-core.server.ts",
+        "app/lib/better-auth.server.ts"
+      ],
       "requiredGate": "G11-EMAIL",
       "requiredEvidence": "durable magic-link attempt, SPF/DKIM/DMARC, inbox receipt, bounce/complaint suppression, rendering, retry/dedupe/unsubscribe and privacy proof",
       "status": "assessed_open_missing_external_email_proof",
@@ -328,7 +422,10 @@
       "surface": "health workflow, status and runbooks",
       "audience": "operators and customers reading status",
       "owner": "operations",
-      "source": ["docs/ops-backup-uptime.md", "docs/ga-support-runbook.md"],
+      "source": [
+        "docs/ops-backup-uptime.md",
+        "docs/ga-support-runbook.md"
+      ],
       "requiredGate": "G11-CAPACITY-SLO,G11-SUPPORT-COMMS",
       "requiredEvidence": "intentional failure notification, deployed identity, recovery and truthful status incident proof",
       "status": "assessed_open_missing_failure_notification",
@@ -342,7 +439,10 @@
       "surface": "backup workflow and operator runbook",
       "audience": "operators",
       "owner": "data operations",
-      "source": ["docs/ops-backup-uptime.md", "scripts/validate-d1-backup.mjs"],
+      "source": [
+        "docs/ops-backup-uptime.md",
+        "scripts/validate-d1-backup.mjs"
+      ],
       "requiredGate": "G360-P1-OPS,G11-DATA-RIGHTS",
       "requiredEvidence": "current scheduled export plus remote-scratch restore, actual-path R2 lifecycle/deletion and rollback proof; Time Travel bookmark only before a database-changing release",
       "status": "assessed_open_missing_r2_lifecycle",
@@ -356,7 +456,10 @@
       "surface": "monitoring runtime, operator desk and customer state",
       "audience": "customers and operators",
       "owner": "monitoring operations",
-      "source": ["docs/monitoring-fanout-rollout.md", "app/routes/ops.tsx"],
+      "source": [
+        "docs/monitoring-fanout-rollout.md",
+        "app/routes/ops.tsx"
+      ],
       "requiredGate": "G11-CAPACITY-SLO,G360-P1-OPS",
       "requiredEvidence": "plan-limit load, completed scans, quota reconciliation, failure/compensation and deployed soak",
       "status": "assessed_gate_c_pending",
@@ -370,7 +473,10 @@
       "surface": "all customer journeys",
       "audience": "all supported customers",
       "owner": "experience",
-      "source": ["playwright.config.ts", "e2e/helpers/release-experience.ts"],
+      "source": [
+        "playwright.config.ts",
+        "e2e/helpers/release-experience.ts"
+      ],
       "requiredGate": "G11-COMPATIBILITY,G360-P1-A11Y",
       "requiredEvidence": "same-fingerprint all-six primary matrix plus representative cross-engine/mobile critical paths, reflow/no-overflow exact artifacts and one manual VoiceOver/Safari complete-process check",
       "status": "assessed_open_missing_cross_browser_at",
@@ -380,11 +486,14 @@
     },
     {
       "claimId": "GA-AGENCY-STATUS",
-      "text": "Agency dated release evidence does not constitute current 0/6 Gate A–C readiness.",
+      "text": "Agency dated release evidence does not constitute current 0/6 Gate A\u2013C readiness.",
       "surface": "launch/readiness scorecards and runbooks",
       "audience": "release owners",
       "owner": "root release owner",
-      "source": ["docs/final-self-serve-ga-scorecard.md", "docs/launch-readiness.md"],
+      "source": [
+        "docs/final-self-serve-ga-scorecard.md",
+        "docs/launch-readiness.md"
+      ],
       "requiredGate": "G360-P0-IMMUTABLE",
       "requiredEvidence": "one current all-six production evidence envelope superseding every dated snapshot",
       "status": "assessed_release_pending",
@@ -397,19 +506,27 @@
     {
       "claimId": "E2E-CANARY-ROUTES",
       "classification": "rejected",
-      "source": ["app/routes.ts", "app/lib/e2e-harness-guard.server.ts", "tests/e2e-harness-guard.test.ts"],
+      "source": [
+        "app/routes.ts",
+        "app/lib/e2e-harness-guard.server.ts",
+        "tests/e2e-harness-guard.test.ts"
+      ],
       "reason": "Local fixture and token-guarded canary routes are operator/test surfaces, not supported customer capabilities; their exclusion still requires route-guard and no-public-nav proof."
     },
     {
       "claimId": "DAILY-MONITORING-ALIAS",
       "classification": "duplicate",
-      "source": ["workers/schedule.ts"],
+      "source": [
+        "workers/schedule.ts"
+      ],
       "reason": "Deprecated schedule alias maps to the canonical digest job and is not a separate customer promise."
     },
     {
       "claimId": "NATIVE-APP-EDITING",
       "classification": "rejected",
-      "source": ["docs/customer-readiness-remediation.md"],
+      "source": [
+        "docs/customer-readiness-remediation.md"
+      ],
       "reason": "No native app is declared; native editing remains out of scope until Gate D buyer evidence changes the product contract."
     }
   ]
