@@ -84,7 +84,11 @@ describe("search selection without D1", () => {
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
       expect.anything(),
       "https://example.com/offer",
-      { persistArtifacts: false },
+      {
+        persistArtifacts: false,
+        routeContext: "selection_enrichment",
+        planTier: null,
+      },
     );
   });
 
@@ -186,6 +190,42 @@ describe("search selection without D1", () => {
         source: "meta_library_browser",
         creativeText: "Fresh Browser Run OCR",
       }),
+    );
+  });
+});
+
+describe("selection-enrichment plan-tier propagation", () => {
+  it("passes the signed-in plan family into the landing capture", async () => {
+    const captureLandingPageSnapshot = vi.fn().mockResolvedValue(null);
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildLandingPageAnalysisFields: vi.fn(() => []),
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
+
+    const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+    await prepareSearchResultSelection(
+      { LANDING_PAGE_ARTIFACTS: {} as R2Bucket } as never,
+      {
+        ads: [{ ...baseAd, landingPageUrl: "https://example.com/offer" }],
+        nextCursor: null,
+        source: "meta",
+      },
+      "meta-boat-1",
+      { planTier: "starter" },
+    );
+
+    expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://example.com/offer",
+      {
+        persistArtifacts: false,
+        routeContext: "selection_enrichment",
+        planTier: "starter",
+      },
     );
   });
 });

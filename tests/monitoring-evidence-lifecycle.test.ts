@@ -383,28 +383,28 @@ async function installManualRunMocks(input: {
 
   vi.doMock("~/lib/analysis.server", () => ({ buildAnalysisFields: vi.fn(() => []) }));
   vi.doMock("~/lib/creative-text.server", () => ({ captureCreativeText: vi.fn() }));
-  vi.doMock("~/lib/landing-pages.server", () => ({
-    captureLandingPageSnapshot: vi.fn().mockImplementation(async () => {
-      input.onCapture?.();
-      if (input.capture === "crash") {
-        throw new Error("provider capture crashed");
-      }
-      return input.capture === "null" ? null : createManualSnapshot();
-    }),
-  }));
+  const captureLandingPageSnapshot = vi.fn().mockImplementation(async () => {
+    input.onCapture?.();
+    if (input.capture === "crash") {
+      throw new Error("provider capture crashed");
+    }
+    return input.capture === "null" ? null : createManualSnapshot();
+  });
+  vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
   if (input.renewLease) {
     vi.doMock("~/lib/monitoring-fanout.server", async (importOriginal) => ({
       ...(await importOriginal<Record<string, unknown>>()),
       renewOrchestratedWatchlistRunLease: vi.fn(async () => input.renewLease?.() ?? false),
     }));
   }
+  const searchAdsViaSourceResolver = vi.fn().mockResolvedValue({
+    ads: [manualAd],
+    nextCursor: null,
+    source: "demo",
+  });
   vi.doMock("~/lib/ad-source.server", async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
-    searchAdsViaSourceResolver: vi.fn().mockResolvedValue({
-      ads: [manualAd],
-      nextCursor: null,
-      source: "demo",
-    }),
+    searchAdsViaSourceResolver,
   }));
   vi.doMock("~/lib/plan.server", async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
@@ -456,6 +456,14 @@ async function installManualRunMocks(input: {
       updatedAt: "2026-06-23T10:00:15.000Z",
     }),
   }));
+
+  return {
+    captureLandingPageSnapshot,
+    searchAdsViaSourceResolver,
+    createProofCapture,
+    createWatchEvent,
+    createEventCandidate,
+  };
 }
 
 afterEach(() => {
@@ -834,5 +842,95 @@ describe("monitoring evidence lifecycle through runWatchlistManual", () => {
     expect(
       env.sqlite.prepare("SELECT COUNT(*) AS count FROM evidence_top_up_ledger_entry WHERE entry_type = 'release'").get(),
     ).toEqual({ count: 1 });
+  });
+});
+
+describe("monitoring plan-tier attribution propagation", () => {
+  it("attributes scans and proof captures with the owner's plan family", async () => {
+    vi.resetModules();
+    const env = createEvidenceEnv("starter");
+    env.sqlite.exec(`
+      INSERT INTO watchlist_run (id, watchlist_id, status, processing_token)
+      VALUES ('run-tier', 'watch-1', 'running', NULL);
+    `);
+    const createdProofCaptures: Array<Record<string, unknown>> = [];
+    const createdCandidates: Array<Record<string, unknown>> = [];
+    const createdEvents: WatchEventRecord[] = [];
+    const mocks = await installManualRunMocks({
+      capture: "success",
+      createdProofCaptures,
+      createdCandidates,
+      createdEvents,
+      deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+        // Zero attempts / no details = a confirmed-success delivery so
+        // runWatchlistManual resolves normally and the assertions on captured
+        // tier/route can run; this test is about plan-tier propagation, not
+        // alert-delivery outcomes.
+        attempts: 0,
+        channels: [],
+        details: [],
+      }),
+    });
+    const { runWatchlistManual } = await import("~/lib/monitoring.server");
+
+    await runWatchlistManual(env, manualWatchlist);
+
+    // Proof-capture landing captures carry the resolved tier + route context.
+    expect(mocks.captureLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      expect.objectContaining({
+        routeContext: "proof_capture",
+        planTier: "starter",
+      }),
+    );
+    // The watchlist scan resolver legs carry the same resolved tier.
+    expect(mocks.searchAdsViaSourceResolver.mock.calls.length).toBeGreaterThan(0);
+    for (const call of mocks.searchAdsViaSourceResolver.mock.calls) {
+      expect(call[3]).toMatchObject({ planTier: "starter" });
+    }
+  });
+
+  it("threads the caller's exact ExecutionContext into proof captures", async () => {
+    vi.resetModules();
+    const env = createEvidenceEnv("starter");
+    env.sqlite.exec(`
+      INSERT INTO watchlist_run (id, watchlist_id, status, processing_token)
+      VALUES ('run-tier', 'watch-1', 'running', NULL);
+    `);
+    const createdProofCaptures: Array<Record<string, unknown>> = [];
+    const createdCandidates: Array<Record<string, unknown>> = [];
+    const createdEvents: WatchEventRecord[] = [];
+    const mocks = await installManualRunMocks({
+      capture: "success",
+      createdProofCaptures,
+      createdCandidates,
+      createdEvents,
+      deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+        attempts: 0,
+        channels: [],
+        details: [],
+      }),
+    });
+    const { runWatchlistManual } = await import("~/lib/monitoring.server");
+    const waitUntil = vi.fn();
+    const ctx = { waitUntil } as unknown as ExecutionContext;
+
+    // Direct-website watchlist exercises the selective AND direct proof-capture
+    // evaluation paths; both must receive the SAME context object (identity,
+    // not a copy) so telemetry row writes get real waitUntil background
+    // completion in production.
+    await runWatchlistManual(env, manualDirectWebsiteWatchlist, {
+      executionContext: ctx,
+    });
+
+    expect(mocks.captureLandingPageSnapshot.mock.calls.length).toBeGreaterThan(0);
+    for (const call of mocks.captureLandingPageSnapshot.mock.calls) {
+      expect(call[2]).toMatchObject({
+        routeContext: "proof_capture",
+        planTier: "starter",
+        executionContext: ctx,
+      });
+    }
   });
 });

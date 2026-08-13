@@ -367,4 +367,54 @@ describe("Worker scheduled handler", () => {
       { cron: WARMUP_CRON, scheduledTime, taskName: "presence_polling_batch" },
     ]);
   });
+
+  it("passes the exact scheduled ExecutionContext into discovery warmup", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+
+    await loaded.worker.scheduled(
+      {
+        cron: WARMUP_CRON,
+        scheduledTime: Date.parse("2026-07-16T06:17:00.000Z"),
+      } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    // The warmup call receives the SAME context object the handler was given
+    // (identity, not a copy) so slow telemetry writes get real waitUntil
+    // background completion in production.
+    expect(loaded.runScheduledDiscoveryWarmup).toHaveBeenCalledTimes(1);
+    const call = loaded.runScheduledDiscoveryWarmup.mock.calls[0]!;
+    expect(call[0]).toBeDefined();
+    expect(call[1]).toBe(ctx);
+  });
+
+  it("passes the exact scheduled ExecutionContext into scheduled monitoring", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+
+    await loaded.worker.scheduled(
+      {
+        cron: NORMAL_CRON,
+        scheduledTime: Date.parse("2026-07-16T04:00:00.000Z"),
+      } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    // The monitoring call receives the SAME context object the handler was
+    // given (identity, not a copy) so scans and proof captures get real
+    // waitUntil background completion in production.
+    expect(loaded.runScheduledMonitoring).toHaveBeenCalledTimes(1);
+    const call = loaded.runScheduledMonitoring.mock.calls[0]!;
+    expect(call[0]).toBeDefined();
+    expect(call[1]).toMatchObject({
+      includeScans: true,
+      cron: NORMAL_CRON,
+    });
+    expect(call[1].executionContext).toBe(ctx);
+  });
 });

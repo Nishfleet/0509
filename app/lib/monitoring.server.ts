@@ -78,6 +78,7 @@ import {
   shouldScheduleWatchlistInRegularScan,
 } from "~/lib/plan-entitlements";
 import type { PlanFamily } from "~/lib/plan-entitlements";
+import type { BrowserJobPlanTier } from "~/lib/browser-job-telemetry.server";
 import { ensureDb } from "~/lib/data/d1.server";
 import {
   getEvidenceUsageSummary,
@@ -154,12 +155,26 @@ interface ScanPayload {
 interface ScanOptions {
   customerMetaAdLibraryToken?: string | null;
   existingRunId?: string;
+  orchestrationRunId?: string;
   orchestrationToken?: string;
   concurrencyPermitToken?: string;
-  orchestrationRunId?: string;
   forceLive?: boolean;
   /** WP-36: reuse shared discovery cache younger than plan cadence. */
   acceptCacheYoungerThanMs?: number;
+  /**
+   * Resolved plan family of the watchlist owner, recorded in
+   * `browser_job_telemetry`. Resolved non-fatally at the scan call sites;
+   * null (unknown) on lookup failure.
+   */
+  planTier?: BrowserJobPlanTier | null;
+  /**
+   * Real request/worker ExecutionContext when the caller has one (manual
+   * refreshes from a route, cron handlers). Threaded into the discovery
+   * resolver so slow telemetry row writes are registered with `waitUntil`
+   * (background completion, never request latency). Scheduled/workflow
+   * surfaces that have no real context omit it — nothing is fabricated.
+   */
+  executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
 }
 
 export class MonitoringConcurrencyLimitError extends Error {
@@ -213,6 +228,12 @@ interface RunScheduledMonitoringOptions {
   digestCadence?: DigestCadence;
   digestLookbackDays?: number;
   scheduledTime?: number;
+  /**
+   * Real Worker ExecutionContext when the cron handler supplies one; threaded
+   * into the discovery resolver so slow telemetry row writes get waitUntil
+   * background completion. Never fabricated by scheduled surfaces.
+   */
+  executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
 }
 
 // Cloudflare kills scheduled invocations at the 15-minute wall limit. Stop
@@ -300,6 +321,7 @@ export async function runScheduledMonitoring(
         {
           scheduledTime,
           cron: options.cron,
+          executionContext: options.executionContext ?? null,
         },
       );
       inlineRuns = inlineResult.inlineRuns;
@@ -348,6 +370,7 @@ export async function runScheduledMonitoring(
           {
             scheduledTime,
             cron: options.cron,
+            executionContext: options.executionContext ?? null,
           },
         );
         inlineRuns = inlineResult.inlineRuns;
@@ -852,7 +875,10 @@ export async function sendCustomerAtRiskAlert(
   };
 }
 
-export async function runScheduledDiscoveryWarmup(env: AppEnv) {
+export async function runScheduledDiscoveryWarmup(
+  env: AppEnv,
+  ctx?: Pick<ExecutionContext, "waitUntil"> | null,
+) {
   if (!env.DB) {
     return {
       attempted: 0,
@@ -867,6 +893,8 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
   const warmupTargets: Array<{
     watchlist: WatchlistRecord;
     query: NormalizedSavedQuery;
+    /** Resolved plan family of the watchlist owner (null = unknown). */
+    planTier: BrowserJobPlanTier | null;
   }> = [];
   let skipped = 0;
 
@@ -913,7 +941,14 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
     }
 
     seenFingerprints.add(watchlist.targetFingerprint);
-    warmupTargets.push({ watchlist, query });
+    warmupTargets.push({
+      watchlist,
+      query,
+      // The warmup pass already resolved the owner's plan family for the
+      // cadence check above — reuse it for telemetry attribution instead of
+      // a second non-fatal plan lookup per target.
+      planTier: toBrowserJobPlanTier(access.plan),
+    });
   }
 
   let attempted = 0;
@@ -930,6 +965,11 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
         null,
         {
           purpose: "scheduled_warmup",
+          planTier: target.planTier,
+          // The cron handler's real Worker ExecutionContext when one is
+          // supplied; slow telemetry writes get waitUntil background
+          // completion. Never fabricated.
+          executionContext: ctx ?? null,
         },
       );
       if (
@@ -1534,7 +1574,10 @@ export async function runWatchlistManual(
   watchlist: WatchlistRecord,
   options: Pick<
     ScanOptions,
-    "existingRunId" | "orchestrationToken" | "concurrencyPermitToken"
+    | "existingRunId"
+    | "orchestrationToken"
+    | "concurrencyPermitToken"
+    | "executionContext"
   > = {},
 ) {
   if (
@@ -1594,6 +1637,8 @@ export async function runWatchlistManual(
           orchestrationRunId: options.existingRunId,
           orchestrationToken: options.orchestrationToken,
           concurrencyPermitToken,
+          planTier: await resolveBrowserJobPlanTier(env, watchlist.userId),
+          executionContext: options.executionContext ?? null,
         });
       },
       {
@@ -1737,6 +1782,7 @@ export async function runWatchlistWorkflowJob(
     runId: params.runId,
     processingToken: claim.processingToken,
   });
+  const scanPlanTier = await resolveBrowserJobPlanTier(env, watchlist.userId);
   try {
     const result = await runWatchlist(
       env,
@@ -1750,6 +1796,7 @@ export async function runWatchlistWorkflowJob(
           concurrencyPermitToken: options.concurrencyPermitToken,
           forceLive: true,
           acceptCacheYoungerThanMs,
+          planTier: scanPlanTier,
         }),
       {
         customerMetaAdLibraryToken,
@@ -2161,6 +2208,10 @@ export async function runWatchlist(
       scanNativeDrafts: eventDrafts,
       recentWatchEvents,
       lease: effectLease,
+      // Real request ExecutionContext from the caller (manual refresh routes,
+      // scheduled handler): proof-capture telemetry rows get waitUntil
+      // background completion instead of being dropped by the bounded race.
+      executionContext: options.executionContext ?? null,
     });
     const directWebsiteProofEvaluation =
       await evaluateDirectWebsiteProofCandidate(env, {
@@ -2169,6 +2220,7 @@ export async function runWatchlist(
         recentWatchEvents: [...recentWatchEvents, ...proofEvaluation.events],
         watchlistRunAttemptCount: proofEvaluation.proofAttemptCount,
         lease: effectLease,
+        executionContext: options.executionContext ?? null,
       });
     await assertOrchestratedWatchlistRunLease(env, runId, options);
     const newlyEvaluatedEvents = [
@@ -2324,6 +2376,7 @@ export async function runWatchlist(
           lease: options.orchestrationToken
             ? { runId, processingToken: options.orchestrationToken }
             : undefined,
+          executionContext: options.executionContext ?? null,
         });
       await assertOrchestratedWatchlistRunLease(env, runId, options);
       if (!directWebsiteProofEvaluation.proofCaptureSucceeded) {
@@ -2762,6 +2815,7 @@ async function runScheduledMonitoringInline(
   options: {
     scheduledTime?: number;
     cron?: string | null;
+    executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
   } = {},
 ) {
   const scanCache = new Map<string, Promise<ScanPayload>>();
@@ -2817,6 +2871,7 @@ async function runScheduledWatchlistInline(
   options: {
     scheduledTime?: number;
     cron?: string | null;
+    executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
   } = {},
 ) {
   const query = await resolveWatchlistQuery(env, watchlist);
@@ -2871,6 +2926,7 @@ async function runScheduledWatchlistInline(
     runOptions.orchestrationRunId = durableClaim.runId;
     runOptions.orchestrationToken = durableClaim.processingToken;
   }
+  const scanPlanTier = await resolveBrowserJobPlanTier(env, watchlist.userId);
 
   await runWatchlist(
     env,
@@ -2884,6 +2940,8 @@ async function runScheduledWatchlistInline(
             customerMetaAdLibraryToken,
             forceLive: true,
             acceptCacheYoungerThanMs,
+            planTier: scanPlanTier,
+            executionContext: options.executionContext ?? null,
           }),
         );
       }
@@ -2963,6 +3021,29 @@ async function resolveScheduledScanSharedCacheMaxAgeMs(
   }
 }
 
+/** Map a resolved plan family to the telemetry tier; null stays unknown. */
+function toBrowserJobPlanTier(plan: string | null | undefined): BrowserJobPlanTier | null {
+  if (plan === "free" || plan === "scout" || plan === "starter" || plan === "agency") {
+    return plan;
+  }
+  return null;
+}
+
+/**
+ * Non-fatal plan-family resolution for browser-job telemetry. A plan-lookup
+ * blip must never fail a scan; the tier simply stays null (unknown).
+ */
+async function resolveBrowserJobPlanTier(
+  env: AppEnv,
+  userId: string,
+): Promise<BrowserJobPlanTier | null> {
+  try {
+    return toBrowserJobPlanTier(await getUserPlan(env, userId));
+  } catch {
+    return null;
+  }
+}
+
 async function performBoundedScan(
   env: AppEnv,
   query: NormalizedSavedQuery,
@@ -2984,6 +3065,8 @@ async function performBoundedScan(
         customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
         forceLive: options.forceLive === true,
         acceptCacheYoungerThanMs: options.acceptCacheYoungerThanMs,
+        planTier: options.planTier ?? null,
+        executionContext: options.executionContext ?? null,
       },
     );
     ads.push(...response.ads);
@@ -3263,6 +3346,13 @@ async function evaluateSelectiveProofCandidates(
     scanNativeDrafts: WatchEventDraft[];
     recentWatchEvents: WatchEventRecord[];
     lease?: { runId: string; processingToken: string };
+    /**
+     * Real request ExecutionContext when the caller has one; threaded into
+     * landing proof captures so telemetry row writes are registered with
+     * waitUntil (background completion, never request latency). Scheduled and
+     * manual callers without a real context omit it — nothing is fabricated.
+     */
+    executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
   },
 ) {
   const proofEvents: WatchEventRecord[] = [];
@@ -3530,6 +3620,11 @@ async function evaluateSelectiveProofCandidates(
             onFailure: (detail) => {
               captureFailureDetail = detail;
             },
+            routeContext: "proof_capture",
+            planTier: toBrowserJobPlanTier(capacity.userPlan),
+            // Real request ExecutionContext when the caller has one (see
+            // `evaluateSelectiveProofCandidates` input).
+            executionContext: input.executionContext ?? null,
           });
       const snapshot = replayedSnapshot ?? freshSnapshot;
       const failureDetail =
@@ -3769,6 +3864,13 @@ async function evaluateDirectWebsiteProofCandidate(
     recentWatchEvents: WatchEventRecord[];
     watchlistRunAttemptCount: number;
     lease?: { runId: string; processingToken: string };
+    /**
+     * Real request ExecutionContext when the caller has one; threaded into
+     * the landing proof capture so telemetry row writes are registered with
+     * waitUntil (background completion, never request latency). Callers
+     * without a real context omit it — nothing is fabricated.
+     */
+    executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
   },
 ) {
   const websiteUrl = directWebsiteUrlForWatchlist(input.watchlist);
@@ -3999,6 +4101,11 @@ async function evaluateDirectWebsiteProofCandidate(
           onFailure: (detail) => {
             captureFailureDetail = detail;
           },
+          routeContext: "proof_capture",
+          planTier: toBrowserJobPlanTier(capacity.userPlan),
+          // Real request ExecutionContext when the caller has one (see
+          // `evaluateDirectWebsiteProofCandidate` input).
+          executionContext: input.executionContext ?? null,
         });
     const snapshot = replayedSnapshot ?? freshSnapshot;
     const failureDetail =
