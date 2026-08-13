@@ -2831,6 +2831,20 @@ describe("Dodo webhook signature verification gate", () => {
     }
   }
 
+  async function spyRealVerifier() {
+    // The gate suite deliberately keeps the REAL verifyDodoWebhookRequest from
+    // ~/lib/dodo-billing.server wired through the route (unlike the
+    // processing-path tests, which mock it as always-passing). Spy on the real
+    // module so the accepted-path test can assert the verification call
+    // happens BEFORE the webhook ledger claim, not just that bad signatures
+    // are rejected.
+    const dodoBilling = await import("~/lib/dodo-billing.server");
+    const realVerifier = dodoBilling.verifyDodoWebhookRequest;
+    const verifierSpy = vi.fn(realVerifier);
+    vi.spyOn(dodoBilling, "verifyDodoWebhookRequest").mockImplementation(verifierSpy);
+    return verifierSpy;
+  }
+
   function webhookRequestWithHeaders(eventId: string, headers: Record<string, string>) {
     return new Request("https://0509.io/api/webhooks/dodo", {
       method: "POST",
@@ -2928,6 +2942,7 @@ describe("Dodo webhook signature verification gate", () => {
 
   it("accepts a genuinely signed webhook and only then claims the event", async () => {
     const { data } = mockVerificationGateDependencies();
+    const verifierSpy = await spyRealVerifier();
     const { action: routeAction } = await import("~/routes/api.webhooks.dodo");
     const request = await signedWebhookRequest("evt-valid-signature", {
       type: "payment.succeeded",
@@ -2935,6 +2950,14 @@ describe("Dodo webhook signature verification gate", () => {
     const response = await routeAction({ context: {}, request, params: {} } as never);
 
     expect(await response.json()).toMatchObject({ ok: true, ignored: true });
+    expect(verifierSpy).toHaveBeenCalledTimes(1);
+    // The verification call must precede every webhook write. The route's only
+    // pre-claim write is the webhook ledger claim, so assert the call order
+    // directly: deleting, bypassing, or moving verification after processing
+    // makes this assertion fail.
+    expect(verifierSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      (data.beginDodoWebhookEventProcessing as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0],
+    );
     expect(data.beginDodoWebhookEventProcessing).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ eventId: "evt-valid-signature" }),
