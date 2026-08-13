@@ -152,6 +152,24 @@ export default function LoginRoute() {
               <p>Share useful ads and landing-page examples with clients or teammates.</p>
             </div>
           </div>
+          <div className="f9-auth-proof-list">
+            <div>
+              <strong>Digests</strong>
+              <p>A scheduled email that recaps what changed across your watchlists — new ads, offer moves, and landing-page edits — each change with its screenshot proof attached.</p>
+            </div>
+            <div>
+              <strong>Reports</strong>
+              <p>A client-ready brief assembled from your saved examples, notes, and analysis — export it and take it to the next call.</p>
+            </div>
+            <div>
+              <strong>Team workspaces</strong>
+              <p>Invite teammates so the watch keeps running when you're away — saved research and evidence stay in the workspace.</p>
+            </div>
+          </div>
+          <p>
+            We email you a one-time sign-in link — there's no password to
+            remember, and you can request a fresh link any time.
+          </p>
         </section>
 
         <AuthForm
