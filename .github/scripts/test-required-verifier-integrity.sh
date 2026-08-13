@@ -9,7 +9,9 @@
 #   insufficient-permission approval, paginated inputs, rename into a
 #   protected path, integrity-workflow self-edit, malformed bundle (API
 #   failure analog: must fail closed), missing head date (fail closed),
-#   maintainer-permission approval.
+#   maintainer-permission approval, unapproved deploy-chain edit
+#   (deploy-production.yml), approved deploy-chain edit by a non-author
+#   admin, unapproved deploy-chain script edit (ci-verify-production-candidate.sh).
 # Exit 0 only when every fixture behaves exactly as pinned.
 set -euo pipefail
 
@@ -236,6 +238,46 @@ FIXTURE_SRC='{
 }'
 build_bundle "16-multi"
 run_fixture "multi-file verifier change with approval passes" PASS "$WORK_DIR/16-multi.json"
+
+# 17. Unapproved deploy-workflow edit: deploy-production.yml changed, zero
+#     reviews -> FAIL (deploy authorization must not be redefinable without
+#     independent approval)
+FIXTURE_SRC='{
+  "author": "nish3451",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "files": [{"filename": ".github/workflows/deploy-production.yml", "previous_filename": None}],
+  "reviews": [],
+  "permissions": {},
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh", ".github/workflows/deploy-production.yml", ".github/workflows/finalize-production-soak.yml", "scripts/ci-verify-production-candidate.sh", "scripts/ci-verify-provider-main-cas.sh"]
+}'
+build_bundle "17-deploy-unapproved"
+run_fixture "unapproved deploy-workflow edit fails" FAIL "$WORK_DIR/17-deploy-unapproved.json"
+
+# 18. Approved deploy-workflow edit: deploy-production.yml changed, current
+#     non-author admin APPROVED -> PASS
+FIXTURE_SRC='{
+  "author": "nish3451",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "files": [{"filename": ".github/workflows/deploy-production.yml", "previous_filename": None}],
+  "reviews": [{"state": "APPROVED", "submitted_at": "2026-08-13T17:10:00Z", "user": "alice"}],
+  "permissions": {"alice": "admin"},
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh", ".github/workflows/deploy-production.yml", ".github/workflows/finalize-production-soak.yml", "scripts/ci-verify-production-candidate.sh", "scripts/ci-verify-provider-main-cas.sh"]
+}'
+build_bundle "18-deploy-approved"
+run_fixture "approved deploy-workflow edit passes" PASS "$WORK_DIR/18-deploy-approved.json"
+
+# 19. Unapproved deploy-chain script edit: ci-verify-production-candidate.sh
+#     changed, zero reviews -> FAIL
+FIXTURE_SRC='{
+  "author": "nish3451",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "files": [{"filename": "scripts/ci-verify-production-candidate.sh", "previous_filename": None}],
+  "reviews": [],
+  "permissions": {},
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh", ".github/workflows/deploy-production.yml", ".github/workflows/finalize-production-soak.yml", "scripts/ci-verify-production-candidate.sh", "scripts/ci-verify-provider-main-cas.sh"]
+}'
+build_bundle "19-deploy-script-unapproved"
+run_fixture "unapproved deploy-chain script edit fails" FAIL "$WORK_DIR/19-deploy-script-unapproved.json"
 
 echo ""
 if [[ $FAIL_COUNT -eq 0 ]]; then
