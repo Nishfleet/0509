@@ -66,6 +66,18 @@ export function addSubscriptionMonthsUtc(anchor: Date, months: number) {
   );
 }
 
+/** Calendar-month entitlement period containing `at` (free plan). */
+export function computeCalendarMonthBounds(at: Date = new Date()) {
+  const year = at.getUTCFullYear();
+  const month = at.getUTCMonth();
+  const periodStart = new Date(Date.UTC(year, month, 1));
+  const periodEnd = new Date(Date.UTC(year, month + 1, 1));
+  return {
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+  };
+}
+
 /** Subscription-anchored monthly entitlement period containing `at`. */
 export function computeSubscriptionPeriodBounds(anchorIso: string, at: Date = new Date()) {
   const anchor = new Date(anchorIso);
@@ -242,31 +254,63 @@ export async function ensureCurrentEvidenceUsagePeriod(
 ) {
   const effectivePlan = planFamily ?? (await getUserPlan(env, workspaceUserId));
   if (!isPaidPlanFamily(effectivePlan)) {
-    const row = await ensureDb(env)
+    // Free still owns a real, persisted monthly period: the instant first scan
+    // carries one included evidence check (see getIncludedEvidenceAllowance),
+    // and a placeholder row with a zero allowance would silently starve it.
+    const { periodStart, periodEnd } = computeCalendarMonthBounds();
+    const allowance = getIncludedEvidenceAllowance("free");
+
+    const existing = await readCurrentUsagePeriod(env, workspaceUserId, periodStart);
+    if (existing) {
+      if (existing.plan_family !== "free" || existing.included_allowance !== allowance) {
+        await ensureDb(env)
+          .prepare(
+            `
+              UPDATE evidence_usage_period
+              SET plan_family = ?,
+                  included_allowance = ?
+              WHERE id = ?
+            `,
+          )
+          .bind("free", allowance, existing.id)
+          .run();
+        return {
+          ...existing,
+          plan_family: "free",
+          included_allowance: allowance,
+        };
+      }
+      return existing;
+    }
+
+    const id = createId();
+    await ensureDb(env)
       .prepare(
         `
-          SELECT id, workspace_user_id, period_start, period_end, plan_family,
-                 included_allowance, included_consumed, created_at
-          FROM evidence_usage_period
-          WHERE workspace_user_id = ?
-          ORDER BY period_start DESC
-          LIMIT 1
+          INSERT INTO evidence_usage_period (
+            id, workspace_user_id, period_start, period_end, plan_family,
+            included_allowance, included_consumed, created_at
+          )
+          VALUES (?, ?, ?, ?, 'free', ?, 0, ?)
+          ON CONFLICT(workspace_user_id, period_start) DO NOTHING
         `,
       )
-      .bind(workspaceUserId)
-      .first<UsagePeriodRow>();
-    return (
-      row ?? {
-        id: "none",
-        workspace_user_id: workspaceUserId,
-        period_start: nowIso(),
-        period_end: nowIso(),
-        plan_family: "free",
-        included_allowance: 0,
-        included_consumed: 0,
-        created_at: nowIso(),
-      }
-    );
+      .bind(id, workspaceUserId, periodStart, periodEnd, allowance, nowIso())
+      .run();
+
+    const created = await readCurrentUsagePeriod(env, workspaceUserId, periodStart);
+    if (created) return created;
+
+    return {
+      id,
+      workspace_user_id: workspaceUserId,
+      period_start: periodStart,
+      period_end: periodEnd,
+      plan_family: "free",
+      included_allowance: allowance,
+      included_consumed: 0,
+      created_at: nowIso(),
+    } satisfies UsagePeriodRow;
   }
 
   const { anchor } = await ensureWorkspaceEntitlementAnchor(env, workspaceUserId);

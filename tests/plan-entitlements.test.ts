@@ -16,11 +16,11 @@ import {
 } from "~/lib/plan-entitlements";
 
 describe("plan entitlements catalog", () => {
-  it("gives free one watchlist on a weekly scan and weekly digest with everything else absent", () => {
+  it("gives free one watchlist, one collection, one evidence check on a weekly scan", () => {
     const entitlements = getPlanEntitlements("free");
     expect(getPlanLimit("free", "watchlists")).toBe(1);
-    expect(getPlanLimit("free", "collections")).toBe(0);
-    expect(getIncludedEvidenceAllowance("free")).toBe(0);
+    expect(getPlanLimit("free", "collections")).toBe(1);
+    expect(getIncludedEvidenceAllowance("free")).toBe(1);
     expect(entitlements.scheduledScanCadence).toBe("weekly");
     expect(entitlements.digestCadence).toBe("weekly");
     expect(planAllowsDigestCadence("free", "weekly")).toBe(true);

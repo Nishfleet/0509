@@ -75,9 +75,10 @@ export interface PlanEntitlements {
   features: ReadonlySet<PlanFeature>;
 }
 
-// Free Weekly Competitor Watch (PLG wedge): the weekly digest email is the
-// product demo. Free gets exactly the weekly brief + the email lane it rides
-// on — no instant alerts, Slack, evidence, exports, or collections.
+// Free Weekly Competitor Watch (PLG wedge): the instant first scan + one
+// proof-backed brief is the product demo. Free gets exactly one watchlist, one
+// collection, one evidence check per month, and the weekly digest email lane —
+// no instant alerts, Slack, exports, or faster cadence.
 const FREE_FEATURES: PlanFeature[] = ["weekly_digest", "email_delivery"];
 
 const SCOUT_FEATURES: PlanFeature[] = [
@@ -121,13 +122,17 @@ const AGENCY_FEATURES: PlanFeature[] = [
 const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
   free: {
     planFamily: "free",
-    // Free Weekly Competitor Watch: one watchlist scanned once a week (the
-    // Monday slot of the regular cron; see isWeeklyAlignedScan) feeding the
-    // weekly digest email. Evidence/collections/instant budgets stay 0 —
-    // paid plans unlock 3–6 hour cadence and everything else.
+    // Free Weekly Competitor Watch: one watchlist, one collection, and one
+    // evidence check per month. The activation scan runs immediately on
+    // creation (see queueFirstWatchlistScan) and its one proof-backed capture
+    // feeds the first brief, so a new free user sees real proof within
+    // minutes — not after the next Monday slot. The weekly scan then rides the
+    // Monday 03:00 UTC tick (see isWeeklyAlignedScan) into the weekly digest
+    // email. Everything else — instant alerts, Slack, exports, collections
+    // beyond one — stays paid.
     watchlists: 1,
-    collections: 0,
-    includedEvidenceChecksPerMonth: 0,
+    collections: 1,
+    includedEvidenceChecksPerMonth: 1,
     workspaceSeats: 1,
     digestCadence: "weekly",
     scheduledScanCadence: "weekly",
