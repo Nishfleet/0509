@@ -13,6 +13,7 @@ const {
   applyStarterGrant,
   beginDodoWebhookEventProcessing,
   failDodoWebhookEventProcessing,
+  finalizeDodoWebhookLedgerOnly,
 } = createDodoBillingAtomicityContext();
 
 describe("Dodo billing atomicity (sqlite)", () => {
@@ -399,5 +400,124 @@ describe("Dodo billing atomicity (sqlite)", () => {
     await expect(setWatchlistActive(env, "user-1", "wl-1", false)).resolves.toBe(false);
     await failDodoWebhookEventProcessing(env, "billing-canary-lock:user-1", { released: true });
     await expect(setWatchlistActive(env, "user-1", "wl-1", false)).resolves.toBe(true);
+  });
+
+  it("returns duplicate for a replayed processed event and causes zero business mutation", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+
+    // First claim applies the grant and finalizes the ledger as 'processed'.
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-processed-replay",
+      eventType: "payment.succeeded",
+      userId: "user-1",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+    })).toEqual({ status: "claimed" });
+    expect(await applyStarterGrant(env, "evt-processed-replay")).toEqual({ changed: true });
+
+    const ledgerColumns = `
+      event_id, event_type, user_id, received_at, payload_timestamp,
+      processed_at, outcome, processing_started_at, metadata_json
+    `;
+    const ledgerBefore = harness.sqlite.prepare(`
+      SELECT ${ledgerColumns} FROM dodo_webhook_event WHERE event_id = ?
+    `).get("evt-processed-replay") as Record<string, unknown>;
+    const planColumns = `
+      plan, dodo_payment_id, dodo_product_id, dodo_subscription_id,
+      dodo_customer_id, dodo_status, plan_updated_at
+    `;
+    const planBefore = harness.sqlite.prepare(`
+      SELECT ${planColumns} FROM user_plan WHERE user_id = 'user-1'
+    `).get() as Record<string, unknown>;
+    expect(ledgerBefore).toMatchObject({ outcome: "processed", processing_started_at: null });
+    expect(planBefore).toMatchObject({ plan: "starter" });
+
+    // A second claim of the terminal event must be rejected as a duplicate
+    // and must not touch the ledger row or any business row.
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-processed-replay",
+      eventType: "payment.succeeded",
+      userId: "user-1",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+    })).toEqual({ status: "duplicate", outcome: "processed" });
+    expect(harness.sqlite.prepare(`
+      SELECT ${ledgerColumns} FROM dodo_webhook_event WHERE event_id = ?
+    `).get("evt-processed-replay")).toEqual(ledgerBefore);
+    expect(harness.sqlite.prepare(`
+      SELECT ${planColumns} FROM user_plan WHERE user_id = 'user-1'
+    `).get()).toEqual(planBefore);
+
+    // Terminal rows survive repeated replays: a third claim is still a
+    // duplicate and the row is still terminal with no lease re-armed.
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-processed-replay",
+      eventType: "payment.succeeded",
+      userId: "user-1",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+    })).toEqual({ status: "duplicate", outcome: "processed" });
+    expect(harness.sqlite.prepare(
+      "SELECT outcome, processed_at, processing_started_at FROM dodo_webhook_event WHERE event_id = ?",
+    ).get("evt-processed-replay")).toMatchObject({
+      outcome: "processed",
+      processing_started_at: null,
+    });
+  });
+
+  it("returns duplicate for a replayed ignored event and causes zero business mutation", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+
+    // Claim then finalize as 'ignored' (the orphan/no-op path) so the ledger
+    // ends terminal without any business mutation.
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-ignored-replay",
+      eventType: "subscription.updated",
+      userId: "user-1",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+    })).toEqual({ status: "claimed" });
+    await finalizeDodoWebhookLedgerOnly(env, {
+      eventId: "evt-ignored-replay",
+      outcome: "ignored",
+      metadata: { ignoredReason: "provider_unknown_event" },
+    });
+
+    const ledgerColumns = `
+      event_id, event_type, user_id, received_at, payload_timestamp,
+      processed_at, outcome, processing_started_at, metadata_json
+    `;
+    const ledgerBefore = harness.sqlite.prepare(`
+      SELECT ${ledgerColumns} FROM dodo_webhook_event WHERE event_id = ?
+    `).get("evt-ignored-replay") as Record<string, unknown>;
+    expect(ledgerBefore).toMatchObject({
+      outcome: "ignored",
+      processing_started_at: null,
+      metadata_json: JSON.stringify({ ignoredReason: "provider_unknown_event" }),
+    });
+
+    // A second claim of the ignored event must be a duplicate with the
+    // ledger row untouched (processed_at preserved, no lease re-armed).
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-ignored-replay",
+      eventType: "subscription.updated",
+      userId: "user-1",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+    })).toEqual({ status: "duplicate", outcome: "ignored" });
+    expect(harness.sqlite.prepare(`
+      SELECT ${ledgerColumns} FROM dodo_webhook_event WHERE event_id = ?
+    `).get("evt-ignored-replay")).toEqual(ledgerBefore);
+
+    // Repeated replays stay duplicates: the terminal row survives.
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-ignored-replay",
+      eventType: "subscription.updated",
+      userId: "user-1",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+    })).toEqual({ status: "duplicate", outcome: "ignored" });
+    expect(harness.sqlite.prepare(
+      "SELECT outcome, processed_at, processing_started_at FROM dodo_webhook_event WHERE event_id = ?",
+    ).get("evt-ignored-replay")).toMatchObject({
+      outcome: "ignored",
+      processing_started_at: null,
+    });
   });
 });

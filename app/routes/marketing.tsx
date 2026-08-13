@@ -578,7 +578,7 @@ export default function MarketingRoute() {
             </h1>
 
             <p className="ld-deck-copy">
-              Your team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
+              Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
               Meta ads and landing pages, saves the screenshots, and files the brief —{" "}
               <b>before your alarm goes off.</b>
             </p>
