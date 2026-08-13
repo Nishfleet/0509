@@ -43,6 +43,14 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(parsed.on?.workflow_dispatch).toBeDefined();
   });
 
+  it("grants the token the scopes the snapshot script needs", () => {
+    // The script reads the issue list (gh api .../issues) and commits the
+    // snapshot, so the token needs issues: read and contents: write. A bare
+    // contents-only block 403s on the issues API: "Resource not accessible
+    // by integration" (first three restored runs, 2026-08-12).
+    expect(parsed.permissions).toEqual({ contents: "write", issues: "read" });
+  });
+
   it("generates the snapshot with Cloudflare token secrets on the self-hosted production-environment job", () => {
     expect(job["runs-on"]).toEqual(["self-hosted", "linux", "x64", "vps-verify"]);
     expect(job.environment).toBe("production");

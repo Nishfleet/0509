@@ -31,8 +31,14 @@ concurrency:
   cancel-in-progress: false
   queue: max
 
+# The snapshot script reads the repository's issue list for the github section
+# of the signal, so the token needs issues: read in addition to the write
+# needed to commit the snapshot. Without it gh api .../issues dies with
+# "Resource not accessible by integration (HTTP 403)" (seen on the first
+# three restored runs, 2026-08-12T01:21Z/01:29Z/01:33Z).
 permissions:
   contents: write
+  issues: read
 
 jobs:
   snapshot:
