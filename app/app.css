@@ -9628,6 +9628,32 @@ a.f9-wk-btn {
   line-height: 1.55;
 }
 
+/* The pre-search scope copy: a section title followed by the explainer list.
+   Same quiet, ruled-free rhythm as the rest of the wk layer — no cards, no
+   specimen, no ornament. */
+.f9-wk-sec > .f9-wk-sec-title + .f9-wk-lede {
+  margin-top: 13px;
+}
+
+.f9-search-scope-list {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f9-search-scope-list li {
+  max-width: 62ch;
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.f9-search-scope-list li strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .f9-wk-empty-filter {
   margin: 0;
   padding: 18px 0;
@@ -11309,6 +11335,14 @@ textarea.f9-wk-in {
   margin: 5px 0 0;
   color: var(--ink-soft);
   font-size: 13px;
+}
+
+/* Snapshot age under the results title: muted so the count and the answer
+   sentence stay the primary reads, but present so a stale cache-served
+   result can never look current. */
+.f9-wk-sec-capture-age {
+  color: var(--ink-faint);
+  font-size: 12px;
 }
 
 .f9-wk-sec-acts {
