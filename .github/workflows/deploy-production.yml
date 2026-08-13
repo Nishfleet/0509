@@ -58,7 +58,17 @@ jobs:
               ;;
             workflow_dispatch)
               [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
-              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              # Dispatch resolution: the authorized candidate is the exact
+              # commit the dispatcher CI-verified, not the run head.
+              # GITHUB_SHA is main's tip when the run was created, which can
+              # be newer than the dispatched candidate if main advanced
+              # between dispatch and run start (2026-08-13: 2c6cc3eb
+              # dispatched, run created on 0932e554 - the equality gate then
+              # failed before doing anything, and auto-deploy only retried on
+              # the next hourly tick). Emit the dispatched candidate as the
+              # pin; pin_candidate's CAS confirms it is still reachable from
+              # live main before anything ships.
+              GITHUB_SHA="$EXPECTED_SHA"
               case "$BACKUP_PROOF_STATUS" in
                 required)
                   test -z "$DEFERRED_BACKUP_AUTHORIZATION"
@@ -104,9 +114,11 @@ jobs:
           PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
           EMIT_PINNED_SHA: "1"
           GH_TOKEN: ${{ github.token }}
-          # Initial pin: fail-closed on ANY CAS failure, including remote-main
-          # drift. TOLERATE_MAIN_DRIFT is only granted to post-pin steps that
-          # re-verify the already-pinned SHA after the gate validated it.
+          # The pin CAS follows the authorize job's dispatch resolution: on a
+          # workflow_dispatch the pinned candidate is the dispatched expected
+          # SHA (not the run head), and the provider CAS confirms it is still
+          # an ancestor of live main before anything ships. Fail-closed on
+          # every other CAS failure, including a rewind/rewrite of main.
         run: ./scripts/ci-verify-production-candidate.sh
 
   prepare_remote_restore_evidence:

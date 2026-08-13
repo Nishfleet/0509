@@ -23,21 +23,29 @@ fail() {
 [[ "$GITHUB_REF" == "$canonical_ref" ]] || fail "ref"
 [[ "$GITHUB_SHA" =~ $sha_pattern ]] || fail "event_sha"
 [[ "$PINNED_SHA" =~ $sha_pattern ]] || fail "pinned_sha"
-[[ "$GITHUB_SHA" == "$PINNED_SHA" ]] || fail "event_sha_mismatch"
 [[ "$GITHUB_RUN_ATTEMPT" == "1" ]] || fail "run_attempt"
 
 case "$GITHUB_EVENT_NAME" in
   push)
+    [[ "$GITHUB_SHA" == "$PINNED_SHA" ]] || fail "event_sha_mismatch"
     [[ -z "${EXPECTED_SHA:-}" ]] || fail "unexpected_push_expected_sha"
     ;;
   schedule)
     # Unattended backup/restore pins whatever main tip the run started on.
     # expected_sha must stay empty so nothing can smuggle a chosen commit.
+    [[ "$GITHUB_SHA" == "$PINNED_SHA" ]] || fail "event_sha_mismatch"
     [[ -z "${EXPECTED_SHA:-}" ]] || fail "unexpected_schedule_expected_sha"
     ;;
   workflow_dispatch)
     [[ "${EXPECTED_SHA:-}" =~ $sha_pattern ]] || fail "expected_sha"
-    [[ "$EXPECTED_SHA" == "$GITHUB_SHA" ]] || fail "dispatch_sha_mismatch"
+    # Dispatch resolution: the authorize job pins the exact dispatched
+    # candidate, not the run head (GITHUB_SHA is main's tip when the run was
+    # created, which can be newer if main advanced between dispatch and run
+    # start). The pin must equal the dispatched candidate - the provider CAS
+    # below confirms it is still reachable from live main before anything
+    # ships. A rewind/rewrite (candidate not an ancestor of the live tip)
+    # stays fail-closed.
+    [[ "$EXPECTED_SHA" == "$PINNED_SHA" ]] || fail "dispatch_sha_mismatch"
     ;;
   *)
     fail "event"
