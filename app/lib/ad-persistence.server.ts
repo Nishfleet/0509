@@ -6,6 +6,7 @@ import {
 } from "~/lib/d1-bind.server";
 import { chunkForBoundParams } from "~/lib/d1-chunk.server";
 import type { AppEnv } from "~/lib/env.server";
+import { isAdLibraryChromeCta } from "~/lib/meta-library-rendered-card-parser.server";
 import type { AdRecord, AnalysisFieldInput } from "~/lib/types";
 
 interface AdLookupRow {
@@ -152,6 +153,14 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
 
   for (const row of chunkedRows.flat()) {
     const raw = parseJson<Partial<AdRecord> | null>(row.raw_json, null) ?? {};
+    // FIX-14 read side: rows captured before the extraction-side chrome-CTA
+    // guard landed can still carry a pure Meta Ad Library chrome value ("Menu",
+    // "Open Drop-down", "See ad details", …) in the cta column. This read
+    // choke point feeds every persisted-ad consumer (public search selection,
+    // creative walls, digests, reports, exports), so drop exact chrome tokens
+    // here — real advertiser CTAs always pass (exact match only).
+    const ctaValue =
+      typeof row.cta === "undefined" ? raw.cta : row.cta;
     const hydrated = {
       ...raw,
       metaAdId: row.id,
@@ -169,7 +178,7 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
           : row.preview_subhead,
       hook: typeof row.hook === "undefined" ? raw.hook : row.hook,
       offer: typeof row.offer_text === "undefined" ? raw.offer : row.offer_text,
-      cta: typeof row.cta === "undefined" ? raw.cta : row.cta,
+      cta: isAdLibraryChromeCta(ctaValue) ? "" : ctaValue,
       format:
         typeof row.creative_format === "undefined"
           ? raw.format
