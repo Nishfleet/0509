@@ -46,6 +46,13 @@ function mockCheckoutDependencies(
     cleanupFails?: boolean;
     checkoutTargetFromSkuSlug?: (slug: string) => unknown;
     topUpValid?: boolean;
+    sessionMissing?: boolean;
+    sessionUser?: { id: string; email: string; name: string };
+    resolveWorkspace?: (env: unknown, userId: string) => Promise<{
+      workspaceUserId: string;
+      isMember: boolean;
+      ownerName: string | null;
+    }>;
     workspace?: {
       workspaceUserId?: string;
       isMember?: boolean;
@@ -58,6 +65,9 @@ function mockCheckoutDependencies(
     isMember: options.workspace?.isMember ?? false,
     ownerName: options.workspace?.ownerName ?? null,
   };
+  const resolvedSession = options.sessionUser
+    ? { ...session, user: { ...session.user, ...options.sessionUser } }
+    : session;
   const createDodo0509CheckoutSession = vi.fn().mockResolvedValue({
     checkoutUrl: "https://checkout.dodo.example/session",
     sessionId: "sess_1",
@@ -90,9 +100,18 @@ function mockCheckoutDependencies(
     pricingContext: { billingCountry: "US", billingCurrency: "USD" },
   });
   vi.doMock("~/lib/auth.server", () => ({
-    requireSession: vi.fn().mockResolvedValue(session),
+    requireSession: options.sessionMissing
+      ? vi.fn().mockRejectedValue(
+          new Response(null, {
+            status: 303,
+            headers: {
+              Location: "/auth/login?redirectTo=%2Fapi%2Fbilling%2Fdodo%2Fcheckout",
+            },
+          }),
+        )
+      : vi.fn().mockResolvedValue(resolvedSession),
     requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
+      session: resolvedSession,
       ...workspace,
     })),
   }));
@@ -102,10 +121,15 @@ function mockCheckoutDependencies(
   vi.doMock("~/lib/plan.server", () => ({
     getUserPlan: vi.fn().mockResolvedValue(currentPlan),
   }));
+  // resolveWorkspace is keyed by user id in production. The explicit override
+  // lets auth tests resolve a different workspace per caller, which is what
+  // makes the ownership guard observable to an attacker-controlled session.
   vi.doMock("~/lib/workspace.server", () => ({
-    resolveWorkspace: vi.fn().mockResolvedValue({
-      ...workspace,
-    }),
+    resolveWorkspace: options.resolveWorkspace
+      ? vi.fn(options.resolveWorkspace)
+      : vi.fn().mockResolvedValue({
+          ...workspace,
+        }),
   }));
   vi.doMock("~/lib/dodo-billing.server", async (importOriginal) => {
     const actual = await importOriginal<typeof import("~/lib/dodo-billing.server")>();
@@ -267,6 +291,55 @@ describe("Dodo checkout route", () => {
           isMember: true,
           ownerName: "Owner",
         },
+      });
+
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    const response = (await action({
+      context: {},
+      request: checkoutRequest({ plan: "starter", cycle: "monthly" }),
+      params: {},
+    } as never).catch((error) => error)) as Response;
+
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(403);
+    await expect(response.text()).resolves.toBe("Only the workspace owner can manage billing.");
+    expect(validateDodo0509PlanCheckout).not.toHaveBeenCalled();
+    expect(claimDodoPlanCheckout).not.toHaveBeenCalled();
+    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("redirects a missing session to login before any checkout provider call", async () => {
+    const { createDodo0509CheckoutSession, claimDodoPlanCheckout, validateDodo0509PlanCheckout } =
+      mockCheckoutDependencies("free", { sessionMissing: true });
+
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    const response = (await action({
+      context: {},
+      request: checkoutRequest({ plan: "starter", cycle: "monthly" }),
+      params: {},
+    } as never).catch((error) => error)) as Response;
+
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe(
+      "/auth/login?redirectTo=%2Fapi%2Fbilling%2Fdodo%2Fcheckout",
+    );
+    expect(validateDodo0509PlanCheckout).not.toHaveBeenCalled();
+    expect(claimDodoPlanCheckout).not.toHaveBeenCalled();
+    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects an authenticated non-owner before any checkout provider call", async () => {
+    const { createDodo0509CheckoutSession, claimDodoPlanCheckout, validateDodo0509PlanCheckout } =
+      mockCheckoutDependencies("free", {
+        sessionUser: { id: "member-1", email: "member@example.com", name: "Member" },
+        resolveWorkspace: vi.fn().mockImplementation(async (_env, userId: string) =>
+          userId === "member-1"
+            ? { workspaceUserId: "owner-1", isMember: true, ownerName: "Owner" }
+            : { workspaceUserId: userId, isMember: false, ownerName: null },
+        ),
       });
 
     const { action } = await import("~/routes/api.billing.dodo.checkout");
