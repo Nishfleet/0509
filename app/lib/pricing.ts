@@ -132,7 +132,7 @@ export function freeWeeklyDigestUpgradeNote(): string {
 }
 
 export const EVIDENCE_USAGE_CUSTOMER_COPY =
-  "Scheduled scans are included with your plan. A check is used when Five to Nine saves a proof-backed capture with screenshots, page text, and the original link. Included checks reset every month and do not roll over. Purchased checks never expire.";
+  "Scheduled scans are included with your plan. A proof capture is saved when Five to Nine records a proof-backed change with screenshots, page text, and the original link. Generous monthly caps reset each cycle: included proof captures don't roll over, purchased proof captures never expire.";
 
 export const TOP_UP_INACTIVE_PLAN_COPY =
   "Your purchased checks are saved and will be available when a paid plan is active.";

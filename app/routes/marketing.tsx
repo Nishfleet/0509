@@ -146,19 +146,19 @@ export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
 export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry[] {
   return [
     {
-      question: "What uses checks?",
+      question: "What uses proof captures?",
       answer:
-        "Scheduled scans are included with your plan. A check is used when Five to Nine saves a proof-backed capture with screenshots, page text, and the original link.",
+        "Scheduled scans are included with your plan. A proof capture is saved when Five to Nine records a proof-backed change with screenshots, page text, and the original link.",
     },
     {
-      question: "Do unused checks roll over?",
+      question: "Do unused proof captures roll over?",
       answer:
-        "Included checks reset every month and do not roll over. Purchased checks never expire.",
+        "Generous monthly caps reset each cycle: included proof captures do not roll over. Purchased proof captures never expire and roll over forever.",
     },
     {
       question: "What changes on Agency?",
       answer:
-        "Agency includes 75 watchlists, 250 Collections, 2,500 checks/month, team seats, API/MCP access, client reports, and shared report branding.",
+        "Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team seats, API/MCP access, client reports, and shared report branding.",
     },
     agencySaleOpen
       ? {
@@ -308,14 +308,14 @@ function bundleValueLabel(
 ) {
   const price = preview?.usageBundles?.[bundleId];
   if (!Number.isFinite(price?.amount) || !Number.isFinite(creditQuantity) || Number(creditQuantity) <= 0) {
-    return "Purchased checks never expire";
+    return "Purchased proof captures roll over forever";
   }
   const unit = formatMinorCurrency(
     Number(price?.amount) / Number(creditQuantity),
     price?.currency,
     { roundWhole: false },
   );
-  return unit ? `${unit} per check` : "Purchased checks never expire";
+  return unit ? `${unit} per proof capture` : "Purchased proof captures roll over forever";
 }
 
 function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBundleSlug) {
@@ -860,10 +860,10 @@ export default function MarketingRoute() {
             <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
           </div>
           <p className="ld-pricing-note">
-            Free: watch 1 competitor with a weekly email brief. Paid plans add 3–6 hour checks,
-            evidence, more competitors, Collections, daily briefs, and clear check caps. Save
-            winning ads to collections — and see how long each ad has been running when the Ad Library
-            shares dates.
+            Free: watch 1 competitor with a weekly email brief. Paid plans add 3–6 hour scans,
+            proof captures, more competitors, Collections, daily briefs, and generous rollover caps.
+            Save winning ads to collections — and see how long each ad has been running when the Ad
+            Library shares dates.
           </p>
           <div className="f9-cycle-toggle" role="group" aria-label="Billing cycle">
             <button
@@ -1016,16 +1016,17 @@ export default function MarketingRoute() {
           watchlists with you, person to person.
         </p>
 
-        <div className="ld-bundles" aria-label="Check packs">
+        <div className="ld-bundles" aria-label="Proof capture packs">
           <div className="ld-bundles-head">
-            <span className="ld-kicker">Check packs</span>
-            <h3>Extra checks when campaigns move fast.</h3>
+            <span className="ld-kicker">Proof capture packs</span>
+            <h3>Extra proof captures when campaigns move fast.</h3>
             <p>
-              Add purchased checks for busy weeks or big campaigns without changing the team&rsquo;s
-              plan. Purchased checks never expire.
+              Top up with purchased proof captures for busy weeks or big campaigns without changing
+              the team&rsquo;s plan. Purchased proof captures never expire and roll over forever.
             </p>
             <p className="ld-check-pack-note">
-              Packs: 500 extra checks, 2,000 extra checks, or 7,500 extra checks.
+              Packs: 500 extra proof captures, 2,000 extra proof captures, or 7,500 extra proof
+              captures.
             </p>
           </div>
           <div className="ld-bundle-grid ld-reveal">
@@ -1051,24 +1052,25 @@ export default function MarketingRoute() {
           <h3>Common billing questions</h3>
           <dl className="proof-trail-list">
             <div>
-              <dt>What uses checks?</dt>
+              <dt>What uses proof captures?</dt>
               <dd>
-                Scheduled scans are included with your plan. A check is used when Five to Nine saves
-                a proof-backed capture with screenshots, page text, and the original link.
+                Scheduled scans are included with your plan. A proof capture is saved when Five to
+                Nine records a proof-backed change with screenshots, page text, and the original
+                link.
               </dd>
             </div>
             <div>
-              <dt>Do unused checks roll over?</dt>
+              <dt>Do unused proof captures roll over?</dt>
               <dd>
-                Included checks reset every month and do not roll over. Purchased checks never
-                expire.
+                Generous monthly caps reset each cycle: included proof captures do not roll over.
+                Purchased proof captures never expire and roll over forever.
               </dd>
             </div>
             <div>
               <dt>What changes on Agency?</dt>
               <dd>
-                Agency includes 75 watchlists, 250 Collections, 2,500 checks/month, team seats,
-                API/MCP access, client reports, and shared report branding.
+                Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team
+                seats, API/MCP access, client reports, and shared report branding.
               </dd>
             </div>
             <div>
