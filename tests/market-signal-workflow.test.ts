@@ -47,8 +47,10 @@ describe("daily market-signal D1 snapshot workflow", () => {
     // The script reads the issue list (gh api .../issues) and commits the
     // snapshot, so the token needs issues: read and contents: write. A bare
     // contents-only block 403s on the issues API: "Resource not accessible
-    // by integration" (first three restored runs, 2026-08-12).
-    expect(parsed.permissions).toEqual({ contents: "write", issues: "read" });
+    // by integration" (first three restored runs, 2026-08-12). pull-requests
+    // write is needed because main's branch protection rejects direct pushes,
+    // so the snapshot lands through a PR squash merge.
+    expect(parsed.permissions).toEqual({ contents: "write", issues: "read", "pull-requests": "write" });
   });
 
   it("generates the snapshot with Cloudflare token secrets on the self-hosted production-environment job", () => {
@@ -79,8 +81,20 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(job.env?.SNAPSHOT_PATH).toBe(snapshotPath);
     expect(source).toContain(`--output "$SNAPSHOT_PATH"`);
     expect(source).toContain(`git add -- "$SNAPSHOT_PATH"`);
-    expect(source).toContain("git push origin HEAD:main");
     expect(contract).toContain(`ops/market-signal/0509-market-signal.json`);
+  });
+
+  it("lands the snapshot on protected main through a PR squash merge", () => {
+    // main has strict required status checks and enforce_admins, so the direct
+    // push the old workflow used was rejected with GH006 (seen on every run,
+    // e.g. 2026-08-14T02:36Z). The landing step must open a PR and merge it.
+    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
+    expect(commit).not.toContain("git push origin HEAD:main");
+    expect(commit).toContain("gh pr create");
+    expect(commit).toContain("gh pr merge");
+    expect(commit).toContain("--squash");
+    expect(commit).toContain("--delete-branch");
+    expect(commit).toContain("market_signal_snapshot_merged");
   });
 
   it("rejects stale snapshots before committing them", () => {
