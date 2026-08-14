@@ -91,7 +91,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("last");
     expect(marketingRoute).toContain("night.");
     expect(marketingRoute).toContain("Sample proof-backed brief");
-    expect(marketingRoute).toContain("A rival page changed while your team was offline");
+    expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
     expect(marketingRoute).toContain("Your growth team would&rsquo;ve found out from a client.");
     expect(marketingRoute).toContain("Meta ads and landing pages");
     expect(marketingRoute).toContain("before your alarm goes off");
@@ -271,7 +271,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain('className="ld-ticker"');
     expect(marketingRoute).toContain('className="ld-wall"');
     expect(marketingRoute).toContain("Sample proof-backed brief");
-    expect(marketingRoute).toContain("A rival page changed while your team was offline");
+    expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
     expect(marketingRoute).toContain('action="/search"');
     expect(marketingRoute).toContain("Preview available ads");
     expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');
