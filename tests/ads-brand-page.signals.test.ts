@@ -6,6 +6,8 @@ import {
   buildBrandChangeFeed,
   computeBrandPageAggressionScore,
   countBrandOwnedAds,
+  formatBrandPageCheckedAgo,
+  resolveBrandPageFreshness,
 } from "~/lib/brand-page.server";
 import type { AdRecord } from "~/lib/types";
 
@@ -199,5 +201,45 @@ describe("brandPageAdLibraryCountryLabel", () => {
     expect(brandPageAdLibraryCountryLabel(null)).toBeNull();
     expect(brandPageAdLibraryCountryLabel(undefined)).toBeNull();
     expect(brandPageAdLibraryCountryLabel("  ")).toBeNull();
+  });
+});
+
+describe("resolveBrandPageFreshness", () => {
+  const clock = new Date("2026-08-14T12:00:00.000Z");
+
+  function fetchedAgo(ms: number) {
+    return new Date(clock.getTime() - ms).toISOString();
+  }
+
+  it("pairs the live claim with the moments-ago stamp from one clock", () => {
+    const cases: Array<[number, string, boolean]> = [
+      [0, "moments ago", true],
+      [119_999, "moments ago", true],
+      [120_000, "about 2 minutes ago", false],
+      [120_001, "about 2 minutes ago", false],
+      [5 * 60_000, "about 5 minutes ago", false],
+    ];
+    for (const [elapsedMs, checkedAgo, freshForLiveClaim] of cases) {
+      const pair = resolveBrandPageFreshness(fetchedAgo(elapsedMs), clock);
+      expect(pair).toEqual({ checkedAgo, freshForLiveClaim });
+      expect(pair.checkedAgo).toBe(formatBrandPageCheckedAgo(fetchedAgo(elapsedMs), clock));
+      expect(pair.freshForLiveClaim).toBe(pair.checkedAgo === "moments ago");
+    }
+  });
+
+  it("documents the two-clock trap and refuses the disagreeing mix on one clock", () => {
+    const fetchedAt = fetchedAgo(119_999);
+    const late = new Date(clock.getTime() + 2);
+    const earlyPair = resolveBrandPageFreshness(fetchedAt, clock);
+    const latePair = resolveBrandPageFreshness(fetchedAt, late);
+    expect(earlyPair).toEqual({ checkedAgo: "moments ago", freshForLiveClaim: true });
+    expect(latePair).toEqual({ checkedAgo: "about 2 minutes ago", freshForLiveClaim: false });
+    // Mixing early-claim + late-stamp is the shipped defect. One helper call
+    // never returns that mix.
+    expect(earlyPair.freshForLiveClaim && latePair.checkedAgo !== "moments ago").toBe(true);
+    for (const now of [clock, late]) {
+      const pair = resolveBrandPageFreshness(fetchedAt, now);
+      expect(pair.freshForLiveClaim).toBe(pair.checkedAgo === "moments ago");
+    }
   });
 });
