@@ -237,8 +237,10 @@ function registryContractSha256() {
 // 2026-07-20 merge: re-pinned after registry drift updates for the overnight
 // stack (free weekly watch, sitemap additions, /ads/:domain) — all reopened
 // as assessed_pending_reproof, no proof fabricated.
+// 2026-08-09: re-pinned after the SEO-CANONICAL-INDEXING assessment recorded
+// the /competitor-monitoring sitemap addition (claim stays reopened).
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "54722e8c51c4cad059107522abd818052ef712dc6adc37ba3523d27252361da9";
+  "2067cd970045d607791c0707471b3d8b7f9659c761072945c6b2ae8876760eef";
 
 type Catalogs = {
   agentActions: string[];
@@ -312,7 +314,10 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
   // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
-  sitemapPaths: ["/", "/search", "/auth/signup", "/compare/magicbrief", "/compare/meta-ad-library", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
+  // sitemap (same claim stays reopened for re-proof; page claims trace to the
+  // existing homepage/docs claims, no new claim text invented).
+  sitemapPaths: ["/", "/search", "/auth/signup", "/compare/magicbrief", "/compare/meta-ad-library", "/competitor-monitoring", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",
