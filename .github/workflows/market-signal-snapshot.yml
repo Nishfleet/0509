@@ -138,7 +138,9 @@ jobs:
           # Watch only the required checks; --watch returns 0 when all of them
           # pass and non-zero when one fails. A wait longer than 25 minutes means
           # a check is stuck or the runner pool is saturated: fail loudly and let
-          # the next scheduled run retry.
+          # the next scheduled run retry. Even if this wait is killed by the
+          # 30-minute job cap, auto-merge above still lands the squash merge the
+          # moment the required checks pass, so the snapshot is not lost.
           set +e
           timeout 1500 gh pr checks "$PR_URL" --repo "${GITHUB_REPOSITORY}" --watch --required --interval 15 --fail-fast
           checks_status=$?
