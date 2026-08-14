@@ -16,6 +16,43 @@ export const WATCH_EVENT_TYPES = [
   "landing_page_offer_changed",
   "landing_page_cta_changed",
   "landing_page_form_changed",
+  "website_page_added",
+  "website_page_removed",
+  "website_page_changed",
+] as const;
+
+export const WEBSITE_PAGE_DISCOVERY_SOURCES = [
+  "watchlist_seed",
+  "robots_declared_sitemap",
+  "conventional_sitemap",
+  "sitemap_content",
+] as const;
+
+export const WEBSITE_PAGE_KINDS = [
+  "home",
+  "pricing",
+  "changelog",
+  "landing",
+  "product",
+  "blog",
+  "docs",
+  "about",
+  "contact",
+  "other",
+] as const;
+
+export const WEBSITE_PAGE_FETCH_STATUSES = [
+  "fetched",
+  "redirected",
+  "fetch_failed",
+  "skipped",
+] as const;
+
+export const WEBSITE_SCAN_STATUSES = [
+  "running",
+  "complete",
+  "partial",
+  "failed",
 ] as const;
 
 export const WATCH_EVENT_STATUSES = [
@@ -101,6 +138,10 @@ export const SUPPORT_CASE_EVENT_TYPES = [
 
 export type AnalysisSource = (typeof ANALYSIS_SOURCES)[number];
 export type WatchEventType = (typeof WATCH_EVENT_TYPES)[number];
+export type WebsitePageDiscoverySource = (typeof WEBSITE_PAGE_DISCOVERY_SOURCES)[number];
+export type WebsitePageKind = (typeof WEBSITE_PAGE_KINDS)[number];
+export type WebsitePageFetchStatus = (typeof WEBSITE_PAGE_FETCH_STATUSES)[number];
+export type WebsiteScanStatus = (typeof WEBSITE_SCAN_STATUSES)[number];
 export type WatchEventStatus = (typeof WATCH_EVENT_STATUSES)[number];
 export type WatchTargetType = (typeof WATCH_TARGET_TYPES)[number];
 export type WatchlistTrackingRole = (typeof WATCHLIST_TRACKING_ROLES)[number];
@@ -394,6 +435,98 @@ export interface WatchEventRecord {
   invalidatedAt: string | null;
   lastEvaluatedAt: string | null;
   createdAt: string;
+}
+
+/**
+ * Run-level manifest for one competitor-site scan. Exactly one row per
+ * watchlist_run. Completeness lives here (inventory_complete plus the
+ * finalized status), never per observation — a rotating 50-page batch cannot
+ * prove a complete 5,000-URL inventory.
+ */
+export interface WebsiteSiteScanRecord {
+  id: string;
+  /** User account that owns the watchlist; derived, never caller-supplied. */
+  workspaceId: string;
+  watchlistId: string;
+  watchlistRunId: string;
+  rootUrl: string;
+  status: WebsiteScanStatus;
+  /** Explicit inventory truth: only the current lease's finalize may set it. */
+  inventoryComplete: boolean;
+  discoveredPageCount: number;
+  sitemapDocumentCount: number;
+  fetchedPageCount: number;
+  /** Bounded per-run page policy (rotating batch size). */
+  pageBudget: number;
+  scanCursor: string | null;
+  inventoryHash: string | null;
+  failureCode: string | null;
+  /** The processing-token fence that created (and may finalize) this scan. */
+  processingToken: string;
+  startedAt: string;
+  finalizedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One row of a scan's full page inventory, unique per scan + canonical URL. */
+export interface WebsiteSiteScanPageRecord {
+  id: string;
+  siteScanId: string;
+  canonicalUrl: string;
+  discoverySource: WebsitePageDiscoverySource;
+  pageKind: WebsitePageKind;
+  /** Stable ordering field for deterministic inventory listings. */
+  stableOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Versioned structured snapshot of a fetched page. `normalizer_version` (the
+ * column) versions this shape; every field is nullable so partial extractions
+ * stay representable.
+ */
+export interface WebsitePageObservationSignals {
+  title: string | null;
+  metaDescription: string | null;
+  visibleTextHash: string | null;
+  visibleTextExcerpt: string | null;
+  offer: string | null;
+  price: string | null;
+  cta: string | null;
+  formPresent: boolean | null;
+}
+
+/**
+ * One observation of a page actually fetched by the rotating batch, unique by
+ * run + canonical URL. contentHash and signals are null when the fetch
+ * failed or was skipped; a fetched observation carries both.
+ */
+export interface WebsitePageObservationRecord {
+  id: string;
+  /** User account that owns the watchlist; derived, never caller-supplied. */
+  workspaceId: string;
+  watchlistId: string;
+  watchlistRunId: string;
+  canonicalUrl: string;
+  discoverySource: WebsitePageDiscoverySource;
+  pageKind: WebsitePageKind;
+  contentHash: string | null;
+  /** Bounded excerpt of the observed page content, when captured. */
+  excerpt: string | null;
+  /** Existing proof_capture id when a capture backs this observation. */
+  proofCaptureId: string | null;
+  fetchStatus: WebsitePageFetchStatus;
+  httpStatus: number | null;
+  fetchErrorCode: string | null;
+  /** Version of the normalizer that produced `signals`, when fetched. */
+  normalizerVersion: string | null;
+  /** Bounded versioned structured snapshot, present for fetched pages. */
+  signals: WebsitePageObservationSignals | null;
+  observedAt: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface EventCandidateRecord {
