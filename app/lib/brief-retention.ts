@@ -31,6 +31,12 @@ export interface BriefRetentionInput {
   items?: ReadonlyArray<DigestItemRecord | WatchEventRecord> | null;
   /** The previous brief on file (the most recent digest older than this one). */
   previousBrief?: DigestRecord | null;
+  /**
+   * Alternative to `previousBrief` when the email/loader has only the prior
+   * digest's item count available (not the digest record itself). When both
+   * are present, `previousBrief` wins.
+   */
+  previousBriefItemCount?: number | null;
   /** The workspace owner / recipient identity; never invented from event text. */
   ownerName?: string | null;
   /**
@@ -87,11 +93,11 @@ export function deriveBriefDelta(input: BriefRetentionInput): string {
   }
 
   const previousBrief = input.previousBrief ?? null;
-  if (!previousBrief) {
+  const previousCount = previousBrief?.items?.length ?? input.previousBriefItemCount ?? null;
+  if (previousCount === null || !Number.isFinite(previousCount)) {
     return `${pluralChanges(itemCount)} filed — first brief on file, so this sets the baseline.`;
   }
 
-  const previousCount = previousBrief.items?.length ?? 0;
   const delta = itemCount - previousCount;
   if (delta > 0) {
     return `${pluralChanges(itemCount)} filed — ${pluralChanges(delta)} more than the previous brief (${previousCount} on file).`;
@@ -149,9 +155,13 @@ export function deriveBriefExpiry(input: BriefRetentionInput): string {
 
 function briefHasAllFields(input: BriefRetentionInput): boolean {
   const items = input.items ?? [];
+  const hasPrevious =
+    Boolean(input.previousBrief) ||
+    (typeof input.previousBriefItemCount === "number" &&
+      Number.isFinite(input.previousBriefItemCount));
   return (
     items.length > 0 &&
-    Boolean(input.previousBrief) &&
+    hasPrevious &&
     Boolean(input.ownerName && input.ownerName.trim()) &&
     deriveBriefConfidence(input) !== "unavailable" &&
     Boolean(input.nextScanAt && Number.isFinite(Date.parse(input.nextScanAt)))
