@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSignalSql,
   buildSnapshot,
+  fetchIssues,
   marketSignalFailureMessage,
   parseD1Response,
   summarizeIssues,
@@ -74,6 +75,18 @@ describe("market signal snapshot", () => {
       start: "2026-08-01T12:00:00.000Z",
       end: "2026-08-02T12:00:00.000Z",
     });
+  });
+
+  it("degrades to a truthful unavailable section when issue reads are denied", () => {
+    const snapshot = buildSnapshot({
+      d1: d1Payload,
+      issues: { unavailable: true },
+      generatedAt: new Date("2026-08-02T12:00:00Z"),
+    });
+    expect(snapshot.github).toEqual({ unavailable: true });
+    expect(snapshot.sourceHealth).toEqual({ cloudflareD1: "ok", githubIssues: "unavailable" });
+    expect(snapshot.product).toBeDefined();
+    expect(snapshot.generatedAt).toBe("2026-08-02T12:00:00.000Z");
   });
 
   it("binds every query window to the snapshot timestamp", () => {
