@@ -74,6 +74,11 @@ it — no redirect, nothing to change. That matches the audit on this tip.
 - PR #570: `state=OPEN`, `mergeable=MERGEABLE`, `reviewDecision=` (no
   blocking reviews), head `a38f48af`, 0 commits behind `origin/main`
   `b21cc135`, required checks queued on the latest head as of 2026-08-14.
+  On 2026-08-15 the PR is `mergeable=MERGEABLE` with
+  `mergeStateStatus=BLOCKED` solely because the required checks
+  (codex-node-checks, required-verifier-integrity, Gitleaks) are queued on
+  the latest main-merge head — no conflicts, no blocking review. It becomes
+  mergeable the moment those checks finish green.
 - The product diff on PR #570 is 14 files / +134 −19 and touches no
   migration, billing, or auth surface.
 
