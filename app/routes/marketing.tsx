@@ -27,9 +27,14 @@ import type { RootLoaderData } from "~/root";
 
 // Kept under ~155 characters so search results show the whole line instead of
 // truncating mid-sentence. The audit flagged the previous 166-character copy.
-// Same claims, nothing new promised.
+// Same claims, nothing new promised. The hero leads with what a scheduled
+// reliability check proves every day: public landing-page change monitoring
+// with screenshot evidence. Meta Ad Library coverage is named as a public
+// source below and in the FAQ, not promised as a scheduled first-class lane
+// until the Meta discovery reliability check publishes a green state on a
+// schedule.
 const marketingDescription =
-  "Five to Nine watches competitors' Meta ads and landing pages, then sends screenshot evidence and change alerts before your next meeting.";
+  "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then sends screenshot evidence and change alerts before your next meeting.";
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 
@@ -579,7 +584,7 @@ export default function MarketingRoute() {
 
             <p className="ld-deck-copy">
               Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
-              Meta ads and landing pages, saves the screenshots, and files the brief —{" "}
+              landing pages for price, offer, and CTA changes, saves the screenshots, and files the brief —{" "}
               <b>before your alarm goes off.</b>
             </p>
 
