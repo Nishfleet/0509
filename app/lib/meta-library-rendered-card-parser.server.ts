@@ -706,6 +706,7 @@ export function isAdLibraryChromeCta(
     return false;
   }
   const normalized = value
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
     .replace(/\u00a0/g, " ")
     .replace(/\s+/g, " ")
     .trim()
