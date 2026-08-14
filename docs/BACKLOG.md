@@ -317,4 +317,22 @@ setup helper already queued lands in settle order, not call order. Guarded by
 ## Parking lane
 
 Ideas land here first and need Nish's explicit promotion into P1/P2 before any
-agent may work on them. (Empty.)
+agent may work on them.
+
+- **Five-agency alert-to-action design-partner sprint** (PARKED —
+  needs Nish's explicit promotion; do not recruit, email, pay, freeze
+  the polish queue, or replace homepage proof).
+  - Source: Sol product critique 2026-08-09
+    (`agent-state/0509-improvement-loop/sol/critique-20260809.md`);
+    older matrix row CR-006 in `docs/customer-readiness-remediation.md`.
+  - What it is: recruit five paid-media/growth agencies; preload three
+    competitors each; deliver at least one source-backed ad/offer/landing
+    change per agency over seven days; record preview → signup →
+    watchlist → alert opened → action taken → repeat visit → paid start;
+    interview after the alert.
+  - Pass: at least two distinct non-test users return and act after a
+    real alert, OR one pays. Then replace the homepage's illustrative
+    Nykaa story with one permissioned, source-backed case study.
+  - Fail: write the repeated failure reason and reconsider the wedge
+    before more features.
+  - Filing this item does NOT pause other product work.
