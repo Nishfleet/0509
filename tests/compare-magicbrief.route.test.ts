@@ -134,6 +134,24 @@ describe("compare magicbrief route", () => {
     expect(markup).toContain("mailto:support@0509.io");
   });
 
+  it("renders a primary migration CTA to signup with the capture source", async () => {
+    const markup = await renderRouteMarkup();
+
+    expect(markup).toContain("Start migration");
+    expect(markup).toContain('href="/auth/signup?source=magicbrief-migration"');
+    expect(markup).toContain("Import your competitor list now.");
+    expect(markup).toContain("Sign up free — no card");
+  });
+
+  it("keeps the honest not-imported boundary next to the migration CTA", async () => {
+    const markup = await renderRouteMarkup();
+
+    expect(markup).toContain("Collections, boards, analytics history, and past");
+    expect(markup).toContain("evidence are not migrated; you recreate them with our help");
+    expect(markup).toContain("Start migration");
+    expect(markup).not.toContain("we migrate everything");
+  });
+
   it("does not overclaim manual migration and states the customer recreates non-imported data", async () => {
     const markup = await renderRouteMarkup();
 
