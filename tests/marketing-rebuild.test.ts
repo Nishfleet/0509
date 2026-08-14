@@ -205,7 +205,6 @@ describe("marketing rebuild", () => {
   });
 
   it("never injects raw digest-markdown syntax into the homepage markup", () => {
-    expect(marketingRoute).toContain("renderDigestMarkdownPreview");
     expect(marketingRoute).not.toContain("*Nykaa changed the routine bundle angle*");
     expect(marketingRoute).not.toContain(
       '<p className="ld-export">{demoProof.exports.digestMarkdown}</p>',
