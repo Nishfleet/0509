@@ -185,6 +185,13 @@ export interface DeliverWeeklyDigestInput {
   cadence?: DigestCadence;
   lane?: DeliveryLane;
   proofEmailSubject?: string;
+  // Brief-as-retention-loop (lane 1, 2026-08-14): the prior digest's
+  // item count when a previous brief exists on file. Drives the weekly
+  // email's "since last brief" delta line.
+  previousBriefItemCount?: number | null;
+  hasPreviousBrief?: boolean | null;
+  nextScanAt?: string | null;
+  nextScanLabel?: string | null;
 }
 
 export interface DeliverWatchlistAlertsInput {
@@ -983,6 +990,10 @@ async function deliverDigestToEmailTarget(
     timeZone,
     unsubscribeUrl,
     upgradeNote,
+    previousBriefItemCount: input.previousBriefItemCount ?? null,
+    hasPreviousBrief: input.hasPreviousBrief ?? null,
+    nextScanAt: input.nextScanAt ?? null,
+    nextScanLabel: input.nextScanLabel ?? null,
   });
   const subject = input.proofEmailSubject ?? email.subject;
   const payloadSnapshot = {
@@ -2325,6 +2336,10 @@ function renderDigestEmail(
     timeZone?: string | null;
     unsubscribeUrl: string | null;
     upgradeNote?: string | null;
+    previousBriefItemCount?: number | null;
+    hasPreviousBrief?: boolean | null;
+    nextScanAt?: string | null;
+    nextScanLabel?: string | null;
   },
 ): ReturnType<typeof buildDigestEmail> {
   const baseUrl = appBaseUrl(env);
@@ -2347,6 +2362,10 @@ function renderDigestEmail(
     unsubscribeUrl: input.unsubscribeUrl,
     upgradeNote: input.upgradeNote ?? null,
     upgradeUrl: input.upgradeNote ? `${baseUrl}/#pricing` : null,
+    previousBriefItemCount: input.previousBriefItemCount ?? null,
+    hasPreviousBrief: input.hasPreviousBrief ?? null,
+    nextScanAt: input.nextScanAt ?? null,
+    nextScanLabel: input.nextScanLabel ?? null,
   });
 }
 
