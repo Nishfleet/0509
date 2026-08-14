@@ -238,16 +238,20 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("highest queue priority");
   });
 
-  it("uses customer-facing check language for top-ups and included usage", () => {
-    expect(marketingRoute).toContain("Purchased checks never expire");
-    expect(marketingRoute).toContain("Included checks reset every month");
+  it("uses customer-facing proof-capture language for top-ups and included usage", () => {
+    expect(marketingRoute).toContain("Purchased proof captures roll over forever");
+    expect(marketingRoute).toContain("Generous monthly caps reset each cycle");
     expect(marketingRoute).toContain("Scheduled scans are included with your plan");
-    expect(marketingRoute).toContain("proof-backed capture");
-    expect(marketingRoute).toContain("500 extra checks");
+    expect(marketingRoute).toContain("proof-backed change");
+    expect(marketingRoute).toContain("500 extra proof captures");
     expect(marketingRoute).not.toContain("Record packs");
     expect(marketingRoute).not.toContain("record packs");
     expect(marketingRoute).not.toContain("saved change records");
     expect(marketingRoute).not.toContain("per saved record");
+    expect(marketingRoute).not.toContain("Purchased checks never expire");
+    expect(marketingRoute).not.toContain("What uses checks?");
+    expect(marketingRoute).not.toContain("Do unused checks roll over?");
+    expect(marketingRoute).not.toContain("2,500 checks/month");
   });
 
   it("has incinerated the stale lower-page system", () => {
