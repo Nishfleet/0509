@@ -739,6 +739,15 @@ async function runDigestForUser(
     ...deliverySnapshot,
     cadence,
     lane: "customer",
+    // Brief-as-retention-loop (lane 1, 2026-08-14): the four retention
+    // fields the weekly email surfaces — derived here from the prior
+    // digest on file and the next scheduled scan. Absent values render
+    // explicit unavailable copy in the email body.
+    ...(await loadRetentionInputsForDigest(env, {
+      userId: user.id,
+      plan,
+      periodEnd,
+    })),
   });
   return countAcceptedDigestDelivery(delivery);
 }
@@ -1054,4 +1063,53 @@ function digestCadenceForPeriod(
   const spanMs =
     new Date(periodEnd).getTime() - new Date(periodStart).getTime();
   return spanMs <= 36 * 60 * 60 * 1000 ? "daily" : "weekly";
+}
+
+/**
+ * Brief-as-retention-loop (lane 1, 2026-08-14): the four retention fields
+ * the weekly email carries above its accountability block are computed
+ * here so the email renderer never has to query D1 or invent content.
+ * The previous digest on file is looked up by `period_end` strictly older
+ * than the current run; the next scheduled scan anchors the expiry field.
+ * Failures (no DB, no workspace) render their explicit unavailable state
+ * in the email body — never a fabricated value.
+ */
+async function loadRetentionInputsForDigest(
+  env: AppEnv,
+  input: {
+    userId: string;
+    plan: string;
+    periodEnd: string;
+  },
+): Promise<{
+  previousBriefItemCount: number | null;
+  hasPreviousBrief: boolean | null;
+  nextScanAt: string | null;
+  nextScanLabel: string | null;
+}> {
+  const { formatNextScanLabel, nextScheduledScanAt } = await import(
+    "~/lib/schedule-display"
+  );
+  let previousBriefItemCount: number | null = null;
+  let hasPreviousBrief: boolean | null = false;
+  try {
+    const digests = await listDigests(env, input.userId);
+    const previous = digests.find(
+      (digest) => digest.periodEnd < input.periodEnd,
+    );
+    if (previous) {
+      hasPreviousBrief = true;
+      previousBriefItemCount = previous.items?.length ?? 0;
+    }
+  } catch {
+    // Swallow the lookup failure: the email body renders the explicit
+    // "first brief on file" baseline line instead of inventing a count.
+  }
+  const nextScan = nextScheduledScanAt(input.plan, new Date());
+  return {
+    previousBriefItemCount,
+    hasPreviousBrief,
+    nextScanAt: nextScan.toISOString(),
+    nextScanLabel: formatNextScanLabel(input.plan, new Date(), null),
+  };
 }
