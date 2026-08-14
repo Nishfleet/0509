@@ -558,7 +558,7 @@ export default function MarketingRoute() {
 
         <p className="ld-case">
           <span className="ld-rec">Sample proof-backed brief</span>
-          <span>A rival page changed while your team was offline</span>
+          <span>A rival page changed while your growth team was offline</span>
         </p>
 
         <div className="ld-hero-grid">
