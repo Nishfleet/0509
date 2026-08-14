@@ -24,12 +24,18 @@ describe("marketing pricing latency", () => {
       agencySaleOpen: false,
     };
     const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
+    // The SSR preview is timeboxed; on timeout the loader keeps the published
+    // anchors instead of hanging the homepage document.
+    const promiseWithTimeout = vi.fn((_op: Promise<unknown>) =>
+      Promise.reject(new Error("marketing pricing preview timed out")),
+    );
 
     vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
     }));
     vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+    vi.doMock("~/lib/fetch-timeout.server", () => ({ promiseWithTimeout }));
 
     const { loader } = await import("~/routes/marketing");
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -44,6 +50,7 @@ describe("marketing pricing latency", () => {
       const result = await Promise.race([
         loader({
           context: { cloudflare: { env: {} } },
+          request: new Request("https://0509.io/"),
         } as never),
         timeoutPromise,
       ]);
@@ -52,7 +59,8 @@ describe("marketing pricing latency", () => {
         pricingPreview: { available: false },
         commercialLaunch,
       });
-      expect(previewDodo0509PlanPrices).not.toHaveBeenCalled();
+      expect(previewDodo0509PlanPrices).toHaveBeenCalled();
+      expect(promiseWithTimeout).toHaveBeenCalled();
       expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
         DODO_0509_API_KEY: "provider-key",
       });
@@ -140,11 +148,13 @@ describe("marketing pricing monthly cadence note", () => {
 
     // Scout, Starter, and Agency each render one plan card.
     expect(planCardNotes(markup)).toEqual(["Billed monthly", "Billed monthly", "Billed monthly"]);
-    // Prices stay localized and no annual-only savings claim appears when
-    // annual checkout is not available.
-    expect(markup).toContain("Localized at checkout");
+    // Published USD anchor prices render from first paint, and the annual
+    // toggle is usable (annual = 8x monthly = 4 months free).
+    expect(markup).toContain("$11 USD");
+    expect(markup).toContain("$59 USD");
+    expect(markup).toContain("$199 USD");
+    expect(markup).toContain("4 months free");
     expect(markup).not.toContain("Billed annually");
-    expect(markup).not.toContain("4 months free");
   });
 
   it("keeps the annual price note only on plans with annual checkout available", async () => {

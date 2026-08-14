@@ -29,6 +29,7 @@ const staleSignals = [
   "Dodo preview",
   "Buyer currency is served from checkout preview.",
   "Prices are loaded from Dodo",
+  "Localized at checkout",
   "No unlimited claims",
   "Meta beta access",
   "Dodo price syncing",
@@ -48,7 +49,8 @@ const requiredSourceSignals = [
   "Stop finding out after the sales call.",
   "Recommended launch plan",
   "Start with Starter",
-  "Localized at checkout",
+  "PUBLISHED_PLAN_PRICES_USD",
+  "PUBLISHED_BUNDLE_PRICES_USD",
   "DODO_0509_ADAPTIVE_CURRENCY",
 ];
 const requiredBuildSignals = [

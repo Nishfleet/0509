@@ -12,7 +12,11 @@ import {
   dodoAnnualUnavailableCopy,
 } from "~/lib/dodo-pricing-display";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
-import { EVIDENCE_USAGE_CUSTOMER_COPY } from "~/lib/pricing";
+import {
+  EVIDENCE_USAGE_CUSTOMER_COPY,
+  PUBLISHED_BUNDLE_PRICES_USD,
+  PUBLISHED_PLAN_PRICES_USD,
+} from "~/lib/pricing";
 import {
   canonicalLinks,
   faqPageJsonLd,
@@ -42,18 +46,33 @@ export const meta: MetaFunction = () =>
     pathname: "/",
   });
 
-const noPricingPreview = { available: false } as const;
+const noPricingPreview: LocalPricingPreview = { available: false };
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
+  const { promiseWithTimeout } = await import("~/lib/fetch-timeout.server");
   const env = getEnv(context);
 
+  let pricingPreview = noPricingPreview;
+  try {
+    // Real published prices are rendered into the server HTML on first paint
+    // (the Dodo checkout preview resolves the buyer's country from the
+    // request). A slow or failing preview must never hold up the homepage
+    // document, so it is timeboxed and degrades to the published USD anchors.
+    const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
+    pricingPreview = await promiseWithTimeout(
+      previewDodo0509PlanPrices({ env, request }),
+      4000,
+      "marketing pricing preview timed out",
+    );
+  } catch {
+    // Keep the published anchor prices; the client retries via
+    // /api/pricing-preview when the pricing section nears the viewport.
+  }
+
   return {
-    // Keep the document request provider-independent. The client hydrates
-    // buyer-country pricing from /api/pricing-preview after the page is
-    // visible, so an unavailable provider never blocks the homepage HTML.
-    pricingPreview: noPricingPreview,
+    pricingPreview,
     commercialLaunch: publicCommercialLaunchSummary(env),
   };
 }
@@ -172,7 +191,7 @@ export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry
     {
       question: "Where do prices come from?",
       answer:
-        "Display prices load from Dodo Payments in your local currency at preview time. We never hardcode checkout amounts in the app.",
+        "Published plan prices are shown on this page. Checkout shows the exact amount in your local currency, loaded from Dodo Payments at preview time.",
     },
   ];
 }
@@ -211,9 +230,11 @@ function priceLabel(
   preview: LocalPricingPreview | null,
   planId: PricingPlanSlug,
   cycle: PricingBillingCycle,
-  fallback: string,
 ) {
-  return preview?.prices?.[planId]?.[cycle]?.display || fallback;
+  return (
+    preview?.prices?.[planId]?.[cycle]?.display ||
+    `$${PUBLISHED_PLAN_PRICES_USD[planId][cycle]} USD`
+  );
 }
 
 function hasPrice(
@@ -224,12 +245,11 @@ function hasPrice(
   return Boolean(preview?.prices?.[planId]?.[cycle]?.display);
 }
 
-function bundlePriceLabel(
-  preview: LocalPricingPreview | null,
-  bundleId: UsageBundleSlug,
-  fallback: string,
-) {
-  return preview?.usageBundles?.[bundleId]?.display || fallback;
+function bundlePriceLabel(preview: LocalPricingPreview | null, bundleId: UsageBundleSlug) {
+  return (
+    preview?.usageBundles?.[bundleId]?.display ||
+    `$${PUBLISHED_BUNDLE_PRICES_USD[bundleId]} USD`
+  );
 }
 
 function formatMinorCurrency(
@@ -266,8 +286,8 @@ export function valueMathLabel(
   annualIsValid: boolean,
 ) {
   const monthlyPrice = preview?.prices?.[planId]?.monthly;
+  const yearlyPrice = preview?.prices?.[planId]?.yearly;
   if (cycle === "yearly" && annualIsValid) {
-    const yearlyPrice = preview?.prices?.[planId]?.yearly;
     const monthlyAmount = monthlyPrice?.amount;
     const annualAmount = yearlyPrice?.amount;
     const monthlyCurrency = monthlyPrice?.currency;
@@ -287,8 +307,10 @@ export function valueMathLabel(
   }
 
   const perDay = formatMinorCurrency(
-    Number.isFinite(monthlyPrice?.amount) ? Number(monthlyPrice?.amount) / 30 : null,
-    monthlyPrice?.currency,
+    Number.isFinite(monthlyPrice?.amount)
+      ? Number(monthlyPrice?.amount) / 30
+      : PUBLISHED_PLAN_PRICES_USD[planId].monthly / 30,
+    monthlyPrice?.currency || "USD",
   );
   return perDay ? `About ${perDay}/day` : "Simple monthly start";
 }
@@ -378,16 +400,15 @@ export default function MarketingRoute() {
         ? commercialLaunch.starterSaleOpen
         : commercialLaunch.agencySaleOpen;
   const saleOpenPricingPlans = rootData.pricingPlans.filter((plan) => isPlanSaleOpen(plan.slug));
+  const previewResolved = localPricing?.available === true;
+  // Published prices stand whenever the live preview has not resolved yet
+  const annualAvailableFor = (plan: PricingPlanSlug) =>
+    isPlanSaleOpen(plan) &&
+    (dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan]) || !previewResolved);
   const annualCycleAvailable =
-    saleOpenPricingPlans.length > 0 &&
-    saleOpenPricingPlans.some((plan) =>
-      dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan.slug]),
-    );
+    saleOpenPricingPlans.length > 0 && saleOpenPricingPlans.some((plan) => annualAvailableFor(plan.slug));
   const annualSavingsValidated =
-    saleOpenPricingPlans.length > 0 &&
-    saleOpenPricingPlans.every((plan) =>
-      dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan.slug]),
-    );
+    saleOpenPricingPlans.length > 0 && saleOpenPricingPlans.every((plan) => annualAvailableFor(plan.slug));
 
   useEffect(() => {
     if (billingCycle === "yearly" && !annualCycleAvailable) {
@@ -490,7 +511,7 @@ export default function MarketingRoute() {
           if (active && preview?.available) setLocalPricing(preview);
         })
         .catch(() => {
-          // Keep honest checkout-localized fallbacks on fetch failure.
+          // Keep the published anchor prices on fetch failure.
           if (active) setLocalPricing(null);
         });
     };
@@ -900,8 +921,15 @@ export default function MarketingRoute() {
               localPricing?.annualValidation?.[plan.slug],
             );
             const planSaleOpen = isPlanSaleOpen(plan.slug);
+            // Without a resolved live preview the published anchors stand, so
+            // checkout intent stays open. The annual gate only tightens once
+            // the preview reports annual checkout is not sellable.
             const selectedAnnualBlocked =
-              billingCycle === "yearly" && planSaleOpen && yearlyReady && !annualIsValid;
+              billingCycle === "yearly" &&
+              planSaleOpen &&
+              previewResolved &&
+              yearlyReady &&
+              !annualIsValid;
             const valueLabel = valueMathLabel(
               localPricing,
               plan.slug,
@@ -927,12 +955,7 @@ export default function MarketingRoute() {
                   <em className="f9-plan-note">Account review</em>
                 ) : null}
                 <h3 className={selectedReady ? undefined : "is-loading-price"}>
-                  {priceLabel(
-                    localPricing,
-                    plan.slug,
-                    billingCycle,
-                    billingCycle === "yearly" ? plan.yearlyLabel : plan.monthlyLabel,
-                  )}
+                  {priceLabel(localPricing, plan.slug, billingCycle)}
                 </h3>
                 <small>
                   {billingCycle === "yearly"
@@ -949,7 +972,7 @@ export default function MarketingRoute() {
                       // plan. Otherwise the note stays on the monthly cadence
                       // and never claims the annual savings offer.
                       : annualIsValid && planSaleOpen && hasPrice(localPricing, plan.slug, "yearly")
-                        ? `${priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)} annual`
+                        ? `${priceLabel(localPricing, plan.slug, "yearly")} annual`
                         : "Billed monthly"}
                 </small>
                 <div className="f9-plan-value" aria-label={`${plan.name} value summary`}>
@@ -1033,7 +1056,7 @@ export default function MarketingRoute() {
               <article className="ld-bundle-card" key={bundle.slug}>
                 <span className="ld-kicker">{bundle.creditLabel}</span>
                 <h3>{bundle.name}</h3>
-                <strong>{bundlePriceLabel(localPricing, bundle.slug, bundle.priceLabel)}</strong>
+                <strong>{bundlePriceLabel(localPricing, bundle.slug)}</strong>
                 <span className="ld-bundle-value">
                   {bundleValueLabel(localPricing, bundle.slug, bundle.creditQuantity)}
                 </span>
@@ -1091,8 +1114,8 @@ export default function MarketingRoute() {
             <div>
               <dt>Where do prices come from?</dt>
               <dd>
-                Display prices load from Dodo Payments in your local currency at preview time. We
-                never hardcode checkout amounts in the app.
+                Published plan prices are shown on this page. Checkout shows the exact amount in
+                your local currency, loaded from Dodo Payments at preview time.
               </dd>
             </div>
           </dl>

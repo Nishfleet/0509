@@ -10,6 +10,32 @@ export type PricingPlanSlug = PricingPlan["slug"];
 export type UsageBundleSlug = UsageBundle["slug"];
 export type PricingBillingCycle = "monthly" | "yearly";
 
+/**
+ * Published plan prices, USD anchor. These are the real list prices the
+ * product sells at; the Dodo checkout preview may show a localized amount in
+ * the buyer's currency, which always overrides these on the marketing page.
+ * Annual is exactly 8x monthly (4 months free) — the same ratio Dodo's
+ * annual validation enforces per plan.
+ */
+export const PUBLISHED_PLAN_PRICES_USD: Record<
+  PricingPlanSlug,
+  { monthly: number; yearly: number }
+> = {
+  scout: { monthly: 11, yearly: 88 },
+  starter: { monthly: 59, yearly: 472 },
+  agency: { monthly: 199, yearly: 1592 },
+};
+
+/** Published check-pack prices, USD anchor (localized preview overrides). */
+export const PUBLISHED_BUNDLE_PRICES_USD: Record<
+  UsageBundleSlug,
+  number
+> = {
+  proof_500: 59,
+  proof_2000: 179,
+  proof_7500: 599,
+};
+
 function planMarketingFeatures(plan: PlanFamily): string[] {
   const entitlements = getPlanEntitlements(plan);
   const features: string[] = [];
@@ -64,11 +90,12 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
 
 const PLANS: PricingPlan[] = PLAN_FAMILIES.filter((plan) => plan !== "free").map((slug) => {
   const entitlements = getPlanEntitlements(slug);
+  const published = PUBLISHED_PLAN_PRICES_USD[slug];
   return {
     slug,
     name: slug.charAt(0).toUpperCase() + slug.slice(1),
-    monthlyLabel: "Localized at checkout",
-    yearlyLabel: "Billed annually — 4 months free",
+    monthlyLabel: `$${published.monthly} USD/mo`,
+    yearlyLabel: `$${published.yearly} USD/year`,
     detail:
       slug === "scout"
         ? "6-hour competitor monitoring for a small watchlist."
@@ -89,7 +116,7 @@ const USAGE_BUNDLES: UsageBundle[] = [
     slug: "proof_500",
     sku: "burst_500_v1",
     name: TOP_UP_PACK_DISPLAY.burst_500_v1.name,
-    priceLabel: "Localized at checkout",
+    priceLabel: `$${PUBLISHED_BUNDLE_PRICES_USD.proof_500} USD`,
     creditLabel: TOP_UP_PACK_DISPLAY.burst_500_v1.creditLabel,
     detail: TOP_UP_PACK_DISPLAY.burst_500_v1.detail,
     creditQuantity: 500,
@@ -98,7 +125,7 @@ const USAGE_BUNDLES: UsageBundle[] = [
     slug: "proof_2000",
     sku: "campaign_2000_v1",
     name: TOP_UP_PACK_DISPLAY.campaign_2000_v1.name,
-    priceLabel: "Localized at checkout",
+    priceLabel: `$${PUBLISHED_BUNDLE_PRICES_USD.proof_2000} USD`,
     creditLabel: TOP_UP_PACK_DISPLAY.campaign_2000_v1.creditLabel,
     detail: TOP_UP_PACK_DISPLAY.campaign_2000_v1.detail,
     creditQuantity: 2000,
@@ -107,7 +134,7 @@ const USAGE_BUNDLES: UsageBundle[] = [
     slug: "proof_7500",
     sku: "scale_7500_v1",
     name: TOP_UP_PACK_DISPLAY.scale_7500_v1.name,
-    priceLabel: "Localized at checkout",
+    priceLabel: `$${PUBLISHED_BUNDLE_PRICES_USD.proof_7500} USD`,
     creditLabel: TOP_UP_PACK_DISPLAY.scale_7500_v1.creditLabel,
     detail: TOP_UP_PACK_DISPLAY.scale_7500_v1.detail,
     creditQuantity: 7500,
@@ -117,8 +144,8 @@ const USAGE_BUNDLES: UsageBundle[] = [
 /**
  * Free weekly digest footer upgrade line. Facts are read from the Scout
  * entitlements so this can never drift from the catalog; pricing stays with
- * the /pricing page (Dodo localizes currency at checkout — never hardcode a
- * monetary amount here).
+ * the /pricing page (published USD anchors above, localized by Dodo at
+ * checkout preview time).
  */
 export function freeWeeklyDigestUpgradeNote(): string {
   const scout = getPlanEntitlements("scout");
