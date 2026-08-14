@@ -98,32 +98,41 @@ afterEach(() => {
 });
 
 describe("collection plan controls", () => {
-  it("locks collection creation before click for Free", async () => {
+  it("offers the one Free collection as a create panel — not a lock", async () => {
+    // Honest 1-coll: Free gets exactly one Collection, so the empty state
+    // shows the create form (no locked panel, no upgrade wall, no specimen
+    // theatre). The compare-plans link lives in the global nav, not the
+    // primary slot.
     const markup = await renderCollections("free", []);
 
-    // BL-033a: a quiet v4 explanation and one filled upgrade action, with no
-    // dashed specimen theatre or shadow card.
-    expect(markup).toContain("f9-library-locked");
-    expect(markup).toContain("Collections start on Scout");
+    expect(markup).toContain("f9-library-empty");
+    expect(markup).toContain("Start your first collection");
     expect(markup).toContain(
       "Saved evidence stays attached to its source, recorded date, and team notes.",
     );
     expect(markup).not.toContain("source, capture time, and team notes");
-    expect(markup).toContain("Upgrade to Scout");
-    expect(markup).toContain('href="/app/billing?source=collections#plans"');
-    expect(markup).not.toContain('name="intent" value="create-collection"');
-    expect(markup).not.toContain('placeholder="Nykaa competitors"');
-    expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
+    expect(markup).toContain('name="intent" value="create-collection"');
+    expect(markup).toContain('placeholder="Competitor set A"');
+    expect(markup).toContain("Create collection");
+    expect(markup).not.toContain("f9-library-locked");
+    expect(markup).not.toContain("Collections start on Scout");
+    expect(markup).not.toContain("Upgrade to Scout");
     expect(markup).not.toContain("f9-evidence-specimen");
   });
 
-  it("keeps downgraded Free evidence visible without claiming a zero-item limit", async () => {
+  it("honestly reports the single Free collection at its 1-of-1 limit", async () => {
+    // Free sits at one collection. Filling that slot must surface the
+    // "limit reached" note (with the real count, not the old "0" wall) and
+    // keep the locked-action upgrade button so the customer can still reach
+    // the plans page from the header.
     const markup = await renderCollections("free");
 
     expect(markup).toContain("Launch proof");
-    expect(markup).toContain("New collections start on Scout");
-    expect(markup).toContain("Your saved evidence remains available");
+    expect(markup).toContain("Collection limit reached");
+    expect(markup).toContain("using all 1 collection");
     expect(markup).not.toContain("using all 0 collections");
+    expect(markup).not.toContain("New collections start on Scout");
+    expect(markup).not.toContain("Your saved evidence remains available");
     expect(markup).not.toContain('name="intent" value="create-collection"');
     expect(markup).toContain("View upgrade options");
   });
