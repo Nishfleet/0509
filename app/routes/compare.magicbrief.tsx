@@ -47,6 +47,13 @@ const notImported = [
   },
 ] as const;
 
+// Landing from a MagicBrief wind-down search is the highest-intent moment for
+// this page. The CTA below is the self-serve migration path: sign up, then the
+// setup checklist's competitor import creates the watchlists. The honest
+// not-imported boundary (collections, boards, analytics, past evidence) stays
+// on this page — a CTA must never read as full migration.
+const MIGRATION_SIGNUP_PATH = "/auth/signup?source=magicbrief-migration";
+
 const differences = [
   {
     title: "We monitor changes, not just creatives",
@@ -139,6 +146,23 @@ export default function CompareMagicBriefRoute() {
               <p>{item.detail}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="ld-final">
+        <div className="ld-migration-cta">
+          <div>
+            <span className="ld-kicker">Start migrating</span>
+            <h2>Import your competitor list now.</h2>
+            <p>
+              Sign up free — no card — and the setup checklist&rsquo;s competitor import turns
+              your paste or CSV into watchlists. Collections, boards, analytics history, and past
+              evidence are not migrated; you recreate them with our help.
+            </p>
+          </div>
+          <a className="ld-cta-button" href={MIGRATION_SIGNUP_PATH}>
+            Start migration <span aria-hidden="true">→</span>
+          </a>
         </div>
       </section>
 
