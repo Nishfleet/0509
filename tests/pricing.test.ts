@@ -69,22 +69,22 @@ describe("pricingPlans", () => {
     expect(agency.features.join("\n")).not.toContain("nightly queue");
   });
 
-  it("offers paid check packs for temporary spikes", () => {
+  it("offers paid proof-capture packs for temporary spikes", () => {
     expect(usageBundles()).toEqual([
       expect.objectContaining({
         slug: "proof_500",
         priceLabel: "Localized at checkout",
-        creditLabel: "500 extra checks",
+        creditLabel: "500 extra proof captures",
       }),
       expect.objectContaining({
         slug: "proof_2000",
         priceLabel: "Localized at checkout",
-        creditLabel: "2,000 extra checks",
+        creditLabel: "2,000 extra proof captures",
       }),
       expect.objectContaining({
         slug: "proof_7500",
         priceLabel: "Localized at checkout",
-        creditLabel: "7,500 extra checks",
+        creditLabel: "7,500 extra proof captures",
       }),
     ]);
   });

@@ -178,7 +178,7 @@ describe("marketing rebuild", () => {
       "75 competitors — top 25 checked every 3 hours, the rest every 6 hours",
     );
     expect(marketingRoute).toContain("valueMathLabel");
-    expect(marketingRoute).toContain("Check packs");
+    expect(marketingRoute).toContain("Proof capture packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');
     expect(marketingRoute).toContain('className="f9-plan-badge">Recommended</em>');
     expect(marketingRoute).not.toContain("Proof-first monitoring");

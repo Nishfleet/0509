@@ -41,7 +41,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   }
 
   features.push(
-    `${entitlements.includedEvidenceChecksPerMonth.toLocaleString("en-US")} checks/month`,
+    `${entitlements.includedEvidenceChecksPerMonth.toLocaleString("en-US")} proof captures/month`,
   );
 
   if (plan === "scout") {
