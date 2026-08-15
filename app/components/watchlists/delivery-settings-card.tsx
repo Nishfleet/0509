@@ -15,6 +15,7 @@ export function DeliverySettingsCard(props: {
   canInstantAlert: boolean;
   canEmailDelivery: boolean;
   showSlackDelivery: boolean;
+  showTeamsDelivery: boolean;
 }) {
   const {
     data,
@@ -23,6 +24,7 @@ export function DeliverySettingsCard(props: {
     canInstantAlert,
     canEmailDelivery,
     showSlackDelivery,
+    showTeamsDelivery,
   } = props;
   return (
     <article className="f9-detail-cell">
@@ -115,6 +117,12 @@ export function DeliverySettingsCard(props: {
         <label className="f9-field f9-field-inline">
           <input defaultChecked={data.effectiveDeliveryConfig.slackEnabled} name="slackEnabled" type="checkbox" />
           <span>Slack enabled</span>
+        </label>
+        ) : null}
+        {showTeamsDelivery ? (
+        <label className="f9-field f9-field-inline">
+          <input defaultChecked={data.effectiveDeliveryConfig.teamsEnabled} name="teamsEnabled" type="checkbox" />
+          <span>Teams enabled</span>
         </label>
         ) : null}
         <SubmitButton className="f9-evidence-cta f9-evidence-cta--rank2" intent="save-delivery-config" pendingLabel="Saving…">

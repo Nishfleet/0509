@@ -34,6 +34,7 @@ export async function upsertWatchlistDeliveryConfig(
     emailEnabled: boolean;
     whatsappEnabled: boolean;
     slackEnabled?: boolean;
+    teamsEnabled?: boolean;
     quietHours?: DeliveryQuietHours | null;
     timezone?: string | null;
   },
@@ -53,12 +54,13 @@ export async function upsertWatchlistDeliveryConfig(
         email_enabled,
         whatsapp_enabled,
         slack_enabled,
+        teams_enabled,
         quiet_hours_json,
         timezone,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(watchlist_id)
       DO UPDATE SET user_id = excluded.user_id,
                     sensitivity_mode = excluded.sensitivity_mode,
@@ -67,6 +69,7 @@ export async function upsertWatchlistDeliveryConfig(
                     email_enabled = excluded.email_enabled,
                     whatsapp_enabled = excluded.whatsapp_enabled,
                     slack_enabled = excluded.slack_enabled,
+                    teams_enabled = excluded.teams_enabled,
                     quiet_hours_json = excluded.quiet_hours_json,
                     timezone = excluded.timezone,
                     updated_at = excluded.updated_at
@@ -80,6 +83,7 @@ export async function upsertWatchlistDeliveryConfig(
     boolToInt(input.emailEnabled),
     boolToInt(input.whatsappEnabled),
     boolToInt(input.slackEnabled ?? false),
+    boolToInt(input.teamsEnabled ?? false),
     jsonValue(input.quietHours ?? null),
     input.timezone ?? null,
     timestamp,

@@ -1617,29 +1617,29 @@ describe("runCustomerAgentAction", () => {
     );
   });
 
-  it("rejects Slack counter-move follow-up channels while Slack is not customer-facing", async () => {
-    setupMocks();
+  it("allows Slack counter-move follow-up channels on Starter+ (webhook delivery is live)", async () => {
+    const mocks = setupMocks();
+    mocks.listWatchEvents.mockResolvedValue([watchEvent]);
+    mocks.listAdsByIds.mockResolvedValue([externalAd]);
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
-    await expect(
-      runCustomerAgentAction(
-        { DB: {} } as never,
-        {
-          userId: "user-1",
-          apiKeyId: "api-key-1",
-          idempotencyKey: "brief-slack-follow-up-blocked",
-          source: "api_v1",
-        },
-        "counter_move_brief.create",
-        {
-          watchlistId: "watchlist-1",
-          followUpChannel: "slack",
-        },
-      ),
-    ).rejects.toMatchObject({
-      code: "slack_delivery_unavailable",
-      status: 403,
-    });
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "brief-slack-follow-up-allowed",
+        source: "api_v1",
+      },
+      "counter_move_brief.create",
+      {
+        watchlistId: "watchlist-1",
+        followUpChannel: "slack",
+      },
+    );
+
+    const result = outcome.result as { brief: { workflow: { channel: string } } };
+    expect(result.brief.workflow.channel).toBe("slack");
   });
 
   it("allows ordinary counter-move owner labels with security-adjacent words", async () => {
@@ -1673,29 +1673,28 @@ describe("runCustomerAgentAction", () => {
     expect(result.brief.workflow.ownerLabel).toBe("Webhook QA");
   });
 
-  it("rejects Slack delivery target list filters while Slack is not customer-facing", async () => {
+  it("allows Slack delivery target list filters now that webhook delivery is live", async () => {
     setupMocks();
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
-    await expect(
-      runCustomerAgentAction(
-        { DB: {} } as never,
-        {
-          userId: "user-1",
-          apiKeyId: "api-key-1",
-          idempotencyKey: "delivery-targets-list-slack",
-          source: "api_v1",
-        },
-        "delivery_targets.list",
-        {
-          watchlistId: "watchlist-1",
-          channel: "slack",
-        },
-      ),
-    ).rejects.toMatchObject({
-      code: "slack_delivery_unavailable",
-      status: 403,
-    });
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "delivery-targets-list-slack",
+        source: "api_v1",
+      },
+      "delivery_targets.list",
+      {
+        watchlistId: "watchlist-1",
+        channel: "slack",
+      },
+    );
+
+    const result = outcome.result as { targets: Array<{ channel: string }> };
+    expect(result.targets).toHaveLength(1);
+    expect(result.targets[0].channel).toBe("slack");
   });
 
   it("rejects WhatsApp delivery target list filters while WhatsApp is not customer-facing", async () => {
@@ -1723,27 +1722,26 @@ describe("runCustomerAgentAction", () => {
     });
   });
 
-  it("filters dormant delivery targets from unfiltered agent lists", async () => {
+  it("filters dormant WhatsApp targets from unfiltered agent lists", async () => {
     const mocks = setupMocks();
-    mocks.listDeliveryTargets.mockResolvedValue([
-      deliveryTarget,
-      {
-        ...deliveryTarget,
-        id: "whatsapp-target-1",
-        channel: "whatsapp",
-        targetValue: "+919999999999",
-        providerIdentifier: "whatsapp:+919999999999",
-        metadata: { displayName: "Founder phone" },
-      },
-      {
-        ...deliveryTarget,
-        id: "email-target-1",
-        channel: "email",
-        targetValue: "owner@example.com",
-        providerIdentifier: "email:owner@example.com",
-        metadata: { displayName: "Owner email" },
-      },
-    ]);
+    mocks.listDeliveryTargets.mockImplementation(async (_env, _userId, options?: { channel?: string }) => {
+      if (options?.channel === "email") {
+        return [
+          {
+            ...deliveryTarget,
+            id: "email-target-1",
+            channel: "email",
+            targetValue: "owner@example.com",
+            providerIdentifier: "email:owner@example.com",
+            metadata: { displayName: "Owner email" },
+          },
+        ];
+      }
+      if (options?.channel === "slack") {
+        return [deliveryTarget];
+      }
+      return [];
+    });
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
     const outcome = await runCustomerAgentAction(
@@ -1759,18 +1757,15 @@ describe("runCustomerAgentAction", () => {
     );
 
     const result = outcome.result as { targets: Array<{ channel: string; targetValue: string }> };
-    expect(result.targets).toHaveLength(1);
-    expect(result.targets[0]).toMatchObject({
-      channel: "email",
-      targetValue: "o***@example.com",
-    });
-    expect(JSON.stringify(result)).not.toContain("slack");
-    expect(JSON.stringify(result)).not.toContain("whatsapp");
+    // WhatsApp stays dormant and is never queried; Slack and Teams are live.
+    expect(result.targets.map((target) => target.channel).sort()).toEqual(["email", "slack"]);
+    expect(mocks.listDeliveryTargets).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.objectContaining({ channel: "whatsapp" }),
+    );
+    // The encrypted webhook URL never leaves the workspace.
     expect(JSON.stringify(result)).not.toContain("hooks.slack.com");
-    expect(mocks.listDeliveryTargets).toHaveBeenCalledWith(expect.anything(), "user-1", {
-      channel: "email",
-      limit: 50,
-    });
   });
 
   it("redacts destination-like delivery display names and clamps list limits", async () => {
@@ -1843,27 +1838,6 @@ describe("runCustomerAgentAction", () => {
         {
           userId: "user-1",
           apiKeyId: "api-key-1",
-          idempotencyKey: "delivery-settings-slack-blocked",
-          source: "api_v1",
-        },
-        "delivery_settings.update",
-        {
-          watchlistId: "watchlist-1",
-          explicitApproval: true,
-          slackEnabled: true,
-        },
-      ),
-    ).rejects.toMatchObject({
-      code: "slack_delivery_unavailable",
-      status: 403,
-    });
-
-    await expect(
-      runCustomerAgentAction(
-        { DB: {} } as never,
-        {
-          userId: "user-1",
-          apiKeyId: "api-key-1",
           idempotencyKey: "delivery-settings-whatsapp-blocked",
           source: "api_v1",
         },
@@ -1913,7 +1887,9 @@ describe("runCustomerAgentAction", () => {
       sensitivityMode: "aggressive",
     });
     expect(result.config).not.toHaveProperty("whatsappEnabled");
-    expect(result.config).not.toHaveProperty("slackEnabled");
+    // Slack and Teams webhook delivery are live surfaces for Starter+.
+    expect(result.config).toHaveProperty("slackEnabled");
+    expect(result.config).toHaveProperty("teamsEnabled");
     expect(result.reversal).toMatchObject({
       action: "delivery_settings.update",
       requiresExplicitApproval: true,
@@ -1930,7 +1906,7 @@ describe("runCustomerAgentAction", () => {
       },
     });
     expect(result.reversal.input).not.toHaveProperty("whatsappEnabled");
-    expect(result.reversal.input).not.toHaveProperty("slackEnabled");
+    expect(result.reversal.input).toHaveProperty("slackEnabled");
     expect(mocks.upsertWatchlistDeliveryConfig).toHaveBeenCalledWith(expect.anything(), {
       watchlistId: "watchlist-1",
       userId: "user-1",
@@ -1940,6 +1916,7 @@ describe("runCustomerAgentAction", () => {
       emailEnabled: true,
       whatsappEnabled: false,
       slackEnabled: false,
+      teamsEnabled: false,
       quietHours: { startHour: 21, endHour: 8 },
       timezone: "Asia/Kolkata",
     });
@@ -1972,7 +1949,7 @@ describe("runCustomerAgentAction", () => {
     expect(mocks.upsertWatchlistDeliveryConfig).not.toHaveBeenCalled();
   });
 
-  it("preserves hidden Slack and WhatsApp settings when updating visible delivery fields", async () => {
+  it("preserves hidden WhatsApp settings while applying live Slack/Teams fields", async () => {
     const mocks = setupMocks();
     mocks.getWorkspaceDeliveryConfig.mockResolvedValueOnce({
       id: "workspace-delivery-1",
@@ -1983,6 +1960,7 @@ describe("runCustomerAgentAction", () => {
       emailEnabled: true,
       whatsappEnabled: true,
       slackEnabled: true,
+      teamsEnabled: true,
       quietHours: null,
       timezone: null,
       createdAt: "2026-06-19T00:00:00.000Z",
@@ -2011,6 +1989,7 @@ describe("runCustomerAgentAction", () => {
         emailEnabled: false,
         whatsappEnabled: false,
         slackEnabled: false,
+        teamsEnabled: false,
       },
     );
 
@@ -2021,8 +2000,12 @@ describe("runCustomerAgentAction", () => {
       instantEnabled: false,
       digestEnabled: true,
       emailEnabled: false,
+      // WhatsApp stays dormant: its stored value is preserved even when the
+      // agent asks to disable it.
       whatsappEnabled: true,
-      slackEnabled: true,
+      // Slack and Teams are live: the agent's values apply.
+      slackEnabled: false,
+      teamsEnabled: false,
       quietHours: null,
       timezone: null,
     });
@@ -2032,39 +2015,42 @@ describe("runCustomerAgentAction", () => {
       },
     });
     expect(JSON.stringify(outcome.result)).not.toContain('"whatsappEnabled"');
-    expect(JSON.stringify(outcome.result)).not.toContain('"slackEnabled"');
+    expect(JSON.stringify(outcome.result)).toContain('"slackEnabled"');
     const result = outcome.result as { reversal: { input: Record<string, unknown> } };
     expect(result.reversal.input).toMatchObject({ emailEnabled: true });
     expect(result.reversal.input).not.toHaveProperty("whatsappEnabled");
-    expect(result.reversal.input).not.toHaveProperty("slackEnabled");
+    expect(result.reversal.input).toHaveProperty("slackEnabled");
   });
 
-  it("blocks Slack delivery target mutation while Slack is not customer-facing", async () => {
+  it("pauses a Slack delivery target now that webhook delivery is live", async () => {
     const mocks = setupMocks();
     mocks.getDeliveryTargetById.mockResolvedValue(deliveryTarget);
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
-    await expect(
-      runCustomerAgentAction(
-        { DB: {} } as never,
-        {
-          userId: "user-1",
-          apiKeyId: "api-key-1",
-          idempotencyKey: "pause-slack-target-1",
-          source: "api_v1",
-        },
-        "delivery_target.update",
-        {
-          targetId: "target-1",
-          isPaused: true,
-          explicitApproval: true,
-        },
-      ),
-    ).rejects.toMatchObject({
-      code: "slack_delivery_unavailable",
-      status: 403,
-    });
-    expect(mocks.upsertDeliveryTarget).not.toHaveBeenCalled();
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "pause-slack-target-1",
+        source: "api_v1",
+      },
+      "delivery_target.update",
+      {
+        targetId: "target-1",
+        isPaused: true,
+        explicitApproval: true,
+      },
+    );
+
+    expect(outcome.audit.status).toBe("succeeded");
+    expect(mocks.upsertDeliveryTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        channel: "slack",
+        isPaused: true,
+      }),
+    );
   });
 
   it("blocks WhatsApp delivery target mutation while WhatsApp is not customer-facing", async () => {

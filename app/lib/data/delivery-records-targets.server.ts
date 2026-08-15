@@ -18,7 +18,8 @@ import {
 } from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
-  isSlackDeliveryCustomerFacing,
+  isSlackWebhookDeliveryCustomerFacing,
+  isTeamsWebhookDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
 import type {
@@ -192,10 +193,22 @@ export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: strin
       )
     `,
   ];
-  if (isSlackDeliveryCustomerFacing()) {
+  if (isSlackWebhookDeliveryCustomerFacing()) {
     channelPredicates.push(`
       (
         channel = 'slack'
+        AND is_opted_in = 1
+        AND is_paused = 0
+        AND opted_out_at IS NULL
+        AND is_validated = 1
+        AND validation_status = 'validated'
+      )
+    `);
+  }
+  if (isTeamsWebhookDeliveryCustomerFacing()) {
+    channelPredicates.push(`
+      (
+        channel = 'teams'
         AND is_opted_in = 1
         AND is_paused = 0
         AND opted_out_at IS NULL
