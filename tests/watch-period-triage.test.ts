@@ -108,10 +108,10 @@ describe("classifyWatchPeriodTriage", () => {
     });
 
     expect(triage.status).toBe("evidence_failed");
-    expect(triage.label).toBe("Evidence check failed");
+    expect(triage.label).toBe("Proof capture failed");
     expect(triage.sourceStatus).toBe("evidence_failed");
     expect(triage.explanation).toBe(
-      "An evidence check couldn't finish, so nothing is confirmed yet.",
+      "A proof capture couldn't finish, so nothing is confirmed yet.",
     );
     expect(triage.explanation).not.toContain("provider timed out");
     expect(triage.explanation).not.toContain("possible change");
@@ -201,7 +201,7 @@ describe("classifyWatchPeriodTriage", () => {
     expect(triage.status).toBe("evidence_failed");
     expect(triage.sourceStatus).toBe("evidence_failed");
     expect(triage.explanation).toBe(
-      "An evidence check couldn't finish, so nothing is confirmed yet.",
+      "A proof capture couldn't finish, so nothing is confirmed yet.",
     );
     expect(triage.explanation).not.toContain("possible change");
   });

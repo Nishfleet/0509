@@ -103,7 +103,7 @@ describe("formatWhyAlertedLabel", () => {
         status: "proof_pending",
         metadata: {},
       }),
-    ).toBe("Possible change detected. The evidence check is still running.");
+    ).toBe("Possible change detected. The proof capture is still running.");
   });
 });
 

@@ -155,7 +155,7 @@ const WATCH_EVENT_STATUS_LABELS: Record<string, string> = {
   detected: "Detected",
   proof_pending: "Evidence pending",
   confirmed: "Confirmed",
-  proof_failed: "Evidence check failed",
+  proof_failed: "Proof capture failed",
   suppressed: "Suppressed",
   invalidated: "Invalidated",
 };
@@ -165,9 +165,9 @@ export function formatWatchEventStatusLabel(status: string) {
 }
 
 const PROOF_CAPTURE_STATUS_LABELS: Record<string, string> = {
-  pending: "Evidence check pending",
+  pending: "Proof capture pending",
   succeeded: "Evidence captured",
-  failed: "Evidence check failed",
+  failed: "Proof capture failed",
   skipped_due_to_budget: "Skipped — evidence budget reached",
   skipped_due_to_rate_limit: "Skipped — provider rate limited",
   skipped_due_to_dedupe: "Skipped — duplicate change",
@@ -183,7 +183,7 @@ export function formatWhyAlertedLabel(input: {
   metadata: Record<string, unknown> | null | undefined;
 }) {
   if (input.status === "detected" || input.status === "proof_pending") {
-    return "Possible change detected. The evidence check is still running.";
+    return "Possible change detected. The proof capture is still running.";
   }
 
   const from = typeof input.metadata?.from === "string" ? input.metadata.from : null;

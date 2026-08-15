@@ -114,9 +114,9 @@ export function classifyWatchPeriodTriage(
     return {
       ...base,
       status: "evidence_failed",
-      label: "Evidence check failed",
+      label: "Proof capture failed",
       explanation:
-        "An evidence check couldn't finish, so nothing is confirmed yet.",
+        "A proof capture couldn't finish, so nothing is confirmed yet.",
       sourceStatus: "evidence_failed",
       changesCaptured: 0,
       suppressedChanges,
@@ -138,12 +138,12 @@ export function classifyWatchPeriodTriage(
       status: "evidence_pending",
       label: "Evidence pending",
       explanation:
-        "A possible change was detected, but its evidence check hasn't completed, so nothing is confirmed yet.",
+        "A possible change was detected, but its proof capture hasn't completed, so nothing is confirmed yet.",
       sourceStatus: "evidence_pending",
       changesCaptured: 0,
       suppressedChanges,
       suppressionReasons: [],
-      nextAction: "We're retrying the evidence check. Open watchlists for status.",
+      nextAction: "We're retrying the proof capture. Open watchlists for status.",
       noActionLine: "No change is confirmed until its evidence lands.",
     };
   }

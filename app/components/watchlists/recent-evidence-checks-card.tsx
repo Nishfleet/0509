@@ -39,7 +39,7 @@ export function RecentEvidenceChecksCard({
           renderedAt={data.renderedAt}
         />
       ) : null,
-      missingLabel: "no successful evidence check yet",
+      missingLabel: "no successful proof capture yet",
     },
   ];
 
@@ -59,14 +59,14 @@ export function RecentEvidenceChecksCard({
 
   return (
     <section aria-label="Evidence freshness" className="f9-evidence-panel">
-      <p className="f9-evidence-micro">Recent evidence checks</p>
+      <p className="f9-evidence-micro">Recent proof captures</p>
       <h3 className="f9-evidence-panel-title">Evidence freshness</h3>
       <FactRail rows={rows} title="Summary" />
       {recentRows.length > 0 ? (
         <FactRail rows={recentRows} title="Latest captures" />
       ) : (
         <p className="f9-wk-dim">
-          Evidence checks will appear here after the next proof-backed check.
+          Proof captures will appear here after the next source-backed check.
         </p>
       )}
     </section>

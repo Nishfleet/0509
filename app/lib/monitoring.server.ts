@@ -3483,8 +3483,8 @@ async function evaluateSelectiveProofCandidates(
         skipReason: "skipped_due_to_budget",
         failureReason:
           evidenceReservation.result.reason === "top_up_inactive_plan"
-            ? "Purchased checks require an active paid plan."
-            : "Evidence check allowance exhausted.",
+            ? "Purchased proof captures require an active paid plan."
+            : "Proof capture allowance exhausted.",
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         idempotencyKey: `${proofRequestKey}:skip:budget`,
       });
@@ -3549,7 +3549,7 @@ async function evaluateSelectiveProofCandidates(
           status: "failed",
           failureCode:
             failureDetail?.reasonCode ?? "proof_capture_failed",
-          failureReason: "Landing-page evidence check failed.",
+          failureReason: "Landing-page proof capture failed.",
           captureMetadata: failureDetail
             ? {
                 ...failureDetail.metadata,
@@ -3941,8 +3941,8 @@ async function evaluateDirectWebsiteProofCandidate(
       skipReason: "skipped_due_to_budget",
       failureReason:
         evidenceReservation.result.reason === "top_up_inactive_plan"
-          ? "Purchased checks require an active paid plan."
-          : "Evidence check allowance exhausted.",
+          ? "Purchased proof captures require an active paid plan."
+          : "Proof capture allowance exhausted.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:budget`,
     });
@@ -3957,7 +3957,7 @@ async function evaluateDirectWebsiteProofCandidate(
       proofTargetId: proofTarget.id,
       status: "skipped_due_to_budget",
       skipReason: "skipped_due_to_budget",
-      failureReason: "Evidence check allowance exhausted.",
+      failureReason: "Proof capture allowance exhausted.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:budget`,
     });
@@ -4019,7 +4019,7 @@ async function evaluateDirectWebsiteProofCandidate(
         failureCode:
           failureDetail?.reasonCode ??
           "direct_website_proof_capture_failed",
-        failureReason: "Competitor website evidence check failed.",
+          failureReason: "Competitor website proof capture failed.",
         captureMetadata: {
           ...(failureDetail?.metadata ?? {}),
           source: "direct_competitor_website",

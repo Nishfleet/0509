@@ -633,7 +633,7 @@ describe("dashboard first 15 minutes activation", () => {
     // The stat band is gone (four numbers shouting at once). The same facts
     // are rows in "Still running" and the operational line at the foot.
     expect(markup).toContain("Competitors");
-    expect(markup).toContain("Evidence checks");
+    expect(markup).toContain("Evidence captures");
     expect(markup).toContain("Still running");
     expect(markup).not.toContain('id="setup-checklist"');
     expect(markup).not.toContain("First 15 minutes");

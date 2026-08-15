@@ -178,14 +178,14 @@ describe("marketing rebuild", () => {
       "75 competitors — top 25 checked every 3 hours, the rest every 6 hours",
     );
     expect(marketingRoute).toContain("valueMathLabel");
-    expect(marketingRoute).toContain("Check packs");
+    expect(marketingRoute).toContain("Proof capture packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');
     expect(marketingRoute).toContain('className="f9-plan-badge">Recommended</em>');
     expect(marketingRoute).not.toContain("Proof-first monitoring");
     expect(marketingRoute).not.toContain("Start with Scout");
     expect(marketingRoute).not.toContain("Dodo price syncing");
     expect(marketingRoute).not.toContain("Extra check capacity");
-    expect(marketingRoute).not.toContain("No unlimited claims");
+    expect(marketingRoute).not.toContain("unlimited");
     expect(marketingRoute).not.toContain("3 offer changes ready");
     expect(marketingRoute).not.toContain("Nykaa changed onboarding bundle");
     expect(marketingRoute).not.toContain("boAt removed COD offer");
@@ -238,16 +238,17 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("highest queue priority");
   });
 
-  it("uses customer-facing check language for top-ups and included usage", () => {
-    expect(marketingRoute).toContain("Purchased checks never expire");
-    expect(marketingRoute).toContain("Included checks reset every month");
+  it("uses customer-facing proof capture language for top-ups and included usage", () => {
+    expect(marketingRoute).toContain("Purchased proof captures never expire");
+    expect(marketingRoute).toContain("Included proof captures reset every month");
     expect(marketingRoute).toContain("Scheduled scans are included with your plan");
-    expect(marketingRoute).toContain("proof-backed capture");
-    expect(marketingRoute).toContain("500 extra checks");
+    expect(marketingRoute).toContain("proof capture");
+    expect(marketingRoute).toContain("500 extra proof captures");
     expect(marketingRoute).not.toContain("Record packs");
     expect(marketingRoute).not.toContain("record packs");
     expect(marketingRoute).not.toContain("saved change records");
     expect(marketingRoute).not.toContain("per saved record");
+    expect(marketingRoute).not.toContain("unlimited");
   });
 
   it("has incinerated the stale lower-page system", () => {

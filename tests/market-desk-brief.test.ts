@@ -232,7 +232,7 @@ describe("buildMarketDeskBrief", () => {
       detail: "Email trail active",
     });
     expect(brief.metrics).toContainEqual({
-      label: "Evidence checks",
+      label: "Proof captures",
       value: 4,
       detail: "16 left this month",
     });
