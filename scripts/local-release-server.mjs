@@ -122,7 +122,7 @@ export function buildLocalReleaseServerRetryScript(
  * @returns {number}
  */
 export function resolveLocalReleaseRunTimeout(value) {
-  if (value === undefined || value === null || value === "") return 10 * 60 * 1000;
+  if (value === undefined || value === null || value === "") return 15 * 60 * 1000;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 60_000 || parsed > 20 * 60 * 1000) {
     throw new Error("invalid_local_release_timeout");
