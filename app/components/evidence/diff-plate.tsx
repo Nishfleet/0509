@@ -30,6 +30,12 @@ export interface DiffCapture {
   quote?: string | null;
   /** Mono capture note (source, capture id). */
   note?: string | null;
+  /**
+   * Stored capture screenshot (app-relative artifact URL). Renders only when
+   * present — the caller decides whether a single side may render, so the
+   * side-by-side pair stays the caller's honest claim.
+   */
+  imageUrl?: string | null;
 }
 
 export interface DiffPlateExtraChange {
@@ -77,6 +83,18 @@ function Pane({
       <span className="f9-evidence-diff-value">
         {variant === "before" ? <s>{capture.value}</s> : <mark>{capture.value}</mark>}
       </span>
+      {capture.imageUrl ? (
+        <img
+          alt={
+            variant === "before"
+              ? "The page before the change, as captured"
+              : "The page after the change, as captured"
+          }
+          className="f9-evidence-diff-shot"
+          loading="lazy"
+          src={capture.imageUrl}
+        />
+      ) : null}
       {capture.quote ? <p className="f9-evidence-diff-quote">“{capture.quote}”</p> : null}
       {capture.note ? <p className="f9-evidence-diff-note">{capture.note}</p> : null}
       {children}
