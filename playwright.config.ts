@@ -82,6 +82,14 @@ export default defineConfig({
     {
       name: "local-release",
       testMatch: journeyReleaseMatch,
+      // Canonical release proof per-test budget. The shared vps-verify
+      // runner is saturated by other fleet/CI services (run 31798456838:
+      // Journey 1 mobile 34.0s, tablet 1.5m under a 30s budget), and the
+      // Aug 8 cross-browser escalation measured journeys needing 31-33s
+      // even when the host was healthier. 60s gives slow-but-correct
+      // journeys room to complete while the harness wall still bounds
+      // hangs. retries stay 0: proof must be first-attempt.
+      timeout: 60_000,
       retries: 0,
       workers: 1,
       use: {
