@@ -22,6 +22,7 @@ async function mockRouter(useLoaderData: MockUseLoaderData) {
       Link: ({ children, to, ...props }: { children?: ReactNode; to?: string } & Record<string, unknown>) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       useLoaderData: vi.fn(useLoaderData),
+      useRouteLoaderData: () => undefined,
     };
   });
 }
