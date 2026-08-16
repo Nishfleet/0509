@@ -1,13 +1,15 @@
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
+import { appLinkTarget } from "~/lib/app-link";
 import {
   canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
+import type { RootLoaderData } from "~/root";
 
 const description =
   "Five to Nine product docs for setup, delivery, billing, integrations, and safety.";
@@ -22,6 +24,8 @@ export const meta: MetaFunction = () =>
   });
 
 export default function DocsRoute() {
+  const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
+
   return (
     <PublicDocShell
       kicker="Docs"
@@ -104,7 +108,7 @@ export default function DocsRoute() {
           Five to Nine speaks MCP (Model Context Protocol), so compatible assistants and agents can
           read your saved competitive evidence and run approved workspace actions. Connect a client
           to the endpoint with a customer API key from{" "}
-          <Link to="/app/developer-access">Developer access</Link> as the bearer token:
+          <Link to={appLinkTarget("/app/developer-access", rootData?.session)}>Developer access</Link> as the bearer token:
         </p>
         <pre className="f9-code-block">
           <code>{`https://0509.io/api/mcp
