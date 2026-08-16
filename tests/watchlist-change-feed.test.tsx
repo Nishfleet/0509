@@ -416,6 +416,80 @@ describe("EventChangesSection", () => {
     expect(markup).toContain(EVENT_CHANGE_SUPPRESSED_COPY);
     expect(markup).not.toContain(DIFF_PLATE_DEGRADE_COPY);
   });
+
+  it("renders the before/after screenshot pair when both captures have screenshots on file", () => {
+    const beforeKey = "landing-pages/2026-04-17/9f8e7d6c-5b4a-3c2d-1e0f-a1b2c3d4e5f6.jpeg";
+    const nowKey = "landing-pages/2026-04-18/1a2b3c4d-5e6f-7a8b-9c0d-e1f2a3b4c5d6.jpeg";
+    const shotCaptures: ProofCaptureRecord[] = [
+      { ...captures[0], screenshotArtifactKey: nowKey },
+      { ...captures[1], screenshotArtifactKey: beforeKey },
+    ];
+
+    const markup = renderChangeFeed({
+      checksExpanded: false,
+      data: {
+        events: [offerEvent],
+        runs: [],
+        selectedWatchlist: {
+          id: "watch-1",
+          name: "Nykaa watch",
+          lastScannedAt: "2026-04-18T09:00:00.000Z",
+        },
+        plan: "starter",
+        effectiveDeliveryConfig: { timezone: "UTC" },
+        highlightedEventId: null,
+      },
+      lastAttemptByEventId: new Map(),
+      proofCapturesById: new Map(shotCaptures.map((capture) => [capture.id, capture])),
+      recentProofCaptures: shotCaptures,
+      renderedAt: new Date("2026-04-18T10:59:50.000Z"),
+      sourceCanSchedule: true,
+      watchlistId: "watch-1",
+    });
+
+    expect(markup).toContain(`src="/artifacts/proof/${encodeURIComponent(beforeKey)}"`);
+    expect(markup).toContain(`src="/artifacts/proof/${encodeURIComponent(nowKey)}"`);
+    expect(markup).toContain("The page before the change, as captured");
+    expect(markup).toContain("The page after the change, as captured");
+    expect(markup.match(/f9-evidence-diff-shot/g)).toHaveLength(2);
+  });
+
+  it("keeps the plate text-only when only one side has a screenshot", () => {
+    const shotCaptures: ProofCaptureRecord[] = [
+      {
+        ...captures[0],
+        screenshotArtifactKey: "landing-pages/2026-04-18/1a2b3c4d-5e6f-7a8b-9c0d-e1f2a3b4c5d6.jpeg",
+      },
+      { ...captures[1], screenshotArtifactKey: null },
+    ];
+
+    const markup = renderChangeFeed({
+      checksExpanded: false,
+      data: {
+        events: [offerEvent],
+        runs: [],
+        selectedWatchlist: {
+          id: "watch-1",
+          name: "Nykaa watch",
+          lastScannedAt: "2026-04-18T09:00:00.000Z",
+        },
+        plan: "starter",
+        effectiveDeliveryConfig: { timezone: "UTC" },
+        highlightedEventId: null,
+      },
+      lastAttemptByEventId: new Map(),
+      proofCapturesById: new Map(shotCaptures.map((capture) => [capture.id, capture])),
+      recentProofCaptures: shotCaptures,
+      renderedAt: new Date("2026-04-18T10:59:50.000Z"),
+      sourceCanSchedule: true,
+      watchlistId: "watch-1",
+    });
+
+    // The plate still renders its text diff, but never half a side-by-side.
+    expect(markup).toContain("f9-evidence-diff-plate");
+    expect(markup).not.toContain("<img");
+    expect(markup).not.toContain("f9-evidence-diff-shot");
+  });
 });
 
 describe("the shared two-timestamp gate (T11)", () => {
