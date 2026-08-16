@@ -14,6 +14,7 @@ beforeEach(() => {
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
         React.createElement("form", props, children),
+      useRouteLoaderData: () => undefined,
     };
   });
 });
