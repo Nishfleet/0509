@@ -9,6 +9,7 @@ import {
 } from "~/components/evidence/diff-plate";
 import { QuietLine, QuietLineList, type QuietLineItem } from "~/components/evidence/quiet-line";
 import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
+import { proofScreenshotSrc } from "~/lib/proof-screenshot";
 import type { PublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import {
   formatConfidenceBandLabel,
@@ -307,18 +308,28 @@ export function resolveEventDiffCaptures(input: {
     baselineRun?.startedAt ??
     null;
 
+  // Visual diff: the stored screenshot pair renders ONLY when both sides of
+  // the change have a screenshot on file. One missing screenshot is not half
+  // a side-by-side — the plate keeps its text before/now, which is the same
+  // honest shape as every plate before this feature.
+  const beforeScreenshotKey = input.priorProofCapture?.screenshotArtifactKey ?? null;
+  const nowScreenshotKey = input.proofCapture?.screenshotArtifactKey ?? null;
+  const hasScreenshotPair = Boolean(beforeScreenshotKey && nowScreenshotKey);
+
   return {
     before: {
       capturedAt: beforeAt,
       value: from,
       quote: from,
       note: input.priorProofCapture ? `capture ${input.priorProofCapture.id.slice(0, 8)}` : null,
+      imageUrl: hasScreenshotPair ? proofScreenshotSrc(beforeScreenshotKey) : null,
     },
     now: {
       capturedAt: nowAt,
       value: to,
       quote: to,
       note: input.proofCapture ? `capture ${input.proofCapture.id.slice(0, 8)}` : null,
+      imageUrl: hasScreenshotPair ? proofScreenshotSrc(nowScreenshotKey) : null,
     },
   };
 }
