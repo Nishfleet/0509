@@ -1,6 +1,8 @@
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { appLinkTarget } from "~/lib/app-link";
+import type { RootLoaderData } from "~/root";
 
 /**
  * Single source of truth for the public wordmark tagline. Every public
@@ -22,8 +24,13 @@ export const MARKETING_TAGLINE = "Competitor change monitoring";
  * from any public page without scrolling or detouring through Sign in. On the
  * compact ≤860px row, Open app is hidden (app.css) so Sign in + Sign up stay
  * one ≥44px touch-target row and the homepage live-search stays above the fold.
+ * Open app is auth-aware: signed-in visitors get /app directly, anonymous
+ * visitors (and crawlers) get /auth/login?redirectTo=%2Fapp — the same final
+ * URL the app guard would redirect to, without the redirect hop.
  */
 export function MarketingNav() {
+  const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
+
   return (
     <header className="ld-nav f9-legal-nav">
       <Link className="ld-brand f9-brandmark" to="/" aria-label="Five to Nine home">
@@ -43,7 +50,10 @@ export function MarketingNav() {
         <Link className="f9-link-arrow" to="/auth/login">
           Sign in
         </Link>
-        <Link className="f9-link-arrow ld-nav-open-app" to="/app">
+        <Link
+          className="f9-link-arrow ld-nav-open-app"
+          to={appLinkTarget("/app", rootData?.session)}
+        >
           Open app
         </Link>
         <Link className="ld-nav-pill" to="/auth/signup">
