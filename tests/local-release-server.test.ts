@@ -211,7 +211,7 @@ describe("local release proof server identity", () => {
   });
 
   it("bounds the browser process instead of hiding hangs behind unbounded waits", () => {
-    expect(resolveLocalReleaseRunTimeout(undefined)).toBe(600_000);
+    expect(resolveLocalReleaseRunTimeout(undefined)).toBe(900_000);
     expect(resolveLocalReleaseRunTimeout("60000")).toBe(60_000);
     expect(resolveLocalReleaseRunTimeout("1200000")).toBe(1_200_000);
     for (const value of ["0", "59999", "1200001", "not-a-number"]) {
