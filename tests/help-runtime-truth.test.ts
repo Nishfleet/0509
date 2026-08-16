@@ -6,8 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
-beforeEach(() => {
-  vi.resetModules();
+// Live holder read by the mocked `useRouteLoaderData` at render time, so a
+// test can flip between anonymous and signed-in root data without re-mocking.
+let rootData: unknown;
+
+function mockRouter() {
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
@@ -16,8 +19,15 @@ beforeEach(() => {
       ...actual,
       Link: ({ children, to, ...props }: MockLinkProps) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+      useRouteLoaderData: () => rootData,
     };
   });
+}
+
+beforeEach(() => {
+  rootData = undefined;
+  vi.resetModules();
+  mockRouter();
 });
 
 afterEach(() => {
@@ -52,8 +62,23 @@ describe("customer help runtime truth", () => {
     expect(markup).toContain("Cancellation stops future renewals, and access continues until the end of the period you have paid for.");
     expect(markup).toContain("Account deletion is a support request, not an automatic or in-app deletion.");
     expect(markup).toContain("Nothing is deleted automatically or in-app.");
-    expect(markup).toContain("/app/support?category=billing");
-    expect(markup).toContain("/app/support?category=security");
+    // Anonymous visitors (and crawlers) get the login destination directly,
+    // so the support-case links never redirect.
+    expect(markup).toContain("/auth/login?redirectTo=%2Fapp%2Fsupport%3Fcategory%3Dbilling");
+    expect(markup).toContain("/auth/login?redirectTo=%2Fapp%2Fsupport%3Fcategory%3Dsecurity");
+  });
+
+  it("keeps direct app-route targets for signed-in customers", async () => {
+    rootData = { session: { user: { id: "u1" } } };
+    const { default: HelpRoute } = await import("~/routes/help");
+    const markup = renderToStaticMarkup(createElement(HelpRoute));
+
+    expect(markup).toContain('href="/app/notifications"');
+    expect(markup).toContain('href="/app/support?category=delivery"');
+    expect(markup).toContain('href="/app/billing"');
+    expect(markup).toContain('href="/app/support?category=billing"');
+    expect(markup).toContain('href="/app/support?category=security"');
+    expect(markup).toContain('href="/app/support"');
   });
 
   it("does not expose candidate or frozen implementation claims in source or copy", async () => {
