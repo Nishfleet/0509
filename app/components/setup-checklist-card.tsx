@@ -267,8 +267,18 @@ export function SetupChecklistCard({
 }
 
 function ImportPreview({ preview }: { preview: CompetitorImportPreview }) {
+  const rejectedColumns = preview.rejectedColumns ?? [];
   return (
     <section aria-label="Competitor import preview" className="f9-import-preview">
+      {rejectedColumns.length > 0 ? (
+        <p className="f9-import-rejected" role="note">
+          Columns not imported:{" "}
+          {rejectedColumns.map((column) => (
+            <code key={column}>{column}</code>
+          ))}
+          . Keep your original file as the record of what the import carried.
+        </p>
+      ) : null}
       <div aria-label="Import summary" className="f9-import-summary">
         <span>{preview.summary.valid} ready</span>
         <span>{preview.summary.over_cap} over plan</span>
