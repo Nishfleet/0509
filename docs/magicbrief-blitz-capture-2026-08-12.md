@@ -25,6 +25,13 @@ to convert them.
   with "MagicBrief alternative" at 143 chars. Proven by
   `tests/compare-magicbrief.route.test.ts` (10 tests) and the SEO/funnel
   suites.
+- **Rejected-column panel on the import preview** (this branch): the
+  Market Desk setup import preview now lists unknown CSV columns
+  ("Columns not imported") instead of only showing row-level statuses.
+  MagicBrief exports carry `board`/`analytics_*` columns; buyers now see
+  exactly which of their columns do not transfer, inside the honest
+  boundary. `preview.rejectedColumns` is the data contract, proven by
+  `tests/magicbrief-migration.test.ts`.
 - **AlternativeTo suggest-as-alternative target** added to
   `docs/alternativeto-listing-2026-08-11.md`: MagicBrief's page is where
   wind-down buyers browse for replacements (target 0, conditional on the
