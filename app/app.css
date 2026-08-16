@@ -8048,6 +8048,22 @@ reds soften --- */
   color: var(--ink-faint);
 }
 
+/* Visual diff screenshot — the stored capture's own frame, rendered INSIDE
+   the diff pane. The image is the page we captured, not a live re-render:
+   the frame is the capture's own edge, never a live re-render: same 1px rule
+   weight as the plate, and the image keeps its aspect ratio at any width.
+   Square corners — the Evidence Desk surface rule (radius 0) applies to
+   every surface, including captured frames. */
+.f9-evidence-diff-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 4px;
+  border: 1px solid var(--ed-rule);
+  border-radius: 0;
+  background: var(--ed-surface);
+}
+
 /* --- §6.8 specimen empty state --- */
 
 .f9-evidence-specimen-body {
