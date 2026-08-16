@@ -172,14 +172,20 @@ describe("the guide stays aligned with the parser's real accepted fields", () =>
     expect(guide).toContain("keep your original");
   });
 
-  it("documents the rejected-column UI limitation and the preview.rejectedColumns data contract", () => {
+  it("documents the rejected-column preview panel and the preview.rejectedColumns data contract", () => {
     const guide = readFileSync(GUIDE_PATH, "utf8");
 
     expect(guide).toContain("`preview.rejectedColumns`");
     expect(guide).toContain("row-level statuses");
     expect(guide).toContain("proof-safe record");
-    expect(guide).toContain("no dedicated rejected-column panel");
-    expect(guide).not.toContain("rejected-column report");
+    expect(guide).toContain("Columns not imported");
+  });
+
+  it("documents the manual-fallback import preview path without the old panel limitation", () => {
+    const guide = readFileSync(GUIDE_PATH, "utf8");
+
+    expect(guide).toContain("rejected columns");
+    expect(guide).not.toContain("no dedicated rejected-column panel");
   });
 
   it("documents the exact supported input forms and limits", () => {
