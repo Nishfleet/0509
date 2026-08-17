@@ -63,6 +63,7 @@ import {
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
 import { EMAIL_H1_STYLE } from "~/lib/email-template.server";
+import { proofScreenshotAbsoluteUrl } from "~/lib/proof-screenshot.server";
 import { buildUnsubscribeUrl } from "~/lib/unsubscribe.server";
 import type {
   AdRecord,
@@ -548,6 +549,17 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
     ? await loadAlertEvidenceStates(env, input.userId, input.events)
     : new Map<string, CustomerEvidenceState>();
 
+  // Visual diff alert payload (2026-08-17): resolve the screenshot pair for
+  // every alert event when email will actually render it. The pair mirrors
+  // the watchlist event diff plate (both sides must have a stored screenshot
+  // artifact key or the entry is skipped). Empty map when no email batch is
+  // routed or the lookup helper is missing on a test adapter — the renderer
+  // falls back to its existing text-only output, never half a side-by-side.
+  const needsScreenshotPair = emailTargets.length > 0;
+  const alertScreenshotPairsByEventId = needsScreenshotPair
+    ? await loadAlertScreenshotPairs(env, input.userId, input.events)
+    : new Map<string, { beforeUrl: string; afterUrl: string }>();
+
   const attempts: InstantAttemptSummary[] = [];
 
   // E2 alert increment (2026-08-08): every delivered alert names exactly one
@@ -564,6 +576,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
       alertAdsById,
       reviewerLabel,
       alertEvidenceByEventId,
+      alertScreenshotPairsByEventId,
     );
 
     if (batch.allowedChannels.includes("email")) {
@@ -3011,7 +3024,10 @@ function buildInstantAlertBatches(input: {
   return [...batches.values()];
 }
 
-function renderEventDiffHtml(event: WatchEventRecord) {
+function renderEventDiffHtml(
+  event: WatchEventRecord,
+  screenshotPair: { beforeUrl: string; afterUrl: string } | null = null,
+) {
   const metadata = (event.metadata ?? {}) as Record<string, unknown>;
   const from = typeof metadata.from === "string" ? metadata.from.trim() : "";
   const to = typeof metadata.to === "string" ? metadata.to.trim() : "";
@@ -3027,16 +3043,43 @@ function renderEventDiffHtml(event: WatchEventRecord) {
     `;
   }
 
+  // Visual diff alert payload (2026-08-17): when the event's proof-capture
+  // pair is on file, embed the stored before/after screenshots side by
+  // side. The pair gate mirrors the watchlist event diff plate exactly —
+  // both URLs must be present or the pair is skipped, never half a
+  // side-by-side. URLs come from `proofScreenshotAbsoluteUrl` (HTTPS
+  // validated by the producer), so the email `<img>` is safe to render
+  // without further sanitization beyond `escapeHtml`.
+  const screenshotRow = screenshotPair
+    ? `<tr>
+          <td colspan="2" style="padding: 0 0 12px 0;">
+            <table role="presentation" style="border-collapse: collapse; background-color: #ffffff; color: #0b1220; width: 100%;">
+              <tr>
+                <td style="padding: 0 8px 0 0; vertical-align: top; width: 50%;">
+                  <p style="margin: 0 0 4px; color: #98a2b3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;">Before</p>
+                  <img src="${escapeHtml(screenshotPair.beforeUrl)}" alt="Before the change" width="280" style="display: block; max-width: 280px; width: 100%; border-radius: 8px; border: 1px solid #e4e7ec; background-color: #f5f7fa;">
+                </td>
+                <td style="padding: 0; vertical-align: top; width: 50%;">
+                  <p style="margin: 0 0 4px; color: #98a2b3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;">Now</p>
+                  <img src="${escapeHtml(screenshotPair.afterUrl)}" alt="After the change" width="280" style="display: block; max-width: 280px; width: 100%; border-radius: 8px; border: 1px solid #e4e7ec; background-color: #f5f7fa;">
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`
+    : "";
+
   // The one fact the customer actually wants: what it said before, and now.
   return `
     <table style="margin: 0 0 16px; border-collapse: collapse; font-size: 14px; background-color: #ffffff; color: #0b1220;">
+      ${screenshotRow}
       <tr>
         <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Before</td>
-        <td style="padding: 4px 0; color: #475467;">${escapeHtml(from)}<br><small>Captured ${escapeHtml(formatEventCaptureTime(captures.beforeCapturedAt))}</small></td>
+        <td style="padding: 0; color: #475467;">${escapeHtml(from)}<br><small>Captured ${escapeHtml(formatEventCaptureTime(captures.beforeCapturedAt))}</small></td>
       </tr>
       <tr>
         <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Now</td>
-        <td style="padding: 4px 0; color: #0b1220;"><strong>${escapeHtml(to)}</strong><br><small>Captured ${escapeHtml(formatEventCaptureTime(captures.nowCapturedAt))}</small></td>
+        <td style="padding: 0; color: #0b1220;"><strong>${escapeHtml(to)}</strong><br><small>Captured ${escapeHtml(formatEventCaptureTime(captures.nowCapturedAt))}</small></td>
       </tr>
     </table>
   `;
@@ -3159,6 +3202,54 @@ async function loadAlertEvidenceStates(
   return states;
 }
 
+/**
+ * Visual diff alert payload (2026-08-17): resolves the screenshot pair
+ * (current + previous succeeded capture with a stored
+ * `screenshotArtifactKey`) for every alert event in one bounded batched
+ * query. The result is keyed by `eventId` and only contains entries with
+ * BOTH URLs present — the same pair gate the watchlist event diff plate
+ * uses, so the renderer never has to decide whether to render a half-pair.
+ * A missing helper on a test adapter or a failed lookup degrades to an
+ * empty map, which makes the alert text-only — never blocks delivery,
+ * never invents an image.
+ */
+async function loadAlertScreenshotPairs(
+  env: AppEnv,
+  userId: string,
+  events: WatchEventRecord[],
+): Promise<Map<string, { beforeUrl: string; afterUrl: string }>> {
+  const pairs = new Map<string, { beforeUrl: string; afterUrl: string }>();
+  // Mirrors `loadAlertEvidenceStates`: strict-mock test adapters throw on
+  // missing property access, so the lookup is wrapped in try/catch and the
+  // empty-map fallback keeps the alert text-only — never blocks delivery,
+  // never invents an image.
+  let rows: Awaited<ReturnType<typeof deliveryData.listProofCapturePairsForEventIds>> = [];
+  try {
+    const listPairs = deliveryData.listProofCapturePairsForEventIds;
+    if (typeof listPairs !== "function") {
+      return pairs;
+    }
+    rows = await listPairs(env, userId, events.map((event) => event.id));
+  } catch {
+    return pairs;
+  }
+  for (const row of rows) {
+    const beforeUrl = proofScreenshotAbsoluteUrl(
+      env,
+      row.previous?.screenshotArtifactKey ?? null,
+    );
+    const afterUrl = proofScreenshotAbsoluteUrl(
+      env,
+      row.current?.screenshotArtifactKey ?? null,
+    );
+    if (!beforeUrl || !afterUrl) {
+      continue;
+    }
+    pairs.set(row.eventId, { beforeUrl, afterUrl });
+  }
+  return pairs;
+}
+
 // One creative image per alert email: the primary event's, only when a real
 // https creative URL was captured. Silent skip otherwise — no placeholders.
 function renderCreativeImageHtml(
@@ -3204,12 +3295,24 @@ export function buildInstantAlertContent(
   adsById?: Map<string, AdRecord>,
   reviewerLabel?: string | null,
   evidenceByEventId?: ReadonlyMap<string, CustomerEvidenceState> | null,
+  screenshotPairsByEventId?: ReadonlyMap<
+    string,
+    { beforeUrl: string; afterUrl: string }
+  > | null,
 ): InstantAlertContent {
   const primaryEvent = events[0];
   const competitor = readCompetitorLabel(primaryEvent) ?? watchlist.name;
   // WP-24: deep-link the primary change so "See the evidence" lands on the row.
   const watchlistUrl = buildWatchlistUrl(env, watchlist.id, primaryEvent?.id ?? null);
   const creativeImageHtml = renderCreativeImageHtml(primaryEvent, adsById);
+  // Visual diff alert payload (2026-08-17): resolve the primary event's
+  // stored before/after screenshot pair (same pair gate the watchlist event
+  // diff plate uses). An absent or partial pair stays unrendered —
+  // `renderEventDiffHtml` falls back to its existing text-only output,
+  // never half a side-by-side.
+  const primaryScreenshotPair = primaryEvent
+    ? screenshotPairsByEventId?.get(primaryEvent.id) ?? null
+    : null;
   // E2 alert increment (2026-08-08): every alert carries a named owner and a
   // materiality reason before delivery. The reviewer is the workspace owner
   // identity (truthful "Workspace owner" fallback, never invented from
@@ -3270,7 +3373,7 @@ export function buildInstantAlertContent(
           <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #5b6577;">${escapeHtml(intelligence.priorityBand)}</p>
           <p style="margin: 0 0 16px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
           ${accountabilityBlock}
-          ${renderEventDiffHtml(primaryEvent)}
+          ${renderEventDiffHtml(primaryEvent, primaryScreenshotPair)}
           ${creativeImageHtml}
           ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 20px; border-radius:8px; font-weight:600; font-size:15px;">See the evidence</a></p>` : ""}
         </div>
