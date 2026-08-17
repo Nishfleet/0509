@@ -1,9 +1,5 @@
 import { digestReviewerLabel } from "~/lib/change-intelligence";
-import type {
-  DigestItemRecord,
-  DigestRecord,
-  WatchEventRecord,
-} from "~/lib/types";
+import type { DigestRecord } from "~/lib/types";
 
 /**
  * Brief-as-retention-loop (lane 1, 2026-08-14): every customer-facing brief
@@ -24,11 +20,24 @@ import type {
  * field and never fabricates one.
  */
 
+/**
+ * Loose structural type for any item the brief can be assembled from — the
+ * full `DigestItemRecord` / `WatchEventRecord` from `~/lib/types`, but also
+ * the slimmer `DigestTrustItem` / `MarketDeskBriefItem` shapes that get
+ * passed in by the email and dashboard callers. The only fields the retention
+ * derivation reads are the proof-status metadata and direct `proofCaptureId`
+ * field, so the loose shape is enough.
+ */
+export interface BriefRetentionItem {
+  metadata?: { proofCaptureId?: unknown; sourceStatus?: unknown } | null;
+  proofCaptureId?: string | null;
+}
+
 export type BriefRetentionConfidence = "high" | "medium" | "low" | "unavailable";
 
 export interface BriefRetentionInput {
   /** The filed events or digest items in this period. */
-  items?: ReadonlyArray<DigestItemRecord | WatchEventRecord> | null;
+  items?: ReadonlyArray<BriefRetentionItem> | null;
   /** The previous brief on file (the most recent digest older than this one). */
   previousBrief?: DigestRecord | null;
   /**
@@ -120,9 +129,7 @@ export function deriveBriefConfidence(
     return "unavailable";
   }
 
-  const proofBacked = items.filter((item) =>
-    hasProofCapture(item as DigestItemRecord),
-  ).length;
+  const proofBacked = items.filter((item) => hasProofCapture(item)).length;
   const allProofBacked = proofBacked === items.length;
 
   if (input.sourceDegraded) {
@@ -185,8 +192,8 @@ function pluralChanges(count: number): string {
   return `${count} change${count === 1 ? "" : "s"}`;
 }
 
-function hasProofCapture(item: DigestItemRecord | WatchEventRecord): boolean {
-  const metadata = (item as { metadata?: Record<string, unknown> | null }).metadata;
+function hasProofCapture(item: BriefRetentionItem): boolean {
+  const metadata = item.metadata ?? null;
   if (metadata && typeof metadata === "object") {
     if (typeof metadata.proofCaptureId === "string" && metadata.proofCaptureId.trim()) {
       return true;
@@ -195,7 +202,7 @@ function hasProofCapture(item: DigestItemRecord | WatchEventRecord): boolean {
       return true;
     }
   }
-  const proofCaptureId = (item as { proofCaptureId?: string | null }).proofCaptureId;
+  const proofCaptureId = item.proofCaptureId ?? null;
   return Boolean(proofCaptureId && proofCaptureId.trim());
 }
 
