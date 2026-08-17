@@ -47,6 +47,7 @@ import {
 import type { AppEnv } from "~/lib/env.server";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import { planAllowsDigestCadence } from "~/lib/plan-entitlements";
+import { proofScreenshotAbsoluteUrl } from "~/lib/proof-screenshot.server";
 import type {
   DigestRecord,
   EventCandidateRecord,
@@ -122,6 +123,75 @@ interface DigestSourceItem {
   title: string;
   summary: string;
   metadata: Record<string, unknown>;
+}
+
+/**
+ * Visual diff alert payload (2026-08-17): one bounded batched query that
+ * resolves the screenshot pair (current + previous succeeded capture with a
+ * stored `screenshotArtifactKey`) for every digest event. The result map is
+ * keyed by `eventId` so the per-event metadata merge is O(1). Returns an
+ * empty map when no event qualifies (or the lookup helper is absent on a
+ * test adapter) so the caller degrades to the existing pending copy — never
+ * invents an image.
+ */
+async function loadDigestScreenshotPairs(
+  env: AppEnv,
+  userId: string,
+  eventIds: string[],
+): Promise<Map<string, { beforeUrl: string; afterUrl: string }>> {
+  const pairs = new Map<string, { beforeUrl: string; afterUrl: string }>();
+  if (eventIds.length === 0) {
+    return pairs;
+  }
+  // Mirrors `loadAlertEvidenceStates`: strict-mock test adapters throw on
+  // missing property access even via dynamic import, so the lookup and the
+  // module resolution are both wrapped in try/catch. The empty-map fallback
+  // keeps the digest run honest (no fabricated pair) and the alert text-only.
+  let rows: Awaited<ReturnType<typeof listProofCapturePairsForEventIds>> = [];
+  try {
+    const dataModule = await import("~/lib/data.server");
+    const listPairs = dataModule.listProofCapturePairsForEventIds;
+    if (typeof listPairs !== "function") {
+      return pairs;
+    }
+    rows = await listPairs(env, userId, eventIds);
+  } catch {
+    return pairs;
+  }
+  for (const row of rows) {
+    const beforeUrl = proofScreenshotAbsoluteUrl(
+      env,
+      row.previous?.screenshotArtifactKey ?? null,
+    );
+    const afterUrl = proofScreenshotAbsoluteUrl(
+      env,
+      row.current?.screenshotArtifactKey ?? null,
+    );
+    if (!beforeUrl || !afterUrl) {
+      continue;
+    }
+    pairs.set(row.eventId, { beforeUrl, afterUrl });
+  }
+  return pairs;
+}
+
+/**
+ * Returns the metadata patch that wires the resolved screenshot pair into
+ * the same keys the existing digest-email renderers read
+ * (`beforeCreativeImageUrl` / `afterCreativeImageUrl`). An absent pair
+ * returns an empty patch so items without stored screenshots stay
+ * byte-identical with the pre-change output.
+ */
+function digestScreenshotMetadata(
+  pair: { beforeUrl: string; afterUrl: string } | null,
+): Record<string, string> {
+  if (!pair) {
+    return {};
+  }
+  return {
+    beforeCreativeImageUrl: pair.beforeUrl,
+    afterCreativeImageUrl: pair.afterUrl,
+  };
 }
 
 async function deliverScanTroubleNoticeOrThrow(
@@ -487,10 +557,31 @@ async function runDigestForUser(
   const adsById = new Map(
     (await listAdsByIds(env, adIds)).map((ad) => [ad.metaAdId, ad]),
   );
+  // Visual diff alert payload (2026-08-17): attach the stored before/after
+  // proof-capture screenshot pair to every digest item whose event has a
+  // succeeded current capture AND a succeeded previous capture (the same
+  // pair gate the watchlist event diff plate uses). The pair is built as
+  // absolute HTTPS URLs against the app origin because email clients refuse
+  // app-relative `<img src>` paths; the existing digest-email renderers
+  // already read `beforeCreativeImageUrl`/`afterCreativeImageUrl` from
+  // metadata and validate the URL via `safeHttpsImageUrl`, so this only
+  // adds the write half. One batched query resolves every event up front
+  // (never an N+1), and the URL builder returns null on a malformed key,
+  // so a missing or half-stored pair degrades to the existing pending copy
+  // — never a fabricated or half-pair image.
+  const digestEventIds = eligibleByWatchlist.flatMap(({ events }) =>
+    events.map((event) => event.id),
+  );
+  const screenshotPairsByEventId = await loadDigestScreenshotPairs(
+    env,
+    user.id,
+    digestEventIds,
+  );
   const digestItems: DigestSourceItem[] = [];
   for (const { watchlist, events } of eligibleByWatchlist) {
     for (const event of events) {
       const ad = event.adId ? (adsById.get(event.adId) ?? null) : null;
+      const screenshotPair = screenshotPairsByEventId.get(event.id) ?? null;
       digestItems.push({
         eventId: event.id,
         watchlistId: watchlist.id,
@@ -500,6 +591,7 @@ async function runDigestForUser(
         summary: event.summary,
         metadata: {
           ...digestMetadataForEvent(event, undefined, ad),
+          ...digestScreenshotMetadata(screenshotPair),
           eventId: event.id,
         },
       });
