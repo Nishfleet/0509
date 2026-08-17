@@ -30,11 +30,22 @@ export function normalizeHeadline(value: string) {
   return {
     raw,
     normalized,
-    hash: hashString(stripHeadlineChurnTokens(normalized)),
+    hash: hashString(stripChurnTokens(normalized)),
   };
 }
 
-function stripHeadlineChurnTokens(value: string) {
+/**
+ * Churn-stable comparison value for any landing-page field. Countdown
+ * timers, rolling calendar dates, live audience counters, and live
+ * inventory/urgency counters are stripped from the COMPARISON value only —
+ * the caller keeps the raw text for display and evidence. Without this, a
+ * "Claim offer · 00:59:59" CTA or a "Only 3 left · ₹499" price line fires a
+ * customer-visible CTA/offer event on every scan even though the page's own
+ * copy never changed. When churn tokens are the only difference, the two
+ * comparison values normalize to the same string and no event is emitted.
+ */
+export function stripChurnTokens(value: string | null | undefined) {
+  if (!value) return "";
   let stripped = value;
   for (const pattern of HEADLINE_CHURN_PATTERNS) {
     stripped = stripped.replace(pattern, " ");
