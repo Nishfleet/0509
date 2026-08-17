@@ -5,6 +5,7 @@ import type {
   WatchEventStatus,
   WatchEventType,
 } from "~/lib/types";
+import { stripChurnTokens } from "~/lib/normalize";
 // Zero-noise period triage lives in an isomorphic module (the app route
 // renders it client-side); server callers keep importing this module.
 export {
@@ -219,8 +220,12 @@ function buildFieldChangeDraft(
   }
 
   if (eventType === "landing_page_offer_changed") {
-    const previousValue = normalizeFieldValue(previous.priceText);
-    const currentValue = normalizeFieldValue(current.priceText);
+    // Churn-stable comparison: countdown timers, rolling dates, and live
+    // inventory counters in the price/offer line (e.g. "Only 3 left · ₹499")
+    // must not fire an offer event on every scan. The raw values are still
+    // stored for display and evidence.
+    const previousValue = normalizeFieldValue(stripChurnTokens(previous.priceText));
+    const currentValue = normalizeFieldValue(stripChurnTokens(current.priceText));
     if (previousValue && currentValue && previousValue !== currentValue) {
       return {
         eventType,
@@ -234,8 +239,11 @@ function buildFieldChangeDraft(
   }
 
   if (eventType === "landing_page_cta_changed") {
-    const previousValue = normalizeFieldValue(previous.ctaText);
-    const currentValue = normalizeFieldValue(current.ctaText);
+    // Churn-stable comparison: a "Claim offer · 00:59:59" CTA ticking between
+    // scans is the same CTA. The raw values are still stored for display and
+    // evidence.
+    const previousValue = normalizeFieldValue(stripChurnTokens(previous.ctaText));
+    const currentValue = normalizeFieldValue(stripChurnTokens(current.ctaText));
     if (previousValue && currentValue && previousValue !== currentValue) {
       return {
         eventType,
