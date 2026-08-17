@@ -236,6 +236,189 @@ describe("watch event evaluator", () => {
     expect(result.events).toEqual([]);
   });
 
+  it("does not emit a CTA change when only a countdown timer in the CTA ticks", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Claim offer · 00:58:21",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Claim offer · 00:59:59",
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("still emits a CTA change when the CTA copy actually changes", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Claim offer · 00:59:59",
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("confirmed");
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        eventType: "landing_page_cta_changed",
+        status: "confirmed",
+        metadata: expect.objectContaining({
+          from: "Claim offer · 00:59:59",
+          to: "Shop now",
+        }),
+      }),
+    ]);
+  });
+
+  it("does not emit an offer change when only an inventory counter in the price line ticks", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Only 3 left at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: "Only 2 left at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("does not emit an offer change when only a rolling date in the price line ticks", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499, offer valid till aug 13",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: "Starting at ₹499, offer valid till aug 12",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("still emits an offer change when the price itself changes", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹799",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("confirmed");
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        eventType: "landing_page_offer_changed",
+        status: "confirmed",
+        metadata: expect.objectContaining({
+          from: "Starting at ₹499",
+          to: "Starting at ₹799",
+        }),
+      }),
+    ]);
+  });
+
   it("suppresses duplicate proof-backed alerts within the suppression window", () => {
     const result = evaluateProofBackedEvents({
       proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
