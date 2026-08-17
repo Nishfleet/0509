@@ -116,6 +116,31 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(commit).toContain("timeout");
   });
 
+  it("reuses a per-day automation branch so retries merge a single PR", () => {
+    // The previous shape used a per-second branch suffix, so each rerun opened
+    // a new PR with its own race and never resolved the stuck auto-merge. One
+    // PR per day lets every retry on the same day land on the same head so
+    // arm-auto-merge keeps firing on the same required checks rather than
+    // racing 30+ stale PRs in parallel.
+    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
+    expect(commit).toContain("automation/market-signal-snapshot-$(date -u +%Y%m%d)");
+    expect(commit).not.toContain("+%H%M%S");
+    expect(commit).toContain("gh pr list");
+    expect(commit).toContain("market_signal_snapshot_existing_pr");
+  });
+
+  it("uses --force-if-includes so a fresh automation branch lands its first push", () => {
+    // --force-with-lease fails on a brand-new branch (no upstream to lease
+    // against), which is the failure mode that left the snapshot file off
+    // main for every restored run. --force-if-includes is the documented
+    // safe alternative for first push; the explicit --force fallback is the
+    // last-resort path so the workflow degrades loudly instead of silently
+    // never landing.
+    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
+    expect(commit).toContain("--force-if-includes");
+    expect(commit).toContain("git push --force origin");
+  });
+
   it("rejects stale snapshots before committing them", () => {
     const freshness = job.steps?.find((step) => step.name === "Verify snapshot freshness")?.run ?? "";
     expect(freshness).toContain("generatedAt");
