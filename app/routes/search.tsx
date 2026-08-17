@@ -715,7 +715,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       {
         limitMessage: ({ limit }) =>
           limit <= 1
-            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+            ? "Free includes 1 watchlist and 1 Collection. Upgrade for scheduled scans and more competitors."
             : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       },
@@ -795,7 +795,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         current: watchlistResult.current,
         message:
           watchlistResult.limit <= 1
-            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+            ? "Free includes 1 watchlist and 1 Collection. Upgrade for scheduled scans and more competitors."
             : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       });
@@ -841,8 +841,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    // Server-side plan gate. Fail CLOSED for free plan. Message follows DESIGN voice:
-    // verbs, specific benefit, upgrade-oriented, no system-speak. (free UI hides form but POST reachable.)
+    // Server-side plan gate. Fail CLOSED for a free plan with no Collection
+    // yet (the save targets an existing Collection; a missing/foreign id
+    // would 500 inside addAdToCollection). Free includes exactly 1
+    // Collection, so saving into it is allowed; the UI guides the
+    // create-first step.
     let savePlan: "free" | "scout" | "starter" | "agency";
     try {
       const { getUserPlan } = await import("~/lib/plan.server");
@@ -855,12 +858,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
     if (savePlan === "free") {
-      return {
-        ok: false,
-        error: "plan_limit_exceeded" as const,
-        message: "Upgrade to Scout to save ads and build your workspace memory.",
-        upgradePath: "/app/billing?source=search#plans",
-      };
+      const { checkPlanLimit } = await import("~/lib/plan.server");
+      const collectionSlots = await checkPlanLimit(env, workspaceUserId, "collections");
+      if (collectionSlots.current < 1) {
+        return {
+          ok: false,
+          error: "plan_limit_exceeded" as const,
+          message: "Free includes 1 Collection — create it in the Library, then save this ad.",
+          upgradePath: "/app/collections",
+        };
+      }
     }
 
     const { listAdsByIds } = await import("~/lib/data.server");
@@ -2180,25 +2187,7 @@ export default function SearchRoute() {
                   <p className="f9-wk-small">{selectedAd.researchSummary}</p>
                 </DetailBlock>
 
-                {data.session && data.plan === "free" ? (
-                  <DetailBlock kicker="Save this ad">
-                    <p className="f9-wk-note">
-                      Upgrade to Scout to save ads and build your workspace
-                      memory.
-                    </p>
-                    <div className="f9-wk-acts">
-                      <Link
-                        className="f9-wk-lnk"
-                        to="/app/billing?source=search#plans"
-                      >
-                        View plans{" "}
-                        <span aria-hidden="true" className="f9-wk-chev">
-                          &rsaquo;
-                        </span>
-                      </Link>
-                    </div>
-                  </DetailBlock>
-                ) : data.session && data.collections.length > 0 ? (
+                {data.session && data.collections.length > 0 ? (
                   <DetailBlock kicker="Save this ad">
                     <Form className="f9-save-stack" method="post">
                       <input

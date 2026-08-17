@@ -75,9 +75,11 @@ export interface PlanEntitlements {
   features: ReadonlySet<PlanFeature>;
 }
 
-// Free Weekly Competitor Watch (PLG wedge): the weekly digest email is the
-// product demo. Free gets exactly the weekly brief + the email lane it rides
-// on — no instant alerts, Slack, evidence, exports, or collections.
+// Free tier (PLG wedge): beats the free alternatives (Meta Ad Library,
+// MagicBrief free) with an instant first scan, a weekly brief that is
+// genuinely proof-backed once a month, and one real Collection — no card.
+// Free gets the weekly brief + the email lane it rides on; instant alerts,
+// Slack, exports, API, and paid cadences stay paid.
 const FREE_FEATURES: PlanFeature[] = ["weekly_digest", "email_delivery"];
 
 const SCOUT_FEATURES: PlanFeature[] = [
@@ -121,13 +123,15 @@ const AGENCY_FEATURES: PlanFeature[] = [
 const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
   free: {
     planFamily: "free",
-    // Free Weekly Competitor Watch: one watchlist scanned once a week (the
-    // Monday slot of the regular cron; see isWeeklyAlignedScan) feeding the
-    // weekly digest email. Evidence/collections/instant budgets stay 0 —
-    // paid plans unlock 3–6 hour cadence and everything else.
+    // Free tier: one watchlist scanned instantly on creation (the activation
+    // scan) then weekly (the Monday slot of the regular cron; see
+    // isWeeklyAlignedScan) feeding the weekly email brief. One Collection and
+    // one included evidence check per month keep the brief genuinely
+    // proof-backed at least once a month — the free-alternatives wedge.
+    // Instant alerts, exports, API, and paid cadences stay paid.
     watchlists: 1,
-    collections: 0,
-    includedEvidenceChecksPerMonth: 0,
+    collections: 1,
+    includedEvidenceChecksPerMonth: 1,
     workspaceSeats: 1,
     digestCadence: "weekly",
     scheduledScanCadence: "weekly",
