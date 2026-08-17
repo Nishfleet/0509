@@ -8,6 +8,7 @@ import {
   normalizeSearchFilters,
   parseSearchParams,
   buildSearchParams,
+  stripChurnTokens,
 } from "~/lib/normalize";
 
 describe("normalizeHeadline", () => {
@@ -77,6 +78,37 @@ describe("normalizeHeadline", () => {
     expect(normalizeHeadline("Buy 2 Get 1 Free").hash).toBe(
       normalizeHeadline("Buy 2 Get 1 Free").hash,
     );
+  });
+});
+
+describe("stripChurnTokens", () => {
+  it("strips countdown timers from CTA-style text", () => {
+    expect(stripChurnTokens("Claim offer · 00:59:59")).toBe("Claim offer ·");
+    expect(stripChurnTokens("Claim offer · 00:58:21")).toBe("Claim offer ·");
+    expect(stripChurnTokens("Offer valid till 12:30")).toBe("Offer valid till");
+  });
+
+  it("strips rolling calendar dates from offer text", () => {
+    expect(stripChurnTokens("Starting at ₹499, offer valid till aug 12")).toBe(
+      "Starting at ₹499, offer valid till",
+    );
+    expect(stripChurnTokens("Starting at ₹499, offer valid till aug 13")).toBe(
+      "Starting at ₹499, offer valid till",
+    );
+    expect(stripChurnTokens("Flash sale until 2026-08-12")).toBe("Flash sale until");
+  });
+
+  it("strips live inventory and audience counters from offer text", () => {
+    expect(stripChurnTokens("Only 3 left at ₹499")).toBe("Only at ₹499");
+    expect(stripChurnTokens("Only 2 left at ₹499")).toBe("Only at ₹499");
+    expect(stripChurnTokens("120 sold today · ₹499")).toBe("today · ₹499");
+  });
+
+  it("keeps real offer and price copy intact", () => {
+    expect(stripChurnTokens("Starting at ₹499")).toBe("Starting at ₹499");
+    expect(stripChurnTokens("Claim offer")).toBe("Claim offer");
+    expect(stripChurnTokens("Buy 2 Get 1 Free")).toBe("Buy 2 Get 1 Free");
+    expect(stripChurnTokens("50% off this week")).toBe("50% off this week");
   });
 });
 
