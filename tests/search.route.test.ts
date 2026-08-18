@@ -1638,6 +1638,105 @@ describe("search loader", () => {
     })).toBe("1 ad found");
   });
 
+  it("scopes the results panel title to the searched country", async () => {
+    const legacyResult: SearchResponse = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+
+    const { formatResultsPanelTitle } = await import("~/routes/search");
+
+    // The verdict title names the market that actually ran, so the same
+    // competitor cannot read as contradictory across country filters.
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+      country: "India",
+    })).toBe("1 ad found in India");
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+      country: "all",
+    })).toBe("1 ad found across all countries");
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: true,
+      country: "India",
+    })).toBe("1 verified ad linked to nykaa.com in India");
+  });
+
+  it("canonicalizes ISO-2 and alias country inputs in the results panel title", async () => {
+    // The resolver already accepts ISO-2 codes and aliases (usa, uk, uae),
+    // so the customer-facing phrase must match the market the search
+    // actually ran in, not the raw URL input.
+    const legacyResult: SearchResponse = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+
+    const { formatResultsPanelTitle } = await import("~/routes/search");
+
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+      country: "IN",
+    })).toBe("1 ad found in India");
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+      country: "usa",
+    })).toBe("1 ad found in United States");
+  });
+
+  it("keeps demo results panel titles unscoped even when a country filter is set", async () => {
+    // Demo/sample matches deliberately ignore the country filter (the
+    // resolver matches every demo ad against every market), so labelling
+    // a demo verdict "in United States" for India-authored samples would
+    // falsely imply country-specific evidence.
+    const demoResult: SearchResponse = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "demo",
+      provider: "demo",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+
+    const { formatResultsPanelTitle } = await import("~/routes/search");
+
+    expect(formatResultsPanelTitle(demoResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: true,
+      country: "United States",
+    })).toBe("1 verified ad linked to nykaa.com");
+  });
+
   it("allows only tokened canary probes to force fresh live discovery", async () => {
     const env = { DB: {}, CANARY_BYPASS_TOKEN: "secret-token" };
     const sourceResult = {
