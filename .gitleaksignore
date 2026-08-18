@@ -1,0 +1,10 @@
+# Gitleaks ignore list (additive; layered on top of the default ruleset).
+#
+# The entry below is NOT a real secret: it is a fixed, obviously-fake 0509
+# share-token fixture embedded in a renderer integration test. It lives in the
+# historical commit b157f14f and must keep the server's 32-hex PDF token shape,
+# so it cannot be lowered in entropy there without rewriting history. The
+# current tree (see ops/netcup-browser/tests/server.test.mjs) already uses a
+# low-entropy, clearly-fake fixture for the same purpose; this only suppresses
+# the historical scan hit so the required Gitleaks check can pass.
+b157f14f3a2989221dc52cc87a3ff1ace8f4327f:ops/netcup-browser/tests/server.test.mjs:generic-api-key:19
