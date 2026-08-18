@@ -36,6 +36,8 @@ export {
 export {
   hasInFlightWatchlistRun,
   listWatchlistRunPairsForEventIds,
+  listFirstScanRunStates,
+  type FirstScanRunState,
   createWatchlistRun,
   finishWatchlistRun,
   getRecentSuccessfulRuns,

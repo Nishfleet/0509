@@ -42,6 +42,8 @@ export {
   reactivateWatchlistsUpToPlanLimit,
   hasInFlightWatchlistRun,
   listWatchlistRunPairsForEventIds,
+  listFirstScanRunStates,
+  type FirstScanRunState,
   createWatchlistRun,
   finishWatchlistRun,
   getRecentSuccessfulRuns,
