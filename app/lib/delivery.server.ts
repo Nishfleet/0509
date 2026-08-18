@@ -11,6 +11,7 @@ import {
   buildScanTroubleEmail,
   renderEmailAccountabilityBlock,
 } from "~/lib/digest-email.server";
+import { getPlanEntitlements, type ScheduledScanCadence } from "~/lib/plan-entitlements";
 import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
@@ -290,7 +291,15 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
 
   for (const target of emailTargets) {
     attempts.push(
-      await deliverDigestToEmailTarget(env, input, lane, target, digestTimeZone, upgradeNote),
+      await deliverDigestToEmailTarget(
+        env,
+        input,
+        lane,
+        target,
+        digestTimeZone,
+        upgradeNote,
+        getPlanEntitlements(entitledConfigs.plan).scheduledScanCadence,
+      ),
     );
   }
 
@@ -980,6 +989,7 @@ async function deliverDigestToEmailTarget(
   target: DeliveryTargetRecord,
   timeZone: string | null,
   upgradeNote: string | null = null,
+  scanCadence: ScheduledScanCadence = "weekly",
 ): Promise<DigestAttemptSummary> {
   const targetValue = normalizeDeliveryEmailValue(target.targetValue);
   if (!targetValue) {
@@ -1014,6 +1024,7 @@ async function deliverDigestToEmailTarget(
     heartbeat: input.heartbeat ?? null,
     strategyParagraph: input.strategyParagraph ?? null,
     cadence: input.cadence,
+    scanCadence,
     timeZone,
     unsubscribeUrl,
     upgradeNote,
@@ -2738,6 +2749,7 @@ function renderDigestEmail(
     heartbeat?: DigestHeartbeat | null;
     strategyParagraph?: string | null;
     cadence?: DigestCadence;
+    scanCadence?: ScheduledScanCadence | null;
     timeZone?: string | null;
     unsubscribeUrl: string | null;
     upgradeNote?: string | null;
@@ -2755,6 +2767,7 @@ function renderDigestEmail(
     heartbeat: input.heartbeat ?? null,
     strategyParagraph: input.strategyParagraph ?? null,
     cadence: input.cadence,
+    scanCadence: input.scanCadence ?? null,
     timeZone: input.timeZone ?? null,
     fullDigestUrl: `${baseUrl}/app/digests?digest=${encodeURIComponent(input.digestRunId)}`,
     manageFrequencyUrl: `${baseUrl}/app/notifications`,
@@ -2997,7 +3010,9 @@ async function resolveInstantAttemptDedupe(
         ? EMAIL_PROVIDER
         : input.channel === "slack"
           ? SLACK_PROVIDER
-          : "whatsapp_cloud_api",
+          : input.channel === "teams"
+            ? TEAMS_PROVIDER
+            : "whatsapp_cloud_api",
     targetValue: input.targetValue,
     eventIds: input.eventIds,
     payloadSnapshot: input.payloadSnapshot,
@@ -3248,7 +3263,9 @@ async function beginInstantDeliveryDispatch(
     ? EMAIL_PROVIDER
     : attempt.idempotencyKey.includes(":slack:")
       ? SLACK_PROVIDER
-      : "whatsapp_cloud_api";
+      : attempt.idempotencyKey.includes(":teams:")
+        ? TEAMS_PROVIDER
+        : "whatsapp_cloud_api";
   const dispatchStartedAt = env.DB
     ? await markInstantDeliveryDispatchStarted(
         env,
