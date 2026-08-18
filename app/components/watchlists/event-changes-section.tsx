@@ -9,6 +9,7 @@ import {
 } from "~/components/evidence/diff-plate";
 import { QuietLine, QuietLineList, type QuietLineItem } from "~/components/evidence/quiet-line";
 import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
+import { proofScreenshotSrc } from "~/lib/proof-screenshot";
 import type { PublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import {
   formatConfidenceBandLabel,

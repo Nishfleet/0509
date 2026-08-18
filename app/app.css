@@ -8048,8 +8048,9 @@ reds soften --- */
   color: var(--ink-faint);
 }
 
-/* The stored before/after screenshot pair inside a diff plate's panes. The
-   frame is the capture's own edge, never a live re-render: same 1px rule
+/* Visual diff screenshot — the stored capture's own frame, rendered INSIDE
+   the diff pane. The image is the page we captured, not a live re-render:
+   the frame is the capture's own edge, never a live re-render: same 1px rule
    weight as the plate, and the image keeps its aspect ratio at any width.
    Square corners — the Evidence Desk surface rule (radius 0) applies to
    every surface, including captured frames. */

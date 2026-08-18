@@ -183,7 +183,7 @@ test.describe("Journey 5 release: plan, checkout, entitlements, billing", () => 
       const starterCard = page.locator("section.f9-wk-plan-card").filter({ hasText: /^Starter/ }).first();
       await expect(starterCard).toBeVisible();
       await expect(starterCard.getByLabel("Starter limits")).toContainText("10 watchlists");
-      await expect(starterCard.getByLabel("Starter limits")).toContainText("250 checks/mo");
+      await expect(starterCard.getByLabel("Starter limits")).toContainText("250 proof captures/mo");
       const checkoutForm = starterCard.locator('form[action="/api/billing/dodo/checkout"]');
       // The isolated local release harness intentionally has no Dodo API key
       // or product ids. Assert that honest unavailable state exactly; a
@@ -201,7 +201,7 @@ test.describe("Journey 5 release: plan, checkout, entitlements, billing", () => 
       await expect(page.getByRole("heading", { name: "Starter plan — free account" })).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "Starter plan" })).toBeVisible();
       await expect(page.getByText("Current plan").first()).toBeVisible();
-      await expect(page.getByText("purchased checks remaining")).toBeVisible();
+      await expect(page.getByText("purchased proof captures remaining")).toBeVisible();
       await expect(page.getByText("Change, cancel, or get invoices")).toBeVisible();
       await expect(page.getByText("Dodo Payments emails a receipt for every charge.")).toBeVisible();
       await expectNoHorizontalOverflow(page);

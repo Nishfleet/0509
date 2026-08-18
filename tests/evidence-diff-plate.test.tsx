@@ -149,3 +149,42 @@ describe("DiffPlate", () => {
     expect(markup).not.toContain("f9-evidence-diff-shot");
   });
 });
+
+describe("DiffPlate visual diff (BL-053)", () => {
+  it("renders the stored screenshot pair side by side inside both panes", () => {
+    const markup = renderToStaticMarkup(
+      <DiffPlate
+        {...base}
+        before={{
+          capturedAt: "2026-07-26T04:00:00.000Z",
+          value: "₹1,499",
+          imageUrl: "/artifacts/proof/before.jpeg",
+        }}
+        now={{
+          capturedAt: "2026-07-27T06:05:00.000Z",
+          value: "₹1,199",
+          imageUrl: "/artifacts/proof/now.jpeg",
+        }}
+      />,
+    );
+
+    expect(markup).toContain('src="/artifacts/proof/before.jpeg"');
+    expect(markup).toContain('src="/artifacts/proof/now.jpeg"');
+    expect(markup).toContain("The page before the change, as captured");
+    expect(markup).toContain("The page after the change, as captured");
+    expect(markup).toContain("f9-evidence-diff-shot");
+  });
+
+  it("renders no screenshot when a capture has none on file", () => {
+    const markup = renderToStaticMarkup(
+      <DiffPlate
+        {...base}
+        before={{ capturedAt: "2026-07-26T04:00:00.000Z", value: "₹1,499" }}
+        now={{ capturedAt: "2026-07-27T06:05:00.000Z", value: "₹1,199" }}
+      />,
+    );
+
+    expect(markup).not.toContain("<img");
+    expect(markup).not.toContain("f9-evidence-diff-shot");
+  });
+});
