@@ -397,6 +397,59 @@ describe("Gate C scheduled-work soak journal", () => {
     expect(lateDeploy.blockers).toContain("deployment_drift_during_soak");
   });
 
+  it("collects soak evidence from the current canonical repo (Nishfleet/0509) and rejects a stale name", async () => {
+    const { journal } = fixture();
+    const runs = Array.from({ length: 288 }, (_, index) => ({
+      id: index + 1,
+      created_at: new Date(STARTED_AT.getTime() + 2 * 60_000 + index * 5 * 60_000).toISOString(),
+      head_sha: HEAD,
+      event: "schedule",
+      status: "completed",
+      conclusion: "success",
+      run_attempt: 1,
+    }));
+    const artifacts = runs.map((run, index) => ({
+      id: index + 10_000,
+      name: `uptime-worker-${WORKER_VERSION}`,
+      expired: false,
+      created_at: run.created_at,
+      workflow_run: { id: run.id },
+    }));
+    const listWorkflowRuns = async ({ workflow }: { workflow: string }) =>
+      workflow === "uptime-health.yml" ? runs : [];
+    const listWorkflowArtifacts = async () => artifacts;
+    const collectionTime = new Date(Date.parse(journal.window.endedAt) + GATE_C_SOAK_SETTLE_MS);
+
+    // The repo guard reads process.env.GITHUB_REPOSITORY in CI, which is the
+    // canonical owner after the repo moved nish3451/0509 -> Nishfleet/0509.
+    // A valid soak from the current repo must be accepted (regression: the
+    // guard was pinned to the pre-rename name and rejected every run).
+    const prev = process.env.GITHUB_REPOSITORY;
+    try {
+      process.env.GITHUB_REPOSITORY = "Nishfleet/0509";
+      const collected = await collectGitHubSoakEvidence(journal, {
+        listWorkflowRuns,
+        listWorkflowArtifacts,
+        now: collectionTime,
+      });
+      expect(collected.passed).toBe(true);
+      expect(collected.observedWorkerArtifacts).toBe(288);
+
+      // A stale pre-rename name must still fail closed.
+      process.env.GITHUB_REPOSITORY = "nish3451/0509";
+      await expect(
+        collectGitHubSoakEvidence(journal, {
+          listWorkflowRuns,
+          listWorkflowArtifacts,
+          now: collectionTime,
+        }),
+      ).rejects.toThrow("github_soak_repository_invalid");
+    } finally {
+      if (prev === undefined) delete process.env.GITHUB_REPOSITORY;
+      else process.env.GITHUB_REPOSITORY = prev;
+    }
+  });
+
   it("accepts only a complete exact-window release-soak payload", () => {
     const { journal } = fixture();
     const buildPayload = (targetJournal: typeof journal) => {
