@@ -12,6 +12,7 @@ import {
 } from "react-router";
 import type {
   ActionFunctionArgs,
+  HeadersFunction,
   LinksFunction,
   LoaderFunctionArgs,
   MetaFunction,
@@ -61,6 +62,7 @@ import {
   SUPPORTED_COUNTRIES,
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
+import { PUBLIC_SEARCH_RATE_LIMIT_MESSAGE } from "~/lib/customer-route-error";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
@@ -160,6 +162,18 @@ export const meta: MetaFunction = () =>
     description: searchDescription,
     pathname: "/search",
   });
+
+// When the search loader throws a 429 (anonymous limiter), React Router only
+// merges cookies from the thrown response's headers onto the final document
+// response unless the boundary route forwards them. Copy Retry-After through
+// here so the rate-limited document keeps the limiter's recovery signal. For
+// every other request errorHeaders is undefined and nothing is added.
+export const headers: HeadersFunction = ({ errorHeaders }) => {
+  const documentHeaders: Record<string, string> = {};
+  const retryAfter = errorHeaders?.get("retry-after");
+  if (retryAfter) documentHeaders["Retry-After"] = retryAfter;
+  return documentHeaders;
+};
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
@@ -340,7 +354,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       cloudflare?.ctx,
     );
     if (rateLimitResponse) {
-      throw rateLimitResponse;
+      // Anonymous throttling is a normal, recoverable product state, not an
+      // internal failure: throw an explicit in-product 429 document whose
+      // body names the limit and the recovery path, and keep the limiter's
+      // Retry-After signal so the client and the document response both know
+      // when the window clears. The route-level headers() export below
+      // forwards that header onto the final document response.
+      const retryAfterSeconds = rateLimitResponse.headers.get("retry-after");
+      throw new Response(
+        JSON.stringify({
+          error: "rate_limited",
+          message: PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+        }),
+        {
+          status: 429,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "no-store",
+            ...(retryAfterSeconds ? { "retry-after": retryAfterSeconds } : {}),
+          },
+        },
+      );
     }
   }
 
@@ -2388,26 +2422,76 @@ export default function SearchRoute() {
           /* Pre-search. The boringness budget: a quiet explanation and the one
              Rank-1 above it. No specimen, no dimmed sample card, no diagram of
              a result — the form IS the affordance and the sentence says what
-             comes back. */
-          <section aria-labelledby="search-idle-title" className="f9-wk-sec">
-            <p className="f9-wk-kick" id="search-idle-title">
-              Nothing searched yet
-            </p>
-            <p className="f9-wk-lede">
-              Paste a competitor website and press See ads. We check the Meta
-              Ad Library for their ads, capture the offer from their landing
-              page, and keep the capture — so the next time that offer moves,
-              you can prove it.
-            </p>
-            <div className="f9-wk-acts">
-              <Link className="f9-wk-lnk" to="/#demo">
-                See a proof brief{" "}
-                <span aria-hidden="true" className="f9-wk-chev">
-                  &rsaquo;
-                </span>
-              </Link>
-            </div>
-          </section>
+             comes back.
+             The scope copy below the fold is the response to the SEO engine's
+             thin-content warning (dogfood 694ddbd68e95 / AI Answer Readiness
+             69e1b4be47bf): honest, page-specific detail — what a search
+             returns, proof, and the next step — without decorating the
+             instrument. The copy avoids claiming current activity: the
+             discovery cache can serve cached inventory, so the "right now"
+             promise stays gated (PR #567). */
+          <>
+            <section
+              aria-labelledby="search-idle-title"
+              className="f9-wk-sec"
+            >
+              <p className="f9-wk-kick" id="search-idle-title">
+                Nothing searched yet
+              </p>
+              <p className="f9-wk-lede">
+                Paste a competitor website and press See ads. We check the Meta
+                Ad Library for their ads, capture the offer from their landing
+                page, and keep the capture — so the next time that offer moves,
+                you can prove it.
+              </p>
+              <div className="f9-wk-acts">
+                <Link className="f9-wk-lnk" to="/#demo">
+                  See a proof brief{" "}
+                  <span aria-hidden="true" className="f9-wk-chev">
+                    &rsaquo;
+                  </span>
+                </Link>
+              </div>
+            </section>
+            <section
+              aria-labelledby="search-scope-title"
+              className="f9-wk-sec"
+            >
+              <h2 className="f9-wk-sec-title" id="search-scope-title">
+                What a search returns
+              </h2>
+              <p className="f9-wk-lede">
+                The public preview searches Meta&rsquo;s Ad Library for the
+                competitor&rsquo;s ads — across Facebook, Instagram, Audience
+                Network, and Messenger — and keeps what it finds, so a later
+                change is provable, not anecdotal.
+              </p>
+              <ul className="f9-search-scope-list">
+                <li>
+                  <strong>Current and recent ads</strong> — creative previews
+                  with first-seen and last-active dates, filterable by country,
+                  platform, creative type, status, and date range.
+                </li>
+                <li>
+                  <strong>The offer, read off their landing page</strong> — the
+                  hook and the offer are extracted from the page, and translated
+                  when the creative is in another language.
+                </li>
+                <li>
+                  <strong>The proof capture</strong> — each ad and its landing
+                  page are saved with a timestamp, so next week&rsquo;s
+                  comparison has today&rsquo;s evidence.
+                </li>
+              </ul>
+              <p className="f9-wk-note">
+                Coverage and freshness vary by advertiser and provider, and
+                public searches are rate-limited to keep the free preview fair.
+                Signing in is free: save the useful examples, start a watchlist
+                that scans on a schedule, and get an email when the offer or
+                the landing page moves.
+              </p>
+            </section>
+          </>
         )}
       </DashboardPage>
     </DashboardShell>

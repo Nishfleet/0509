@@ -484,6 +484,76 @@ advertisers.
 - `.lane/report.md` — evidence record only; no product code touched.
 
 ---
+
+# Structured data opportunity on /search (2026-08-12 lane 6) — already resolved by PR #564 (+ duplicate #600)
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane6-search-structured-data-already-resolved`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] [dogfood `fce4fa3c00f1`] Structured data opportunity on /search
+  [dogfood 20260808T074205Z-msk2fl3n]
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main` and
+live in production:
+
+- PR #564 — `d1c8bd43` "fix(seo): add truthful WebPage JSON-LD", merged
+  2026-08-09, is an ancestor of the current `main` HEAD (`389c0e55`) and is
+  the commit that introduced the truthful WebPage JSON-LD into BOTH halves of
+  the finding's scope — `app/routes/search.tsx` and
+  `app/routes/auth.login.tsx` (`git log HEAD -S "Truthful WebPage JSON-LD" --`
+  attributes the auth/login block to `d1c8bd43`).
+- PR #600 — `fix/lane15-search-structured-data`, merged 2026-08-10, is a
+  duplicate of the `/search` half; the improvement-loop backlog note around
+  `backlog.md:1042` flagged that the `/auth/login` half "looks covered by
+  #600" while PR #618 (evidence-only docs lane, closed 2026-08-11) stayed
+  unmerged. Neither gap exists: `d1c8bd43` itself covers `/auth/login` on
+  main, so the concern is fully resolved.
+- Regression pins on this tip: `tests/search-structured-data.test.ts` and
+  `tests/auth-login-structured-data.test.ts` both exist on `main` and pass
+  4/4.
+
+## Evidence on current main + live production (2026-08-12)
+
+- `git merge-base --is-ancestor d1c8bd43 HEAD` → 0 (ancestor).
+- Live `https://0509.io/search` (HTTP 200) renders exactly one
+  `application/ld+json` WebPage block: `name`/`description`/`url` match the
+  document head, `isPartOf` WebSite, `publisher` Organization; no prices,
+  ratings, result counts, or live-scrape claims.
+- Live `https://0509.io/auth/login` (HTTP 200) renders exactly one truthful
+  WebPage JSON-LD with the same minimal shape.
+- Same-engine rerun (the engine the dogfood job wraps, `auditUrl` from
+  `proof-seo/server/audit/engine.js`, `maxPages: 6`, `pageSpeed: false` —
+  identical options to the dogfood pipeline):
+  - `https://0509.io/search` crawl → page `schemaTypes: ["WebPage"]`,
+    `schemaErrors: []`; the `enhancement-7` "Structured data opportunity on
+    /search" finding is gone from the result (the engine's check at
+    `shared/audit-engine.js:1724` fires only when `schemaTypes` is empty or
+    `invalid-json`).
+  - `https://0509.io/auth/login` → no structured-data finding on
+    `/auth/login`; `enhancement-16` no longer appears.
+- Focused regressions `tests/search-structured-data.test.ts`
+  `tests/auth-login-structured-data.test.ts` via test-gate: 2 files, 4/4
+  passed on this tip.
+
+## Observed residual (out of scope, noted for honesty)
+
+The same-engine rerun of `/auth/login` surfaced a NEW "Structured data
+opportunity on /auth/signup" notice — `/auth/signup` was never in
+`fce4fa3c00f1`'s scope (`enhancement-7` = /search, `enhancement-16` =
+/auth/login; the 2026-08-08 run did not crawl /auth/signup). It will be filed
+as a separate finding by the dogfood job if the next audit still sees it, and
+the open PR #627 already lifts `/auth/signup` content. No change made here.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
+---
 # Alert named owner + materiality reason (2026-08-11 lane 1) — already resolved by PR #571
 
 **Status: already resolved; this lane records the evidence only.**

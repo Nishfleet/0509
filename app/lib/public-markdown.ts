@@ -3,6 +3,9 @@ import {
   CUSTOMER_SUPPORT_PATHS,
   auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
+// Shared with the robots.txt deny list in app/lib/seo.ts (docs/ai-crawler-policy.md)
+// so robots.txt and llms.txt always name the same denied training crawlers.
+import { AI_TRAINING_CRAWLERS } from "~/lib/seo";
 
 const AUDITED_AGENT_ACTION_GROUPS = auditedAgentActionGroups();
 const AUDITED_AGENT_ACTION_GROUP_SUMMARY = AUDITED_AGENT_ACTION_GROUPS.map((group) => group.label).join(", ");
@@ -120,7 +123,7 @@ Core layers:
 
 AI access:
 - AI answer and reference engines may use this file and public pages (search=yes, ai-input=yes, use=reference).
-- AI training/fine-tuning crawlers are denied in robots.txt (ai-train=no): GPTBot, ClaudeBot, Google-Extended, CCBot, Bytespider, Amazonbot, Applebot-Extended, meta-externalagent.
+- AI training/fine-tuning crawlers are denied in robots.txt (ai-train=no): ${AI_TRAINING_CRAWLERS.join(", ")}.
 - This policy is decided and recorded in docs/ai-crawler-policy.md.
 `;
 

@@ -592,6 +592,155 @@ describe("extractLandingPageSignals", () => {
       formPresent: false,
     });
   });
+
+  it("ignores rotating ad-slot creative in div ad containers", () => {
+    const html = `
+      <html>
+        <body>
+          <div id="ad-slot-1">
+            <a href="#">Buy now</a>
+            <p>$19.99</p>
+            <input name="email" />
+            <input type="submit" value="Claim deal" />
+          </div>
+          <main>
+            <p>Launch price $49.99</p>
+            <button>Shop now</button>
+          </main>
+        </body>
+      </html>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Shop now",
+      priceText: "$49.99",
+      formPresent: false,
+    });
+  });
+
+  it("ignores google adsense and sponsored ad blocks", () => {
+    const html = `
+      <html>
+        <body>
+          <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-1">
+            <a href="#">Buy now</a>
+            $9.99
+          </ins>
+          <section class="sponsored">
+            <a href="#">Claim deal</a>
+            <p>₹199 only</p>
+            <input name="phone" />
+            <input type="submit" value="Get offer" />
+          </section>
+          <main>
+            <p>Team plan $79.99</p>
+            <button>Book demo</button>
+          </main>
+        </body>
+      </html>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Book demo",
+      priceText: "$79.99",
+      formPresent: false,
+    });
+  });
+
+  it("ignores ad iframes and amp-ad elements", () => {
+    const html = `
+      <html>
+        <body>
+          <iframe src="https://ads.example.com/unit">
+            <a href="#">Buy now</a>
+            <p>$9.99</p>
+          </iframe>
+          <amp-ad width="300" height="250" type="doubleclick">
+            <a href="#">Shop now</a>
+            $5.99
+          </amp-ad>
+          <main>
+            <button>Get started</button>
+            <p>Pro plan $29.99</p>
+          </main>
+        </body>
+      </html>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      priceText: "$29.99",
+      formPresent: false,
+    });
+  });
+
+  it("strips nested divs inside an ad container", () => {
+    const html = `
+      <div id="ad-slot-1">
+        <div class="inner">
+          <div class="inner-2"><a href="#">Buy now</a></div>
+        </div>
+      </div>
+      <main><button>Shop now</button><p>$49.99</p></main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Shop now",
+      priceText: "$49.99",
+    });
+  });
+
+  it("keeps the page intact when an ad region never closes", () => {
+    const html = `
+      <div class="ad">
+        <p>$9.99</p>
+      <main>
+        <button>Buy now</button>
+        <p>Launch price $49.99</p>
+      </main>
+    `;
+
+    // Fail safe: malformed/unclosed ad markup must not eat real content.
+    // The ad-slot price stays (old behavior) but the real CTA survives.
+    const signals = extractLandingPageSignals(html);
+    expect(signals.ctaText).toBe("Buy now");
+    expect(signals.priceText).toBe("$9.99");
+  });
+
+  it("keeps content inside ad-token lookalike words", () => {
+    const html = `
+      <div class="header">
+        <a href="/shop">Shop now</a>
+      </div>
+      <div class="adventure-card">
+        <p>$49.99</p>
+      </div>
+      <div id="address">
+        <input name="email" />
+        <input type="submit" value="Get started" />
+      </div>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      priceText: "$49.99",
+      formPresent: true,
+    });
+  });
+
+  it("keeps signals from unmarked product content wrappers", () => {
+    const html = `
+      <div class="product-card">
+        <p>Launch price $49.99</p>
+        <button>Buy now</button>
+      </div>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: "$49.99",
+    });
+  });
 });
 
 describe("captureLandingPageSnapshot", () => {

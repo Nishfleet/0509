@@ -3,22 +3,29 @@
 **Item:** Prepare a manual BetaList listing for Five to Nine
 [scout 2026-08-09, risk: green] [traction] [unreviewed-by-grok]
 
-**Status:** PREPARED, NOT SUBMITTED. This document contains every field the
+**Status:** PREPARED, NOT SUBMITTED (re-verified 2026-08-12). This document contains every field the
 BetaList submission form needs, grounded in official BetaList guidance and the
 repo's canonical product copy. Submission requires a paid BetaList plan and an
 owner decision on a few personal fields (founder name, location, contact
 email) plus launch-status wording — see [Owner decisions](#owner-decisions).
 
-## Submission status (recorded 2026-08-11)
+## Submission status (recorded 2026-08-11, re-verified 2026-08-12)
 
-**SKIPPED_PAID — not submitted.** Recorded 2026-08-11:
+**SKIPPED_PAID — not submitted.** Recorded 2026-08-11 and re-verified
+2026-08-12:
 
-- BetaList's official Support page currently states that **all submissions
-  are paid** and there is **no free submission option**. With no free tier,
-  this venue is skipped rather than pursued; the prepared copy above stays
+- BetaList's official Support/FAQ page states that **all submissions are
+  paid** and there is **no free submission option** — re-checked live at
+  `https://betalist.com/faq` on 2026-08-12, unchanged. With no free tier,
+  this venue is skipped rather than pursued; the prepared copy below stays
   on file if the paid tier ever becomes a separate owner decision (see
   [Launch-status wording](#launch-status-wording-owner-decision) and
   [Owner decisions](#owner-decisions)).
+- If the paid tier is ever approved: submission plans differ only by
+  featuring speed and newsletter-guarantee, and a startup that is not
+  selected is refunded in full automatically (5–10 business days). The
+  downside of trying is the fee plus review time, not lost money on a
+  rejected listing.
 
 ## Eligibility check against BetaList submission guidelines
 
@@ -27,7 +34,7 @@ passes every guideline:
 
 | BetaList guideline | Five to Nine posture |
 |---|---|
-| Product should be relatively new (pre-launch / private beta / recently launched) | Live since 2026-06-15 in public early access with an honest beta caveat. See [Launch-status wording](#launch-status-wording) before submitting — the older the launch, the weaker the fit. |
+| Product should be relatively new (pre-launch / private beta / recently launched) | Live since 2026-06-15 in public early access (~8.5 weeks as of 2026-08-12). See [Launch-status wording](#launch-status-wording) before submitting — the older the launch, the weaker the fit. |
 | Not featured on BetaList before | Correct — no prior listing. Each startup gets one pre-launch and one launch feature. |
 | Needs to be a technology startup | Yes — SaaS competitor-monitoring product, not a blog/newsletter/store. |
 | Distinct, decent-looking landing page | Yes — custom-designed `https://0509.io` marketing site (no template), with product info, proof brief, FAQ, and pricing. |
@@ -170,7 +177,7 @@ live homepage copy in `app/routes/marketing.tsx`:
 - [ ] Verify every screenshot shows no personal/private data (mask emails and
       any non-public workspace content).
 
-## Submission process (verified from BetaList FAQ, 2026-08-10)
+## Submission process (verified from BetaList FAQ, 2026-08-10; re-verified 2026-08-12)
 
 1. Create a free BetaList account (`https://betalist.com/sign_up`).
 2. Go to `https://betalist.com/submit` and complete the form with the fields
@@ -189,12 +196,28 @@ live homepage copy in `app/routes/marketing.tsx`:
    shares contact information itself (FAQ note) — this is normal scraping
    noise, not a leak.
 
+## Re-verification log (2026-08-12)
+
+Refresh done by lane 2 on 2026-08-12 before reporting this item complete.
+Every claim in this document was re-checked against live sources:
+
+| Check | Evidence | Verdict |
+|---|---|---|
+| Submission guidelines unchanged | Live fetch of `https://betalist.com/criteria` on 2026-08-12 | Five to Nine still passes all six guidelines; "recently launched" is still the best available fit bracket |
+| Paid-only requirement unchanged | Live fetch of `https://betalist.com/faq` on 2026-08-12: "All submissions are paid. There is no free submission option." | SKIPPED_PAID decision stands as of today |
+| Plan/entitlement copy still accurate | `docs/plan-catalog.md` + `app/lib/plan-entitlements.ts`: Free 1 watchlist/weekly digest, Scout 3 @ 6-hour checks, Starter 10 @ 3-hour + daily digests, Agency 75 | The Pricing value and both description versions match the catalog exactly |
+| Meta ads tracking status current | Graduation commit `ac393f02` (PR #638) merged on main 2026-08-12: Meta ads tracking no longer beta, gated by green production canary | Guardrail line in this document updated by that commit; rollback = restore the beta caveat if the canary turns red |
+| Launch age | Production domains live since 2026-06-15 (`README.md` production note) | ~8.5 weeks as of 2026-08-12 — still inside "recently launched" but trending toward the weaker fit (see Launch-status wording) |
+| Tagline matches live site | Homepage SEO title + hero in `app/routes/marketing.tsx`: "Know when competitors change the offer." | Recommended tagline is identical to the live page copy |
+| No stale beta wording | `grep -i "beta\|early access" app/routes/marketing.tsx app/routes/compare.magicbrief.tsx` returns nothing | No customer-facing beta caveat remains to conflict with the listing; eligibility row updated to drop the stale "beta caveat" phrase |
+| Logo asset exists | `brand/five-to-nine-colored-logo.svg` in repo | Asset checklist item 1 is ready to upload |
+
 ## Launch-status wording (owner decision)
 
 BetaList's guideline favors products that are pre-launch, private-beta, or
 **recently launched**; "launched weeks ago or longer" is listed as less
 suitable. Five to Nine has been live in public early access since 2026-06-15
-(~8 weeks as of today). Options:
+(~8.5 weeks as of 2026-08-12). Options:
 
 - **A — Submit now as "recently launched / early access."** Highest-fit
   framing available today; risk that the editorial team still sees an older
@@ -205,8 +228,10 @@ suitable. Five to Nine has been live in public early access since 2026-06-15
 - **C — Skip.** If the launch is considered complete, BetaList's audience fit
   drops and the paid fee + refund mechanics are not worth the noise.
 
-Recommended: **A**, paired with honest "early access / beta" phrasing in the
-description so the listing and the live site never disagree.
+Recommended: **A**, paired with honest "early access" phrasing in the
+description so the listing and the live site never disagree (no beta wording —
+the site's Meta ads tracking graduated from beta 2026-08-12, so the listing
+must not claim the product is in beta).
 
 ## Owner decisions
 

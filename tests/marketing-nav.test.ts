@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
-async function mockRouter() {
+async function mockRouter(rootData?: unknown) {
 	vi.doMock("react-router", async () => {
 		const actual = await vi.importActual<typeof import("react-router")>("react-router");
 		const React = await import("react");
@@ -13,6 +13,7 @@ async function mockRouter() {
 			...actual,
 			Link: ({ children, to, ...props }: MockLinkProps) =>
 				React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+			useRouteLoaderData: () => rootData,
 		};
 	});
 }
@@ -34,7 +35,9 @@ const SHARED_LINKS = [
 	{ href: "/docs", label: "Docs" },
 	{ href: "/status", label: "Status" },
 	{ href: "/auth/login", label: "Sign in" },
-	{ href: "/app", label: "Open app" },
+	// Open app is auth-aware: anonymous visitors (and crawlers) get the login
+	// destination directly so no internal link on a public page redirects.
+	{ href: "/auth/login?redirectTo=%2Fapp", label: "Open app" },
 	// Signup CTA: anonymous visitors can reach /auth/signup from the nav.
 	{ href: "/auth/signup", label: "Sign up" },
 ];
@@ -59,6 +62,15 @@ describe("MarketingNav (shared public nav)", () => {
 		expect(markup).toContain("class=\"f9-link-arrow ld-nav-open-app\"");
 		expect(markup).toContain("href=\"/auth/signup\"");
 		expect(markup).toContain(">Sign up</a>");
+	});
+
+	it("points Open app straight at /app for signed-in visitors", async () => {
+		await mockRouter({ session: { user: { id: "u1" } } });
+		const { MarketingNav } = await import("~/components/marketing-nav");
+		const markup = renderToStaticMarkup(createElement(MarketingNav));
+
+		expect(markup).toContain('href="/app"');
+		expect(markup).toContain(">Open app</a>");
 	});
 
 	it("hides Open app on the compact ≤860px nav so the fold stays clear", () => {

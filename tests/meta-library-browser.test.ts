@@ -2536,6 +2536,18 @@ describe("Ad Library chrome CTA guard", () => {
     }
   });
 
+  it("flags Menu with a trailing zero-width space (U+200B) as chrome", async () => {
+    const { isAdLibraryChromeCta } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    // Exact production value captured from public search: the library
+    // "Menu" overflow label plus newline plus U+200B. U+200B is not \s,
+    // so the pre-fix normalizer left it in and the guard missed it.
+    expect(isAdLibraryChromeCta("Menu\n\u200B")).toBe(true);
+    expect(isAdLibraryChromeCta("Menu\u200B")).toBe(true);
+  });
+
   it("never flags real advertiser CTAs", async () => {
     const { isAdLibraryChromeCta } = await import(
       "~/lib/meta-library-rendered-card-parser.server"
