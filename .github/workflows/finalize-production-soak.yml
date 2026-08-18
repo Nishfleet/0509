@@ -83,7 +83,7 @@ jobs:
             });
             const canonicalWorkflowPath = ".github/workflows/deploy-production.yml";
             const valid =
-              context.repo.owner === "nish3451" &&
+              context.repo.owner === "Nishfleet" &&
               context.repo.repo === "0509" &&
               workflow.path === canonicalWorkflowPath &&
               run.workflow_id === workflow.id &&
