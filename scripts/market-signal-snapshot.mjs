@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 const DATABASE = "0509";
-const REPOSITORY = "nish3451/0509";
+const REPOSITORY = "Nishfleet/0509";
 
 /** @param {Date} generatedAt */
 export function buildSignalSql(generatedAt) {

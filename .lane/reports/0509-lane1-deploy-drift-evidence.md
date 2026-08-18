@@ -27,7 +27,7 @@ These are the exact tests that pin the drift-tolerant behavior (#556/#630 added 
 
 ## Deliverables
 
-- Branch `0509-lane1-deploy-drift-evidence` pushed; PR **#726** opened: https://github.com/nish3451/0509/pull/726
+- Branch `0509-lane1-deploy-drift-evidence` pushed; PR **#726** opened: https://github.com/Nishfleet/0509/pull/726
 - Evidence record: `.lane/reports/0509-lane1-deploy-drift-evidence.md` (only file in the PR)
 - Lane claims published to `/home/nish/workspaces/agent-state/lanes/0509/lane-1.json`
 

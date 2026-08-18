@@ -44,7 +44,7 @@ retry — the pipeline self-heals, which is the designed behavior.
 ## Evidence sources
 
 - `gh run list --workflow deploy-production.yml` — conclusions and SHAs above.
-- `gh api repos/nish3451/0509/deployments` — production deployment records at
+- `gh api repos/Nishfleet/0509/deployments` — production deployment records at
   10:01:07Z (`164c3bbc`), 12:37:51Z (`afc1e687`), 20:16:26Z (`bceec022`),
   20:58:27Z and 22:08–22:14Z (`07481600`).
 - `/home/nish/workspaces/agent-state/lanes/auto-deploy.log` — the dispatcher's
