@@ -208,6 +208,7 @@ describe("sendFreeActivationResultEmail", () => {
           creativeImageUrl: null,
         },
       ],
+      proofCaptureSucceeded: true,
     });
     const second = await sendFreeActivationResultEmail(env as never, {
       userId: "user-1",
@@ -217,6 +218,7 @@ describe("sendFreeActivationResultEmail", () => {
       competitorName: "Glossier",
       adsFound: 12,
       topAds: [],
+      proofCaptureSucceeded: false,
     });
 
     expect(first.sent).toBe(true);
@@ -266,6 +268,7 @@ describe("sendFreeActivationResultEmail", () => {
       competitorName: "Glossier",
       adsFound: 1,
       topAds: [],
+      proofCaptureSucceeded: true,
     });
 
     expect(result).toEqual({ sent: true, reason: "sent" });
@@ -309,6 +312,7 @@ describe("sendFreeActivationResultEmail", () => {
       competitorName: "Nike",
       adsFound: 3,
       topAds: [],
+      proofCaptureSucceeded: true,
     });
 
     expect(result).toEqual({ sent: false, reason: "unsubscribed" });
@@ -346,6 +350,7 @@ describe("sendFreeActivationResultEmail", () => {
       competitorName: "Nike",
       adsFound: 3,
       topAds: [],
+      proofCaptureSucceeded: true,
     });
 
     expect(result).toEqual({ sent: false, reason: "target_not_ready" });
