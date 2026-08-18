@@ -48,6 +48,7 @@ import type {
   BrandIntelTeaser,
   BrandPageAggression,
 } from "~/lib/brand-page.server";
+import { countBrandOwnedAds } from "~/lib/brand-page.server";
 import { canonicalUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
@@ -138,9 +139,8 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     buildBrandChangeFeed,
     buildBrandIntelTeaser,
     computeBrandPageAggressionScore,
-    countBrandOwnedAds,
-    formatBrandPageCheckedAgo,
     loadBrandPageCacheSnapshot,
+    resolveBrandPageFreshness,
   } = await import("~/lib/brand-page.server");
   const { defaultCountryForVisitor } = await import("~/lib/countries");
   const visitorCountry = defaultCountryForVisitor(
@@ -164,6 +164,9 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   }
 
   const now = new Date();
+  const freshness = snapshot
+    ? resolveBrandPageFreshness(snapshot.fetchedAt, now)
+    : null;
   const emergencyNoindex = env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0";
   const noindex = emergencyNoindex || !snapshot || !snapshot.freshForIndexing;
 
@@ -183,9 +186,9 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     hasCachedAds: Boolean(snapshot),
     ads: snapshotAds,
     verifiedLinkedAds,
-    checkedAgo: snapshot ? formatBrandPageCheckedAgo(snapshot.fetchedAt, now) : null,
+    checkedAgo: freshness?.checkedAgo ?? null,
     lastCheckedAt: snapshot?.fetchedAt ?? null,
-    freshForLiveClaim: snapshot?.freshForLiveClaim ?? false,
+    freshForLiveClaim: freshness?.freshForLiveClaim ?? false,
     brandOwnedAdCount: countBrandOwnedAds(verifiedLinkedAds, brand.domain),
     verifiedLinkCount: verifiedLinkedAds.length,
     unverifiedMatchCount: snapshotAds.length - verifiedLinkedAds.length,

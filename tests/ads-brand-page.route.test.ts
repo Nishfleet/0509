@@ -85,11 +85,15 @@ interface MockOptions {
   entry?: ReturnType<typeof cacheEntry> | null;
   provider?: string;
   rateLimitResponse?: Response | null;
+  onCacheRead?: () => void;
 }
 
 function installBrandPageMocks(options: MockOptions = {}) {
   const env = options.env ?? { DB: {} };
-  const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(options.entry ?? null);
+  const getDiscoveryCacheEntry = vi.fn().mockImplementation(async () => {
+    options.onCacheRead?.();
+    return options.entry ?? null;
+  });
   const searchAdsViaSourceResolver = vi.fn();
   const hasFreshDiscoveryCacheEntry = vi.fn();
   const searchMetaLibraryByBrowser = vi.fn();
@@ -228,6 +232,30 @@ describe("/ads/:domain loader", () => {
     expect(result.hasCachedAds).toBe(true);
     expect(result.checkedAgo).toBe("moments ago");
     expect(result.freshForLiveClaim).toBe(true);
+  });
+
+  it("keeps the live claim and checked-ago stamp on one post-read clock across a 2ms cache-read gap", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const t0 = new Date("2026-08-14T12:00:00.000Z");
+      vi.setSystemTime(t0);
+      const fetchedAt = new Date(t0.getTime() - 119_999).toISOString();
+      const mocks = installBrandPageMocks({
+        entry: cacheEntry({ fetchedAt }),
+        onCacheRead: () => {
+          vi.setSystemTime(new Date(t0.getTime() + 2));
+        },
+      });
+
+      const result = await runLoader("nykaa.com", mocks.env);
+
+      expect(result.hasCachedAds).toBe(true);
+      expect(result.checkedAgo).toBe("about 2 minutes ago");
+      expect(result.freshForLiveClaim).toBe(false);
+      expect(result.freshForLiveClaim).toBe(result.checkedAgo === "moments ago");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("withholds the live-claim freshness for a capture minutes old — not just hours", async () => {

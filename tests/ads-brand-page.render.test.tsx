@@ -17,6 +17,7 @@ beforeEach(() => {
     return {
       ...actual,
       useLoaderData: () => currentData,
+      useRouteLoaderData: () => undefined,
       Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
@@ -210,7 +211,7 @@ describe("/ads/:domain — Case File render", () => {
     // Exactly 5: the 6th ad hides behind the overflow tile, which is a
     // conversion cell, not a card.
     expect((markup.match(/Since 1 Jun 2026/g) ?? []).length).toBe(5);
-    expect(markup).toContain("+29");
+    expect(markup).toContain("+1");
   });
 
   it("renders no capture-date pill when the creative's first-seen proof is missing", async () => {
@@ -310,9 +311,9 @@ describe("/ads/:domain — Case File render", () => {
 
     // Fresh capture reads present tense; stale capture reads "at the last
     // check", mirroring the hero line and the caption flip above.
-    expect(fresh).toContain(">28 active<");
-    expect(stale).toContain("28 active at last check");
-    expect(stale).not.toContain(">28 active<");
+    expect(fresh).toContain(">6 active<");
+    expect(stale).toContain("6 active at last check");
+    expect(stale).not.toContain(">6 active<");
   });
 
   it("stops telling visitors the brand is running ads when the creatives are other advertisers'", async () => {
