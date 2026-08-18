@@ -23,6 +23,7 @@ export function legacyWorkspaceDeliveryDefaults(input: { hasEmail: boolean }) {
     emailEnabled: input.hasEmail,
     whatsappEnabled: false,
     slackEnabled: false,
+    teamsEnabled: false,
   };
 }
 
@@ -48,6 +49,7 @@ export async function ensureNewWorkspaceDeliveryDefaults(
     emailEnabled: options.hasEmail !== false,
     whatsappEnabled: false,
     slackEnabled: false,
+    teamsEnabled: false,
   });
   const config = await getWorkspaceDeliveryConfig(env, userId);
   return { created: true as const, config };
@@ -168,6 +170,7 @@ export async function upsertWorkspaceDeliveryConfig(
     emailEnabled: boolean;
     whatsappEnabled: boolean;
     slackEnabled?: boolean;
+    teamsEnabled?: boolean;
     quietHours?: DeliveryQuietHours | null;
     timezone?: string | null;
   },
@@ -189,12 +192,13 @@ export async function upsertWorkspaceDeliveryConfig(
         email_enabled,
         whatsapp_enabled,
         slack_enabled,
+        teams_enabled,
         quiet_hours_json,
         timezone,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id)
       DO UPDATE SET sensitivity_mode = excluded.sensitivity_mode,
                     instant_enabled = excluded.instant_enabled,
@@ -203,6 +207,7 @@ export async function upsertWorkspaceDeliveryConfig(
                     email_enabled = excluded.email_enabled,
                     whatsapp_enabled = excluded.whatsapp_enabled,
                     slack_enabled = excluded.slack_enabled,
+                    teams_enabled = excluded.teams_enabled,
                     quiet_hours_json = excluded.quiet_hours_json,
                     timezone = excluded.timezone,
                     updated_at = excluded.updated_at
@@ -216,6 +221,7 @@ export async function upsertWorkspaceDeliveryConfig(
     boolToInt(input.emailEnabled),
     boolToInt(input.whatsappEnabled),
     boolToInt(input.slackEnabled ?? false),
+    boolToInt(input.teamsEnabled ?? false),
     jsonValue(input.quietHours ?? null),
     input.timezone ?? null,
     timestamp,

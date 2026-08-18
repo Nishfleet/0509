@@ -4407,7 +4407,9 @@ describe("upsertDeliveryTarget", () => {
     expect(statement?.sql).toContain("last_successful_delivery_at IS NOT NULL");
     expect(statement?.sql).toContain("opted_out_at IS NULL");
     expect(statement?.sql).toContain("channel = 'email'");
-    expect(statement?.sql).not.toContain("channel = 'slack'");
+    // Slack and Teams webhook delivery are live; WhatsApp stays dormant.
+    expect(statement?.sql).toContain("channel = 'slack'");
+    expect(statement?.sql).toContain("channel = 'teams'");
     expect(statement?.sql).not.toContain("channel = 'whatsapp'");
     expect(statement?.sql).toContain("is_validated = 1");
     expect(statement?.sql).toContain("validation_status = 'validated'");
@@ -5018,6 +5020,7 @@ describe("legacy proof-first defaults", () => {
       emailEnabled: true,
       whatsappEnabled: false,
       slackEnabled: false,
+      teamsEnabled: false,
     });
   });
 });
