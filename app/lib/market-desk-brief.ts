@@ -11,6 +11,13 @@ export interface MarketDeskBriefFollowUp {
   openCount?: number | null;
 }
 
+/** Same-session first value: latest first-scan run state per watchlist. */
+export interface MarketDeskBriefFirstScanState {
+  watchlistId: string;
+  status: "pending" | "running" | "succeeded" | "failed" | "skipped";
+  errorCode?: string | null;
+}
+
 export interface MarketDeskBriefInput {
   watchlists: WatchlistRecord[];
   recentEvents: WatchEventRecord[];
@@ -41,6 +48,7 @@ export interface MarketDeskBriefInput {
     * already known. Used to derive the brief's expiry field.
     */
   nextScanAt?: string | null;
+  firstScanStates?: MarketDeskBriefFirstScanState[] | null;
 }
 
 export interface MarketDeskBriefMetric {
@@ -346,6 +354,53 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       };
     }
 
+    // No successful scan yet — the first-scan run states (when available)
+    // make the queued claim live instead of static, so the signup session
+    // knows the check is running now and that results land here.
+    const stateByWatchlistId = new Map(
+      (input.firstScanStates ?? []).map((state) => [state.watchlistId, state]),
+    );
+    const pendingOrRunning = activeWatchlists.some((watchlist) => {
+      const state = stateByWatchlistId.get(watchlist.id);
+      return state?.status === "pending" || state?.status === "running";
+    });
+    const runningNow = activeWatchlists.some((watchlist) =>
+      stateByWatchlistId.get(watchlist.id)?.status === "running",
+    );
+    const itemDetail = (watchlist: WatchlistRecord) => {
+      const state = stateByWatchlistId.get(watchlist.id);
+      if (state?.status === "running") return "First scan running now — results land here";
+      if (state?.status === "pending") return "First scan starts shortly";
+      if (state?.status === "failed") return "First scan couldn't finish — open for next steps";
+      if (state?.status === "skipped") return "First scan paused before results — open for details";
+      return "First scan pending";
+    };
+    if (pendingOrRunning) {
+      return {
+        state: "queued",
+        kicker: "Brief",
+        title: runningNow
+          ? (isFreePlan ? "Activation scan is running now" : "First sweep is running now")
+          : (isFreePlan ? "Activation scan starts shortly" : "First sweep starts shortly"),
+        summary: runningNow
+          ? (isFreePlan
+              ? `Your activation scan is running now — results and your first mini-brief land here automatically. After this, free checks this competitor weekly and emails a weekly brief; paid plans check every 3–6 hours.`
+              : `Your first scan is running now — results and your first mini-brief land here automatically.`)
+          : (isFreePlan
+              ? `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} ready. The activation scan starts automatically, and results land here the moment it completes.`
+              : `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} ready. The first scan starts automatically, and results land here the moment it completes.`),
+        action: { href: "/app/watchlists", label: "Open watchlists" },
+        metrics,
+        items: activeWatchlists.slice(0, 3).map((watchlist) => ({
+          label: runningNow ? "Scanning" : "Queued",
+          title: watchlist.targetLabel,
+          detail: itemDetail(watchlist),
+        })),
+        hasMetrics,
+        retention,
+      };
+    }
+
     return {
       state: "queued",
       kicker: "Brief",
@@ -358,7 +413,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       items: activeWatchlists.slice(0, 3).map((watchlist) => ({
         label: "Queued",
         title: watchlist.targetLabel,
-        detail: watchlist.lastScannedAt ? "Already has scan history" : "First scan pending",
+        detail: itemDetail(watchlist),
       })),
       hasMetrics,
       retention,
