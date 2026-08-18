@@ -57,7 +57,7 @@ export function CheckoutReturnNotice({
   if (checkoutConfirmed && kind === "top_up") {
     return (
       <div className="f9-wk-notice is-success" role="status">
-        <p>Your top-up pack is live. Purchased checks and usage limits are now updated.</p>
+        <p>Your top-up pack is live. Purchased proof captures and usage limits are now updated.</p>
       </div>
     );
   }
