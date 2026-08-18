@@ -41,8 +41,8 @@ describe("production soak finalization workflow", () => {
     expect(script).toContain('`${canonicalWorkflowPath}@main`');
     expect(script).toContain('run.status === "completed"');
     expect(script).toContain('run.conclusion === "success"');
-    expect(script).toContain('run.repository?.full_name === "nish3451/0509"');
-    expect(script).toContain('run.head_repository?.full_name === "nish3451/0509"');
+    expect(script).toContain('run.repository?.full_name === "Nishfleet/0509"');
+    expect(script).toContain('run.head_repository?.full_name === "Nishfleet/0509"');
     expect(script).toContain("run.run_attempt === expectedAttempt");
     expect(script).toContain("run.head_sha === expectedSha");
   });
@@ -72,8 +72,8 @@ describe("production soak finalization workflow", () => {
       status: "completed",
       conclusion: "success",
       event: "push",
-      repository: { full_name: "nish3451/0509" },
-      head_repository: { full_name: "nish3451/0509" },
+      repository: { full_name: "Nishfleet/0509" },
+      head_repository: { full_name: "Nishfleet/0509" },
     };
     const github = {
       rest: { actions: {
