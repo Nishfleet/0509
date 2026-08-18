@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { adLongevityDays, formatAdLongevityLabel, STRONG_LONGEVITY_DAYS } from "~/lib/ad-display";
+import {
+  adLongevityDays,
+  formatAdCaptureSinceLabel,
+  formatAdLongevityLabel,
+  STRONG_LONGEVITY_DAYS,
+} from "~/lib/ad-display";
 
 const NOW = new Date("2026-06-12T12:00:00.000Z");
 
@@ -51,6 +56,37 @@ describe("formatAdLongevityLabel", () => {
         { firstSeenAt: "2026-06-10T00:00:00.000Z", lastSeenAt: "2026-06-01T00:00:00.000Z" },
         NOW,
       ),
+    ).toBeNull();
+  });
+});
+
+describe("formatAdCaptureSinceLabel", () => {
+  it("renders the per-ad capture date in pinned en-GB UTC copy", () => {
+    expect(
+      formatAdCaptureSinceLabel(
+        { firstSeenAt: "2026-06-01T00:00:00.000Z" },
+        NOW,
+      ),
+    ).toBe("Since 1 Jun 2026");
+    expect(
+      formatAdCaptureSinceLabel(
+        { firstSeenAt: "2025-10-24T12:30:00.000Z" },
+        NOW,
+      ),
+    ).toBe("Since 24 Oct 2025");
+  });
+
+  it("returns null when firstSeenAt is missing (no date when we don't know)", () => {
+    expect(formatAdCaptureSinceLabel({ firstSeenAt: null }, NOW)).toBeNull();
+  });
+
+  it("returns null for unusable timestamps", () => {
+    expect(formatAdCaptureSinceLabel({ firstSeenAt: "not-a-date" }, NOW)).toBeNull();
+  });
+
+  it("returns null for a future firstSeenAt (clock-skew guard)", () => {
+    expect(
+      formatAdCaptureSinceLabel({ firstSeenAt: "2026-06-13T00:00:00.000Z" }, NOW),
     ).toBeNull();
   });
 });

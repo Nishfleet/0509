@@ -333,7 +333,7 @@ export function buildRemoteRestoreEvidence({
   if (
     !SHA256_PATTERN.test(candidate?.fingerprint ?? "") ||
     !SHA256_PATTERN.test(candidate?.wrangler?.worktreeSha256 ?? "") ||
-    candidate?.wrangler?.worktreeSearchRolloutMode !== "shadow" ||
+    candidate?.wrangler?.worktreeSearchRolloutMode !== "v2" ||
     !SHA256_PATTERN.test(sourceDumpSha256) ||
     !SHA256_PATTERN.test(transformedSqlSha256) ||
     !UUID_PATTERN.test(productionDatabase?.uuid ?? "") ||
@@ -375,7 +375,7 @@ export function buildRemoteRestoreEvidence({
     migrationCount,
     planRowCount: aggregate.planRowCount,
     dodoLinkedPlanRowCount: aggregate.dodoLinkedPlanRowCount,
-    productionSearchRolloutMode: "shadow",
+    productionSearchRolloutMode: "v2",
     integrity: aggregate.integrity,
     foreignKeyViolations: aggregate.foreignKeyViolations,
     exactRowCounts: true,

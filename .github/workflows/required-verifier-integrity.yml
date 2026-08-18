@@ -1,0 +1,158 @@
+name: Required verifier integrity
+
+# Independent, base-branch-owned integrity gate for the 0509 required
+# verifiers (sol-sweep product-ci/0509-required-verifiers-self-certify-
+# without-independent-approval).
+#
+# Defect closed: PR #694 changed both workflows that produce the only required
+# contexts (Gitleaks, codex-node-checks), received successful checks produced
+# by that same candidate, had zero reviews, and merged. Branch protection
+# required neither approval nor conversation resolution, so a candidate could
+# redefine its own verifier and self-certify.
+#
+# This workflow runs on pull_request_target, i.e. it executes the BASE branch's
+# bytes with a base-branch-scoped token: it never checks out candidate code and
+# never runs a candidate-controlled script. Every input (changed files, review
+# states, reviewer permissions, head commit date) is read through the GitHub
+# API in the base branch's context, so a candidate cannot shape the evidence
+# about itself. If a candidate changes a protected verifier definition
+# (ci.yml, secret-scan.yml, this workflow, or the gate's decision scripts), the
+# job FAILS unless the PR carries a current APPROVED review from a repository
+# administrator/maintainer other than the PR author. Any API failure fails
+# closed.
+#
+# Hygiene contract (test_required_context_hygiene.py): the required job has NO
+# job-level `if:` (authorizer is a step), no `continue-on-error`, no trailing
+# `|| true` swallow, and no mutable verifier (`uses:` must be a pinned SHA or
+# absent; this job uses only the runner-provided `gh` CLI and shell tools).
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  required-verifier-integrity:
+    name: required-verifier-integrity
+    runs-on: [self-hosted, linux, x64, vps-verify]
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Authorize exact verification candidate
+        id: authorize
+        shell: bash
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "nish3451/0509"
+          test "$GITHUB_EVENT_NAME" = "pull_request_target"
+          test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+          # Self-hosted runners on pull_request_target may set GITHUB_REF to
+          # either refs/pull/N/merge (hosted behavior) or refs/heads/<branch>
+          # (when the runner checks out the head branch directly). Accept both
+          # forms and additionally validate the PR number, head SHA, and base
+          # ref via the explicit event fields so a runner cannot be tricked
+          # into evaluating a different PR or branch.
+          case "$GITHUB_REF" in
+            refs/pull/[1-9]*[0-9]*/merge) ;;
+            refs/heads/*) ;;
+            *) echo "unexpected GITHUB_REF: $GITHUB_REF" >&2; exit 1 ;;
+          esac
+          # PR_NUMBER, HEAD_SHA, and BASE_REF must be well-formed (non-empty,
+          # PR number a positive integer, head SHA 40 lowercase hex, base ref
+          # a non-empty branch name). Any malformed field fails closed.
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "bad PR_NUMBER: $PR_NUMBER" >&2; exit 1; }
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad HEAD_SHA: $HEAD_SHA" >&2; exit 1; }
+          test -n "$BASE_REF" || { echo "empty BASE_REF" >&2; exit 1; }
+
+      - name: Resolve candidate context through the GitHub API
+        id: context
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+          # Authoritative PR changed-file list (paginated; every page merged).
+          files_json="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
+            --jq '[.[] | {filename, previous_filename}]')"
+          # Authoritative review list (paginated; states include DISMISSED so
+          # dismissals can never masquerade as approvals).
+          reviews_json="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews?per_page=100" \
+            --jq '[.[] | {state, submitted_at, user: (.user.login // ""), commit_id}]')"
+          # Head commit date proves an approval is current, not stale.
+          head_date="$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq '.commit.committer.date // ""')"
+          # Reviewer permissions resolved from the collaborator-permission API,
+          # never from a label, comment, or candidate file.
+          perms_file="$RUNNER_TEMP/perms.tsv"
+          : > "$perms_file"
+          for login in $(printf '%s' "$reviews_json" | jq -r '.[].user | select(. != "")' | sort -u); do
+            perm="$(gh api "repos/$REPO/collaborators/$login/permission" --jq '.permission')"
+            printf '%s\t%s\n' "$login" "$perm" >> "$perms_file"
+          done
+          perms_json="$(awk -F'\t' 'NF==2 {print}' "$perms_file" | jq -Rn \
+            '[inputs | split("\t") | select(length==2) | {key: .[0], value: .[1]}] | from_entries')"
+          jq -n \
+            --arg author "$AUTHOR" \
+            --arg head_commit_date "$head_date" \
+            --argjson files "$files_json" \
+            --argjson reviews "$reviews_json" \
+            --argjson permissions "$perms_json" \
+            --argjson protected '[
+              ".github/workflows/ci.yml",
+              ".github/workflows/secret-scan.yml",
+              ".github/workflows/required-verifier-integrity.yml",
+              ".github/scripts/required-verifier-integrity.sh",
+              ".github/scripts/test-required-verifier-integrity.sh"
+            ]' \
+            '{author: $author, head_commit_date: $head_commit_date, files: $files,
+              reviews: $reviews, permissions: $permissions, protected_files: $protected}' \
+            > "$RUNNER_TEMP/context-bundle.json"
+
+      - name: Evaluate required-verifier integrity
+        id: evaluate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          # The decision logic is fetched from the BASE branch's current ref
+          # (never from the candidate tree), so the candidate cannot run its
+          # own script. The default-branch ref (not base.sha) is used because
+          # base.sha is the PR-creation-time base commit and can predate the
+          # gate's landing for PRs that were already open; the workflow YAML
+          # GitHub evaluates for pull_request_target is the base branch's
+          # current file, so the current ref is the matching source of truth.
+          script="$RUNNER_TEMP/required-verifier-integrity.sh"
+          gh api "repos/$REPO/contents/.github/scripts/required-verifier-integrity.sh?ref=$BASE_REF" \
+            --jq '.content' | base64 -d > "$script"
+          test -s "$script"
+          bash "$script" < "$RUNNER_TEMP/context-bundle.json"
+
+      - name: Run deterministic fixture regression
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/test-required-verifier-integrity.sh"
+          gh api "repos/$REPO/contents/.github/scripts/test-required-verifier-integrity.sh?ref=$BASE_REF" \
+            --jq '.content' | base64 -d > "$fixture"
+          test -s "$fixture"
+          bash "$fixture"

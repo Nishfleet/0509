@@ -70,12 +70,12 @@ function releaseCompatibleProductionMetaReport(options: {
     app: "0509",
     expectedApp: "0509",
     expectedWorkerVersionId: "worker-v1",
-    expectedSearchRolloutMode: "shadow",
+    expectedSearchRolloutMode: "v2",
     releaseIdentity: {
       workerVersionId: "worker-v1",
       tag: null,
       timestamp: "2026-07-18T00:00:00.000Z",
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
     },
     releaseIdentityOk: true,
     message: null,
@@ -91,7 +91,7 @@ function releaseCompatibleProductionMetaReport(options: {
     health: healthChecks[0],
     healthChecks,
     expectedWorkerVersionId: "worker-v1",
-    expectedSearchRolloutMode: "shadow",
+    expectedSearchRolloutMode: "v2",
     launchReadiness: {
       ok: false,
       status: 503,
@@ -254,7 +254,7 @@ describe("defaultHealthAnchor (stabilized identity anchor)", () => {
     expect(checkHealthImpl.mock.calls.length).toBeGreaterThan(0);
   });
 
-  it("enforces the exact worker version and shadow mode on every alias, every sample", async () => {
+  it("enforces the exact worker version and v2 rollout mode on every alias, every sample", async () => {
     const checkHealthImpl = vi.fn(async (_args: HealthProbeArgs) => ({ ok: true }));
 
     const result = await defaultHealthAnchor({
@@ -266,19 +266,19 @@ describe("defaultHealthAnchor (stabilized identity anchor)", () => {
     });
 
     expect(result.ok).toBe(true);
-    // All three aliases probed, each with the exact deployed version + shadow.
+    // All three aliases probed, each with the exact deployed version + v2 rollout.
     for (const url of HOSTS) {
       expect(checkHealthImpl).toHaveBeenCalledWith({
         baseUrl: url,
         expectedWorkerVersionId: "worker-v1",
-        expectedSearchRolloutMode: "shadow",
+        expectedSearchRolloutMode: "v2",
       });
     }
-    // Every recorded probe carried the exact-version + shadow assertion.
+    // Every recorded probe carried the exact-version + v2 rollout assertion.
     for (const [args] of checkHealthImpl.mock.calls) {
       expect(args).toMatchObject({
         expectedWorkerVersionId: "worker-v1",
-        expectedSearchRolloutMode: "shadow",
+        expectedSearchRolloutMode: "v2",
       });
     }
   });
@@ -640,7 +640,7 @@ describe("version-bound Gate C orchestrator", () => {
       schemaVersion: 1,
       generatedAt: "2026-07-18T00:00:00.000Z",
       workerVersionId: "worker-v1",
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       gateRunId: "gate-c-worker-v1",
       gatePhase: "immediate",
       backupProofStatus: "required",
@@ -688,7 +688,7 @@ describe("version-bound Gate C orchestrator", () => {
       schemaVersion: 1,
       generatedAt: "2026-07-18T00:00:00.000Z",
       workerVersionId: "worker-v1",
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       gateRunId: "gate-c-worker-v1",
       gatePhase: "immediate",
       backupProofStatus: "required",
@@ -789,7 +789,7 @@ describe("version-bound Gate C orchestrator", () => {
       schemaVersion: 1,
       generatedAt: "2026-07-18T00:00:00.000Z",
       workerVersionId: "worker-v1",
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       gateRunId: "gate-c-worker-v1",
       gatePhase: "immediate",
       backupProofStatus: "required",
@@ -851,7 +851,7 @@ describe("version-bound Gate C orchestrator", () => {
       generatedAt: "2026-07-16T00:00:00.000Z",
       completedAt: "2026-07-16T00:01:00.000Z",
       workerVersionId: "worker-v1",
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       gateRunId: "gate-c-worker-v1",
       status: "passed",
       steps: Object.fromEntries([

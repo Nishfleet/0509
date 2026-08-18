@@ -46,8 +46,8 @@ jobs:
           import re
           if not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", worker_version):
               raise SystemExit("health worker version contained unsafe characters")
-          if identity.get("searchRolloutMode") != "shadow":
-              raise SystemExit("health search rollout mode was not shadow")
+          if identity.get("searchRolloutMode") != "v2":
+              raise SystemExit("health search rollout mode was not v2")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"worker_version={worker_version}\n")
           PY
@@ -111,6 +111,6 @@ jobs:
           identity = payload.get("releaseIdentity") or {}
           if identity.get("workerVersionId") != os.environ["EXPECTED_WORKER_VERSION"]:
               raise SystemExit("deep health worker version did not match shallow health")
-          if identity.get("searchRolloutMode") != "shadow":
-              raise SystemExit("deep health search rollout mode was not shadow")
+          if identity.get("searchRolloutMode") != "v2":
+              raise SystemExit("deep health search rollout mode was not v2")
           PY

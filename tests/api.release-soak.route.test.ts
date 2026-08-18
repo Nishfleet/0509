@@ -136,7 +136,7 @@ function createContext(rows: Observation[] = completeWindow()) {
       cloudflare: {
         env: {
           CANARY_BYPASS_TOKEN: "secret-token",
-          SEARCH_ROLLOUT_MODE: "shadow",
+          SEARCH_ROLLOUT_MODE: "v2",
           CF_VERSION_METADATA: { id: "worker-v1" },
           DB: { prepare },
         },
@@ -291,7 +291,7 @@ describe("release soak action", () => {
       ok: true,
       passed: true,
       workerVersionId: "worker-v1",
-      searchRolloutMode: "shadow",
+      searchRolloutMode: "v2",
       evidenceClass: "exact_worker_scheduled_observation",
     });
     expect(JSON.stringify(payload)).not.toContain("secret-token");

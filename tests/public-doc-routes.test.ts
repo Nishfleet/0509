@@ -14,6 +14,7 @@ beforeEach(() => {
       ...actual,
       Link: ({ children, to, ...props }: MockLinkProps) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+      useRouteLoaderData: () => undefined,
     };
   });
 });

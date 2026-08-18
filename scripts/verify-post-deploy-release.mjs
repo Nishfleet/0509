@@ -290,10 +290,10 @@ function acceptSameRunInternalProofForProductionMeta(result, context) {
       check?.status === 200 &&
       check?.app === "0509" &&
       check?.expectedWorkerVersionId === context.workerVersionId &&
-      check?.expectedSearchRolloutMode === "shadow" &&
+      check?.expectedSearchRolloutMode === "v2" &&
       check?.releaseIdentityOk === true &&
       check?.releaseIdentity?.workerVersionId === context.workerVersionId &&
-      check?.releaseIdentity?.searchRolloutMode === "shadow"
+      check?.releaseIdentity?.searchRolloutMode === "v2"
     );
   const genericEmailIsCurrent =
     Number.isFinite(emailDelivery?.recentAttempts) &&
@@ -305,7 +305,7 @@ function acceptSameRunInternalProofForProductionMeta(result, context) {
   const allOtherAssertionsPassed =
     report?.passed === false &&
     report?.expectedWorkerVersionId === context.workerVersionId &&
-    report?.expectedSearchRolloutMode === "shadow" &&
+    report?.expectedSearchRolloutMode === "v2" &&
     healthIsExact &&
     report?.freshLiveBypass?.required === true &&
     report?.freshLiveBypass?.configured === true &&
@@ -452,7 +452,7 @@ export function sanitizeProofDiagnostics(payload) {
 
 /**
  * Anchor the release identity by REQUIRING the exact deployed Worker version +
- * shadow mode to hold on ALL THREE public aliases for several consecutive
+ * v2 rollout mode to hold on ALL THREE public aliases for several consecutive
  * samples, not just a single fresh-connection snapshot. Deploy attempt 18's
  * Gate C (run 29764511397) flapped because this ran as a one-shot Promise.all
  * from a fresh process: its new connections hit a lagging/flapping edge colo
@@ -460,7 +460,7 @@ export function sanitizeProofDiagnostics(payload) {
  * and identity_pre/identity_post failed 0.6s after the waiter declared all
  * three aliases stable. Sharing waitForExpectedWorkerVersion makes the anchor
  * bounded and consecutive-sampling — assertion strength is unchanged (exact
- * worker + shadow on all three aliases) but now proven over `requiredConsecutive`
+ * worker + v2 rollout on all three aliases) but now proven over `requiredConsecutive`
  * samples instead of one. On the waiter's fail-closed throw we return
  * `{ ok: false }` so the surrounding step machinery emits the SAME
  * identity_pre_failed / identity_post_failed identifiers as before — nothing
@@ -640,7 +640,7 @@ async function defaultCleanup({ ticket: _ticket, gateRunId: cleanupGateRunId, to
 async function defaultProductionCanary({ workerVersionId, token }) {
   const report = await runProductionCanary({
     expectedWorkerVersionId: workerVersionId,
-    expectedSearchRolloutMode: "shadow",
+    expectedSearchRolloutMode: "v2",
     canaryBypassToken: token,
   });
   return { ok: report.passed, report };
@@ -699,7 +699,7 @@ export async function runVersionBoundGateC({
     schemaVersion: 1,
     generatedAt: now().toISOString(),
     workerVersionId,
-    searchRolloutMode: "shadow",
+    searchRolloutMode: "v2",
     gateRunId: runId,
     gatePhase: GATE_PHASE_IMMEDIATE,
     backupProofStatus: normalizedBackupProofStatus,
@@ -924,7 +924,7 @@ function isCompletePassedJournal(journal) {
   return (
     journal.schemaVersion === 1 &&
     journal.gatePhase === GATE_PHASE_IMMEDIATE &&
-    journal.searchRolloutMode === "shadow" &&
+    journal.searchRolloutMode === "v2" &&
     journal.status === "passed" &&
     journal.errors.length === 0 &&
     isCleanupTicket(journal.cleanupTicket) &&
@@ -1109,7 +1109,7 @@ function readExistingJournal(
   if (
     !parsed || typeof parsed !== "object" || Array.isArray(parsed) ||
     parsed.workerVersionId !== workerVersionId || parsed.gateRunId !== runId ||
-    parsed.schemaVersion !== 1 || parsed.searchRolloutMode !== "shadow" ||
+    parsed.schemaVersion !== 1 || parsed.searchRolloutMode !== "v2" ||
     (parsed.status !== "passed" && parsed.status !== "failed" && parsed.status !== "running") ||
     !parsed.steps || typeof parsed.steps !== "object" || Array.isArray(parsed.steps) ||
     !Array.isArray(parsed.errors) ||

@@ -61,7 +61,7 @@ function manifest(project: string, journeys: readonly number[]) {
       launchConfig: {
         identity: "d".repeat(64),
         wranglerWorktreeSha256: wranglerHash,
-        productionSearchRolloutMode: "shadow",
+        productionSearchRolloutMode: "v2",
         localProofSearchRolloutMode: "v2",
         providerNetworkDeny: true,
         authProvider: "better-auth",

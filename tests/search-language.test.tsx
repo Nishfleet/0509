@@ -203,6 +203,23 @@ describe("BL-031 — the page budgets", () => {
     expect(route).toContain("Nothing searched yet");
   });
 
+  it("answers the thin-content finding with honest scope copy, not filler", () => {
+    // dogfood 694ddbd68e95: 207 rendered words on /search. The idle state now
+    // carries a scope section under the quiet lede — what a search returns,
+    // the proof, and the next step — with the coverage caveat still stated.
+    // The budgets hold: still one kicker on the pre-search state, still three
+    // filled buttons on the whole page, and still no specimen or sample card.
+    expect(route).toContain("What a search returns");
+    expect(route).toContain("Current and recent ads");
+    expect(route).toContain("The offer, read off their landing page");
+    expect(route).toContain("The proof capture");
+    expect(route).toContain("f9-search-scope-list");
+    expect(route).toContain("Coverage and freshness vary by advertiser");
+    expect(route.match(/className="f9-wk-kick"/g)).toHaveLength(1);
+    expect(route.match(/className="f9-wk-btn"/g)).toHaveLength(3);
+    expect(route).not.toContain("f9-search-specimen");
+  });
+
   it("stops pinning a second palette and a gradient onto the search page", () => {
     const base = cssRules.slice(cssRules.indexOf(".f9-find-page {"));
     const rule = base.slice(0, base.indexOf("}"));
