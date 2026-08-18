@@ -1354,6 +1354,7 @@ export default function SearchRoute() {
           displayDomain,
           isDomainSearch: isDomainSearch && data.relevanceApplied,
           isBroaderScope,
+          country: data.filters.country,
         })
       : null;
 
@@ -1423,6 +1424,7 @@ export default function SearchRoute() {
           isDomainSearch,
           isBroaderScope,
           relevanceApplied: data.relevanceApplied,
+          country: data.filters.country,
         })
       : null;
   const sectionHeadline =
@@ -1433,6 +1435,7 @@ export default function SearchRoute() {
       isDomainSearch,
       isBroaderScope,
       relevanceApplied: data.relevanceApplied,
+      country: data.filters.country,
     });
   const selectedLongevity = selectedAd ? formatAdLongevityLabel(selectedAd) : null;
   const selectedRunning =
