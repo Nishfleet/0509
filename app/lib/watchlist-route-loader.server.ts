@@ -5,10 +5,6 @@ import {
   type PublicDeliveryAttemptSummary,
 } from "~/lib/delivery-attempt-public";
 import { toPublicDeliveryTarget, type PublicDeliveryTargetRecord } from "~/lib/delivery-target-public";
-import {
-  isSlackDeliveryCustomerFacing,
-  isWhatsAppDeliveryCustomerFacing,
-} from "~/lib/ga-customer-surface";
 import type {
   EventCandidateRecord,
   ProofCaptureRecord,
@@ -75,7 +71,13 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
   const { isUserEmailVerified } = await import("~/lib/email-verification.server");
   const { isWhatsAppProviderConfigured } = await import("~/lib/env.server");
   const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
-  const showSlackDelivery = isSlackDeliveryCustomerFacing();
+  const {
+    isSlackWebhookDeliveryCustomerFacing,
+    isTeamsWebhookDeliveryCustomerFacing,
+    isWhatsAppDeliveryCustomerFacing,
+  } = await import("~/lib/ga-customer-surface");
+  const showSlackDelivery = isSlackWebhookDeliveryCustomerFacing();
+  const showTeamsDelivery = isTeamsWebhookDeliveryCustomerFacing();
   const whatsappAvailable = isWhatsAppDeliveryCustomerFacing() && isWhatsAppProviderConfigured(env);
   const url = new URL(request.url);
   // WP-24: deep-link target from alert/digest emails (`?event=<id>`).
@@ -150,12 +152,13 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
       runs: [],
       workspaceDeliveryConfig: maskDormantDeliveryConfig(workspaceDeliveryConfig, {
         showSlackDelivery,
+        showTeamsDelivery,
         whatsappAvailable,
       }),
       watchlistDeliveryConfig: null,
       effectiveDeliveryConfig: maskDormantDeliveryConfig(
         resolveDeliveryConfig({ workspaceConfig: workspaceDeliveryConfig, watchlistConfig: null }),
-        { showSlackDelivery, whatsappAvailable },
+        { showSlackDelivery, showTeamsDelivery, whatsappAvailable },
       ),
       deliveryTargets: [] as PublicDeliveryTargetRecord[],
       workspaceDeliveryTargets: [] as PublicDeliveryTargetRecord[],
@@ -178,7 +181,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     };
   }
 
-  const visibleDelivery = { showSlackDelivery, whatsappAvailable };
+  const visibleDelivery = { showSlackDelivery, showTeamsDelivery, whatsappAvailable };
   const deliveryChannels = visibleDeliveryChannels(visibleDelivery);
   const [
     eventCandidates,
@@ -323,6 +326,7 @@ export function buildLegacyWorkspaceConfig(
     emailEnabled: hasEmail,
     whatsappEnabled: false,
     slackEnabled: false,
+    teamsEnabled: false,
     quietHours: null,
     timezone: null,
     createdAt: "",

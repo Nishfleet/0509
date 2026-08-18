@@ -36,7 +36,7 @@ export function DeliveryTargetsSection(props: {
           <div className="f9-wk-workrow" key={target.id}>
             <div>
               <h4 className="f9-wk-mb025">
-                {target.channel === "email" ? "Email" : "WhatsApp"}
+                {deliveryChannelLabel(target.channel)}
               </h4>
               <p className="f9-wk-dim">
                 {toPublicDeliveryTarget(target, {
@@ -120,7 +120,7 @@ export function DeliveryTargetsSection(props: {
                     <h4 className="f9-wk-mb025">
                       {target.channel === "email"
                         ? "Workspace default email"
-                        : "Workspace default WhatsApp"}
+                        : `Workspace default ${deliveryChannelLabel(target.channel)}`}
                     </h4>
                     <p className="f9-wk-dim">
                       {toPublicDeliveryTarget(target, {
@@ -200,4 +200,11 @@ export function DeliveryTargetsSection(props: {
       </div>
     </section>
   );
+}
+
+function deliveryChannelLabel(channel: string) {
+  if (channel === "slack") return "Slack";
+  if (channel === "teams") return "Teams";
+  if (channel === "whatsapp") return "WhatsApp";
+  return "Email";
 }
