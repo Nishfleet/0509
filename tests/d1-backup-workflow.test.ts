@@ -167,6 +167,17 @@ describe("manual D1 backup workflow", () => {
       run: "./scripts/ci-verify-production-candidate.sh",
       env: { GH_TOKEN: "${{ github.token }}" },
     });
+    // Post-pin drift tolerance: this step re-verifies the exact SHA the
+    // authorize step already pinned, so a mid-run move of main must not abort
+    // the unattended nightly backup (same rationale as deploy-production.yml's
+    // post-gate reconfirm, #630). Every other CAS failure stays fail-closed,
+    // and the schedule's empty-expected_sha contract is unchanged.
+    expect(steps[casIndex]?.env).toMatchObject({
+      TOLERATE_MAIN_DRIFT: "1",
+    });
+    expect(steps[casIndex]?.env?.EXPECTED_SHA).toBe(
+      "${{ inputs.expected_sha || '' }}",
+    );
     expect(backupStep?.run).toBe("node scripts/d1-backup-to-r2.mjs");
     expect(backupStep?.env?.CLOUDFLARE_ACCOUNT_ID).toBe("${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
     expect(backupStep?.env?.CLOUDFLARE_API_TOKEN).toBe("${{ secrets.CLOUDFLARE_API_TOKEN }}");

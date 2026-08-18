@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  mapCustomerRouteError,
+  PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+} from "~/lib/customer-route-error";
 import type { AdRecord, SearchResponse } from "~/lib/types";
 
 const baseAd: AdRecord = {
@@ -1316,9 +1320,24 @@ describe("search loader", () => {
     );
   });
 
-  it("stops anonymous public searches when the route limiter blocks them", async () => {
+  it("stops anonymous public searches with a labeled 429 that keeps Retry-After and shows a truthful recovery message", async () => {
     const env = { DB: {} };
-    const rateLimitedResponse = new Response("Too many requests", { status: 429 });
+    // Deterministically drive the public limiter: a blocked anonymous search
+    // must surface as an explicit in-product 429 document — never a generic
+    // "Request failed" page — preserving the limiter's Retry-After signal.
+    const rateLimitedResponse = new Response(
+      JSON.stringify({
+        error: "rate_limited",
+        message: "Too many requests. Please try again shortly.",
+      }),
+      {
+        status: 429,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "retry-after": "600",
+        },
+      },
+    );
     const searchAdsViaSourceResolver = vi.fn();
     const prepareSearchResultSelection = vi.fn();
     const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(rateLimitedResponse);
@@ -1352,12 +1371,30 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    await expect(
-      loader({
-        context: createContext(env),
-        request: new Request("http://localhost/search?query=nykaa"),
-      } as never),
-    ).rejects.toBe(rateLimitedResponse);
+    const blocked = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa"),
+    } as never).catch((error: unknown) => error);
+
+    // Status and the limiter's recovery signal survive onto the document.
+    expect(blocked).toBeInstanceOf(Response);
+    expect((blocked as Response).status).toBe(429);
+    expect((blocked as Response).headers.get("retry-after")).toBe("600");
+
+    // Labeled visible state: the thrown body names the limit and the recovery
+    // path (this is what the 429 error surface renders verbatim), instead of
+    // the bare "Too many requests" limiter text or the generic fallthrough.
+    await expect((blocked as Response).json()).resolves.toMatchObject({
+      error: "rate_limited",
+      message: PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+    });
+
+    // The 429 mapping renders a labeled rate-limit surface, never the generic
+    // "Request failed" catch-all that shipped with the original defect.
+    const mapped = mapCustomerRouteError(blocked);
+    expect(mapped.title).toBe("Too many searches");
+    expect(mapped.message).toBe(PUBLIC_SEARCH_RATE_LIMIT_MESSAGE);
+    expect(mapped.retryable).toBe(true);
 
     expect(enforcePublicSearchRateLimit).toHaveBeenCalledWith(
       expect.any(Request),
@@ -1366,6 +1403,20 @@ describe("search loader", () => {
     );
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+  });
+
+  it("forwards the limiter's Retry-After onto the 429 document response", async () => {
+    // React Router only carries cookies from a thrown loader response onto
+    // the final document unless the boundary route re-exports the header;
+    // this is the exact signal the original defect dropped on the wire.
+    const { headers } = await import("~/routes/search");
+    expect(
+      headers({
+        errorHeaders: new Headers({ "retry-after": "600" }),
+      } as never),
+    ).toEqual({ "Retry-After": "600" });
+    // No error headers → no header surgery on ordinary documents.
+    expect(headers({} as never)).toEqual({});
   });
 
   it("does not spend live discovery on anonymous HEAD searches", async () => {
@@ -1585,6 +1636,105 @@ describe("search loader", () => {
       isBroaderScope: false,
       relevanceApplied: false,
     })).toBe("1 ad found");
+  });
+
+  it("scopes the results panel title to the searched country", async () => {
+    const legacyResult: SearchResponse = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+
+    const { formatResultsPanelTitle } = await import("~/routes/search");
+
+    // The verdict title names the market that actually ran, so the same
+    // competitor cannot read as contradictory across country filters.
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+      country: "India",
+    })).toBe("1 ad found in India");
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+      country: "all",
+    })).toBe("1 ad found across all countries");
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: true,
+      country: "India",
+    })).toBe("1 verified ad linked to nykaa.com in India");
+  });
+
+  it("canonicalizes ISO-2 and alias country inputs in the results panel title", async () => {
+    // The resolver already accepts ISO-2 codes and aliases (usa, uk, uae),
+    // so the customer-facing phrase must match the market the search
+    // actually ran in, not the raw URL input.
+    const legacyResult: SearchResponse = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+
+    const { formatResultsPanelTitle } = await import("~/routes/search");
+
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+      country: "IN",
+    })).toBe("1 ad found in India");
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+      country: "usa",
+    })).toBe("1 ad found in United States");
+  });
+
+  it("keeps demo results panel titles unscoped even when a country filter is set", async () => {
+    // Demo/sample matches deliberately ignore the country filter (the
+    // resolver matches every demo ad against every market), so labelling
+    // a demo verdict "in United States" for India-authored samples would
+    // falsely imply country-specific evidence.
+    const demoResult: SearchResponse = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "demo",
+      provider: "demo",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+
+    const { formatResultsPanelTitle } = await import("~/routes/search");
+
+    expect(formatResultsPanelTitle(demoResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: true,
+      country: "United States",
+    })).toBe("1 verified ad linked to nykaa.com");
   });
 
   it("allows only tokened canary probes to force fresh live discovery", async () => {

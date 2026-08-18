@@ -11,7 +11,11 @@ import { canUseSiteRepWidgetScript, hasSiteRepAuthCookie } from "../app/lib/site
 // The beacon posts to /cdn-cgi/rum on the same origin, which connect-src 'self'
 // already permits — see the Cloudflare Web Analytics CSP guidance:
 // https://developers.cloudflare.com/web-analytics/faq/#what-do-i-need-to-add-to-my-content-security-policy-csp
-const CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC = "https://static.cloudflareinsights.com/beacon.min.js";
+// Exported so the live deploy gate (scripts/check-live-public-home.mjs) can be
+// coupled to it via tests/worker-security-headers.test.ts and fail loudly if
+// the beacon ever drops out of the deployed CSP again (PR #610 regression
+// class: CSP blocks the beacon and analytics silently records zero page views).
+export const CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC = "https://static.cloudflareinsights.com/beacon.min.js";
 const BASE_SCRIPT_SRC = `script-src 'self' 'unsafe-inline' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC}`;
 const SITE_REP_WIDGET_SCRIPT_SRC = `${BASE_SCRIPT_SRC} https://siterep.net`;
 
@@ -161,9 +165,7 @@ export function withSecurityHeaders(response: Response, request?: Request): Resp
       // of being shared-cached under the generic public policy — a cached
       // DE/EUR variant would otherwise be served to a US visitor and vice
       // versa. Security headers above still apply.
-      if (headers.has("cache-control")) {
-        // Respect the app's caching intent.
-      } else {
+      if (!headers.has("cache-control")) {
         headers.set("cache-control", PUBLIC_HTML_CACHE_CONTROL);
         const vary = headers.get("vary");
         if (!vary) {

@@ -102,6 +102,13 @@ describe("exact production candidate workflow", () => {
       'test "$GITHUB_RUN_ATTEMPT" = "1"',
     );
     expect(authorizeStep?.run).toContain("workflow_dispatch)");
+    // Dispatch resolution: authorize pins the exact dispatched candidate, not
+    // the run head - GITHUB_SHA may be a newer main tip if main advanced
+    // between dispatch and run start (2026-08-13: 2c6cc3eb dispatched, run
+    // created on 0932e554). pin_candidate's CAS confirms the candidate is
+    // still reachable from live main before anything ships.
+    expect(authorizeStep?.env).not.toHaveProperty("GITHUB_TOKEN");
+    expect(authorizeStep?.run).toContain('GITHUB_SHA="$EXPECTED_SHA"');
 
     const pin = workflow.jobs.pin_candidate;
     expect(pin?.needs).toBe("authorize_release");
@@ -280,6 +287,17 @@ describe("exact production candidate workflow", () => {
         parsed.on.workflow_dispatch?.inputs?.expected_sha,
         `${name} expected_sha`,
       ).toMatchObject({ required: true, type: "string" });
+    }
+
+    // Standalone authorizer jobs survive only where the consuming job is not
+    // itself a required context. The CI and secret-scan required jobs fold
+    // their authorizer into the first STEP instead: a required job must be
+    // structurally incapable of concluding SKIPPED, so it carries no `if:`
+    // and no `needs` (both would let it skip - GitHub counts a skipped
+    // required context as satisfied). required-context-no-skip.test.ts pins
+    // that shape for the required jobs.
+    for (const name of ["d1-backup-r2.yml", "d1-remote-restore-evidence.yml"]) {
+      const { parsed } = readWorkflow(name);
       const authorize = parsed.jobs.authorize_release;
       expect(authorize?.["runs-on"], `${name} authorizer runner`).toEqual(
         ["self-hosted", "linux", "x64", "vps-verify"],
@@ -301,18 +319,18 @@ describe("exact production candidate workflow", () => {
     for (const [name, jobName] of [
       ["ci.yml", "codex-node-checks"],
       ["secret-scan.yml", "gitleaks"],
-      ["d1-backup-r2.yml", "backup"],
     ] as const) {
       const job = readWorkflow(name).parsed.jobs[jobName];
-      expect(job?.needs, `${name} authorization dependency`).toBe(
-        "authorize_release",
-      );
+      expect(job?.needs, `${name} required job must not need a job`).toBeUndefined();
       const steps = job?.steps ?? [];
+      expect(steps[0]?.id, `${name} in-job authorizer is step 1`).toBe(
+        "authorize",
+      );
       const checkout = steps.findIndex((step) =>
         step.uses?.startsWith("actions/checkout@"),
       );
       expect(steps[checkout]?.with, `${name} pinned checkout`).toMatchObject({
-        ref: "${{ needs.authorize_release.outputs.sha }}",
+        ref: "${{ steps.authorize.outputs.sha }}",
         "fetch-depth": 0,
         clean: true,
         "persist-credentials": false,
@@ -336,6 +354,26 @@ describe("exact production candidate workflow", () => {
     );
 
     const backup = readWorkflow("d1-backup-r2.yml").parsed.jobs.backup;
+    expect(backup?.needs, "d1-backup authorization dependency").toBe(
+      "authorize_release",
+    );
+    const backupSteps = backup?.steps ?? [];
+    const backupCheckout = backupSteps.findIndex((step) =>
+      step.uses?.startsWith("actions/checkout@"),
+    );
+    expect(
+      backupSteps[backupCheckout]?.with,
+      "d1-backup pinned checkout",
+    ).toMatchObject({
+      ref: "${{ needs.authorize_release.outputs.sha }}",
+      "fetch-depth": 0,
+      clean: true,
+      "persist-credentials": false,
+    });
+    expect(
+      backupSteps[backupCheckout + 1]?.name,
+      "d1-backup immediate verification",
+    ).toMatch(/Verify (?:authorized|pinned)/);
     const backupAcquire = stepIndex(backup, "Acquire provider lane");
     const backupCas = stepIndex(backup, "Reconfirm frozen main before backup mutation");
     expect(backupAcquire).toBeGreaterThanOrEqual(0);
@@ -528,8 +566,46 @@ printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
         GITHUB_EVENT_NAME: "workflow_dispatch",
         EXPECTED_SHA: candidateSha,
       }).status).toBe(0);
+      // Dispatch resolution: authorize pins the exact dispatched candidate,
+      // so a run created on a newer main tip (main advanced between dispatch
+      // and run start) still pins and deploys the CI-verified dispatched
+      // commit. The pin CAS confirms the candidate is an ancestor of live
+      // main via the provider CAS.
+      writeFileSync(join(work, "descendant.txt"), "descendant\n");
+      git(work, "add", "descendant.txt");
+      git(work, "commit", "-m", "descendant");
+      const descendantSha = git(work, "rev-parse", "HEAD");
+      // Pinned candidate equals dispatched candidate even though GITHUB_SHA
+      // (run head) is newer; live main (FAKE_REMOTE_SHA) descends from it.
+      // The pin job checks out the pinned candidate, mirroring the workflow's
+      // checkout ref, so HEAD matches PINNED_SHA.
+      git(work, "checkout", "--detach", candidateSha);
+      expect(run({
+        GITHUB_EVENT_NAME: "workflow_dispatch",
+        EXPECTED_SHA: candidateSha,
+        GITHUB_SHA: descendantSha,
+        PINNED_SHA: candidateSha,
+        FAKE_REMOTE_SHA: descendantSha,
+      }).status).toBe(0);
+      // A rewind/rewrite (pinned candidate not an ancestor of live main)
+      // stays fail-closed even when both SHAs are syntactically valid.
+      expect(run({
+        GITHUB_EVENT_NAME: "workflow_dispatch",
+        EXPECTED_SHA: descendantSha,
+        GITHUB_SHA: candidateSha,
+        PINNED_SHA: descendantSha,
+        FAKE_REMOTE_SHA: candidateSha,
+      }).status).not.toBe(0);
+      expect(run({
+        GITHUB_EVENT_NAME: "workflow_dispatch",
+        EXPECTED_SHA: candidateSha,
+        GITHUB_SHA: "f".repeat(40),
+        PINNED_SHA: candidateSha,
+        FAKE_REMOTE_SHA: "f".repeat(40),
+      }).status).not.toBe(0);
       // Scheduled unattended runs pin main tip with empty expected_sha (same
       // contract as authorize in d1-backup-r2.yml / restore-evidence).
+      git(work, "checkout", "--detach", candidateSha);
       expect(run({
         GITHUB_EVENT_NAME: "schedule",
         EXPECTED_SHA: "",

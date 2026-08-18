@@ -106,6 +106,129 @@ describe("marketing pricing SSR", () => {
       commercialLaunch,
     });
   });
+
+  it("waits for a Dodo preview only up to the SSR bound, then falls back", async () => {
+    const previewDodo0509PlanPrices = vi.fn(
+      () => new Promise<never>(() => {}),
+    );
+    const commercialLaunch = {
+      scoutSaleOpen: true,
+      starterSaleOpen: true,
+      agencySaleOpen: false,
+    };
+    const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
+
+    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
+    }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+
+    const { loader } = await import("~/routes/marketing");
+    const start = Date.now();
+    const result = await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/"),
+    } as never);
+
+    // The document waits only the bounded SSR window (2.5s), then degrades to
+    // the honest checkout-localized fallback instead of blocking the page.
+    expect(Date.now() - start).toBeGreaterThanOrEqual(2300);
+    expect(result).toEqual({
+      pricingPreview: { available: false },
+      commercialLaunch,
+    });
+    expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
+    expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
+      DODO_0509_API_KEY: "provider-key",
+    });
+  });
+
+  it("renders real per-plan prices in the SSR document when the preview is available", async () => {
+    const preview = {
+      available: true,
+      provider: "dodo",
+      source: "dodo_checkout_preview",
+      country: "US",
+      adaptiveCurrency: true,
+      feesInclusive: true,
+      prices: {
+        scout: {
+          monthly: { display: "$19", amount: 1900, currency: "USD", billingCountry: "US" },
+          yearly: { display: "$152", amount: 15200, currency: "USD", billingCountry: "US" },
+        },
+        starter: {
+          monthly: { display: "$59", amount: 5900, currency: "USD", billingCountry: "US" },
+          yearly: { display: "$472", amount: 47200, currency: "USD", billingCountry: "US" },
+        },
+        agency: {
+          monthly: { display: "$199", amount: 19900, currency: "USD", billingCountry: "US" },
+          yearly: { display: "$1,592", amount: 159200, currency: "USD", billingCountry: "US" },
+        },
+      },
+      annualValidation: {
+        scout: {
+          valid: true,
+          reason: "valid_4_months_free",
+          monthlyAmount: 1900,
+          annualAmount: 15200,
+          expectedAnnualAmount: 15200,
+          currency: "USD",
+          billingCountry: "US",
+        },
+        starter: {
+          valid: true,
+          reason: "valid_4_months_free",
+          monthlyAmount: 5900,
+          annualAmount: 47200,
+          expectedAnnualAmount: 47200,
+          currency: "USD",
+          billingCountry: "US",
+        },
+        agency: {
+          valid: true,
+          reason: "valid_4_months_free",
+          monthlyAmount: 19900,
+          annualAmount: 159200,
+          expectedAnnualAmount: 159200,
+          currency: "USD",
+          billingCountry: "US",
+        },
+      },
+      usageBundles: {},
+    };
+    const previewDodo0509PlanPrices = vi.fn().mockResolvedValue(preview);
+    const publicCommercialLaunchSummary = vi.fn(() => ({
+      scoutSaleOpen: true,
+      starterSaleOpen: true,
+      agencySaleOpen: false,
+    }));
+
+    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
+    }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+
+    const { loader } = await import("~/routes/marketing");
+    const response = (await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/"),
+    } as never)) as Response;
+
+    expect(response.status).toBe(200);
+    // Buyer-country prices must never be shared-cached: a DE/EUR variant could
+    // otherwise be replayed for a US visitor.
+    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+    const data = (await response.json()) as {
+      pricingPreview: { prices?: Record<string, Record<string, { display: string }>> };
+      commercialLaunch: { scoutSaleOpen: boolean };
+    };
+    expect(data.pricingPreview.prices?.scout?.monthly?.display).toBe("$19");
+    expect(data.pricingPreview.prices?.starter?.monthly?.display).toBe("$59");
+    expect(data.pricingPreview.prices?.agency?.monthly?.display).toBe("$199");
+    expect(data.commercialLaunch.scoutSaleOpen).toBe(true);
+  });
 });
 
 describe("marketing pricing monthly cadence note", () => {
