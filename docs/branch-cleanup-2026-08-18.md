@@ -21,8 +21,8 @@ or landed via a fresh PR. Disposition per branch below.
 | `fix/0509-checkout-session-auth-coverage-v2` | **KILLED — already landed** | Same test file, identical blob hash to `main`. Redundant local ref deleted. |
 | `test/0509-terminal-webhook-replay-reclaim` | **KILLED — already landed** | `tests/dodo-billing-webhook-lease-atomicity.test.ts` (replay-stays-duplicate / zero-mutation proof) is already in `main`. Redundant local ref deleted. |
 | `codex/0509-browser-attribution` | **KILLED — redundant subset** | Its tree is a strict subset of `codex/0509-browser-integration` (all shared files byte-identical; integration adds auth-login/search/brand-page coverage). Content preserved via the integration PR. Local ref deleted. |
-| `codex/0509-browser-integration` | **LANDED** | Browser-job telemetry feature (migration `0075_browser_job_telemetry.sql`, `app/lib/browser-job-telemetry.server.ts`, attribution across ad-source/browser-run/landing-pages/meta-library, tests). Merges cleanly into `main` (0 conflicts). Landed via PR. |
-| `codex/0509-netcup-browser-v2` | **LANDED** | Bounded loopback-only netcup browser-rendering foundation (`ops/netcup-browser/` — auth, engine, job-queue, renderer-server, url-policy, deploy, tests, runbook). Merges cleanly into `main` (0 conflicts). Landed via PR. |
+| `codex/0509-browser-integration` | **LANDED** | Browser-job telemetry feature (migration `0075_browser_job_telemetry.sql`, `app/lib/browser-job-telemetry.server.ts`, attribution across ad-source/browser-run/landing-pages/meta-library, tests). Merges cleanly into `main` (0 conflicts). Landed via PR #774. |
+| `codex/0509-netcup-browser-v2` | **LANDED** | Bounded loopback-only netcup browser-rendering foundation (`ops/netcup-browser/` — auth, engine, job-queue, renderer-server, url-policy, deploy, tests, runbook). Merges cleanly into `main` (0 conflicts). Landed via PR #775. |
 
 ## Notes
 
