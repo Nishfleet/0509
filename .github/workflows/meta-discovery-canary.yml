@@ -21,6 +21,11 @@ jobs:
     # D1 aggregate over discovery_fetch_log; it never mutates monitoring,
     # proof, or delivery state (unlike the proof canary at
     # /api/launch-readiness/canary, which is deliberately not scheduled).
+    # State semantics for the persisted artifact:
+    #   green         - launch readiness ok=true and metaAdsBeta.ok=true
+    #   red           - readiness endpoint reachable but meta lane degraded
+    #                   (step exits non-zero; no artifact is published)
+    #   missing-token - CANARY_BYPASS_TOKEN secret absent; no probe ran
     runs-on: [self-hosted, linux, x64, vps-verify]
     timeout-minutes: 5
     steps:
