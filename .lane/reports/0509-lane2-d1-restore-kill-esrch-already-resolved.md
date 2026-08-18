@@ -21,7 +21,7 @@ single merged fix, an ancestor of the current `main` HEAD (`b21cc135`):
 ## The failing run and the exact race
 
 The item cites CI run 3 of the `codex-node-checks` job on main:
-[run 31671869414](https://github.com/nish3451/0509/actions/runs/31671869414),
+[run 31671869414](https://github.com/Nishfleet/0509/actions/runs/31671869414),
 failed 2026-08-13T05:53:22Z on commit `4d49658e` (#690). The single failing
 test was `tests/d1-remote-restore-evidence.test.ts > D1 remote restore evidence
 automation > forwards cancellation to a detached provider child before

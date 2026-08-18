@@ -66,7 +66,7 @@ describe("manual D1 backup workflow", () => {
     expect(authorizeScript).toBe([
       "set -euo pipefail",
       "sha_pattern='^[a-f0-9]{40}$'",
-      'test "$GITHUB_REPOSITORY" = "nish3451/0509"',
+      'test "$GITHUB_REPOSITORY" = "Nishfleet/0509"',
       'test "$GITHUB_REF" = "refs/heads/main"',
       'test "$GITHUB_RUN_ATTEMPT" = "1"',
       '[[ "$GITHUB_SHA" =~ $sha_pattern ]]',

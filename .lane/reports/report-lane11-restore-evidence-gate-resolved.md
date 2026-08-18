@@ -17,7 +17,7 @@ this worktree.
 
 Branch: `fix/silent-fixobserve`
 Base: `origin/main` at `46fe111`
-Pull request: https://github.com/nish3451/0509/pull/447
+Pull request: https://github.com/Nishfleet/0509/pull/447
 
 ## Outcome
 
@@ -108,7 +108,7 @@ The GitHub-installed Bugbot hook ran independently of this lane command and retu
 
 Branch: `fix/deploy-restore-evidence-self-generate`
 Base: `origin/main` at `b5bf3ce7`
-Pull request: https://github.com/nish3451/0509/pull/545
+Pull request: https://github.com/Nishfleet/0509/pull/545
 
 ## Problem
 
@@ -314,7 +314,7 @@ item closes on merge + deploy + same-engine dogfood rerun. No duplicate PR opene
 
 Branch: `fix/ai-answer-readiness-content-depth`
 Base: `origin/main` at `6f1026f3`
-Pull request: https://github.com/nish3451/0509/pull/566
+Pull request: https://github.com/Nishfleet/0509/pull/566
 
 ## Item
 
