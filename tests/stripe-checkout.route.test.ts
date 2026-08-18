@@ -196,6 +196,7 @@ describe("marketing route", () => {
     expect(markup).toContain("500 extra proof captures");
     expect(markup).toContain("$0.05 per proof capture");
     expect(markup).not.toContain("500 extra checks");
+    expect(markup).not.toContain("per check");
     expect(markup).not.toContain("Dodo preview");
     expect(markup).not.toContain("Buyer currency");
     expect(markup).toContain("Choose monthly");

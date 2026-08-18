@@ -93,7 +93,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Sample proof-backed brief");
     expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
     expect(marketingRoute).toContain("Your growth team would&rsquo;ve found out from a client.");
-    expect(marketingRoute).toContain("Meta ads and landing pages");
+    expect(marketingRoute).toContain("landing pages for price, offer, and CTA changes");
     expect(marketingRoute).toContain("before your alarm goes off");
     expect(marketingRoute).not.toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
     expect(marketingRoute).toContain("start from the brands you already track");
@@ -242,13 +242,16 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Purchased proof captures never expire");
     expect(marketingRoute).toContain("Included proof captures reset every month");
     expect(marketingRoute).toContain("Scheduled scans are included with your plan");
-    expect(marketingRoute).toContain("proof capture");
+    expect(marketingRoute).toContain("never touch your cap");
     expect(marketingRoute).toContain("500 extra proof captures");
+    expect(marketingRoute).toContain("What uses proof captures?");
+    expect(marketingRoute).toContain("Do unused proof captures roll over?");
+    expect(marketingRoute).toContain("2,500 proof captures/month");
     expect(marketingRoute).not.toContain("Record packs");
     expect(marketingRoute).not.toContain("record packs");
     expect(marketingRoute).not.toContain("saved change records");
     expect(marketingRoute).not.toContain("per saved record");
-    expect(marketingRoute).not.toContain("unlimited");
+    expect(marketingRoute).not.toMatch(/checks never expire|per check|extra checks|checks\/month/);
   });
 
   it("has incinerated the stale lower-page system", () => {

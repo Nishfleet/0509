@@ -59,6 +59,7 @@ const workspaceDeliveryConfig: WorkspaceDeliveryConfigRecord = {
   emailEnabled: true,
   whatsappEnabled: false,
   slackEnabled: false,
+  teamsEnabled: false,
   quietHours: null,
   timezone: "Asia/Kolkata",
   createdAt: "2026-04-18T00:00:00.000Z",
@@ -75,6 +76,7 @@ const watchlistDeliveryConfig: WatchlistDeliveryConfigRecord = {
   emailEnabled: true,
   whatsappEnabled: true,
   slackEnabled: false,
+  teamsEnabled: false,
   quietHours: {
     startHour: 22,
     endHour: 8,
@@ -386,11 +388,12 @@ describe("watchlists route loader", () => {
   it("returns bounded proof, delivery, and candidate state for the selected watchlist", async () => {
     const listDeliveryAttempts = vi
       .fn()
-      .mockResolvedValue(recentDeliveryAttempts);
+      .mockResolvedValueOnce(recentDeliveryAttempts)
+      .mockResolvedValue([]);
     const listDeliveryTargets = vi
       .fn()
       .mockResolvedValueOnce(deliveryTargets)
-      .mockResolvedValueOnce([]);
+      .mockResolvedValue([]);
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
@@ -495,6 +498,18 @@ describe("watchlists route loader", () => {
     );
     expect(listDeliveryTargets).toHaveBeenNthCalledWith(
       2,
+      expect.anything(),
+      "user-1",
+      {
+        watchlistId: "watch-1",
+        channel: "slack",
+        limit: 12,
+      },
+    );
+    // Slack and Teams are live webhook channels: the workspace-default target
+    // batch for email is the 4th call (channels are email, slack, teams).
+    expect(listDeliveryTargets).toHaveBeenNthCalledWith(
+      4,
       expect.anything(),
       "user-1",
       {
@@ -1189,7 +1204,7 @@ describe("watchlists route actions", () => {
     expect(upsertWatchlistDeliveryConfig).not.toHaveBeenCalled();
   });
 
-  it("preserves hidden delivery channel settings on visible delivery saves", async () => {
+  it("preserves dormant WhatsApp settings and applies live Slack/Teams toggles on delivery saves", async () => {
     const upsertWatchlistDeliveryConfig = vi
       .fn()
       .mockResolvedValue(watchlistDeliveryConfig);
@@ -1209,6 +1224,7 @@ describe("watchlists route actions", () => {
         ...watchlistDeliveryConfig,
         whatsappEnabled: true,
         slackEnabled: true,
+        teamsEnabled: true,
       }),
       getWorkspaceDeliveryConfig: vi
         .fn()
@@ -1226,6 +1242,7 @@ describe("watchlists route actions", () => {
     formData.set("watchlistId", "watch-1");
     formData.set("sensitivityMode", "balanced");
     formData.set("emailEnabled", "on");
+    formData.set("slackEnabled", "on");
 
     const result = await action({
       context: createContext(),
@@ -1246,8 +1263,13 @@ describe("watchlists route actions", () => {
         userId: "user-1",
         sensitivityMode: "balanced",
         emailEnabled: true,
+        // WhatsApp is still a dormant GA channel: its stored value is
+        // preserved no matter what the form sends.
         whatsappEnabled: true,
+        // Slack is live: the checked box applies.
         slackEnabled: true,
+        // Teams is live but unchecked: it turns off.
+        teamsEnabled: false,
       }),
     );
   });
@@ -1726,7 +1748,7 @@ describe("watchlists route actions", () => {
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
   });
 
-  it("blocks Slack delivery targets while Slack is not customer-facing", async () => {
+  it("points watchlist-scoped Slack delivery targets to the Notifications page", async () => {
     const upsertDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/auth.server", () => ({
@@ -1761,7 +1783,7 @@ describe("watchlists route actions", () => {
 
     expect(result).toEqual({
       message:
-        "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
+        "Connect Slack or Teams delivery from the Notifications page — watchlist-scoped webhook targets aren't supported.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
@@ -2041,7 +2063,7 @@ describe("watchlists route actions", () => {
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
   });
 
-  it("blocks toggling Slack delivery targets while Slack is not customer-facing", async () => {
+  it("points watchlist-scoped Slack delivery toggles to the Notifications page", async () => {
     const upsertDeliveryTarget = vi.fn();
     const getDeliveryTargetById = vi.fn().mockResolvedValue({
       ...deliveryTargets[0],
@@ -2083,7 +2105,7 @@ describe("watchlists route actions", () => {
 
     expect(result).toEqual({
       message:
-        "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
+        "Manage Slack or Teams delivery from the Notifications page — watchlist-scoped webhook targets aren't supported.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();

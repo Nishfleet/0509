@@ -23,13 +23,19 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import type { AppEnv } from "~/lib/env.server";
 import type { RootLoaderData } from "~/root";
 
 // Kept under ~155 characters so search results show the whole line instead of
 // truncating mid-sentence. The audit flagged the previous 166-character copy.
-// Same claims, nothing new promised.
+// Same claims, nothing new promised. The hero leads with what a scheduled
+// reliability check proves every day: public landing-page change monitoring
+// with screenshot evidence. Meta Ad Library coverage is named as a public
+// source below and in the FAQ, not promised as a scheduled first-class lane
+// until the Meta discovery reliability check publishes a green state on a
+// schedule.
 const marketingDescription =
-  "Five to Nine watches competitors' Meta ads and landing pages, then sends screenshot evidence and change alerts before your next meeting.";
+  "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then sends screenshot evidence and change alerts before your next meeting.";
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 
@@ -44,18 +50,61 @@ export const meta: MetaFunction = () =>
 
 const noPricingPreview = { available: false } as const;
 
-export async function loader({ context }: LoaderFunctionArgs) {
+// Published prices: the marketing page renders real per-plan Dodo prices in
+// the server-rendered HTML instead of waiting for a client-side fetch. The
+// Dodo checkout preview can take a second or two on a cold cache, so the
+// document request waits only up to this bound; when Dodo is slower than the
+// bound the loader degrades to the honest checkout-localized fallback and the
+// existing client-side /api/pricing-preview fetch takes over near the fold.
+const MARKETING_PRICING_SSR_TIMEOUT_MS = 2500;
+
+async function pricingPreviewWithinBound({
+  env,
+  request,
+}: {
+  env: AppEnv;
+  request: Request;
+}): Promise<LocalPricingPreview | typeof noPricingPreview> {
+  const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const preview = await Promise.race([
+      previewDodo0509PlanPrices({ env, request }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("pricing preview exceeded SSR bound")),
+          MARKETING_PRICING_SSR_TIMEOUT_MS,
+        );
+      }),
+    ]);
+    return preview.available ? preview : noPricingPreview;
+  } catch {
+    return noPricingPreview;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const env = getEnv(context);
+  const commercialLaunch = publicCommercialLaunchSummary(env);
+  const pricingPreview = await pricingPreviewWithinBound({ env, request });
 
-  return {
-    // Keep the document request provider-independent. The client hydrates
-    // buyer-country pricing from /api/pricing-preview after the page is
-    // visible, so an unavailable provider never blocks the homepage HTML.
-    pricingPreview: noPricingPreview,
-    commercialLaunch: publicCommercialLaunchSummary(env),
-  };
+  if (pricingPreview.available) {
+    // Buyer-country prices are embedded in this HTML, so the response must
+    // never be shared-cached: a cached DE/EUR variant would otherwise be
+    // served to a US visitor (and vice versa). The worker honors an
+    // explicitly-set cache-control on cacheable HTML paths instead of
+    // stamping the generic public, max-age=300 policy.
+    return Response.json(
+      { pricingPreview, commercialLaunch },
+      { headers: { "Cache-Control": "private, max-age=300", Vary: "cookie" } },
+    );
+  }
+
+  return { pricingPreview: noPricingPreview, commercialLaunch };
 }
 
 const tickerEvents = [
@@ -148,12 +197,12 @@ export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry
     {
       question: "What uses proof captures?",
       answer:
-        "Scheduled scans are included with your plan. A proof capture is used when Five to Nine saves a source-backed capture with screenshots, page text, and the original link.",
+        "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with screenshots, page text, and the original link.",
     },
     {
       question: "Do unused proof captures roll over?",
       answer:
-        "Included proof captures reset every month and do not roll over. Purchased proof-capture packs never expire, so any unused captures carry over until you spend them.",
+        "Included proof captures reset every month and do not roll over — the caps are generous. Purchased proof captures never expire and carry over until you use them.",
     },
     {
       question: "What changes on Agency?",
@@ -579,7 +628,7 @@ export default function MarketingRoute() {
 
             <p className="ld-deck-copy">
               Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
-              Meta ads and landing pages, saves the screenshots, and files the brief —{" "}
+              landing pages for price, offer, and CTA changes, saves the screenshots, and files the brief —{" "}
               <b>before your alarm goes off.</b>
             </p>
 
@@ -861,9 +910,9 @@ export default function MarketingRoute() {
           </div>
           <p className="ld-pricing-note">
             Free: watch 1 competitor with a weekly email brief. Paid plans add 3–6 hour checks,
-            evidence, more competitors, Collections, daily briefs, and generous proof-capture
-            caps. Save winning ads to collections — and see how long each ad has been running when
-            the Ad Library shares dates.
+            evidence, more competitors, Collections, daily briefs, and clear, generous
+            proof-capture caps. Save winning ads to collections — and see how long each ad has
+            been running when the Ad Library shares dates.
           </p>
           <div className="f9-cycle-toggle" role="group" aria-label="Billing cycle">
             <button
@@ -1022,8 +1071,8 @@ export default function MarketingRoute() {
             <h3>Extra proof captures when campaigns move fast.</h3>
             <p>
               Add purchased proof captures for busy weeks or big campaigns without changing the
-              team&rsquo;s plan. Purchased proof captures never expire, so leftovers carry over to
-              the next month.
+              team&rsquo;s plan. Purchased proof captures never expire and carry over until you
+              use them.
             </p>
             <p className="ld-check-pack-note">
               Packs: 500 extra proof captures, 2,000 extra proof captures, or 7,500 extra proof
@@ -1055,16 +1104,16 @@ export default function MarketingRoute() {
             <div>
               <dt>What uses proof captures?</dt>
               <dd>
-                Scheduled scans are included with your plan. A proof capture is used when Five to
-                Nine saves a source-backed capture with screenshots, page text, and the original
-                link.
+                Scheduled scans are included with your plan and never touch your cap. A proof
+                capture is used when Five to Nine saves a confirmed change with screenshots,
+                page text, and the original link.
               </dd>
             </div>
             <div>
               <dt>Do unused proof captures roll over?</dt>
               <dd>
-                Included proof captures reset every month and do not roll over. Purchased
-                proof-capture packs never expire, so any unused captures carry over until you spend
+                Included proof captures reset every month and do not roll over — the caps are
+                generous. Purchased proof captures never expire and carry over until you use
                 them.
               </dd>
             </div>
