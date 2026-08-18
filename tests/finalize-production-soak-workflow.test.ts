@@ -82,7 +82,7 @@ describe("production soak finalization workflow", () => {
       } },
     };
 
-    await execute(github, { repo: { owner: "nish3451", repo: "0509" } }, { setFailed, setOutput });
+    await execute(github, { repo: { owner: "Nishfleet", repo: "0509" } }, { setFailed, setOutput });
     expect(setFailed).not.toHaveBeenCalled();
     expect(setOutput).toHaveBeenCalledWith("sha", "a".repeat(40));
 
@@ -91,7 +91,7 @@ describe("production soak finalization workflow", () => {
         getWorkflowRun: vi.fn().mockResolvedValue({ data: { ...run, workflow_id: 999 } }),
         getWorkflow: github.rest.actions.getWorkflow,
       } },
-    }, { repo: { owner: "nish3451", repo: "0509" } }, { setFailed, setOutput });
+    }, { repo: { owner: "Nishfleet", repo: "0509" } }, { setFailed, setOutput });
     expect(setFailed).toHaveBeenCalledWith("production_deploy_run_provenance_invalid");
   });
 
