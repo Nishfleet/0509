@@ -21,6 +21,10 @@ beforeEach(() => {
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
         React.createElement("form", props, children),
+      // Route components render in isolation here (no data router), so the
+      // real useRouteLoaderData would throw. The nav only reads
+      // rootData?.session, which is absent in this static-render context.
+      useRouteLoaderData: () => undefined,
     };
   });
 });
