@@ -1,4 +1,5 @@
 import { digestReviewerLabel } from "~/lib/change-intelligence";
+import type { DigestTrustItem } from "~/lib/proof-classification";
 import type {
   DigestItemRecord,
   DigestRecord,
@@ -27,8 +28,15 @@ import type {
 export type BriefRetentionConfidence = "high" | "medium" | "low" | "unavailable";
 
 export interface BriefRetentionInput {
-  /** The filed events or digest items in this period. */
-  items?: ReadonlyArray<DigestItemRecord | WatchEventRecord> | null;
+  /**
+   * The filed events or digest items in this period. Accepts the loose
+   * `DigestTrustItem` shape the email surface passes (all-optional fields)
+   * as well as the strict record types; only `length` and proof metadata are
+   * read, so the union stays permissive without weakening the strict callers.
+   */
+  items?:
+    | ReadonlyArray<DigestItemRecord | WatchEventRecord | DigestTrustItem>
+    | null;
   /** The previous brief on file (the most recent digest older than this one). */
   previousBrief?: DigestRecord | null;
   /**
