@@ -3,15 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL,
   EXPECTED_PUBLIC_HOME_CACHE_CONTROL,
+  EXPECTED_SCRIPT_SRC_BEACON_HOST,
 } from "../scripts/check-live-public-home.mjs";
 import {
+  CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC,
   HTML_NO_STORE_HEADERS,
   PUBLIC_HTML_CACHE_CONTROL,
   SECURITY_HEADERS,
   withSecurityHeaders,
 } from "../workers/security-headers";
 
-const CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC = "https://static.cloudflareinsights.com/beacon.min.js";
 const BASE_SCRIPT_SRC = `script-src 'self' 'unsafe-inline' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC}`;
 
 function htmlResponse(init: ResponseInit & { headers?: Record<string, string> } = {}) {
@@ -243,6 +244,44 @@ describe("Worker security headers", () => {
       // public, max-age=300), deploys would fail on a policy that is actually
       // correct. Import both constants and assert they can never diverge.
       expect(EXPECTED_PUBLIC_HOME_CACHE_CONTROL).toBe(PUBLIC_HTML_CACHE_CONTROL);
+      // The SSR-pricing variant (private) must stay within the same bounded,
+      // SWR-free stale window the gate enforces for the shared-cache variant.
+      expect(COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL).toBe("private, max-age=300");
+      expect(COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL).not.toContain("stale-while-revalidate");
+    });
+
+    it("honors an explicitly-set cache-control on public cacheable HTML", () => {
+      // The marketing page embeds buyer-country Dodo prices in its SSR HTML,
+      // so it sets `private, max-age=300` itself. The worker must respect that
+      // instead of stamping the generic public policy — a shared cache must
+      // never replay one country's prices for another visitor.
+      const response = withSecurityHeaders(
+        new Response("<!doctype html>", {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "private, max-age=300",
+            "vary": "cookie",
+          },
+        }),
+        new Request("https://0509.io/"),
+      );
+
+      expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+      expect(response.headers.get("vary")).toBe("cookie");
+      // Security headers still apply to the private variant.
+      expect(response.headers.get("strict-transport-security")).toBe(
+        SECURITY_HEADERS["strict-transport-security"],
+      );
+      expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    });
+
+    it("keeps the live deploy gate's beacon-CSP contract coupled to the product policy", () => {
+      // The gate asserts the LIVE script-src still allows the Cloudflare Web
+      // Analytics beacon (PR #610). If the product CSP ever drops the beacon
+      // host without the gate moving with it, deploys would pass while analytics
+      // silently records zero page views. Import both constants and assert they
+      // can never diverge.
+      expect(EXPECTED_SCRIPT_SRC_BEACON_HOST).toBe(CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC);
     });
 
     it("honors an app-set cache-control on cacheable HTML instead of stamping the public policy", () => {

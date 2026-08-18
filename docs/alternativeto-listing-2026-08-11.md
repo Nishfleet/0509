@@ -203,9 +203,20 @@ existing app → "Suggest as alternative and select among its alternatives".
 Approved suggestions make Five to Nine appear on that app's alternatives
 list.
 
-Recommended targets (all verified to exist and be listed 2026-08-11), by fit
-with AlternativeTo's own rule — same main task and focus:
+Recommended targets (targets 1–8 verified to exist and be listed
+2026-08-11; target 0 is conditional — see note), by fit with
+AlternativeTo's own rule — same main task and focus:
 
+0. **MagicBrief** (`/software/magicbrief/`) — wind-down buyers land here
+   first (MagicBrief closed 2026-07-31; displaced users browse its
+   alternatives page when picking a replacement). **Time-sensitive:**
+   suggest Five to Nine as an alternative on this page BEFORE the wind-down
+   attention fades. AlternativeTo blocked automated verification
+   (HTTP 403 to a plain fetch on 2026-08-12), so confirm the page is still
+   listed at submission time — if it is gone (or was never listed), skip
+   and keep target 1 below. Our live migration guide
+   (`https://0509.io/compare/magicbrief`) is the landing page for that
+   audience.
 1. **Facebook Ad Library** (`/software/facebook-ad-library/`) — the manual
    ad-transparency tool Five to Nine automates on top of; 15 alternatives
    listed today. Highest-fit target.

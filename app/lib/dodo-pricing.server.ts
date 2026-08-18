@@ -650,9 +650,9 @@ function validateDodoAnnualPricePair(
 
 // Adaptive-currency Dodo previews compute the annual tax-inclusive total per
 // line, so the annual amount can differ from monthly x 8 by a few minor units
-// of currency-conversion rounding (observed live: EUR totals off by 1-2
-// units). The "4 months free" claim stays honest within this allowance — the
-// allowance is a tiny fraction of a percent and far below any real price
+// of currency-conversion rounding (observed live: EUR and PLN totals off by
+// 1-2 units, GB exact). The "4 months free" claim stays honest within this
+// allowance — a tiny fraction of a percent, far below any real price
 // difference — while still rejecting a Dodo configuration that drifts from
 // pay-8-months by a meaningful amount.
 const ANNUAL_ROUNDING_ALLOWANCE_FACTOR = 0.001;

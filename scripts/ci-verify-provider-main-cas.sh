@@ -50,6 +50,14 @@ remote_sha="$(
 [[ "$remote_sha" =~ $sha_pattern ]] || fail "remote_main_sha"
 if [[ "$remote_sha" == "$PINNED_SHA" ]]; then
   printf 'Provider main CAS verified at %s.\n' "$PINNED_SHA"
+elif [[ "${GITHUB_EVENT_NAME:-}" == "workflow_dispatch" ]] &&
+     git merge-base --is-ancestor "$PINNED_SHA" "$remote_sha" 2>/dev/null; then
+  # Dispatch resolution: the dispatched candidate is an ancestor of the live
+  # main tip - main advanced between dispatch and run start. The pin ships
+  # the exact dispatched, CI-verified commit; a rewind/rewrite of main
+  # (candidate NOT an ancestor of the live tip) stays fail-closed below.
+  printf 'Provider main moved to %s; deployed candidate %s is still an ancestor of live main.\n' \
+    "$remote_sha" "$PINNED_SHA" >&2
 elif [[ "${TOLERATE_MAIN_DRIFT:-0}" == "1" ]]; then
   # Post-gate drift tolerance: the caller (Deploy production, after its full
   # verification gate) deploys exactly PINNED_SHA, so a mid-run move of main

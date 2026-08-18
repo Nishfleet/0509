@@ -32,6 +32,20 @@ const ACCEPTED_PUBLIC_HOME_CACHE_CONTROLS = new Set([
   COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL,
 ]);
 
+// Deploy-gate contract for the Cloudflare Web Analytics beacon (PR #610).
+//
+// Web Analytics is enabled for the zone with automatic (edge) injection, so
+// Cloudflare inserts https://static.cloudflareinsights.com/beacon.min.js into
+// HTML responses as it passes the edge. If the beacon host ever drops out of
+// the live script-src directive, the CSP blocks the beacon and analytics
+// silently records zero page views — no crash, no log, just a silent zero.
+// That silent failure is exactly what the coupling test in
+// tests/worker-security-headers.test.ts guards: it imports this constant and
+// CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC from workers/security-headers.ts and
+// asserts they are equal, so the gate and the product policy can never
+// silently diverge again.
+export const EXPECTED_SCRIPT_SRC_BEACON_HOST = "https://static.cloudflareinsights.com/beacon.min.js";
+
 const staleSignals = [
   "The market moves after you log off",
   "After-hours market intelligence",
@@ -86,6 +100,18 @@ function varyIncludesCookie(varyHeader) {
     .some((token) => token.trim() === "cookie");
 }
 
+/**
+ * @param {string} cspHeader the full content-security-policy header value
+ * @returns {boolean} whether script-src allows the Cloudflare Web Analytics beacon
+ */
+function cspAllowsBeacon(cspHeader) {
+  const scriptSrc = cspHeader
+    .split(";")
+    .map((directive) => directive.trim())
+    .find((directive) => directive.startsWith("script-src "));
+  return scriptSrc !== undefined && scriptSrc.includes(EXPECTED_SCRIPT_SRC_BEACON_HOST);
+}
+
 /** @param {URL} url */
 async function checkUrl(url) {
   const response = await fetch(url, {
@@ -111,14 +137,20 @@ async function checkUrl(url) {
   const cacheSafe =
     ACCEPTED_PUBLIC_HOME_CACHE_CONTROLS.has(cacheControl.trim()) && varyIncludesCookie(vary);
 
+  // PR #610 contract: the live CSP must keep allowing the Cloudflare Web
+  // Analytics beacon. Without this, analytics silently records zero page views
+  // (blocked beacon, no error anywhere).
+  const cspAllowsBeaconSafe = cspAllowsBeacon(response.headers.get("content-security-policy") ?? "");
+
   return {
     url: url.toString(),
-    ok: response.ok && missing.length === 0 && stale.length === 0 && cacheSafe,
+    ok: response.ok && missing.length === 0 && stale.length === 0 && cacheSafe && cspAllowsBeaconSafe,
     status: response.status,
     missing,
     stale,
     cacheControl,
     vary,
+    cspAllowsBeacon: cspAllowsBeaconSafe,
   };
 }
 
