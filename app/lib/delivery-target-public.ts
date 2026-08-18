@@ -15,13 +15,28 @@ export function toPublicDeliveryTarget(
         ? options?.verifiedAccountEmail ?? "Verified account email"
         : target.channel === "whatsapp"
           ? "Verified WhatsApp destination"
-          : "Connected Slack workspace",
+          : target.channel === "slack"
+            ? "Connected Slack workspace"
+            : "Connected Teams channel",
     providerIdentifier: null,
-    metadata: target.channel === "slack" ? safeSlackMetadata(target.metadata) : {},
+    metadata:
+      target.channel === "slack"
+        ? safeSlackMetadata(target.metadata)
+        : target.channel === "teams"
+          ? safeTeamsMetadata(target.metadata)
+          : {},
   };
 }
 
 function safeSlackMetadata(metadata: Record<string, unknown>): Record<string, string> {
+  return safeDisplayNameMetadata(metadata);
+}
+
+function safeTeamsMetadata(metadata: Record<string, unknown>): Record<string, string> {
+  return safeDisplayNameMetadata(metadata);
+}
+
+function safeDisplayNameMetadata(metadata: Record<string, unknown>): Record<string, string> {
   const displayName = readString(metadata.displayName);
   if (!displayName) {
     return {};
