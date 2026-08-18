@@ -2,14 +2,55 @@ import type { NormalizedSavedQuery, SearchFilters, SearchMode } from "~/lib/type
 
 const COMPARISON_WHITESPACE = /\s+/g;
 
+// Script-driven churn tokens that make landing-page headlines change between
+// scans without the copy actually changing: countdown timers ("Deal ends in
+// 00:59:59"), rolling calendar dates ("Offer valid until aug 12"), live
+// audience counters ("12 people viewing now"), and live inventory/urgency
+// counters ("only 3 left", "120 sold"). These are stripped ONLY from the
+// comparison hash, so a churning page stays silent while real headline
+// rewrites (the "copy structure" signal) still fire. The raw and normalized
+// strings keep the full text for display and evidence.
+const HEADLINE_CHURN_PATTERNS: RegExp[] = [
+  // Countdown / clock timers: "Deal ends in 00:59:59", "Offer valid till 12:30".
+  /\b\d{1,2}:\d{2}(?::\d{2})?\b/g,
+  // Rolling calendar dates: "12/08/2026", "2026-08-12", "aug 12, 2026".
+  /\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g,
+  /\b\d{4}-\d{2}-\d{2}\b/g,
+  /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?\b/g,
+  // Live audience counters: "12 people viewing now", "1.2k watching".
+  /\b\d[\d,.]*k?\s+(?:people|users|shoppers|customers|visitors|families)\s+(?:are\s+)?(?:viewing|watching|browsing|looking\s+at|online|in\s+line)\b/g,
+  // Live inventory / urgency counters: "only 3 left", "5 seats remaining",
+  // "120 sold".
+  /\b(?:only\s+)?\d[\d,]*\s+(?:left|remaining|seats|spots|places|items|units|tickets|sold|bought|claimed|enrolled|joined|registered)\b/g,
+];
+
 export function normalizeHeadline(value: string) {
   const raw = value.trim();
   const normalized = raw.replace(COMPARISON_WHITESPACE, " ").toLowerCase();
   return {
     raw,
     normalized,
-    hash: hashString(normalized),
+    hash: hashString(stripChurnTokens(normalized)),
   };
+}
+
+/**
+ * Churn-stable comparison value for any landing-page field. Countdown
+ * timers, rolling calendar dates, live audience counters, and live
+ * inventory/urgency counters are stripped from the COMPARISON value only —
+ * the caller keeps the raw text for display and evidence. Without this, a
+ * "Claim offer · 00:59:59" CTA or a "Only 3 left · ₹499" price line fires a
+ * customer-visible CTA/offer event on every scan even though the page's own
+ * copy never changed. When churn tokens are the only difference, the two
+ * comparison values normalize to the same string and no event is emitted.
+ */
+export function stripChurnTokens(value: string | null | undefined) {
+  if (!value) return "";
+  let stripped = value;
+  for (const pattern of HEADLINE_CHURN_PATTERNS) {
+    stripped = stripped.replace(pattern, " ");
+  }
+  return stripped.replace(COMPARISON_WHITESPACE, " ").trim();
 }
 
 // Country falls back to "all", not any single market — Five to Nine is

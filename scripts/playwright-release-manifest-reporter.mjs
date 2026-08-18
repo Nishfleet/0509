@@ -835,7 +835,7 @@ export function recordManifestPostflight(path, evidence) {
     typeof config !== "object" ||
     !FINGERPRINT_PATTERN.test(config.identity ?? "") ||
     !FINGERPRINT_PATTERN.test(config.wranglerWorktreeSha256 ?? "") ||
-    config.productionSearchRolloutMode !== "shadow" ||
+    config.productionSearchRolloutMode !== "v2" ||
     config.localProofSearchRolloutMode !== "v2" ||
     config.providerNetworkDeny !== true ||
     config.authProvider !== "better-auth" ||

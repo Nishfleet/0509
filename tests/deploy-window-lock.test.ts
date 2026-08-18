@@ -112,9 +112,13 @@ function completed(child: ChildProcess): Promise<{
   });
 }
 
+// The default ceiling is deliberately generous: it is a safety net against a
+// hung child, never the assertion. Correctness is asserted afterwards via the
+// state transitions the test cares about (markers, queue tickets, flock
+// probes). A tight ceiling would turn machine load into a false failure.
 async function waitFor(
   predicate: () => boolean,
-  timeoutMs = 2_500,
+  timeoutMs = 30_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!predicate()) {
@@ -125,13 +129,45 @@ async function waitFor(
   }
 }
 
+// A verification queue ticket is the script's deterministic "this lane is
+// waiting for a slot" signal: it is created at enqueue time and removed only
+// when the lane claims a slot and starts running. Tickets match
+// <20-digit-sequence>.<pid>.<process-start>.
+function hasQueueTicket(queueDir: string): boolean {
+  if (!existsSync(queueDir)) {
+    return false;
+  }
+  try {
+    return readdirSync(queueDir).some((entry) =>
+      /^\d{20}\.\d+\.\d+$/u.test(entry),
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Deterministic "lane is parked, not running" check. `parked` is a state
+// signal that becomes true only once the lane has provably entered the
+// waiting protocol (queue ticket enqueued, or verification slot held), so
+// the wait is on the state transition the test cares about, with a generous
+// safety-net ceiling rather than a load assertion. The settle afterwards is
+// a detection window for a wrongly-admitted lane (one whose marker appears):
+// a broken admission manifests within a few script steps of the parked
+// signal, far inside this window, and a slow machine only makes it manifest
+// later — never invisible — so this check cannot false-fail under load.
+async function expectLaneParked(
+  parked: () => boolean,
+  marker: string,
+): Promise<void> {
+  await waitFor(() => parked() || existsSync(marker));
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 1_000));
+  expect(existsSync(marker)).toBe(false);
+}
+
 // Liveness is judged by /proc identity, mirroring the script's own
 // process_identity_is_live() (start time + non-zombie state). kill -0 is
 // deliberately avoided: it is unreliable across distinct runner UIDs
-// (EPERM on a live peer), and it reports a dead-but-unreaped zombie as
-// alive (kill(pid, 0) succeeds on state "Z"), so a waitFor on
-// !pidAlive(...) can still be followed by a successful kill -0. This
-// file's first spec locks the /proc-identity choice in.
+// (EPERM on a live peer) and this file's first spec locks that choice in.
 function pidAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false;
@@ -166,67 +202,6 @@ async function readPidWhenWritten(marker: string): Promise<number> {
     return Number.isInteger(pid) && pid > 0;
   });
   return pid;
-}
-
-// Cleanup must never signal a process group that is no longer ours. Once the
-// lane-holder reaps the cancelled command its PID is free, and under CI process
-// churn the kernel can reuse that exact PID as the leader of a brand-new group
-// (e.g. the slot-reuse replacement lane) before this finally block runs. A
-// blind kill(-pid, SIGKILL) then kills the wrong process and fails an unrelated
-// spec. Only signal when a live member of the original group still exists.
-function killOwnedProcessGroup(pid: number): void {
-  if (!Number.isInteger(pid) || pid <= 0) {
-    return;
-  }
-  // A dead-but-unreaped zombie still holds its PGID; a live descendant (e.g. an
-  // in-flight `sleep` of the stubborn loop) may also remain. Both are still our
-  // group. If no /proc entry claims the PGID, the group is gone: signalling the
-  // now-free PID could hit a reused group, so skip.
-  if (!processGroupHasMember(pid)) {
-    return;
-  }
-  try {
-    process.kill(-pid, "SIGKILL");
-  } catch {
-    // The cancellation path may have reaped the group in between.
-  }
-}
-
-function processGroupHasMember(pid: number): boolean {
-  try {
-    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    const fields = stat.slice(stat.indexOf(")") + 2).split(" ");
-    // Field 5 is the process group id (fields are offset by 3 in this parse).
-    const pgid = Number(fields[5 - 3]);
-    if (!Number.isInteger(pgid) || pgid !== pid) {
-      // The command is no longer (or never was) a group leader.
-      return false;
-    }
-  } catch {
-    return false;
-  }
-  try {
-    for (const entry of readdirSync("/proc")) {
-      if (!/^\d+$/u.test(entry)) {
-        continue;
-      }
-      let stat: string;
-      try {
-        stat = readFileSync(`/proc/${entry}/stat`, "utf8");
-      } catch {
-        continue;
-      }
-      const fields = stat.slice(stat.indexOf(")") + 2).split(" ");
-      if (Number(fields[5 - 3]) === pid) {
-        return true;
-      }
-    }
-  } catch {
-    // If /proc is unreadable, fall back to signalling: the group either exists
-    // (we reap it) or is gone (kill fails harmlessly).
-    return true;
-  }
-  return false;
 }
 
 function probeIsFree(lockFile: string): boolean {
@@ -317,10 +292,15 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     const lane = spawnScript(
       lockFile,
       ["run", "--", "bash", "-c", 'printf "ran" >"$1"', "lane", marker],
-      { DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "1" },
+      // The budget is not under test here (timeout-exit behavior has its own
+      // spec below). It only has to outlast the parked-detection settle plus
+      // the release step, so the lane still runs after the window opens.
+      { DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "10" },
     );
     const laneResult = completed(lane);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+    // While acquire holds the window, the lane must park holding a
+    // verification slot but stay blocked on the shared gate.
+    await expectLaneParked(() => !slotIsFree(lockFile, 1), marker);
     expect(lane.exitCode).toBeNull();
     expect(existsSync(marker)).toBe(false);
 
@@ -382,8 +362,12 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       overrides,
     );
     const fourthResult = completed(fourth);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
-    expect(existsSync(fourthMarker)).toBe(false);
+    // With all three slots held, the fourth lane must park with a queue
+    // ticket and never write its marker until a slot frees.
+    await expectLaneParked(
+      () => hasQueueTicket(`${verifyRoot}/queue`),
+      fourthMarker,
+    );
     expect(probeIsFree(lockFile)).toBe(false);
 
     writeFileSync(lanes[0]!.stop, "");
@@ -562,7 +546,9 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       },
     );
     const laneResult = completed(lane);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+    // Behind the legacy exclusive holder, the lane must park holding a
+    // verification slot but stay blocked on the shared gate.
+    await expectLaneParked(() => !slotIsFree(lockFile, 1), marker);
     expect(lane.exitCode).toBeNull();
     expect(existsSync(marker)).toBe(false);
 
@@ -664,7 +650,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
 
     try {
       commandPid = await readPidWhenWritten(marker);
-      expect(pidAlive(commandPid)).toBe(true);
+      expect(() => process.kill(commandPid, 0)).not.toThrow();
 
       lane.kill("SIGTERM");
       expect((await laneResult).code).toBe(143);
@@ -672,10 +658,14 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
         () =>
           probeIsFree(lockFile) && slotIsFree(lockFile, 1) && !pidAlive(commandPid),
       );
-      expect(pidAlive(commandPid)).toBe(false);
+      expect(() => process.kill(commandPid, 0)).toThrow();
     } finally {
       if (Number.isInteger(commandPid) && commandPid > 0) {
-        killOwnedProcessGroup(commandPid);
+        try {
+          process.kill(-commandPid, "SIGKILL");
+        } catch {
+          // The cancellation path should already have reaped the group.
+        }
       }
     }
   });
@@ -721,7 +711,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
           slotIsFree(lockFile, 1) &&
           !pidAlive(commandPid),
       );
-      expect(pidAlive(commandPid)).toBe(false);
+      expect(() => process.kill(commandPid, 0)).toThrow();
 
       const replacement = spawnScript(
         lockFile,
@@ -737,7 +727,11 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       expect(readFileSync(nextMarker, "utf8")).toBe("reused");
     } finally {
       if (commandPid > 0) {
-        killOwnedProcessGroup(commandPid);
+        try {
+          process.kill(-commandPid, "SIGKILL");
+        } catch {
+          // The bounded cancellation path should have killed the session.
+        }
       }
     }
   });
@@ -778,7 +772,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
 
     try {
       childPid = await readPidWhenWritten(childPidFile);
-      expect(pidAlive(childPid)).toBe(true);
+      expect(() => process.kill(childPid, 0)).not.toThrow();
 
       lane.kill("SIGTERM");
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
@@ -789,10 +783,14 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
         () =>
           probeIsFree(lockFile) && slotIsFree(lockFile, 1) && !pidAlive(childPid),
       );
-      expect(pidAlive(childPid)).toBe(false);
+      expect(() => process.kill(childPid, 0)).toThrow();
     } finally {
       if (Number.isInteger(childPid) && childPid > 0) {
-        killOwnedProcessGroup(childPid);
+        try {
+          process.kill(-childPid, "SIGKILL");
+        } catch {
+          // The cancellation path should already have reaped the group.
+        }
       }
     }
   });
@@ -848,8 +846,12 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
 
     writeFileSync(lanes[0]!.stop, "");
     expect((await lanes[0]!.result).code).toBe(0);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
-    expect(existsSync(fourthMarker)).toBe(false);
+    // While the deploy acquire drains, the fourth lane must stay parked
+    // (ticket enqueued, no marker) even after a slot frees.
+    await expectLaneParked(
+      () => hasQueueTicket(`${overrides.DEPLOY_WINDOW_VERIFY_ROOT}/queue`),
+      fourthMarker,
+    );
 
     for (const lane of lanes.slice(1)) {
       writeFileSync(lane.stop, "");

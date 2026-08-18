@@ -1,5 +1,5 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
@@ -328,6 +328,25 @@ export function sampleProofValue(value: string): string {
   return value.trim() || "Not available in this sample";
 }
 
+// The sample digest export is stored as markdown for the raw-export API
+// contract. On the homepage, render the small supported subset — bold
+// emphasis and line breaks — instead of leaking raw markdown syntax into
+// the visible "Brief export" preview.
+export function renderDigestMarkdownPreview(markdown: string): ReactNode {
+  const lines = markdown.split("\n");
+  return lines.map((line, index) => (
+    <span key={index}>
+      {renderDigestMarkdownLine(line)}
+      {index < lines.length - 1 ? <br /> : null}
+    </span>
+  ));
+}
+
+function renderDigestMarkdownLine(line: string): ReactNode {
+  const emphasis = line.match(/^\*(.+)\*$/);
+  return emphasis ? <strong>{emphasis[1]}</strong> : line;
+}
+
 export function planIntentPath(
   signedIn: boolean,
   plan: PricingPlanSlug,
@@ -539,7 +558,7 @@ export default function MarketingRoute() {
 
         <p className="ld-case">
           <span className="ld-rec">Sample proof-backed brief</span>
-          <span>A rival page changed while your team was offline</span>
+          <span>A rival page changed while your growth team was offline</span>
         </p>
 
         <div className="ld-hero-grid">
@@ -559,7 +578,7 @@ export default function MarketingRoute() {
             </h1>
 
             <p className="ld-deck-copy">
-              Your team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
+              Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
               Meta ads and landing pages, saves the screenshots, and files the brief —{" "}
               <b>before your alarm goes off.</b>
             </p>
@@ -780,7 +799,7 @@ export default function MarketingRoute() {
             </article>
             <article>
               <span className="ld-kicker">Brief export</span>
-              <p className="ld-export">{demoProof.exports.digestMarkdown}</p>
+              <p className="ld-export">{renderDigestMarkdownPreview(demoProof.exports.digestMarkdown)}</p>
             </article>
           </div>
         </div>
