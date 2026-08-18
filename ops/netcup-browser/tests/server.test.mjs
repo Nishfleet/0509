@@ -16,7 +16,10 @@ import { HmacVerifier, buildCanonical, sign, sha256Hex } from "../src/auth.mjs";
 
 const SECRET = "s".repeat(64);
 const META_URL = "https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=IN&q=hello";
-const VALID_TOKEN = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
+// Low-entropy, obviously-fake 0509 share-token fixture (must match the
+// server's 32-hex PDF token shape). Intentionally NOT a high-entropy secret so
+// the secret scanner does not flag this test fixture.
+const VALID_TOKEN = "abcabcabcabcabcabcabcabcabcabcab";
 const SHARE_ORIGIN = "https://0509.io";
 
 // --- stub Camofox engine ------------------------------------------------------
