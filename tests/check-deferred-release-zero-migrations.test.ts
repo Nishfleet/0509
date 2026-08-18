@@ -59,7 +59,7 @@ describe("resolveLiveSha", () => {
     expect(seen).toEqual([
       "gh",
       "run", "list",
-      "--repo", "nish3451/0509",
+      "--repo", "Nishfleet/0509",
       "--workflow", "deploy-production.yml",
       "--status", "success",
       "--limit", "1",

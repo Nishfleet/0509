@@ -666,8 +666,8 @@ describe("D1 remote restore evidence automation", () => {
       head_branch: "main",
       head_sha: headSha,
       created_at: "2026-07-29T06:00:00.000Z",
-      repository: { full_name: "nish3451/0509" },
-      head_repository: { full_name: "nish3451/0509" },
+      repository: { full_name: "Nishfleet/0509" },
+      head_repository: { full_name: "Nishfleet/0509" },
       workflowFile: "deploy-production.yml",
     };
     const artifact = {
@@ -1325,7 +1325,7 @@ describe("D1 remote restore evidence automation", () => {
     expect(() =>
       assertAutomationContext({
         GITHUB_ACTIONS: "true",
-        GITHUB_REPOSITORY: "nish3451/0509",
+        GITHUB_REPOSITORY: "Nishfleet/0509",
         GITHUB_REF: "refs/heads/main",
         D1_REMOTE_RESTORE_AUTOMATION_APPROVED:
           "0509-remote-restore-evidence",
@@ -1336,7 +1336,7 @@ describe("D1 remote restore evidence automation", () => {
     expect(() =>
       assertAutomationContext({
         GITHUB_ACTIONS: "true",
-        GITHUB_REPOSITORY: "nish3451/0509",
+        GITHUB_REPOSITORY: "Nishfleet/0509",
         GITHUB_REF: "refs/heads/main",
         D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "wrong",
         GITHUB_RUN_ID: "30423695493",

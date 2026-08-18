@@ -93,7 +93,7 @@ describe("exact production candidate workflow", () => {
     const authorizeStep = authorize?.steps?.[0];
     expect(authorizeStep?.name).toBe("Authorize release request");
     expect(authorizeStep?.run).toContain(
-      'test "$GITHUB_REPOSITORY" = "nish3451/0509"',
+      'test "$GITHUB_REPOSITORY" = "Nishfleet/0509"',
     );
     expect(authorizeStep?.run).toContain(
       'test "$GITHUB_REF" = "refs/heads/main"',
@@ -305,7 +305,7 @@ describe("exact production candidate workflow", () => {
         /actions\/checkout|secrets\.|wrangler|cloudflare/i,
       );
       expect(authorize?.steps?.[0]?.run, `${name} canonical repository`).toContain(
-        'test "$GITHUB_REPOSITORY" = "nish3451/0509"',
+        'test "$GITHUB_REPOSITORY" = "Nishfleet/0509"',
       );
     }
 
@@ -520,7 +520,7 @@ args="$*"
 [[ "$args" = *"--proto-redir =https"* ]]
 [[ "$args" = *"--config -"* ]]
 config="$(cat)"
-grep -Fq 'url = "https://api.github.com/repos/nish3451/0509/git/ref/heads/main"' <<< "$config"
+grep -Fq 'url = "https://api.github.com/repos/Nishfleet/0509/git/ref/heads/main"' <<< "$config"
 grep -Fq 'header = "Authorization: Bearer test-token"' <<< "$config"
 grep -Fq 'header = "X-GitHub-Api-Version: 2026-03-10"' <<< "$config"
 printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
@@ -534,7 +534,7 @@ printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
       const baseEnv = {
         ...process.env,
         GITHUB_EVENT_NAME: "push",
-        GITHUB_REPOSITORY: "nish3451/0509",
+        GITHUB_REPOSITORY: "Nishfleet/0509",
         GITHUB_REF: "refs/heads/main",
         GITHUB_SHA: candidateSha,
         GITHUB_RUN_ATTEMPT: "1",
