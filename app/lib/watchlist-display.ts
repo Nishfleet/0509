@@ -81,17 +81,18 @@ export function buildProofSummary(captures: ProofCaptureRecord[]): WatchlistProo
 
 export function isVisibleDeliveryChannel(
   channel: string,
-  visibility: { showSlackDelivery: boolean; whatsappAvailable: boolean },
+  visibility: { showSlackDelivery: boolean; showTeamsDelivery: boolean; whatsappAvailable: boolean },
 ) {
   return (
     channel === "email" ||
     (channel === "whatsapp" && visibility.whatsappAvailable) ||
-    (channel === "slack" && visibility.showSlackDelivery)
+    (channel === "slack" && visibility.showSlackDelivery) ||
+    (channel === "teams" && visibility.showTeamsDelivery)
   );
 }
 
 export function visibleDeliveryChannels(
-  visibility: { showSlackDelivery: boolean; whatsappAvailable: boolean },
+  visibility: { showSlackDelivery: boolean; showTeamsDelivery: boolean; whatsappAvailable: boolean },
 ): DeliveryChannel[] {
   const channels: DeliveryChannel[] = ["email"];
   if (visibility.whatsappAvailable) {
@@ -99,6 +100,9 @@ export function visibleDeliveryChannels(
   }
   if (visibility.showSlackDelivery) {
     channels.push("slack");
+  }
+  if (visibility.showTeamsDelivery) {
+    channels.push("teams");
   }
   return channels;
 }
@@ -112,12 +116,13 @@ export function sortByCreatedAtDesc<T extends { createdAt: string }>(records: T[
 }
 
 export function maskDormantDeliveryConfig<
-  T extends { whatsappEnabled: boolean; slackEnabled: boolean },
->(config: T, visibility: { showSlackDelivery: boolean; whatsappAvailable: boolean }): T {
+  T extends { whatsappEnabled: boolean; slackEnabled: boolean; teamsEnabled: boolean },
+>(config: T, visibility: { showSlackDelivery: boolean; showTeamsDelivery: boolean; whatsappAvailable: boolean }): T {
   return {
     ...config,
     whatsappEnabled: visibility.whatsappAvailable && config.whatsappEnabled,
     slackEnabled: visibility.showSlackDelivery && config.slackEnabled,
+    teamsEnabled: visibility.showTeamsDelivery && config.teamsEnabled,
   };
 }
 
