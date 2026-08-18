@@ -84,10 +84,10 @@ export interface BrandPageCacheSnapshot {
   /** True when young enough (≤ 7 days) to be indexable. */
   freshForIndexing: boolean;
   /**
-   * True only while the capture is still inside the "moments ago" window —
-   * the same strict 2-minute bound the "Last checked" stamp uses — that
-   * "right now"/"live" copy is honest. Anything older, even "about 5
-   * minutes ago", renders past-tense copy.
+   * True only while the capture is still in the "moments ago" bucket (same
+   * boundary as the freshness stamp) that "right now" / "live" copy is
+   * honest. Any older capture — even one from a few minutes ago — renders
+   * past-tense copy.
    */
   freshForLiveClaim: boolean;
 }
@@ -488,6 +488,24 @@ export function formatBrandPageCheckedAgo(fetchedAt: string, now: Date = new Dat
 }
 
 /**
+ * One-clock pair for the public brand-page freshness stamp and the live
+ * ("right now") claim. Both values come from the same `now`, so they cannot
+ * disagree: `freshForLiveClaim` is true if and only if `checkedAgo` is
+ * "moments ago". The public loader MUST use this helper for both fields
+ * rather than mixing a snapshot-time flag with a later stamp clock.
+ */
+export function resolveBrandPageFreshness(
+  fetchedAt: string,
+  now: Date = new Date(),
+): { checkedAgo: string; freshForLiveClaim: boolean } {
+  const checkedAgo = formatBrandPageCheckedAgo(fetchedAt, now);
+  return {
+    checkedAgo,
+    freshForLiveClaim: checkedAgo === "moments ago",
+  };
+}
+
+/**
  * Honest Ad Library country label for public page copy, derived from the
  * snapshot's `country` ("India", "United States", … or "all"). The Meta Ad
  * Library is country-scoped — a page that renders cached ads must name the
@@ -600,10 +618,9 @@ function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot 
     country: entry.country,
     ageMs,
     freshForIndexing: ageMs <= BRAND_PAGE_FRESH_FOR_INDEXING_MS,
-    // Strictly less than — the live claim must stay honest for EXACTLY the
-    // same window the stamp calls "moments ago" (also strict <). A capture at
-    // the boundary then shows the past-tense copy with an "about 2 minutes
-    // ago" stamp instead of claiming "right now".
-    freshForLiveClaim: ageMs < BRAND_PAGE_LIVE_CLAIM_MAX_AGE_MS,
+    // Snapshot-time flag, derived from the same helper the public page uses.
+    // The public loader still recomputes from its own post-read `now` so a
+    // D1 gap cannot pair "right now" with "about 2 minutes ago".
+    freshForLiveClaim: resolveBrandPageFreshness(entry.fetchedAt, now).freshForLiveClaim,
   };
 }
