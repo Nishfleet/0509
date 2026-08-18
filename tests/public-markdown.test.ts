@@ -7,6 +7,7 @@ import {
   wantsPublicMarkdown,
 } from "~/lib/public-markdown";
 import { auditedAgentActionGroups } from "~/lib/agent-action-catalog";
+import { AI_TRAINING_CRAWLERS } from "~/lib/seo";
 
 describe("public markdown", () => {
   it("supports same-url markdown negotiation for public pages", () => {
@@ -129,7 +130,12 @@ describe("public markdown", () => {
     // file cannot be read as implying unrestricted AI participation.
     expect(LLMS_TEXT).toContain("AI answer and reference engines may use this file");
     expect(LLMS_TEXT).toContain("ai-train=no");
-    expect(LLMS_TEXT).toContain("GPTBot, ClaudeBot, Google-Extended");
+    // The denied training-crawler list must match robots.txt exactly — it is
+    // derived from the same shared constant (app/lib/seo.ts AI_TRAINING_CRAWLERS),
+    // and this pins every agent by name so a removed entry fails loudly.
+    AI_TRAINING_CRAWLERS.forEach((agent) => {
+      expect(LLMS_TEXT, `${agent} should be named in the llms.txt deny list`).toContain(agent);
+    });
   });
 
   it("labels configured capability separately from live proof", () => {

@@ -88,8 +88,8 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("linking to");
     expect(marketingRoute).toContain("We saved the proof.");
     expect(marketingRoute).toContain("Proof-backed brief");
-    expect(marketingRoute).toContain("A rival page changed while your team was offline");
-    expect(marketingRoute).toContain("Your team would&rsquo;ve found out from a client.");
+    expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
+    expect(marketingRoute).toContain("Your growth team would&rsquo;ve found out from a client.");
     expect(marketingRoute).toContain("Meta ads and landing pages");
     expect(marketingRoute).toContain("before your alarm goes off");
     expect(marketingRoute).not.toContain("Sample proof-backed brief");
@@ -204,6 +204,14 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Brief export");
   });
 
+  it("never injects raw digest-markdown syntax into the homepage markup", () => {
+    expect(marketingRoute).not.toContain("renderDigestMarkdownPreview");
+    expect(marketingRoute).not.toContain("*Nykaa changed the routine bundle angle*");
+    expect(marketingRoute).not.toContain(
+      '<p className="ld-export">{demoProof.exports.digestMarkdown}</p>',
+    );
+  });
+
   it("keeps unsupported social and internal implementation claims out of homepage copy", () => {
     for (const unsupported of ["Slack", "WhatsApp", "Reddit", "LinkedIn", "Twitter"]) {
       expect(marketingRoute).not.toContain(unsupported);
@@ -262,7 +270,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain('className="ld-ticker"');
     expect(marketingRoute).toContain('className="ld-wall"');
     expect(marketingRoute).toContain("Proof-backed brief");
-    expect(marketingRoute).toContain("A rival page changed while your team was offline");
+    expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
     expect(marketingRoute).toContain('action="/search"');
     expect(marketingRoute).toContain("Preview available ads");
     expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');

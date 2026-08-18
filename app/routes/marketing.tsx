@@ -684,7 +684,7 @@ export default function MarketingRoute() {
 
         <p className="ld-case">
           <span className="ld-rec">Proof-backed brief</span>
-          <span>A rival page changed while your team was offline</span>
+          <span>A rival page changed while your growth team was offline</span>
         </p>
 
         <div className="ld-hero-grid">
@@ -692,7 +692,7 @@ export default function MarketingRoute() {
             {heroWall}
 
             <p className="ld-deck-copy">
-              Your team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
+              Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
               Meta ads and landing pages, saves the screenshots, and files the brief —{" "}
               <b>before your alarm goes off.</b>
             </p>
