@@ -97,6 +97,25 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(commit).toContain("market_signal_snapshot_merged");
   });
 
+  it("waits for required checks before merging instead of racing them", () => {
+    // Merging immediately after gh pr create races the required checks
+    // (codex-node-checks ~5-9 min, Gitleaks, required-verifier-integrity) and
+    // fails every run with "required status check is expected", so the
+    // snapshot never lands (all five restored runs died on the push/merge).
+    // The landing step must arm auto-merge, watch the required checks, and
+    // confirm the merge actually happened.
+    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
+    expect(commit).toContain("--auto");
+    expect(commit).toContain("gh pr checks");
+    expect(commit).toContain("--watch");
+    expect(commit).toContain("--required");
+    expect(commit).toContain("market_signal_snapshot_checks_failed");
+    expect(commit).toContain("market_signal_snapshot_merge_timeout");
+    // The watch is bounded so a stuck check fails loudly instead of burning
+    // the whole 30-minute job cap.
+    expect(commit).toContain("timeout");
+  });
+
   it("rejects stale snapshots before committing them", () => {
     const freshness = job.steps?.find((step) => step.name === "Verify snapshot freshness")?.run ?? "";
     expect(freshness).toContain("generatedAt");
