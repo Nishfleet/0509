@@ -22,6 +22,7 @@ const workspaceConfig: WorkspaceDeliveryConfigRecord = {
   emailEnabled: true,
   whatsappEnabled: false,
   slackEnabled: false,
+  teamsEnabled: false,
   quietHours: {
     startHour: 22,
     endHour: 8,
@@ -91,6 +92,7 @@ describe("delivery policy", () => {
       emailEnabled: true,
       whatsappEnabled: true,
       slackEnabled: false,
+      teamsEnabled: false,
       quietHours: null,
       timezone: "UTC",
       createdAt: "2026-04-18T00:00:00.000Z",
@@ -109,6 +111,7 @@ describe("delivery policy", () => {
       emailEnabled: true,
       whatsappEnabled: true,
       slackEnabled: false,
+      teamsEnabled: false,
       quietHours: null,
       timezone: "UTC",
     });
