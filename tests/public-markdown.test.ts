@@ -80,8 +80,9 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Proof capture packs add purchased proof captures that never expire");
     expect(PUBLIC_MARKDOWN).toContain("Included proof captures reset every month and do not roll over");
     expect(PUBLIC_MARKDOWN).toContain("Scheduled scans are included with your plan");
-    expect(PUBLIC_MARKDOWN).toContain("saved source-backed captures use proof captures");
-    expect(PUBLIC_MARKDOWN).toContain("generous but finite");
+    expect(PUBLIC_MARKDOWN).toContain("each saved proof-backed capture counts toward your included or purchased proof captures");
+    expect(PUBLIC_MARKDOWN).toContain("make monitoring unlimited");
+    expect(PUBLIC_MARKDOWN).toContain("80% proof-capture usage");
     expect(PUBLIC_MARKDOWN).not.toContain("30-day");
     expect(PUBLIC_MARKDOWN).not.toContain("30 day");
     expect(PUBLIC_MARKDOWN).not.toContain("Starter includes 10 watchlists, 25 collections, weekly digest delivery");
@@ -101,7 +102,7 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("setup status plus collection, watchlist, and digest exports");
     expect(LLMS_TEXT).toContain("Purchased proof captures never expire");
     expect(LLMS_TEXT).toContain("included proof captures reset monthly without rollover");
-    expect(LLMS_TEXT).toContain("saved source-backed captures use proof captures");
+    expect(LLMS_TEXT).toContain("each saved proof-backed capture counts toward the cap");
     expect(LLMS_TEXT).not.toContain("usage bundles add 30-day");
     expect(LLMS_TEXT).not.toContain("Starter includes weekly digest delivery");
     expect(LLMS_TEXT).toContain("approved account actions");

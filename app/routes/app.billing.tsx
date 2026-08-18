@@ -366,7 +366,7 @@ export default function BillingRoute() {
         <div className="f9-wk-notice is-error" role="alert">
           <p>
             Top-up packs can only be added to a paid plan. Choose a plan first, then add extra
-            checks whenever you need them.
+            proof captures whenever you need them.
           </p>
         </div>
       ) : null}
@@ -544,7 +544,7 @@ export default function BillingRoute() {
                 <div className="f9-plan-limit-strip" aria-label={`${plan.name} limits`}>
                   <span>{plan.watchlistLimit ?? 0} watchlists</span>
                   <span>{plan.boardLimit ?? 0} Collections</span>
-                  <span>{(plan.evidenceChecksPerMonth ?? 0).toLocaleString("en-US")} checks/mo</span>
+                  <span>{(plan.evidenceChecksPerMonth ?? 0).toLocaleString("en-US")} proof captures/mo</span>
                 </div>
                 {selectedCycle === "yearly" ? (
                   <p className={`f9-annual-note${annualIsValid ? " is-valid" : " is-unavailable"}`}>
@@ -772,9 +772,8 @@ export default function BillingRoute() {
             <span className="f9-wk-kick">Proof capture packs</span>
             <h2>Top up busy weeks without changing plans</h2>
             <p className="f9-wk-dim">
-              Purchased proof captures never expire, and leftovers carry over until you spend
-              them. They add capture volume only; they do not change watchlist limits, cadence, or
-              plan features.
+              Purchased proof captures never expire and carry over until you use them. They add
+              capture volume only; they do not change watchlist limits, cadence, or plan features.
             </p>
           </div>
         </div>
@@ -1302,7 +1301,7 @@ function topUpPackName(skuSlug: string | null | undefined, credits: number) {
   if (skuSlug && isTopUpDisplayKey(skuSlug)) {
     return TOP_UP_PACK_DISPLAY[skuSlug].name;
   }
-  return `${credits.toLocaleString("en-IN")} proof capture pack`;
+  return `${credits.toLocaleString("en-IN")} proof-capture pack`;
 }
 
 function isTopUpDisplayKey(value: string): value is keyof typeof TOP_UP_PACK_DISPLAY {
