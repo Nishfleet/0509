@@ -6,7 +6,11 @@
  */
 
 import { formatAdsFoundLabel } from "~/lib/analysis-display";
-import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
+import {
+  ALL_COUNTRIES_VALUE,
+  countryNameFromIso,
+  isoFromCountryName,
+} from "~/lib/countries";
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import type {
@@ -168,6 +172,17 @@ export function isProvenFreshLiveCapture(result: SearchResponse): boolean {
   // fresh-live. An absent/unknown discovery status cannot prove a live capture.
   if (result.discoveryStatus !== "healthy") return false;
   return result.cacheStatus === "miss";
+}
+
+/**
+ * True when the result was produced from the demo/sample dataset rather than
+ * a live Ad Library lookup. Demo matches deliberately ignore the country
+ * filter (every demo ad matches every market), so a verdict title naming
+ * the searched country for a demo result would falsely imply
+ * country-specific evidence. Used to keep demo verdict copy unscoped.
+ */
+function isDemoSourceResult(result: SearchResponse): boolean {
+  return result.source === "demo" || result.provider === "demo";
 }
 
 export function formatSearchFreshnessLabel(result: SearchResponse) {
@@ -534,6 +549,13 @@ export function formatEmptyResultHeadline(
     return "Search preview is temporarily unavailable";
   }
 
+  // Demo/sample results are not actually filtered by the searched country,
+  // so the verdict title must not name a market — otherwise a demo
+  // verdict for India-authored samples served under a United States
+  // filter would falsely imply country-specific evidence.
+  const isDemoSource = isDemoSourceResult(result);
+  const marketScopeOptions = { isDemoSource };
+
   if (
     context.relevanceApplied &&
     context.isDomainSearch &&
@@ -543,10 +565,15 @@ export function formatEmptyResultHeadline(
     return withMarketScope(
       `No verified ads found for ${context.displayDomain}`,
       context.country,
+      marketScopeOptions,
     );
   }
 
-  return withMarketScope("No ads found for this competitor", context.country);
+  return withMarketScope(
+    "No ads found for this competitor",
+    context.country,
+    marketScopeOptions,
+  );
 }
 
 export function isDelayedDiscoveryStatus(
@@ -565,6 +592,12 @@ export function formatResultsPanelTitle(
     country?: string | null;
   } = {},
 ) {
+  // Demo/sample results are not actually filtered by the searched country,
+  // so the verdict title must not name a market — otherwise a demo
+  // verdict for India-authored samples served under a United States
+  // filter would falsely imply country-specific evidence.
+  const isDemoSource = isDemoSourceResult(result);
+  const marketScopeOptions = { isDemoSource };
   if (result.ads.length > 0) {
     if (
       context.relevanceApplied &&
@@ -576,6 +609,7 @@ export function formatResultsPanelTitle(
       return withMarketScope(
         `${result.ads.length} verified ${verifiedNoun} linked to ${context.displayDomain}`,
         context.country,
+        marketScopeOptions,
       );
     }
 
@@ -588,14 +622,20 @@ export function formatResultsPanelTitle(
         ? withMarketScope(
             `${verifiedCount} verified and ${relatedCount} related ${relatedNoun} for ${context.displayDomain}`,
             context.country,
+            marketScopeOptions,
           )
         : withMarketScope(
             `${result.ads.length} broader ${broaderNoun} for ${context.displayDomain}`,
             context.country,
+            marketScopeOptions,
           );
     }
 
-    return withMarketScope(formatAdsFoundLabel(result.ads.length), context.country);
+    return withMarketScope(
+      formatAdsFoundLabel(result.ads.length),
+      context.country,
+      marketScopeOptions,
+    );
   }
 
   if (
@@ -613,10 +653,15 @@ export function formatResultsPanelTitle(
     return withMarketScope(
       `No verified ads for ${context.displayDomain}`,
       context.country,
+      marketScopeOptions,
     );
   }
 
-  return withMarketScope(formatAdsFoundLabel(0), context.country);
+  return withMarketScope(
+    formatAdsFoundLabel(0),
+    context.country,
+    marketScopeOptions,
+  );
 }
 
 /**
@@ -627,8 +672,16 @@ export function formatResultsPanelTitle(
  * one market and none in another, and unqualified copy ("No verified ads
  * found for X") would contradict the country-filtered answer for the same
  * competitor. "all" (the all-countries view) is spelled "across all
- * countries" so the copy never implies a single market. Returns null when no
- * country was passed, leaving legacy callers with unscoped copy.
+ * countries" so the copy never implies a single market.
+ *
+ * The raw URL input is canonicalized through the country catalog so a
+ * visitor who deep-links with `country=IN` or `country=usa` reads as
+ * "in India" / "in United States" instead of "in IN" / "in usa"; the
+ * provider already resolves the same aliases for the actual lookup, so
+ * the customer-facing phrase matches the market the search ran in. Falls
+ * back to the trimmed input when the value is unknown to the catalog, and
+ * returns null when no country was passed (legacy callers keep the
+ * unscoped copy).
  */
 export function formatSearchMarketScope(
   country: string | null | undefined,
@@ -637,15 +690,28 @@ export function formatSearchMarketScope(
   if (!trimmed) {
     return null;
   }
-  return trimmed.toLowerCase() === ALL_COUNTRIES_VALUE
-    ? "across all countries"
-    : `in ${trimmed}`;
+  if (trimmed.toLowerCase() === ALL_COUNTRIES_VALUE) {
+    return "across all countries";
+  }
+  const canonical =
+    countryNameFromIso(isoFromCountryName(trimmed)) ?? trimmed;
+  return `in ${canonical}`;
 }
 
 function withMarketScope(
   title: string,
   country: string | null | undefined,
+  options: { isDemoSource?: boolean } = {},
 ): string {
+  // Demo/sample data is not actually filtered by the searched country — the
+  // resolver deliberately matches every demo ad against every country, so
+  // labelling a demo verdict "in United States" for a result that returns
+  // India-authored samples would falsely imply country-specific evidence.
+  // Skip the market scope for demo sources so the copy stays unscoped, the
+  // same shape legacy callers (no country passed) already used.
+  if (options.isDemoSource) {
+    return title;
+  }
   const scope = formatSearchMarketScope(country);
   return scope ? `${title} ${scope}` : title;
 }

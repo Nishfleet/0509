@@ -601,4 +601,58 @@ describe("buildSearchAnswer market scope", () => {
 
     expect(answer.title).toBe("1 verified ad linked to boat-lifestyle.com");
   });
+
+  it("canonicalizes ISO-2 and alias country inputs through the catalog", () => {
+    // The resolver already accepts ISO-2 codes and aliases (usa, uk, uae),
+    // so the customer-facing phrase must match the market the search
+    // actually ran in, not the raw URL input.
+    const iso = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "IN",
+    });
+    const alias = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "usa",
+    });
+
+    expect(iso.title).toBe(
+      "1 verified ad linked to boat-lifestyle.com in India",
+    );
+    expect(alias.title).toBe(
+      "1 verified ad linked to boat-lifestyle.com in United States",
+    );
+  });
+
+  it("keeps demo verdicts unscoped even when a country filter is set", () => {
+    // Demo/sample matches deliberately ignore the country filter (the
+    // resolver matches every demo ad against every market), so labelling
+    // a demo verdict "in United States" for India-authored samples would
+    // falsely imply country-specific evidence.
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+        source: "demo",
+        provider: "demo",
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "United States",
+    });
+
+    expect(answer.title).toBe("1 verified ad linked to boat-lifestyle.com");
+  });
 });
