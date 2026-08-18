@@ -131,6 +131,38 @@ export function parseD1Response(payload) {
  */
 
 /**
+ * @param {Issue[]} issues
+ * @param {Date} now
+ */
+export function summarizeIssues(issues, now = new Date()) {
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 86_400_000);
+  const opened7d = issues.filter((issue) => new Date(issue.createdAt) >= sevenDaysAgo);
+  const openedPrevious7d = issues.filter((issue) => {
+    const created = new Date(issue.createdAt);
+    return created >= fourteenDaysAgo && created < sevenDaysAgo;
+  });
+  const closed7d = issues.filter((issue) => issue.closedAt && new Date(issue.closedAt) >= sevenDaysAgo);
+
+  return {
+    openTotal: issues.filter((issue) => issue.state === "OPEN").length,
+    opened7d: opened7d.length,
+    openedPrevious7d: openedPrevious7d.length,
+    closed7d: closed7d.length,
+    recent: [...issues]
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .slice(0, 10)
+      .map((issue) => ({
+        number: issue.number,
+        state: issue.state,
+        labels: (issue.labels || []).map((label) => label.name).filter(Boolean),
+        createdAt: issue.createdAt,
+        closedAt: issue.closedAt,
+      })),
+  };
+}
+
+/**
  * Fetch the repository issue list with the GitHub CLI. Fails loudly only for
  * genuinely unexpected outcomes; a read failure on the issues API (most
  * commonly HTTP 403 "Resource not accessible by integration" when the token
@@ -167,38 +199,6 @@ export function fetchIssues() {
     closedAt: issue.closed_at,
     url: issue.html_url,
   })));
-}
-
-/**
- * @param {Issue[]} issues
- * @param {Date} now
- */
-export function summarizeIssues(issues, now = new Date()) {
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
-  const fourteenDaysAgo = new Date(now.getTime() - 14 * 86_400_000);
-  const opened7d = issues.filter((issue) => new Date(issue.createdAt) >= sevenDaysAgo);
-  const openedPrevious7d = issues.filter((issue) => {
-    const created = new Date(issue.createdAt);
-    return created >= fourteenDaysAgo && created < sevenDaysAgo;
-  });
-  const closed7d = issues.filter((issue) => issue.closedAt && new Date(issue.closedAt) >= sevenDaysAgo);
-
-  return {
-    openTotal: issues.filter((issue) => issue.state === "OPEN").length,
-    opened7d: opened7d.length,
-    openedPrevious7d: openedPrevious7d.length,
-    closed7d: closed7d.length,
-    recent: [...issues]
-      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .slice(0, 10)
-      .map((issue) => ({
-        number: issue.number,
-        state: issue.state,
-        labels: (issue.labels || []).map((label) => label.name).filter(Boolean),
-        createdAt: issue.createdAt,
-        closedAt: issue.closedAt,
-      })),
-  };
 }
 
 /**
