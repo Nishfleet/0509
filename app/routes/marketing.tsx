@@ -1,5 +1,5 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
@@ -146,19 +146,19 @@ export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
 export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry[] {
   return [
     {
-      question: "What uses checks?",
+      question: "What uses proof captures?",
       answer:
-        "Scheduled scans are included with your plan. A check is used when Five to Nine saves a proof-backed capture with screenshots, page text, and the original link.",
+        "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with screenshots, page text, and the original link.",
     },
     {
-      question: "Do unused checks roll over?",
+      question: "Do unused proof captures roll over?",
       answer:
-        "Included checks reset every month and do not roll over. Purchased checks never expire.",
+        "Included proof captures reset every month and do not roll over — the caps are generous. Purchased proof captures never expire and carry over until you use them.",
     },
     {
       question: "What changes on Agency?",
       answer:
-        "Agency includes 75 watchlists, 250 Collections, 2,500 checks/month, team seats, API/MCP access, client reports, and shared report branding.",
+        "Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team seats, API/MCP access, client reports, and shared report branding.",
     },
     agencySaleOpen
       ? {
@@ -308,14 +308,14 @@ function bundleValueLabel(
 ) {
   const price = preview?.usageBundles?.[bundleId];
   if (!Number.isFinite(price?.amount) || !Number.isFinite(creditQuantity) || Number(creditQuantity) <= 0) {
-    return "Purchased checks never expire";
+    return "Purchased proof captures never expire";
   }
   const unit = formatMinorCurrency(
     Number(price?.amount) / Number(creditQuantity),
     price?.currency,
     { roundWhole: false },
   );
-  return unit ? `${unit} per check` : "Purchased checks never expire";
+  return unit ? `${unit} per proof capture` : "Purchased proof captures never expire";
 }
 
 function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBundleSlug) {
@@ -326,6 +326,25 @@ function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBund
 // degrades to the explicit unavailable state instead of an empty label.
 export function sampleProofValue(value: string): string {
   return value.trim() || "Not available in this sample";
+}
+
+// The sample digest export is stored as markdown for the raw-export API
+// contract. On the homepage, render the small supported subset — bold
+// emphasis and line breaks — instead of leaking raw markdown syntax into
+// the visible "Brief export" preview.
+export function renderDigestMarkdownPreview(markdown: string): ReactNode {
+  const lines = markdown.split("\n");
+  return lines.map((line, index) => (
+    <span key={index}>
+      {renderDigestMarkdownLine(line)}
+      {index < lines.length - 1 ? <br /> : null}
+    </span>
+  ));
+}
+
+function renderDigestMarkdownLine(line: string): ReactNode {
+  const emphasis = line.match(/^\*(.+)\*$/);
+  return emphasis ? <strong>{emphasis[1]}</strong> : line;
 }
 
 export function planIntentPath(
@@ -539,7 +558,7 @@ export default function MarketingRoute() {
 
         <p className="ld-case">
           <span className="ld-rec">Sample proof-backed brief</span>
-          <span>A rival page changed while your team was offline</span>
+          <span>A rival page changed while your growth team was offline</span>
         </p>
 
         <div className="ld-hero-grid">
@@ -559,7 +578,7 @@ export default function MarketingRoute() {
             </h1>
 
             <p className="ld-deck-copy">
-              Your team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
+              Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
               Meta ads and landing pages, saves the screenshots, and files the brief —{" "}
               <b>before your alarm goes off.</b>
             </p>
@@ -780,7 +799,7 @@ export default function MarketingRoute() {
             </article>
             <article>
               <span className="ld-kicker">Brief export</span>
-              <p className="ld-export">{demoProof.exports.digestMarkdown}</p>
+              <p className="ld-export">{renderDigestMarkdownPreview(demoProof.exports.digestMarkdown)}</p>
             </article>
           </div>
         </div>
@@ -842,9 +861,9 @@ export default function MarketingRoute() {
           </div>
           <p className="ld-pricing-note">
             Free: watch 1 competitor with a weekly email brief. Paid plans add 3–6 hour checks,
-            evidence, more competitors, Collections, daily briefs, and clear check caps. Save
-            winning ads to collections — and see how long each ad has been running when the Ad Library
-            shares dates.
+            evidence, more competitors, Collections, daily briefs, and clear, generous
+            proof-capture caps. Save winning ads to collections — and see how long each ad has
+            been running when the Ad Library shares dates.
           </p>
           <div className="f9-cycle-toggle" role="group" aria-label="Billing cycle">
             <button
@@ -997,16 +1016,18 @@ export default function MarketingRoute() {
           watchlists with you, person to person.
         </p>
 
-        <div className="ld-bundles" aria-label="Check packs">
+        <div className="ld-bundles" aria-label="Proof capture packs">
           <div className="ld-bundles-head">
-            <span className="ld-kicker">Check packs</span>
-            <h3>Extra checks when campaigns move fast.</h3>
+            <span className="ld-kicker">Proof capture packs</span>
+            <h3>Extra proof captures when campaigns move fast.</h3>
             <p>
-              Add purchased checks for busy weeks or big campaigns without changing the team&rsquo;s
-              plan. Purchased checks never expire.
+              Add purchased proof captures for busy weeks or big campaigns without changing the
+              team&rsquo;s plan. Purchased proof captures never expire and carry over until you
+              use them.
             </p>
             <p className="ld-check-pack-note">
-              Packs: 500 extra checks, 2,000 extra checks, or 7,500 extra checks.
+              Packs: 500 extra proof captures, 2,000 extra proof captures, or 7,500 extra proof
+              captures.
             </p>
           </div>
           <div className="ld-bundle-grid ld-reveal">
@@ -1032,24 +1053,26 @@ export default function MarketingRoute() {
           <h3>Common billing questions</h3>
           <dl className="proof-trail-list">
             <div>
-              <dt>What uses checks?</dt>
+              <dt>What uses proof captures?</dt>
               <dd>
-                Scheduled scans are included with your plan. A check is used when Five to Nine saves
-                a proof-backed capture with screenshots, page text, and the original link.
+                Scheduled scans are included with your plan and never touch your cap. A proof
+                capture is used when Five to Nine saves a confirmed change with screenshots,
+                page text, and the original link.
               </dd>
             </div>
             <div>
-              <dt>Do unused checks roll over?</dt>
+              <dt>Do unused proof captures roll over?</dt>
               <dd>
-                Included checks reset every month and do not roll over. Purchased checks never
-                expire.
+                Included proof captures reset every month and do not roll over — the caps are
+                generous. Purchased proof captures never expire and carry over until you use
+                them.
               </dd>
             </div>
             <div>
               <dt>What changes on Agency?</dt>
               <dd>
-                Agency includes 75 watchlists, 250 Collections, 2,500 checks/month, team seats,
-                API/MCP access, client reports, and shared report branding.
+                Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team
+                seats, API/MCP access, client reports, and shared report branding.
               </dd>
             </div>
             <div>

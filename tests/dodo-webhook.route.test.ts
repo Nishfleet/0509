@@ -2754,3 +2754,217 @@ describe("customer lifecycle billing emails", () => {
     expect(delivery.sendBillingRefundEmail).not.toHaveBeenCalled();
   });
 });
+
+describe("Dodo webhook signature verification gate", () => {
+  // Unlike the processing-path tests above, these tests keep the REAL
+  // verifyDodoWebhookRequest from ~/lib/dodo-billing.server so the route is
+  // exercised end to end: a request that never carries a valid signature must
+  // be rejected with the existing response BEFORE the webhook ledger is
+  // claimed, entitlements are mutated, or credits are granted. Deleting,
+  // bypassing, or moving the verification call after processing turns these
+  // tests red (the junk request would sail through to the ledger claim).
+  function mockVerificationGateDependencies() {
+    const data = {
+      applyDodoCancellationReversalWithLedger: vi.fn().mockResolvedValue({ changed: false, handled: true }),
+      applyDodoPlanGrantWithWatchlistReconcile: vi.fn().mockResolvedValue(undefined),
+      applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue({ changed: true }),
+      applyDodoPlanRevokeWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: true }),
+      applyDodoProofCreditGrantWithLedger: vi.fn().mockResolvedValue(undefined),
+      applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: true }),
+      beginDodoWebhookEventProcessing: vi.fn().mockResolvedValue({ status: "claimed" }),
+      clearDodoPlanCheckout: vi.fn().mockResolvedValue(true),
+      failDodoWebhookEventProcessing: vi.fn().mockResolvedValue(undefined),
+      failDodoWebhookEventForLifecycleEmailRetry: vi.fn().mockResolvedValue(true),
+      finalizeDodoWebhookLedgerOnly: vi.fn().mockResolvedValue(undefined),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue(null),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({ plan: "free", dodoStatus: "none" }),
+      getUserIdForDodoPayment: vi.fn().mockResolvedValue(null),
+      getUserIdForDodoLifecycle: vi.fn().mockResolvedValue(null),
+    };
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DODO_0509_WEBHOOK_SECRET: "secret" })),
+    }));
+    vi.doMock("~/lib/data.server", () => data);
+    return { data };
+  }
+
+  // Every durable write the route can perform after verification: webhook
+  // ledger claims/finalizations, entitlement mutations, credit grants, and
+  // the payment/lifecycle user lookups that precede them.
+  const WEBHOOK_WRITE_SPIES = [
+    "applyDodoCancellationReversalWithLedger",
+    "applyDodoPlanGrantWithWatchlistReconcile",
+    "applyDodoPlanPaymentIssueWithLedger",
+    "applyDodoPlanRevokeWithWatchlistReconcile",
+    "applyDodoProofCreditGrantWithLedger",
+    "applyDodoRefundWithWatchlistReconcile",
+    "beginDodoWebhookEventProcessing",
+    "clearDodoPlanCheckout",
+    "failDodoWebhookEventProcessing",
+    "failDodoWebhookEventForLifecycleEmailRetry",
+    "finalizeDodoWebhookLedgerOnly",
+    "getUserIdForDodoPayment",
+    "getUserIdForDodoLifecycle",
+  ];
+
+  async function expectVerificationRejection(
+    routeAction: (args: never) => unknown,
+    data: Record<string, unknown>,
+    request: Request,
+    status: number,
+    message: string,
+  ) {
+    let thrown: unknown;
+    try {
+      await routeAction({ context: {}, request, params: {} } as never);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    const response = thrown as Response;
+    expect(response.status).toBe(status);
+    expect(await response.text()).toBe(message);
+    for (const name of WEBHOOK_WRITE_SPIES) {
+      const spy = data[name] as ReturnType<typeof vi.fn>;
+      expect(spy).not.toHaveBeenCalled();
+    }
+  }
+
+  async function spyRealVerifier() {
+    // The gate suite deliberately keeps the REAL verifyDodoWebhookRequest from
+    // ~/lib/dodo-billing.server wired through the route (unlike the
+    // processing-path tests, which mock it as always-passing). Spy on the real
+    // module so the accepted-path test can assert the verification call
+    // happens BEFORE the webhook ledger claim, not just that bad signatures
+    // are rejected.
+    const dodoBilling = await import("~/lib/dodo-billing.server");
+    const realVerifier = dodoBilling.verifyDodoWebhookRequest;
+    const verifierSpy = vi.fn(realVerifier);
+    vi.spyOn(dodoBilling, "verifyDodoWebhookRequest").mockImplementation(verifierSpy);
+    return verifierSpy;
+  }
+
+  function webhookRequestWithHeaders(eventId: string, headers: Record<string, string>) {
+    return new Request("https://0509.io/api/webhooks/dodo", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ type: "payment.succeeded" }),
+    });
+  }
+
+  async function signedWebhookRequest(eventId: string, body: Record<string, unknown>) {
+    const { signDodoWebhookPayload } = await import("~/lib/dodo-billing.server");
+    const webhookTimestamp = String(Math.floor(Date.now() / 1000));
+    const rawBody = JSON.stringify(body);
+    const signature = await signDodoWebhookPayload(
+      { DODO_0509_WEBHOOK_SECRET: "secret" } as never,
+      eventId,
+      webhookTimestamp,
+      rawBody,
+    );
+    return new Request("https://0509.io/api/webhooks/dodo", {
+      method: "POST",
+      headers: {
+        "webhook-id": eventId,
+        "webhook-timestamp": webhookTimestamp,
+        "webhook-signature": `v1=${signature}`,
+      },
+      body: rawBody,
+    });
+  }
+
+  it.each([
+    [
+      "webhook-id",
+      { "webhook-timestamp": String(Math.floor(Date.now() / 1000)), "webhook-signature": "v1=signed" },
+    ],
+    [
+      "webhook-timestamp",
+      { "webhook-id": "evt-missing-timestamp", "webhook-signature": "v1=signed" },
+    ],
+    [
+      "webhook-signature",
+      { "webhook-id": "evt-missing-signature", "webhook-timestamp": String(Math.floor(Date.now() / 1000)) },
+    ],
+  ])(
+    "rejects a request missing the %s header with the existing response before any webhook processing",
+    async (_missingHeader, headers) => {
+      const { data } = mockVerificationGateDependencies();
+      const { action: routeAction } = await import("~/routes/api.webhooks.dodo");
+      await expectVerificationRejection(
+        routeAction,
+        data,
+        webhookRequestWithHeaders("evt-missing-signature-headers", headers),
+        400,
+        "Missing Dodo webhook signature headers.",
+      );
+    },
+  );
+
+  it("rejects a wrong signature with the existing response before any webhook processing", async () => {
+    const { data } = mockVerificationGateDependencies();
+    const { action: routeAction } = await import("~/routes/api.webhooks.dodo");
+    await expectVerificationRejection(
+      routeAction,
+      data,
+      webhookRequestWithHeaders("evt-wrong-signature", {
+        "webhook-id": "evt-wrong-signature",
+        "webhook-timestamp": String(Math.floor(Date.now() / 1000)),
+        "webhook-signature": "v1=not-the-real-hmac",
+      }),
+      401,
+      "Invalid Dodo webhook signature.",
+    );
+  });
+
+  it.each([
+    ["ten minutes old", String(Math.floor(Date.now() / 1000) - 10 * 60)],
+    ["unparseable", "not-a-timestamp"],
+  ])(
+    "rejects a %s webhook timestamp with the existing response before any webhook processing",
+    async (_label, webhookTimestamp) => {
+      const { data } = mockVerificationGateDependencies();
+      const { action: routeAction } = await import("~/routes/api.webhooks.dodo");
+      await expectVerificationRejection(
+        routeAction,
+        data,
+        webhookRequestWithHeaders("evt-stale-timestamp", {
+          "webhook-id": "evt-stale-timestamp",
+          "webhook-timestamp": webhookTimestamp,
+          "webhook-signature": "v1=signed",
+        }),
+        400,
+        "Stale Dodo webhook timestamp.",
+      );
+    },
+  );
+
+  it("accepts a genuinely signed webhook and only then claims the event", async () => {
+    const { data } = mockVerificationGateDependencies();
+    const verifierSpy = await spyRealVerifier();
+    const { action: routeAction } = await import("~/routes/api.webhooks.dodo");
+    const request = await signedWebhookRequest("evt-valid-signature", {
+      type: "payment.succeeded",
+    });
+    const response = await routeAction({ context: {}, request, params: {} } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true, ignored: true });
+    expect(verifierSpy).toHaveBeenCalledTimes(1);
+    // The verification call must precede every webhook write. The route's only
+    // pre-claim write is the webhook ledger claim, so assert the call order
+    // directly: deleting, bypassing, or moving verification after processing
+    // makes this assertion fail.
+    expect(verifierSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      (data.beginDodoWebhookEventProcessing as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0],
+    );
+    expect(data.beginDodoWebhookEventProcessing).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventId: "evt-valid-signature" }),
+    );
+    expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventId: "evt-valid-signature", outcome: "ignored" }),
+    );
+  });
+});

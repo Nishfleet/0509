@@ -20,6 +20,7 @@ import {
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
 import { publicSeoFileForPathname } from "../app/lib/seo";
+import { publicSitemapFile } from "../app/lib/sitemap.server";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import {
   observeScheduledTask,
@@ -85,6 +86,17 @@ export default {
       return withSecurityHeaders(primaryDomainResponse, request);
     }
 
+    // /sitemap.xml is dynamic: the static funnel paths plus the indexable
+    // /ads/:domain brand pages backed by the discovery cache — see
+    // app/lib/sitemap.server.ts. It degrades to the static list when D1 is
+    // absent; robots.txt and the social card below stay fully static.
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      url.pathname === "/sitemap.xml"
+    ) {
+      return publicFileResponse(request, await publicSitemapFile(env));
+    }
+
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
     if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {
       return publicFileResponse(request, publicSeoFile);
@@ -117,6 +129,19 @@ export default {
         const artifactResponse = await serveCreativeArtifact(env, request, creativeId);
         if (artifactResponse) {
           return withSecurityHeaders(artifactResponse, request);
+        }
+      }
+
+      // Visual diff: stored proof-capture screenshots behind the watchlist
+      // change feed's before/now plates. Same unguessable-key model as the
+      // creative thumbnails; raster-only, key-shape-gated.
+      const { parseProofScreenshotPathname } = await import("../app/lib/proof-screenshot");
+      const { serveProofScreenshot } = await import("../app/lib/proof-screenshot.server");
+      const proofKey = parseProofScreenshotPathname(url.pathname);
+      if (proofKey) {
+        const screenshotResponse = await serveProofScreenshot(env, request, proofKey);
+        if (screenshotResponse) {
+          return withSecurityHeaders(screenshotResponse, request);
         }
       }
     }

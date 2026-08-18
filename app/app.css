@@ -1719,6 +1719,30 @@ button[aria-busy="true"] {
   gap: 10px;
 }
 
+.f9-import-rejected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--amber-wash, #fff8e6);
+  box-shadow: 0 0 0 1px rgba(6, 22, 41, 0.1);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.f9-import-rejected code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px rgba(6, 22, 41, 0.1);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .f9-import-summary {
   display: flex;
   flex-wrap: wrap;
@@ -4551,6 +4575,73 @@ one signal-green accent.
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ld-green-ink);
+}
+
+/* MagicBrief migration CTA — the wind-down capture block on /compare/magicbrief.
+   Inline flex with the honest not-imported boundary kept on the page; the button
+   is the only self-serve migration action. */
+.ld-migration-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(20px, 4vw, 40px);
+  border: 2.5px solid var(--ld-ink);
+  border-radius: 8px;
+  background: var(--ld-card);
+  padding: clamp(24px, 4vw, 40px);
+}
+
+.ld-migration-cta h2 {
+  margin: 0 0 10px;
+}
+
+.ld-migration-cta p {
+  margin: 0;
+  max-width: 620px;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+}
+
+.ld-cta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 24px;
+  border: 2.5px solid var(--ld-ink);
+  border-radius: 8px;
+  background: var(--ld-green-ink);
+  color: #fff;
+  font-family: var(--ld-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.ld-cta-button:hover {
+  background: var(--ld-green);
+  color: var(--ld-ink);
+}
+
+.ld-cta-button:focus-visible {
+  outline: 3px solid var(--ld-green);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .ld-migration-cta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ld-cta-button {
+    width: 100%;
+  }
 }
 
 /* Hero radar — "we work while you sleep" as an instrument (2026-06-12) */
@@ -7957,6 +8048,22 @@ reds soften --- */
   color: var(--ink-faint);
 }
 
+/* Visual diff screenshot — the stored capture's own frame, rendered INSIDE
+   the diff pane. The image is the page we captured, not a live re-render:
+   the frame is the capture's own edge, never a live re-render: same 1px rule
+   weight as the plate, and the image keeps its aspect ratio at any width.
+   Square corners — the Evidence Desk surface rule (radius 0) applies to
+   every surface, including captured frames. */
+.f9-evidence-diff-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 4px;
+  border: 1px solid var(--ed-rule);
+  border-radius: 0;
+  background: var(--ed-surface);
+}
+
 /* --- §6.8 specimen empty state --- */
 
 .f9-evidence-specimen-body {
@@ -9626,6 +9733,32 @@ a.f9-wk-btn {
   color: var(--ink-soft);
   font-size: 13.5px;
   line-height: 1.55;
+}
+
+/* The pre-search scope copy: a section title followed by the explainer list.
+   Same quiet, ruled-free rhythm as the rest of the wk layer — no cards, no
+   specimen, no ornament. */
+.f9-wk-sec > .f9-wk-sec-title + .f9-wk-lede {
+  margin-top: 13px;
+}
+
+.f9-search-scope-list {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f9-search-scope-list li {
+  max-width: 62ch;
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.f9-search-scope-list li strong {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .f9-wk-empty-filter {
@@ -11309,6 +11442,14 @@ textarea.f9-wk-in {
   margin: 5px 0 0;
   color: var(--ink-soft);
   font-size: 13px;
+}
+
+/* Snapshot age under the results title: muted so the count and the answer
+   sentence stay the primary reads, but present so a stale cache-served
+   result can never look current. */
+.f9-wk-sec-capture-age {
+  color: var(--ink-faint);
+  font-size: 12px;
 }
 
 .f9-wk-sec-acts {
