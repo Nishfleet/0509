@@ -1,8 +1,9 @@
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { CUSTOMER_SUPPORT_PATHS } from "~/lib/agent-action-catalog";
+import { appLinkTarget } from "~/lib/app-link";
 import {
   canonicalLinks,
   jsonLdScriptProps,
@@ -10,6 +11,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import type { RootLoaderData } from "~/root";
 
 const description =
   "Help for setting up Five to Nine competitor monitoring, delivery, billing, and support.";
@@ -24,6 +26,9 @@ export const meta: MetaFunction = () =>
   });
 
 export default function HelpRoute() {
+  const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
+  const session = rootData?.session;
+
   return (
     <PublicDocShell
       kicker="Help"
@@ -53,18 +58,18 @@ export default function HelpRoute() {
         <p>
           Email delivery is in product scope, but this page does not measure live email-provider availability. Paid
           plans add scheduled monitoring and digest features when configured for the account. Open{" "}
-          <Link to="/app/notifications">Notifications</Link> to review delivery settings. A manual refresh confirms a
+          <Link to={appLinkTarget("/app/notifications", session)}>Notifications</Link> to review delivery settings. A manual refresh confirms a
           fresh check only; it does not confirm recurring delivery. If a scheduled digest does not arrive, open a{" "}
-          <Link to="/app/support?category=delivery">delivery support case</Link>.
+          <Link to={appLinkTarget("/app/support?category=delivery", session)}>delivery support case</Link>.
         </p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Billing help">
         <p>
           Paid access follows the confirmed payment path connected to the account. Card and invoice tasks can use the
-          hosted billing portal on <Link to="/app/billing">Plan &amp; billing</Link> when it is available. Plan changes
+          hosted billing portal on <Link to={appLinkTarget("/app/billing", session)}>Plan &amp; billing</Link> when it is available. Plan changes
           and cancellation stay backed by{" "}
-          <Link to="/app/support?category=billing">signed-in support cases</Link> until portal subscription updates
+          <Link to={appLinkTarget("/app/support?category=billing", session)}>signed-in support cases</Link> until portal subscription updates
           are confirmed.
         </p>
       </PublicDocBlock>
@@ -77,7 +82,7 @@ export default function HelpRoute() {
         </p>
         <p>
           Account deletion is a support request, not an automatic or in-app deletion. Signed-in customers can open a{" "}
-          <Link to="/app/support?category=security">deletion support case</Link>; email{" "}
+          <Link to={appLinkTarget("/app/support?category=security", session)}>deletion support case</Link>; email{" "}
           <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you cannot sign in. Nothing is deleted automatically or
           in-app.
         </p>
@@ -96,7 +101,7 @@ export default function HelpRoute() {
 
       <PublicDocBlock title="Contact support">
         <p>
-          Signed-in customers can open <Link to="/app/support">support cases</Link> for account access,
+          Signed-in customers can open <Link to={appLinkTarget("/app/support", session)}>support cases</Link> for account access,
           billing changes, cancellation help, deletion requests, security reports, or migration
           support. Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you cannot sign in.
         </p>
