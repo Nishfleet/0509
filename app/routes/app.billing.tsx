@@ -1302,7 +1302,7 @@ function topUpPackName(skuSlug: string | null | undefined, credits: number) {
   if (skuSlug && isTopUpDisplayKey(skuSlug)) {
     return TOP_UP_PACK_DISPLAY[skuSlug].name;
   }
-  return `${credits.toLocaleString("en-IN")} check pack`;
+  return `${credits.toLocaleString("en-IN")} proof capture pack`;
 }
 
 function isTopUpDisplayKey(value: string): value is keyof typeof TOP_UP_PACK_DISPLAY {
