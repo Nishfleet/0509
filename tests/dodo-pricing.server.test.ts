@@ -6,6 +6,7 @@ import {
   dodo0509UsageBundleProductIds,
   hasDodo0509Pricing,
   previewDodo0509PlanPrices,
+  validateDodo0509PlanCheckout,
 } from "~/lib/dodo-pricing.server";
 
 function jsonResponse(payload: unknown, init: ResponseInit = {}) {
@@ -492,6 +493,247 @@ describe("Dodo 0509 pricing", () => {
     expect(preview.annualValidation.starter).toMatchObject({
       valid: false,
       reason: "missing_monthly_price",
+    });
+  });
+
+  it("rejects annual savings that are not exactly eight monthly periods", async () => {
+    const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
+      const amounts: Record<string, number> = {
+        prod_scout_monthly: 5900,
+        prod_scout_yearly: 50000,
+      };
+      return jsonResponse({
+        currency: "USD",
+        billing_country: "US",
+        current_breakup: { total_amount: amounts[productId] ?? 0 },
+        product_cart: [{ product_id: productId, is_subscription: true, tax_inclusive: false }],
+        total_tax: 0,
+      });
+    });
+    const env = {
+      DODO_0509_API_KEY: "secret",
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_ENVIRONMENT: "test",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      DODO_0509_PRODUCT_SCOUT_YEARLY_ID: "prod_scout_yearly",
+    };
+    const request = new Request("https://0509.io/api/pricing-preview", {
+      headers: { "cf-ipcountry": "US" },
+    });
+
+    const preview = await previewDodo0509PlanPrices({ env, request, fetcher: fetcher as never, bypassCache: true });
+
+    // Both cycles resolve sellable preview prices; only the savings guard may
+    // reject the pair.
+    expect(preview.prices.scout?.monthly).toMatchObject({ amount: 5900, currency: "USD" });
+    expect(preview.prices.scout?.yearly).toMatchObject({ amount: 50000, currency: "USD" });
+    expect(preview.annualValidation.scout).toEqual({
+      planId: "scout",
+      valid: false,
+      reason: "amount_mismatch",
+      monthlyAmount: 5900,
+      annualAmount: 50000,
+      expectedAnnualAmount: 47200,
+      currency: "USD",
+      billingCountry: "US",
+    });
+
+    // The yearly checkout claim is refused with the same reason.
+    await expect(
+      validateDodo0509PlanCheckout({
+        env,
+        request,
+        plan: "scout",
+        cycle: "yearly",
+        fetcher: fetcher as never,
+      }),
+    ).resolves.toMatchObject({
+      planId: "scout",
+      cycle: "yearly",
+      valid: false,
+      reason: "amount_mismatch",
+      annualValidation: {
+        planId: "scout",
+        valid: false,
+        reason: "amount_mismatch",
+        monthlyAmount: 5900,
+        annualAmount: 50000,
+        expectedAnnualAmount: 47200,
+      },
+    });
+  });
+
+  it("tolerates adaptive-currency rounding in the annual savings pair", async () => {
+    // Live Dodo previews compute the annual tax-inclusive total per line, so
+    // the annual amount can differ from monthly x 8 by a few minor units of
+    // currency-conversion rounding (observed live: EUR off by 1 unit, PLN off
+    // by 2). The "4 months free" toggle must keep working within that tiny
+    // allowance while still failing closed on meaningful drift.
+    const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
+      const amounts: Record<string, number> = {
+        prod_scout_monthly: 905,
+        prod_scout_yearly: 7239,
+      };
+      return jsonResponse({
+        currency: "EUR",
+        billing_country: "ES",
+        current_breakup: { total_amount: amounts[productId] ?? 0 },
+        product_cart: [{ product_id: productId, is_subscription: true, tax_inclusive: false }],
+        total_tax: 0,
+      });
+    });
+    const env = {
+      DODO_0509_API_KEY: "secret",
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_ENVIRONMENT: "test",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      DODO_0509_PRODUCT_SCOUT_YEARLY_ID: "prod_scout_yearly",
+    };
+    const request = new Request("https://0509.io/api/pricing-preview", {
+      headers: { "cf-ipcountry": "ES" },
+    });
+
+    const preview = await previewDodo0509PlanPrices({
+      env,
+      request,
+      fetcher: fetcher as never,
+      bypassCache: true,
+    });
+
+    expect(preview.prices.scout?.monthly).toMatchObject({ amount: 905, currency: "EUR" });
+    expect(preview.prices.scout?.yearly).toMatchObject({ amount: 7239, currency: "EUR" });
+    expect(preview.annualValidation.scout).toMatchObject({
+      valid: true,
+      reason: "valid_4_months_free",
+      monthlyAmount: 905,
+      annualAmount: 7239,
+      expectedAnnualAmount: 7240,
+    });
+
+    // The yearly checkout claim is accepted under the same rounding allowance.
+    await expect(
+      validateDodo0509PlanCheckout({
+        env,
+        request,
+        plan: "scout",
+        cycle: "yearly",
+        fetcher: fetcher as never,
+      }),
+    ).resolves.toMatchObject({
+      planId: "scout",
+      cycle: "yearly",
+      valid: true,
+      reason: "valid_preview",
+      annualValidation: {
+        valid: true,
+        reason: "valid_4_months_free",
+      },
+    });
+  });
+
+  it("still rejects annual savings that drift beyond the rounding allowance", async () => {
+    const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
+      const amounts: Record<string, number> = {
+        prod_scout_monthly: 1000,
+        prod_scout_yearly: 10200,
+      };
+      return jsonResponse({
+        currency: "USD",
+        billing_country: "US",
+        current_breakup: { total_amount: amounts[productId] ?? 0 },
+        product_cart: [{ product_id: productId, is_subscription: true, tax_inclusive: false }],
+        total_tax: 0,
+      });
+    });
+    const env = {
+      DODO_0509_API_KEY: "secret",
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_ENVIRONMENT: "test",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      DODO_0509_PRODUCT_SCOUT_YEARLY_ID: "prod_scout_yearly",
+    };
+    const request = new Request("https://0509.io/api/pricing-preview", {
+      headers: { "cf-ipcountry": "US" },
+    });
+
+    const preview = await previewDodo0509PlanPrices({
+      env,
+      request,
+      fetcher: fetcher as never,
+      bypassCache: true,
+    });
+
+    expect(preview.annualValidation.scout).toMatchObject({
+      valid: false,
+      reason: "amount_mismatch",
+      monthlyAmount: 1000,
+      annualAmount: 10200,
+      expectedAnnualAmount: 8000,
+    });
+  });
+
+  it("rejects annual savings quoted in a different currency than monthly", async () => {
+    const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
+      const yearly = productId === "prod_scout_yearly";
+      return jsonResponse({
+        currency: yearly ? "INR" : "USD",
+        billing_country: "US",
+        // The amount alone satisfies the eight-month rule (47200 = 5900 * 8);
+        // only the currency differs.
+        current_breakup: { total_amount: yearly ? 47200 : 5900 },
+        product_cart: [{ product_id: productId, is_subscription: true, tax_inclusive: false }],
+        total_tax: 0,
+      });
+    });
+    const env = {
+      DODO_0509_API_KEY: "secret",
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_ENVIRONMENT: "test",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      DODO_0509_PRODUCT_SCOUT_YEARLY_ID: "prod_scout_yearly",
+    };
+    const request = new Request("https://0509.io/api/pricing-preview", {
+      headers: { "cf-ipcountry": "US" },
+    });
+
+    const preview = await previewDodo0509PlanPrices({ env, request, fetcher: fetcher as never, bypassCache: true });
+
+    expect(preview.prices.scout?.monthly).toMatchObject({ amount: 5900, currency: "USD" });
+    expect(preview.prices.scout?.yearly).toMatchObject({ amount: 47200, currency: "INR" });
+    expect(preview.annualValidation.scout).toEqual({
+      planId: "scout",
+      valid: false,
+      reason: "currency_mismatch",
+      monthlyAmount: 5900,
+      annualAmount: 47200,
+      expectedAnnualAmount: 47200,
+      currency: "INR",
+      billingCountry: "US",
+    });
+
+    // The yearly checkout claim is refused with the same reason.
+    await expect(
+      validateDodo0509PlanCheckout({
+        env,
+        request,
+        plan: "scout",
+        cycle: "yearly",
+        fetcher: fetcher as never,
+      }),
+    ).resolves.toMatchObject({
+      planId: "scout",
+      cycle: "yearly",
+      valid: false,
+      reason: "currency_mismatch",
+      annualValidation: {
+        planId: "scout",
+        valid: false,
+        reason: "currency_mismatch",
+      },
     });
   });
 

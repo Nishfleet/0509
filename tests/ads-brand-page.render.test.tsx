@@ -17,6 +17,7 @@ beforeEach(() => {
     return {
       ...actual,
       useLoaderData: () => currentData,
+      useRouteLoaderData: () => undefined,
       Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
@@ -193,6 +194,29 @@ describe("/ads/:domain — Case File render", () => {
     );
   });
 
+  it("dates every visible wall card with its own capture date, so months-old creatives read as old", async () => {
+    const markup = await render(populated());
+
+    // Each of the 5 visible cards carries the date its creative was first
+    // observed (its firstSeenAt), not just a page-level "cached N ago" stamp
+    // — a Diwali/Navratri/Pay Day creative from months back is visibly dated.
+    // Exactly 5: the 6th ad hides behind the overflow tile, which is a
+    // conversion cell, not a card.
+    expect((markup.match(/Since 1 Jun 2026/g) ?? []).length).toBe(5);
+    expect(markup).toContain("+29");
+  });
+
+  it("renders no capture-date pill when the creative's first-seen proof is missing", async () => {
+    const ads = [ad({ metaAdId: "ad-no-date", firstSeenAt: null })];
+    const markup = await render(
+      populated({ ads, brandOwnedAdCount: 1, teaser: { ...teaser, totalCount: 1 } }),
+    );
+
+    // The card still renders — but never invents a date it does not know.
+    expect(markup).toContain("Run through summer with gear that can take the heat.");
+    expect(markup).not.toContain("Since ");
+  });
+
   it("hides the score card and states why when the evidence floor is not met", async () => {
     const markup = await render(populated({ aggression: null }));
 
@@ -264,6 +288,24 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).not.toContain("Nike · live");
     expect(stale).not.toContain("Ads live");
     expect(stale).not.toContain("more ads live");
+  });
+
+  it("keeps the stat-strip context public (no signed-in 'marked active' language)", async () => {
+    const fresh = await render(
+      populated({ checkedAgo: "moments ago", freshForLiveClaim: true }),
+    );
+    const stale = await render(populated());
+
+    // "Active" is the ad's observed Ad Library status, stated publicly —
+    // never "marked active", which implies a signed-in viewer action.
+    expect(fresh).not.toContain("marked active");
+    expect(stale).not.toContain("marked active");
+
+    // Fresh capture reads present tense; stale capture reads "at the last
+    // check", mirroring the hero line and the caption flip above.
+    expect(fresh).toContain(">28 active<");
+    expect(stale).toContain("28 active at last check");
+    expect(stale).not.toContain(">28 active<");
   });
 
   it("stops telling visitors the brand is running ads when the creatives are other advertisers'", async () => {

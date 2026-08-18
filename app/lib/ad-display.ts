@@ -38,6 +38,40 @@ export function formatAdLongevityLabel(ad: AdLongevityInput, now: Date = new Dat
   return days === 1 ? "Running 1 day" : `Running ${days} days`;
 }
 
+/**
+ * Deterministic per-ad capture-date formatter. Locale and timezone are
+ * pinned (en-GB, UTC) so the server-rendered label equals the hydrated
+ * client copy — the same SSR/client parity rule as the proof capture label
+ * (see formatProofCaptureLabel in search-display.ts).
+ */
+const AD_CAPTURE_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeZone: "UTC",
+});
+
+type AdCaptureDateInput = Pick<AdRecord, "firstSeenAt">;
+
+/**
+ * Per-ad capture-date pill: "Since 24 Oct 2025" from the ad's firstSeenAt —
+ * the date this creative was first observed in the Ad Library. This is what
+ * makes months-old seasonal creatives (Diwali/Navratri/Pay Day, …) visibly
+ * dated on a brand-page ad wall instead of reading as current rotation.
+ * Returns null when first-seen proof is missing, unparseable, or in the
+ * future (clock-skew guard) — no date when we do not know.
+ */
+export function formatAdCaptureSinceLabel(
+  ad: AdCaptureDateInput,
+  now: Date = new Date(),
+): string | null {
+  if (!ad.firstSeenAt) return null;
+
+  const firstSeen = Date.parse(ad.firstSeenAt);
+  if (Number.isNaN(firstSeen)) return null;
+  if (firstSeen > now.getTime()) return null;
+
+  return `Since ${AD_CAPTURE_DATE_FORMATTER.format(new Date(firstSeen))}`;
+}
+
 type AdAngleInput = Pick<AdRecord, "hook" | "body" | "offer" | "cta">;
 
 /**

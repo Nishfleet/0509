@@ -286,6 +286,26 @@ describe("public search submission settle", () => {
     expect(markup).toContain("Nothing searched yet");
   });
 
+  it("idle pre-search renders honest scope copy clear of the thin-content heuristic", async () => {
+    loaderData = idleLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const markup = await renderMarkup();
+
+    // dogfood 694ddbd68e95: the SEO engine warns at fewer than 250 rendered
+    // words. This fragment is the full body minus the prod shell's nav, so
+    // its count is a strict lower bound for what the engine sees live.
+    expect(markup).toContain("What a search returns");
+    expect(markup).toContain("Current and recent ads");
+    expect(markup).toContain("The offer, read off their landing page");
+    expect(markup).toContain("The proof capture");
+    expect(markup).toContain("Coverage and freshness vary by advertiser");
+    const text = markup.replace(/<[^>]+>/g, " ");
+    const words = text.split(/\s+/).filter(Boolean).length;
+    expect(words).toBeGreaterThanOrEqual(250);
+  });
+
   it("renders results or the error for the committed target and enables submit even when useNavigation still says loading", async () => {
     loaderData = resultsLoaderData;
     locationObj = { pathname: "/search", search: TARGET_SEARCH, hash: "" };

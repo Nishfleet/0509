@@ -24,9 +24,10 @@
  * data exists (the score hides below the evidence floor, "What changed" hides
  * with no change events). Honesty is the brand — no invented figures.
  *
- * SITEMAP: /ads/* is deliberately NOT in the static sitemap. When adding it,
- * generate entries dynamically from cached-fresh pages only — see the
- * commented block above SITEMAP_XML in app/lib/seo.ts for the exact strategy.
+ * SITEMAP: /ads/* is NOT in the static sitemap list — the live sitemap
+ * appends dynamic entries generated from cached-fresh indexable pages only —
+ * see app/lib/sitemap.server.ts and the comment block above SITEMAP_XML in
+ * app/lib/seo.ts for the exact strategy.
  */
 
 import { Link, useLoaderData } from "react-router";
@@ -116,8 +117,8 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     buildBrandChangeFeed,
     buildBrandIntelTeaser,
     computeBrandPageAggressionScore,
-    formatBrandPageCheckedAgo,
     loadBrandPageCacheSnapshot,
+    resolveBrandPageFreshness,
   } = await import("~/lib/brand-page.server");
   const { defaultCountryForVisitor } = await import("~/lib/countries");
   const visitorCountry = defaultCountryForVisitor(
@@ -141,6 +142,9 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   }
 
   const now = new Date();
+  const freshness = snapshot
+    ? resolveBrandPageFreshness(snapshot.fetchedAt, now)
+    : null;
   const emergencyNoindex = env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0";
   const noindex = emergencyNoindex || !snapshot || !snapshot.freshForIndexing;
 
@@ -149,9 +153,9 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     brandName: brand.displayName,
     hasCachedAds: Boolean(snapshot),
     ads: snapshot?.ads ?? [],
-    checkedAgo: snapshot ? formatBrandPageCheckedAgo(snapshot.fetchedAt, now) : null,
+    checkedAgo: freshness?.checkedAgo ?? null,
     lastCheckedAt: snapshot?.fetchedAt ?? null,
-    freshForLiveClaim: snapshot?.freshForLiveClaim ?? false,
+    freshForLiveClaim: freshness?.freshForLiveClaim ?? false,
     brandOwnedAdCount: snapshot ? countBrandOwnedAds(snapshot.ads, brand.domain) : 0,
     teaser: snapshot ? buildBrandIntelTeaser(snapshot.ads, now) : null,
     aggression: snapshot ? computeBrandPageAggressionScore(snapshot.ads, now) : null,

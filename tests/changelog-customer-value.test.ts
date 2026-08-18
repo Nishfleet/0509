@@ -16,6 +16,7 @@ beforeEach(() => {
       ...actual,
       Link: ({ children, to, ...props }: MockLinkProps) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+      useRouteLoaderData: () => undefined,
     };
   });
 });
@@ -34,6 +35,8 @@ describe("customer changelog", () => {
     expect(markup).toContain("Billing checks now keep account access tied to confirmed payment information.");
     expect(markup).toContain("WhatsApp notifications are not available yet");
     expect(markup).toContain("Slack notifications are not generally available yet");
+    expect(markup).toContain("Workspace navigation now has five destinations");
+    expect(markup).toContain("Brand pages at /ads/:domain now attribute every ad to its real advertiser");
     expect(markup).not.toMatch(/(?:Slack|WhatsApp) (?:delivery|notifications?) (?:is|are) (?:available|live|enabled)/i);
     expect(markup).not.toMatch(/live provider|provider availability/i);
   });
