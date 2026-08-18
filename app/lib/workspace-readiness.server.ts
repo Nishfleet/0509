@@ -418,5 +418,5 @@ function topUpPackName(skuSlug: string | null | undefined, credits: number) {
   if (skuSlug && skuSlug in TOP_UP_PACK_DISPLAY) {
     return TOP_UP_PACK_DISPLAY[skuSlug as keyof typeof TOP_UP_PACK_DISPLAY].name;
   }
-  return `${credits.toLocaleString("en-IN")} check pack`;
+  return `${credits.toLocaleString("en-IN")} proof capture pack`;
 }
