@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DeliveryTargetRecord } from "~/lib/types";
 
 const env = {
   META_TOKEN_ENCRYPTION_SECRET: "0123456789abcdefghijklmnopqrstuvwxyz",
@@ -18,7 +19,7 @@ function fakeLegacyTeamsWebhookUrl() {
   ).toString();
 }
 
-function teamsTarget(overrides: Record<string, unknown> = {}) {
+function teamsTarget(overrides: Partial<DeliveryTargetRecord> = {}): DeliveryTargetRecord {
   return {
     id: "teams-target-1",
     userId: "user-1",
