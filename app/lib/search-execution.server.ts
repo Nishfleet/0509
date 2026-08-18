@@ -71,7 +71,11 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
     // Cold path: let an uncached public search return the warming state
     // immediately while the browser capture finishes via waitUntil.
     executionContext: options.executionContext ?? null,
-    planTier: options.planTier ?? null,
+    // Optional attribution: only attach the plan tier when the caller actually
+    // resolved one. Anonymously-scoped searches omit it, which keeps the
+    // resolver's `options.planTier ?? null` default (and the call contract that
+    // existing callers assert) unchanged for the absent case.
+    ...(options.planTier != null ? { planTier: options.planTier } : {}),
     ...(options.customerMetaAdLibraryToken ? { customerMetaAdLibraryToken: options.customerMetaAdLibraryToken } : {}),
   };
 
