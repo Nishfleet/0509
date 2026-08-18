@@ -1,0 +1,92 @@
+name: Meta discovery canary
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every 3 hours. Gate C already verifies the Meta lane after every
+    # successful deploy; this scheduled check keeps a published green/red
+    # state between deploys so hero copy can be gated on the canary.
+    - cron: "23 */3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meta-discovery-canary
+  cancel-in-progress: false
+
+jobs:
+  meta-readiness:
+    # Read-only readiness probe. The launch-readiness endpoint runs a pure
+    # D1 aggregate over discovery_fetch_log; it never mutates monitoring,
+    # proof, or delivery state (unlike the proof canary at
+    # /api/launch-readiness/canary, which is deliberately not scheduled).
+    runs-on: [self-hosted, linux, x64, vps-verify]
+    timeout-minutes: 5
+    steps:
+      - name: Check production Meta readiness
+        id: readiness
+        shell: bash
+        env:
+          READINESS_URL: https://0509.io/api/launch-readiness
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CANARY_BYPASS_TOKEN:-}" ]; then
+            echo "meta canary: skipped (missing CANARY_BYPASS_TOKEN)" >&2
+            echo "state=missing-token" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          response="$(curl --fail --silent --show-error --max-time 20 --retry 2 --retry-delay 5 \
+            -H "x-0509-canary-token: ${CANARY_BYPASS_TOKEN}" \
+            -H "user-agent: 0509-meta-discovery-canary/1.0" \
+            "$READINESS_URL")"
+          printf '%s\n' "$response"
+          READINESS_RESPONSE="$response" python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          payload = json.loads(os.environ["READINESS_RESPONSE"])
+          if payload.get("ok") is not True:
+              raise SystemExit("launch readiness ok was not true")
+          meta = payload.get("metaAdsBeta") or {}
+          meta_ok = meta.get("ok") is True
+          print(f"meta canary: {'green' if meta_ok else 'red'}")
+          print(f"samples={meta.get('samples')} target={meta.get('sampleTarget')} "
+                f"success_rate={meta.get('successRate')} "
+                f"blockers={','.join(meta.get('blockers') or [])}")
+          if not meta_ok:
+              raise SystemExit(f"meta readiness red: {','.join(meta.get('blockers') or [])}")
+          PY
+          echo "state=green" >> "$GITHUB_OUTPUT"
+
+      - name: Persist canary state evidence
+        shell: bash
+        env:
+          STATE: ${{ steps.readiness.outputs.state }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          with open("meta-discovery-canary-state.json", "w", encoding="utf-8") as f:
+              json.dump({
+                  "state": os.environ["STATE"],
+                  "runId": int(os.environ["RUN_ID"]),
+                  "generatedAt": __import__("datetime").datetime.now(
+                      __import__("datetime").timezone.utc
+                  ).isoformat(),
+              }, f, sort_keys=True, separators=(",", ":"))
+              f.write("\n")
+          PY
+
+      - name: Upload canary state evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: meta-discovery-canary-state
+          path: meta-discovery-canary-state.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

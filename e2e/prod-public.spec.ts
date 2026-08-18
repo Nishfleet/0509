@@ -256,10 +256,6 @@ test.describe("public production-safe E2E smoke", () => {
       isProductionBaseURL(baseURL),
       "Branch search fixtures are local-only; production proof uses the authorized live canary gate.",
     );
-    test.skip(
-      process.env.E2E_SEARCH_V2 !== "1",
-      "Local rendered proof runs only during the explicit V2 candidate check; the committed rollout stays in shadow.",
-    );
 
     await page.setViewportSize({ width: 375, height: 812 });
     await gotoPublicPage(page, "/");

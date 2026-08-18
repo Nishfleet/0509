@@ -164,7 +164,7 @@ function launchConfigEvidence(candidateState) {
   };
   if (
     typeof config.wranglerWorktreeSha256 !== "string" ||
-    config.productionSearchRolloutMode !== "shadow"
+    config.productionSearchRolloutMode !== "v2"
   ) {
     throw new Error("release_config_identity_unavailable");
   }

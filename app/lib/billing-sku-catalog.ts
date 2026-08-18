@@ -293,18 +293,18 @@ export const TOP_UP_PACK_DISPLAY: Record<
 > = {
   burst_500_v1: {
     name: "Burst Pack",
-    creditLabel: "500 extra checks",
-    detail: "For sale-week spikes when campaigns need extra proof-backed checks.",
+    creditLabel: "500 extra proof captures",
+    detail: "For sale-week spikes when campaigns need extra proof-backed captures.",
   },
   campaign_2000_v1: {
     name: "Campaign Pack",
-    creditLabel: "2,000 extra checks",
-    detail: "Overflow check volume for active launches and promo weeks.",
+    creditLabel: "2,000 extra proof captures",
+    detail: "Overflow proof-capture volume for active launches and promo weeks.",
   },
   scale_7500_v1: {
     name: "Scale Pack",
-    creditLabel: "7,500 extra checks",
-    detail: "Bulk check volume for agencies tracking heavy categories.",
+    creditLabel: "7,500 extra proof captures",
+    detail: "Bulk proof-capture volume for agencies tracking heavy categories.",
   },
 };
 

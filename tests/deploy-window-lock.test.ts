@@ -112,9 +112,13 @@ function completed(child: ChildProcess): Promise<{
   });
 }
 
+// The default ceiling is deliberately generous: it is a safety net against a
+// hung child, never the assertion. Correctness is asserted afterwards via the
+// state transitions the test cares about (markers, queue tickets, flock
+// probes). A tight ceiling would turn machine load into a false failure.
 async function waitFor(
   predicate: () => boolean,
-  timeoutMs = 1_500,
+  timeoutMs = 30_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!predicate()) {
@@ -123,6 +127,41 @@ async function waitFor(
     }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 5));
   }
+}
+
+// A verification queue ticket is the script's deterministic "this lane is
+// waiting for a slot" signal: it is created at enqueue time and removed only
+// when the lane claims a slot and starts running. Tickets match
+// <20-digit-sequence>.<pid>.<process-start>.
+function hasQueueTicket(queueDir: string): boolean {
+  if (!existsSync(queueDir)) {
+    return false;
+  }
+  try {
+    return readdirSync(queueDir).some((entry) =>
+      /^\d{20}\.\d+\.\d+$/u.test(entry),
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Deterministic "lane is parked, not running" check. `parked` is a state
+// signal that becomes true only once the lane has provably entered the
+// waiting protocol (queue ticket enqueued, or verification slot held), so
+// the wait is on the state transition the test cares about, with a generous
+// safety-net ceiling rather than a load assertion. The settle afterwards is
+// a detection window for a wrongly-admitted lane (one whose marker appears):
+// a broken admission manifests within a few script steps of the parked
+// signal, far inside this window, and a slow machine only makes it manifest
+// later — never invisible — so this check cannot false-fail under load.
+async function expectLaneParked(
+  parked: () => boolean,
+  marker: string,
+): Promise<void> {
+  await waitFor(() => parked() || existsSync(marker));
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 1_000));
+  expect(existsSync(marker)).toBe(false);
 }
 
 // Liveness is judged by /proc identity, mirroring the script's own
@@ -253,10 +292,15 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     const lane = spawnScript(
       lockFile,
       ["run", "--", "bash", "-c", 'printf "ran" >"$1"', "lane", marker],
-      { DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "1" },
+      // The budget is not under test here (timeout-exit behavior has its own
+      // spec below). It only has to outlast the parked-detection settle plus
+      // the release step, so the lane still runs after the window opens.
+      { DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "10" },
     );
     const laneResult = completed(lane);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+    // While acquire holds the window, the lane must park holding a
+    // verification slot but stay blocked on the shared gate.
+    await expectLaneParked(() => !slotIsFree(lockFile, 1), marker);
     expect(lane.exitCode).toBeNull();
     expect(existsSync(marker)).toBe(false);
 
@@ -318,8 +362,12 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       overrides,
     );
     const fourthResult = completed(fourth);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
-    expect(existsSync(fourthMarker)).toBe(false);
+    // With all three slots held, the fourth lane must park with a queue
+    // ticket and never write its marker until a slot frees.
+    await expectLaneParked(
+      () => hasQueueTicket(`${verifyRoot}/queue`),
+      fourthMarker,
+    );
     expect(probeIsFree(lockFile)).toBe(false);
 
     writeFileSync(lanes[0]!.stop, "");
@@ -498,7 +546,9 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       },
     );
     const laneResult = completed(lane);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+    // Behind the legacy exclusive holder, the lane must park holding a
+    // verification slot but stay blocked on the shared gate.
+    await expectLaneParked(() => !slotIsFree(lockFile, 1), marker);
     expect(lane.exitCode).toBeNull();
     expect(existsSync(marker)).toBe(false);
 
@@ -796,8 +846,12 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
 
     writeFileSync(lanes[0]!.stop, "");
     expect((await lanes[0]!.result).code).toBe(0);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
-    expect(existsSync(fourthMarker)).toBe(false);
+    // While the deploy acquire drains, the fourth lane must stay parked
+    // (ticket enqueued, no marker) even after a slot frees.
+    await expectLaneParked(
+      () => hasQueueTicket(`${overrides.DEPLOY_WINDOW_VERIFY_ROOT}/queue`),
+      fourthMarker,
+    );
 
     for (const lane of lanes.slice(1)) {
       writeFileSync(lane.stop, "");

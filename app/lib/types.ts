@@ -36,7 +36,7 @@ export const CREATIVE_TYPES = ["all", "image", "video", "carousel"] as const;
 export const SEARCH_STATUSES = ["all", "active", "inactive"] as const;
 export const SENSITIVITY_MODES = ["quiet", "balanced", "aggressive", "auto"] as const;
 export const DELIVERY_LANES = ["internal", "customer"] as const;
-export const DELIVERY_CHANNELS = ["email", "whatsapp", "slack"] as const;
+export const DELIVERY_CHANNELS = ["email", "whatsapp", "slack", "teams"] as const;
 export const PROOF_STATUSES = [
   "pending",
   "succeeded",
@@ -278,6 +278,14 @@ export interface SearchResponse {
   source: AdDiscoverySource;
   provider?: AdDiscoveryProvider;
   cacheStatus?: DiscoveryCacheStatus;
+  /**
+   * The discovery cache entry's `fetched_at`, carried on cache-served
+   * responses (cacheStatus "hit" or "stale"). Lets a result view render the
+   * age of the snapshot it is showing ("captured N minutes ago"), so a stale
+   * per-country snapshot is self-evidently stale instead of looking current.
+   * Absent on live captures (cacheStatus "miss"/"none").
+   */
+  cacheFetchedAt?: string;
   discoveryEmptyReason?: "no_results";
   /**
    * Contract epoch stamped by the cache WRITER (see
@@ -480,6 +488,7 @@ export interface WorkspaceDeliveryConfigRecord {
   emailEnabled: boolean;
   whatsappEnabled: boolean;
   slackEnabled: boolean;
+  teamsEnabled: boolean;
   quietHours: DeliveryQuietHours | null;
   timezone: string | null;
   createdAt: string;
@@ -496,6 +505,7 @@ export interface WatchlistDeliveryConfigRecord {
   emailEnabled: boolean;
   whatsappEnabled: boolean;
   slackEnabled: boolean;
+  teamsEnabled: boolean;
   quietHours: DeliveryQuietHours | null;
   timezone: string | null;
   createdAt: string;
@@ -509,6 +519,7 @@ export interface EffectiveDeliveryConfig {
   emailEnabled: boolean;
   whatsappEnabled: boolean;
   slackEnabled: boolean;
+  teamsEnabled: boolean;
   quietHours: DeliveryQuietHours | null;
   timezone: string | null;
 }

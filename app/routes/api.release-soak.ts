@@ -425,7 +425,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
   const releaseIdentity = readReleaseIdentity(env);
   const workerVersionId = releaseIdentity.workerVersionId;
-  if (!workerVersionId || releaseIdentity.searchRolloutMode !== "shadow") {
+  if (!workerVersionId || releaseIdentity.searchRolloutMode !== "v2") {
     return Response.json({ ok: false, blocker: "release_identity_incomplete" }, {
       status: 503,
       headers: { "cache-control": "no-store" },
@@ -457,7 +457,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     schemaVersion: 1,
     evidenceClass: "exact_worker_scheduled_observation",
     workerVersionId,
-    searchRolloutMode: "shadow",
+    searchRolloutMode: "v2",
     window: { startedAt: window.startedAt, endedAt: window.endedAt, durationMs: SOAK_DURATION_MS },
     slo: {
       maxTaskDurationMs: MAX_TASK_DURATION_MS,

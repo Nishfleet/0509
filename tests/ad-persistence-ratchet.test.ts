@@ -228,6 +228,49 @@ describe("upsertAd seen-window ratchet", () => {
     ]));
   });
 
+  it("drops Meta Ad Library chrome captured as the CTA from persisted rows (FIX-14 read side)", async () => {
+    // Simulate an ad persisted before the extraction-side chrome guard landed:
+    // the cta column and raw_json both carry the library "Menu" overflow label.
+    await upsertAd(env, buildAd({ cta: "Menu" }));
+
+    const [persisted] = await listAdsByIds(env, ["1280520150312258"]);
+    expect(persisted.cta).toBe("");
+
+    // The same guard must hold for every exact chrome token, case and
+    // whitespace variants included, so no consumer (public search selection,
+    // creative wall, digest, report, export) can render them.
+    for (const chromeCta of [
+      "Menu",
+      " menu ",
+      "Open Drop-down",
+      "See ad details",
+      "See summary details",
+      "View ad details",
+      "Meta Ad Library result",
+      "More",
+      "Report ad",
+    ]) {
+      await upsertAd(env, buildAd({ metaAdId: `chrome-${chromeCta.length}`, cta: chromeCta }));
+      const [hydrated] = await listAdsByIds(env, [`chrome-${chromeCta.length}`]);
+      expect(hydrated.cta).toBe("");
+    }
+
+    // Exact production value from public search: "Menu" plus newline plus
+    // U+200B. Kept out of the length-keyed loop above because
+    // "Menu\n\u200B".length === 6 collides with " menu ".
+    await upsertAd(env, buildAd({ metaAdId: "chrome-zwsp-menu", cta: "Menu\n\u200B" }));
+    const [zwsp] = await listAdsByIds(env, ["chrome-zwsp-menu"]);
+    expect(zwsp.cta).toBe("");
+  });
+
+  it("never drops a real advertiser CTA from persisted rows (FIX-14 read side)", async () => {
+    for (const realCta of ["Shop Now", "Learn more", "Sign up", "Apply now", "Book now", "Contact us", "Buy combo", "WhatsApp now"]) {
+      await upsertAd(env, buildAd({ metaAdId: `real-${realCta.length}`, cta: realCta }));
+      const [hydrated] = await listAdsByIds(env, [`real-${realCta.length}`]);
+      expect(hydrated.cta).toBe(realCta);
+    }
+  });
+
   it("removes stale hook and offer fields when current source evidence has neither", async () => {
     await upsertAd(env, buildAd({
       analysisFields: [
