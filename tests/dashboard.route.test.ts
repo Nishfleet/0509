@@ -124,12 +124,16 @@ function mockDashboardLoaderDependencies(
       isMember?: boolean;
       ownerName?: string | null;
     };
+    firstScanStates?: unknown[];
   } = {},
 ) {
   const liveKey = ["f9", "live", "dashboard"].join("_");
   const counterMoveAudits = options.counterMoveAudits ?? [];
   const listWatchlists = vi.fn().mockResolvedValue(options.watchlists ?? []);
   const listWatchEvents = vi.fn().mockResolvedValue([]);
+  const listFirstScanRunStates = vi
+    .fn()
+    .mockResolvedValue(options.firstScanStates ?? []);
   const listRecentWorkspaceWatchEvents = vi
     .fn()
     .mockResolvedValue(options.recentWorkspaceEvents ?? []);
@@ -231,6 +235,7 @@ function mockDashboardLoaderDependencies(
       .mockResolvedValue(options.recentEventRuns ?? []),
     listWatchEvents,
     listWatchlists,
+    listFirstScanRunStates,
   }));
   vi.doMock("~/lib/plan.server", () => ({
     getProofUsageSummary: vi.fn().mockResolvedValue({
@@ -253,6 +258,7 @@ function mockDashboardLoaderDependencies(
     listWatchEvents,
     listRecentWorkspaceWatchEvents,
     listWatchlists,
+    listFirstScanRunStates,
   };
 }
 
@@ -1291,5 +1297,208 @@ describe("dashboard route agent memory", () => {
     } as never);
 
     expect(loaderData.counterMoveFollowUps).toEqual([]);
+  });
+});
+
+describe("dashboard same-session first value", () => {
+  it("marks the workspace as awaiting its first scan while a run is pending", async () => {
+    mockDashboardLoaderDependencies({
+      watchlists: [
+        {
+          id: "watch-1",
+          name: "Boat watch",
+          targetType: "advertiser",
+          targetLabel: "Boat Lifestyle",
+          isActive: true,
+          lastScannedAt: null,
+        },
+      ],
+      firstScanStates: [
+        { watchlistId: "watch-1", status: "pending", errorCode: null },
+      ],
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(loaderData.firstScanStates).toEqual([
+      { watchlistId: "watch-1", status: "pending", errorCode: null },
+    ]);
+    expect(loaderData.awaitingFirstScan).toBe(true);
+  });
+
+  it("stops awaiting once the first scan succeeded", async () => {
+    mockDashboardLoaderDependencies({
+      watchlists: [
+        {
+          id: "watch-1",
+          name: "Boat watch",
+          targetType: "advertiser",
+          targetLabel: "Boat Lifestyle",
+          isActive: true,
+          lastScannedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+      firstScanStates: [
+        { watchlistId: "watch-1", status: "succeeded", errorCode: null },
+      ],
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(loaderData.awaitingFirstScan).toBe(false);
+  });
+
+  it("does not ask about first-scan state when every competitor was scanned", async () => {
+    const deps = mockDashboardLoaderDependencies({
+      watchlists: [
+        {
+          id: "watch-1",
+          name: "Boat watch",
+          targetType: "advertiser",
+          targetLabel: "Boat Lifestyle",
+          isActive: true,
+          lastScannedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(deps.listFirstScanRunStates).not.toHaveBeenCalled();
+  });
+
+  it("renders the live first-scan strip while the first scan is running", async () => {
+    const loaderData = {
+      collections: [],
+      watchlists: [
+        {
+          id: "watch-1",
+          userId: "user-1",
+          name: "Boat watch",
+          targetType: "advertiser",
+          trackingRole: "competitor",
+          targetId: "https://boat-lifestyle.com",
+          targetFingerprint: "fp-1",
+          targetLabel: "Boat Lifestyle",
+          targetCountry: "all",
+          isActive: true,
+          lastScannedAt: null,
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ],
+      digests: [],
+      recentEvents: [],
+      recentProofCaptures: [],
+      recentProofPairs: [],
+      recentEventRuns: [],
+      deliveryTargets: [],
+      metaStatus: { status: "healthy", summary: "Healthy", lastCheckedAt: null },
+      proofUsage: { warningLevel: "ok", used: 0, limit: 0, remaining: 0, plan: "free" },
+      overnightStats: { runs: 0, watchlistsChecked: 0, adsSeen: 0 },
+      successfulProofStats: { count: 0, latestAt: null },
+      workspaceReadiness: {
+        status: "attention",
+        readyCount: 0,
+        totalCount: 1,
+        items: [],
+        nextActions: [],
+        nudges: [],
+        counts: {},
+      },
+      counterMoveFollowUps: [],
+      plan: "starter",
+      teamMemberCount: 0,
+      nextScanLabel: "Mon 15 Jun, 3:00 am UTC",
+      workspaceDeliveryTimezone: "Asia/Kolkata",
+      hasPaymentIssue: false,
+      sectionWarnings: [],
+      setupPrefillWebsite: "",
+      setupPrefillCountry: "",
+      setupCreatedCount: 0,
+      firstScanStates: [
+        { watchlistId: "watch-1", status: "running", errorCode: null },
+      ],
+      awaitingFirstScan: true,
+    };
+
+    vi.resetModules();
+    await mockRouter(loaderData);
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("First scan live");
+    expect(markup).toContain("first mini-brief and any proof-backed evidence land here");
+    expect(markup).toContain("First sweep is running now");
+  });
+
+  it("announces the created count and started scan from the setup handoff", async () => {
+    const loaderData = {
+      collections: [],
+      watchlists: [],
+      digests: [],
+      recentEvents: [],
+      recentProofCaptures: [],
+      recentProofPairs: [],
+      recentEventRuns: [],
+      deliveryTargets: [],
+      metaStatus: { status: "healthy", summary: "Healthy", lastCheckedAt: null },
+      proofUsage: { warningLevel: "ok", used: 0, limit: 0, remaining: 0, plan: "free" },
+      overnightStats: { runs: 0, watchlistsChecked: 0, adsSeen: 0 },
+      successfulProofStats: { count: 0, latestAt: null },
+      workspaceReadiness: {
+        status: "attention",
+        readyCount: 0,
+        totalCount: 1,
+        items: [],
+        nextActions: [],
+        nudges: [],
+        counts: {},
+      },
+      counterMoveFollowUps: [],
+      plan: "free",
+      teamMemberCount: 0,
+      nextScanLabel: "Mon 15 Jun, 3:00 am UTC",
+      workspaceDeliveryTimezone: "Asia/Kolkata",
+      hasPaymentIssue: false,
+      sectionWarnings: [],
+      setupPrefillWebsite: "",
+      setupPrefillCountry: "",
+      setupCreatedCount: 2,
+      firstScanStates: [],
+      awaitingFirstScan: true,
+    };
+
+    vi.resetModules();
+    await mockRouter(loaderData);
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Created 2 competitor watchlists");
+    expect(markup).toContain("first live scan is running now");
+  });
+
+  it("reads the created count from the loader handoff query", async () => {
+    mockDashboardLoaderDependencies();
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app?setup=market-desk&created=3"),
+    } as never);
+
+    expect(loaderData.setupCreatedCount).toBe(3);
   });
 });
