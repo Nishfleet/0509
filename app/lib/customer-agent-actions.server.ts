@@ -27,7 +27,8 @@ import {
 } from "~/lib/agent-memory.server";
 import type { CustomerAgentActionName } from "~/lib/agent-action-catalog";
 import {
-  isSlackDeliveryCustomerFacing,
+  isSlackWebhookDeliveryCustomerFacing,
+  isTeamsWebhookDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
   slackDeliveryUnavailableMessage,
   whatsappDeliveryUnavailableMessage,
@@ -1434,6 +1435,7 @@ async function updateDeliverySettingsFromAgent(
     emailEnabled: workspaceConfig?.emailEnabled ?? true,
     whatsappEnabled: workspaceConfig?.whatsappEnabled ?? false,
     slackEnabled: workspaceConfig?.slackEnabled ?? false,
+    teamsEnabled: workspaceConfig?.teamsEnabled ?? false,
     quietHours: workspaceConfig?.quietHours ?? null,
     timezone: workspaceConfig?.timezone ?? null,
   };
@@ -1457,9 +1459,12 @@ async function updateDeliverySettingsFromAgent(
     whatsappEnabled: isWhatsAppDeliveryCustomerFacing()
       ? readOptionalBoolean(input, "whatsappEnabled") ?? base.whatsappEnabled
       : base.whatsappEnabled,
-    slackEnabled: isSlackDeliveryCustomerFacing()
+    slackEnabled: isSlackWebhookDeliveryCustomerFacing()
       ? readOptionalBoolean(input, "slackEnabled") ?? base.slackEnabled
       : base.slackEnabled,
+    teamsEnabled: isTeamsWebhookDeliveryCustomerFacing()
+      ? readOptionalBoolean(input, "teamsEnabled") ?? base.teamsEnabled
+      : base.teamsEnabled,
     quietHours: readQuietHours(input, "quietHours", base.quietHours),
     timezone: requestedTimezone === null ? null : normalizedTimezone ?? safeTimeZone(base.timezone),
   });
@@ -1485,8 +1490,11 @@ async function updateDeliverySettingsFromAgent(
   if (isWhatsAppDeliveryCustomerFacing()) {
     reversalInput.whatsappEnabled = base.whatsappEnabled;
   }
-  if (isSlackDeliveryCustomerFacing()) {
+  if (isSlackWebhookDeliveryCustomerFacing()) {
     reversalInput.slackEnabled = base.slackEnabled;
+  }
+  if (isTeamsWebhookDeliveryCustomerFacing()) {
+    reversalInput.teamsEnabled = base.teamsEnabled;
   }
 
   return {
@@ -1518,10 +1526,19 @@ async function updateDeliveryTargetFromAgent(
   if (!existing) {
     throw new CustomerAgentActionError("delivery_target_not_found", "Delivery target not found.", { status: 404 });
   }
-  if (!isSlackDeliveryCustomerFacing() && existing.channel === "slack") {
+  if (!isSlackWebhookDeliveryCustomerFacing() && existing.channel === "slack") {
     throw new CustomerAgentActionError("slack_delivery_unavailable", slackDeliveryUnavailableMessage(), {
       status: 403,
     });
+  }
+  if (!isTeamsWebhookDeliveryCustomerFacing() && existing.channel === "teams") {
+    throw new CustomerAgentActionError(
+      "teams_delivery_unavailable",
+      "Teams delivery isn’t available. Nothing was saved — use email delivery instead.",
+      {
+        status: 403,
+      },
+    );
   }
   if (!isWhatsAppDeliveryCustomerFacing() && existing.channel === "whatsapp") {
     throw new CustomerAgentActionError("whatsapp_delivery_unavailable", whatsappDeliveryUnavailableMessage(), {
@@ -1590,11 +1607,21 @@ async function updateDeliveryTargetFromAgent(
 }
 
 function rejectDormantDeliveryActionInput(input: Record<string, unknown>) {
-  if (!isSlackDeliveryCustomerFacing() &&
+  if (!isSlackWebhookDeliveryCustomerFacing() &&
     (readOptionalBoolean(input, "slackEnabled") === true || readString(input, "channel") === "slack")) {
     throw new CustomerAgentActionError("slack_delivery_unavailable", slackDeliveryUnavailableMessage(), {
       status: 403,
     });
+  }
+  if (!isTeamsWebhookDeliveryCustomerFacing() &&
+    (readOptionalBoolean(input, "teamsEnabled") === true || readString(input, "channel") === "teams")) {
+    throw new CustomerAgentActionError(
+      "teams_delivery_unavailable",
+      "Teams delivery isn’t available. Nothing was saved — use email delivery instead.",
+      {
+        status: 403,
+      },
+    );
   }
   if (!isWhatsAppDeliveryCustomerFacing() &&
     (readOptionalBoolean(input, "whatsappEnabled") === true || readString(input, "channel") === "whatsapp")) {
@@ -1799,10 +1826,22 @@ function readDeliveryChannel(input: Record<string, unknown>): DeliveryChannel | 
     return value;
   }
   if (value === "slack") {
-    if (!isSlackDeliveryCustomerFacing()) {
+    if (!isSlackWebhookDeliveryCustomerFacing()) {
       throw new CustomerAgentActionError("slack_delivery_unavailable", slackDeliveryUnavailableMessage(), {
         status: 403,
       });
+    }
+    return value;
+  }
+  if (value === "teams") {
+    if (!isTeamsWebhookDeliveryCustomerFacing()) {
+      throw new CustomerAgentActionError(
+        "teams_delivery_unavailable",
+        "Teams delivery isn’t available. Nothing was saved — use email delivery instead.",
+        {
+          status: 403,
+        },
+      );
     }
     return value;
   }
@@ -1813,7 +1852,8 @@ function isCustomerFacingDeliveryChannel(channel: DeliveryChannel) {
   return (
     channel === "email" ||
     (channel === "whatsapp" && isWhatsAppDeliveryCustomerFacing()) ||
-    (channel === "slack" && isSlackDeliveryCustomerFacing())
+    (channel === "slack" && isSlackWebhookDeliveryCustomerFacing()) ||
+    (channel === "teams" && isTeamsWebhookDeliveryCustomerFacing())
   );
 }
 
@@ -1822,8 +1862,11 @@ function customerFacingDeliveryChannels(): DeliveryChannel[] {
   if (isWhatsAppDeliveryCustomerFacing()) {
     channels.push("whatsapp");
   }
-  if (isSlackDeliveryCustomerFacing()) {
+  if (isSlackWebhookDeliveryCustomerFacing()) {
     channels.push("slack");
+  }
+  if (isTeamsWebhookDeliveryCustomerFacing()) {
+    channels.push("teams");
   }
   return channels;
 }
@@ -1956,7 +1999,7 @@ function readCounterMoveFollowUpChannel(input: Record<string, unknown>): Counter
   if (!value) {
     return null;
   }
-  if (value === "slack" && !isSlackDeliveryCustomerFacing()) {
+  if (value === "slack" && !isSlackWebhookDeliveryCustomerFacing()) {
     throw new CustomerAgentActionError("slack_delivery_unavailable", slackDeliveryUnavailableMessage(), {
       status: 403,
     });
@@ -2066,7 +2109,8 @@ function safeWatchlistDeliveryConfigRecord(config: WatchlistDeliveryConfigRecord
     digestEnabled: config.digestEnabled,
     emailEnabled: config.emailEnabled,
     ...(isWhatsAppDeliveryCustomerFacing() ? { whatsappEnabled: config.whatsappEnabled } : {}),
-    ...(isSlackDeliveryCustomerFacing() ? { slackEnabled: config.slackEnabled } : {}),
+    ...(isSlackWebhookDeliveryCustomerFacing() ? { slackEnabled: config.slackEnabled } : {}),
+    ...(isTeamsWebhookDeliveryCustomerFacing() ? { teamsEnabled: config.teamsEnabled } : {}),
     quietHours: config.quietHours,
     timezone: config.timezone,
     createdAt: config.createdAt,

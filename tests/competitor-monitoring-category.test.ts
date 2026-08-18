@@ -17,6 +17,10 @@ beforeEach(() => {
 
     return {
       ...actual,
+      // The shared MarketingNav shell reads root loader data; render these
+      // routes without a data-router context (same pattern as
+      // tests/ads-brand-page.render.test.tsx) so the router hook is a no-op.
+      useRouteLoaderData: () => undefined,
       Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
