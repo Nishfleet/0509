@@ -1,7 +1,12 @@
 import { Link } from "react-router";
 
 import { AdCreative } from "~/components/ads/ad-creative";
-import { adLongevityDays, formatAdLongevityLabel, STRONG_LONGEVITY_DAYS } from "~/lib/ad-display";
+import {
+  adLongevityDays,
+  formatAdCaptureSinceLabel,
+  formatAdLongevityLabel,
+  STRONG_LONGEVITY_DAYS,
+} from "~/lib/ad-display";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import type { AdRecord } from "~/lib/types";
 
@@ -67,6 +72,10 @@ function BrandAdCard({ ad, now }: { ad: AdRecord; now: Date }) {
   const strong = longevityDays !== null && longevityDays >= STRONG_LONGEVITY_DAYS;
   const isNew = isNewlySeen(ad, now);
   const savedLabel = isNew ? "New" : "Screenshot saved";
+  // The per-ad capture date: when this creative was first observed. A
+  // months-old seasonal creative (Diwali/Navratri/Pay Day, …) reads as
+  // current rotation without it — the date is the card's honest age anchor.
+  const captureSinceLabel = formatAdCaptureSinceLabel(ad, now);
   const destination = destinationDomain(ad.landingPageUrl);
   // The REAL advertiser, or the honest unconfirmed label — never the brand
   // this page is about. A blank advertiser means discovery could not confirm
@@ -86,6 +95,9 @@ function BrandAdCard({ ad, now }: { ad: AdRecord; now: Date }) {
         <h3 className="f9-ads-card-headline">{headline}</h3>
         {hook ? <p className="f9-ads-card-hook">{hook}</p> : null}
         <div className="f9-ads-card-pills">
+          {captureSinceLabel ? (
+            <span className="f9-ads-pill">{captureSinceLabel}</span>
+          ) : null}
           {longevityLabel && ad.activeStatusObserved !== false ? (
             <span className={`f9-ads-pill${strong ? " f9-ads-pill-strong" : ""}`}>
               {longevityLabel}

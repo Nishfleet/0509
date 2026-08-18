@@ -2,6 +2,14 @@
 
 Narrative records moved out of `CLAUDE.md` so per-session guidance stays operational. Entries below preserve the original wording and are organized by the date of the event.
 
+## 2026-08-12
+
+### Meta ads beta graduation
+
+- Meta ads discovery reliability graduated from beta: the production canary for the live worker `24e18f13-f932-4b23-a6c1-d0eb218747f0` is green (post-deploy Gate-C canary passed 2026-08-09, run 31319791367, `{"passed":true,"errors":[]}`; re-verified live 2026-08-11 during the stale `codex:prod-canary` triage; worker still live 2026-08-12 with no regression). Public `/search` serves honest fresh/recent/sample labels with `isProvenFreshLiveCapture()` since #567.
+- Customer-facing changes: the MagicBrief compare page no longer says Meta ads tracking is "labeled beta" — it states tracking is live and gated by a production canary; the served marketing hero keeps its Meta ads claim (now honest) with freshness labeling intact; `app/lib/plan-entitlements.ts` `metaSourceStatus` values renamed `beta_limited`/`beta_priority` → `limited`/`priority`; README and the GA positioning/scorecard/customer-journey audit docs record the graduation.
+- Rollback: if the production canary turns red (launch-readiness `meta_ads_beta:*` blockers, Gate C failing, or fresh-live probe degradation), restore the beta caveat in `app/routes/compare.magicbrief.tsx`, `README.md`, and `docs/ga-positioning.md` before any customer-facing Meta claim.
+
 ## 2026-08-11
 
 ### Stale codex:prod-canary issue triage

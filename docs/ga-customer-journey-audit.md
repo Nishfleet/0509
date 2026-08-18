@@ -44,12 +44,12 @@ flowchart LR
 | Location | Copy | Recommendation |
 |----------|------|----------------|
 | `app/routes/marketing.tsx` | "Early access" announcement | Superseded: the served homepage no longer shows this announcement |
-| `app/routes/marketing.tsx` | Meta ads "marked beta" in honest note | Keep until Meta ads canary graduates |
-| `app/lib/plan-entitlements.ts` | `metaSourceStatus: beta_*` | Product truth for Meta source lane |
+| `app/routes/marketing.tsx` | Meta ads "marked beta" in honest note | GRADUATED 2026-08-12: canary green on the live worker (Gate C pass 2026-08-09, re-verified 2026-08-11); no beta caveat in served hero copy |
+| `app/lib/plan-entitlements.ts` | `metaSourceStatus: beta_*` | GRADUATED 2026-08-12: renamed to `limited` / `priority`; product truth for Meta source lane |
 | `app/routes/app.sources.tsx` | Meta ads beta readiness | Internal; not public marketing |
 | `legacy/` | "Get early access" | Ignored — not in live build |
 | `docs/launch-readiness.md` | "pilot-ready" verdict | Update after ops gates clear |
-| `README.md` | Meta ads beta + old launch framing | Superseded: README now keeps Meta ads beta honesty without broader pilot wording |
+| `README.md` | Meta ads beta + old launch framing | GRADUATED 2026-08-12: README states the Meta ads beta caveat is lifted and gated on a green canary |
 
 ## Pricing honesty
 
@@ -70,5 +70,5 @@ flowchart LR
 ## Gaps for GA (addressed in later phases)
 
 - Agency public sale was held until fan-out proof in this historical branch; current truth lives in `docs/final-self-serve-ga-scorecard.md`.
-- The old homepage beta announcement was removed in the final hardening branch; Meta ads beta honesty remains intentional until live discovery proof supports graduation.
+- The old homepage beta announcement was removed in the final hardening branch; the Meta ads beta caveat was lifted 2026-08-12 after the production canary went green on the live worker (Gate C pass 2026-08-09, re-verified 2026-08-11). If the canary turns red, restore the beta caveat before any customer-facing Meta claim.
 - Slack / uptime / portal remain owner-action (Phase 12).

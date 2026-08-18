@@ -55,6 +55,7 @@ CI passes). Verified: `env -u NODE_ENV` turns the 8 failures in
 
 - [MONEY silent-failure remediation](#money-silent-failure-remediation) — PR #445, branch `fix/silent-fixmoney` (landed on `main`)
 - [Silent-failure observability remediation](#silent-failure-observability-remediation) — PR #447, branch `fix/silent-fixobserve`
+- [Anonymous search honest end state after 60s warming cap (2026-08-12 lane 1)](#anonymous-search-honest-end-state-after-60s-warming-cap-2026-08-12-lane-1) — PR #612, commit `90cea3a5` (landed on `main`)
 
 ---
 # MONEY silent-failure remediation
@@ -630,6 +631,76 @@ advertisers.
 - `.lane/report.md` — evidence record only; no product code touched.
 
 ---
+
+# Structured data opportunity on /search (2026-08-12 lane 6) — already resolved by PR #564 (+ duplicate #600)
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane6-search-structured-data-already-resolved`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] [dogfood `fce4fa3c00f1`] Structured data opportunity on /search
+  [dogfood 20260808T074205Z-msk2fl3n]
+
+## Verdict
+
+No code change was warranted. The item is already landed on `origin/main` and
+live in production:
+
+- PR #564 — `d1c8bd43` "fix(seo): add truthful WebPage JSON-LD", merged
+  2026-08-09, is an ancestor of the current `main` HEAD (`389c0e55`) and is
+  the commit that introduced the truthful WebPage JSON-LD into BOTH halves of
+  the finding's scope — `app/routes/search.tsx` and
+  `app/routes/auth.login.tsx` (`git log HEAD -S "Truthful WebPage JSON-LD" --`
+  attributes the auth/login block to `d1c8bd43`).
+- PR #600 — `fix/lane15-search-structured-data`, merged 2026-08-10, is a
+  duplicate of the `/search` half; the improvement-loop backlog note around
+  `backlog.md:1042` flagged that the `/auth/login` half "looks covered by
+  #600" while PR #618 (evidence-only docs lane, closed 2026-08-11) stayed
+  unmerged. Neither gap exists: `d1c8bd43` itself covers `/auth/login` on
+  main, so the concern is fully resolved.
+- Regression pins on this tip: `tests/search-structured-data.test.ts` and
+  `tests/auth-login-structured-data.test.ts` both exist on `main` and pass
+  4/4.
+
+## Evidence on current main + live production (2026-08-12)
+
+- `git merge-base --is-ancestor d1c8bd43 HEAD` → 0 (ancestor).
+- Live `https://0509.io/search` (HTTP 200) renders exactly one
+  `application/ld+json` WebPage block: `name`/`description`/`url` match the
+  document head, `isPartOf` WebSite, `publisher` Organization; no prices,
+  ratings, result counts, or live-scrape claims.
+- Live `https://0509.io/auth/login` (HTTP 200) renders exactly one truthful
+  WebPage JSON-LD with the same minimal shape.
+- Same-engine rerun (the engine the dogfood job wraps, `auditUrl` from
+  `proof-seo/server/audit/engine.js`, `maxPages: 6`, `pageSpeed: false` —
+  identical options to the dogfood pipeline):
+  - `https://0509.io/search` crawl → page `schemaTypes: ["WebPage"]`,
+    `schemaErrors: []`; the `enhancement-7` "Structured data opportunity on
+    /search" finding is gone from the result (the engine's check at
+    `shared/audit-engine.js:1724` fires only when `schemaTypes` is empty or
+    `invalid-json`).
+  - `https://0509.io/auth/login` → no structured-data finding on
+    `/auth/login`; `enhancement-16` no longer appears.
+- Focused regressions `tests/search-structured-data.test.ts`
+  `tests/auth-login-structured-data.test.ts` via test-gate: 2 files, 4/4
+  passed on this tip.
+
+## Observed residual (out of scope, noted for honesty)
+
+The same-engine rerun of `/auth/login` surfaced a NEW "Structured data
+opportunity on /auth/signup" notice — `/auth/signup` was never in
+`fce4fa3c00f1`'s scope (`enhancement-7` = /search, `enhancement-16` =
+/auth/login; the 2026-08-08 run did not crawl /auth/signup). It will be filed
+as a separate finding by the dogfood job if the next audit still sees it, and
+the open PR #627 already lifts `/auth/signup` content. No change made here.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
+---
 # Alert named owner + materiality reason (2026-08-11 lane 1) — already resolved by PR #571
 
 **Status: already resolved; this lane records the evidence only.**
@@ -801,7 +872,58 @@ lane; the package is still current and accurate:
 - `.lane/report.md` — evidence record only; no product code touched.
 
 ---
-# Stale open PRs #573/#574/#584 (2026-08-11 lane 1) — already merged / superseded, closed
+# Anonymous search honest end state after 60s warming cap (2026-08-12 lane 1) — already resolved via PR #612
+
+**Status: resolved; evidence record only, no product code touched.**
+
+Branch: `report/lane1-612-anonymous-search-60s-cap-honest-end`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Give anonymous search an honest end state when the check outlives the 60s warming cap (silent stop of the promised auto-refresh).
+
+## Verdict
+
+Already resolved on `origin/main` by **PR #612** (`90cea3a5`,
+"fix(search): honest end state when the anonymous check outlives the 60s
+warming cap", merged 2026-08-11). The commit is an ancestor of the current
+`main` tip (`389c0e55`) and its full content is present on this worktree's
+HEAD. No code change was warranted.
+
+The warming poll (5s × 12 = 60s cap) is also the auto-refresh promise.
+Previously, when a background capture outlived the budget, polling stopped
+silently but the empty state kept saying "Usually under a minute — we'll
+refresh automatically" next to a still-warming server state. PR #612:
+
+- `app/routes/search.tsx` — adds `warmingPollExhausted` (warming AND poll
+  budget spent) and an honest end state: "The check is taking longer than a
+  minute / We stopped auto-refreshing. Retry this search to check again."
+- Re-arms the poll on same-URL retry/re-submit via a navigation-commit
+  budget reset (`navigationInFlightRef`), because the searchKey is unchanged
+  and the exhausted budget would otherwise carry into the fresh check.
+- `tests/search-submission-settle.test.tsx` — regression test: after 12
+  poll ticks the page retracts the auto-refresh promise, and a same-URL
+  retry re-arms the promise with a fresh budget.
+
+## Evidence on current main (`389c0e55`)
+
+- `git log --oneline -S "warmingPollExhausted" -- app/routes/search.tsx` →
+  `90cea3a5` (PR #612) is the introducing commit.
+- `git log --oneline -S "SEARCH_WARMING_POLL_LIMIT" -- app/routes/search.tsx`
+  → `90147b9b` (#559) introduced the poll; `90cea3a5` (#612) the honest end
+  state.
+- `git merge-base --is-ancestor 90cea3a5 origin/main` → exit 0.
+- The exact regression test from #612 is present in
+  `tests/search-submission-settle.test.tsx` on this tip.
+- Test evidence on this worktree: `vitest run tests/search-submission-settle.test.tsx`
+  → **14/14 passed** (includes "shows an honest end state when the warming
+  check outlives the poll budget and re-arms it on retry"). Full unit suite:
+  **427 files / 4892 tests passed**.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
 
 **Status: resolved; this lane closed the stale PRs and records the evidence.**
 
@@ -848,6 +970,143 @@ comments); #574 had already merged before this lane started.
   unknown>), ...`; `git log -S` attributes them to `5021807e` (#585).
 - `git log origin/main --oneline -- docs/alternativeto-listing-2026-08-11.md`
   → `adceefdd` (#606), ancestor of current main HEAD.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
+
+---
+
+# Daily market-signal D1 snapshot restore (five days stale)
+
+**Status: implemented; full Vitest green; PR open, not merged.**
+
+Branch: `fix/restore-market-signal-d1-snapshot`
+Base: `origin/main` at `d109e2d2`
+Pull request: https://github.com/nish3451/0509/pull/586 (opened by this lane)
+
+## Item
+
+- [ ] Restore the daily market-signal D1 snapshot so commercial dogfood is not
+  five days stale [scout 2026-08-09].
+
+## Problem
+
+The daily 0509 market-signal snapshot has been stale since 2026-08-05. The
+Hermes host cron (`hostinger-kvm4`) drives `npm run signal:market`, which runs
+`wrangler d1 execute 0509 --remote`. The host's wrangler OAuth session expired
+2026-08-04T13:26:24Z and no `CLOUDFLARE_API_TOKEN` exists in the cron
+environment, so every non-interactive run fails. PR #557 (merged 2026-08-09)
+made that failure self-diagnosing (`market_signal_auth_required`) but did not
+restore generation: the host still cannot authenticate, and a git lane cannot
+repair a host credential.
+
+## Fix
+
+Move snapshot generation to a scheduled GitHub Actions workflow that uses the
+repository's `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets on a
+`production`-environment GitHub-hosted runner — the same proven pattern as the
+nightly `d1-backup-r2.yml` and `d1-remote-restore-evidence.yml` jobs — and
+commit the snapshot to `ops/market-signal/0509-market-signal.json` on `main`.
+
+- `.github/workflows/market-signal-snapshot.yml` — daily `7 0 * * *` (00:07 UTC
+  / 05:37 IST, before the morning Hermes report and outside the 20:07/20:47 UTC
+  provider-mutation windows) plus `workflow_dispatch` for an immediate restore.
+  `npm ci` and `npm run signal:market` are lane-wrapped through
+  `deploy-window-lock.sh run --`, and a freshness gate verifies `generatedAt`
+  before the commit step pushes (no-op when unchanged). Manual dispatches are
+  gated to `refs/heads/main`; the snapshot commit is a plain `git push origin
+  HEAD:main` — main is unprotected, no workflow in the repo triggers on push to
+  main, so a snapshot commit cannot cascade CI or deploys.
+- `automation/HERMES_MARKET_SIGNAL.md` — the host no longer runs wrangler at
+  all. Hermes reads the committed snapshot from the synced checkout and, if the
+  file is missing or `generatedAt` is older than 26 hours, reports the D1
+  source as unavailable instead of presenting stale counts as current (the
+  workflow fails loudly on auth/query failure, so a stale committed file means
+  the morning run did not happen). Manual host-side generation remains a
+  documented fallback only.
+- `tests/market-signal-workflow.test.ts` — locks the schedule, the
+  production-environment/secret placement, the lane wrapping, the snapshot path
+  parity between workflow and Hermes contract, and the stale-snapshot honesty
+  rule.
+
+## Verification
+
+- Full Vitest on this tip: 424 files, 4854/4854 passed (includes the new
+  `market-signal-workflow` suite and the global `workflow-routing-hardening` /
+  `workflow-startup-safety` / `self-hosted-node-cache-workflows` invariants
+  applied to the new workflow file).
+- Workflow wiring exercised locally: `deploy-window-lock.sh run -- npm run
+  signal:market -- --output <path>` resolves args correctly and, with no
+  Cloudflare credential present, exits with the single greppable
+  `market_signal_auth_required` classifier and writes no file. In CI the same
+  command runs with `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` set, which is
+  the exact combination the broken host cron lacked.
+- `git diff --check`: clean.
+
+## Post-merge restore
+
+The next scheduled run (or a manual `workflow_dispatch` on `main`) produces a
+fresh snapshot immediately; Hermes consumes it from `ops/market-signal/` with
+no host Cloudflare credential required.
+
+---
+
+# BL-031 refine-disclosure fix from the paused lane-1 self-directed cycle (2026-08-12 lane 1) — already landed by PRs #583/#585
+
+**Status: already resolved; this lane records the evidence only.**
+
+Branch: `report/lane1-bl031-refine-disclosure-already-resolved`
+Base: `origin/main` at `389c0e55`
+
+## Item
+
+- [ ] Land the stranded BL-031 refine-disclosure fix from the paused
+  lane-1 self-directed cycle — the complete +71/-2 diff (keep the refine
+  disclosure shut on a pristine /search).
+
+## Verdict
+
+No code change was warranted. The item is already fully landed on
+`origin/main`: the +71/-2 diff itself landed as PR #583 (`d109e2d2`,
+merged 2026-08-10), and the typecheck break its test additions
+introduced (TS2698 — spreading `unknown` filters) was repaired on main
+by `5021807e` (PR #585, merged 2026-08-10). The dedicated repair PR
+#584 (`d01b21eb`) was closed as superseded by the owner
+(2026-08-10T23:02:59Z) with a comment recording that the casts were
+already on main and only formatting differed. Current main HEAD
+(`389c0e55`) passes the repo's real type gate and the BL-031
+refine-disclosure tests.
+
+- PR #583 — "fix(search): keep the refine disclosure shut on a pristine
+  /search (BL-031)" — **MERGED** as `d109e2d2`; the exact +71/-2 diff
+  of the item (`app/routes/search.tsx` 11 changed, 2 removed;
+  `tests/search-submission-settle.test.tsx` 62 added). The resolving
+  commit is an ancestor of the current main HEAD.
+- PR #584 — "fix(search): make the BL-031 refine-disclosure tests
+  typecheck-clean (TS2698)" — **CLOSED as superseded**; its content is
+  on main via `5021807e` (PR #585).
+
+## Evidence on current main (HEAD `389c0e55`)
+
+- `git merge-base --is-ancestor d109e2d2 origin/main` → yes (the +71/-2
+  fix is in main's history).
+- `app/routes/search.tsx:1317-1345` carries the full BL-031 round-3
+  disclosure contract: `refineDisclosureActive = instrumentUsed &&
+  activeRefineFilters.length > 0` (line 1344), used at lines 1529/1533
+  for the `<details open>` state and the "N on" badge — the panel stays
+  shut on a pristine /search and a narrowed search that ran still opens
+  with its count.
+- `tests/search-submission-settle.test.tsx:646` and `:665` already
+  carry `...(resultsLoaderData.filters as Record<string, unknown>)`;
+  `git log -S "as Record<string, unknown>"` attributes both sites to
+  `5021807e` (PR #585).
+- `npm run typecheck` — EXIT 0 at HEAD `389c0e55` (cf-typegen +
+  react-router typegen + `tsc -b`), re-run by this lane on
+  2026-08-12.
+- `npx vitest run --configLoader runner tests/search-submission-settle.test.tsx`
+  — 14/14 passed, including the "refine disclosure state (BL-031 round
+  3)" block.
 
 ## Files
 

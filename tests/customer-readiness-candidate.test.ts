@@ -18,7 +18,7 @@ function git(repo: string, args: string[]) {
   }).trim();
 }
 
-function createRepo(mode = "shadow") {
+function createRepo(mode = "v2") {
   const repo = mkdtempSync(join(tmpdir(), "0509-customer-readiness-candidate-"));
   repos.push(repo);
   git(repo, ["init", "-q", "-b", "main"]);
@@ -244,33 +244,33 @@ describe("customer readiness candidate identity", () => {
     }
   });
 
-  it("requires committed shadow mode and reports only safe identity evidence", () => {
-    const repo = createRepo("v2-secret-\\u007f");
+  it("requires committed v2 rollout mode and reports only safe identity evidence", () => {
+    const repo = createRepo("legacy-secret-\\u007f");
     const refused = runCandidate(repo);
     expect(refused.code).not.toBe(0);
     expect(refused.report).toMatchObject({
       ok: false,
-      blockers: ["search_rollout_mode_not_shadow"],
-      wrangler: { searchRolloutMode: "non_shadow_or_missing" },
+      blockers: ["search_rollout_mode_not_v2"],
+      wrangler: { searchRolloutMode: "non_v2_or_missing" },
     });
-    expect(refused.output).not.toContain("v2-secret");
+    expect(refused.output).not.toContain("legacy-secret");
 
-    const shadowRepo = createRepo();
-    writeWrangler(shadowRepo, "v2-secret-\\u007f");
-    const refusedWorktreeMode = runCandidate(shadowRepo);
+    const v2Repo = createRepo();
+    writeWrangler(v2Repo, "legacy-secret-\\u007f");
+    const refusedWorktreeMode = runCandidate(v2Repo);
     expect(refusedWorktreeMode.code).not.toBe(0);
     expect(refusedWorktreeMode.report).toMatchObject({
       ok: false,
-      blockers: ["search_rollout_mode_not_shadow"],
+      blockers: ["search_rollout_mode_not_v2"],
       wrangler: {
-        searchRolloutMode: "shadow",
-        worktreeSearchRolloutMode: "non_shadow_or_missing",
+        searchRolloutMode: "v2",
+        worktreeSearchRolloutMode: "non_v2_or_missing",
       },
     });
-    expect(refusedWorktreeMode.output).not.toContain("v2-secret");
+    expect(refusedWorktreeMode.output).not.toContain("legacy-secret");
 
-    writeWrangler(shadowRepo, "shadow");
-    const noEvidence = runCandidate(shadowRepo);
+    writeWrangler(v2Repo, "v2");
+    const noEvidence = runCandidate(v2Repo);
     expect(noEvidence.report?.wrangler).toMatchObject({
       d1Database: {
         binding: "DB",
@@ -287,7 +287,7 @@ describe("customer readiness candidate identity", () => {
       classification: "external_proof_required",
       evidenceProvided: false,
     });
-    const explicit = runCandidate(shadowRepo, [
+    const explicit = runCandidate(v2Repo, [
       "--base",
       "HEAD",
       "--deployed-version",

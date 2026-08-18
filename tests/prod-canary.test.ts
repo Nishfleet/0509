@@ -7,7 +7,7 @@ import {
 } from "../scripts/prod-canary.lib.mjs";
 
 const EXPECTED_WORKER_VERSION_ID = "worker-version-123";
-const EXPECTED_SEARCH_ROLLOUT_MODE = "shadow";
+const EXPECTED_SEARCH_ROLLOUT_MODE = "v2";
 
 function current0509Result(status: "ok" | "empty", overrides = {}) {
   return {
@@ -56,7 +56,7 @@ function createHealthyCanaryFetchImpl() {
         workerVersionId: "worker-version-123",
         tag: "release-2026-07-15",
         timestamp: "2026-07-15T10:00:00.000Z",
-        searchRolloutMode: "shadow",
+        searchRolloutMode: "v2",
       },
     });
   });
@@ -72,7 +72,7 @@ describe("production canary", () => {
         app: "0509",
         releaseIdentity: {
           workerVersionId: EXPECTED_WORKER_VERSION_ID,
-          searchRolloutMode: "shadow",
+          searchRolloutMode: "v2",
         },
       }),
     });
@@ -187,17 +187,17 @@ describe("production canary", () => {
   it.each([
     [
       "wrong version",
-      { workerVersionId: "other-worker", searchRolloutMode: "shadow" },
+      { workerVersionId: "other-worker", searchRolloutMode: "v2" },
       "Worker version mismatch",
     ],
     [
       "missing version",
-      { workerVersionId: null, searchRolloutMode: "shadow" },
+      { workerVersionId: null, searchRolloutMode: "v2" },
       "missing the Worker version ID",
     ],
     [
       "wrong mode",
-      { workerVersionId: EXPECTED_WORKER_VERSION_ID, searchRolloutMode: "v2" },
+      { workerVersionId: EXPECTED_WORKER_VERSION_ID, searchRolloutMode: "shadow" },
       "rollout mode mismatch",
     ],
     [
@@ -549,7 +549,7 @@ describe("production canary", () => {
         app: "0509",
         releaseIdentity: {
           workerVersionId: "worker-version-123",
-          searchRolloutMode: "shadow",
+          searchRolloutMode: "v2",
         },
       }),
     });

@@ -12,6 +12,7 @@ import {
 } from "react-router";
 import type {
   ActionFunctionArgs,
+  HeadersFunction,
   LinksFunction,
   LoaderFunctionArgs,
   MetaFunction,
@@ -61,6 +62,7 @@ import {
   SUPPORTED_COUNTRIES,
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
+import { PUBLIC_SEARCH_RATE_LIMIT_MESSAGE } from "~/lib/customer-route-error";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
@@ -95,6 +97,7 @@ import {
   formatOfferLabel,
   formatProofCaptureLabel,
   formatResultsPanelTitle,
+  formatSearchCaptureAgeLabel,
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
   formatSearchSourceLabel,
@@ -159,6 +162,18 @@ export const meta: MetaFunction = () =>
     description: searchDescription,
     pathname: "/search",
   });
+
+// When the search loader throws a 429 (anonymous limiter), React Router only
+// merges cookies from the thrown response's headers onto the final document
+// response unless the boundary route forwards them. Copy Retry-After through
+// here so the rate-limited document keeps the limiter's recovery signal. For
+// every other request errorHeaders is undefined and nothing is added.
+export const headers: HeadersFunction = ({ errorHeaders }) => {
+  const documentHeaders: Record<string, string> = {};
+  const retryAfter = errorHeaders?.get("retry-after");
+  if (retryAfter) documentHeaders["Retry-After"] = retryAfter;
+  return documentHeaders;
+};
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
@@ -232,6 +247,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
       collections: [],
@@ -259,6 +275,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
       collections: [],
@@ -337,7 +354,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       cloudflare?.ctx,
     );
     if (rateLimitResponse) {
-      throw rateLimitResponse;
+      // Anonymous throttling is a normal, recoverable product state, not an
+      // internal failure: throw an explicit in-product 429 document whose
+      // body names the limit and the recovery path, and keep the limiter's
+      // Retry-After signal so the client and the document response both know
+      // when the window clears. The route-level headers() export below
+      // forwards that header onto the final document response.
+      const retryAfterSeconds = rateLimitResponse.headers.get("retry-after");
+      throw new Response(
+        JSON.stringify({
+          error: "rate_limited",
+          message: PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+        }),
+        {
+          status: 429,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "no-store",
+            ...(retryAfterSeconds ? { "retry-after": retryAfterSeconds } : {}),
+          },
+        },
+      );
     }
   }
 
@@ -389,6 +426,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           fingerprint: parsed.fingerprint,
           result: buildIdleSearchResult(),
           selectedAd: null,
+          resultCaptureAgeLabel: null,
           stealSummary: null,
           selectionEnrichmentPending: false,
           collections,
@@ -415,6 +453,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
       collections,
@@ -546,6 +585,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     fingerprint: parsed.fingerprint,
     result: hydratedResult,
     selectedAd,
+    resultCaptureAgeLabel: formatSearchCaptureAgeLabel(
+      hydratedResult.cacheFetchedAt,
+      new Date(),
+    ),
     stealSummary,
     selectionEnrichmentPending: Boolean(selectionEnrichmentPending),
     collections,
@@ -1701,6 +1744,15 @@ export default function SearchRoute() {
                     <h2 className="f9-wk-sec-title">
                       {sectionHeadline}
                     </h2>
+                    {/* Snapshot age: a cache-served result names how old the
+                        capture is, so a stale per-country snapshot is
+                        self-evidently stale instead of looking current. The
+                        label is computed once in the loader (hydration-safe). */}
+                    {data.resultCaptureAgeLabel ? (
+                      <p className="f9-wk-sec-sub f9-wk-sec-capture-age">
+                        {data.resultCaptureAgeLabel}
+                      </p>
+                    ) : null}
                     {/* One sub-line, and the search answer's own sentence
                         wins it when there is one — the panel below then
                         carries only the facts it uniquely knows. */}
@@ -2372,11 +2424,12 @@ export default function SearchRoute() {
              a result — the form IS the affordance and the sentence says what
              comes back.
              The scope copy below the fold is the response to the SEO engine's
-             thin-content warning (dogfood 694ddbd68e95): honest, page-specific
-             detail — what a search returns, proof, and the next step — without
-             decorating the instrument. The copy avoids claiming current
-             activity: the discovery cache can serve cached inventory, so the
-             "right now" promise stays gated (PR #567). */
+             thin-content warning (dogfood 694ddbd68e95 / AI Answer Readiness
+             69e1b4be47bf): honest, page-specific detail — what a search
+             returns, proof, and the next step — without decorating the
+             instrument. The copy avoids claiming current activity: the
+             discovery cache can serve cached inventory, so the "right now"
+             promise stays gated (PR #567). */
           <>
             <section
               aria-labelledby="search-idle-title"

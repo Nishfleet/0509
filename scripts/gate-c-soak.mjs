@@ -69,7 +69,7 @@ async function verifyLiveIdentity(workerVersionId) {
     checkHealthEndpoint({
       baseUrl,
       expectedWorkerVersionId: workerVersionId,
-      expectedSearchRolloutMode: "shadow",
+      expectedSearchRolloutMode: "v2",
     }),
   ));
   if (!checks.every((check) => check.ok)) throw new Error("soak_live_identity_mismatch");

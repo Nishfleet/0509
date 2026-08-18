@@ -3,17 +3,23 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  faqPageJsonLd,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  type FaqJsonLdEntry,
+} from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const pageDescription =
-  "Moving from MagicBrief? Your competitor list imports as watchlists; collections, boards, and analytics history do not transfer. See what moves and how we help you, person to person.";
+  "MagicBrief alternative: your competitor list imports as watchlists; collections, boards, and analytics history do not transfer. See what moves.";
 
 export const links: LinksFunction = () => canonicalLinks("/compare/magicbrief");
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
-    title: "Five to Nine vs MagicBrief | Migration guide",
+    title: "MagicBrief alternative: Five to Nine | Migration guide",
     description: pageDescription,
     pathname: "/compare/magicbrief",
   });
@@ -47,6 +53,13 @@ const notImported = [
   },
 ] as const;
 
+// Landing from a MagicBrief wind-down search is the highest-intent moment for
+// this page. The CTA below is the self-serve migration path: sign up, then the
+// setup checklist's competitor import creates the watchlists. The honest
+// not-imported boundary (collections, boards, analytics, past evidence) stays
+// on this page — a CTA must never read as full migration.
+const MIGRATION_SIGNUP_PATH = "/auth/signup?source=magicbrief-migration";
+
 const differences = [
   {
     title: "We monitor changes, not just creatives",
@@ -61,13 +74,42 @@ const differences = [
   {
     title: "Honest limits",
     detail:
-      "Meta ads tracking is labeled beta until it is reliable on your competitors. Results are always marked fresh, recent, or sample.",
+      "Meta ads tracking is live on your competitors and gated by a production canary. Results are always marked fresh, recent, or sample.",
+  },
+] as const;
+
+// FAQ entries answer the searches displaced MagicBrief buyers actually type
+// ("MagicBrief alternative", "what happened to MagicBrief"). Every answer is
+// grounded in this page's own copy — nothing new promised.
+export const magicBriefFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
+  {
+    question: "What happened to MagicBrief?",
+    answer:
+      "MagicBrief announced its wind-down and closed on 31 July 2026. Teams that tracked ad creatives there are choosing a replacement now — this guide covers what Five to Nine moves for you and what it does not.",
+  },
+  {
+    question: "Is Five to Nine a MagicBrief alternative?",
+    answer:
+      "For competitor-list migration and change monitoring, yes: your tracked brands import as watchlists, and paid plans check them every 3–6 hours with screenshot evidence. For browsing saved creative collections and boards, no — that saved work does not transfer, and Five to Nine's library is narrower and change-focused.",
+  },
+  {
+    question: "What actually moves from MagicBrief?",
+    answer:
+      "Your tracked brands, pasted or as a CSV, import as watchlists with your notes, tags, and client labels. Collections, boards, analytics history, and past screenshots are not imported — keep your original export as the record.",
+  },
+  {
+    question: "What does switching cost?",
+    answer:
+      "The public search preview is free and needs no account. The free plan watches one competitor with a weekly brief; paid plans add more competitors, faster checks, and daily briefs — plans and prices are on the pricing page, shown at checkout.",
   },
 ] as const;
 
 export default function CompareMagicBriefRoute() {
+  const structuredFaq = faqPageJsonLd(magicBriefFaqEntries);
+
   return (
     <main className="f9-home">
+      <script {...jsonLdScriptProps(structuredFaq)} />
       <MarketingNav />
 
       <section className="ld-hero">
@@ -139,6 +181,38 @@ export default function CompareMagicBriefRoute() {
               <p>{item.detail}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="ld-quiet" id="faq">
+        <div className="ld-pricing-faq" aria-label="MagicBrief migration FAQ">
+          <span className="ld-kicker">FAQ</span>
+          <h2>MagicBrief wind-down questions, answered honestly.</h2>
+          <dl className="proof-trail-list">
+            {magicBriefFaqEntries.map((entry) => (
+              <div key={entry.question}>
+                <dt>{entry.question}</dt>
+                <dd>{entry.answer}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
+      <section className="ld-final">
+        <div className="ld-migration-cta">
+          <div>
+            <span className="ld-kicker">Start migrating</span>
+            <h2>Import your competitor list now.</h2>
+            <p>
+              Sign up free — no card — and the setup checklist&rsquo;s competitor import turns
+              your paste or CSV into watchlists. Collections, boards, analytics history, and past
+              evidence are not migrated; you recreate them with our help.
+            </p>
+          </div>
+          <a className="ld-cta-button" href={MIGRATION_SIGNUP_PATH}>
+            Start migration <span aria-hidden="true">→</span>
+          </a>
         </div>
       </section>
 
