@@ -4,6 +4,7 @@ import {
   formatAdDetailBody,
   formatProofCaptureLabel,
   formatResultCardSummary,
+  formatSearchCaptureAgeLabel,
 } from "~/lib/search-display";
 import type { AdRecord } from "~/lib/types";
 
@@ -142,5 +143,55 @@ describe("formatResultCardSummary / formatAdDetailBody broken-unicode guard", ()
 
     expect(formatResultCardSummary(ad)).toContain("✨");
     expect(formatResultCardSummary(ad)).not.toContain("\uFFFD");
+  });
+});
+
+describe("formatSearchCaptureAgeLabel", () => {
+  const now = new Date("2026-08-12T12:00:00.000Z");
+
+  it("renders a deterministic age label independent of the runtime timezone", () => {
+    // Same hydration rule as the proof label: the loader computes the label
+    // once at request time, so the string must never depend on the zone the
+    // server or browser happens to run in.
+    for (const timeZone of ["UTC", "Asia/Kolkata", "Pacific/Kiritimati"]) {
+      process.env.TZ = timeZone;
+      expect(
+        formatSearchCaptureAgeLabel("2026-08-12T09:00:00.000Z", now),
+      ).toBe("Captured about 3 hours ago");
+    }
+  });
+
+  it("names minutes, hours and days of snapshot age", () => {
+    expect(formatSearchCaptureAgeLabel("2026-08-12T11:59:00.000Z", now)).toBe(
+      "Captured about 1 minute ago",
+    );
+    expect(formatSearchCaptureAgeLabel("2026-08-12T11:00:00.000Z", now)).toBe(
+      "Captured about an hour ago",
+    );
+    expect(formatSearchCaptureAgeLabel("2026-08-12T10:00:00.000Z", now)).toBe(
+      "Captured about 2 hours ago",
+    );
+    expect(formatSearchCaptureAgeLabel("2026-08-11T12:00:00.000Z", now)).toBe(
+      "Captured about a day ago",
+    );
+    expect(formatSearchCaptureAgeLabel("2026-08-09T12:00:00.000Z", now)).toBe(
+      "Captured about 3 days ago",
+    );
+  });
+
+  it("says 'moments ago' for a fresh capture and never shows a future timestamp", () => {
+    expect(formatSearchCaptureAgeLabel("2026-08-12T11:59:30.000Z", now)).toBe(
+      "Captured moments ago",
+    );
+    // A clock-skewed cache timestamp must not render as "negative age".
+    expect(formatSearchCaptureAgeLabel("2026-08-12T12:30:00.000Z", now)).toBe(
+      "Captured moments ago",
+    );
+  });
+
+  it("returns null when no capture timestamp exists or it is unparseable", () => {
+    expect(formatSearchCaptureAgeLabel(undefined, now)).toBeNull();
+    expect(formatSearchCaptureAgeLabel(null, now)).toBeNull();
+    expect(formatSearchCaptureAgeLabel("not-a-date", now)).toBeNull();
   });
 });

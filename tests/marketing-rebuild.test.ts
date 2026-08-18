@@ -91,8 +91,8 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("last");
     expect(marketingRoute).toContain("night.");
     expect(marketingRoute).toContain("Sample proof-backed brief");
-    expect(marketingRoute).toContain("A rival page changed while your team was offline");
-    expect(marketingRoute).toContain("Your team would&rsquo;ve found out from a client.");
+    expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
+    expect(marketingRoute).toContain("Your growth team would&rsquo;ve found out from a client.");
     expect(marketingRoute).toContain("Meta ads and landing pages");
     expect(marketingRoute).toContain("before your alarm goes off");
     expect(marketingRoute).not.toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
@@ -178,7 +178,7 @@ describe("marketing rebuild", () => {
       "75 competitors — top 25 checked every 3 hours, the rest every 6 hours",
     );
     expect(marketingRoute).toContain("valueMathLabel");
-    expect(marketingRoute).toContain("Check packs");
+    expect(marketingRoute).toContain("Proof capture packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');
     expect(marketingRoute).toContain('className="f9-plan-badge">Recommended</em>');
     expect(marketingRoute).not.toContain("Proof-first monitoring");
@@ -199,6 +199,14 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("Slack delivery");
     expect(marketingRoute).not.toContain("Slack-ready");
     expect(marketingRoute).toContain("Brief export");
+  });
+
+  it("never injects raw digest-markdown syntax into the homepage markup", () => {
+    expect(marketingRoute).toContain("renderDigestMarkdownPreview");
+    expect(marketingRoute).not.toContain("*Nykaa changed the routine bundle angle*");
+    expect(marketingRoute).not.toContain(
+      '<p className="ld-export">{demoProof.exports.digestMarkdown}</p>',
+    );
   });
 
   it("keeps unsupported social and internal implementation claims out of homepage copy", () => {
@@ -230,16 +238,20 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("highest queue priority");
   });
 
-  it("uses customer-facing check language for top-ups and included usage", () => {
-    expect(marketingRoute).toContain("Purchased checks never expire");
-    expect(marketingRoute).toContain("Included checks reset every month");
+  it("uses customer-facing proof capture language for top-ups and included usage", () => {
+    expect(marketingRoute).toContain("Purchased proof captures never expire");
+    expect(marketingRoute).toContain("Included proof captures reset every month");
     expect(marketingRoute).toContain("Scheduled scans are included with your plan");
-    expect(marketingRoute).toContain("proof-backed capture");
-    expect(marketingRoute).toContain("500 extra checks");
+    expect(marketingRoute).toContain("never touch your cap");
+    expect(marketingRoute).toContain("500 extra proof captures");
+    expect(marketingRoute).toContain("What uses proof captures?");
+    expect(marketingRoute).toContain("Do unused proof captures roll over?");
+    expect(marketingRoute).toContain("2,500 proof captures/month");
     expect(marketingRoute).not.toContain("Record packs");
     expect(marketingRoute).not.toContain("record packs");
     expect(marketingRoute).not.toContain("saved change records");
     expect(marketingRoute).not.toContain("per saved record");
+    expect(marketingRoute).not.toMatch(/checks never expire|per check|extra checks|checks\/month/);
   });
 
   it("has incinerated the stale lower-page system", () => {
@@ -259,7 +271,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain('className="ld-ticker"');
     expect(marketingRoute).toContain('className="ld-wall"');
     expect(marketingRoute).toContain("Sample proof-backed brief");
-    expect(marketingRoute).toContain("A rival page changed while your team was offline");
+    expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
     expect(marketingRoute).toContain('action="/search"');
     expect(marketingRoute).toContain("Preview available ads");
     expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');

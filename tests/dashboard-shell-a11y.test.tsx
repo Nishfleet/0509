@@ -134,6 +134,22 @@ describe("DashboardShell accessibility (WP-43)", () => {
     expect(view.querySelector('nav[aria-label="Workspace sections"]')).toBeNull();
   });
 
+  it("keeps public-shell destinations reachable exactly once — Help is a nav item, not a footer duplicate", async () => {
+    const view = await renderShell("/search", { isPublic: true });
+
+    const links = Array.from(view.querySelectorAll("a")).map((link) => ({
+      href: link.getAttribute("href"),
+      text: link.textContent?.trim() ?? "",
+    }));
+    const navLinks = links.filter(({ text }) => text !== "");
+
+    // Every public destination is reachable exactly once: Home, Search,
+    // Pricing and Help ride the icon rail; Docs and Sign in ride the footer.
+    for (const href of ["/", "/search", "/#pricing", "/help", "/docs", "/auth/login"]) {
+      expect(navLinks.filter((link) => link.href === href)).toHaveLength(1);
+    }
+  });
+
   it("does not announce or steal focus during a StrictMode initial mount", async () => {
     const view = await renderShell("/app/watchlists", { strict: true });
 
