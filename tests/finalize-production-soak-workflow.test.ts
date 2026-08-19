@@ -41,8 +41,8 @@ describe("production soak finalization workflow", () => {
     expect(script).toContain('`${canonicalWorkflowPath}@main`');
     expect(script).toContain('run.status === "completed"');
     expect(script).toContain('run.conclusion === "success"');
-    expect(script).toContain('run.repository?.full_name === "nish3451/0509"');
-    expect(script).toContain('run.head_repository?.full_name === "nish3451/0509"');
+    expect(script).toContain('run.repository?.full_name === "Nishfleet/0509"');
+    expect(script).toContain('run.head_repository?.full_name === "Nishfleet/0509"');
     expect(script).toContain("run.run_attempt === expectedAttempt");
     expect(script).toContain("run.head_sha === expectedSha");
   });
@@ -72,8 +72,8 @@ describe("production soak finalization workflow", () => {
       status: "completed",
       conclusion: "success",
       event: "push",
-      repository: { full_name: "nish3451/0509" },
-      head_repository: { full_name: "nish3451/0509" },
+      repository: { full_name: "Nishfleet/0509" },
+      head_repository: { full_name: "Nishfleet/0509" },
     };
     const github = {
       rest: { actions: {
@@ -82,7 +82,7 @@ describe("production soak finalization workflow", () => {
       } },
     };
 
-    await execute(github, { repo: { owner: "nish3451", repo: "0509" } }, { setFailed, setOutput });
+    await execute(github, { repo: { owner: "Nishfleet", repo: "0509" } }, { setFailed, setOutput });
     expect(setFailed).not.toHaveBeenCalled();
     expect(setOutput).toHaveBeenCalledWith("sha", "a".repeat(40));
 
@@ -91,7 +91,7 @@ describe("production soak finalization workflow", () => {
         getWorkflowRun: vi.fn().mockResolvedValue({ data: { ...run, workflow_id: 999 } }),
         getWorkflow: github.rest.actions.getWorkflow,
       } },
-    }, { repo: { owner: "nish3451", repo: "0509" } }, { setFailed, setOutput });
+    }, { repo: { owner: "Nishfleet", repo: "0509" } }, { setFailed, setOutput });
     expect(setFailed).toHaveBeenCalledWith("production_deploy_run_provenance_invalid");
   });
 

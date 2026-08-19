@@ -13,6 +13,7 @@ import {
   registrableDomainFromHostname,
 } from "~/lib/search-query";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
+import { truncateTextSafe } from "~/lib/text-safe";
 import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
 import type {
@@ -222,7 +223,9 @@ function parseMetaAd(raw: MetaRawAd): AdRecord {
   const advertiser = raw.page_name ?? "Unknown advertiser";
   const body = bodies[0] ?? titles[0] ?? descriptions[0] ?? "";
   const previewHeadline = titles[0] ?? advertiser;
-  const previewSubhead = descriptions[0] ?? body.slice(0, 120);
+  // truncateTextSafe keeps the subhead well-formed: a plain slice at an emoji
+  // boundary leaves a lone surrogate that persists as U+FFFD ("�") on /search.
+  const previewSubhead = descriptions[0] ?? truncateTextSafe(body, 120);
   const format = detectCreativeType(raw, bodies, titles);
   const landingPageUrl = extractDestinationUrl(raw.ad_snapshot_url);
   const cta = captions[0] ?? "Learn more";

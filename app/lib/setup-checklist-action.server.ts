@@ -335,7 +335,7 @@ export async function handleSetupChecklistAction(
         current: watchlistResult.current,
         message:
           watchlistResult.limit <= 1
-            ? "Free includes 1 watchlist. Upgrade for more competitors, scheduled scans, and digests."
+            ? "Free includes 1 watchlist, 1 Collection, and a weekly proof-backed brief. Upgrade for more competitors, scheduled scans, and digests."
             : "You've reached your competitor monitoring limit.",
         upgradePath: "/app/billing?source=onboarding#plans",
       };

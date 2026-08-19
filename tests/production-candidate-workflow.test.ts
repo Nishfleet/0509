@@ -93,7 +93,7 @@ describe("exact production candidate workflow", () => {
     const authorizeStep = authorize?.steps?.[0];
     expect(authorizeStep?.name).toBe("Authorize release request");
     expect(authorizeStep?.run).toContain(
-      'test "$GITHUB_REPOSITORY" = "nish3451/0509"',
+      'test "$GITHUB_REPOSITORY" = "Nishfleet/0509"',
     );
     expect(authorizeStep?.run).toContain(
       'test "$GITHUB_REF" = "refs/heads/main"',
@@ -138,6 +138,83 @@ describe("exact production candidate workflow", () => {
     // validated it. If main moved before the pin, no candidate has been
     // verified yet, so the run must stop.
     expect(steps[verifyIndex]?.env).not.toHaveProperty("TOLERATE_MAIN_DRIFT");
+  });
+
+  it("offers the chain bootstrap as an optional dispatch input wired only to the release gate", () => {
+    // The repository rename (nish3451/0509 -> Nishfleet/0509) reset GitHub's
+    // deploy-production run history to zero, which deadlocked the
+    // last-successful-deploy chain: no deploy could succeed without a prior
+    // success, and no prior success could exist without a successful deploy.
+    // The input exists to break that deadlock exactly once.
+    expect(
+      workflow.on.workflow_dispatch?.inputs?.bootstrap_previous_success_sha,
+    ).toEqual({
+      description:
+        "One-time chain bootstrap; empty unless GitHub has zero successful deploys",
+      required: false,
+      default: "",
+      type: "string",
+    });
+
+    // Optional by construction: a push-triggered or plain dispatch run must
+    // stay byte-identical to today's behaviour, which means the env resolves
+    // to the empty string and the verifier keeps failing closed.
+    const deploy = workflow.jobs.deploy;
+    const deployStep = deploy?.steps?.[stepIndex(deploy, "Deploy")];
+    expect(deployStep?.env?.BOOTSTRAP_PREVIOUS_SUCCESS_SHA).toBe(
+      "${{ inputs.bootstrap_previous_success_sha || '' }}",
+    );
+
+    // Blast radius: only the two steps that actually run
+    // verify-remote-restore-evidence.mjs may read it. No authorizing,
+    // pinning, evidence-generating, or provider-mutating step may, and no
+    // job-level env may leak it to every step in a job.
+    const consumers: string[] = [];
+    for (const [jobName, job] of Object.entries(workflow.jobs)) {
+      for (const key of Object.keys(job.env ?? {})) {
+        if (key === "BOOTSTRAP_PREVIOUS_SUCCESS_SHA") {
+          consumers.push(`${jobName}:<job env>`);
+        }
+      }
+      for (const step of job.steps ?? []) {
+        for (const key of Object.keys(step.env ?? {})) {
+          if (key === "BOOTSTRAP_PREVIOUS_SUCCESS_SHA") {
+            consumers.push(`${jobName}:${step.name ?? step.uses ?? "<step>"}`);
+          }
+        }
+      }
+    }
+    expect(consumers).toEqual([
+      "prepare_remote_restore_evidence:Verify pre-generated exact R2 restore evidence",
+      "deploy:Deploy",
+    ]);
+
+    // Both consumers are exactly the steps that invoke the verifier: the
+    // pre-generated-artifact check and the release gate. Without the anchor
+    // the first one exits 2 on every attempt and hard-stops the run before
+    // the gate is ever reached (run 32232488597).
+    const prepareVerify =
+      workflow.jobs.prepare_remote_restore_evidence?.steps?.[
+        stepIndex(
+          workflow.jobs.prepare_remote_restore_evidence,
+          "Verify pre-generated exact R2 restore evidence",
+        )
+      ];
+    expect(prepareVerify?.run).toContain(
+      "ci-prepare-remote-restore-evidence.sh",
+    );
+    expect(prepareVerify?.env?.BOOTSTRAP_PREVIOUS_SUCCESS_SHA).toBe(
+      "${{ inputs.bootstrap_previous_success_sha || '' }}",
+    );
+
+    // The input is inert everywhere else in the file, including the
+    // authorizer's dispatch validation, which must not start treating it as
+    // an authorization token.
+    expect(
+      workflowSource.match(/inputs\.bootstrap_previous_success_sha/g),
+    ).toHaveLength(2);
+    const authorizeStep = workflow.jobs.authorize_release?.steps?.[0];
+    expect(JSON.stringify(authorizeStep)).not.toContain("bootstrap");
   });
 
   it("pins every downstream checkout and rechecks main at each mutation boundary", () => {
@@ -312,7 +389,7 @@ describe("exact production candidate workflow", () => {
         /actions\/checkout|secrets\.|wrangler|cloudflare/i,
       );
       expect(authorize?.steps?.[0]?.run, `${name} canonical repository`).toContain(
-        'test "$GITHUB_REPOSITORY" = "nish3451/0509"',
+        'test "$GITHUB_REPOSITORY" = "Nishfleet/0509"',
       );
     }
 
@@ -527,7 +604,7 @@ args="$*"
 [[ "$args" = *"--proto-redir =https"* ]]
 [[ "$args" = *"--config -"* ]]
 config="$(cat)"
-grep -Fq 'url = "https://api.github.com/repos/nish3451/0509/git/ref/heads/main"' <<< "$config"
+grep -Fq 'url = "https://api.github.com/repos/Nishfleet/0509/git/ref/heads/main"' <<< "$config"
 grep -Fq 'header = "Authorization: Bearer test-token"' <<< "$config"
 grep -Fq 'header = "X-GitHub-Api-Version: 2026-03-10"' <<< "$config"
 printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
@@ -541,7 +618,7 @@ printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
       const baseEnv = {
         ...process.env,
         GITHUB_EVENT_NAME: "push",
-        GITHUB_REPOSITORY: "nish3451/0509",
+        GITHUB_REPOSITORY: "Nishfleet/0509",
         GITHUB_REF: "refs/heads/main",
         GITHUB_SHA: candidateSha,
         GITHUB_RUN_ATTEMPT: "1",

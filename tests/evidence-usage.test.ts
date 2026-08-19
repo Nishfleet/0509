@@ -1083,21 +1083,30 @@ describe("evidence usage periods", () => {
       quantityGranted: 3,
     });
     env.sqlite.exec(`UPDATE user_plan SET plan = 'free' WHERE user_id = 'user-1'`);
-    await env.DB.prepare(`UPDATE evidence_usage_period SET included_allowance = 0, included_consumed = 0`)
-      .bind()
-      .run();
 
     const summary = await getEvidenceUsageSummary(env, "user-1");
     expect(summary.topUpRemaining).toBe(3);
     expect(summary.canSpendTopUps).toBe(false);
-    expect(summary.totalAvailable).toBe(0);
+    // Free carries its own single monthly included check; the purchased
+    // top-ups stay retained but unspendable.
+    expect(summary.totalAvailable).toBe(1);
 
     const attempt = await reserveEvidenceCheck(env, {
       workspaceUserId: "user-1",
       logicalOperationKey: "free-op",
       source: "test",
     });
-    expect(attempt).toEqual({ ok: false, reason: "top_up_inactive_plan" });
+    expect(attempt).toMatchObject({ ok: true, pool: "included" });
+    await settleEvidenceReservation(env, "free-op");
+
+    // With the free included check spent, a further reservation must hit the
+    // top-up path and be refused — free never spends purchased checks.
+    const secondAttempt = await reserveEvidenceCheck(env, {
+      workspaceUserId: "user-1",
+      logicalOperationKey: "free-op-2",
+      source: "test",
+    });
+    expect(secondAttempt).toEqual({ ok: false, reason: "top_up_inactive_plan" });
   });
 
   it("fails loudly when paid top-up balances cannot be read", async () => {

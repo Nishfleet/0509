@@ -1,0 +1,14 @@
+# gitleaks findings that are proven false positives.
+#
+# Each entry is a FINGERPRINT: commit:path:rule:line. A fingerprint pins one
+# exact line of one exact commit, so ignoring it can never hide a future or
+# different secret - not even the same rule in the same file on another line.
+#
+# Add an entry only after confirming by hand that the value is not a real
+# credential, and say why on the comment line above it.
+
+# Deterministic dummy token in a deleted unit-test fixture for the netcup
+# renderer service. The value is the literal hex pattern
+# a1b2c3d4... used to exercise HMAC auth against a stub engine; it was never a
+# credential, and ops/netcup-browser/ no longer exists in the tree.
+b157f14f3a2989221dc52cc87a3ff1ace8f4327f:ops/netcup-browser/tests/server.test.mjs:generic-api-key:19
