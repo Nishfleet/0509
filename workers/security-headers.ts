@@ -159,17 +159,25 @@ export function withSecurityHeaders(response: Response, request?: Request): Resp
       !headers.has("set-cookie") &&
       isPublicCacheableHtmlRequest(request);
     if (cacheablePublicHtml) {
-      headers.set("cache-control", PUBLIC_HTML_CACHE_CONTROL);
-      const vary = headers.get("vary");
-      if (!vary) {
-        headers.set("vary", "cookie");
-      } else if (!vary.toLowerCase().split(",").some((v) => v.trim() === "cookie")) {
-        headers.set("vary", `${vary}, cookie`);
+      // An explicitly-set cache-control on the app response wins. The
+      // marketing page uses this for its SSR pricing: buyer-country prices are
+      // embedded in the HTML, so it must stay private (browser-only) instead
+      // of being shared-cached under the generic public policy — a cached
+      // DE/EUR variant would otherwise be served to a US visitor and vice
+      // versa. Security headers above still apply.
+      if (!headers.has("cache-control")) {
+        headers.set("cache-control", PUBLIC_HTML_CACHE_CONTROL);
+        const vary = headers.get("vary");
+        if (!vary) {
+          headers.set("vary", "cookie");
+        } else if (!vary.toLowerCase().split(",").some((v) => v.trim() === "cookie")) {
+          headers.set("vary", `${vary}, cookie`);
+        }
+        headers.delete("cdn-cache-control");
+        headers.delete("cloudflare-cdn-cache-control");
+        headers.delete("pragma");
+        headers.delete("expires");
       }
-      headers.delete("cdn-cache-control");
-      headers.delete("cloudflare-cdn-cache-control");
-      headers.delete("pragma");
-      headers.delete("expires");
     } else {
       for (const [name, value] of Object.entries(HTML_NO_STORE_HEADERS)) {
         headers.set(name, value);

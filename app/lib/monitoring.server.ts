@@ -3573,8 +3573,8 @@ async function evaluateSelectiveProofCandidates(
         skipReason: "skipped_due_to_budget",
         failureReason:
           evidenceReservation.result.reason === "top_up_inactive_plan"
-            ? "Purchased checks require an active paid plan."
-            : "Evidence check allowance exhausted.",
+            ? "Purchased proof captures require an active paid plan."
+            : "Proof capture allowance exhausted.",
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         idempotencyKey: `${proofRequestKey}:skip:budget`,
       });
@@ -3644,7 +3644,7 @@ async function evaluateSelectiveProofCandidates(
           status: "failed",
           failureCode:
             failureDetail?.reasonCode ?? "proof_capture_failed",
-          failureReason: "Landing-page evidence check failed.",
+          failureReason: "Landing-page proof capture failed.",
           captureMetadata: failureDetail
             ? {
                 ...failureDetail.metadata,
@@ -4043,8 +4043,8 @@ async function evaluateDirectWebsiteProofCandidate(
       skipReason: "skipped_due_to_budget",
       failureReason:
         evidenceReservation.result.reason === "top_up_inactive_plan"
-          ? "Purchased checks require an active paid plan."
-          : "Evidence check allowance exhausted.",
+          ? "Purchased proof captures require an active paid plan."
+          : "Proof capture allowance exhausted.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:budget`,
     });
@@ -4059,7 +4059,7 @@ async function evaluateDirectWebsiteProofCandidate(
       proofTargetId: proofTarget.id,
       status: "skipped_due_to_budget",
       skipReason: "skipped_due_to_budget",
-      failureReason: "Evidence check allowance exhausted.",
+      failureReason: "Proof capture allowance exhausted.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:budget`,
     });
@@ -4126,7 +4126,7 @@ async function evaluateDirectWebsiteProofCandidate(
         failureCode:
           failureDetail?.reasonCode ??
           "direct_website_proof_capture_failed",
-        failureReason: "Competitor website evidence check failed.",
+          failureReason: "Competitor website proof capture failed.",
         captureMetadata: {
           ...(failureDetail?.metadata ?? {}),
           source: "direct_competitor_website",
@@ -4625,7 +4625,9 @@ function startOfRollingProofWindowIso() {
 // actually reachable (cap*30 > monthly), with purchased credit packs adding
 // a smoothed daily allowance without expiring the underlying top-up balance.
 const DAILY_PROOF_CAP_BY_PLAN: Record<string, number> = {
-  free: 0,
+  // Free carries one evidence check per month (the activation scan's
+  // proof-backed brief); the daily cap must not starve that single capture.
+  free: 1,
   scout: 20,
   starter: 40,
   agency: 120,
@@ -4907,6 +4909,13 @@ async function maybeSendFreeActivationResultEmail(
       competitorName: input.watchlist.name,
       adsFound: input.adsSeen,
       topAds,
+      // Honest proof claim: only when a confirmed event is attached to a
+      // succeeded capture. A scan can complete with zero ads, or the landing
+      // capture can fail, and the email must not claim a proof-backed brief
+      // that does not exist.
+      proofCaptureSucceeded: input.events.some(
+        (event) => Boolean(event.proofCaptureId) && event.status === "confirmed",
+      ),
     });
     if (
       !result.sent &&

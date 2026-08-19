@@ -373,7 +373,7 @@ describe("browser_job_telemetry retention", () => {
   it("deletes only rows older than 30 days via the indexed created_at path", async () => {
     const sqlite = new DatabaseSync(":memory:");
     sqlite.exec(
-      readFileSync("migrations/0075_browser_job_telemetry.sql", "utf8"),
+      readFileSync("migrations/0076_browser_job_telemetry.sql", "utf8"),
     );
     const insert = sqlite.prepare(
       "INSERT INTO browser_job_telemetry (id, job_id, idempotency_key, job_kind, actual_provider, route_context, plan_tier, source, attempt, started_at, ended_at, duration_ms, browser_ms_used, cache_status, cache_age_ms, outcome, result_count, result_bytes, worker_version, cron_task, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

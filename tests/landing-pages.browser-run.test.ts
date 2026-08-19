@@ -460,7 +460,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         renderMode: "mobile",
         deviceProfile: "mobile_default",
         renderProvider: "cloudflare_browser_run",
-        extractorVersion: "lp-signals-v3",
+        extractorVersion: "lp-signals-v4",
         extractionWarnings: [],
         extractedFieldConfidence: {
           headline: 0.95,
@@ -967,7 +967,7 @@ describe("captureLandingPageSnapshot plain_http attribution rows", () => {
       captureRenderedLandingPageSnapshot: vi.fn().mockResolvedValue(null),
     }));
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
     const snapshot = await captureLandingPageSnapshot(
@@ -1003,7 +1003,7 @@ describe("captureLandingPageSnapshot plain_http attribution rows", () => {
       captureRenderedLandingPageSnapshot: vi.fn().mockResolvedValue(null),
     }));
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
     const onFailure = vi.fn();
 
     const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
@@ -1046,7 +1046,7 @@ describe("landing attribution outcome and attempt fidelity", () => {
       captureRenderedLandingPageSnapshot: vi.fn().mockResolvedValue(null),
     }));
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
     const onFailure = vi.fn();
 
     const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
@@ -1082,7 +1082,7 @@ describe("landing attribution outcome and attempt fidelity", () => {
       captureRenderedLandingPageSnapshot: vi.fn().mockResolvedValue(null),
     }));
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
     const onFailure = vi.fn();
 
     const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
@@ -1148,7 +1148,7 @@ describe("landing attribution outcome and attempt fidelity", () => {
     }));
 
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
     const snapshot = await captureLandingPageSnapshot(
@@ -1188,7 +1188,7 @@ describe("landing attribution outcome and attempt fidelity", () => {
       captureRenderedLandingPageSnapshot: vi.fn().mockResolvedValue(null),
     }));
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
     const onFailure = vi.fn();
 
     const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
@@ -1215,7 +1215,7 @@ describe("landing attribution outcome and attempt fidelity", () => {
 describe("rendered chain attempt ordering and job correlation", () => {
   function telemetryHarness() {
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
     return harness;
   }
 
@@ -1481,7 +1481,7 @@ describe("rendered chain attempt ordering and job correlation", () => {
 describe("rendered leg provider-error fidelity", () => {
   function telemetryHarness() {
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
     return harness;
   }
 
@@ -1797,7 +1797,7 @@ describe("rendered-first duration origin (controlled clock)", () => {
     }));
 
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
     const snapshot = await captureLandingPageSnapshot(

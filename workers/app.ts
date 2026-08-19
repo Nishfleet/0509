@@ -131,6 +131,19 @@ export default {
           return withSecurityHeaders(artifactResponse, request);
         }
       }
+
+      // Visual diff: stored proof-capture screenshots behind the watchlist
+      // change feed's before/now plates. Same unguessable-key model as the
+      // creative thumbnails; raster-only, key-shape-gated.
+      const { parseProofScreenshotPathname } = await import("../app/lib/proof-screenshot");
+      const { serveProofScreenshot } = await import("../app/lib/proof-screenshot.server");
+      const proofKey = parseProofScreenshotPathname(url.pathname);
+      if (proofKey) {
+        const screenshotResponse = await serveProofScreenshot(env, request, proofKey);
+        if (screenshotResponse) {
+          return withSecurityHeaders(screenshotResponse, request);
+        }
+      }
     }
 
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;

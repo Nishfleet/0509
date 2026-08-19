@@ -22,6 +22,7 @@ const {
   printReleaseReadinessDiagnostics,
 } = deployPlanModule;
 const {
+  bootstrapPreviousSuccessHead,
   firstParentMigrationDiffs,
   hasAppliedMigrationMutation,
   hasMigrationChanges,
@@ -1207,6 +1208,143 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       }),
     ).toEqual({ ok: true, issues: [] });
   });
+
+  it("bootstraps the last-successful-deploy chain only when history is genuinely empty", () => {
+    const head = spawnSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+      encoding: "utf8",
+    }).stdout.trim();
+    const ancestor = spawnSync(
+      "git",
+      ["rev-parse", "--verify", "HEAD~1^{commit}"],
+      { encoding: "utf8" },
+    ).stdout.trim();
+    // A real commit object in this repository that is not reachable from
+    // HEAD: same tree, no parents, never referenced. Exercises the ancestry
+    // gate without mutating any ref.
+    const tree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], {
+      encoding: "utf8",
+    }).stdout.trim();
+    const unreachable = spawnSync(
+      "git",
+      ["commit-tree", tree, "-m", "bootstrap ancestry probe"],
+      {
+        encoding: "utf8",
+        // commit-tree needs an identity, and CI checkouts have none
+        // configured. Supply one for this call only; the resulting commit is
+        // never referenced, so no ref, branch, or history is touched.
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: "0509 test",
+          GIT_AUTHOR_EMAIL: "test@0509.invalid",
+          GIT_COMMITTER_NAME: "0509 test",
+          GIT_COMMITTER_EMAIL: "test@0509.invalid",
+        },
+      },
+    ).stdout.trim();
+    expect(head).toMatch(/^[a-f0-9]{40}$/);
+    expect(ancestor).toMatch(/^[a-f0-9]{40}$/);
+    expect(unreachable).toMatch(/^[a-f0-9]{40}$/);
+
+    const warnings: string[] = [];
+    const collect = (message: string) => {
+      warnings.push(message);
+    };
+
+    // Recorded history always wins: the env is ignored outright, loudly, so a
+    // bootstrap value can never override, rewind, or reinterpret a real run.
+    expect(
+      bootstrapPreviousSuccessHead(
+        { hasRecordedHistory: true },
+        { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor },
+        collect,
+      ),
+    ).toBeNull();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("Ignoring the bootstrap value");
+    warnings.length = 0;
+
+    // Recorded history and no env: silent, nothing to bootstrap.
+    expect(
+      bootstrapPreviousSuccessHead({ hasRecordedHistory: true }, {}, collect),
+    ).toBeNull();
+    expect(warnings).toEqual([]);
+
+    // Empty history and no env: still null, so the caller keeps failing with
+    // the original remote_restore_last_successful_deploy_missing.
+    expect(
+      bootstrapPreviousSuccessHead({ hasRecordedHistory: false }, {}, collect),
+    ).toBeNull();
+    expect(
+      bootstrapPreviousSuccessHead(
+        { hasRecordedHistory: false },
+        { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: "   " },
+        collect,
+      ),
+    ).toBeNull();
+    expect(warnings).toEqual([]);
+
+    // Empty history plus an operator-supplied ancestor: accepted, and loud.
+    expect(
+      bootstrapPreviousSuccessHead(
+        { hasRecordedHistory: false },
+        { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ` ${ancestor} ` },
+        collect,
+      ),
+    ).toBe(ancestor);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("::warning::BOOTSTRAP:");
+    expect(warnings[0]).toContain(ancestor);
+    warnings.length = 0;
+
+    // HEAD is a strict ancestor of nothing: anchoring on it makes the
+    // classification diff empty, which would report the release as neither
+    // migration-bearing nor restore-critical and downgrade the evidence
+    // policy from fresh-exact-24h to verified-ledger-7d. Refused outright,
+    // so the bootstrap cannot buy a weaker gate than a normal deploy gets.
+    expect(() =>
+      bootstrapPreviousSuccessHead(
+        { hasRecordedHistory: false },
+        { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: head },
+        collect,
+      ),
+    ).toThrow("remote_restore_bootstrap_previous_head_is_head");
+
+    for (const malformed of [
+      "not-a-sha",
+      ancestor.slice(0, 39),
+      `${ancestor}0`,
+      ancestor.toUpperCase(),
+      "main",
+      `${ancestor} --not-a-flag`,
+    ]) {
+      expect(() =>
+        bootstrapPreviousSuccessHead(
+          { hasRecordedHistory: false },
+          { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: malformed },
+          collect,
+        ),
+      ).toThrow("remote_restore_bootstrap_previous_head_invalid");
+    }
+
+    expect(() =>
+      bootstrapPreviousSuccessHead(
+        { hasRecordedHistory: false },
+        { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: "0".repeat(40) },
+        collect,
+      ),
+    ).toThrow("remote_restore_bootstrap_previous_head_unknown");
+
+    // Well-formed, real, but not on this branch's history: refused.
+    expect(() =>
+      bootstrapPreviousSuccessHead(
+        { hasRecordedHistory: false },
+        { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: unreachable },
+        collect,
+      ),
+    ).toThrow("remote_restore_bootstrap_previous_head_not_ancestor");
+
+    expect(warnings).toEqual([]);
+  }, 30_000);
 
   it("classifies migration and restore-critical changes from the deploy diff", () => {
     const currentHead = spawnSync(

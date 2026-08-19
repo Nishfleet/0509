@@ -51,7 +51,7 @@ function proofCapture(overrides: Partial<ProofCaptureRecord> = {}): ProofCapture
     status: "failed",
     skipReason: null,
     failureCode: "proof_capture_failed",
-    failureReason: "Landing-page evidence check failed.",
+    failureReason: "Landing-page proof capture failed.",
     screenshotArtifactKey: null,
     htmlArtifactKey: null,
     extractedFields: {},

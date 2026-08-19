@@ -38,7 +38,7 @@ const baseFields: BrowserJobTelemetryFields = {
 
 function makeHarness() {
   const harness = createSqliteD1();
-  applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+  applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
   return harness;
 }
 
@@ -265,7 +265,7 @@ describe("writer field-bounds enforcement (raw material can never persist)", () 
 
   it("rejects a raw paging cursor as an idempotency key", async () => {
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
     // base64url cursors carry + / = or are long enough to fail the bounded
     // format; a URL-shaped key is rejected too.
     await recordBrowserJobTelemetry(telemetryEnv(harness.db), {
@@ -282,7 +282,7 @@ describe("writer field-bounds enforcement (raw material can never persist)", () 
 
   it("rejects unbounded or malformed job ids, timestamps, and oversized fields", async () => {
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     await recordBrowserJobTelemetry(telemetryEnv(harness.db), {
       ...baseFields,
@@ -306,7 +306,7 @@ describe("writer field-bounds enforcement (raw material can never persist)", () 
 
   it("accepts bounded idempotency keys used by production callers", async () => {
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     await recordBrowserJobTelemetry(telemetryEnv(harness.db), {
       ...baseFields,
@@ -323,7 +323,7 @@ describe("writer field-bounds enforcement (raw material can never persist)", () 
 
   it("coerces NaN/negative durations to null instead of dropping the row", async () => {
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     await recordBrowserJobTelemetry(telemetryEnv(harness.db), {
       ...baseFields,
