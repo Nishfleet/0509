@@ -151,7 +151,7 @@ export function formatRunSummary(summary: Record<string, unknown>) {
     message || null,
     formatNumericSummaryPart(summary, "adsSeen", "ads seen"),
     formatNumericSummaryPart(summary, "candidatesDetected", "candidates detected"),
-    formatNumericSummaryPart(summary, "proofsAttempted", "evidence checks attempted"),
+    formatNumericSummaryPart(summary, "proofsAttempted", "proof captures attempted"),
     formatNumericSummaryPart(summary, "eventsConfirmed", "events confirmed"),
     formatNumericSummaryPart(summary, "sendsTriggered", "sends triggered"),
     formatNumericSummaryPart(summary, "events", "events total"),

@@ -114,7 +114,7 @@ function proofCapture(
       ? (status as ProofCaptureRecord["skipReason"])
       : null,
     failureCode: status === "failed" ? "proof_capture_failed" : null,
-    failureReason: status === "failed" ? "Landing-page evidence check failed." : null,
+    failureReason: status === "failed" ? "Landing-page proof capture failed." : null,
     screenshotArtifactKey: null,
     htmlArtifactKey: null,
     extractedFields: {},
@@ -202,7 +202,7 @@ describe("resolveWatchlistTriageRecord (app surface)", () => {
       lastScannedAt: watchlist.lastScannedAt,
     });
 
-    expect(record!.label).toBe("Evidence check failed");
+    expect(record!.label).toBe("Proof capture failed");
     expect(record!.line).toContain("No change is confirmed without proof.");
     expect(record!.line).not.toContain("All quiet");
   });
@@ -386,7 +386,7 @@ describe("watchlists route render — zero-noise record", () => {
     expect(markup).not.toContain("All quiet: no competitor moves worth action");
   });
 
-  it("renders a failed evidence check as an honest record instead of quiet", async () => {
+  it("renders a failed proof capture as an honest record instead of quiet", async () => {
     await mockRouter({
       ...quietLoaderData(),
       recentProofCaptures: [proofCapture("failed")],
@@ -395,7 +395,7 @@ describe("watchlists route render — zero-noise record", () => {
     const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
-    expect(markup).toContain("Evidence check failed");
+    expect(markup).toContain("Proof capture failed");
     expect(markup).toContain("No change is confirmed without proof.");
     expect(markup).not.toContain("All quiet");
   });
