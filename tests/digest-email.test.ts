@@ -826,9 +826,9 @@ describe("zero-noise triage digest emails (2026-08-06)", () => {
 				watchlistsChecked: 4,
 				adsSeen: 128,
 				triage: triage("evidence_failed", {
-					label: "Evidence check failed",
+					label: "Proof capture failed",
 					explanation:
-						"An evidence check couldn't finish, so nothing is confirmed yet.",
+						"A proof capture couldn't finish, so nothing is confirmed yet.",
 					noActionLine: "No change is confirmed without proof.",
 					nextAction:
 						"We'll retry at the next scheduled check. If it persists, email support and we'll dig in.",
@@ -840,13 +840,13 @@ describe("zero-noise triage digest emails (2026-08-06)", () => {
 		expect(email.text).toContain("We couldn't finish some competitor checks.");
 		expect(email.html).toContain("We couldn&#039;t finish some competitor checks.");
 		expect(email.text).toContain(
-			"An evidence check couldn't finish, so nothing is confirmed yet.",
+			"A proof capture couldn't finish, so nothing is confirmed yet.",
 		);
 		expect(email.text).not.toContain("provider timed out");
 		expect(email.text).not.toContain("possible change was detected");
 		expect(email.text).toContain("No change is confirmed without proof.");
 		expect(email.text).toContain("We'll retry at the next scheduled check");
-		expect(email.text).toContain("Source: evidence check failed.");
+		expect(email.text).toContain("Source: proof capture failed.");
 		expect(email.html).not.toContain("All quiet");
 		expect(email.subject).not.toContain("All quiet");
 	});
@@ -860,10 +860,10 @@ describe("zero-noise triage digest emails (2026-08-06)", () => {
 				triage: triage("evidence_pending", {
 					label: "Evidence pending",
 					explanation:
-						"A possible change was detected, but its evidence check hasn't completed, so nothing is confirmed yet.",
+						"A possible change was detected, but its proof capture hasn't completed, so nothing is confirmed yet.",
 					noActionLine: "No change is confirmed until its evidence lands.",
 					nextAction:
-						"We're retrying the evidence check. Open watchlists for status.",
+						"We're retrying the proof capture. Open watchlists for status.",
 				}),
 			}),
 		);
@@ -1046,9 +1046,9 @@ describe("named owner, materiality reason, and next action (E2 2026-08-08)", () 
 					adsSeen: 128,
 					triage: {
 						status: "evidence_failed",
-						label: "Evidence check failed",
+						label: "Proof capture failed",
 						explanation:
-							"An evidence check couldn't finish, so nothing is confirmed yet.",
+							"A proof capture couldn't finish, so nothing is confirmed yet.",
 						checkedAt: "2026-06-08T04:00:00.000Z",
 						checksCompleted: 6,
 						suppressedChanges: 0,
@@ -1062,10 +1062,10 @@ describe("named owner, materiality reason, and next action (E2 2026-08-08)", () 
 		);
 
 		expect(email.html).toContain(
-			"An evidence check couldn&#039;t finish, so nothing is confirmed yet.",
+			"A proof capture couldn&#039;t finish, so nothing is confirmed yet.",
 		);
 		expect(email.text).toContain(
-			"Why this matters: An evidence check couldn't finish, so nothing is confirmed yet.",
+			"Why this matters: A proof capture couldn't finish, so nothing is confirmed yet.",
 		);
 		expect(email.text).toContain(
 			"Next action: We'll retry at the next scheduled check. If it persists, email support and we'll dig in.",
@@ -1793,9 +1793,9 @@ describe("authenticated briefs route accountability (E2 2026-08-08)", () => {
 				{
 					triage: {
 						status: "evidence_failed",
-						label: "Evidence check failed",
+						label: "Proof capture failed",
 						explanation:
-							"An evidence check couldn't finish, so nothing is confirmed yet.",
+							"A proof capture couldn't finish, so nothing is confirmed yet.",
 						sourceStatus: "evidence_failed",
 						checkedAt: null,
 						checksCompleted: 6,
@@ -1812,7 +1812,7 @@ describe("authenticated briefs route accountability (E2 2026-08-08)", () => {
 		);
 
 		expect(markup).toContain(
-			"An evidence check couldn&#x27;t finish, so nothing is confirmed yet.",
+			"A proof capture couldn&#x27;t finish, so nothing is confirmed yet.",
 		);
 		expect(markup).toContain("Priya");
 		expect(markup).toContain("We&#x27;ll retry at the next scheduled check.");

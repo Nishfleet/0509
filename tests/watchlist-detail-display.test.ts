@@ -171,7 +171,7 @@ describe("fact rail rows (brief §6.6)", () => {
     expect(byKey.get("Market")?.missingLabel).toBe("not set — scanned as first saved");
     expect(byKey.get("Watch age")?.value).toBeNull();
     expect(byKey.get("Last check")?.missingLabel).toBe("none yet");
-    expect(byKey.get("Evidence checks")?.missingLabel).toBe("none yet");
+    expect(byKey.get("Proof captures")?.missingLabel).toBe("none yet");
     expect(byKey.get("Changes on file")?.missingLabel).toBe("none yet");
     expect(byKey.get("Cadence")?.value).toBe("Paused — no checks run");
     expect(byKey.get("Tracked as")?.value).toBe("Competitor");

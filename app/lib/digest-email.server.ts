@@ -498,7 +498,7 @@ const TRIAGE_EMAIL_HEADLINES: Record<WatchPeriodTriageStatus, string> = {
 
 const TRIAGE_SOURCE_LABELS: Record<WatchPeriodTriageStatus, string> = {
   changed: "completed checks",
-  evidence_failed: "evidence check failed",
+  evidence_failed: "proof capture failed",
   evidence_pending: "evidence pending",
   routine_only: "completed checks",
   all_quiet: "completed checks",
