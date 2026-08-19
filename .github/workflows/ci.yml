@@ -97,6 +97,8 @@ jobs:
         run: ./scripts/deploy-window-lock.sh run -- npm run build
       - name: Test
         run: ./scripts/deploy-window-lock.sh run -- npm run test
+      - name: Test backlog-console refresh (hermetic)
+        run: bash automation/backlog-console/test_refresh.sh
       - name: Typecheck
         env:
           # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while
