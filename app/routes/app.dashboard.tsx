@@ -498,7 +498,7 @@ export async function action(args: ActionFunctionArgs) {
           current: result.current,
           message:
             result.limit <= 1
-              ? "Free includes 1 watchlist with a weekly check and weekly email brief. Upgrade for 3–6 hour checks and more competitors."
+              ? "Free includes 1 watchlist, 1 Collection, and a weekly proof-backed brief. Upgrade for 3–6 hour checks and more competitors."
               : "You've reached your competitor tracking limit — pause another watchlist first.",
         }),
         intent,
@@ -729,20 +729,30 @@ export default function AppDashboardRoute() {
       {proofUsage.warningLevel !== "ok" ? (
         <FeedbackStrip
           actions={
-            <Link className="f9-wk-lnk" to="/app/billing?source=evidence#top-ups">
-              Review proof capture packs <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+            <Link
+              className="f9-wk-lnk"
+              to={proofUsage.plan === "free"
+                ? "/app/billing?source=evidence#plans"
+                : "/app/billing?source=evidence#top-ups"}
+            >
+              {proofUsage.plan === "free" ? "Compare plans" : "Review check packs"}{" "}
+              <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           }
           label="Evidence usage"
           tone="bad"
         >
           {proofUsage.warningLevel === "exhausted"
-            ? "You've used all your evidence checks. "
+            ? proofUsage.plan === "free"
+              ? "You've used your free plan's proof-backed capture for this month. "
+              : "You've used all your evidence checks. "
             : "You've used over 80% of your evidence checks. "}
           {proofUsage.used} of {proofUsage.limit} checks used in the current billing period.
           {proofUsage.upgradeTarget
             ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
-            : " Add an overflow pack before the next busy campaign."}
+            : proofUsage.plan === "free"
+              ? " Move to Scout for more captures and 6-hour checks."
+              : " Add an overflow pack before the next busy campaign."}
         </FeedbackStrip>
       ) : null}
 
