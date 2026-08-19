@@ -161,6 +161,7 @@ export const SITEMAP_PATHS = [
   "/auth/signup",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
+  "/competitor-monitoring",
   "/help",
   "/docs",
   "/api/docs",
