@@ -16,10 +16,12 @@ name: Required verifier integrity
 # states, reviewer permissions, head commit date) is read through the GitHub
 # API in the base branch's context, so a candidate cannot shape the evidence
 # about itself. If a candidate changes a protected verifier definition
-# (ci.yml, secret-scan.yml, this workflow, or the gate's decision scripts), the
-# job FAILS unless the PR carries a current APPROVED review from a repository
-# administrator/maintainer other than the PR author. Any API failure fails
-# closed.
+# (ci.yml, secret-scan.yml, this workflow, the gate's decision scripts, or the
+# production deploy-authorization chain: deploy-production.yml,
+# finalize-production-soak.yml, scripts/ci-verify-production-candidate.sh,
+# scripts/ci-verify-provider-main-cas.sh), the job FAILS unless the PR carries
+# a current APPROVED review from a repository administrator/maintainer other
+# than the PR author. Any API failure fails closed.
 #
 # Hygiene contract (test_required_context_hygiene.py): the required job has NO
 # job-level `if:` (authorizer is a step), no `continue-on-error`, no trailing
@@ -53,7 +55,7 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
         run: |
           set -euo pipefail
-          test "$GITHUB_REPOSITORY" = "nish3451/0509"
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
           test "$GITHUB_EVENT_NAME" = "pull_request_target"
           test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
           # Self-hosted runners on pull_request_target may set GITHUB_REF to
@@ -115,7 +117,11 @@ jobs:
               ".github/workflows/secret-scan.yml",
               ".github/workflows/required-verifier-integrity.yml",
               ".github/scripts/required-verifier-integrity.sh",
-              ".github/scripts/test-required-verifier-integrity.sh"
+              ".github/scripts/test-required-verifier-integrity.sh",
+              ".github/workflows/deploy-production.yml",
+              ".github/workflows/finalize-production-soak.yml",
+              "scripts/ci-verify-production-candidate.sh",
+              "scripts/ci-verify-provider-main-cas.sh"
             ]' \
             '{author: $author, head_commit_date: $head_commit_date, files: $files,
               reviews: $reviews, permissions: $permissions, protected_files: $protected}' \
