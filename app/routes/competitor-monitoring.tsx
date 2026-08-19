@@ -1,9 +1,10 @@
-import { Form, Link } from "react-router";
-import type { LinksFunction, MetaFunction } from "react-router";
+import { Form, Link, useLoaderData } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
-import { demoProof } from "~/lib/demo-proof";
+import type { AppEnv } from "~/lib/env.server";
+import type { PublicProofBrief } from "~/lib/public-proof.server";
 import {
   canonicalLinks,
   faqPageJsonLd,
@@ -13,6 +14,45 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+
+const publicSearchTrialPath =
+  "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
+
+// Real-proof loader. Renders the featured competitor's real captures from the
+// discovery cache only (never a sample fixture and never a live scrape). When
+// no usable real cache exists the page renders the honest "no live proof yet"
+// state instead of inventing evidence.
+export async function loader({ context }: LoaderFunctionArgs) {
+  const { getEnv } = await import("~/lib/context.server");
+  const env: AppEnv = getEnv(context);
+
+  let proofBrief: PublicProofBrief | null = null;
+  try {
+    const { loadPublicProofBrief } = await import("~/lib/public-proof.server");
+    proofBrief = await loadPublicProofBrief(env);
+  } catch (error) {
+    // A cache-read hiccup degrades to the honest state, never a 500 and
+    // never a sample fixture.
+    console.warn(
+      "Competitor-monitoring proof brief load failed; rendering the honest state.",
+      { errorName: error instanceof Error ? error.name : typeof error },
+    );
+    proofBrief = null;
+  }
+
+  return { proofBrief };
+}
+
+function proofTimeLabel(iso: string | null | undefined): string {
+  const parsed = iso ? new Date(iso) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return "recently";
+  }
+  return parsed.toLocaleString("en", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 // Kept under ~155 characters so search results show the whole line instead of
 // truncating mid-sentence. Same claims as the homepage, scoped to the category.
@@ -136,6 +176,7 @@ export const categoryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
 ];
 
 export default function CompetitorMonitoringCategoryRoute() {
+  const { proofBrief } = useLoaderData<typeof loader>();
   const structuredFaq = faqPageJsonLd(categoryFaqEntries);
 
   return (
@@ -250,68 +291,132 @@ export default function CompetitorMonitoringCategoryRoute() {
 
       <section className="ld-proof" id="demo">
         <div className="ld-section-head">
-          <span className="ld-kicker">Sample proof</span>
-          <h2>What a proof-backed brief looks like.</h2>
+          <span className="ld-kicker">Proof brief</span>
+          <h2>
+            {proofBrief
+              ? "The morning brief — from a real watch"
+              : "See the brief before you sign up"}
+          </h2>
           <p>
-            The same sample brief the homepage shows, labeled sample. Saved watches attach real
-            screenshots, page text, and original links — no proof, no claim.
+            {proofBrief
+              ? `Real captures from the ${proofBrief.adLibraryCountry ? `${proofBrief.adLibraryCountry} Ad Library` : "Meta Ad Library"} for ${proofBrief.website}, checked ${proofBrief.checkedAgoLabel}. Every row links to the same public page you can open yourself.`
+              : "A brief groups one competitor's real captured changes — hooks, offers, CTAs, sources, and freshness — into one decision. Live proof appears here after the first scan; preview what it looks like with the search preview."}
           </p>
           <div className="ld-proof-actions">
-            <Link to="/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com">
-              Try the live search preview
-            </Link>
+            <Link to={publicSearchTrialPath}>Try the live search preview</Link>
             <a href="#faq">Category FAQ</a>
           </div>
         </div>
 
-        <div className="ld-caseboard" aria-label="Sample Five to Nine evidence trail">
-          <article className="ld-case-lead">
-            <span className="ld-kicker">{demoProof.competitor.market}</span>
-            <h3>{demoProof.competitor.name}</h3>
-            <p>{demoProof.summary}</p>
-          </article>
+        {proofBrief ? (
+          <div className="ld-caseboard" aria-label="Real Five to Nine evidence trail">
+            <article className="ld-case-lead">
+              <span className="ld-kicker">
+                {proofBrief.adLibraryCountry
+                  ? `${proofBrief.adLibraryCountry} Ad Library`
+                  : "Meta Ad Library"}
+              </span>
+              <h3>{proofBrief.competitorName}</h3>
+              <p>{proofBrief.summary}</p>
+            </article>
 
-          <article className="ld-case-card">
-            <span className="ld-kicker">Decision summary</span>
-            <h4>{demoProof.digestPreview.subject}</h4>
-            <p>{demoProof.digestPreview.whyItMatters}</p>
-            <dl>
-              <div>
-                <dt>Proof status</dt>
-                <dd>Not available in this sample</dd>
-              </div>
-              <div>
-                <dt>Source</dt>
-                <dd>Sample sources — landing-page snapshot + page text capture</dd>
-              </div>
-              <div>
-                <dt>Freshness</dt>
-                <dd>Sample captured at 05:09</dd>
-              </div>
-              <div>
-                <dt>Next action</dt>
-                <dd>{demoProof.digestPreview.recommendedMove}</dd>
-              </div>
-            </dl>
-          </article>
+            <article className="ld-case-card">
+              <span className="ld-kicker">Decision summary</span>
+              <h4>{proofBrief.decision.subject}</h4>
+              <p>{proofBrief.decision.whyItMatters}</p>
+              <dl>
+                <div>
+                  <dt>What changed</dt>
+                  <dd>{proofBrief.decision.whatChanged}</dd>
+                </div>
+                <div>
+                  <dt>Why it matters</dt>
+                  <dd>{proofBrief.decision.whyItMatters}</dd>
+                </div>
+                <div>
+                  <dt>Urgency</dt>
+                  <dd>{proofBrief.decision.priority}</dd>
+                </div>
+                <div>
+                  <dt>Proof status</dt>
+                  <dd>{proofBrief.decision.proofStatus}</dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd>{proofBrief.decision.source}</dd>
+                </div>
+                <div>
+                  <dt>Freshness</dt>
+                  <dd>{proofBrief.decision.freshness}</dd>
+                </div>
+                <div>
+                  <dt>Next action</dt>
+                  <dd>
+                    {proofBrief.proofTrail[0]?.sourceUrl ? (
+                      <a href={proofBrief.proofTrail[0].sourceUrl} target="_blank" rel="noreferrer">
+                        {proofBrief.decision.nextAction} →
+                      </a>
+                    ) : (
+                      proofBrief.decision.nextAction
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </article>
 
-          <article className="ld-case-card">
-            <span className="ld-kicker">Source trail</span>
-            <ul className="ld-trail">
-              {demoProof.proofTrail.map((item) => (
-                <li key={item.signal}>
-                  <strong>{item.signal}</strong>
-                  <p>{item.evidence}</p>
-                  <em>{item.source}</em>
-                </li>
-              ))}
-            </ul>
-            <p className="ld-trail-note" role="note">
-              This sample trail is illustrative — no live captures are attached to this preview.
-              Saved watches attach real screenshots, page text, and original links.
-            </p>
-          </article>
-        </div>
+            <article className="ld-case-card">
+              <span className="ld-kicker">Source trail</span>
+              <ul className="ld-trail">
+                {proofBrief.proofTrail.map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.signal}</strong>
+                    <p>{item.evidence}</p>
+                    <em>
+                      {item.sourceUrl ? (
+                        <a href={item.sourceUrl} target="_blank" rel="noreferrer">
+                          {item.source} — open the same page →
+                        </a>
+                      ) : (
+                        item.source
+                      )}
+                    </em>
+                    <small>Captured {proofTimeLabel(item.capturedAt)}</small>
+                  </li>
+                ))}
+              </ul>
+              <p className="ld-trail-note" role="note">
+                Every row above is a real capture. Open the source link and check it yourself —
+                saved watches attach screenshots, page text, and original links.
+              </p>
+            </article>
+
+            <article className="ld-case-card">
+              <span className="ld-kicker">Client-ready view</span>
+              <h4>Report preview</h4>
+              <ul className="ld-trail">
+                {proofBrief.reportRows.map((row) => (
+                  <li key={row}>{row}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        ) : (
+          <div className="ld-caseboard" aria-label="No live proof yet">
+            <article className="ld-case-card ld-case-empty">
+              <span className="ld-kicker">No live proof right now</span>
+              <h4>We haven’t captured this competitor recently.</h4>
+              <p>
+                The proof brief renders real captures from the public Meta Ad Library. Run the
+                search preview to see current ads and sources, or create an account to start a
+                scheduled watch.
+              </p>
+              <div className="ld-proof-actions">
+                <Link to={publicSearchTrialPath}>Run the search preview</Link>
+                <Link to="/auth/signup">Create an account</Link>
+              </div>
+            </article>
+          </div>
+        )}
       </section>
 
       <section className="ld-quiet" id="sources">
