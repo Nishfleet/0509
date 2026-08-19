@@ -71,16 +71,18 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
     expect(PUBLIC_MARKDOWN).toContain("Starter is the recommended plan");
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and sample brief");
-    expect(PUBLIC_MARKDOWN).toContain("6-hour scans, weekly Digest, and 50 checks/month");
-    expect(PUBLIC_MARKDOWN).toContain("3-hour scans, daily and weekly Digests, email Notifications, exports, and 250 checks/month");
+    expect(PUBLIC_MARKDOWN).toContain("6-hour scans, weekly Digest, and 50 proof captures/month");
+    expect(PUBLIC_MARKDOWN).toContain("3-hour scans, daily and weekly Digests, email Notifications, exports, and 250 proof captures/month");
     expect(PUBLIC_MARKDOWN).toContain(
       "top 25 competitors checked every 3 hours and the rest every 6 hours",
     );
     expect(LLMS_TEXT).toContain("top 25 competitors every 3 hours (rest every 6 hours)");
-    expect(PUBLIC_MARKDOWN).toContain("Check packs add purchased checks that never expire");
-    expect(PUBLIC_MARKDOWN).toContain("Included checks reset every month and do not roll over");
+    expect(PUBLIC_MARKDOWN).toContain("Proof capture packs add purchased proof captures that never expire");
+    expect(PUBLIC_MARKDOWN).toContain("Included proof captures reset every month and do not roll over");
     expect(PUBLIC_MARKDOWN).toContain("Scheduled scans are included with your plan");
-    expect(PUBLIC_MARKDOWN).toContain("saved proof-backed captures use checks");
+    expect(PUBLIC_MARKDOWN).toContain("each saved proof-backed capture counts toward your included or purchased proof captures");
+    expect(PUBLIC_MARKDOWN).toContain("make monitoring unlimited");
+    expect(PUBLIC_MARKDOWN).toContain("80% proof-capture usage");
     expect(PUBLIC_MARKDOWN).not.toContain("30-day");
     expect(PUBLIC_MARKDOWN).not.toContain("30 day");
     expect(PUBLIC_MARKDOWN).not.toContain("Starter includes 10 watchlists, 25 collections, weekly digest delivery");
@@ -98,9 +100,9 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("user-supplied metric context");
     expect(LLMS_TEXT).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
     expect(LLMS_TEXT).toContain("setup status plus collection, watchlist, and digest exports");
-    expect(LLMS_TEXT).toContain("Purchased checks never expire");
-    expect(LLMS_TEXT).toContain("included checks reset monthly without rollover");
-    expect(LLMS_TEXT).toContain("saved proof-backed captures use checks");
+    expect(LLMS_TEXT).toContain("Purchased proof captures never expire");
+    expect(LLMS_TEXT).toContain("included proof captures reset monthly without rollover");
+    expect(LLMS_TEXT).toContain("each saved proof-backed capture counts toward the cap");
     expect(LLMS_TEXT).not.toContain("usage bundles add 30-day");
     expect(LLMS_TEXT).not.toContain("Starter includes weekly digest delivery");
     expect(LLMS_TEXT).toContain("approved account actions");

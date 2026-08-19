@@ -208,6 +208,7 @@ describe("sendFreeActivationResultEmail", () => {
           creativeImageUrl: null,
         },
       ],
+      proofCaptureSucceeded: true,
     });
     const second = await sendFreeActivationResultEmail(env as never, {
       userId: "user-1",
@@ -217,6 +218,7 @@ describe("sendFreeActivationResultEmail", () => {
       competitorName: "Glossier",
       adsFound: 12,
       topAds: [],
+      proofCaptureSucceeded: false,
     });
 
     expect(first.sent).toBe(true);
@@ -234,6 +236,8 @@ describe("sendFreeActivationResultEmail", () => {
     expect(payload.subject).toContain("Glossier");
     expect(payload.html).toContain("Soft skin kit");
     expect(payload.html).toContain("https://cdn.example.com/ad.jpg");
+    expect(payload.html).toContain("proof-backed brief");
+    expect(payload.html).not.toContain("no evidence check was used");
     expect(payload.html).toMatch(/Free keeps watching this competitor with a weekly check/i);
     expect(payload.html).toMatch(/Paid plans check every 3–6 hours/i);
     expect(payload.html).toContain("/app/billing");
@@ -266,6 +270,7 @@ describe("sendFreeActivationResultEmail", () => {
       competitorName: "Glossier",
       adsFound: 1,
       topAds: [],
+      proofCaptureSucceeded: false,
     });
 
     expect(result).toEqual({ sent: true, reason: "sent" });
@@ -309,6 +314,7 @@ describe("sendFreeActivationResultEmail", () => {
       competitorName: "Nike",
       adsFound: 3,
       topAds: [],
+      proofCaptureSucceeded: false,
     });
 
     expect(result).toEqual({ sent: false, reason: "unsubscribed" });
@@ -346,6 +352,7 @@ describe("sendFreeActivationResultEmail", () => {
       competitorName: "Nike",
       adsFound: 3,
       topAds: [],
+      proofCaptureSucceeded: false,
     });
 
     expect(result).toEqual({ sent: false, reason: "target_not_ready" });

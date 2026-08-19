@@ -1,3 +1,5 @@
+import type { ScheduledScanCadence } from "~/lib/plan-entitlements";
+import { classifyDigestItemSource } from "~/lib/proof-classification";
 import { safeTimeZone } from "~/lib/safe-timezone";
 import type { AdRecord, AnalysisFieldInput, WatchEventRecord, WatchEventType } from "~/lib/types";
 
@@ -177,6 +179,249 @@ export function digestNextAction(input: DigestPeriodTruthInput): string {
   }
 
   return DIGEST_NEXT_ACTION_UNAVAILABLE;
+}
+
+/*
+ * E3 increment (2026-08-11): the brief as a retention loop. Every
+ * customer-facing brief/digest must also carry how confident its claims are
+ * and when they stop being fresh — the reader knows what to trust and when
+ * the loop re-checks. Same discipline as E2: derived from filed records and
+ * the plan's scheduled scan cadence, never invented, with an explicit
+ * failure state when nothing can be stated.
+ */
+
+export type DigestConfidenceLevel = "high" | "medium" | "low" | "none";
+
+/** Explicit failure state: the period's confidence cannot be judged. */
+export const DIGEST_CONFIDENCE_UNAVAILABLE =
+  "No confidence record for this period — treat every claim in this brief as unverified.";
+
+/** Explicit failure state: no next scheduled check can be stated. */
+export const DIGEST_EXPIRY_UNAVAILABLE =
+  "Freshness unavailable — no next check is scheduled on file for this brief.";
+
+/**
+ * Confidence level for a digest period's claims, derived from the persisted
+ * triage status and the filed items' own proof classification. The strongest
+ * honest statement wins: failed/pending evidence is low, unverified
+ * check-spotted changes are medium, fully verified changes are high, and a
+ * completed check with no movement is high for what was checked. A period
+ * with no record at all is "none" — {@link DIGEST_CONFIDENCE_UNAVAILABLE}
+ * renders as its explicit failure state.
+ */
+export function digestConfidenceLevel(
+  input: DigestPeriodTruthInput,
+): DigestConfidenceLevel {
+  const triage = input.triage ?? null;
+  if (triage?.status === "not_run") return "none";
+  if (
+    triage?.status === "evidence_failed" ||
+    triage?.status === "evidence_pending"
+  ) {
+    return "low";
+  }
+  if (triage?.status === "all_quiet" || triage?.status === "routine_only") {
+    return "high";
+  }
+
+  const items = input.items ?? [];
+  if (items.length > 0) {
+    const problems = countUnverifiedDigestItems(items);
+    if (problems > 0) return "low";
+    if (everyDigestItemVerified(items)) return "high";
+    return "medium";
+  }
+
+  const heartbeat = input.heartbeat ?? null;
+  if (heartbeat && (heartbeat.runs ?? 0) > 0) return "high";
+  return "none";
+}
+
+/**
+ * Non-empty, human-readable confidence statement for a digest period. Shares
+ * the triage and item classification with {@link digestConfidenceLevel} so
+ * the email and the app never disagree about what a brief claims.
+ */
+export function digestConfidenceLabel(input: DigestPeriodTruthInput): string {
+  const triage = input.triage ?? null;
+  if (triage?.status === "not_run") {
+    return "Not rated — no checks completed in this period, so nothing in this brief is confirmed.";
+  }
+  if (triage?.status === "evidence_failed") {
+    return "Low confidence — an evidence check failed, so no change is confirmed this period.";
+  }
+  if (triage?.status === "evidence_pending") {
+    return "Low confidence — detected changes are still waiting on their evidence check.";
+  }
+  if (triage?.status === "all_quiet" || triage?.status === "routine_only") {
+    return "High confidence — checks completed across the sources that ran.";
+  }
+
+  const items = input.items ?? [];
+  if (items.length > 0) {
+    const problems = countUnverifiedDigestItems(items);
+    if (problems > 0) {
+      return `Low confidence — ${problems} of ${items.length} filed change${
+        items.length === 1 ? "" : "s"
+      } ${problems === 1 ? "is" : "are"} not backed by verified evidence.`;
+    }
+    if (everyDigestItemVerified(items)) {
+      return "High confidence — every filed change is verified against stored evidence.";
+    }
+    return "Medium confidence — changes are check-spotted but not yet verified against stored evidence.";
+  }
+
+  const heartbeat = input.heartbeat ?? null;
+  if (heartbeat && (heartbeat.runs ?? 0) > 0) {
+    return "High confidence — completed checks reviewed the sources that ran.";
+  }
+
+  return DIGEST_CONFIDENCE_UNAVAILABLE;
+}
+
+function countUnverifiedDigestItems(
+  items: ReadonlyArray<DigestPeriodTruthItem>,
+): number {
+  let problems = 0;
+  for (const item of items) {
+    const status = classifyDigestItemSource({
+      eventType: item.eventType ?? undefined,
+      metadata: item.metadata ?? undefined,
+    }).status;
+    if (
+      status === "proof_failed" ||
+      status === "proof_pending" ||
+      status === "needs_review" ||
+      status === "unknown"
+    ) {
+      problems += 1;
+    }
+  }
+  return problems;
+}
+
+function everyDigestItemVerified(
+  items: ReadonlyArray<DigestPeriodTruthItem>,
+): boolean {
+  for (const item of items) {
+    const status = classifyDigestItemSource({
+      eventType: item.eventType ?? undefined,
+      metadata: item.metadata ?? undefined,
+    }).status;
+    if (status !== "verified_proof") return false;
+  }
+  return true;
+}
+
+/*
+ * Weekly-cadence plans ride exactly one tick of the regular 3-hour cron:
+ * Monday 03:00 UTC — two hours before the Monday 05:00 UTC weekly brief cron,
+ * so the brief always includes that morning's fresh scan. Mirrors
+ * `plan-entitlements`' WEEKLY_SCAN_UTC_* constants; kept here so the
+ * freshness vocabulary stays self-contained and isomorphic.
+ */
+const WEEKLY_SCAN_UTC_DAY = 1;
+const WEEKLY_SCAN_UTC_HOUR = 3;
+
+/**
+ * Non-empty, human-readable freshness statement for a digest period: the
+ * brief's claims stay true only until the next scheduled check of the
+ * workspace's scan cadence, which is when the loop re-files. A weekly brief
+ * names the next Monday check; faster cadences name the next aligned scan
+ * slot. When no cadence or anchor is on file, the explicit failure state
+ * renders instead of a made-up expiry.
+ */
+export function digestFreshUntilLabel(input: {
+  /** The brief's cadence; used only when no plan scan cadence is known. */
+  cadence?: DigestCadence | null;
+  /** The workspace's scheduled scan cadence (plan entitlement). */
+  scanCadence?: ScheduledScanCadence | null;
+  /** Anchor: the last completed check, else the period end. Defaults to now. */
+  after?: string | number | Date | null;
+  timeZone?: string | null;
+}): string {
+  const scanCadence =
+    input.scanCadence ?? (input.cadence === "daily" ? "every_3h" : "weekly");
+  const next = nextScheduledCheckAfter(scanCadence, input.after);
+  if (!next) return DIGEST_EXPIRY_UNAVAILABLE;
+  const when = formatCheckTime(next, input.timeZone);
+  const checkNoun = scanCadence === "weekly" ? "weekly check" : "check";
+  return `Fresh until the next ${checkNoun}, ${when}.`;
+}
+
+function nextScheduledCheckAfter(
+  scanCadence: ScheduledScanCadence,
+  after: string | number | Date | null | undefined,
+): Date | null {
+  if (scanCadence === "none") return null;
+  const anchor = new Date(after ?? Date.now());
+  if (Number.isNaN(anchor.getTime())) return null;
+  if (scanCadence === "weekly") {
+    return nextUtcDayHourAfter(anchor, WEEKLY_SCAN_UTC_DAY, WEEKLY_SCAN_UTC_HOUR);
+  }
+  const stepHours = scanCadence === "every_6h" ? 6 : 3;
+  return nextUtcHourSlotAfter(anchor, stepHours);
+}
+
+/** Next occurrence of a fixed UTC day+hour strictly after the anchor. */
+function nextUtcDayHourAfter(anchor: Date, utcDay: number, utcHour: number): Date {
+  const utc = new Date(
+    Date.UTC(
+      anchor.getUTCFullYear(),
+      anchor.getUTCMonth(),
+      anchor.getUTCDate(),
+      anchor.getUTCHours(),
+      anchor.getUTCMinutes(),
+      anchor.getUTCSeconds(),
+      anchor.getUTCMilliseconds(),
+    ),
+  );
+  const deltaDays = (utcDay - utc.getUTCDay() + 7) % 7;
+  const candidate = new Date(utc);
+  candidate.setUTCDate(candidate.getUTCDate() + deltaDays);
+  candidate.setUTCHours(utcHour, 0, 0, 0);
+  if (candidate.getTime() <= utc.getTime()) {
+    candidate.setUTCDate(candidate.getUTCDate() + 7);
+  }
+  return candidate;
+}
+
+/** Next UTC hour slot aligned to a step (3h/6h) strictly after the anchor. */
+function nextUtcHourSlotAfter(anchor: Date, stepHours: number): Date {
+  const utc = new Date(
+    Date.UTC(
+      anchor.getUTCFullYear(),
+      anchor.getUTCMonth(),
+      anchor.getUTCDate(),
+      anchor.getUTCHours(),
+      anchor.getUTCMinutes(),
+      anchor.getUTCSeconds(),
+      anchor.getUTCMilliseconds(),
+    ),
+  );
+  const next = new Date(utc);
+  next.setUTCHours(
+    next.getUTCHours() + (stepHours - (next.getUTCHours() % stepHours)),
+    0,
+    0,
+    0,
+  );
+  if (next.getTime() <= utc.getTime()) {
+    next.setUTCHours(next.getUTCHours() + stepHours, 0, 0, 0);
+  }
+  return next;
+}
+
+function formatCheckTime(date: Date, timeZone?: string | null): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: safeTimeZone(timeZone),
+  }).format(date);
 }
 
 type DigestPeriodEventClass =
