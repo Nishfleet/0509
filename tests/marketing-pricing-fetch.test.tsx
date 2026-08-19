@@ -13,7 +13,20 @@ import { pricingPlans, usageBundles } from "~/lib/pricing";
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 
-const loaderData = {
+type MockLoaderData = {
+  pricingPreview: {
+    available: boolean;
+    prices?: Record<
+      string,
+      Partial<Record<"monthly" | "yearly", { display: string; amount: number; currency: string }>>
+    >;
+    annualValidation?: Record<string, { valid: boolean; reason: string }>;
+    usageBundles?: Record<string, { display: string; amount: number; currency: string }>;
+  };
+  commercialLaunch: { scoutSaleOpen: boolean; starterSaleOpen: boolean; agencySaleOpen: boolean };
+};
+
+const loaderData: MockLoaderData = {
   pricingPreview: { available: false },
   commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: false },
 };
@@ -141,6 +154,8 @@ describe("marketing pricing preview fetch timing", () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     vi.resetModules();
+    // The loader fixture is shared across tests in this file.
+    loaderData.pricingPreview = { available: false };
     if (mounted) {
       await act(async () => mounted!.root.unmount());
       mounted.container.remove();
@@ -183,6 +198,48 @@ describe("marketing pricing preview fetch timing", () => {
       observer.trigger(true);
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders SSR-published prices immediately without fetching the preview", async () => {
+    await mockMarketingDependencies({
+      session: null,
+      pricingPlans: pricingPlans(),
+      usageBundles: usageBundles(),
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+    vi.stubGlobal("fetch", fetchMock);
+    installFakeIntersectionObserver();
+    // The loader now publishes the Dodo preview server-side (bounded); a
+    // hydrated page with those prices must never re-fetch the preview client
+    // side, and the real price renders instead of the checkout-localized
+    // fallback.
+    loaderData.pricingPreview = {
+      available: true,
+      prices: {
+        scout: {
+          monthly: { display: "$19", amount: 1900, currency: "USD" },
+        },
+        starter: {
+          monthly: { display: "$99", amount: 9900, currency: "USD" },
+        },
+        agency: {
+          monthly: { display: "$199", amount: 19900, currency: "USD" },
+        },
+      },
+      annualValidation: {},
+      usageBundles: {
+        proof_500: { display: "$25", amount: 2500, currency: "USD" },
+        proof_2000: { display: "$80", amount: 8000, currency: "USD" },
+        proof_7500: { display: "$240", amount: 24000, currency: "USD" },
+      },
+    };
+
+    mounted = await mountMarketing();
+    expect(mounted.container.textContent).toContain("$19");
+    expect(mounted.container.textContent).toContain("$99");
+    expect(mounted.container.textContent).toContain("$199");
+    expect(mounted.container.textContent).not.toContain("Localized at checkout");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("renders the fetched prices into the plan cards after the section becomes visible", async () => {

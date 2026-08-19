@@ -245,7 +245,7 @@ export default {
 			),
 		);
       ctx.waitUntil(
-        observe("discovery_warmup", runScheduledDiscoveryWarmup(env)).then(
+        observe("discovery_warmup", runScheduledDiscoveryWarmup(env, ctx)).then(
           undefined,
           (error) => reportScheduledTaskFailure(env, "discovery_warmup", error),
         ),
@@ -342,6 +342,10 @@ export default {
         digestLookbackDays: scheduledTask.digestLookbackDays,
         cron: controller.cron,
         scheduledTime: controller.scheduledTime,
+        // The scheduled handler's real ExecutionContext: slow telemetry row
+        // writes are registered with waitUntil (background completion, never
+        // request latency) down through scans and proof captures.
+        executionContext: ctx,
       })).then(
         async (result) => {
           console.log("scheduled monitoring completed", {

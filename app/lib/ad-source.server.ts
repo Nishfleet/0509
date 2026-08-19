@@ -7,8 +7,17 @@ import {
 } from "~/lib/data.server";
 import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
 import {
+  mapDiscoveryFailureOutcome,
+  recordBrowserJobTelemetry,
+  sha256Hex,
+  type BrowserJobPlanTier,
+  type BrowserJobSource,
+} from "~/lib/browser-job-telemetry.server";
+import {
   buildDiscoveryCacheKey,
+  buildTelemetryCorrelationKey,
   DISCOVERY_ADVERTISER_FILTER_EPOCH,
+  normalizeCursorForTelemetry,
   toServableDiscoveryPayload,
   isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
@@ -53,6 +62,13 @@ export interface SearchAdsViaSourceOptions {
    * Callers without a request context (tests, scheduled handlers) omit it.
    */
   executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
+  /**
+   * Attribution context recorded in `browser_job_telemetry` (optional).
+   * Plan tier applies when the caller knows the actor's plan family;
+   * public/anonymous search leaves it null.
+   */
+  planTier?: BrowserJobPlanTier | null;
+  telemetrySource?: BrowserJobSource;
 }
 
 /**
@@ -505,6 +521,69 @@ export async function searchAdsViaSourceResolver(
   const customerFallbackCacheKey =
     provider === "meta_library_browser" ? customerScopedCacheKey : null;
 
+  // Attribution telemetry context (browser_job_telemetry, migration 0075).
+  // One random job_id per top-level request, passed through every provider
+  // leg (browser chain, customer Meta API fallback, cache serves). The
+  // idempotency key is a SHA-256 of the complete canonical correlation input
+  // (provider + query fingerprint + country + paging cursor, cursor bounded
+  // first — see buildTelemetryCorrelationKey), so no raw cursor/query
+  // material ever reaches the table (the writer also rejects unbounded keys).
+  const telemetrySource =
+    options.telemetrySource ??
+    (routeContext === "public_search" ? "manual" : "scheduled");
+  const telemetryCorrelationKey = await buildTelemetryCorrelationKey({
+    provider,
+    fingerprint: fingerprintSavedQuery(query),
+    country: query.filters.country || "all",
+    cursor,
+    cacheKeyOverride: options.cacheKeyOverride ?? null,
+  });
+  const telemetryContext = {
+    jobId: crypto.randomUUID(),
+    idempotencyKey: await sha256Hex(telemetryCorrelationKey),
+    routeContext,
+    planTier: options.planTier ?? null,
+    source: telemetrySource,
+  };
+  const resolverStartedAt = new Date().toISOString();
+  // Central attempt counter: browser legs increment it via
+  // searchMetaLibraryByBrowser's out-param; later legs (Meta API fallback,
+  // post-failure cache serves) continue from where the chain left off.
+  const telemetryAttempts = { used: 0 };
+
+  // Cache-only serves (no browser leg ran in this request) are attributed to
+  // the `cache` provider. Leg failures keep their own rows, so serves that
+  // follow a failed live attempt are NOT re-recorded here (no double count);
+  // their attempt number continues the job chain.
+  const recordCacheServe = (
+    entry: NonNullable<Awaited<ReturnType<typeof getDiscoveryCacheEntry>>>,
+    cacheStatus: "hit" | "stale",
+    outcome: "succeeded" | "degraded",
+    resultCount: number,
+  ) => {
+    telemetryAttempts.used += 1;
+    return recordBrowserJobTelemetry(
+      effectiveEnv,
+      {
+        ...telemetryContext,
+        jobKind: "meta_discovery",
+        actualProvider: "cache",
+        attempt: telemetryAttempts.used,
+        startedAt: resolverStartedAt,
+        endedAt: new Date().toISOString(),
+        durationMs: Math.max(0, Date.now() - Date.parse(resolverStartedAt)),
+        cacheStatus,
+        cacheAgeMs: Math.max(0, Date.now() - Date.parse(entry.fetchedAt)),
+        outcome,
+        resultCount,
+      },
+      // When the caller has a real request ExecutionContext, the row write is
+      // registered with waitUntil so a slow D1 write still lands after the
+      // response (the bounded race still caps how long we wait).
+      { executionContext: options.executionContext ?? null },
+    );
+  };
+
   if (fixtureProvider) {
     const fixtureResult = await (
       await import("~/lib/e2e-search.server")
@@ -549,6 +628,7 @@ export async function searchAdsViaSourceResolver(
       : null;
   const freshCacheHit = !forceLive ? unexpiredCache : forceLiveSharedHit;
   if (freshCacheHit) {
+    await recordCacheServe(freshCacheHit, "hit", "succeeded", freshCacheHit.payload.ads.length);
     return {
       ...toServableDiscoveryPayload(freshCacheHit.payload),
       source: provider,
@@ -563,6 +643,7 @@ export async function searchAdsViaSourceResolver(
 
   if (!forceLive && providerState && shouldUseProviderCooldown(providerState)) {
     if (usableCached) {
+      await recordCacheServe(usableCached, "stale", "degraded", usableCached.payload.ads.length);
       return {
         ...toServableDiscoveryPayload(usableCached.payload),
         source: provider,
@@ -581,6 +662,11 @@ export async function searchAdsViaSourceResolver(
         browserSummary: providerState.summary,
         routeContext,
         customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+        planTier: options.planTier ?? null,
+        telemetrySource,
+        jobId: telemetryContext.jobId,
+        telemetryAttempts,
+        executionContext: options.executionContext ?? null,
       });
       if (apiFallback) {
         return apiFallback;
@@ -616,12 +702,18 @@ export async function searchAdsViaSourceResolver(
       browserSummary: providerState.summary,
       routeContext,
       customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+      planTier: options.planTier ?? null,
+      telemetrySource,
+      jobId: telemetryContext.jobId,
+      telemetryAttempts,
+      executionContext: options.executionContext ?? null,
     });
     if (apiFallback) {
       return apiFallback;
     }
 
     if (usableCached) {
+      await recordCacheServe(usableCached, "stale", "degraded", usableCached.payload.ads.length);
       return {
         ...toServableDiscoveryPayload(usableCached.payload),
         source: provider,
@@ -702,6 +794,10 @@ export async function searchAdsViaSourceResolver(
         forceLive && provider === "meta_library_browser" && options.customerMetaAdLibraryToken?.trim(),
       ),
       stopOnProviderCooldownAfterMs: leaseFreshAfterMs,
+      // Cache serves returned by the lease waiter belong to THIS job: they
+      // are recorded through the resolver's cache telemetry helper and
+      // consume the next value from the same shared attempt allocator.
+      recordCacheServe,
     });
 
     if (settledResponse) {
@@ -715,6 +811,11 @@ export async function searchAdsViaSourceResolver(
           "Commercial discovery is already warming this query; using customer Meta API fallback after waiting.",
         routeContext,
         customerMetaAdLibraryToken: options.customerMetaAdLibraryToken,
+        planTier: options.planTier ?? null,
+        telemetrySource,
+        jobId: telemetryContext.jobId,
+        telemetryAttempts,
+        executionContext: options.executionContext ?? null,
       });
       if (apiFallback) {
         if (effectiveEnv.DB && customerFallbackCacheKey) {
@@ -762,32 +863,47 @@ export async function searchAdsViaSourceResolver(
           discoveryLease?.holderId ?? null,
         )
       : null;
+    // Provider-only timing for the Meta API path: the leg start is captured
+    // immediately before the actual provider call — after cursor hashing,
+    // provider-state/cache/D1 lookups, and lease work — so the recorded
+    // duration never includes pre-provider work. Set right before the call;
+    // read in both the success and failure telemetry rows below.
+    let metaApiProviderStartedAtMs: number | null = null;
     try {
       const result = await runWithSharedDiscoveryRequest(cacheKey, async () => {
         const startedAt = Date.now();
-        const liveResultRaw =
-          provider === "meta_library_browser"
-            ? await searchMetaLibraryByBrowser(effectiveEnv, query, {
-                // Deep scroll only for interactive public search. Watchlist and
-                // scheduled warmup keep the shallow default so DEFAULT_PAGE_BUDGET
-                // remains the scan-cost guard.
-                mode: routeContext === "public_search" ? "interactive" : "shallow",
-              })
-            : normalizeSearchResponse(
-                await searchMetaApiAdsWithInteractiveDepth(
-                  {
-                    ...effectiveEnv,
-                    META_AD_LIBRARY_TOKEN: metaApiToken ?? effectiveEnv.META_AD_LIBRARY_TOKEN,
-                  },
-                  query,
-                  cursor,
-                  {
-                    allowDemoFallback: false,
-                    interactive: routeContext === "public_search" && !cursor,
-                  },
-                ),
-                provider,
-              );
+        let liveResultRaw: SearchResponse;
+        if (provider === "meta_library_browser") {
+          liveResultRaw = await searchMetaLibraryByBrowser(effectiveEnv, query, {
+            // Deep scroll only for interactive public search. Watchlist and
+            // scheduled warmup keep the shallow default so DEFAULT_PAGE_BUDGET
+            // remains the scan-cost guard.
+            mode: routeContext === "public_search" ? "interactive" : "shallow",
+            routeContext,
+            planTier: options.planTier ?? null,
+            source: telemetrySource,
+            jobId: telemetryContext.jobId,
+            telemetryAttempts,
+            executionContext: options.executionContext ?? null,
+          });
+        } else {
+          metaApiProviderStartedAtMs = Date.now();
+          liveResultRaw = normalizeSearchResponse(
+            await searchMetaApiAdsWithInteractiveDepth(
+              {
+                ...effectiveEnv,
+                META_AD_LIBRARY_TOKEN: metaApiToken ?? effectiveEnv.META_AD_LIBRARY_TOKEN,
+              },
+              query,
+              cursor,
+              {
+                allowDemoFallback: false,
+                interactive: routeContext === "public_search" && !cursor,
+              },
+            ),
+            provider,
+          );
+        }
         // Browser scrape only encodes country/query in the Ad Library URL — apply
         // platform/creative/status filters client-side so exposed UI filters work.
         // A usable scrape narrowed to zero ads by those filters is an honest
@@ -813,6 +929,38 @@ export async function searchAdsViaSourceResolver(
         const browserMsUsed = Date.now() - startedAt;
         const timestamp = new Date().toISOString();
         const partial = liveResult.discoveryPartial === true;
+
+        // The Meta API path never reaches a browser leg, so its attribution
+        // row is recorded here (the browser legs record their own rows).
+        if (provider === "meta_api") {
+          telemetryAttempts.used += 1;
+          await recordBrowserJobTelemetry(
+            effectiveEnv,
+            {
+              ...telemetryContext,
+              jobKind: "meta_discovery",
+              actualProvider: "customer_meta_api",
+              attempt: telemetryAttempts.used,
+              // Provider-only window: started immediately before the actual
+              // Meta API provider call (see `metaApiProviderStartedAtMs`).
+              startedAt:
+                metaApiProviderStartedAtMs != null
+                  ? new Date(metaApiProviderStartedAtMs).toISOString()
+                  : resolverStartedAt,
+              endedAt: timestamp,
+              durationMs:
+                metaApiProviderStartedAtMs != null
+                  ? Math.max(0, Date.now() - metaApiProviderStartedAtMs)
+                  : Math.max(0, Date.now() - Date.parse(resolverStartedAt)),
+              outcome:
+                partial ? "degraded"
+                : liveResult.ads.length === 0 ? "empty"
+                : "succeeded",
+              resultCount: liveResult.ads.length,
+            },
+            { executionContext: options.executionContext ?? null },
+          );
+        }
 
         if (effectiveEnv.DB) {
           if (!partial) {
@@ -901,6 +1049,34 @@ export async function searchAdsViaSourceResolver(
         provider,
       });
 
+      // The Meta API path has no browser leg rows; record its failure here.
+      if (provider === "meta_api") {
+        telemetryAttempts.used += 1;
+        await recordBrowserJobTelemetry(
+          effectiveEnv,
+          {
+            ...telemetryContext,
+            jobKind: "meta_discovery",
+            actualProvider: "customer_meta_api",
+            attempt: telemetryAttempts.used,
+            // Provider-only window: started immediately before the actual
+            // Meta API provider call (see `metaApiProviderStartedAtMs`).
+            startedAt:
+              metaApiProviderStartedAtMs != null
+                ? new Date(metaApiProviderStartedAtMs).toISOString()
+                : resolverStartedAt,
+            endedAt: timestamp,
+            durationMs:
+              metaApiProviderStartedAtMs != null
+                ? Math.max(0, Date.now() - metaApiProviderStartedAtMs)
+                : Math.max(0, Date.now() - Date.parse(resolverStartedAt)),
+            outcome: mapDiscoveryFailureOutcome(failureClass),
+            resultCount: null,
+          },
+          { executionContext: options.executionContext ?? null },
+        );
+      }
+
       if (effectiveEnv.DB) {
         await createDiscoveryFetchLog(effectiveEnv, {
           provider,
@@ -941,6 +1117,11 @@ export async function searchAdsViaSourceResolver(
           browserSummary: summary,
           routeContext,
           customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+          planTier: options.planTier ?? null,
+          telemetrySource,
+          jobId: telemetryContext.jobId,
+          telemetryAttempts,
+          executionContext: options.executionContext ?? null,
         });
         if (apiFallback) {
           if (forceLive && effectiveEnv.DB) {
@@ -957,6 +1138,10 @@ export async function searchAdsViaSourceResolver(
       }
 
       if (!forceLive && usableCached) {
+        // Cache serve after the failed live chain: attributed to the same job
+        // and continuing the shared attempt allocator (the browser/API legs
+        // already consumed their attempt numbers above).
+        await recordCacheServe(usableCached, "stale", "degraded", usableCached.payload.ads.length);
         return {
           ...toServableDiscoveryPayload(usableCached.payload),
           source: provider,
@@ -1012,7 +1197,10 @@ export async function searchAdsViaSourceResolver(
       // Expired-but-usable entry: paint the older results immediately (labeled
       // cache_only) instead of leaving the visitor on a blank page, and keep
       // the warming flag so the client poll swaps in the finished capture when
-      // the background run lands instead of stranding them on old data.
+      // the background run lands instead of stranding them on old data. The
+      // serve is attributed to this job through the cache telemetry helper
+      // (the background run shares the same job id and attempt allocator).
+      await recordCacheServe(usableCached, "stale", "degraded", usableCached.payload.ads.length);
       return {
         ...toServableDiscoveryPayload(usableCached.payload),
         source: provider,
@@ -1053,6 +1241,23 @@ async function tryMetaApiFallback(
     browserSummary: string | null | undefined;
     routeContext: DiscoveryRouteContext;
     customerMetaAdLibraryToken?: string | null;
+    planTier?: BrowserJobPlanTier | null;
+    telemetrySource?: BrowserJobSource;
+    /**
+     * Top-level job correlation id from the resolver. REQUIRED: this
+     * fallback is a leg of the same job and must never mint its own id.
+     */
+    jobId: string;
+    /**
+     * Central attempt counter from the resolver. REQUIRED: the fallback
+     * continues from the browser chain; it must never restart at attempt 1.
+     */
+    telemetryAttempts: { used: number };
+    /**
+     * Request ExecutionContext when the caller has one; the row write is
+     * registered with waitUntil for background completion.
+     */
+    executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
   },
 ): Promise<SearchResponse | null> {
   const metaApiToken = resolveCustomerOwnedMetaToken(env, {
@@ -1069,6 +1274,13 @@ async function tryMetaApiFallback(
   const hasCustomerMetaToken = Boolean(input.customerMetaAdLibraryToken?.trim());
   const queryFingerprint = fingerprintSavedQuery(query);
   const country = query.filters.country || "all";
+  // The idempotency key is a SHA-256 of the canonical correlation input
+  // (meta_api + query fingerprint + country + paging cursor, cursor bounded
+  // first) — the raw cursor and query text never reach the telemetry table.
+  const idempotencyKey = await sha256Hex(
+    `meta_api:${queryFingerprint}:${country}:${await normalizeCursorForTelemetry(cursor)}`,
+  );
+  const nextAttempt = input.telemetryAttempts.used + 1;
   const providerState =
     metaApiEnv.DB && !hasCustomerMetaToken
       ? await getDiscoveryProviderState(metaApiEnv, "meta_api")
@@ -1076,6 +1288,11 @@ async function tryMetaApiFallback(
   if (providerState && shouldUseProviderCooldown(providerState)) {
     return null;
   }
+  // Provider-only timing: the recorded leg starts immediately before the
+  // actual Meta API provider call — after cursor hashing, provider-state/D1
+  // lookups, and cooldown checks — so pre-provider work is never included in
+  // the recorded duration.
+  const fallbackProviderStartedAt = new Date().toISOString();
 
   try {
     const apiResult = normalizeSearchResponse(
@@ -1085,6 +1302,28 @@ async function tryMetaApiFallback(
       "meta_api",
     );
     const timestamp = new Date().toISOString();
+    input.telemetryAttempts.used = nextAttempt;
+    await recordBrowserJobTelemetry(
+      metaApiEnv,
+      {
+        jobId: input.jobId,
+        idempotencyKey,
+        jobKind: "meta_discovery",
+        actualProvider: "customer_meta_api",
+        routeContext: input.routeContext,
+        planTier: input.planTier ?? null,
+        source:
+          input.telemetrySource ??
+          (input.routeContext === "public_search" ? "manual" : "scheduled"),
+        attempt: nextAttempt,
+        startedAt: fallbackProviderStartedAt,
+        endedAt: timestamp,
+        durationMs: Math.max(0, Date.parse(timestamp) - Date.parse(fallbackProviderStartedAt)),
+        outcome: apiResult.ads.length === 0 ? "empty" : "succeeded",
+        resultCount: apiResult.ads.length,
+      },
+      { executionContext: input.executionContext ?? null },
+    );
 
     if (metaApiEnv.DB) {
       await createDiscoveryFetchLog(metaApiEnv, {
@@ -1133,6 +1372,29 @@ async function tryMetaApiFallback(
     const timestamp = new Date().toISOString();
     const cooldownState = buildDiscoveryCooldownState(error, failureClass);
     const errorMessage = error instanceof Error ? error.message : "Unknown API fallback error.";
+
+    input.telemetryAttempts.used = nextAttempt;
+    await recordBrowserJobTelemetry(
+      metaApiEnv,
+      {
+        jobId: input.jobId,
+        idempotencyKey,
+        jobKind: "meta_discovery",
+        actualProvider: "customer_meta_api",
+        routeContext: input.routeContext,
+        planTier: input.planTier ?? null,
+        source:
+          input.telemetrySource ??
+          (input.routeContext === "public_search" ? "manual" : "scheduled"),
+        attempt: nextAttempt,
+        startedAt: fallbackProviderStartedAt,
+        endedAt: timestamp,
+        durationMs: Math.max(0, Date.parse(timestamp) - Date.parse(fallbackProviderStartedAt)),
+        outcome: mapDiscoveryFailureOutcome(failureClass),
+        resultCount: null,
+      },
+      { executionContext: input.executionContext ?? null },
+    );
 
     if (metaApiEnv.DB) {
       await createDiscoveryFetchLog(metaApiEnv, {
@@ -1394,6 +1656,18 @@ async function waitForDiscoveryLeaseResolution(
     ignoreProviderCooldown?: boolean;
     stopOnProviderCooldown?: boolean;
     stopOnProviderCooldownAfterMs?: number | null;
+    /**
+     * Resolver-owned cache-serve telemetry callback (see
+     * `searchAdsViaSourceResolver.recordCacheServe`). Called for EVERY cache
+     * entry this waiter returns so the serve is attributed to the waiter's
+     * own job and consumes the next value from the shared attempt allocator.
+     */
+    recordCacheServe?: (
+      entry: DiscoveryCacheEntry,
+      cacheStatus: "hit" | "stale",
+      outcome: "succeeded" | "degraded",
+      resultCount: number,
+    ) => Promise<void>;
   },
 ): Promise<SearchResponse | null> {
   const deadline = Date.now() + input.waitMs;
@@ -1406,6 +1680,7 @@ async function waitForDiscoveryLeaseResolution(
         isDiscoveryLeaseCacheFreshEnough(entry.fetchedAt, input.minFetchedAtMs),
     );
     if (freshCached) {
+      await input.recordCacheServe?.(freshCached, "hit", "succeeded", freshCached.payload.ads.length);
       return {
         ...toServableDiscoveryPayload(freshCached.payload),
         source: freshCached.payload.source,
@@ -1430,6 +1705,7 @@ async function waitForDiscoveryLeaseResolution(
         isDiscoveryLeaseCacheFreshEnough(entry.fetchedAt, input.minFetchedAtMs),
       );
       if (staleCached) {
+        await input.recordCacheServe?.(staleCached, "stale", "degraded", staleCached.payload.ads.length);
         return {
           ...toServableDiscoveryPayload(staleCached.payload),
           source: staleCached.payload.source,
@@ -1463,6 +1739,7 @@ async function waitForDiscoveryLeaseResolution(
         isDiscoveryLeaseCacheFreshEnough(entry.fetchedAt, input.minFetchedAtMs),
       );
       if (staleCached) {
+        await input.recordCacheServe?.(staleCached, "stale", "degraded", staleCached.payload.ads.length);
         return {
           ...toServableDiscoveryPayload(staleCached.payload),
           source: staleCached.payload.source,

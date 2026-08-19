@@ -18,6 +18,7 @@ import {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const FETCH_LOG_RETENTION_DAYS = 30;
+const BROWSER_JOB_TELEMETRY_RETENTION_DAYS = 30;
 const META_LOG_RETENTION_DAYS = 30;
 const EXPIRED_CACHE_GRACE_DAYS = 7;
 const MAGIC_LINK_TICKET_GRACE_DAYS = 1;
@@ -76,6 +77,21 @@ export async function runRetentionSweep(
         )
       `,
       bindings: [cutoff(FETCH_LOG_RETENTION_DAYS)],
+    },
+    {
+      // Append-only browser-job attribution telemetry follows the same 30-day
+      // policy as discovery_fetch_log; the deletion path is indexed via
+      // idx_browser_job_telemetry_created (created_at) and batched.
+      name: "browser_job_telemetry",
+      sql: `
+        DELETE FROM browser_job_telemetry
+        WHERE id IN (
+          SELECT id FROM browser_job_telemetry
+          WHERE created_at < ?
+          LIMIT 500
+        )
+      `,
+      bindings: [cutoff(BROWSER_JOB_TELEMETRY_RETENTION_DAYS)],
     },
     {
       name: "discovery_cache_entry",

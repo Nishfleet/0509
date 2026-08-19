@@ -62,6 +62,7 @@ import {
   SUPPORTED_COUNTRIES,
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
+import { scrubBrokenUnicode } from "~/lib/text-safe";
 import { PUBLIC_SEARCH_RATE_LIMIT_MESSAGE } from "~/lib/customer-route-error";
 import {
   formatAdvertiserLabel,
@@ -510,6 +511,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         customerMetaAdLibraryToken,
         executionContext: cloudflare?.ctx,
         hydratePersisted: Boolean(session),
+        // Optional attribution: only attach the plan tier when the caller
+        // actually resolved one; anonymous searches omit it so the call
+        // contract that existing callers assert stays unchanged.
+        ...(plan ? { planTier: plan } : {}),
       })
     : {
         result: await (
@@ -524,6 +529,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
             // Cold path: an uncached first query returns the warming state
             // immediately and the browser capture finishes via waitUntil.
             executionContext: cloudflare?.ctx ?? null,
+            // Optional attribution: omit when no plan tier was resolved.
+            ...(plan ? { planTier: plan } : {}),
             ...(customerMetaAdLibraryToken
               ? { customerMetaAdLibraryToken }
               : {}),
@@ -547,6 +554,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     {
       enrichSelected: Boolean(session) && !providerDeny.enabled,
       hydratePersisted: Boolean(session),
+      // Optional attribution: omit when no plan tier was resolved.
+      ...(plan ? { planTier: plan } : {}),
       // WP-11: paint base ad immediately; OCR/landing/translation finish via waitUntil.
       ...(typeof waitUntil === "function" ? { waitUntil } : {}),
     },
@@ -1361,6 +1370,7 @@ export default function SearchRoute() {
           displayDomain,
           isDomainSearch: isDomainSearch && data.relevanceApplied,
           isBroaderScope,
+          country: data.filters.country,
         })
       : null;
 
@@ -1430,6 +1440,7 @@ export default function SearchRoute() {
           isDomainSearch,
           isBroaderScope,
           relevanceApplied: data.relevanceApplied,
+          country: data.filters.country,
         })
       : null;
   const sectionHeadline =
@@ -1440,6 +1451,7 @@ export default function SearchRoute() {
       isDomainSearch,
       isBroaderScope,
       relevanceApplied: data.relevanceApplied,
+      country: data.filters.country,
     });
   const selectedLongevity = selectedAd ? formatAdLongevityLabel(selectedAd) : null;
   const selectedRunning =
@@ -2061,7 +2073,7 @@ export default function SearchRoute() {
                 <div className="f9-wk-creative">
                   <AdThumb ad={selectedAd} />
                   <h3 className="f9-wk-creative-head">
-                    {selectedAd.previewHeadline}
+                    {scrubBrokenUnicode(selectedAd.previewHeadline)}
                   </h3>
                   <p className="f9-wk-quote">{formatAdDetailBody(selectedAd)}</p>
                 </div>
@@ -2081,7 +2093,7 @@ export default function SearchRoute() {
                 <DetailBlock kicker="What the ad says">
                   <DetailFacts
                     rows={[
-                      { key: "Hook", value: selectedAd.hook },
+                      { key: "Hook", value: scrubBrokenUnicode(selectedAd.hook) },
                       ...(selectedAdAngle
                         ? [
                             {
@@ -2092,9 +2104,11 @@ export default function SearchRoute() {
                         : []),
                       {
                         key: "Offer",
-                        value: formatOfferDisplay(selectedAd.offer),
+                        value: scrubBrokenUnicode(
+                          formatOfferDisplay(selectedAd.offer),
+                        ),
                       },
-                      { key: "CTA", value: selectedAd.cta },
+                      { key: "CTA", value: scrubBrokenUnicode(selectedAd.cta) },
                       {
                         key: "Format",
                         value: formatCreativeFormatLabel(selectedAd.format),
