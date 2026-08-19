@@ -395,7 +395,7 @@
       "requiredGate": "G11-SEO",
       "requiredEvidence": "queryful search policy, private/token noindex, structured data, redirects and deployed social/crawl checks",
       "status": "assessed_pending_reproof",
-      "assessment": "2026-07-20 integration drift: the overnight stack added /search, /auth/signup and /compare/meta-ad-library to the sitemap and introduced public /ads/:domain brand pages (indexable by default with honest-shell/demo/stale self-noindex, deliberately absent from the static sitemap). Prior canonical/robots/sitemap proof predates these surfaces; indexing claims need fresh proof on the merged candidate.",
+      "assessment": "2026-07-20 integration drift: the overnight stack added /search, /auth/signup and /compare/meta-ad-library to the sitemap and introduced public /ads/:domain brand pages (indexable by default with honest-shell/demo/stale self-noindex, deliberately absent from the static sitemap). Prior canonical/robots/sitemap proof predates these surfaces; indexing claims need fresh proof on the merged candidate. 2026-08-09: the proof-backed /competitor-monitoring category page joined the sitemap (route, canonical, WebPage+FAQ JSON-LD, source/freshness limits, and sample labeling are asserted in tests); the claim stays assessed_pending_reproof, no proof fabricated.",
       "classification": "discovered",
       "expiry": "route, metadata, host, robots, sitemap or header change"
     },
