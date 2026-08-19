@@ -199,6 +199,15 @@ jobs:
           D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
+          # Same one-time chain bootstrap as the release gate. This step runs
+          # the identical verifier against a PRE-GENERATED artifact, so
+          # without the anchor it cannot classify the release at all: the
+          # verifier exits 2 (infrastructure failure) on all three attempts
+          # and the job hard-stops, instead of returning a verdict and
+          # falling through to generating fresh evidence. Run 32232488597
+          # failed exactly here. With the anchor the step reaches a real
+          # verdict, which is the behaviour every non-bootstrap deploy gets.
+          BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ${{ inputs.bootstrap_previous_success_sha || '' }}
         run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-prepare-remote-restore-evidence.sh
       - name: Preserve private restore evidence for this deploy only
         if: env.BACKUP_PROOF_STATUS == 'required' && steps.verify_evidence.outputs.restore_evidence_available == 'true'
