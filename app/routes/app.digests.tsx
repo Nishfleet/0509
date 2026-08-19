@@ -26,10 +26,12 @@ import {
   digestNextAction,
   digestReviewerLabel,
 } from "~/lib/change-intelligence";
+import { deriveBriefRetentionFields } from "~/lib/brief-retention";
 import { toPublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import { formatWatchEventTypeLabel } from "~/lib/landing-page-display";
 import { canUsePlanFeature, getPlanEntitlements } from "~/lib/plan-entitlements";
 import { classifyDigestItemSource } from "~/lib/proof-classification";
+import { formatNextScanLabel, nextScheduledScanAt } from "~/lib/schedule-display";
 import { readTriageFromDigestSummary } from "~/lib/watch-period-triage";
 
 export const meta = () => [{ title: "Briefs | Five to Nine" }];
@@ -255,6 +257,37 @@ export default function DigestsRoute() {
           }),
         }
       : null;
+  // Brief-as-retention-loop (lane 1, 2026-08-14): the archived brief page
+  // also carries the four retention fields — delta, owner, confidence,
+  // expiry. The previous brief is the digest on file strictly older than
+  // the selected one; absent that, the delta line says "first brief on
+  // file" instead of inventing a comparison.
+  const previousBriefForRetention =
+    data.canAccessDigests && data.selectedDigest
+      ? data.digests.find(
+          (candidate) =>
+            candidate.id !== data.selectedDigest!.id &&
+            candidate.periodEnd < data.selectedDigest!.periodEnd,
+        ) ?? null
+      : null;
+  const retentionNextScanAt =
+    data.canAccessDigests && data.selectedDigest
+      ? nextScheduledScanAt(plan, new Date()).toISOString()
+      : null;
+  const retentionNextScanLabel =
+    data.canAccessDigests && data.selectedDigest
+      ? formatNextScanLabel(plan, new Date(), null)
+      : null;
+  const retention =
+    data.canAccessDigests && data.selectedDigest
+      ? deriveBriefRetentionFields({
+          items: data.selectedDigest.items,
+          previousBrief: previousBriefForRetention,
+          ownerName: data.reviewerName,
+          nextScanAt: retentionNextScanAt,
+          nextScanLabel: retentionNextScanLabel,
+        })
+      : null;
   const deliveryLabel =
     selectedDigestAttempts.length > 0
       ? selectedDigestAttempts
@@ -399,6 +432,35 @@ export default function DigestsRoute() {
                 <div className="f9-wk-contents">
                   <dt>Fresh until</dt>
                   <dd>{accountability.freshUntilLabel}</dd>
+                </div>
+              </dl>
+            </section>
+          ) : null}
+
+          {retention ? (
+            <section
+              aria-labelledby="brief-retention-title"
+              className="f9-wk-sec"
+            >
+              <h2 className="f9-wk-kick" id="brief-retention-title">
+                Brief retention
+              </h2>
+              <dl className="f9-wk-dl">
+                <div className="f9-wk-contents">
+                  <dt>Since last brief</dt>
+                  <dd>{retention.delta}</dd>
+                </div>
+                <div className="f9-wk-contents">
+                  <dt>Accountable reviewer</dt>
+                  <dd>{retention.owner}</dd>
+                </div>
+                <div className="f9-wk-contents">
+                  <dt>Confidence</dt>
+                  <dd>{retention.confidenceLabel}</dd>
+                </div>
+                <div className="f9-wk-contents">
+                  <dt>Expiry</dt>
+                  <dd>{retention.expiry}</dd>
                 </div>
               </dl>
             </section>

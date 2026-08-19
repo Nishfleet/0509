@@ -35,7 +35,7 @@ import { buildMarketDeskBrief } from "~/lib/market-desk-brief";
 import { buildOvernightSentence } from "~/lib/overnight-sentence";
 import { pendingBlockingSetupItems } from "~/lib/setup-checklist";
 import { buildSearchParams } from "~/lib/normalize";
-import { formatNextScanLabel } from "~/lib/schedule-display";
+import { formatNextScanLabel, nextScheduledScanAt } from "~/lib/schedule-display";
 import { formatMachineTokenLabel } from "~/lib/landing-page-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { AppEnv } from "~/lib/env.server";
@@ -351,6 +351,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceReadiness,
     counterMoveFollowUps,
     plan,
+    // Brief-as-retention-loop (lane 1, 2026-08-14): the workspace owner
+    // identity is already on hand from requireWorkspaceSession — pass it
+    // through so the brief's accountable reviewer field renders the actual
+    // name instead of the truthful "Workspace owner" fallback.
+    ownerName: !isMember ? ownerName : null,
     teamMemberCount: workspaceMembers.filter((member) => {
       if (member.status === "active" || !member.tokenExpiresAt) {
         return true;
@@ -498,7 +503,7 @@ export async function action(args: ActionFunctionArgs) {
           current: result.current,
           message:
             result.limit <= 1
-              ? "Free includes 1 watchlist with a weekly check and weekly email brief. Upgrade for 3–6 hour checks and more competitors."
+              ? "Free includes 1 watchlist, 1 Collection, and a weekly proof-backed brief. Upgrade for 3–6 hour checks and more competitors."
               : "You've reached your competitor tracking limit — pause another watchlist first.",
         }),
         intent,
@@ -594,6 +599,10 @@ export default function AppDashboardRoute() {
   const nextScanLabel =
     data.nextScanLabel ??
     formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone);
+  // Brief-as-retention-loop (lane 1, 2026-08-14): the brief's expiry field
+  // needs an ISO timestamp in addition to the human label, so the explicit
+  // expiry state survives when only a label is available.
+  const nextScanAt = nextScheduledScanAt(plan, new Date()).toISOString();
   const hasPaymentIssue = Boolean(data.hasPaymentIssue);
   const competitorCount = watchlists.length;
   const activeWatchlists = watchlists.filter(
@@ -638,6 +647,8 @@ export default function AppDashboardRoute() {
     nextScanLabel,
     plan,
     sourceStatus: data.metaStatus?.status,
+    ownerName: data.ownerName ?? null,
+    nextScanAt,
     firstScanStates: data.firstScanStates,
   });
   const sourceNeedsRecovery =
@@ -702,6 +713,33 @@ export default function AppDashboardRoute() {
         title="Today"
       />
 
+      <section
+        aria-labelledby="overview-brief-retention-title"
+        className="f9-wk-sec"
+      >
+        <p className="f9-wk-kick" id="overview-brief-retention-title">
+          Brief retention
+        </p>
+        <dl className="f9-wk-dl">
+          <div className="f9-wk-contents">
+            <dt>Since last brief</dt>
+            <dd>{marketDeskBrief.retention.delta}</dd>
+          </div>
+          <div className="f9-wk-contents">
+            <dt>Accountable reviewer</dt>
+            <dd>{marketDeskBrief.retention.owner}</dd>
+          </div>
+          <div className="f9-wk-contents">
+            <dt>Confidence</dt>
+            <dd>{marketDeskBrief.retention.confidenceLabel}</dd>
+          </div>
+          <div className="f9-wk-contents">
+            <dt>Expiry</dt>
+            <dd>{marketDeskBrief.retention.expiry}</dd>
+          </div>
+        </dl>
+      </section>
+
       {sectionWarningCopy ? (
         <FeedbackStrip label="Partial overview" tone="bad">
           {sectionWarningCopy} Everything else shown here is current — refresh to load the
@@ -729,20 +767,30 @@ export default function AppDashboardRoute() {
       {proofUsage.warningLevel !== "ok" ? (
         <FeedbackStrip
           actions={
-            <Link className="f9-wk-lnk" to="/app/billing?source=evidence#top-ups">
-              Review proof capture packs <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+            <Link
+              className="f9-wk-lnk"
+              to={proofUsage.plan === "free"
+                ? "/app/billing?source=evidence#plans"
+                : "/app/billing?source=evidence#top-ups"}
+            >
+              {proofUsage.plan === "free" ? "Compare plans" : "Review check packs"}{" "}
+              <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           }
           label="Evidence usage"
           tone="bad"
         >
           {proofUsage.warningLevel === "exhausted"
-            ? "You've used all your proof captures. "
+            ? proofUsage.plan === "free"
+              ? "You've used your free plan's proof-backed capture for this month. "
+              : "You've used all your proof captures. "
             : "You've used over 80% of your proof captures. "}
           {proofUsage.used} of {proofUsage.limit} proof captures used in the current billing period.
           {proofUsage.upgradeTarget
             ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
-            : " Add an overflow pack before the next busy campaign."}
+            : proofUsage.plan === "free"
+              ? " Move to Scout for more captures and 6-hour checks."
+              : " Add an overflow pack before the next busy campaign."}
         </FeedbackStrip>
       ) : null}
 

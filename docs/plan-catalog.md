@@ -6,7 +6,7 @@ Authoritative entitlements live in `app/lib/plan-entitlements.ts`. Prices are lo
 
 | Plan | Watchlists | Boards | Included proof captures / month | Monitoring | Digests | Seats |
 |------|------------|--------|----------------------------------|------------|---------|-------|
-| Free | 1 | 0 | 0 | Weekly (Monday 03:00 UTC slot of the regular cron; scans prefer any shared discovery-cache entry ≤7 days old before scraping live) | Weekly | 1 |
+| Free | 1 | 1 | 1 | Instant activation scan on first watchlist, then weekly (Monday 03:00 UTC slot of the regular cron; scans prefer any shared discovery-cache entry ≤7 days old before scraping live) | Weekly | 1 |
 | Scout | 3 | 10 | 50 | Every 6 hours | Weekly | 1 |
 | Starter | 10 | 25 | 250 | Every 3 hours | Daily + weekly | 1 |
 | Agency | 75 | 250 | 2,500 | Top 25 every 3 hours, rest every 6 hours (highest queue priority) | Daily + weekly | 3 (owner included) |

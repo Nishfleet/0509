@@ -909,10 +909,11 @@ export default function MarketingRoute() {
             <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
           </div>
           <p className="ld-pricing-note">
-            Free: watch 1 competitor with a weekly email brief. Paid plans add 3–6 hour checks,
-            evidence, more competitors, Collections, daily briefs, and clear, generous
-            proof-capture caps. Save winning ads to collections — and see how long each ad has
-            been running when the Ad Library shares dates.
+            Free: watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1
+            Collection. No card required. Paid plans add 3–6 hour checks, evidence,
+            more competitors, Collections, daily briefs, and clear check caps. Save
+            winning ads to collections — and see how long each ad has been running when the Ad Library
+            shares dates.
           </p>
           <div className="f9-cycle-toggle" role="group" aria-label="Billing cycle">
             <button
