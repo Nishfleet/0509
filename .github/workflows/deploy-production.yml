@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           sha_pattern='^[a-f0-9]{40}$'
-          test "$GITHUB_REPOSITORY" = "nishfleet/0509"
+          test "$GITHUB_REPOSITORY" = "nish3451/0509"
           test "$GITHUB_REF" = "refs/heads/main"
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
           test "$GITHUB_RUN_ATTEMPT" = "1"
