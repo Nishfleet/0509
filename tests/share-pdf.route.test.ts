@@ -454,7 +454,7 @@ describe("GET /share/:token/pdf", () => {
 describe("report_pdf browser-job attribution rows", () => {
   function telemetryHarness() {
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
     return harness;
   }
 

@@ -40,7 +40,7 @@ describe("pricingPlans", () => {
     expect(scout.detail).toContain("6-hour competitor monitoring");
     expect(scout.features).toContain("Weekly Brief");
     expect(scout.features).not.toContain("Slack");
-    expect(scout.features).toContain("50 checks/month");
+    expect(scout.features).toContain("50 proof captures/month");
     expect(starter.features).toContain("10 active watchlists");
     expect(starter.features).toContain("25 Collections");
     expect(starter.features).toContain("3-hour scans");
@@ -49,7 +49,7 @@ describe("pricingPlans", () => {
     expect(starter.features).toContain("Email Notifications");
     expect(starter.features).toContain("Exports");
     expect(starter.features).not.toContain("Slack");
-    expect(starter.features).toContain("250 checks/month");
+    expect(starter.features).toContain("250 proof captures/month");
     expect(agency.features).toContain("75 active watchlists");
     expect(agency.features).toContain("250 Collections");
     expect(agency.features).toContain(
@@ -59,7 +59,7 @@ describe("pricingPlans", () => {
       "75 competitors — top 25 checked every 3 hours, the rest every 6 hours",
     );
     expect(agency.features).not.toContain("Slack");
-    expect(agency.features).toContain("2,500 checks/month");
+    expect(agency.features).toContain("2,500 proof captures/month");
     expect(agency.features).toContain("Team workspace");
     expect(agency.features).toContain("API + MCP access");
     expect(agency.features).toContain("Client reports");
@@ -69,33 +69,35 @@ describe("pricingPlans", () => {
     expect(agency.features.join("\n")).not.toContain("nightly queue");
   });
 
-  it("offers paid check packs for temporary spikes", () => {
+  it("offers paid proof capture packs for temporary spikes", () => {
     expect(usageBundles()).toEqual([
       expect.objectContaining({
         slug: "proof_500",
         priceLabel: "Localized at checkout",
-        creditLabel: "500 extra checks",
+        creditLabel: "500 extra proof captures",
       }),
       expect.objectContaining({
         slug: "proof_2000",
         priceLabel: "Localized at checkout",
-        creditLabel: "2,000 extra checks",
+        creditLabel: "2,000 extra proof captures",
       }),
       expect.objectContaining({
         slug: "proof_7500",
         priceLabel: "Localized at checkout",
-        creditLabel: "7,500 extra checks",
+        creditLabel: "7,500 extra proof captures",
       }),
     ]);
   });
 
-  it("states the customer-facing check accounting contract", () => {
+  it("states the customer-facing proof capture accounting contract", () => {
     expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("Scheduled scans are included with your plan");
-    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("proof-backed capture");
-    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("Included checks reset every month");
-    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("Purchased checks never expire");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("never touch your cap");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("confirmed change with screenshots, page text, and the original link");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("Included caps are generous and reset monthly");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("purchased proof captures never expire");
     expect(EVIDENCE_USAGE_CUSTOMER_COPY).not.toContain("saved change records");
     expect(EVIDENCE_USAGE_CUSTOMER_COPY).not.toContain("record packs");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).not.toContain("unlimited");
   });
 
   it("does not branch copy by India versus rest of world anymore", () => {

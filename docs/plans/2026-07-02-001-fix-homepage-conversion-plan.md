@@ -42,7 +42,7 @@ Pricing must remain locally priced by Dodo preview, with annual and Agency check
 - R5. Keep Search V2, Presence, auth, plan gating, billing, Dodo preview pricing, Dodo annual validation, and Dodo checkout behavior intact.
 - R6. Pricing must show Dodo localized prices only, must not hardcode visible amounts, and must show `4 months free` only when annual validates as eight monthly periods in the same currency/context.
 - R7. Agency checkout remains held unless the fan-out proof gate opens; public copy must explain this as capacity/coverage control without exposing internal terms.
-- R8. Top-up copy must say purchased checks never expire, included checks reset monthly, and scheduled monitoring does not consume checks.
+- R8. Top-up copy must say purchased proof captures never expire (they carry over until spent), included proof captures reset monthly with generous caps, and scheduled monitoring does not consume proof captures.
 - R9. CTAs must have clear intent: signed-out plan intent survives signup/login, signed-in plan CTAs go to the in-app billing plan picker, sample CTAs scroll/open the sample, and no dead CTAs remain.
 - R10. Accessibility and performance must retain one H1, semantic sections, keyboardable billing cycle controls, focus states, contrast, reduced motion, no layout shift, and no large animation bundle.
 
@@ -61,7 +61,7 @@ Pricing must remain locally priced by Dodo preview, with annual and Agency check
 - KTD1. Treat `app/routes/marketing.tsx` and existing `ld-*` / `f9-home` CSS as the page system to refine, not replace.
 - KTD2. Keep pricing calculations in `app/lib/dodo-pricing.server.ts` and display helpers; homepage copy may consume validation state but must not derive or hardcode money amounts outside existing preview data.
 - KTD3. Use safe same-origin redirect preservation already present in auth routes for signed-out plan intent, aligned with Better Auth callback behavior and React Router redirect safety.
-- KTD4. Convert buyer-facing "records" language to "checks" only where it describes plan/top-up buying, while preserving internal evidence usage code names unless changing them is required.
+- KTD4. Convert buyer-facing "records" language to "proof captures" where it describes plan/top-up buying, while preserving internal evidence usage code names unless changing them is required.
 - KTD5. Add source-text tests as drift guards for claims and routing, plus focused runtime/unit tests only where behavior changes.
 
 ### Assumptions
@@ -109,7 +109,7 @@ Pricing must remain locally priced by Dodo preview, with annual and Agency check
 - **Files:** `app/routes/marketing.tsx`, `app/lib/pricing.ts`, `app/app.css`, `tests/marketing-rebuild.test.ts`, `tests/pricing.test.ts`, existing Dodo checkout tests as needed.
 - **Approach:** Reformat plan cards around limits and included value, gate annual savings copy behind `dodoAnnualSavingsIsValid`, route signed-in plan clicks to `/app/billing`, and use safe signed-out redirects through `/auth/signup`.
 - **Patterns to follow:** `planIntentPath`, `app/routes/app.billing.tsx` plan picker behavior, `dodoAnnualUnavailableCopy`, and commercial launch summary.
-- **Test scenarios:** Source/unit tests confirm no hardcoded prices, annual `4 months free` is tied to validation, Agency public checkout is held when sale gate is closed, purchased checks never expire, included checks reset monthly, scheduled monitoring is included, and signed-in/signed-out intent paths are correct.
+- **Test scenarios:** Source/unit tests confirm no hardcoded prices, annual `4 months free` is tied to validation, Agency public checkout is held when sale gate is closed, purchased proof captures never expire, included proof captures reset monthly, scheduled monitoring is included, and signed-in/signed-out intent paths are correct.
 - **Verification:** Focused pricing/marketing tests and build/typecheck confirm no regressions to Dodo billing code.
 
 ### U4. Visual Polish, Mobile Density, Accessibility, And Motion
@@ -151,7 +151,7 @@ Pricing must remain locally priced by Dodo preview, with annual and Agency check
 - Homepage hero immediately explains the paid outcome and keeps the current brand system.
 - Sample Market Desk Brief appears early, is labeled `Sample`, and shows proof/source/next-action fields.
 - Pricing cards are scanable, Dodo-backed, annual-fail-closed, and Agency-held when capacity proof is absent.
-- Buyer-facing top-up language says purchased checks never expire, included checks reset monthly, and scheduled monitoring does not consume checks.
+- Buyer-facing top-up language says purchased proof captures never expire (carry over until spent), included proof captures reset monthly with generous caps, and scheduled monitoring does not consume proof captures.
 - Unsupported connector/social claims and internal implementation terms are absent from public homepage/pricing copy.
 - Signed-out plan intent survives signup/login; signed-in plan CTAs route to the app billing picker.
 - Requested tests, smokes, review gates, PR, deploy, production smoke, and docs-only provenance are complete or explicitly blocked with evidence.

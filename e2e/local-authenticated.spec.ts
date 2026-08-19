@@ -397,7 +397,7 @@ test.describe("local authenticated E2E harness", () => {
     await expectAppPage(page);
     await expect(page.getByRole("heading", { name: "Billing & usage" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Starter plan" })).toBeVisible();
-    await expect(page.getByText("purchased checks remaining")).toBeVisible();
+    await expect(page.getByText("purchased proof captures remaining")).toBeVisible();
 
     await page.goto("/app/source-access");
     await expectAppPage(page);

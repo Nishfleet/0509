@@ -249,6 +249,71 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(ad.offer).toBe("");
   });
 
+  it("never splits an emoji when deriving the preview subhead from a long body", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: {},
+    }));
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    // Units 0..118 are filler, unit 119 is the HIGH half of 🌟 (U+1F31F): a
+    // plain body.slice(0, 120) would orphan it and the subhead would render
+    // the U+FFFD replacement character on /search.
+    const body = "a".repeat(119) + "🌟 French Pharmacy collection";
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "1234567890",
+        advertiser: "Nykaa",
+        body,
+        previewHeadline: "French Pharmacy collection",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
+        landingPageUrl: "https://www.nykaa.com",
+        platforms: ["Instagram"],
+        active: true,
+      },
+      buildQuery(),
+    );
+
+    // The truncated subhead stays well-formed: the dangling high surrogate is
+    // dropped instead of being persisted as "�".
+    expect(ad.previewSubhead).toBe("a".repeat(119));
+    expect(/[\uD800-\uDFFF]/.test(ad.previewSubhead)).toBe(false);
+    expect(ad.previewSubhead.includes("\uFFFD")).toBe(false);
+    // The full body keeps the real emoji untouched for the detail pane.
+    expect(ad.body).toContain("🌟");
+  });
+
+  it("keeps a real emoji intact when the body fits inside the subhead cap", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: {},
+    }));
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    const body =
+      "French Pharmacy collection ✨ " + "x".repeat(100) + " more copy";
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "1234567891",
+        advertiser: "Nykaa",
+        body,
+        previewHeadline: "French Pharmacy collection",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567891",
+        landingPageUrl: "https://www.nykaa.com",
+        platforms: ["Instagram"],
+        active: true,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.previewSubhead).toContain("✨");
+    expect(/[\uD800-\uDFFF]/.test(ad.previewSubhead)).toBe(false);
+  });
+
   it("post-filters cards whose observed active status contradicts the request", async () => {
     vi.doMock("@cloudflare/puppeteer", () => ({
       default: {},
@@ -2535,6 +2600,18 @@ describe("Ad Library chrome CTA guard", () => {
     }
   });
 
+  it("flags Menu with a trailing zero-width space (U+200B) as chrome", async () => {
+    const { isAdLibraryChromeCta } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    // Exact production value captured from public search: the library
+    // "Menu" overflow label plus newline plus U+200B. U+200B is not \s,
+    // so the pre-fix normalizer left it in and the guard missed it.
+    expect(isAdLibraryChromeCta("Menu\n\u200B")).toBe(true);
+    expect(isAdLibraryChromeCta("Menu\u200B")).toBe(true);
+  });
+
   it("never flags real advertiser CTAs", async () => {
     const { isAdLibraryChromeCta } = await import(
       "~/lib/meta-library-rendered-card-parser.server"
@@ -2979,7 +3056,7 @@ describe("Ad Library relay page-identity parsing", () => {
     }));
 
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
 
@@ -3047,7 +3124,7 @@ describe("ordered multi-provider meta discovery attempts", () => {
     }));
 
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
 
@@ -3164,7 +3241,7 @@ describe("ordered multi-provider meta discovery attempts", () => {
     }));
 
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
     const jobId = crypto.randomUUID();
@@ -3252,7 +3329,7 @@ describe("ordered multi-provider meta discovery attempts", () => {
     }));
 
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
     const result = await searchMetaLibraryByBrowser(
@@ -3311,7 +3388,7 @@ describe("ordered multi-provider meta discovery attempts", () => {
     );
 
     const harness = createSqliteD1();
-    applyMigration(harness.sqlite, "migrations/0075_browser_job_telemetry.sql");
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
 
     const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
     const result = await searchMetaLibraryByBrowser(

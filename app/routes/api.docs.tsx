@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
@@ -6,7 +6,9 @@ import {
   AGENT_BLOCKED_CAPABILITIES,
   auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
+import { appLinkTarget } from "~/lib/app-link";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import type { RootLoaderData } from "~/root";
 
 const description =
   "Five to Nine API docs for account-owned exports and approved account actions.";
@@ -21,6 +23,8 @@ export const meta: MetaFunction = () =>
   });
 
 export default function ApiDocsRoute() {
+  const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
+
   return (
     <PublicDocShell
       kicker="Developer access"
@@ -30,7 +34,7 @@ export default function ApiDocsRoute() {
       <PublicDocBlock title="Authentication">
         <p>
           Developer API and connected-tool access require Agency. Create a customer API key inside{" "}
-          <Link to="/app/developer-access">Developer access</Link>.
+          <Link to={appLinkTarget("/app/developer-access", rootData?.session)}>Developer access</Link>.
           Send it as a bearer token:
         </p>
         <pre className="f9-code-block">
