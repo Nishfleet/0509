@@ -12,6 +12,8 @@ import {
 } from "~/lib/dashboard-navigation";
 import {
   isSlackDeliveryCustomerFacing,
+  isSlackWebhookDeliveryCustomerFacing,
+  isTeamsWebhookDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
 import {
@@ -39,7 +41,7 @@ type ClaimContext = {
   agentActions: readonly string[];
   skuSlugs: readonly string[];
   presenceSources: readonly string[];
-  deliveryChannels: { email: boolean; slack: boolean; whatsapp: boolean };
+  deliveryChannels: { email: boolean; slack: boolean; teams: boolean; whatsapp: boolean };
   agencySeats: number;
 };
 
@@ -117,7 +119,8 @@ const CLAIM_CHECKS: Record<string, ClaimCheck> = {
   "CUSTOMER-ROUTE-CATALOG": sourcePatternCheck(/DASHBOARD_PRIMARY_NAV|PUBLIC_MARKDOWN_PATHS|SITEMAP_PATHS/u),
   "DELIVERY-CHANNEL-GATES": sourcePatternCheck(/not available at general availability|customer-facing GA surface/iu, (_entry, context) =>
     context.deliveryChannels.email &&
-    !context.deliveryChannels.slack &&
+    context.deliveryChannels.slack &&
+    context.deliveryChannels.teams &&
     !context.deliveryChannels.whatsapp),
   "TEAM-AGENCY-SHARING": sourcePatternCheck(/workspaceSeats|seat/iu, (_entry, context) =>
     context.agencySeats === 3),
@@ -164,16 +167,18 @@ const expectedPlanFeaturesByPlan: Record<string, readonly string[]> = {
     "competitor_research", "weekly_digest", "email_delivery",
     "presence_competitor_tracking", "presence_website_sources", "presence_digest_alerts",
     "daily_digest", "high_priority_alerts", "landing_page_evidence", "slack_delivery",
-    "ad_text_multilingual", "english_translation", "export_csv", "export_json",
-    "export_slack_ready", "share_links", "presence_self_tracking", "presence_social_connect",
+    "teams_delivery", "ad_text_multilingual", "english_translation", "export_csv",
+    "export_json", "export_slack_ready", "share_links", "presence_self_tracking",
+    "presence_social_connect",
   ],
   agency: [
     "competitor_research", "weekly_digest", "email_delivery",
     "presence_competitor_tracking", "presence_website_sources", "presence_digest_alerts",
     "daily_digest", "high_priority_alerts", "landing_page_evidence", "slack_delivery",
-    "ad_text_multilingual", "english_translation", "export_csv", "export_json",
-    "export_slack_ready", "presence_self_tracking", "presence_social_connect",
-    "client_reports", "share_links", "pdf_reports", "agency_branding", "api_access",
+    "teams_delivery", "ad_text_multilingual", "english_translation", "export_csv",
+    "export_json", "export_slack_ready", "presence_self_tracking",
+    "presence_social_connect", "client_reports", "share_links", "pdf_reports",
+    "agency_branding", "api_access",
     "mcp_access", "mcp_account_actions", "team_workspace",
   ],
 };
@@ -234,13 +239,11 @@ function registryContractSha256() {
   return createHash("sha256").update(JSON.stringify(contract)).digest("hex");
 }
 
-// 2026-07-20 merge: re-pinned after registry drift updates for the overnight
-// stack (free weekly watch, sitemap additions, /ads/:domain) — all reopened
-// as assessed_pending_reproof, no proof fabricated.
-// 2026-08-09: re-pinned after the SEO-CANONICAL-INDEXING assessment recorded
-// the /competitor-monitoring sitemap addition (claim stays reopened).
+// 2026-08-12 merge: re-pinned after the Slack/Teams webhook-delivery decision
+// reopened DELIVERY-CHANNEL-GATES (claim text/assessment updated to the live
+// Slack+Teams/WhatsApp-dormant truth; no proof fabricated).
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "2067cd970045d607791c0707471b3d8b7f9659c761072945c6b2ae8876760eef";
+  "844985e969e1d5ca3cff281d32134ba8f014a93eb839f4c0e0ff9860155e3c3a";
 
 type Catalogs = {
   agentActions: string[];
@@ -294,9 +297,10 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   planFamilies: ["free", "scout", "starter", "agency"],
   planFeatures: [
     "competitor_research", "weekly_digest", "daily_digest", "high_priority_alerts",
-    "landing_page_evidence", "email_delivery", "slack_delivery", "ad_text_multilingual",
-    "english_translation", "export_csv", "export_json", "export_slack_ready",
-    "client_reports", "share_links", "pdf_reports", "agency_branding", "api_access",
+    "landing_page_evidence", "email_delivery", "slack_delivery", "teams_delivery",
+    "ad_text_multilingual", "english_translation", "export_csv", "export_json",
+    "export_slack_ready", "client_reports", "share_links", "pdf_reports",
+    "agency_branding", "api_access",
     "mcp_access", "mcp_account_actions", "team_workspace", "presence_competitor_tracking",
     "presence_self_tracking", "presence_website_sources", "presence_social_connect",
     "presence_digest_alerts",
@@ -314,10 +318,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
   // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
-  // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
-  // sitemap (same claim stays reopened for re-proof; page claims trace to the
-  // existing homepage/docs claims, no new claim text invented).
-  sitemapPaths: ["/", "/search", "/auth/signup", "/compare/magicbrief", "/compare/meta-ad-library", "/competitor-monitoring", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  sitemapPaths: ["/", "/search", "/auth/signup", "/compare/magicbrief", "/compare/meta-ad-library", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",
@@ -371,7 +372,8 @@ const context: ClaimContext = {
   deliveryChannels: {
     email: PLAN_FAMILIES.filter((plan) => plan !== "free").every((plan) =>
       getPlanEntitlements(plan).features.has("email_delivery")),
-    slack: isSlackDeliveryCustomerFacing(),
+    slack: isSlackWebhookDeliveryCustomerFacing(),
+    teams: isTeamsWebhookDeliveryCustomerFacing(),
     whatsapp: isWhatsAppDeliveryCustomerFacing(),
   },
   agencySeats: getPlanEntitlements("agency").workspaceSeats,

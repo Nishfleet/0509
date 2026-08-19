@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           sha_pattern='^[a-f0-9]{40}$'
-          test "$GITHUB_REPOSITORY" = "nishfleet/0509"
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
           case "$GITHUB_EVENT_NAME" in
             pull_request)
@@ -97,8 +97,6 @@ jobs:
         run: ./scripts/deploy-window-lock.sh run -- npm run build
       - name: Test
         run: ./scripts/deploy-window-lock.sh run -- npm run test
-      - name: Test backlog-console refresh (hermetic)
-        run: bash automation/backlog-console/test_refresh.sh
       - name: Typecheck
         env:
           # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while

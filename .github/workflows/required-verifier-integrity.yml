@@ -53,7 +53,7 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
         run: |
           set -euo pipefail
-          test "$GITHUB_REPOSITORY" = "nishfleet/0509"
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
           test "$GITHUB_EVENT_NAME" = "pull_request_target"
           test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
           # Self-hosted runners on pull_request_target may set GITHUB_REF to

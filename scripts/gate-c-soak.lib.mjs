@@ -583,8 +583,8 @@ async function listWorkflowArtifacts({ repository, name, token, fetchImpl = fetc
  * }} [dependencies]
  */
 export async function collectGitHubSoakEvidence(journal, dependencies = {}) {
-  const repository = dependencies.repository ?? process.env.GITHUB_REPOSITORY ?? "nish3451/0509";
-  if (repository !== "nish3451/0509") throw new Error("github_soak_repository_invalid");
+  const repository = dependencies.repository ?? process.env.GITHUB_REPOSITORY ?? "Nishfleet/0509";
+  if (repository !== "Nishfleet/0509") throw new Error("github_soak_repository_invalid");
   const token = dependencies.token ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "";
   const startedAt = journal.window.startedAt;
   const endedAt = new Date(Date.parse(journal.window.endedAt) + GATE_C_SOAK_SETTLE_MS).toISOString();
