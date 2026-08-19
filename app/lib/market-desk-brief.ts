@@ -137,7 +137,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
                 : "Waiting for first scan",
     },
     {
-      label: "Evidence checks",
+      label: "Proof captures",
       value: proofValue,
       detail: proofDetail,
     },
