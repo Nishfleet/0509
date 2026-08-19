@@ -165,9 +165,10 @@ describe("exact production candidate workflow", () => {
       "${{ inputs.bootstrap_previous_success_sha || '' }}",
     );
 
-    // Blast radius: the release gate is the only consumer. No authorizing,
-    // pinning, evidence-generating, or provider-mutating step may read it,
-    // and no job-level env may leak it to every step in a job.
+    // Blast radius: only the two steps that actually run
+    // verify-remote-restore-evidence.mjs may read it. No authorizing,
+    // pinning, evidence-generating, or provider-mutating step may, and no
+    // job-level env may leak it to every step in a job.
     const consumers: string[] = [];
     for (const [jobName, job] of Object.entries(workflow.jobs)) {
       for (const key of Object.keys(job.env ?? {})) {
@@ -183,14 +184,35 @@ describe("exact production candidate workflow", () => {
         }
       }
     }
-    expect(consumers).toEqual(["deploy:Deploy"]);
+    expect(consumers).toEqual([
+      "prepare_remote_restore_evidence:Verify pre-generated exact R2 restore evidence",
+      "deploy:Deploy",
+    ]);
+
+    // Both consumers are exactly the steps that invoke the verifier: the
+    // pre-generated-artifact check and the release gate. Without the anchor
+    // the first one exits 2 on every attempt and hard-stops the run before
+    // the gate is ever reached (run 32232488597).
+    const prepareVerify =
+      workflow.jobs.prepare_remote_restore_evidence?.steps?.[
+        stepIndex(
+          workflow.jobs.prepare_remote_restore_evidence,
+          "Verify pre-generated exact R2 restore evidence",
+        )
+      ];
+    expect(prepareVerify?.run).toContain(
+      "ci-prepare-remote-restore-evidence.sh",
+    );
+    expect(prepareVerify?.env?.BOOTSTRAP_PREVIOUS_SUCCESS_SHA).toBe(
+      "${{ inputs.bootstrap_previous_success_sha || '' }}",
+    );
 
     // The input is inert everywhere else in the file, including the
     // authorizer's dispatch validation, which must not start treating it as
     // an authorization token.
     expect(
       workflowSource.match(/inputs\.bootstrap_previous_success_sha/g),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     const authorizeStep = workflow.jobs.authorize_release?.steps?.[0];
     expect(JSON.stringify(authorizeStep)).not.toContain("bootstrap");
   });
