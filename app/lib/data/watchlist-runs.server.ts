@@ -99,6 +99,57 @@ export async function countWatchlistRunsForUserSince(
   );
   return row?.total ?? 0;
 }
+export interface FirstScanRunState {
+  watchlistId: string;
+  status: WatchlistRunRecord["status"];
+  errorCode: string | null;
+}
+
+/**
+ * Latest first-scan run per active watchlist of a workspace that has no
+ * successful scan history yet. Powers the same-session first-value surface:
+ * the Overview can say "running now" / "starts shortly" / "couldn't finish"
+ * instead of a static queued claim, and it stops polling the moment nothing
+ * is still waiting. Only run rows with the first-scan execution key are
+ * considered, so a later scheduled run never mislabels a first scan.
+ */
+export async function listFirstScanRunStates(
+  env: AppEnv,
+  userId: string,
+): Promise<FirstScanRunState[]> {
+  const rows = await many<{
+    watchlist_id: string;
+    status: string;
+    error_code: string | null;
+  }>(
+    env,
+    `
+      SELECT watchlist.id AS watchlist_id,
+             run.status AS status,
+             run.error_code AS error_code
+      FROM watchlist
+      LEFT JOIN watchlist_run AS run
+        ON run.id = (
+          SELECT latest.id
+          FROM watchlist_run AS latest
+          WHERE latest.watchlist_id = watchlist.id
+            AND latest.idempotency_key LIKE 'watchlist-run:first-scan:%'
+          ORDER BY latest.created_at DESC
+          LIMIT 1
+        )
+      WHERE watchlist.user_id = ?
+        AND watchlist.is_active = 1
+        AND watchlist.last_scanned_at IS NULL
+    `,
+    userId,
+  );
+  return rows.map((row) => ({
+    watchlistId: row.watchlist_id,
+    status: row.status as WatchlistRunRecord["status"],
+    errorCode: row.error_code,
+  }));
+}
+
 export async function createWatchlistRun(
   env: AppEnv,
   watchlistId: string,
