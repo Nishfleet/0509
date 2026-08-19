@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 
+import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
+
 const DNS_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
 
 function buildQuery() {
@@ -245,6 +247,71 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(ad.body).toBe("");
     expect(ad.hook).toBe("");
     expect(ad.offer).toBe("");
+  });
+
+  it("never splits an emoji when deriving the preview subhead from a long body", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: {},
+    }));
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    // Units 0..118 are filler, unit 119 is the HIGH half of 🌟 (U+1F31F): a
+    // plain body.slice(0, 120) would orphan it and the subhead would render
+    // the U+FFFD replacement character on /search.
+    const body = "a".repeat(119) + "🌟 French Pharmacy collection";
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "1234567890",
+        advertiser: "Nykaa",
+        body,
+        previewHeadline: "French Pharmacy collection",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
+        landingPageUrl: "https://www.nykaa.com",
+        platforms: ["Instagram"],
+        active: true,
+      },
+      buildQuery(),
+    );
+
+    // The truncated subhead stays well-formed: the dangling high surrogate is
+    // dropped instead of being persisted as "�".
+    expect(ad.previewSubhead).toBe("a".repeat(119));
+    expect(/[\uD800-\uDFFF]/.test(ad.previewSubhead)).toBe(false);
+    expect(ad.previewSubhead.includes("\uFFFD")).toBe(false);
+    // The full body keeps the real emoji untouched for the detail pane.
+    expect(ad.body).toContain("🌟");
+  });
+
+  it("keeps a real emoji intact when the body fits inside the subhead cap", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: {},
+    }));
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    const body =
+      "French Pharmacy collection ✨ " + "x".repeat(100) + " more copy";
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "1234567891",
+        advertiser: "Nykaa",
+        body,
+        previewHeadline: "French Pharmacy collection",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567891",
+        landingPageUrl: "https://www.nykaa.com",
+        platforms: ["Instagram"],
+        active: true,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.previewSubhead).toContain("✨");
+    expect(/[\uD800-\uDFFF]/.test(ad.previewSubhead)).toBe(false);
   });
 
   it("post-filters cards whose observed active status contradicts the request", async () => {
@@ -2970,5 +3037,434 @@ describe("Ad Library relay page-identity parsing", () => {
       pageId: "15087023444",
       pageName: "Nykaa",
     });
+  });
+
+  it("records a cloudflare_browser_run meta_discovery row with route/source context", async () => {
+    const { browser } = createBrowserHarness();
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER: {} as Fetcher,
+        DB: harness.db,
+      } as never,
+      buildQuery(),
+    );
+
+    expect(result.ads).toHaveLength(1);
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      job_kind: "meta_discovery",
+      actual_provider: "cloudflare_browser_run",
+      route_context: "public_search",
+      source: "manual",
+      plan_tier: null,
+      outcome: "succeeded",
+      result_count: 1,
+      attempt: 1,
+    });
+    expect(String(rows[0].idempotency_key)).toMatch(/^[0-9a-f]{64}$/u);
+    harness.close();
+  });
+});
+
+describe("ordered multi-provider meta discovery attempts", () => {
+  it("records one job id with attempts 1..N across the browser→Quick Actions chain", async () => {
+    const launch = vi
+      .fn()
+      .mockRejectedValue(new Error("Unable to create new browser: code: 429: message: Rate limit exceeded"));
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+    const fetch = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: buildQuickActionContent(),
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1234",
+            },
+          },
+        ),
+      ) as never,
+    );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER: {} as Fetcher,
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+        DB: harness.db,
+      } as never,
+      buildQuery(),
+      {
+        planTier: "agency",
+        routeContext: "watchlist_scan",
+      },
+    );
+
+    expect(result.ads).toHaveLength(1);
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(1);
+
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+    // Same top-level job id across both legs.
+    expect(rows[0].job_id).toBe(rows[1].job_id);
+    expect(String(rows[0].job_id)).toMatch(/^[0-9a-f-]{36}$/u);
+    // Ordered attempts: failed Browser Run leg first, Quick Actions second.
+    expect(rows[0]).toMatchObject({
+      job_kind: "meta_discovery",
+      actual_provider: "cloudflare_browser_run",
+      attempt: 1,
+      outcome: "rate_limited",
+      plan_tier: "agency",
+      route_context: "watchlist_scan",
+      source: "scheduled",
+      result_count: null,
+    });
+    expect(rows[1]).toMatchObject({
+      job_kind: "meta_discovery",
+      actual_provider: "cloudflare_quick_actions",
+      attempt: 2,
+      outcome: "succeeded",
+      plan_tier: "agency",
+      route_context: "watchlist_scan",
+      source: "scheduled",
+      result_count: 1,
+    });
+    // Stable SHA-256 idempotency fingerprints, never the raw query.
+    for (const row of rows) {
+      expect(String(row.idempotency_key)).toMatch(/^[0-9a-f]{64}$/u);
+    }
+    harness.close();
+  });
+
+  it("reports the attempt count back so callers can continue the chain", async () => {
+    const { browser } = createBrowserHarness();
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+    const telemetryAttempts = { used: 0 };
+    await searchMetaLibraryByBrowser(
+      { BROWSER: {} as Fetcher } as never,
+      buildQuery(),
+      { telemetryAttempts },
+    );
+    expect(telemetryAttempts.used).toBe(1);
+  });
+
+  it("keeps one caller-supplied job id across the chain and continues its attempts", async () => {
+    const launch = vi
+      .fn()
+      .mockRejectedValue(new Error("Unable to create new browser: code: 429: message: Rate limit exceeded"));
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+    const fetch = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: buildQuickActionContent(),
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1234",
+            },
+          },
+        ),
+      ) as never,
+    );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+    const jobId = crypto.randomUUID();
+    const telemetryAttempts = { used: 0 };
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER: {} as Fetcher,
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+        DB: harness.db,
+      } as never,
+      buildQuery(),
+      { jobId, telemetryAttempts },
+    );
+
+    expect(result.ads).toHaveLength(1);
+    expect(telemetryAttempts.used).toBe(2);
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+    // The caller's top-level job id is passed through every provider leg.
+    for (const row of rows) {
+      expect(row.job_id).toBe(jobId);
+      // Duration comes from the same recorded started_at.
+      expect(Math.abs(
+        Number(row.duration_ms) -
+          (Date.parse(String(row.ended_at)) - Date.parse(String(row.started_at))),
+      )).toBeLessThanOrEqual(2);
+    }
+    expect(rows.map((row) => row.attempt)).toEqual([1, 2]);
+    harness.close();
+  });
+
+  it("never assigns the same attempt to Browser Run, Quick Actions, and Browserless legs", async () => {
+    const launch = vi
+      .fn()
+      .mockRejectedValue(new Error("Unable to create new browser: code: 429: message: Rate limit exceeded"));
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+    const fetch = mockFetchWithDns(
+      vi.fn(async (input) => {
+        if (String(input).includes("/browser-rendering/content")) {
+          throw new DOMException("aborted", "AbortError");
+        }
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: `
+                  <html>
+                    <body>
+                      <article>
+                        <strong>Nykaa</strong>
+                        <span>Sponsored</span>
+                        <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
+                        <a href="/ads/library/?id=1234567890">View ad details</a>
+                        <a href="https://www.nykaa.com/glow-sale">Shop now</a>
+                      </article>
+                    </body>
+                  </html>
+                `,
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      }) as never,
+    );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER: {} as Fetcher,
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+        BROWSERLESS_TOKEN: "browserless-token",
+        DB: harness.db,
+      } as never,
+      buildQuery(),
+    );
+
+    expect(result.ads).toHaveLength(1);
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(2);
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(3);
+    // One job id across all three provider legs, one distinct attempt each.
+    expect(new Set(rows.map((row) => row.job_id)).size).toBe(1);
+    expect(rows.map((row) => row.attempt)).toEqual([1, 2, 3]);
+    expect(rows[0]).toMatchObject({
+      actual_provider: "cloudflare_browser_run",
+      outcome: "rate_limited",
+    });
+    expect(rows[1]).toMatchObject({
+      actual_provider: "cloudflare_quick_actions",
+      outcome: "timeout",
+    });
+    expect(rows[2]).toMatchObject({
+      actual_provider: "browserless_bql",
+      outcome: "succeeded",
+      result_count: 1,
+    });
+    harness.close();
+  });
+
+  it("records a healthy no-results leg as empty, not succeeded", async () => {
+    const fetch = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: buildQuickActionContent({ cards: [], noResults: true }),
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1000",
+            },
+          },
+        ),
+      ) as never,
+    );
+
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+        DB: harness.db,
+      } as never,
+      buildQuery(),
+    );
+
+    expect(result.ads).toEqual([]);
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(1);
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actual_provider: "cloudflare_quick_actions",
+      attempt: 1,
+      outcome: "empty",
+      result_count: 0,
+      browser_ms_used: 1000,
+    });
+    harness.close();
+  });
+
+  it("registers slow telemetry writes with waitUntil without delaying the search", async () => {
+    // With a caller-supplied ExecutionContext, the bounded write race still
+    // caps the wait while the never-settling write is handed to waitUntil for
+    // background completion — discovery completes promptly and never throws.
+    const hangingDb = {
+      prepare() {
+        return {
+          bind() {
+            return {
+              run: () => new Promise<never>(() => undefined),
+            };
+          },
+        };
+      },
+    } as unknown as D1Database;
+    const waitUntil = vi.fn();
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: buildQuickActionContent(),
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "500",
+            },
+          },
+        ),
+      ) as never,
+    );
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+    const startedAt = Date.now();
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+        DB: hangingDb,
+      } as never,
+      buildQuery(),
+      { executionContext: { waitUntil } as unknown as ExecutionContext },
+    );
+
+    expect(result.ads).toHaveLength(1);
+    expect(Date.now() - startedAt).toBeLessThan(2000);
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(waitUntil.mock.calls[0]?.[0]).toBeInstanceOf(Promise);
   });
 });
