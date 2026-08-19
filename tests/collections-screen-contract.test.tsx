@@ -132,7 +132,7 @@ function screenPrimaries(view: HTMLElement) {
 
 describe("collections screen-level Rank-1 budget (brief §5)", () => {
   it.each([
-    ["free plan gate", { collections: [], plan: "free", selectedCollection: null }, 1],
+    ["free first run", { collections: [], plan: "free", selectedCollection: null }, 1],
     ["first run", { collections: [], plan: "agency", selectedCollection: null }, 1],
     ["collection selected, nothing filed", {}, 1],
     ["populated", { items: [savedItem()] }, 1],

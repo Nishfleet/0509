@@ -160,7 +160,7 @@ export function buildLifecycleNudges(input: {
     nudges.push({
       id: "proof_usage",
       title: "Usage near cap",
-      detail: `${proofUsage.used ?? 0} of ${proofUsage.limit ?? 0} evidence checks are used.`,
+      detail: `${proofUsage.used ?? 0} of ${proofUsage.limit ?? 0} proof captures are used.`,
       href: "/app/billing",
       priority: proofUsage.warningLevel === "exhausted" ? "high" : "medium",
     });
@@ -206,7 +206,7 @@ function firstPreValueSafetyNudge(
     return {
       id: "proof_usage",
       title: "Usage near cap",
-      detail: `${proofUsage.used ?? 0} of ${proofUsage.limit ?? 0} evidence checks are used.`,
+      detail: `${proofUsage.used ?? 0} of ${proofUsage.limit ?? 0} proof captures are used.`,
       href: "/app/billing",
       priority: "high",
     };
