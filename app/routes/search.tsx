@@ -62,6 +62,7 @@ import {
   SUPPORTED_COUNTRIES,
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
+import { scrubBrokenUnicode } from "~/lib/text-safe";
 import { PUBLIC_SEARCH_RATE_LIMIT_MESSAGE } from "~/lib/customer-route-error";
 import {
   formatAdvertiserLabel,
@@ -2057,7 +2058,7 @@ export default function SearchRoute() {
                 <div className="f9-wk-creative">
                   <AdThumb ad={selectedAd} />
                   <h3 className="f9-wk-creative-head">
-                    {selectedAd.previewHeadline}
+                    {scrubBrokenUnicode(selectedAd.previewHeadline)}
                   </h3>
                   <p className="f9-wk-quote">{formatAdDetailBody(selectedAd)}</p>
                 </div>
@@ -2077,7 +2078,7 @@ export default function SearchRoute() {
                 <DetailBlock kicker="What the ad says">
                   <DetailFacts
                     rows={[
-                      { key: "Hook", value: selectedAd.hook },
+                      { key: "Hook", value: scrubBrokenUnicode(selectedAd.hook) },
                       ...(selectedAdAngle
                         ? [
                             {
@@ -2088,9 +2089,11 @@ export default function SearchRoute() {
                         : []),
                       {
                         key: "Offer",
-                        value: formatOfferDisplay(selectedAd.offer),
+                        value: scrubBrokenUnicode(
+                          formatOfferDisplay(selectedAd.offer),
+                        ),
                       },
-                      { key: "CTA", value: selectedAd.cta },
+                      { key: "CTA", value: scrubBrokenUnicode(selectedAd.cta) },
                       {
                         key: "Format",
                         value: formatCreativeFormatLabel(selectedAd.format),
