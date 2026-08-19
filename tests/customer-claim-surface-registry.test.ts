@@ -250,7 +250,6 @@ function registryContractSha256() {
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
   "ffb062105899cd89ba5610aa4a3c825026770e16dda91685d143dedc061f8151";
 
-
 type Catalogs = {
   agentActions: string[];
   billingSkus: string[];
