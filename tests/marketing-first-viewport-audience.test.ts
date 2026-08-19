@@ -72,7 +72,7 @@ describe("first viewport names the audience (product-live/0509-first-viewport-au
   });
 
   it("keeps the mechanism and evidence claims of the deck intact", () => {
-    expect(marketingRouteText).toContain("watches competitors&rsquo; Meta ads and landing pages");
+    expect(marketingRouteText).toContain("watches competitors&rsquo; landing pages for price, offer, and CTA changes");
     expect(marketingRouteText).toContain("saves the screenshots");
     expect(marketingRouteText).toContain("before your alarm goes off");
     expect(marketingRouteText).toContain("Proof-backed brief");
