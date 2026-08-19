@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-canonical_repository="Nishfleet/0509"
+canonical_repository="nish3451/0509"
 canonical_ref="refs/heads/main"
 sha_pattern='^[a-f0-9]{40}$'
 
