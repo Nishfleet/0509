@@ -1866,3 +1866,64 @@ function digestItem(
     },
   };
 }
+
+describe("buildDigestEmail — brief retention frame (lane 1)", () => {
+  it("renders the four retention fields with previous-brief delta on the weekly brief", () => {
+    const email = buildDigestEmail({
+      name: "Priya",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+      ],
+      previousBriefItemCount: 2,
+      hasPreviousBrief: true,
+      nextScanAt: "2026-06-15T03:00:00.000Z",
+      nextScanLabel: "Mon 15 Jun, 3:00 am UTC",
+    });
+
+    expect(email.html).toContain("Brief retention");
+    expect(email.html).toContain("Since last brief:");
+    expect(email.html).toContain("Accountable reviewer:");
+    expect(email.html).toContain("Confidence:");
+    expect(email.html).toContain("Expiry:");
+    expect(email.html).toContain("Priya");
+    expect(email.html).toContain("1 change filed");
+    expect(email.html).toContain("1 change fewer than the previous brief");
+    expect(email.html).toContain("Expires at the next check");
+
+    expect(email.text).toContain("Brief retention:");
+    expect(email.text).toContain("Since last brief: 1 change filed");
+    expect(email.text).toContain("Accountable reviewer: Priya");
+    expect(email.text).toContain("Expiry: Expires at the next check");
+  });
+
+  it("renders the first-brief baseline delta when no previous brief is on file", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        digestItem("Boat", "CTA changed", 80, "scan_backed"),
+      ],
+      hasPreviousBrief: false,
+    });
+
+    expect(email.html).toContain("first brief on file");
+    expect(email.html).toContain("Expiry unset");
+  });
+});
