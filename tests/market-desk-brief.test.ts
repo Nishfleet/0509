@@ -124,6 +124,84 @@ describe("buildMarketDeskBrief", () => {
     expect(brief.summary).not.toContain("Scheduled checks run");
   });
 
+  it("says the first sweep is running now and that results land in-session", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [
+        watchlist({ id: "watch-1", targetLabel: "Boat Lifestyle" }),
+        watchlist({ id: "watch-2", targetLabel: "Noise" }),
+      ],
+      nextScanLabel: "tonight",
+      firstScanStates: [
+        { watchlistId: "watch-1", status: "running", errorCode: null },
+        { watchlistId: "watch-2", status: "pending", errorCode: null },
+      ],
+    }));
+
+    expect(brief.state).toBe("queued");
+    expect(brief.title).toBe("First sweep is running now");
+    expect(brief.summary).toContain("results and your first mini-brief land here automatically");
+    expect(brief.items[0]).toMatchObject({
+      label: "Scanning",
+      title: "Boat Lifestyle",
+      detail: "First scan running now — results land here",
+    });
+    expect(brief.items[1]).toMatchObject({
+      label: "Scanning",
+      title: "Noise",
+      detail: "First scan starts shortly",
+    });
+  });
+
+  it("says the free activation scan is running now without a paid claim", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      plan: "free",
+      watchlists: [watchlist({ id: "watch-1", targetLabel: "Boat Lifestyle" })],
+      nextScanLabel: "Mon 15 Jun, 3:00 am UTC",
+      firstScanStates: [
+        { watchlistId: "watch-1", status: "running", errorCode: null },
+      ],
+    }));
+
+    expect(brief.title).toBe("Activation scan is running now");
+    expect(brief.summary).toContain("mini-brief land here automatically");
+    expect(brief.summary).toContain("weekly brief");
+    expect(brief.items[0]).toMatchObject({
+      label: "Scanning",
+      title: "Boat Lifestyle",
+      detail: "First scan running now — results land here",
+    });
+  });
+
+  it("stays on the queued first sweep copy while no run state is known", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [watchlist({ id: "watch-1", targetLabel: "Boat Lifestyle" })],
+      nextScanLabel: "tonight",
+      firstScanStates: null,
+    }));
+
+    expect(brief.title).toBe("First sweep is queued");
+    expect(brief.items[0]).toMatchObject({
+      label: "Queued",
+      detail: "First scan pending",
+    });
+  });
+
+  it("names a failed first scan honestly instead of promising a landing", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [watchlist({ id: "watch-1", targetLabel: "Boat Lifestyle" })],
+      nextScanLabel: "tonight",
+      firstScanStates: [
+        { watchlistId: "watch-1", status: "failed", errorCode: "provider_unavailable" },
+      ],
+    }));
+
+    expect(brief.title).toBe("First sweep is queued");
+    expect(brief.summary).not.toContain("land here automatically");
+    expect(brief.items[0]).toMatchObject({
+      detail: "First scan couldn't finish — open for next steps",
+    });
+  });
+
   it("summarizes quiet overnight checks without inventing a move", () => {
     const brief = buildMarketDeskBrief(baseInput({
       watchlists: [watchlist({ lastScannedAt: "2026-06-20T02:00:00.000Z" })],
@@ -294,5 +372,72 @@ describe("quiet is a proof claim (remediation)", () => {
     expect(brief.title).toBe("1 check failed");
     expect(brief.state).toBe("queued");
     expect(brief.summary).toContain("cannot be called quiet");
+  });
+});
+
+describe("brief retention frame (lane 1)", () => {
+  it("carries material delta, owner, confidence, and expiry on a changed brief", () => {
+    const brief = buildMarketDeskBrief(
+      baseInput({
+        watchlists: [watchlist({ id: "watch-1", lastScannedAt: "2026-06-20T00:00:00.000Z" })],
+        recentEvents: [
+          event({
+            id: "event-1",
+            status: "confirmed",
+            metadata: {
+              proofCaptureId: "proof-1",
+              sourceStatus: "proof_backed",
+            },
+          }),
+        ],
+        digests: [
+          digest({ id: "digest-prev", items: [{} as never] }),
+        ],
+        ownerName: "Priya",
+        nextScanAt: "2026-06-27T03:00:00.000Z",
+      }),
+    );
+
+    expect(brief.retention).toBeDefined();
+    expect(brief.retention.delta).toContain("1 change filed");
+    expect(brief.retention.owner).toBe("Priya");
+    expect(brief.retention.confidence).toBe("high");
+    expect(brief.retention.expiry).toContain("Expires at the next check");
+  });
+
+  it("renders an explicit unavailable confidence when no items are filed", () => {
+    const brief = buildMarketDeskBrief(
+      baseInput({
+        nextScanLabel: "",
+        nextScanAt: null,
+      }),
+    );
+
+    expect(brief.retention.confidence).toBe("unavailable");
+    expect(brief.retention.confidenceLabel).toContain("Confidence unavailable");
+    expect(brief.retention.expiry).toContain("Expiry unset");
+  });
+
+  it("downgrades confidence to low when source access is degraded", () => {
+    const brief = buildMarketDeskBrief(
+      baseInput({
+        watchlists: [watchlist({ id: "watch-1", lastScannedAt: "2026-06-20T00:00:00.000Z" })],
+        recentEvents: [
+          event({
+            id: "event-1",
+            status: "confirmed",
+            metadata: {
+              proofCaptureId: "proof-1",
+              sourceStatus: "proof_backed",
+            },
+          }),
+        ],
+        sourceStatus: "degraded",
+        ownerName: "Priya",
+      }),
+    );
+
+    expect(brief.retention.confidence).toBe("low");
+    expect(brief.retention.confidenceLabel).toContain("Low confidence");
   });
 });

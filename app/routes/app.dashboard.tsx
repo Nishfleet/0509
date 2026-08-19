@@ -19,6 +19,7 @@ import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { FeedbackStrip } from "~/components/workspace/feedback-strip";
+import { useFirstCapturePolling } from "~/components/workspace/use-first-capture-polling";
 import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
@@ -34,7 +35,7 @@ import { buildMarketDeskBrief } from "~/lib/market-desk-brief";
 import { buildOvernightSentence } from "~/lib/overnight-sentence";
 import { pendingBlockingSetupItems } from "~/lib/setup-checklist";
 import { buildSearchParams } from "~/lib/normalize";
-import { formatNextScanLabel } from "~/lib/schedule-display";
+import { formatNextScanLabel, nextScheduledScanAt } from "~/lib/schedule-display";
 import { formatMachineTokenLabel } from "~/lib/landing-page-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { AppEnv } from "~/lib/env.server";
@@ -145,6 +146,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listRecentWorkspaceWatchEvents,
     listSavedQueries,
     listWatchlistRunPairsForEventIds,
+    listFirstScanRunStates,
     getWorkspaceDeliveryConfig,
     listWatchlists,
   } = await import("~/lib/data.server");
@@ -213,6 +215,20 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       [],
     ),
   );
+  // Same-session first value: only workspaces with an active competitor that
+  // has never been scanned ask about first-scan run state, and that state is
+  // what lets the Overview say "running now" instead of a static queued claim.
+  const firstScanStatesPromise = watchlistsPromise.then((allWatchlists) =>
+    allWatchlists.some(
+      (watchlist) => watchlist.isActive && !watchlist.lastScannedAt,
+    )
+      ? optionalSection(
+          "firstScan",
+          listFirstScanRunStates(env, workspaceUserId),
+          [],
+        )
+      : [],
+  );
   const [
     savedQueries,
     collections,
@@ -231,6 +247,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     deliveryTargets,
     overnightStats,
     successfulProofStats,
+    firstScanStates,
   ] = await Promise.all([
     optionalSection("savedQueries", listSavedQueries(env, workspaceUserId), []),
     optionalSection("collections", listCollections(env, workspaceUserId), []),
@@ -305,6 +322,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       getSuccessfulProofCaptureStatsForUser(env, workspaceUserId),
       { count: 0, latestAt: null },
     ),
+    firstScanStatesPromise,
   ]);
   const recentProofCaptures = recentProofPairs.flatMap((pair) =>
     pair.previous ? [pair.current, pair.previous] : [pair.current],
@@ -333,6 +351,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceReadiness,
     counterMoveFollowUps,
     plan,
+    // Brief-as-retention-loop (lane 1, 2026-08-14): the workspace owner
+    // identity is already on hand from requireWorkspaceSession — pass it
+    // through so the brief's accountable reviewer field renders the actual
+    // name instead of the truthful "Workspace owner" fallback.
+    ownerName: !isMember ? ownerName : null,
     teamMemberCount: workspaceMembers.filter((member) => {
       if (member.status === "active" || !member.tokenExpiresAt) {
         return true;
@@ -350,7 +373,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     sectionWarnings,
     setupPrefillWebsite: requestUrl.searchParams.get("website")?.trim() ?? "",
     setupPrefillCountry: requestUrl.searchParams.get("country")?.trim() ?? "",
+    setupCreatedCount: readSetupCreatedCount(requestUrl),
+    firstScanStates,
+    awaitingFirstScan: firstScanStates.some(
+      (state) => state.status === "pending" || state.status === "running",
+    ),
   };
+}
+
+function readSetupCreatedCount(requestUrl: URL) {
+  const value = Number(requestUrl.searchParams.get("created"));
+  return Number.isInteger(value) && value > 0 ? value : 0;
 }
 
 export async function action(args: ActionFunctionArgs) {
@@ -470,7 +503,7 @@ export async function action(args: ActionFunctionArgs) {
           current: result.current,
           message:
             result.limit <= 1
-              ? "Free includes 1 watchlist with a weekly check and weekly email brief. Upgrade for 3–6 hour checks and more competitors."
+              ? "Free includes 1 watchlist, 1 Collection, and a weekly proof-backed brief. Upgrade for 3–6 hour checks and more competitors."
               : "You've reached your competitor tracking limit — pause another watchlist first.",
         }),
         intent,
@@ -541,6 +574,18 @@ export default function AppDashboardRoute() {
   const watchlists = data.watchlists ?? [];
   const digests = data.digests ?? [];
   const revalidator = useRevalidator();
+  // Same-session first value: while any competitor is still waiting on its
+  // first live scan, the Overview keeps refreshing itself so the first
+  // mini-brief lands without a manual reload. Bounded (≈10 minutes of 30s
+  // polls) and it stops the moment nothing is waiting.
+  const awaitingFirstScan = Boolean(
+    data.awaitingFirstScan ??
+      (data.firstScanStates ?? []).some(
+        (state) => state.status === "pending" || state.status === "running",
+      ),
+  );
+  useFirstCapturePolling(awaitingFirstScan);
+  const setupCreatedCount = data.setupCreatedCount ?? 0;
   const recentEvents = data.recentEvents ?? [];
   const recentProofCaptures = data.recentProofCaptures ?? [];
   const proofUsage = data.proofUsage ?? {
@@ -554,6 +599,10 @@ export default function AppDashboardRoute() {
   const nextScanLabel =
     data.nextScanLabel ??
     formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone);
+  // Brief-as-retention-loop (lane 1, 2026-08-14): the brief's expiry field
+  // needs an ISO timestamp in addition to the human label, so the explicit
+  // expiry state survives when only a label is available.
+  const nextScanAt = nextScheduledScanAt(plan, new Date()).toISOString();
   const hasPaymentIssue = Boolean(data.hasPaymentIssue);
   const competitorCount = watchlists.length;
   const activeWatchlists = watchlists.filter(
@@ -598,6 +647,9 @@ export default function AppDashboardRoute() {
     nextScanLabel,
     plan,
     sourceStatus: data.metaStatus?.status,
+    ownerName: data.ownerName ?? null,
+    nextScanAt,
+    firstScanStates: data.firstScanStates,
   });
   const sourceNeedsRecovery =
     Boolean(data.metaStatus) && data.metaStatus?.status !== "healthy";
@@ -661,6 +713,33 @@ export default function AppDashboardRoute() {
         title="Today"
       />
 
+      <section
+        aria-labelledby="overview-brief-retention-title"
+        className="f9-wk-sec"
+      >
+        <p className="f9-wk-kick" id="overview-brief-retention-title">
+          Brief retention
+        </p>
+        <dl className="f9-wk-dl">
+          <div className="f9-wk-contents">
+            <dt>Since last brief</dt>
+            <dd>{marketDeskBrief.retention.delta}</dd>
+          </div>
+          <div className="f9-wk-contents">
+            <dt>Accountable reviewer</dt>
+            <dd>{marketDeskBrief.retention.owner}</dd>
+          </div>
+          <div className="f9-wk-contents">
+            <dt>Confidence</dt>
+            <dd>{marketDeskBrief.retention.confidenceLabel}</dd>
+          </div>
+          <div className="f9-wk-contents">
+            <dt>Expiry</dt>
+            <dd>{marketDeskBrief.retention.expiry}</dd>
+          </div>
+        </dl>
+      </section>
+
       {sectionWarningCopy ? (
         <FeedbackStrip label="Partial overview" tone="bad">
           {sectionWarningCopy} Everything else shown here is current — refresh to load the
@@ -688,20 +767,30 @@ export default function AppDashboardRoute() {
       {proofUsage.warningLevel !== "ok" ? (
         <FeedbackStrip
           actions={
-            <Link className="f9-wk-lnk" to="/app/billing?source=evidence#top-ups">
-              Review check packs <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+            <Link
+              className="f9-wk-lnk"
+              to={proofUsage.plan === "free"
+                ? "/app/billing?source=evidence#plans"
+                : "/app/billing?source=evidence#top-ups"}
+            >
+              {proofUsage.plan === "free" ? "Compare plans" : "Review check packs"}{" "}
+              <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           }
           label="Evidence usage"
           tone="bad"
         >
           {proofUsage.warningLevel === "exhausted"
-            ? "You've used all your evidence checks. "
+            ? proofUsage.plan === "free"
+              ? "You've used your free plan's proof-backed capture for this month. "
+              : "You've used all your evidence checks. "
             : "You've used over 80% of your evidence checks. "}
           {proofUsage.used} of {proofUsage.limit} checks used in the current billing period.
           {proofUsage.upgradeTarget
             ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
-            : " Add an overflow pack before the next busy campaign."}
+            : proofUsage.plan === "free"
+              ? " Move to Scout for more captures and 6-hour checks."
+              : " Add an overflow pack before the next busy campaign."}
         </FeedbackStrip>
       ) : null}
 
@@ -718,6 +807,45 @@ export default function AppDashboardRoute() {
         />
         <ActionFeedback data={actionData} intent="close-counter-move" />
       </div>
+
+      {setupCreatedCount > 0 || awaitingFirstScan ? (
+        <div className="f9-wk-sec">
+          <FeedbackStrip
+            actions={
+              <Link className="f9-wk-lnk" to="/app/watchlists">
+                Open Competitors{" "}
+                <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+              </Link>
+            }
+            label={awaitingFirstScan ? "First scan live" : "Setup complete"}
+          >
+            {setupCreatedCount > 0 ? (
+              awaitingFirstScan ? (
+                <>
+                  Created {setupCreatedCount} competitor{" "}
+                  {setupCreatedCount === 1 ? "watchlist" : "watchlists"} — the
+                  first live scan is running now. This page refreshes
+                  automatically, and your first mini-brief lands here the
+                  moment it completes.
+                </>
+              ) : (
+                <>
+                  Created {setupCreatedCount} competitor{" "}
+                  {setupCreatedCount === 1 ? "watchlist" : "watchlists"} — the
+                  first live scan has started. Your first mini-brief lands in
+                  the brief below as soon as it completes.
+                </>
+              )
+            ) : (
+              <>
+                Your first scan is running now. This page refreshes
+                automatically — the first mini-brief and any proof-backed
+                evidence land here the moment the scan completes.
+              </>
+            )}
+          </FeedbackStrip>
+        </div>
+      ) : null}
 
       {readinessUnavailable ? (
         <div className="f9-wk-sec" id="setup-checklist">

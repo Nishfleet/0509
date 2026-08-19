@@ -26,18 +26,22 @@ function digestInput() {
   };
 }
 
-function deliveryTarget(channel: "slack" | "whatsapp") {
+function deliveryTarget(channel: "slack" | "whatsapp" | "teams") {
   const isWhatsApp = channel === "whatsapp";
   return {
     id: `${channel}-target-1`,
     userId: "user-1",
     watchlistId: null,
     channel,
-    targetValue: isWhatsApp ? "+919999999999" : "slack:abc123",
+    targetValue: isWhatsApp ? "+919999999999" : channel === "teams" ? "teams:abc123" : "slack:abc123",
     validationStatus: "validated",
     isValidated: true,
     isOptedIn: true,
-    optInSource: isWhatsApp ? "manual_whatsapp_setup" : "manual_slack_webhook",
+    optInSource: isWhatsApp
+      ? "manual_whatsapp_setup"
+      : channel === "teams"
+        ? "manual_teams_webhook"
+        : "manual_slack_webhook",
     optedInAt: "2026-07-01T00:00:00.000Z",
     isPaused: false,
     pausedAt: null,
@@ -53,7 +57,7 @@ function deliveryTarget(channel: "slack" | "whatsapp") {
 }
 
 function deliveryAttempt(
-  channel: "slack" | "whatsapp",
+  channel: "slack" | "whatsapp" | "teams",
   status: "failed" | "pending" | "sent",
 ) {
   const target = deliveryTarget(channel);
@@ -65,7 +69,12 @@ function deliveryAttempt(
     deliveryTargetId: target.id,
     lane: "customer",
     channel,
-    provider: channel === "slack" ? "slack_incoming_webhook" : "whatsapp_cloud_api",
+    provider:
+      channel === "slack"
+        ? "slack_incoming_webhook"
+        : channel === "teams"
+          ? "microsoft_teams_incoming_webhook"
+          : "whatsapp_cloud_api",
     status,
     webhookStatus: status === "failed" ? "failed" : status === "pending" ? "pending" : "provider_unknown",
     targetValue: target.targetValue,
@@ -86,7 +95,7 @@ function deliveryAttempt(
 }
 
 function mockDataServer(input: {
-  channel: "slack" | "whatsapp";
+  channel: "slack" | "whatsapp" | "teams";
   getDeliveryAttemptByIdempotencyKey: ReturnType<typeof vi.fn>;
   createDeliveryAttempt?: ReturnType<typeof vi.fn>;
   updateDeliveryAttemptResult: ReturnType<typeof vi.fn>;
@@ -117,6 +126,7 @@ function mockDataServer(input: {
       emailEnabled: false,
       whatsappEnabled: input.channel === "whatsapp",
       slackEnabled: input.channel === "slack",
+      teamsEnabled: input.channel === "teams",
       quietHours: null,
       timezone: "Asia/Kolkata",
       createdAt: "2026-07-01T00:00:00.000Z",
@@ -159,6 +169,8 @@ beforeEach(() => {
   }));
   vi.doMock("~/lib/ga-customer-surface", () => ({
     isSlackDeliveryCustomerFacing: () => true,
+    isSlackWebhookDeliveryCustomerFacing: () => true,
+    isTeamsWebhookDeliveryCustomerFacing: () => true,
     isWhatsAppDeliveryCustomerFacing: () => true,
   }));
 });
@@ -172,6 +184,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/ga-customer-surface");
   vi.doUnmock("~/lib/plan.server");
   vi.doUnmock("~/lib/slack-webhook.server");
+  vi.doUnmock("~/lib/teams-webhook.server");
   vi.doUnmock("~/lib/whatsapp.server");
 });
 
@@ -261,6 +274,71 @@ describe("weekly digest per-target delivery claims", () => {
     expect(updateDeliveryAttemptResult.mock.invocationCallOrder[0]).toBeLessThan(
       sendSlackWebhookMessage.mock.invocationCallOrder[0],
     );
+  });
+
+  it("claims a fresh Teams attempt before the provider so overlapping workers emit once", async () => {
+    const pendingAttempt = deliveryAttempt("teams", "pending");
+    const getDeliveryAttemptByIdempotencyKey = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(pendingAttempt);
+    const createDeliveryAttempt = vi
+      .fn()
+      .mockResolvedValueOnce(pendingAttempt.id)
+      .mockRejectedValueOnce(
+        new Error("UNIQUE constraint failed: delivery_attempt.idempotency_key"),
+      );
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockDataServer({
+      channel: "teams",
+      getDeliveryAttemptByIdempotencyKey,
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+    });
+    const sendTeamsWebhookUrl = vi.fn().mockResolvedValue({
+      provider: "microsoft_teams_incoming_webhook",
+      status: "sent",
+      webhookStatus: "delivered",
+      providerMessageId: null,
+      providerStatusLastSeenAt: "2026-07-13T05:02:00.000Z",
+      errorMessage: null,
+      deliveredAt: "2026-07-13T05:02:00.000Z",
+    });
+    vi.doMock("~/lib/teams-webhook.server", () => ({
+      TEAMS_PROVIDER: "microsoft_teams_incoming_webhook",
+      prepareTeamsWebhookTarget: vi.fn().mockResolvedValue({
+        ok: true,
+        webhookUrl: "https://acme.webhook.office.test/webhookb2/redacted",
+      }),
+      sendTeamsWebhookUrl,
+    }));
+    vi.doMock("~/lib/slack-webhook.server", () => ({
+      SLACK_PROVIDER: "slack_incoming_webhook",
+      prepareSlackWebhookTarget: vi.fn(),
+      sendSlackWebhookUrl: vi.fn(),
+    }));
+    mockWhatsAppServer();
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    await deliverWeeklyDigest({} as never, digestInput());
+    await deliverWeeklyDigest({} as never, digestInput());
+
+    expect(createDeliveryAttempt).toHaveBeenCalledTimes(2);
+    expect(createDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        channel: "teams",
+        status: "pending",
+        webhookStatus: "pending",
+        payloadSnapshot: expect.objectContaining({
+          deliveryClaimProtocol: DIGEST_PROVIDER_CLAIM_PROTOCOL,
+        }),
+        timestamp: expect.any(String),
+      }),
+    );
+    expect(sendTeamsWebhookUrl).toHaveBeenCalledTimes(1);
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(2);
   });
 
   it("atomically reclaims a failed WhatsApp attempt so overlapping retries emit once", async () => {

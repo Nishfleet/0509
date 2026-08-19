@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           sha_pattern='^[a-f0-9]{40}$'
-          test "$GITHUB_REPOSITORY" = "nish3451/0509"
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
           test "$GITHUB_REF" = "refs/heads/main"
           test "$GITHUB_RUN_ATTEMPT" = "1"
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
@@ -116,6 +116,17 @@ jobs:
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance, same rationale as deploy-production.yml's
+          # post-gate reconfirm (#630): this step re-verifies the exact SHA the
+          # authorize step already pinned. A push landing during the run's
+          # npm-ci/lane-acquire window must not abort the unattended nightly
+          # backup - it would leave the night with no fresh proof, which is
+          # exactly what stranded releases on 2026-08-11. The CAS script
+          # records the move loudly and the backup still covers exactly
+          # PINNED_SHA (real main at run start). Every other CAS failure stays
+          # fail-closed, and the schedule's empty-expected_sha contract in
+          # authorize still forbids smuggling a chosen commit.
+          TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/ci-verify-production-candidate.sh
       - name: Run approved D1-to-R2 backup
         env:

@@ -11,6 +11,7 @@ import {
   buildScanTroubleEmail,
   renderEmailAccountabilityBlock,
 } from "~/lib/digest-email.server";
+import { getPlanEntitlements, type ScheduledScanCadence } from "~/lib/plan-entitlements";
 import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
@@ -59,7 +60,8 @@ import {
   type CustomerEvidenceState,
 } from "~/lib/evidence-render-contract";
 import {
-  isSlackDeliveryCustomerFacing,
+  isSlackWebhookDeliveryCustomerFacing,
+  isTeamsWebhookDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
 import { EMAIL_H1_STYLE } from "~/lib/email-template.server";
@@ -85,6 +87,11 @@ import {
   sendSlackWebhookUrl,
   SLACK_PROVIDER,
 } from "~/lib/slack-webhook.server";
+import {
+  prepareTeamsWebhookTarget,
+  sendTeamsWebhookUrl,
+  TEAMS_PROVIDER,
+} from "~/lib/teams-webhook.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 // Facade re-exports: product code and tests import every delivery sender
@@ -185,6 +192,13 @@ export interface DeliverWeeklyDigestInput {
   cadence?: DigestCadence;
   lane?: DeliveryLane;
   proofEmailSubject?: string;
+  // Brief-as-retention-loop (lane 1, 2026-08-14): the prior digest's
+  // item count when a previous brief exists on file. Drives the weekly
+  // email's "since last brief" delta line.
+  previousBriefItemCount?: number | null;
+  hasPreviousBrief?: boolean | null;
+  nextScanAt?: string | null;
+  nextScanLabel?: string | null;
 }
 
 export interface DeliverWatchlistAlertsInput {
@@ -259,13 +273,16 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
   if (input.proofEmailSubject !== undefined && emailTargets.length !== 1) {
     throw new Error("Gate C proof email target must resolve uniquely.");
   }
-  // "All quiet" heartbeats stay email-only: a WhatsApp template or Slack
+  // "All quiet" heartbeats stay email-only: a WhatsApp template or Slack/Teams
   // ping saying nothing happened reads as noise on those channels.
   const whatsappTargets = !isHeartbeat && config.whatsappEnabled && isWhatsAppDeliveryCustomerFacing()
     ? await resolveDigestWhatsAppTargets(env, input.userId)
     : [];
-  const slackTargets = !isHeartbeat && config.slackEnabled && isSlackDeliveryCustomerFacing()
+  const slackTargets = !isHeartbeat && config.slackEnabled && isSlackWebhookDeliveryCustomerFacing()
     ? await resolveDigestSlackTargets(env, input.userId)
+    : [];
+  const teamsTargets = !isHeartbeat && config.teamsEnabled && isTeamsWebhookDeliveryCustomerFacing()
+    ? await resolveDigestTeamsTargets(env, input.userId)
     : [];
 
   const attempts: DigestAttemptSummary[] = [];
@@ -281,7 +298,15 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
 
   for (const target of emailTargets) {
     attempts.push(
-      await deliverDigestToEmailTarget(env, input, lane, target, digestTimeZone, upgradeNote),
+      await deliverDigestToEmailTarget(
+        env,
+        input,
+        lane,
+        target,
+        digestTimeZone,
+        upgradeNote,
+        getPlanEntitlements(entitledConfigs.plan).scheduledScanCadence,
+      ),
     );
   }
 
@@ -291,6 +316,10 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
 
   for (const target of slackTargets) {
     attempts.push(await deliverDigestToSlackTarget(env, input, lane, target, digestTimeZone));
+  }
+
+  for (const target of teamsTargets) {
+    attempts.push(await deliverDigestToTeamsTarget(env, input, lane, target, digestTimeZone));
   }
 
   const digestStatusAttempt = selectDigestStatusAttempt(attempts);
@@ -525,6 +554,9 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   const slackTargets = batches.some((batch) => batch.allowedChannels.includes("slack"))
     ? await resolveAlertSlackTargets(env, input.userId, input.watchlist.id)
     : [];
+  const teamsTargets = batches.some((batch) => batch.allowedChannels.includes("teams"))
+    ? await resolveAlertTeamsTargets(env, input.userId, input.watchlist.id)
+    : [];
 
   // One batched lookup so alert emails can show the primary event's captured
   // creative. Only fetched when an email will actually render it.
@@ -542,7 +574,9 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   const needsEvidenceResolution = batches.some(
     (batch) =>
       !batch.provisional &&
-      (batch.allowedChannels.includes("email") || batch.allowedChannels.includes("slack")),
+      (batch.allowedChannels.includes("email") ||
+        batch.allowedChannels.includes("slack") ||
+        batch.allowedChannels.includes("teams")),
   );
   const alertEvidenceByEventId = needsEvidenceResolution
     ? await loadAlertEvidenceStates(env, input.userId, input.events)
@@ -610,6 +644,21 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
         );
       }
     }
+
+    if (batch.allowedChannels.includes("teams")) {
+      for (const target of teamsTargets) {
+        attempts.push(
+          await deliverInstantTeamsBatch(env, {
+            lane,
+            userId: input.userId,
+            deliveryTarget: target,
+            watchlistId: input.watchlist.id,
+            batch,
+            content,
+          }),
+        );
+      }
+    }
   }
 
   return {
@@ -648,7 +697,7 @@ export async function reconcileDeliveryStatus(
   return attempt;
 }
 
-const DIGEST_STATUS_CHANNEL_PRIORITY: DeliveryChannel[] = ["email", "slack", "whatsapp"];
+const DIGEST_STATUS_CHANNEL_PRIORITY: DeliveryChannel[] = ["email", "slack", "teams", "whatsapp"];
 
 async function reconcileWhatsAppSetupValidationTargetFromAttempt(
   env: AppEnv,
@@ -741,6 +790,7 @@ function selectDigestStatusAttempt(attempts: DigestAttemptSummary[]) {
 
 function digestStatusProvider(attempt: DigestAttemptSummary) {
   if (attempt.channel === "slack") return SLACK_PROVIDER;
+  if (attempt.channel === "teams") return TEAMS_PROVIDER;
   if (attempt.channel === "whatsapp") return "whatsapp_cloud_api";
   return EMAIL_PROVIDER;
 }
@@ -946,6 +996,7 @@ async function deliverDigestToEmailTarget(
   target: DeliveryTargetRecord,
   timeZone: string | null,
   upgradeNote: string | null = null,
+  scanCadence: ScheduledScanCadence = "weekly",
 ): Promise<DigestAttemptSummary> {
   const targetValue = normalizeDeliveryEmailValue(target.targetValue);
   if (!targetValue) {
@@ -980,9 +1031,14 @@ async function deliverDigestToEmailTarget(
     heartbeat: input.heartbeat ?? null,
     strategyParagraph: input.strategyParagraph ?? null,
     cadence: input.cadence,
+    scanCadence,
     timeZone,
     unsubscribeUrl,
     upgradeNote,
+    previousBriefItemCount: input.previousBriefItemCount ?? null,
+    hasPreviousBrief: input.hasPreviousBrief ?? null,
+    nextScanAt: input.nextScanAt ?? null,
+    nextScanLabel: input.nextScanLabel ?? null,
   });
   const subject = input.proofEmailSubject ?? email.subject;
   const payloadSnapshot = {
@@ -1722,6 +1778,216 @@ async function deliverInstantSlackBatch(
   });
 }
 
+async function deliverInstantTeamsBatch(
+  env: AppEnv,
+  input: {
+    lane: DeliveryLane;
+    userId: string;
+    deliveryTarget: DeliveryTargetRecord;
+    watchlistId: string;
+    batch: InstantAlertBatch;
+    content: InstantAlertContent;
+  },
+): Promise<InstantAttemptSummary> {
+  const attemptDedupe = await resolveInstantAttemptDedupe(env, {
+    userId: input.userId,
+    watchlistId: input.watchlistId,
+    deliveryTargetId: input.deliveryTarget.id,
+    lane: input.lane,
+    channel: "teams",
+    targetValue: input.deliveryTarget.targetValue,
+    eventIds: input.batch.events.map((event) => event.id),
+    payloadSnapshot: {
+      kind: "instant_alert",
+      deliveryClaimProtocol: INSTANT_PROVIDER_CLAIM_PROTOCOL,
+      channel: "teams",
+      batchKey: input.batch.batchKey,
+      provisional: input.batch.provisional,
+      subject: input.content.subject,
+      watchlistUrl: input.content.watchlistUrl,
+    },
+    batchKey: input.batch.batchKey,
+    deferredByQuietHours: input.batch.deferredByQuietHours,
+  });
+  if (attemptDedupe.duplicate) {
+    return summarizeDeliveryAttempt(attemptDedupe.duplicate);
+  }
+
+  if (input.batch.deferredByQuietHours) {
+    if (!attemptDedupe.attemptId) {
+      await createDeliveryAttempt(env, {
+        userId: input.userId,
+        watchlistId: input.watchlistId,
+        digestRunId: null,
+        deliveryTargetId: input.deliveryTarget.id,
+        lane: input.lane,
+        channel: "teams",
+        provider: TEAMS_PROVIDER,
+        status: "skipped_due_to_quiet_hours",
+        webhookStatus: "provider_unknown",
+        targetValue: input.deliveryTarget.targetValue,
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName: null,
+        eventIds: input.batch.events.map((event) => event.id),
+        payloadSnapshot: {
+          kind: "instant_alert",
+          channel: "teams",
+          batchKey: input.batch.batchKey,
+          provisional: input.batch.provisional,
+        },
+        idempotencyKey: attemptDedupe.idempotencyKey,
+        errorMessage: null,
+        sentAt: null,
+        failedAt: null,
+      });
+    }
+
+    return summarizeCurrentInstantAttempt({
+      channel: "teams",
+      status: "failed",
+      targetValue: input.deliveryTarget.targetValue,
+      providerMessageId: null,
+      errorMessage: null,
+      deliveredAt: null,
+      deferredByQuietHours: true,
+      providerAttemptedByThisRun: false,
+      webhookStatus: "provider_unknown",
+    });
+  }
+
+  if (!attemptDedupe.attemptId || !attemptDedupe.claimUpdatedAt) {
+    throw new Error("Instant Teams delivery claim did not return an owned attempt.");
+  }
+
+  const preparation = await prepareTeamsWebhookTarget(env, input.deliveryTarget);
+  if (!preparation.ok) {
+    const localResult = preparation.result;
+    const finalized = await updateDeliveryAttemptResult(
+      env,
+      attemptDedupe.attemptId,
+      {
+        provider: localResult.provider,
+        status: localResult.status,
+        webhookStatus: localResult.webhookStatus,
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        errorMessage: localResult.errorMessage,
+        sentAt: null,
+        failedAt: new Date().toISOString(),
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: attemptDedupe.claimUpdatedAt,
+      },
+    );
+    if (finalized === false) {
+      const durable = await getDeliveryAttemptByIdempotencyKey(
+        env,
+        attemptDedupe.idempotencyKey,
+      );
+      if (durable) return summarizeDeliveryAttempt(durable);
+      throw new Error("Instant Teams local preparation claim disappeared.");
+    }
+    return summarizeCurrentInstantAttempt({
+      channel: "teams",
+      status: localResult.status,
+      targetValue: input.deliveryTarget.targetValue,
+      providerMessageId: null,
+      errorMessage: localResult.errorMessage,
+      deliveredAt: null,
+      providerAttemptedByThisRun: false,
+      webhookStatus: "failed",
+    });
+  }
+
+  const dispatchClaim = await beginInstantDeliveryDispatch(env, attemptDedupe);
+  if (dispatchClaim.duplicate) {
+    return summarizeDeliveryAttempt(dispatchClaim.duplicate);
+  }
+
+  const providerResult = await sendTeamsWebhookUrl(preparation.webhookUrl, {
+    text: renderInstantTeamsText(input.content, input.batch.events),
+    title: input.content.subject,
+  });
+
+  let attemptId: string;
+  if (attemptDedupe.attemptId) {
+    const finalized = await finalizeInstantDeliveryAttempt(env, {
+      attemptId: attemptDedupe.attemptId,
+      idempotencyKey: attemptDedupe.idempotencyKey,
+      dispatchStartedAt: dispatchClaim.dispatchStartedAt,
+      provider: providerResult.provider,
+      status: providerResult.status,
+      webhookStatus: providerResult.webhookStatus,
+      providerMessageId: providerResult.providerMessageId,
+      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+      errorMessage: providerResult.errorMessage,
+      sentAt: providerResult.deliveredAt,
+      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    });
+    if (!finalized.won && finalized.attempt) {
+      return summarizeDeliveryAttempt(finalized.attempt, true);
+    }
+    attemptId = attemptDedupe.attemptId;
+  } else if (attemptDedupe.retryAttempt) {
+    await updateDeliveryAttemptResult(env, attemptDedupe.retryAttempt.id, {
+      provider: providerResult.provider,
+      status: providerResult.status,
+      webhookStatus: providerResult.webhookStatus,
+      providerMessageId: providerResult.providerMessageId,
+      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+      errorMessage: providerResult.errorMessage,
+      sentAt: providerResult.deliveredAt,
+      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    });
+    attemptId = attemptDedupe.retryAttempt.id;
+  } else {
+    attemptId = await createDeliveryAttempt(env, {
+      userId: input.userId,
+      watchlistId: input.watchlistId,
+      digestRunId: null,
+      deliveryTargetId: input.deliveryTarget.id,
+      lane: input.lane,
+      channel: "teams",
+      provider: providerResult.provider,
+      status: providerResult.status,
+      webhookStatus: providerResult.webhookStatus,
+      targetValue: input.deliveryTarget.targetValue,
+      providerMessageId: providerResult.providerMessageId,
+      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+      templateName: null,
+      eventIds: input.batch.events.map((event) => event.id),
+      payloadSnapshot: {
+        kind: "instant_alert",
+        channel: "teams",
+        batchKey: input.batch.batchKey,
+        provisional: input.batch.provisional,
+        subject: input.content.subject,
+        watchlistUrl: input.content.watchlistUrl,
+      },
+      idempotencyKey: attemptDedupe.idempotencyKey,
+      errorMessage: providerResult.errorMessage,
+      sentAt: providerResult.deliveredAt,
+      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    });
+  }
+
+  if (providerResult.status === "sent") {
+    await persistDeliveryTargetSuccess(env, input.deliveryTarget, attemptId, providerResult.deliveredAt);
+  }
+
+  return summarizeCurrentInstantAttempt({
+    channel: "teams",
+    status: providerResult.status,
+    targetValue: input.deliveryTarget.targetValue,
+    providerMessageId: providerResult.providerMessageId,
+    errorMessage: providerResult.errorMessage,
+    deliveredAt: providerResult.deliveredAt,
+    providerAttemptedByThisRun: true,
+    webhookStatus: providerResult.webhookStatus,
+  });
+}
+
 async function deliverDigestToWhatsAppTarget(
   env: AppEnv,
   input: DeliverWeeklyDigestInput,
@@ -1999,6 +2265,143 @@ async function deliverDigestToSlackTarget(
   return providerSummary;
 }
 
+async function deliverDigestToTeamsTarget(
+  env: AppEnv,
+  input: DeliverWeeklyDigestInput,
+  lane: DeliveryLane,
+  target: DeliveryTargetRecord,
+  timeZone: string | null,
+): Promise<DigestAttemptSummary> {
+  const idempotencyKey = buildDeliveryAttemptIdempotencyKey({
+    digestRunId: input.digestRunId,
+    lane,
+    channel: "teams",
+    targetValue: target.targetValue,
+  });
+  const cadenceLabel = digestCadenceLabel(input.cadence);
+  const teamsText = renderDigestTeamsText({
+    cadenceLabel,
+    periodStart: input.periodStart,
+    periodEnd: input.periodEnd,
+    items: input.items,
+    timeZone,
+  });
+  const attemptClaim = await claimDigestDeliveryAttempt(env, {
+    userId: input.userId,
+    digestRunId: input.digestRunId,
+    deliveryTargetId: target.id,
+    lane,
+    channel: "teams",
+    provider: TEAMS_PROVIDER,
+    targetValue: target.targetValue,
+    eventIds: input.items.map((item) => item.eventId),
+    payloadSnapshot: {
+      kind: "weekly_digest",
+      channel: "teams",
+      cadence: input.cadence ?? "weekly",
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      itemCount: input.items.length,
+    },
+    idempotencyKey,
+  });
+  if (attemptClaim.duplicate) {
+    return summarizeDigestDeliveryAttempt("teams", attemptClaim.duplicate);
+  }
+  const attemptId = attemptClaim.attemptId;
+  const claimUpdatedAt = attemptClaim.claimUpdatedAt;
+  if (!attemptId || !claimUpdatedAt) {
+    throw new Error("Digest Teams claim did not return an owned attempt.");
+  }
+
+  const preparation = await prepareTeamsWebhookTarget(env, target);
+  if (!preparation.ok) {
+    const localFailure = preparation.result;
+    const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+      provider: localFailure.provider,
+      status: localFailure.status,
+      webhookStatus: localFailure.webhookStatus,
+      providerMessageId: localFailure.providerMessageId,
+      providerStatusLastSeenAt: localFailure.providerStatusLastSeenAt,
+      errorMessage: localFailure.errorMessage,
+      sentAt: localFailure.deliveredAt,
+      failedAt: new Date().toISOString(),
+      expectedStatus: "pending",
+      expectedWebhookStatus: "pending",
+      expectedUpdatedAt: claimUpdatedAt,
+    });
+    const summary: DigestAttemptSummary = {
+      channel: "teams",
+      status: "failed",
+      targetValue: target.targetValue,
+      providerMessageId: null,
+      errorMessage: localFailure.errorMessage,
+      deliveredAt: null,
+      claimedByThisRun: true,
+    };
+    return finalized === false
+      ? readFinalizedDigestAttempt(env, {
+          channel: "teams",
+          idempotencyKey,
+          fallback: summary,
+        })
+      : summary;
+  }
+
+  const dispatch = await beginDigestProviderDispatch(env, {
+    attemptId,
+    claimUpdatedAt,
+    idempotencyKey,
+    provider: TEAMS_PROVIDER,
+  });
+  if (dispatch.duplicate) {
+    return summarizeDigestDeliveryAttempt("teams", dispatch.duplicate);
+  }
+  if (!dispatch.dispatchStartedAt) {
+    throw new Error("Digest Teams dispatch did not return an owned attempt.");
+  }
+
+  const providerResult = await sendTeamsWebhookUrl(preparation.webhookUrl, {
+    text: teamsText,
+    title: `Five to Nine ${cadenceLabel}`,
+  });
+  const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerResult.deliveredAt,
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatch.dispatchStartedAt,
+  });
+  const providerSummary: DigestAttemptSummary = {
+    channel: "teams",
+    status: providerResult.status,
+    targetValue: target.targetValue,
+    providerMessageId: providerResult.providerMessageId,
+    errorMessage: providerResult.errorMessage,
+    deliveredAt: providerResult.deliveredAt,
+    claimedByThisRun: true,
+  };
+  if (finalized === false) {
+    return readFinalizedDigestAttempt(env, {
+      channel: "teams",
+      idempotencyKey,
+      fallback: providerSummary,
+    });
+  }
+
+  if (providerResult.status === "sent") {
+    await persistDeliveryTargetSuccess(env, target, attemptId, providerResult.deliveredAt);
+  }
+
+  return providerSummary;
+}
+
 async function beginDigestProviderDispatch(
   env: AppEnv,
   input: {
@@ -2205,7 +2608,7 @@ async function resolveAlertWhatsAppTargets(env: AppEnv, userId: string, watchlis
 }
 
 async function resolveDigestSlackTargets(env: AppEnv, userId: string) {
-  if (!isSlackDeliveryCustomerFacing()) return [];
+  if (!isSlackWebhookDeliveryCustomerFacing()) return [];
   return (await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "slack",
@@ -2214,7 +2617,7 @@ async function resolveDigestSlackTargets(env: AppEnv, userId: string) {
 }
 
 async function resolveAlertSlackTargets(env: AppEnv, userId: string, watchlistId: string) {
-  if (!isSlackDeliveryCustomerFacing()) return [];
+  if (!isSlackWebhookDeliveryCustomerFacing()) return [];
   return dedupeTargetsByValue([
     ...(await listDeliveryTargets(env, userId, {
       watchlistId,
@@ -2227,6 +2630,31 @@ async function resolveAlertSlackTargets(env: AppEnv, userId: string, watchlistId
       limit: 10,
     })),
   ]).filter(isUsableSlackTarget);
+}
+
+async function resolveDigestTeamsTargets(env: AppEnv, userId: string) {
+  if (!isTeamsWebhookDeliveryCustomerFacing()) return [];
+  return (await listDeliveryTargets(env, userId, {
+    watchlistId: null,
+    channel: "teams",
+    limit: 10,
+  })).filter(isUsableTeamsTarget);
+}
+
+async function resolveAlertTeamsTargets(env: AppEnv, userId: string, watchlistId: string) {
+  if (!isTeamsWebhookDeliveryCustomerFacing()) return [];
+  return dedupeTargetsByValue([
+    ...(await listDeliveryTargets(env, userId, {
+      watchlistId,
+      channel: "teams",
+      limit: 10,
+    })),
+    ...(await listDeliveryTargets(env, userId, {
+      watchlistId: null,
+      channel: "teams",
+      limit: 10,
+    })),
+  ]).filter(isUsableTeamsTarget);
 }
 
 function isUsableEmailTarget(target: DeliveryTargetRecord, currentAccountEmail?: string | null) {
@@ -2296,6 +2724,16 @@ function isUsableSlackTarget(target: DeliveryTargetRecord) {
   );
 }
 
+function isUsableTeamsTarget(target: DeliveryTargetRecord) {
+  return (
+    !target.isPaused &&
+    target.isOptedIn &&
+    !target.optedOutAt &&
+    target.isValidated &&
+    target.validationStatus === "validated"
+  );
+}
+
 function isUsableWhatsAppTarget(target: DeliveryTargetRecord) {
   return (
     !target.isPaused &&
@@ -2322,9 +2760,14 @@ function renderDigestEmail(
     heartbeat?: DigestHeartbeat | null;
     strategyParagraph?: string | null;
     cadence?: DigestCadence;
+    scanCadence?: ScheduledScanCadence | null;
     timeZone?: string | null;
     unsubscribeUrl: string | null;
     upgradeNote?: string | null;
+    previousBriefItemCount?: number | null;
+    hasPreviousBrief?: boolean | null;
+    nextScanAt?: string | null;
+    nextScanLabel?: string | null;
   },
 ): ReturnType<typeof buildDigestEmail> {
   const baseUrl = appBaseUrl(env);
@@ -2339,6 +2782,7 @@ function renderDigestEmail(
     heartbeat: input.heartbeat ?? null,
     strategyParagraph: input.strategyParagraph ?? null,
     cadence: input.cadence,
+    scanCadence: input.scanCadence ?? null,
     timeZone: input.timeZone ?? null,
     fullDigestUrl: `${baseUrl}/app/digests?digest=${encodeURIComponent(input.digestRunId)}`,
     manageFrequencyUrl: `${baseUrl}/app/notifications`,
@@ -2347,6 +2791,10 @@ function renderDigestEmail(
     unsubscribeUrl: input.unsubscribeUrl,
     upgradeNote: input.upgradeNote ?? null,
     upgradeUrl: input.upgradeNote ? `${baseUrl}/#pricing` : null,
+    previousBriefItemCount: input.previousBriefItemCount ?? null,
+    hasPreviousBrief: input.hasPreviousBrief ?? null,
+    nextScanAt: input.nextScanAt ?? null,
+    nextScanLabel: input.nextScanLabel ?? null,
   });
 }
 
@@ -2446,6 +2894,7 @@ function buildLegacyWorkspaceConfig(
     emailEnabled: defaults.emailEnabled,
     whatsappEnabled: defaults.whatsappEnabled,
     slackEnabled: defaults.slackEnabled,
+    teamsEnabled: defaults.teamsEnabled,
     quietHours: null,
     timezone: null,
     createdAt: "",
@@ -2580,7 +3029,9 @@ async function resolveInstantAttemptDedupe(
         ? EMAIL_PROVIDER
         : input.channel === "slack"
           ? SLACK_PROVIDER
-          : "whatsapp_cloud_api",
+          : input.channel === "teams"
+            ? TEAMS_PROVIDER
+            : "whatsapp_cloud_api",
     targetValue: input.targetValue,
     eventIds: input.eventIds,
     payloadSnapshot: input.payloadSnapshot,
@@ -2831,7 +3282,9 @@ async function beginInstantDeliveryDispatch(
     ? EMAIL_PROVIDER
     : attempt.idempotencyKey.includes(":slack:")
       ? SLACK_PROVIDER
-      : "whatsapp_cloud_api";
+      : attempt.idempotencyKey.includes(":teams:")
+        ? TEAMS_PROVIDER
+        : "whatsapp_cloud_api";
   const dispatchStartedAt = env.DB
     ? await markInstantDeliveryDispatchStarted(
         env,
@@ -2943,6 +3396,45 @@ function renderDigestSlackText(input: {
         `  Priority: ${escapeSlackText(scoreLabel)}`,
         `  Next: ${escapeSlackText(intelligence.recommendedAction)}`,
         `  Evidence: ${escapeSlackText(intelligence.proofTrail)}`,
+      ].join("\n"),
+    );
+  }
+
+  if (input.items.length > 10) {
+    lines.push(`+${input.items.length - 10} more changes in Five to Nine.`);
+  }
+
+  return lines.join("\n\n");
+}
+
+function renderDigestTeamsText(input: {
+  cadenceLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  items: DigestDeliveryItem[];
+  timeZone?: string | null;
+}) {
+  const lines = [
+    `**Five to Nine ${escapeSlackText(input.cadenceLabel)}: ${input.items.length} competitor changes**`,
+    `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`,
+  ];
+
+  if (input.items.length === 0) {
+    return [...lines, "No digest changes yet."].join("\n");
+  }
+
+  for (const item of input.items.slice(0, 10)) {
+    const intelligence = readDigestIntelligence(item.metadata);
+    const scoreLabel = intelligence.priorityScore === null
+      ? intelligence.priorityBand
+      : `${intelligence.priorityBand} - ${intelligence.priorityScore}/100`;
+    lines.push(
+      [
+        `• **${escapeSlackText(item.watchlistName)}**: ${escapeSlackText(item.title)}`,
+        `  ${escapeSlackText(item.summary)}`,
+        `  **Priority:** ${escapeSlackText(scoreLabel)}`,
+        `  **Next:** ${escapeSlackText(intelligence.recommendedAction)}`,
+        `  **Evidence:** ${escapeSlackText(intelligence.proofTrail)}`,
       ].join("\n"),
     );
   }
@@ -3347,6 +3839,40 @@ function renderInstantSlackText(content: InstantAlertContent, events: WatchEvent
 
   if (content.watchlistUrl) {
     lines.push(`<${content.watchlistUrl}|View watchlist>`);
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Teams connector text is Markdown (unlike Slack's Mrkdwn link syntax), so
+ * deep links use the [label](url) form. Copy mirrors Slack exactly: the
+ * subject carries the honest provisional label ("Possible change at …" when
+ * the change is not yet confirmed), the materiality reason and accountable
+ * reviewer ride along, and the deep link lands on the watchlist row.
+ */
+function renderInstantTeamsText(content: InstantAlertContent, events: WatchEventRecord[]) {
+  const lines = [
+    `**${escapeSlackText(content.subject)}**`,
+  ];
+
+  for (const event of events.slice(0, 6)) {
+    lines.push(
+      `• ${escapeSlackText(event.title)}: ${escapeSlackText(event.summary)}${escapeSlackText(renderEventDiffText(event))}`,
+    );
+  }
+
+  if (events.length > 6) {
+    lines.push(`+${events.length - 6} more changes.`);
+  }
+
+  lines.push(
+    `**Why this matters:** ${escapeSlackText(content.materialityReason)}`,
+    `**Accountable reviewer:** ${escapeSlackText(content.reviewerLabel)}`,
+  );
+
+  if (content.watchlistUrl) {
+    lines.push(`[View watchlist](${content.watchlistUrl})`);
   }
 
   return lines.join("\n");

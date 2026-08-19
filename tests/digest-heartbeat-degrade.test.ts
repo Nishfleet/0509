@@ -226,7 +226,12 @@ describe("WP-21 daily heartbeat auto-degrade", () => {
     const result = await runCycle(data, deliverWeeklyDigest, "weekly");
 
     expect(result).toBe(1);
-    expect(data.listDigests).not.toHaveBeenCalled();
+    // Brief-as-retention-loop (lane 1, 2026-08-14): the email surface now
+    // looks up the previous digest on file to populate the retention
+    // delta field, so listDigests is called exactly once for the retention
+    // frame — the daily quiet-streak lookup is still gated to the daily
+    // cadence path.
+    expect(data.listDigests).toHaveBeenCalledTimes(1);
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -236,6 +241,8 @@ describe("WP-21 daily heartbeat auto-degrade", () => {
           adsSeen: 20,
           triage: expect.objectContaining({ status: "all_quiet" }),
         }),
+        previousBriefItemCount: 0,
+        hasPreviousBrief: true,
       }),
     );
   });
