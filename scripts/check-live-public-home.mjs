@@ -20,6 +20,18 @@ const baseUrl = process.env.PUBLIC_HOME_URL ?? "https://0509.io";
 // they are equal so the gate and product can never silently diverge again.
 export const EXPECTED_PUBLIC_HOME_CACHE_CONTROL = "public, max-age=300";
 
+// The marketing page now embeds buyer-country Dodo prices in the SSR HTML, so
+// it serves `private, max-age=300` (browser-only — a shared cache must never
+// replay one country's prices for another) whenever the SSR preview is
+// available, and falls back to the public variant below when Dodo is slower
+// than the SSR bound. Both are bounded, SWR-free, and vary on cookie, so both
+// keep the same stale-window guarantees the gate exists to enforce.
+export const COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL = "private, max-age=300";
+const ACCEPTED_PUBLIC_HOME_CACHE_CONTROLS = new Set([
+  EXPECTED_PUBLIC_HOME_CACHE_CONTROL,
+  COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL,
+]);
+
 // Deploy-gate contract for the Cloudflare Web Analytics beacon (PR #610).
 //
 // Web Analytics is enabled for the zone with automatic (edge) injection, so
@@ -116,12 +128,14 @@ async function checkUrl(url) {
   const missing = requiredSignals.filter((signal) => !html.includes(signal));
   const stale = staleSignals.filter((signal) => html.includes(signal));
   // Deliberate anonymous public-HTML contract (PR #360): cache-control must be
-  // EXACTLY the bounded public policy (no stale-while-revalidate anywhere), and
-  // the response must vary on cookie so any honoring cache revalidates when auth
-  // state changes. The worker no longer emits cloudflare-cdn-cache-control on
-  // these paths (it deletes it), so it is intentionally not asserted here.
+  // EXACTLY one of the bounded public policies (no stale-while-revalidate
+  // anywhere), and the response must vary on cookie so any honoring cache
+  // revalidates when auth state changes. The country-varying SSR-pricing
+  // variant is private (browser-only) for the same reason the /api surface is.
+  // The worker no longer emits cloudflare-cdn-cache-control on these paths (it
+  // deletes it), so it is intentionally not asserted here.
   const cacheSafe =
-    cacheControl.trim() === EXPECTED_PUBLIC_HOME_CACHE_CONTROL && varyIncludesCookie(vary);
+    ACCEPTED_PUBLIC_HOME_CACHE_CONTROLS.has(cacheControl.trim()) && varyIncludesCookie(vary);
 
   // PR #610 contract: the live CSP must keep allowing the Cloudflare Web
   // Analytics beacon. Without this, analytics silently records zero page views

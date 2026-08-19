@@ -2,7 +2,7 @@
 set -euo pipefail
 set +x
 
-readonly REPOSITORY_URL="${REPOSITORY_URL:-https://github.com/nish3451/0509}"
+readonly REPOSITORY_URL="${REPOSITORY_URL:-https://github.com/Nishfleet/0509}"
 readonly RUNNER_VERSION="${RUNNER_VERSION:-2.336.0}"
 readonly RUNNER_ARCHIVE_SHA256="${RUNNER_ARCHIVE_SHA256:-04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d}"
 readonly RUNNER_REGISTRATION_TOKEN_FILE="${RUNNER_REGISTRATION_TOKEN_FILE:-/run/0509-runner-registration.token}"
