@@ -1,3 +1,7 @@
+import {
+  deriveBriefRetentionFields,
+  type BriefRetentionFields,
+} from "~/lib/brief-retention";
 import type { DigestRecord, WatchEventRecord, WatchlistRecord } from "~/lib/types";
 
 export interface MarketDeskBriefFollowUp {
@@ -33,6 +37,17 @@ export interface MarketDeskBriefInput {
   nextScanLabel: string;
   plan?: string;
   sourceStatus?: string;
+  /**
+    * Brief-as-retention-loop (lane 1, 2026-08-14): workspace owner identity
+    * the dashboard loader already has on hand, used to render the brief's
+    * accountable reviewer field without inventing it from event text.
+    */
+  ownerName?: string | null;
+  /**
+    * ISO timestamp of the next scheduled scan after this brief, when one is
+    * already known. Used to derive the brief's expiry field.
+    */
+  nextScanAt?: string | null;
   firstScanStates?: MarketDeskBriefFirstScanState[] | null;
 }
 
@@ -60,6 +75,12 @@ export interface MarketDeskBrief {
   metrics: MarketDeskBriefMetric[];
   items: MarketDeskBriefItem[];
   hasMetrics: boolean;
+  /**
+   * Brief-as-retention-loop (lane 1, 2026-08-14): the four retention fields
+   * the brief must always carry — material delta, owner, confidence, expiry.
+   * The dashboard renders this frame directly below the brief summary.
+   */
+  retention: BriefRetentionFields;
 }
 
 export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBrief {
@@ -135,6 +156,18 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
     confirmedChanges.length > 0 ||
     input.successfulProofCount > 0 ||
     sentDigests > 0;
+  // Brief-as-retention-loop (lane 1, 2026-08-14): every brief carries the
+  // four retention fields derived from the same period inputs. The frame
+  // stays truthful when items or previous-brief are absent — the helper
+  // renders explicit unavailable copy instead of inventing content.
+  const retention = deriveBriefRetentionFields({
+    items: recentEvents,
+    previousBrief: input.digests?.[1] ?? null,
+    ownerName: input.ownerName ?? null,
+    nextScanAt: input.nextScanAt ?? null,
+    nextScanLabel: input.nextScanLabel,
+    sourceDegraded: !sourceHealthy,
+  });
 
   if (input.counterMoveFollowUps.length > 0) {
     const count = input.counterMoveFollowUps.length;
@@ -151,6 +184,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         detail: [followUp.ownerLabel, followUp.channelLabel].filter(Boolean).join(" · ") || "Open follow-up",
       })),
       hasMetrics,
+      retention,
     };
   }
 
@@ -169,6 +203,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         detail: event.summary,
       })),
       hasMetrics,
+      retention,
     };
   }
 
@@ -189,6 +224,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         detail: event.summary,
       })),
       hasMetrics,
+      retention,
     };
   }
 
@@ -209,6 +245,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         detail: event.summary,
       })),
       hasMetrics,
+      retention,
     };
   }
 
@@ -223,6 +260,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         metrics,
         items: [],
         hasMetrics,
+        retention,
       };
     }
 
@@ -240,6 +278,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
           detail: watchlist.lastScannedAt ? "Checked this week" : "Waiting for its first weekly check",
         })),
         hasMetrics,
+        retention,
       };
     }
 
@@ -256,6 +295,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         detail: watchlist.lastScannedAt ? "Checked recently" : "Waiting for first successful scan",
       })),
       hasMetrics,
+      retention,
     };
   }
 
@@ -273,6 +313,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         detail: "Not included in scans or briefs until resumed",
       })),
       hasMetrics,
+      retention,
     };
   }
 
@@ -292,6 +333,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
             detail: "Activation scan complete",
           })),
           hasMetrics,
+          retention,
         };
       }
 
@@ -308,6 +350,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
           detail: "Already has scan history",
         })),
         hasMetrics,
+        retention,
       };
     }
 
@@ -354,6 +397,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
           detail: itemDetail(watchlist),
         })),
         hasMetrics,
+        retention,
       };
     }
 
@@ -372,6 +416,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         detail: itemDetail(watchlist),
       })),
       hasMetrics,
+      retention,
     };
   }
 
@@ -386,5 +431,6 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
     metrics,
     items: [],
     hasMetrics,
+    retention,
   };
 }

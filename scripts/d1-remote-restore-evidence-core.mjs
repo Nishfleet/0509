@@ -10,7 +10,7 @@ import {
 } from "./d1-migration-sync-check.lib.mjs";
 
 const APPROVAL_MARKER = "0509-remote-restore-evidence";
-const REPOSITORY = "nish3451/0509";
+const REPOSITORY = "Nishfleet/0509";
 const STALE_SCRATCH_AGE_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_SQL_BYTES = 256 * 1024 * 1024;
 const MIN_MAX_SQL_BYTES = 16 * 1024 * 1024;

@@ -93,7 +93,7 @@ describe("exact production candidate workflow", () => {
     const authorizeStep = authorize?.steps?.[0];
     expect(authorizeStep?.name).toBe("Authorize release request");
     expect(authorizeStep?.run).toContain(
-      'test "$GITHUB_REPOSITORY" = "nish3451/0509"',
+      'test "$GITHUB_REPOSITORY" = "Nishfleet/0509"',
     );
     expect(authorizeStep?.run).toContain(
       'test "$GITHUB_REF" = "refs/heads/main"',
@@ -102,6 +102,13 @@ describe("exact production candidate workflow", () => {
       'test "$GITHUB_RUN_ATTEMPT" = "1"',
     );
     expect(authorizeStep?.run).toContain("workflow_dispatch)");
+    // Dispatch resolution: authorize pins the exact dispatched candidate, not
+    // the run head - GITHUB_SHA may be a newer main tip if main advanced
+    // between dispatch and run start (2026-08-13: 2c6cc3eb dispatched, run
+    // created on 0932e554). pin_candidate's CAS confirms the candidate is
+    // still reachable from live main before anything ships.
+    expect(authorizeStep?.env).not.toHaveProperty("GITHUB_TOKEN");
+    expect(authorizeStep?.run).toContain('GITHUB_SHA="$EXPECTED_SHA"');
 
     const pin = workflow.jobs.pin_candidate;
     expect(pin?.needs).toBe("authorize_release");
@@ -305,7 +312,7 @@ describe("exact production candidate workflow", () => {
         /actions\/checkout|secrets\.|wrangler|cloudflare/i,
       );
       expect(authorize?.steps?.[0]?.run, `${name} canonical repository`).toContain(
-        'test "$GITHUB_REPOSITORY" = "nish3451/0509"',
+        'test "$GITHUB_REPOSITORY" = "Nishfleet/0509"',
       );
     }
 
@@ -520,7 +527,7 @@ args="$*"
 [[ "$args" = *"--proto-redir =https"* ]]
 [[ "$args" = *"--config -"* ]]
 config="$(cat)"
-grep -Fq 'url = "https://api.github.com/repos/nish3451/0509/git/ref/heads/main"' <<< "$config"
+grep -Fq 'url = "https://api.github.com/repos/Nishfleet/0509/git/ref/heads/main"' <<< "$config"
 grep -Fq 'header = "Authorization: Bearer test-token"' <<< "$config"
 grep -Fq 'header = "X-GitHub-Api-Version: 2026-03-10"' <<< "$config"
 printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
@@ -534,7 +541,7 @@ printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
       const baseEnv = {
         ...process.env,
         GITHUB_EVENT_NAME: "push",
-        GITHUB_REPOSITORY: "nish3451/0509",
+        GITHUB_REPOSITORY: "Nishfleet/0509",
         GITHUB_REF: "refs/heads/main",
         GITHUB_SHA: candidateSha,
         GITHUB_RUN_ATTEMPT: "1",
@@ -559,8 +566,46 @@ printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
         GITHUB_EVENT_NAME: "workflow_dispatch",
         EXPECTED_SHA: candidateSha,
       }).status).toBe(0);
+      // Dispatch resolution: authorize pins the exact dispatched candidate,
+      // so a run created on a newer main tip (main advanced between dispatch
+      // and run start) still pins and deploys the CI-verified dispatched
+      // commit. The pin CAS confirms the candidate is an ancestor of live
+      // main via the provider CAS.
+      writeFileSync(join(work, "descendant.txt"), "descendant\n");
+      git(work, "add", "descendant.txt");
+      git(work, "commit", "-m", "descendant");
+      const descendantSha = git(work, "rev-parse", "HEAD");
+      // Pinned candidate equals dispatched candidate even though GITHUB_SHA
+      // (run head) is newer; live main (FAKE_REMOTE_SHA) descends from it.
+      // The pin job checks out the pinned candidate, mirroring the workflow's
+      // checkout ref, so HEAD matches PINNED_SHA.
+      git(work, "checkout", "--detach", candidateSha);
+      expect(run({
+        GITHUB_EVENT_NAME: "workflow_dispatch",
+        EXPECTED_SHA: candidateSha,
+        GITHUB_SHA: descendantSha,
+        PINNED_SHA: candidateSha,
+        FAKE_REMOTE_SHA: descendantSha,
+      }).status).toBe(0);
+      // A rewind/rewrite (pinned candidate not an ancestor of live main)
+      // stays fail-closed even when both SHAs are syntactically valid.
+      expect(run({
+        GITHUB_EVENT_NAME: "workflow_dispatch",
+        EXPECTED_SHA: descendantSha,
+        GITHUB_SHA: candidateSha,
+        PINNED_SHA: descendantSha,
+        FAKE_REMOTE_SHA: candidateSha,
+      }).status).not.toBe(0);
+      expect(run({
+        GITHUB_EVENT_NAME: "workflow_dispatch",
+        EXPECTED_SHA: candidateSha,
+        GITHUB_SHA: "f".repeat(40),
+        PINNED_SHA: candidateSha,
+        FAKE_REMOTE_SHA: "f".repeat(40),
+      }).status).not.toBe(0);
       // Scheduled unattended runs pin main tip with empty expected_sha (same
       // contract as authorize in d1-backup-r2.yml / restore-evidence).
+      git(work, "checkout", "--detach", candidateSha);
       expect(run({
         GITHUB_EVENT_NAME: "schedule",
         EXPECTED_SHA: "",

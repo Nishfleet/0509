@@ -18,18 +18,29 @@
 #                "submitted_at": "2026-08-13T17:05:00Z",
 #                "user": "alice"}],             # PR review list (paginated, merged)
 #   "permissions": {"alice": "admin"},          # collaborator permission per reviewer
-#   "protected_files": [".github/workflows/ci.yml", ...]
+#   "protected_files": [".github/workflows/ci.yml",
+#                       ".github/workflows/secret-scan.yml",
+#                       ".github/workflows/required-verifier-integrity.yml",
+#                       ".github/scripts/required-verifier-integrity.sh",
+#                       ".github/scripts/test-required-verifier-integrity.sh",
+#                       ".github/workflows/deploy-production.yml",
+#                       ".github/workflows/finalize-production-soak.yml",
+#                       "scripts/ci-verify-production-candidate.sh",
+#                       "scripts/ci-verify-provider-main-cas.sh"]
 # }
 #
 # Rule (fail closed):
 #   * If no protected verifier definition changed (by filename or
 #     previous_filename), PASS.
-#   * If a protected verifier definition changed, PASS only when the reviews
-#     list contains a CURRENT independent approval: state == APPROVED,
-#     reviewer != PR author, reviewer permission is admin or maintain, and
-#     submitted_at >= head_commit_date. Anything else (no approval, dismissed,
-#     commented, stale, self-approval, insufficient permission, unparseable
-#     bundle, missing head date) FAILS.
+#   * If a protected verifier definition changed (required-verifier workflows,
+#     the gate's decision scripts, or the production deploy-authorization
+#     chain: deploy-production.yml, finalize-production-soak.yml,
+#     ci-verify-production-candidate.sh, ci-verify-provider-main-cas.sh),
+#     PASS only when the reviews list contains a CURRENT independent approval:
+#     state == APPROVED, reviewer != PR author, reviewer permission is admin
+#     or maintain, and submitted_at >= head_commit_date. Anything else (no
+#     approval, dismissed, commented, stale, self-approval, insufficient
+#     permission, unparseable bundle, missing head date) FAILS.
 set -euo pipefail
 
 # The bundle is read here (bash), then handed to python by argv: python's own

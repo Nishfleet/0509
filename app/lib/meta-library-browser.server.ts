@@ -16,6 +16,7 @@ import {
 } from "~/lib/browser-run.server";
 import { isoFromCountryName } from "~/lib/countries";
 import { normalizeNumericPageId } from "~/lib/normalize";
+import { truncateTextSafe } from "~/lib/text-safe";
 import {
   findStartedRunningLine,
   parseStartedRunningDate,
@@ -1947,7 +1948,7 @@ function extractQuickActionPayloadFromScrape(
       libraryId,
       advertiser: null,
       body: text,
-      previewHeadline: element.text?.trim() || text.slice(0, 120),
+      previewHeadline: element.text?.trim() || truncateTextSafe(text, 120),
       previewSubhead: null,
       cta: inferCta(text),
       adSnapshotUrl: absolutizeMetaAdUrl(href),
@@ -2042,7 +2043,9 @@ export function normalizeExtractedCard(
   const previewHeadline = headlineIsUsable
     ? rawPreviewHeadline
     : deriveDisplayHeadline(body) || advertiser;
-  const previewSubhead = card.previewSubhead || body.slice(0, 120);
+  // truncateTextSafe keeps the subhead well-formed: a plain slice at an emoji
+  // boundary leaves a lone surrogate that persists as U+FFFD ("�") on /search.
+  const previewSubhead = card.previewSubhead || truncateTextSafe(body, 120);
   const analysisHeadline = headlineIsUsable ? rawPreviewHeadline : "";
   const { hook, offer } = resolveHookAndOffer({
     body,

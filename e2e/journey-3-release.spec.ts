@@ -285,11 +285,55 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         /Delivery channel/,
         /Email/,
         /Ready/,
-        // PR-3 subtraction: email is the one delivery channel; the dormant
-        // Slack/WhatsApp rows and their roadmap sentence are gone.
+        // #705 addition: Slack and Microsoft Teams incoming webhooks are live
+        // delivery channels for Starter and Agency plans. Email stays the
+        // always-on baseline, so the operator line still names it; WhatsApp
+        // delivery stays dormant and must not surface anywhere.
+        /Webhook delivery/,
         /Delivery channel: email/,
       ]);
-      await expect(page.locator("#f9-main-content")).not.toContainText("Slack");
+      // Every delivery channel announces itself the same way — a name, a
+      // status, and the one next step — so the definition list a screen reader
+      // walks carries exactly the truth the page shows.
+      const deliveryChannels = page.getByRole("region", { name: "Delivery channel", exact: true });
+      await expect(deliveryChannels.getByText("Email", { exact: true })).toBeVisible();
+      await expect(deliveryChannels.getByText("Ready", { exact: true })).toBeVisible();
+      await expect(
+        deliveryChannels.getByText("Briefs go to the account email.", { exact: true }),
+      ).toBeVisible();
+      await expect(deliveryChannels.getByText("Slack", { exact: true })).toBeVisible();
+      await expect(
+        deliveryChannels.getByText("Connect a Slack incoming webhook below.", { exact: true }),
+      ).toBeVisible();
+      await expect(deliveryChannels.getByText("Teams", { exact: true })).toBeVisible();
+      await expect(
+        deliveryChannels.getByText("Connect a Teams incoming webhook below.", { exact: true }),
+      ).toBeVisible();
+      // Not-connected is stated, never implied: this persona has connected no
+      // webhook, so neither Slack nor Teams may read as a working channel.
+      await expect(deliveryChannels.getByText("Not connected", { exact: true })).toHaveCount(2);
+
+      // Source truth for webhook delivery: the exact provider hosts a customer
+      // pastes from, and the confirmed-versus-possible line that stops an alert
+      // overclaiming what a scan actually proved.
+      const webhookDelivery = page.getByRole("region", { name: "Webhook delivery", exact: true });
+      await expect(
+        webhookDelivery.getByRole("heading", { name: "Slack webhook", exact: true }),
+      ).toBeVisible();
+      await expect(
+        webhookDelivery.getByRole("heading", { name: "Teams webhook", exact: true }),
+      ).toBeVisible();
+      await expect(webhookDelivery).toContainText("hooks.slack.com");
+      await expect(webhookDelivery).toContainText("webhook.office.com");
+      await expect(webhookDelivery).toContainText(
+        "Unconfirmed changes are always labelled as possible, never as confirmed.",
+      );
+      // Both connect forms stay reachable by accessible name, not by position.
+      await expect(webhookDelivery.getByRole("textbox", { name: "Webhook URL", exact: true })).toHaveCount(2);
+      await expect(
+        webhookDelivery.getByRole("textbox", { name: "Destination name", exact: true }),
+      ).toHaveCount(2);
+      await expect(webhookDelivery.getByRole("button", { name: "Connect", exact: true })).toHaveCount(2);
       await expect(page.locator("#f9-main-content")).not.toContainText("WhatsApp");
       await page.goto("/unsubscribe");
       await expect(page.getByRole("heading", { name: "This unsubscribe link isn't valid.", exact: true })).toBeVisible();
