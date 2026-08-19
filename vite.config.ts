@@ -64,12 +64,5 @@ export default defineConfig(({ mode }) => ({
     testTimeout: 10_000,
     maxWorkers: isVerificationLane ? 1 : undefined,
     fileParallelism: !isVerificationLane,
-    // Reuse one long-lived fork worker for the whole verification lane:
-    // vitest only reuses a worker across files when isolation is off, and the
-    // forks-pool startup budget is hardcoded (90s ready / 60s handshake). One
-    // startup per suite instead of one per file removes the intermittent
-    // "[vitest-pool]: Timeout starting forks runner." failure on the shared
-    // vps-verify runner.
-    isolate: !isVerificationLane,
   },
 }));

@@ -1067,7 +1067,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       "run: ./scripts/deploy-window-lock.sh run -- npm run build",
     );
     expect(workflow).toContain(
-      "run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-vitest-run.sh",
+      "run: ./scripts/deploy-window-lock.sh run -- npm run test",
     );
     expect(workflow).toContain(
       "run: ./scripts/deploy-window-lock.sh run -- npm run typecheck",
