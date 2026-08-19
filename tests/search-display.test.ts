@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  formatAdDetailBody,
   formatProofCaptureLabel,
+  formatResultCardSummary,
   formatSearchCaptureAgeLabel,
 } from "~/lib/search-display";
 import type { AdRecord } from "~/lib/types";
@@ -63,6 +65,84 @@ describe("formatProofCaptureLabel", () => {
     expect(formatProofCaptureLabel({ landingPageUrl: null } as AdRecord)).toBe(
       "No landing-page destination available",
     );
+  });
+});
+
+function adForSummary(overrides: Partial<AdRecord> = {}): AdRecord {
+  return {
+    metaAdId: "ad-1",
+    advertiser: "Nykaa",
+    body: "French Pharmacy collection",
+    previewHeadline: "Glow sale",
+    previewSubhead: "French Pharmacy collection",
+    hook: "",
+    offer: "",
+    cta: "",
+    format: "image",
+    languageLabel: "English",
+    destinationType: "website",
+    landingPageUrl: null,
+    adSnapshotUrl: null,
+    countries: ["India"],
+    platforms: ["Instagram"],
+    firstSeenAt: null,
+    lastSeenAt: null,
+    active: true,
+    researchSummary: "fixture",
+    source: "meta_library_browser",
+    analysisFields: [],
+    tags: [],
+    ...overrides,
+  };
+}
+
+describe("formatResultCardSummary / formatAdDetailBody broken-unicode guard", () => {
+  it("never renders the U+FFFD replacement character from stale cached copy", () => {
+    const ad = adForSummary({
+      hook: "",
+      body: "French Pharmacy collection \uFFFD",
+      previewSubhead: "",
+      offer: "",
+    });
+
+    expect(formatResultCardSummary(ad)).toBe("French Pharmacy collection");
+    expect(formatAdDetailBody(ad)).toBe("French Pharmacy collection");
+  });
+
+  it("scrubs lone surrogates (which render as U+FFFD in the browser)", () => {
+    const ad = adForSummary({
+      hook: "",
+      body: "French Pharmacy collection \uD83C",
+      previewSubhead: "",
+      offer: "",
+    });
+
+    expect(formatResultCardSummary(ad)).toBe("French Pharmacy collection");
+    expect(/[\uD800-\uDFFF]/.test(formatResultCardSummary(ad))).toBe(false);
+  });
+
+  it("keeps real emoji (well-formed surrogate pairs) untouched", () => {
+    const ad = adForSummary({
+      hook: "",
+      body: "French Pharmacy collection ✨",
+      previewSubhead: "",
+      offer: "",
+    });
+
+    expect(formatResultCardSummary(ad)).toBe("French Pharmacy collection ✨");
+    expect(formatAdDetailBody(ad)).toBe("French Pharmacy collection ✨");
+  });
+
+  it("prefers the intact body over a corrupted subhead", () => {
+    const ad = adForSummary({
+      hook: "",
+      body: "French Pharmacy collection ✨",
+      previewSubhead: "French Pharmacy collection \uFFFD",
+      offer: "",
+    });
+
+    expect(formatResultCardSummary(ad)).toContain("✨");
+    expect(formatResultCardSummary(ad)).not.toContain("\uFFFD");
   });
 });
 

@@ -2641,6 +2641,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Watching");
     expect(markup).not.toContain("Save watchlist");
     expect(markup).not.toContain("Recent evidence checks");
+    expect(markup).not.toContain("Recent proof captures");
   });
 
   it("keeps Package for client available for a quiet completed Agency check", async () => {
@@ -2899,7 +2900,7 @@ describe("watchlists route rendering", () => {
     const markup = await renderWatchlistsRoute(selectedPanelLoaderData, "evidence");
 
     expect(markup).toContain("Evidence and delivery");
-    expect(markup).toContain("Recent evidence checks");
+    expect(markup).toContain("Recent proof captures");
     expect(markup).toContain("Last good check");
     expect(markup).toContain("1h ago");
     expect(markup).toContain("Evidence labels");

@@ -3,7 +3,7 @@
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
-const REPOSITORY = "nish3451/0509";
+const REPOSITORY = "Nishfleet/0509";
 const TRUSTED_WORKFLOWS = new Set([
   "deploy-production.yml",
   "d1-remote-restore-evidence.yml",

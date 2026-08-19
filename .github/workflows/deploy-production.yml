@@ -19,6 +19,21 @@ on:
         description: Exact-SHA Nish acceptance; empty unless backup proof is deferred
         required: false
         type: string
+      bootstrap_previous_success_sha:
+        # One-time bootstrap only. GitHub scopes workflow-run history to the
+        # repository, so the 2026-08-19 rename (nish3451/0509 ->
+        # Nishfleet/0509) reset deploy-production.yml to zero successful runs
+        # and the last-successful-deploy chain lost its anchor: no deploy can
+        # succeed without a prior success, and no prior success can exist
+        # without a successful deploy. This input names the genuinely last
+        # deployed main commit so the chain can restart. The verifier accepts
+        # it ONLY while GitHub reports zero successful runs, ignores it
+        # outright once real history exists, and requires it to be an
+        # ancestor of the deployed commit - so it cannot weaken the gate.
+        description: One-time chain bootstrap; empty unless GitHub has zero successful deploys
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: 0509-production-provider-mutations
@@ -46,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           sha_pattern='^[a-f0-9]{40}$'
-          test "$GITHUB_REPOSITORY" = "nish3451/0509"
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
           test "$GITHUB_REF" = "refs/heads/main"
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
           test "$GITHUB_RUN_ATTEMPT" = "1"
@@ -184,6 +199,15 @@ jobs:
           D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
+          # Same one-time chain bootstrap as the release gate. This step runs
+          # the identical verifier against a PRE-GENERATED artifact, so
+          # without the anchor it cannot classify the release at all: the
+          # verifier exits 2 (infrastructure failure) on all three attempts
+          # and the job hard-stops, instead of returning a verdict and
+          # falling through to generating fresh evidence. Run 32232488597
+          # failed exactly here. With the anchor the step reaches a real
+          # verdict, which is the behaviour every non-bootstrap deploy gets.
+          BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ${{ inputs.bootstrap_previous_success_sha || '' }}
         run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-prepare-remote-restore-evidence.sh
       - name: Preserve private restore evidence for this deploy only
         if: env.BACKUP_PROOF_STATUS == 'required' && steps.verify_evidence.outputs.restore_evidence_available == 'true'
@@ -573,6 +597,11 @@ jobs:
           BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
+          # One-time last-successful-deploy chain bootstrap after the repo
+          # rename wiped run history. Threaded to the release gate only; the
+          # verifier ignores it the moment GitHub reports a real successful
+          # run, and validates it as an ancestor of the deployed commit.
+          BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ${{ inputs.bootstrap_previous_success_sha || '' }}
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
         run: npm run deploy
 

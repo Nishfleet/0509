@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSignalSql,
   buildSnapshot,
+  fetchIssues,
   marketSignalFailureMessage,
   parseD1Response,
   summarizeIssues,

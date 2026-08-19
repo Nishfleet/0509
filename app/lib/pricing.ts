@@ -128,7 +128,7 @@ export function freeWeeklyDigestUpgradeNote(): string {
       : scout.scheduledScanCadence === "every_6h"
         ? "checks every 6 hours"
         : "checks weekly";
-  return `You're on the free weekly watch. Scout ${cadenceLabel} and unlocks ${scout.collections} Collections across ${scout.watchlists} competitors.`;
+  return `Your free watch includes an instant first scan, one proof-backed brief, and one saved Collection. Scout ${cadenceLabel} and unlocks ${scout.collections} Collections across ${scout.watchlists} competitors.`;
 }
 
 export const EVIDENCE_USAGE_CUSTOMER_COPY =
