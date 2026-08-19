@@ -109,7 +109,7 @@ function mockBillingLoaderDependencies(input: {
   }));
   vi.doMock("~/lib/plan.server", () => ({
     PLAN_LIMITS: {
-      free: { watchlists: 1, collections: 0, digests: false, digestCadence: "none", proofCapturesPerMonth: 0 },
+      free: { watchlists: 1, collections: 1, digests: false, digestCadence: "none", proofCapturesPerMonth: 1 },
       starter: { watchlists: 10, collections: 25, digests: true, digestCadence: "weekly", proofCapturesPerMonth: 250 },
     },
     checkPlanLimit,
@@ -1402,9 +1402,9 @@ describe("billing page", () => {
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
     expect(markup).toContain("200 of 250 included used");
-    expect(markup).toContain("500 purchased checks remaining");
+    expect(markup).toContain("500 purchased proof captures remaining");
     expect(markup).toContain("Burst Pack");
-    expect(markup).toContain("500 checks from Burst Pack — never expire");
+    expect(markup).toContain("500 proof captures from Burst Pack — never expire");
     expect(markup).not.toContain("burst_500_v1");
     expect(markup).toContain("never expire");
   });

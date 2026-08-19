@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   utimesSync,
   writeFileSync,
@@ -80,6 +81,91 @@ function aggregateEvidence() {
   };
 }
 
+// Liveness is judged by /proc identity. kill -0 is deliberately avoided: it is
+// unreliable across distinct runner UIDs (EPERM on a live peer), and it reports
+// a dead-but-unreaped zombie as alive (kill(pid, 0) succeeds on state "Z"), so
+// a waitFor on !pidAlive(...) can still be followed by a successful kill -0.
+// /proc/<pid>/stat answers the same question the script's own
+// process_identity_is_live() answers (start time + non-zombie state), and
+// matches the choice already locked in by tests/deploy-window-lock.test.ts.
+function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  const start = readProcField(pid, 22);
+  const state = readProcField(pid, 3);
+  return start !== "" && state !== "" && state !== "Z";
+}
+
+function readProcField(pid: number, field: number): string {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const fields = stat.slice(stat.indexOf(")") + 2).split(" ");
+    return fields[field - 3] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// Cleanup must never signal a process group that is no longer ours. Once the
+// cancellation relay reaps the child its PID is free, and under CI process
+// churn the kernel can reuse that exact PID as the leader of a brand-new
+// process group before this finally block runs. A blind kill(-pid, SIGKILL)
+// then kills the wrong process and fails an unrelated spec. Only signal when
+// a live member of the original group still exists.
+function killOwnedProcessGroup(pid: number): void {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return;
+  }
+  // A dead-but-unreaped zombie still holds its PGID; a live descendant (e.g. an
+  // in-flight `sleep` of the stubborn loop) may also remain. Both are still our
+  // group. If no /proc entry claims the PGID, the group is gone: signalling the
+  // now-free PID could hit a reused group, so skip.
+  if (!processGroupHasMember(pid)) {
+    return;
+  }
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // The cancellation path may have reaped the group in between.
+  }
+}
+
+function processGroupHasMember(pid: number): boolean {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const fields = stat.slice(stat.indexOf(")") + 2).split(" ");
+    const pgid = Number(fields[5 - 3]);
+    if (!Number.isInteger(pgid) || pgid !== pid) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+  try {
+    for (const entry of readdirSync("/proc")) {
+      if (!/^\d+$/u.test(entry)) {
+        continue;
+      }
+      let stat: string;
+      try {
+        stat = readFileSync(`/proc/${entry}/stat`, "utf8");
+      } catch {
+        continue;
+      }
+      const fields = stat.slice(stat.indexOf(")") + 2).split(" ");
+      if (Number(fields[5 - 3]) === pid) {
+        return true;
+      }
+    }
+  } catch {
+    // If /proc is unreadable, fall back to signalling: the group either exists
+    // (we reap it) or is gone (kill fails harmlessly).
+    return true;
+  }
+  return false;
+}
+
 describe("D1 remote restore evidence automation", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -126,23 +212,17 @@ describe("D1 remote restore evidence automation", () => {
         await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
       }
       childPid = Number(readFileSync(childPidFile, "utf8"));
-      expect(() => process.kill(childPid, 0)).not.toThrow();
+      expect(pidAlive(childPid)).toBe(true);
 
       helperProcess.kill("SIGTERM");
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
-      expect(() => process.kill(childPid, 0)).not.toThrow();
+      expect(pidAlive(childPid)).toBe(true);
 
       expect(await completed).toEqual({ code: null, signal: "SIGTERM" });
-      expect(() => process.kill(childPid, 0)).toThrow();
+      expect(pidAlive(childPid)).toBe(false);
     } finally {
       helperProcess.kill("SIGKILL");
-      if (Number.isInteger(childPid) && childPid > 0) {
-        try {
-          process.kill(-childPid, "SIGKILL");
-        } catch {
-          // The cancellation relay should already have reaped the child group.
-        }
-      }
+      killOwnedProcessGroup(childPid);
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -331,6 +411,9 @@ describe("D1 remote restore evidence automation", () => {
       run: "./scripts/ci-verify-provider-main-cas.sh",
       env: { GH_TOKEN: "${{ github.token }}" },
     });
+    expect(apply?.steps?.[applyBackupCasIndex]?.env).toMatchObject({
+      TOLERATE_MAIN_DRIFT: "1",
+    });
     expect(apply?.steps?.[applyBackupIndex]).toMatchObject({
       id: "pre_migration_backup",
       run: "node scripts/d1-backup-to-r2.mjs",
@@ -348,6 +431,9 @@ describe("D1 remote restore evidence automation", () => {
       if: "success() && steps.pre_migration_backup.outcome == 'success'",
       run: "./scripts/ci-verify-provider-main-cas.sh",
       env: { GH_TOKEN: "${{ github.token }}" },
+    });
+    expect(apply?.steps?.[applyMigrationCasIndex]?.env).toMatchObject({
+      TOLERATE_MAIN_DRIFT: "1",
     });
     expect(apply?.steps?.[applyMigrationIndex]).toMatchObject({
       if: "success() && steps.pre_migration_backup.outcome == 'success'",
@@ -433,6 +519,15 @@ describe("D1 remote restore evidence automation", () => {
         expect(job?.steps?.[casIndex]).toMatchObject({
           run: "./scripts/ci-verify-provider-main-cas.sh",
           env: { GH_TOKEN: "${{ github.token }}" },
+        });
+        // Post-pin drift tolerance: every reconfirm re-verifies the exact SHA
+        // the authorize step already pinned, so a mid-run move of main must
+        // not abort the unattended nightly drill (same rationale as
+        // deploy-production.yml's post-gate reconfirm, #630). Every other CAS
+        // failure stays fail-closed, and the schedule's empty-expected_sha
+        // contract is unchanged.
+        expect(job?.steps?.[casIndex]?.env).toMatchObject({
+          TOLERATE_MAIN_DRIFT: "1",
         });
       }
       expect(job?.steps?.[consumerIndex]?.run).not.toContain(
@@ -586,8 +681,8 @@ describe("D1 remote restore evidence automation", () => {
       head_branch: "main",
       head_sha: headSha,
       created_at: "2026-07-29T06:00:00.000Z",
-      repository: { full_name: "nish3451/0509" },
-      head_repository: { full_name: "nish3451/0509" },
+      repository: { full_name: "Nishfleet/0509" },
+      head_repository: { full_name: "Nishfleet/0509" },
       workflowFile: "deploy-production.yml",
     };
     const artifact = {
@@ -1245,7 +1340,7 @@ describe("D1 remote restore evidence automation", () => {
     expect(() =>
       assertAutomationContext({
         GITHUB_ACTIONS: "true",
-        GITHUB_REPOSITORY: "nish3451/0509",
+        GITHUB_REPOSITORY: "Nishfleet/0509",
         GITHUB_REF: "refs/heads/main",
         D1_REMOTE_RESTORE_AUTOMATION_APPROVED:
           "0509-remote-restore-evidence",
@@ -1256,7 +1351,7 @@ describe("D1 remote restore evidence automation", () => {
     expect(() =>
       assertAutomationContext({
         GITHUB_ACTIONS: "true",
-        GITHUB_REPOSITORY: "nish3451/0509",
+        GITHUB_REPOSITORY: "Nishfleet/0509",
         GITHUB_REF: "refs/heads/main",
         D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "wrong",
         GITHUB_RUN_ID: "30423695493",

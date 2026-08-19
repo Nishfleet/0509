@@ -62,6 +62,7 @@ import {
   SUPPORTED_COUNTRIES,
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
+import { scrubBrokenUnicode } from "~/lib/text-safe";
 import { PUBLIC_SEARCH_RATE_LIMIT_MESSAGE } from "~/lib/customer-route-error";
 import {
   formatAdvertiserLabel,
@@ -715,7 +716,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       {
         limitMessage: ({ limit }) =>
           limit <= 1
-            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+            ? "Free includes 1 watchlist and 1 Collection. Upgrade for scheduled scans and more competitors."
             : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       },
@@ -795,7 +796,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         current: watchlistResult.current,
         message:
           watchlistResult.limit <= 1
-            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+            ? "Free includes 1 watchlist and 1 Collection. Upgrade for scheduled scans and more competitors."
             : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       });
@@ -841,8 +842,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    // Server-side plan gate. Fail CLOSED for free plan. Message follows DESIGN voice:
-    // verbs, specific benefit, upgrade-oriented, no system-speak. (free UI hides form but POST reachable.)
+    // Server-side plan gate. Fail CLOSED for a free plan with no Collection
+    // yet (the save targets an existing Collection; a missing/foreign id
+    // would 500 inside addAdToCollection). Free includes exactly 1
+    // Collection, so saving into it is allowed; the UI guides the
+    // create-first step.
     let savePlan: "free" | "scout" | "starter" | "agency";
     try {
       const { getUserPlan } = await import("~/lib/plan.server");
@@ -855,12 +859,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
     if (savePlan === "free") {
-      return {
-        ok: false,
-        error: "plan_limit_exceeded" as const,
-        message: "Upgrade to Scout to save ads and build your workspace memory.",
-        upgradePath: "/app/billing?source=search#plans",
-      };
+      const { checkPlanLimit } = await import("~/lib/plan.server");
+      const collectionSlots = await checkPlanLimit(env, workspaceUserId, "collections");
+      if (collectionSlots.current < 1) {
+        return {
+          ok: false,
+          error: "plan_limit_exceeded" as const,
+          message: "Free includes 1 Collection — create it in the Library, then save this ad.",
+          upgradePath: "/app/collections",
+        };
+      }
     }
 
     const { listAdsByIds } = await import("~/lib/data.server");
@@ -1354,6 +1362,7 @@ export default function SearchRoute() {
           displayDomain,
           isDomainSearch: isDomainSearch && data.relevanceApplied,
           isBroaderScope,
+          country: data.filters.country,
         })
       : null;
 
@@ -1423,6 +1432,7 @@ export default function SearchRoute() {
           isDomainSearch,
           isBroaderScope,
           relevanceApplied: data.relevanceApplied,
+          country: data.filters.country,
         })
       : null;
   const sectionHeadline =
@@ -1433,6 +1443,7 @@ export default function SearchRoute() {
       isDomainSearch,
       isBroaderScope,
       relevanceApplied: data.relevanceApplied,
+      country: data.filters.country,
     });
   const selectedLongevity = selectedAd ? formatAdLongevityLabel(selectedAd) : null;
   const selectedRunning =
@@ -2054,7 +2065,7 @@ export default function SearchRoute() {
                 <div className="f9-wk-creative">
                   <AdThumb ad={selectedAd} />
                   <h3 className="f9-wk-creative-head">
-                    {selectedAd.previewHeadline}
+                    {scrubBrokenUnicode(selectedAd.previewHeadline)}
                   </h3>
                   <p className="f9-wk-quote">{formatAdDetailBody(selectedAd)}</p>
                 </div>
@@ -2074,7 +2085,7 @@ export default function SearchRoute() {
                 <DetailBlock kicker="What the ad says">
                   <DetailFacts
                     rows={[
-                      { key: "Hook", value: selectedAd.hook },
+                      { key: "Hook", value: scrubBrokenUnicode(selectedAd.hook) },
                       ...(selectedAdAngle
                         ? [
                             {
@@ -2085,9 +2096,11 @@ export default function SearchRoute() {
                         : []),
                       {
                         key: "Offer",
-                        value: formatOfferDisplay(selectedAd.offer),
+                        value: scrubBrokenUnicode(
+                          formatOfferDisplay(selectedAd.offer),
+                        ),
                       },
-                      { key: "CTA", value: selectedAd.cta },
+                      { key: "CTA", value: scrubBrokenUnicode(selectedAd.cta) },
                       {
                         key: "Format",
                         value: formatCreativeFormatLabel(selectedAd.format),
@@ -2180,25 +2193,7 @@ export default function SearchRoute() {
                   <p className="f9-wk-small">{selectedAd.researchSummary}</p>
                 </DetailBlock>
 
-                {data.session && data.plan === "free" ? (
-                  <DetailBlock kicker="Save this ad">
-                    <p className="f9-wk-note">
-                      Upgrade to Scout to save ads and build your workspace
-                      memory.
-                    </p>
-                    <div className="f9-wk-acts">
-                      <Link
-                        className="f9-wk-lnk"
-                        to="/app/billing?source=search#plans"
-                      >
-                        View plans{" "}
-                        <span aria-hidden="true" className="f9-wk-chev">
-                          &rsaquo;
-                        </span>
-                      </Link>
-                    </div>
-                  </DetailBlock>
-                ) : data.session && data.collections.length > 0 ? (
+                {data.session && data.collections.length > 0 ? (
                   <DetailBlock kicker="Save this ad">
                     <Form className="f9-save-stack" method="post">
                       <input
@@ -2422,26 +2417,76 @@ export default function SearchRoute() {
           /* Pre-search. The boringness budget: a quiet explanation and the one
              Rank-1 above it. No specimen, no dimmed sample card, no diagram of
              a result — the form IS the affordance and the sentence says what
-             comes back. */
-          <section aria-labelledby="search-idle-title" className="f9-wk-sec">
-            <p className="f9-wk-kick" id="search-idle-title">
-              Nothing searched yet
-            </p>
-            <p className="f9-wk-lede">
-              Paste a competitor website and press See ads. We check the Meta
-              Ad Library for their ads, capture the offer from their landing
-              page, and keep the capture — so the next time that offer moves,
-              you can prove it.
-            </p>
-            <div className="f9-wk-acts">
-              <Link className="f9-wk-lnk" to="/#demo">
-                See a sample brief{" "}
-                <span aria-hidden="true" className="f9-wk-chev">
-                  &rsaquo;
-                </span>
-              </Link>
-            </div>
-          </section>
+             comes back.
+             The scope copy below the fold is the response to the SEO engine's
+             thin-content warning (dogfood 694ddbd68e95 / AI Answer Readiness
+             69e1b4be47bf): honest, page-specific detail — what a search
+             returns, proof, and the next step — without decorating the
+             instrument. The copy avoids claiming current activity: the
+             discovery cache can serve cached inventory, so the "right now"
+             promise stays gated (PR #567). */
+          <>
+            <section
+              aria-labelledby="search-idle-title"
+              className="f9-wk-sec"
+            >
+              <p className="f9-wk-kick" id="search-idle-title">
+                Nothing searched yet
+              </p>
+              <p className="f9-wk-lede">
+                Paste a competitor website and press See ads. We check the Meta
+                Ad Library for their ads, capture the offer from their landing
+                page, and keep the capture — so the next time that offer moves,
+                you can prove it.
+              </p>
+              <div className="f9-wk-acts">
+                <Link className="f9-wk-lnk" to="/#demo">
+                  See a sample brief{" "}
+                  <span aria-hidden="true" className="f9-wk-chev">
+                    &rsaquo;
+                  </span>
+                </Link>
+              </div>
+            </section>
+            <section
+              aria-labelledby="search-scope-title"
+              className="f9-wk-sec"
+            >
+              <h2 className="f9-wk-sec-title" id="search-scope-title">
+                What a search returns
+              </h2>
+              <p className="f9-wk-lede">
+                The public preview searches Meta&rsquo;s Ad Library for the
+                competitor&rsquo;s ads — across Facebook, Instagram, Audience
+                Network, and Messenger — and keeps what it finds, so a later
+                change is provable, not anecdotal.
+              </p>
+              <ul className="f9-search-scope-list">
+                <li>
+                  <strong>Current and recent ads</strong> — creative previews
+                  with first-seen and last-active dates, filterable by country,
+                  platform, creative type, status, and date range.
+                </li>
+                <li>
+                  <strong>The offer, read off their landing page</strong> — the
+                  hook and the offer are extracted from the page, and translated
+                  when the creative is in another language.
+                </li>
+                <li>
+                  <strong>The proof capture</strong> — each ad and its landing
+                  page are saved with a timestamp, so next week&rsquo;s
+                  comparison has today&rsquo;s evidence.
+                </li>
+              </ul>
+              <p className="f9-wk-note">
+                Coverage and freshness vary by advertiser and provider, and
+                public searches are rate-limited to keep the free preview fair.
+                Signing in is free: save the useful examples, start a watchlist
+                that scans on a schedule, and get an email when the offer or
+                the landing page moves.
+              </p>
+            </section>
+          </>
         )}
       </DashboardPage>
     </DashboardShell>

@@ -36,7 +36,7 @@ export const CREATIVE_TYPES = ["all", "image", "video", "carousel"] as const;
 export const SEARCH_STATUSES = ["all", "active", "inactive"] as const;
 export const SENSITIVITY_MODES = ["quiet", "balanced", "aggressive", "auto"] as const;
 export const DELIVERY_LANES = ["internal", "customer"] as const;
-export const DELIVERY_CHANNELS = ["email", "whatsapp", "slack"] as const;
+export const DELIVERY_CHANNELS = ["email", "whatsapp", "slack", "teams"] as const;
 export const PROOF_STATUSES = [
   "pending",
   "succeeded",
@@ -488,6 +488,7 @@ export interface WorkspaceDeliveryConfigRecord {
   emailEnabled: boolean;
   whatsappEnabled: boolean;
   slackEnabled: boolean;
+  teamsEnabled: boolean;
   quietHours: DeliveryQuietHours | null;
   timezone: string | null;
   createdAt: string;
@@ -504,6 +505,7 @@ export interface WatchlistDeliveryConfigRecord {
   emailEnabled: boolean;
   whatsappEnabled: boolean;
   slackEnabled: boolean;
+  teamsEnabled: boolean;
   quietHours: DeliveryQuietHours | null;
   timezone: string | null;
   createdAt: string;
@@ -517,6 +519,7 @@ export interface EffectiveDeliveryConfig {
   emailEnabled: boolean;
   whatsappEnabled: boolean;
   slackEnabled: boolean;
+  teamsEnabled: boolean;
   quietHours: DeliveryQuietHours | null;
   timezone: string | null;
 }

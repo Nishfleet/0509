@@ -1,4 +1,4 @@
-export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v3";
+export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v4";
 
 const CTA_PRIORITY_PATTERNS = [
   /\b(buy now|shop now|add to cart|get offer|claim deal|book demo|whatsapp us|get started)\b/i,
@@ -41,6 +41,60 @@ const HEAD_CONTENT_CONTAINER_NAMES = new Set([
 ]);
 const SHELL_PLACEHOLDER_PATTERN =
   /^(?:loading(?:\s+(?:app|application))?(?:,\s*please wait)?|please wait|initializing)(?:[.!…]+)?$/i;
+
+// Ad-slot suppression (lp-signals-v4): rotating third-party ad creatives are
+// the loudest remaining landing-page noise source. A banner that swaps
+// between "Buy now · $19.99" and "Claim deal · $9.99" must never become
+// customer-visible offer/CTA/form events, so ad containers are stripped from
+// signal extraction the same way script/style content already is.
+const AD_SLOT_MARKER_TOKENS = new Set([
+  "ad",
+  "ads",
+  "adslot",
+  "adunit",
+  "adbox",
+  "advert",
+  "adverts",
+  "advertisement",
+  "advertising",
+  "advertisment",
+  "adcontainer",
+  "adwrapper",
+  "adsbygoogle",
+  "adsense",
+  "googleads",
+  "googletag",
+  "doubleclick",
+  "dfp",
+  "sponsored",
+  "sponsor",
+  "sponsors",
+  "sponsorship",
+  "taboola",
+  "outbrain",
+  "criteo",
+  "prebid",
+  "amazonads",
+  "adchoices",
+  "promoads",
+  "nativeads",
+  "leaderboard",
+  "skyscraper",
+  "inread",
+  "infeed",
+  "popunder",
+  "interstitial",
+  "affiliate",
+]);
+// Elements that are structurally ad frames: no page-owned copy lives inside
+// them, and cross-origin ad iframes rotate content beyond our visibility.
+const AD_SLOT_BARE_TAG_NAMES = new Set(["iframe", "fencedframe", "amp-ad"]);
+// Containers whose text can look like markup. Treated as opaque by the ad
+// pre-pass so JS strings like "<div class=ad>" can never mask real content.
+const AD_SLOT_OPAQUE_TAG_NAMES = new Set(["script", "style", "template"]);
+// A bounded ad region that never closes is treated as NOT an ad region:
+// stripping to a malformed end could eat real offer/copy content after it.
+const AD_SLOT_REGION_SCAN_LIMIT = 24 * 1024;
 
 export function extractLandingPageSignals(
   html: string,
@@ -88,6 +142,7 @@ function removeNonVisibleElements(
   removeDocumentMetadata = false,
   ignoreNoscript = false,
 ) {
+  const adSlotStripped = stripAdSlotRegions(html ?? "");
   const elementNames = new Set(
     documentMode === "rendered"
       ? ["script", "style", "noscript", "template"]
@@ -107,33 +162,33 @@ function removeNonVisibleElements(
   let hiddenDepth = 0;
   const headContentElements: string[] = [];
 
-  while (cursor < html.length) {
-    const tagStart = html.indexOf("<", cursor);
+  while (cursor < adSlotStripped.length) {
+    const tagStart = adSlotStripped.indexOf("<", cursor);
     if (tagStart < 0) break;
     if (
       (!hiddenElement ||
         (hiddenElement === "head" && headContentElements.length === 0)) &&
-      html.startsWith("<!--", tagStart)
+      adSlotStripped.startsWith("<!--", tagStart)
     ) {
-      const commentEnd = html.indexOf("-->", tagStart + 4);
+      const commentEnd = adSlotStripped.indexOf("-->", tagStart + 4);
       if (!hiddenElement) {
-        output.push(html.slice(copyFrom, tagStart), " ");
-        copyFrom = commentEnd < 0 ? html.length : commentEnd + 3;
+        output.push(adSlotStripped.slice(copyFrom, tagStart), " ");
+        copyFrom = commentEnd < 0 ? adSlotStripped.length : commentEnd + 3;
       }
-      cursor = commentEnd < 0 ? html.length : commentEnd + 3;
+      cursor = commentEnd < 0 ? adSlotStripped.length : commentEnd + 3;
       if (commentEnd < 0) break;
       continue;
     }
-    const prefix = readHtmlTagPrefix(html, tagStart);
+    const prefix = readHtmlTagPrefix(adSlotStripped, tagStart);
     const hiddenOpeningTag = Boolean(
       prefix &&
       !prefix.closing &&
       elementNames.has(prefix.name),
     );
     const parsedTag = readHtmlTag(
-      html,
+      adSlotStripped,
       tagStart,
-      hiddenOpeningTag ? html.length - tagStart : undefined,
+      hiddenOpeningTag ? adSlotStripped.length - tagStart : undefined,
       !hiddenOpeningTag,
       hiddenElement,
     );
@@ -141,9 +196,9 @@ function removeNonVisibleElements(
     if (!tag) {
       if (hiddenOpeningTag) {
         if (!hiddenElement) {
-          output.push(html.slice(copyFrom, tagStart), " ");
+          output.push(adSlotStripped.slice(copyFrom, tagStart), " ");
         }
-        copyFrom = html.length;
+        copyFrom = adSlotStripped.length;
         break;
       }
       cursor = parsedTag.nextCursor;
@@ -152,7 +207,7 @@ function removeNonVisibleElements(
 
     if (!hiddenElement) {
       if (!tag.closing && elementNames.has(tag.name)) {
-        output.push(html.slice(copyFrom, tagStart), " ");
+        output.push(adSlotStripped.slice(copyFrom, tagStart), " ");
         copyFrom = tag.end;
         // HTML ignores XHTML-style slashes on these non-void elements. An
         // empty <head/> is the exception here because browsers implicitly
@@ -207,9 +262,181 @@ function removeNonVisibleElements(
   }
 
   if (!hiddenElement) {
-    output.push(html.slice(copyFrom));
+    output.push(adSlotStripped.slice(copyFrom));
   }
   return output.join("");
+}
+
+/**
+ * Remove third-party ad containers before any signal extraction. Ad-slot
+ * creatives rotate independently of the page's own offer, price, CTA, and
+ * form structure, so their text must never feed the customer-facing change
+ * diff. This is a tolerant pre-pass over the same hand-rolled scanner as the
+ * main pass; unclosable regions fail safe (kept) rather than risk eating
+ * real content that follows malformed ad markup.
+ */
+function stripAdSlotRegions(html: string) {
+  const output: string[] = [];
+  let copyFrom = 0;
+  let cursor = 0;
+  while (cursor < html.length) {
+    const tagStart = html.indexOf("<", cursor);
+    if (tagStart < 0) break;
+    const prefix = readHtmlTagPrefix(html, tagStart);
+    if (!prefix) {
+      cursor = tagStart + 1;
+      continue;
+    }
+    if (prefix.closing) {
+      cursor = tagStart + 1;
+      continue;
+    }
+    if (AD_SLOT_OPAQUE_TAG_NAMES.has(prefix.name)) {
+      // Script/style/template text can contain tag-looking markup (JS
+      // strings, CSS content). Skip to the real closing tag so a fake
+      // "<div class=ad>" inside a string can never trigger a strip.
+      const opaqueEnd = findOpaqueContainerEnd(html, tagStart, prefix.name);
+      cursor = opaqueEnd ?? html.length;
+      continue;
+    }
+    const parsedTag = readHtmlTag(html, tagStart);
+    if (!parsedTag.tag) {
+      cursor = parsedTag.nextCursor;
+      continue;
+    }
+    if (
+      !isAdSlotContainerTag(
+        prefix.name,
+        html.slice(tagStart, parsedTag.tag.end),
+      )
+    ) {
+      cursor = parsedTag.tag.end;
+      continue;
+    }
+    const regionEnd = findAdSlotRegionEnd(
+      html,
+      tagStart,
+      prefix.name,
+      parsedTag.tag.end,
+    );
+    if (regionEnd === null) {
+      // Unbounded ad region: keep it (current behavior) instead of
+      // stripping the rest of the page.
+      cursor = tagStart + 1;
+      continue;
+    }
+    output.push(html.slice(copyFrom, tagStart), " ");
+    copyFrom = regionEnd;
+    cursor = regionEnd;
+  }
+  output.push(html.slice(copyFrom));
+  return output.join("");
+}
+
+function isAdSlotContainerTag(name: string, tagText: string) {
+  if (AD_SLOT_BARE_TAG_NAMES.has(name)) {
+    return true;
+  }
+  return tagCarriesAdSlotMarker(tagText);
+}
+
+function tagCarriesAdSlotMarker(tagText: string) {
+  const id = readAttributeValue(tagText, "id") ?? "";
+  const className = readAttributeValue(tagText, "class") ?? "";
+  const tokens = `${id} ${className}`
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return tokens.some((token) => AD_SLOT_MARKER_TOKENS.has(token));
+}
+
+/** Return the index just past the closing tag, or null when never closed. */
+function findOpaqueContainerEnd(
+  html: string,
+  tagStart: number,
+  name: string,
+) {
+  let cursor = tagStart + 1;
+  let depth = 1;
+  while (cursor < html.length) {
+    const nextTag = html.indexOf("<", cursor);
+    if (nextTag < 0) return null;
+    const parsedTag = readHtmlTag(html, nextTag);
+    const tag = parsedTag.tag;
+    cursor = parsedTag.nextCursor;
+    if (!tag || tag.name !== name) continue;
+    if (tag.closing) {
+      depth -= 1;
+      if (depth === 0) {
+        return parsedTag.nextCursor;
+      }
+      continue;
+    }
+    // Only templates nest legitimately; script/style use first-close-wins
+    // (a "<script>" inside a JS string is not a real element).
+    if (name === "template") {
+      depth += 1;
+    }
+  }
+  return null;
+}
+
+/**
+ * Find the end of an ad-slot region opened at tagStart. Same-name nesting is
+ * tracked; script/style/template subtrees inside the region are skipped
+ * opaquely. Returns null (fail safe) when no closing tag appears within the
+ * scan bound.
+ */
+function findAdSlotRegionEnd(
+  html: string,
+  tagStart: number,
+  name: string,
+  afterOpenTag: number,
+) {
+  let cursor = afterOpenTag;
+  let depth = 1;
+  while (cursor < html.length) {
+    if (cursor - tagStart > AD_SLOT_REGION_SCAN_LIMIT) {
+      return null;
+    }
+    const nextTag = html.indexOf("<", cursor);
+    if (nextTag < 0) return null;
+    if (nextTag - tagStart > AD_SLOT_REGION_SCAN_LIMIT) {
+      return null;
+    }
+    const parsedTag = readHtmlTag(html, nextTag);
+    const tag = parsedTag.tag;
+    cursor = parsedTag.nextCursor;
+    if (!tag) continue;
+    if (tag.closing && tag.name === name) {
+      depth -= 1;
+      if (depth === 0) {
+        return parsedTag.nextCursor;
+      }
+      continue;
+    }
+    if (!tag.closing && tag.name === name) {
+      depth += 1;
+      continue;
+    }
+    if (!tag.closing && AD_SLOT_OPAQUE_TAG_NAMES.has(tag.name)) {
+      const opaqueEnd = findOpaqueContainerEnd(html, nextTag, tag.name);
+      if (opaqueEnd !== null) {
+        cursor = opaqueEnd;
+      }
+    }
+  }
+  return null;
+}
+
+function readAttributeValue(tagText: string, attribute: string) {
+  const pattern = new RegExp(
+    `\\b${attribute}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=<>\\\`]+))`,
+    "i",
+  );
+  const match = tagText.match(pattern);
+  if (!match) return null;
+  return match[1] ?? match[2] ?? match[3] ?? "";
 }
 
 function extractButtonText(html: string) {

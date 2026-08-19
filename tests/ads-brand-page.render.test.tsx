@@ -17,6 +17,7 @@ beforeEach(() => {
     return {
       ...actual,
       useLoaderData: () => currentData,
+      useRouteLoaderData: () => undefined,
       Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
