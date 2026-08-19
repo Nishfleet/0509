@@ -4,9 +4,9 @@ Authoritative entitlements live in `app/lib/plan-entitlements.ts`. Prices are lo
 
 ## Plans
 
-| Plan | Watchlists | Boards | Included evidence checks / month | Monitoring | Digests | Seats |
+| Plan | Watchlists | Boards | Included proof captures / month | Monitoring | Digests | Seats |
 |------|------------|--------|----------------------------------|------------|---------|-------|
-| Free | 1 | 0 | 0 | Weekly (Monday 03:00 UTC slot of the regular cron; scans prefer any shared discovery-cache entry ≤7 days old before scraping live) | Weekly | 1 |
+| Free | 1 | 1 | 1 | Instant activation scan on first watchlist, then weekly (Monday 03:00 UTC slot of the regular cron; scans prefer any shared discovery-cache entry ≤7 days old before scraping live) | Weekly | 1 |
 | Scout | 3 | 10 | 50 | Every 6 hours | Weekly | 1 |
 | Starter | 10 | 25 | 250 | Every 3 hours | Daily + weekly | 1 |
 | Agency | 75 | 250 | 2,500 | Top 25 every 3 hours, rest every 6 hours (highest queue priority) | Daily + weekly | 3 (owner included) |
@@ -15,13 +15,13 @@ Authoritative entitlements live in `app/lib/plan-entitlements.ts`. Prices are lo
 
 - Anchored to the workspace **subscription entitlement anchor** (`user_plan.evidence_entitlement_anchor`), not the UTC calendar month.
 - Annual subscriptions receive a fresh monthly bucket on the same anniversary cadence (not an upfront yearly pool).
-- Unused included checks **do not roll over**.
+- Unused included proof captures **do not roll over**.
 - Plan upgrades during a period raise the current period allowance; downgrades clamp remaining included balance to zero without clawing back recorded usage.
 
 ## Top-ups
 
-- Burst Pack 500 / Campaign Pack 2,000 / Scale Pack 7,500 evidence checks. Quantities are fixed in code; prices load from Dodo at runtime and are verified by the live pricing canary.
-- Purchased checks **never expire** and remain owned after cancellation.
+- Burst Pack 500 / Campaign Pack 2,000 / Scale Pack 7,500 proof captures. Quantities are fixed in code; prices load from Dodo at runtime and are verified by the live pricing canary.
+- Purchased proof captures **never expire** and remain owned after cancellation.
 - Spending top-ups requires an active Scout, Starter, or Agency plan.
 
 ## Feature gating
@@ -34,7 +34,7 @@ Server routes, API/MCP tools, exports, shares, reports, Slack delivery, and acco
 
 - **Save-time:** `requireDeliveryConfigSave()` rejects forbidden Slack/instant/email toggles before persisting watchlist or workspace delivery config. Stored config is retained on downgrade.
 - **Execution-time:** `applyDeliveryEntitlements()` strips disallowed channels before digest/instant sends. Downgraded workspaces keep webhooks/targets but nothing sends until the plan restores access.
-- **Top-ups** grant evidence checks only — they do not unlock Slack, instant alerts, or agency branding.
+- **Top-ups** grant proof captures only — they do not unlock Slack, instant alerts, or agency branding.
 
 ### Agency branding
 
@@ -45,9 +45,9 @@ Server routes, API/MCP tools, exports, shares, reports, Slack delivery, and acco
 
 Checkout SKUs are mapped in `app/lib/billing-sku-catalog.ts` and provider product IDs are supplied by environment. Public prices and checkout totals come from Dodo localized pricing preview, not this document. Unknown, inactive, or unmapped SKUs fail closed at checkout. Partial refunds are an owner decision — ledger code revokes on full refund only.
 
-## Evidence checks
+## Proof captures
 
-Scheduled monitoring is included. One evidence check = one successful, unique, newly produced landing-page proof capture.
+Scheduled monitoring is included. One proof capture = one successful, unique, newly produced landing-page proof capture.
 
 Customer copy: see `EVIDENCE_USAGE_CUSTOMER_COPY` in `app/lib/pricing.ts`.
 
