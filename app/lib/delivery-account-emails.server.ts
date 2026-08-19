@@ -672,6 +672,7 @@ export function renderActivationResultHtml(input: {
   }>;
   watchlistUrl: string;
   billingUrl: string;
+  proofCaptureSucceeded: boolean;
 }) {
   const { competitor, count } = input;
   const topAdsHtml = input.topAds
@@ -708,7 +709,11 @@ export function renderActivationResultHtml(input: {
             : ""
         }
         <p style="margin: 0 0 20px;">
-          Free keeps watching this competitor with a weekly check and a weekly email brief. Paid plans check every 3–6 hours and email you as soon as things change.
+          ${
+            input.proofCaptureSucceeded
+              ? `That capture is your one proof-backed brief this month — saved with a screenshot, page text, and the original link in your Library. `
+              : `We couldn't attach a proof-backed capture to this first scan, so no evidence check was used. `
+          }Free keeps watching this competitor with a weekly check and a weekly email brief. Paid plans check every 3–6 hours and email you as soon as things change.
         </p>
         <p style="margin: 0 0 24px;">
           <a href="${escapeHtml(input.watchlistUrl)}" style="${ACCOUNT_CTA_STYLE} margin-right: 12px;">View results</a>
@@ -871,6 +876,7 @@ export async function sendFreeActivationResultEmail(
       body: string | null;
       creativeImageUrl: string | null;
     }>;
+    proofCaptureSucceeded: boolean;
   },
 ) {
   const recipient = normalizeDeliveryEmail(input.email);
@@ -953,6 +959,7 @@ export async function sendFreeActivationResultEmail(
       topAds: input.topAds,
       watchlistUrl,
       billingUrl,
+      proofCaptureSucceeded: input.proofCaptureSucceeded,
     }),
     tag: "activation-result",
     unsubscribeUrl,
