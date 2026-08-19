@@ -24,6 +24,7 @@ import {
   shouldRunSearchV2Shadow,
 } from "~/lib/search-rollout.server";
 import type { CompetitorWebsiteState } from "~/lib/competitor-website";
+import type { BrowserJobPlanTier } from "~/lib/browser-job-telemetry.server";
 import type { NormalizedSavedQuery, SearchFilters, SearchResponse } from "~/lib/types";
 
 export interface ExecuteSearchOptions {
@@ -40,6 +41,11 @@ export interface ExecuteSearchOptions {
   customerMetaAdLibraryToken?: string | null;
   executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
   hydratePersisted?: boolean;
+  /**
+   * Resolved plan family of the signed-in actor, recorded in
+   * `browser_job_telemetry`. Anonymous visitors omit it (rows stay unknown).
+   */
+  planTier?: BrowserJobPlanTier | null;
 }
 
 export interface ExecuteSearchResult {
@@ -65,6 +71,11 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
     // Cold path: let an uncached public search return the warming state
     // immediately while the browser capture finishes via waitUntil.
     executionContext: options.executionContext ?? null,
+    // Optional attribution: only attach the plan tier when the caller actually
+    // resolved one. Anonymously-scoped searches omit it, which keeps the
+    // resolver's `options.planTier ?? null` default (and the call contract that
+    // existing callers assert) unchanged for the absent case.
+    ...(options.planTier != null ? { planTier: options.planTier } : {}),
     ...(options.customerMetaAdLibraryToken ? { customerMetaAdLibraryToken: options.customerMetaAdLibraryToken } : {}),
   };
 
