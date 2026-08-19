@@ -35,7 +35,7 @@ import { buildMarketDeskBrief } from "~/lib/market-desk-brief";
 import { buildOvernightSentence } from "~/lib/overnight-sentence";
 import { pendingBlockingSetupItems } from "~/lib/setup-checklist";
 import { buildSearchParams } from "~/lib/normalize";
-import { formatNextScanLabel } from "~/lib/schedule-display";
+import { formatNextScanLabel, nextScheduledScanAt } from "~/lib/schedule-display";
 import { formatMachineTokenLabel } from "~/lib/landing-page-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { AppEnv } from "~/lib/env.server";
@@ -351,6 +351,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceReadiness,
     counterMoveFollowUps,
     plan,
+    // Brief-as-retention-loop (lane 1, 2026-08-14): the workspace owner
+    // identity is already on hand from requireWorkspaceSession — pass it
+    // through so the brief's accountable reviewer field renders the actual
+    // name instead of the truthful "Workspace owner" fallback.
+    ownerName: !isMember ? ownerName : null,
     teamMemberCount: workspaceMembers.filter((member) => {
       if (member.status === "active" || !member.tokenExpiresAt) {
         return true;
@@ -594,6 +599,10 @@ export default function AppDashboardRoute() {
   const nextScanLabel =
     data.nextScanLabel ??
     formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone);
+  // Brief-as-retention-loop (lane 1, 2026-08-14): the brief's expiry field
+  // needs an ISO timestamp in addition to the human label, so the explicit
+  // expiry state survives when only a label is available.
+  const nextScanAt = nextScheduledScanAt(plan, new Date()).toISOString();
   const hasPaymentIssue = Boolean(data.hasPaymentIssue);
   const competitorCount = watchlists.length;
   const activeWatchlists = watchlists.filter(
@@ -638,6 +647,8 @@ export default function AppDashboardRoute() {
     nextScanLabel,
     plan,
     sourceStatus: data.metaStatus?.status,
+    ownerName: data.ownerName ?? null,
+    nextScanAt,
     firstScanStates: data.firstScanStates,
   });
   const sourceNeedsRecovery =
@@ -701,6 +712,33 @@ export default function AppDashboardRoute() {
         }
         title="Today"
       />
+
+      <section
+        aria-labelledby="overview-brief-retention-title"
+        className="f9-wk-sec"
+      >
+        <p className="f9-wk-kick" id="overview-brief-retention-title">
+          Brief retention
+        </p>
+        <dl className="f9-wk-dl">
+          <div className="f9-wk-contents">
+            <dt>Since last brief</dt>
+            <dd>{marketDeskBrief.retention.delta}</dd>
+          </div>
+          <div className="f9-wk-contents">
+            <dt>Accountable reviewer</dt>
+            <dd>{marketDeskBrief.retention.owner}</dd>
+          </div>
+          <div className="f9-wk-contents">
+            <dt>Confidence</dt>
+            <dd>{marketDeskBrief.retention.confidenceLabel}</dd>
+          </div>
+          <div className="f9-wk-contents">
+            <dt>Expiry</dt>
+            <dd>{marketDeskBrief.retention.expiry}</dd>
+          </div>
+        </dl>
+      </section>
 
       {sectionWarningCopy ? (
         <FeedbackStrip label="Partial overview" tone="bad">
