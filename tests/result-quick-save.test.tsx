@@ -111,7 +111,24 @@ describe("ResultQuickSave", () => {
     expect(button(view)!.textContent).toBe("Saved");
   });
 
-  it("shows the existing plan gate inline for free users instead of submitting", async () => {
+  it("lets free users save into their included Collection like paid users", async () => {
+    let submitted = false;
+    const view = await renderQuickSave({ plan: "free", collections }, async () => {
+      submitted = true;
+      return { ok: true, message: "Saved Nykaa to your collection." };
+    });
+
+    await act(async () => {
+      button(view)!.click();
+    });
+    await act(async () => {});
+
+    expect(submitted).toBe(true);
+    expect(button(view)!.textContent).toBe("Saved");
+    expect(view.textContent).not.toContain("Upgrade to Scout");
+  });
+
+  it("shows the honest create-first note for free users without their 1 Collection instead of submitting", async () => {
     let submitted = false;
     const view = await renderQuickSave({ plan: "free", collections: [] }, async () => {
       submitted = true;
@@ -123,9 +140,11 @@ describe("ResultQuickSave", () => {
     });
 
     expect(submitted).toBe(false);
-    expect(view.textContent).toContain("Upgrade to Scout to save ads and build your workspace memory.");
-    const upgrade = view.querySelector<HTMLAnchorElement>('a[href="/app/billing?source=search#plans"]');
-    expect(upgrade?.textContent).toBe("View plans");
+    expect(view.textContent).toContain(
+      "Free includes 1 Collection — create it in the Library to save ads.",
+    );
+    const library = view.querySelector<HTMLAnchorElement>('a[href="/app/collections"]');
+    expect(library?.textContent).toBe("Open the Library");
   });
 
   it("renders nothing for paid users without a board yet", async () => {
