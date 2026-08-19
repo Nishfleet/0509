@@ -16,17 +16,20 @@ import {
 } from "~/lib/plan-entitlements";
 
 describe("plan entitlements catalog", () => {
-  it("gives free one watchlist on a weekly scan and weekly digest with everything else absent", () => {
+  it("gives free one watchlist, one Collection, and one evidence check on a weekly rhythm", () => {
     const entitlements = getPlanEntitlements("free");
     expect(getPlanLimit("free", "watchlists")).toBe(1);
-    expect(getPlanLimit("free", "collections")).toBe(0);
-    expect(getIncludedEvidenceAllowance("free")).toBe(0);
+    // Honest 1-coll: the free tier includes exactly one Collection.
+    expect(getPlanLimit("free", "collections")).toBe(1);
+    // One included evidence check per month keeps the free weekly brief
+    // genuinely proof-backed at least once a month.
+    expect(getIncludedEvidenceAllowance("free")).toBe(1);
     expect(entitlements.scheduledScanCadence).toBe("weekly");
     expect(entitlements.digestCadence).toBe("weekly");
     expect(planAllowsDigestCadence("free", "weekly")).toBe(true);
     expect(planAllowsDigestCadence("free", "daily")).toBe(false);
-    // Free carries only the weekly digest + its email lane; no evidence,
-    // exports, instant alerts, Slack, collections, API, or MCP.
+    // Free carries only the weekly digest + its email lane; no exports,
+    // instant alerts, Slack, API, or MCP.
     expect([...entitlements.features].sort()).toEqual(["email_delivery", "weekly_digest"]);
     // A Friday 00:00 UTC tick is a 6h-aligned slot for paid plans but must
     // never include free — free scans only on the weekly Monday slot.

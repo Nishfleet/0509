@@ -311,6 +311,39 @@ describe("watch event evaluator", () => {
     ]);
   });
 
+  it("does not emit an offer change when only an UPPERCASE inventory counter in the price line ticks", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "ONLY 3 LEFT · ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: "ONLY 2 LEFT · ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
   it("does not emit an offer change when only an inventory counter in the price line ticks", () => {
     const result = evaluateProofBackedEvents({
       proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",

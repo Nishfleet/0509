@@ -408,7 +408,7 @@ describe("getWorkspaceReadiness", () => {
 
     expect(firstProof).toMatchObject({
       status: "ready",
-      detail: "1 successful evidence check recorded.",
+      detail: "1 successful proof capture recorded.",
     });
     expect(readiness.counts.successfulProofs).toBe(1);
   });
