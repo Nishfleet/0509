@@ -189,9 +189,9 @@ describe("ci-vitest-run retry wrapper", () => {
     expect(result.stdout).toContain("suite output");
   });
 
-  it("defaults the suite command to npm run test", () => {
+  it("defaults the suite command to the raw vitest run command", () => {
     const source = readFileSync(script, "utf8");
-    expect(source).toContain("command=(npm run test)");
+    expect(source).toContain("command=(vitest run --configLoader runner)");
   });
 
   it("accepts an explicit `--` separator before the command", async () => {
