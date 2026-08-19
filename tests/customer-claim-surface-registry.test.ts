@@ -239,11 +239,16 @@ function registryContractSha256() {
   return createHash("sha256").update(JSON.stringify(contract)).digest("hex");
 }
 
+// 2026-07-20 merge: re-pinned after registry drift updates for the overnight
+// stack (free weekly watch, sitemap additions, /ads/:domain) — all reopened
+// as assessed_pending_reproof, no proof fabricated.
+// 2026-08-09: re-pinned after the SEO-CANONICAL-INDEXING assessment recorded
+// the /competitor-monitoring sitemap addition (claim stays reopened).
 // 2026-08-12 merge: re-pinned after the Slack/Teams webhook-delivery decision
 // reopened DELIVERY-CHANNEL-GATES (claim text/assessment updated to the live
 // Slack+Teams/WhatsApp-dormant truth; no proof fabricated).
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "844985e969e1d5ca3cff281d32134ba8f014a93eb839f4c0e0ff9860155e3c3a";
+  "ffb062105899cd89ba5610aa4a3c825026770e16dda91685d143dedc061f8151";
 
 type Catalogs = {
   agentActions: string[];
@@ -318,7 +323,10 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
   // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
-  sitemapPaths: ["/", "/search", "/auth/signup", "/compare/magicbrief", "/compare/meta-ad-library", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
+  // sitemap (same claim stays reopened for re-proof; page claims trace to the
+  // existing homepage/docs claims, no new claim text invented).
+  sitemapPaths: ["/", "/search", "/auth/signup", "/compare/magicbrief", "/compare/meta-ad-library", "/competitor-monitoring", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",

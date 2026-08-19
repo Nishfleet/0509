@@ -704,7 +704,7 @@ export default function ClientsRoute() {
         <PartialDataNotice message="Saved client context could not be loaded. Existing room memory may be missing from this view; refresh before editing or sending." />
       ) : null}
       {approvalUnavailableRoomIds.size > 0 ? (
-        <PartialDataNotice message="One or more report approvals could not be rechecked. Their saved approvals remain unchanged, but client readiness is unavailable until the evidence check recovers." />
+        <PartialDataNotice message="One or more report approvals could not be rechecked. Their saved approvals remain unchanged, but client readiness is unavailable until the proof capture recovers." />
       ) : null}
 
       {actionData?.message ? (

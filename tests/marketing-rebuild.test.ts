@@ -185,7 +185,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("Start with Scout");
     expect(marketingRoute).not.toContain("Dodo price syncing");
     expect(marketingRoute).not.toContain("Extra check capacity");
-    expect(marketingRoute).not.toContain("No unlimited claims");
+    expect(marketingRoute).not.toContain("unlimited");
     expect(marketingRoute).not.toContain("3 offer changes ready");
     expect(marketingRoute).not.toContain("Nykaa changed onboarding bundle");
     expect(marketingRoute).not.toContain("boAt removed COD offer");

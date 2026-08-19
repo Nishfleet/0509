@@ -175,6 +175,96 @@ export function firstParentMigrationDiffs(previousHead) {
   );
 }
 
+/**
+ * One-time bootstrap for the last-successful-deploy chain.
+ *
+ * The chain anchor is normally the head SHA of the most recent successful
+ * `deploy-production.yml` run. GitHub scopes that run history to the
+ * repository, and renaming a repository resets it to zero (2026-08-19:
+ * `nish3451/0509` -> `Nishfleet/0509`). With zero recorded successful runs no
+ * deploy can ever anchor the chain, so no deploy can ever succeed, so a
+ * successful run can never be recorded — a closed loop that only an operator
+ * can break.
+ *
+ * `BOOTSTRAP_PREVIOUS_SUCCESS_SHA` breaks it exactly once, under conditions
+ * that make it incapable of weakening the real gate:
+ *
+ * - It is consulted ONLY when the GitHub query succeeded and returned no
+ *   eligible successful run. A failed query still throws
+ *   `remote_restore_last_successful_deploy_unavailable` upstream, and an
+ *   absent env var still throws the original
+ *   `remote_restore_last_successful_deploy_missing`.
+ * - When real history exists the value is ignored outright and loudly warned
+ *   about, so it can never override, rewind, or reinterpret a recorded deploy.
+ * - The value must be a 40-hex commit that exists in this checkout and is a
+ *   STRICT ancestor of HEAD, so it can only ever name a real, already-shipped
+ *   point in this branch's history — never a fabricated or future anchor, and
+ *   never HEAD itself. HEAD would make the classification diff empty, which
+ *   would report the release as neither migration-bearing nor
+ *   restore-critical and silently downgrade the evidence policy from
+ *   fresh-exact-24h to verified-ledger-7d. Recorded history may legitimately
+ *   equal HEAD (nothing shipped since the last deploy); an operator-supplied
+ *   anchor may not.
+ *
+ * @param {{ hasRecordedHistory: boolean }} options
+ * @param {Record<string, string | undefined>} [env]
+ * @param {(message: string) => void} [warn]
+ * @returns {string | null} the bootstrap anchor, or null when none applies
+ */
+export function bootstrapPreviousSuccessHead(
+  { hasRecordedHistory },
+  env = process.env,
+  warn = (message) => process.stderr.write(`${message}\n`),
+) {
+  const requested = env.BOOTSTRAP_PREVIOUS_SUCCESS_SHA?.trim() ?? "";
+  if (hasRecordedHistory) {
+    if (requested) {
+      warn(
+        "::warning::BOOTSTRAP_PREVIOUS_SUCCESS_SHA is set, but GitHub reports a real last successful production deploy. Ignoring the bootstrap value entirely and anchoring on recorded run history.",
+      );
+    }
+    return null;
+  }
+  if (!requested) return null;
+  if (!/^[a-f0-9]{40}$/u.test(requested)) {
+    throw new Error("remote_restore_bootstrap_previous_head_invalid");
+  }
+  let resolved;
+  try {
+    resolved = execFileSync(
+      "git",
+      ["rev-parse", "--verify", `${requested}^{commit}`],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    ).trim();
+  } catch {
+    throw new Error("remote_restore_bootstrap_previous_head_unknown");
+  }
+  if (resolved !== requested) {
+    throw new Error("remote_restore_bootstrap_previous_head_unknown");
+  }
+  const head = execFileSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+  if (resolved === head) {
+    // An anchor of HEAD makes previousHead..HEAD empty, so the release would
+    // classify as neither migration-bearing nor restore-critical and accept
+    // the weaker verified-ledger-7d evidence policy. Refuse it outright.
+    throw new Error("remote_restore_bootstrap_previous_head_is_head");
+  }
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", requested, "HEAD"], {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+  } catch {
+    throw new Error("remote_restore_bootstrap_previous_head_not_ancestor");
+  }
+  warn(
+    `::warning::BOOTSTRAP: GitHub reports zero successful production deploys for this repository, so the last-successful-deploy chain has no anchor. Using the operator-supplied previous deployed commit ${requested} as the anchor for this run only. This path closes itself the moment one successful run is recorded.`,
+  );
+  return resolved;
+}
+
 /** @param {unknown} diffOutput */
 function changedPathsFromNameStatus(diffOutput) {
   return String(diffOutput)
@@ -234,9 +324,13 @@ async function restoreEvidenceClassification() {
           /^[a-f0-9]{40}$/u.test(run?.head_sha ?? ""),
       )
     : null;
-  if (!previous)
-    throw new Error("remote_restore_last_successful_deploy_missing");
-  const previousHead = previous.head_sha;
+  // Recorded run history always wins. The bootstrap anchor is consulted only
+  // when this successful query found no eligible run at all, and is ignored
+  // (loudly) whenever one exists — see bootstrapPreviousSuccessHead.
+  const bootstrapHead = bootstrapPreviousSuccessHead({
+    hasRecordedHistory: Boolean(previous),
+  });
+  const previousHead = previous ? previous.head_sha : bootstrapHead;
   if (
     typeof previousHead !== "string" ||
     !/^[a-f0-9]{40}$/u.test(previousHead)
