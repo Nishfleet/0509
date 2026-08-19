@@ -95,8 +95,8 @@ export default function DocsRoute() {
       <PublicDocBlock id="plan-boundaries" title="Plan boundaries">
         <p>These are documented plan entitlements, not a live availability guarantee; account and provider readiness still apply.</p>
         <ul className="f9-doc-list">
-          <li>Free plan scope: watch one competitor with a weekly scheduled check and a weekly email brief. No collections, proof captures, instant alerts, or manual refresh — paid plans add 3–6 hour checks and more competitors.</li>
-          <li>Scout plan scope: three scheduled watchlists, a six-hour cadence, weekly email briefs, ten collections, and 50 included proof captures each month.</li>
+          <li>Free plan scope: one competitor with an instant first scan, then a weekly scheduled check and a weekly email brief backed by one proof capture a month. Includes one Collection and never asks for a card. No instant alerts, manual refresh, or exports — paid plans add 3–6 hour checks and more competitors.</li>
+          <li>Scout plan scope: three scheduled watchlists, a six-hour cadence, weekly email briefs, ten collections, and 50 included evidence checks each month.</li>
           <li>Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports, with ten watchlists on a three-hour cadence.</li>
           <li>Agency plan scope: client reports, share links, PDF delivery, branding, API/MCP access, and team seats.</li>
           <li>Unavailable actions should appear locked before click; server-side plan checks still apply.</li>
