@@ -21,7 +21,7 @@ set -euo pipefail
 #
 # Auth: GITHUB_TOKEN/GH_TOKEN env var, or an authenticated `gh` CLI.
 
-readonly REPOSITORY="${REPOSITORY:-nish3451/0509}"
+readonly REPOSITORY="${REPOSITORY:-Nishfleet/0509}"
 readonly STALE_NAME_PREFIX="${STALE_NAME_PREFIX:-0509-hardened-}"
 readonly TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 readonly APPLY="${1:-}"

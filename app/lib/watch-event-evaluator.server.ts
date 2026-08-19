@@ -223,9 +223,11 @@ function buildFieldChangeDraft(
     // Churn-stable comparison: countdown timers, rolling dates, and live
     // inventory counters in the price/offer line (e.g. "Only 3 left · ₹499")
     // must not fire an offer event on every scan. The raw values are still
-    // stored for display and evidence.
-    const previousValue = normalizeFieldValue(stripChurnTokens(previous.priceText));
-    const currentValue = normalizeFieldValue(stripChurnTokens(current.priceText));
+    // stored for display and evidence. Lowercase before stripping so the
+    // churn patterns (which are lowercase) also match uppercase urgency copy
+    // like "ONLY 3 LEFT · ₹499" — the headline path already lowercases first.
+    const previousValue = normalizeFieldValue(stripChurnTokens(previous.priceText?.toLowerCase()));
+    const currentValue = normalizeFieldValue(stripChurnTokens(current.priceText?.toLowerCase()));
     if (previousValue && currentValue && previousValue !== currentValue) {
       return {
         eventType,
@@ -241,9 +243,10 @@ function buildFieldChangeDraft(
   if (eventType === "landing_page_cta_changed") {
     // Churn-stable comparison: a "Claim offer · 00:59:59" CTA ticking between
     // scans is the same CTA. The raw values are still stored for display and
-    // evidence.
-    const previousValue = normalizeFieldValue(stripChurnTokens(previous.ctaText));
-    const currentValue = normalizeFieldValue(stripChurnTokens(current.ctaText));
+    // evidence. Lowercase before stripping so uppercase urgency copy (e.g.
+    // "HURRY · 00:59:59") is also treated as churn, matching the headline path.
+    const previousValue = normalizeFieldValue(stripChurnTokens(previous.ctaText?.toLowerCase()));
+    const currentValue = normalizeFieldValue(stripChurnTokens(current.ctaText?.toLowerCase()));
     if (previousValue && currentValue && previousValue !== currentValue) {
       return {
         eventType,
