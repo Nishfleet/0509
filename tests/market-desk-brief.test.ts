@@ -374,3 +374,70 @@ describe("quiet is a proof claim (remediation)", () => {
     expect(brief.summary).toContain("cannot be called quiet");
   });
 });
+
+describe("brief retention frame (lane 1)", () => {
+  it("carries material delta, owner, confidence, and expiry on a changed brief", () => {
+    const brief = buildMarketDeskBrief(
+      baseInput({
+        watchlists: [watchlist({ id: "watch-1", lastScannedAt: "2026-06-20T00:00:00.000Z" })],
+        recentEvents: [
+          event({
+            id: "event-1",
+            status: "confirmed",
+            metadata: {
+              proofCaptureId: "proof-1",
+              sourceStatus: "proof_backed",
+            },
+          }),
+        ],
+        digests: [
+          digest({ id: "digest-prev", items: [{} as never] }),
+        ],
+        ownerName: "Priya",
+        nextScanAt: "2026-06-27T03:00:00.000Z",
+      }),
+    );
+
+    expect(brief.retention).toBeDefined();
+    expect(brief.retention.delta).toContain("1 change filed");
+    expect(brief.retention.owner).toBe("Priya");
+    expect(brief.retention.confidence).toBe("high");
+    expect(brief.retention.expiry).toContain("Expires at the next check");
+  });
+
+  it("renders an explicit unavailable confidence when no items are filed", () => {
+    const brief = buildMarketDeskBrief(
+      baseInput({
+        nextScanLabel: "",
+        nextScanAt: null,
+      }),
+    );
+
+    expect(brief.retention.confidence).toBe("unavailable");
+    expect(brief.retention.confidenceLabel).toContain("Confidence unavailable");
+    expect(brief.retention.expiry).toContain("Expiry unset");
+  });
+
+  it("downgrades confidence to low when source access is degraded", () => {
+    const brief = buildMarketDeskBrief(
+      baseInput({
+        watchlists: [watchlist({ id: "watch-1", lastScannedAt: "2026-06-20T00:00:00.000Z" })],
+        recentEvents: [
+          event({
+            id: "event-1",
+            status: "confirmed",
+            metadata: {
+              proofCaptureId: "proof-1",
+              sourceStatus: "proof_backed",
+            },
+          }),
+        ],
+        sourceStatus: "degraded",
+        ownerName: "Priya",
+      }),
+    );
+
+    expect(brief.retention.confidence).toBe("low");
+    expect(brief.retention.confidenceLabel).toContain("Low confidence");
+  });
+});

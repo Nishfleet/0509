@@ -13,6 +13,7 @@ import {
   readDigestIntelligence,
   safeHttpsImageUrl,
 } from "~/lib/change-intelligence";
+import { deriveBriefRetentionFields } from "~/lib/brief-retention";
 import {
   isLandingPageEventType,
   landingPageChangedFieldLabel,
@@ -114,6 +115,14 @@ export interface DigestEmailInput {
   // Absent or empty renders nothing — paid digests are byte-identical.
   upgradeNote?: string | null;
   upgradeUrl?: string | null;
+  // Brief-as-retention-loop (lane 1, 2026-08-14): the weekly brief carries
+  // its four retention fields (delta, owner, confidence, expiry). The previous
+  // digest on file (if any) feeds the delta line; the next scheduled scan
+  // feeds the expiry line. Absent values render explicit unavailable copy.
+  previousBriefItemCount?: number | null;
+  hasPreviousBrief?: boolean | null;
+  nextScanAt?: string | null;
+  nextScanLabel?: string | null;
 }
 
 export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
@@ -173,6 +182,21 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       timeZone: input.timeZone,
     }),
   };
+  // Brief-as-retention-loop (lane 1, 2026-08-14): every customer email
+  // surfaces the four retention fields. The delta is computed from the
+  // previous-brief item count when one exists, otherwise the explicit
+  // baseline line. Expiry is anchored to the next scheduled scan.
+  const retention = deriveBriefRetentionFields({
+    items: input.items,
+    previousBriefItemCount: input.hasPreviousBrief
+      ? input.previousBriefItemCount ?? 0
+      : null,
+    ownerName: input.name,
+    nextScanAt: input.nextScanAt ?? null,
+    nextScanLabel: input.nextScanLabel ?? null,
+  });
+  const retentionHtml = renderEmailRetentionBlock(retention);
+  const retentionTextLines = renderEmailRetentionText(retention);
 
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
@@ -184,6 +208,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
         <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
         <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
       </div>
+      ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
       ${renderTrendSectionHtml(trendLines)}
       <h2 style="${EMAIL_H2_STYLE}">Top moves</h2>
@@ -208,6 +233,9 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     `Priority mix: ${priorityMixLabel(priorityMix)}`,
     `Evidence mix: ${proofMixLabel(proofMix)}`,
+    "",
+    ...retentionTextLines,
+    "",
     ...renderEmailAccountabilityText(accountability),
     ...renderTrendSectionText(trendLines),
     "",
@@ -628,6 +656,44 @@ export function renderEmailAccountabilityText(input: {
     ...(input.confidence ? [`Confidence: ${input.confidence}`] : []),
     ...(input.freshUntil ? [`Fresh until: ${input.freshUntil}`] : []),
     "",
+  ];
+}
+
+/**
+ * Brief-as-retention-loop (lane 1, 2026-08-14): the labelled retention frame
+ * the weekly brief email carries above the accountability block — material
+ * delta, owner, confidence, expiry. Mirrors the dashboard and archived-brief
+ * surfaces so every customer-facing brief reads the same four fields.
+ */
+export function renderEmailRetentionBlock(retention: {
+  delta: string;
+  owner: string;
+  confidenceLabel: string;
+  expiry: string;
+}): string {
+  return `
+      <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
+        <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Brief retention</p>
+        <p style="margin: 0 0 6px;"><strong>Since last brief:</strong> ${escapeHtml(retention.delta)}</p>
+        <p style="margin: 0 0 6px;"><strong>Accountable reviewer:</strong> ${escapeHtml(retention.owner)}</p>
+        <p style="margin: 0 0 6px;"><strong>Confidence:</strong> ${escapeHtml(retention.confidenceLabel)}</p>
+        <p style="margin: 0;"><strong>Expiry:</strong> ${escapeHtml(retention.expiry)}</p>
+      </div>
+  `;
+}
+
+export function renderEmailRetentionText(retention: {
+  delta: string;
+  owner: string;
+  confidenceLabel: string;
+  expiry: string;
+}): string[] {
+  return [
+    "Brief retention:",
+    `Since last brief: ${retention.delta}`,
+    `Accountable reviewer: ${retention.owner}`,
+    `Confidence: ${retention.confidenceLabel}`,
+    `Expiry: ${retention.expiry}`,
   ];
 }
 
