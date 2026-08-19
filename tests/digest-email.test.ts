@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   alertMaterialityReason,
+  digestConfidenceLabel,
+  digestConfidenceLevel,
+  digestFreshUntilLabel,
   digestMaterialityReason,
   digestNextAction,
   digestReviewerLabel,
@@ -13,6 +16,7 @@ import {
   buildScanTroubleEmail,
   digestItemDeepLink,
   groupTopMovesByWatchlist,
+  renderEmailAccountabilityBlock,
   type DigestEmailHeartbeat,
   type DigestEmailHeartbeatTriage,
 } from "~/lib/digest-email.server";
@@ -1267,6 +1271,296 @@ describe("named owner, materiality reason, and next action (E2 2026-08-08)", () 
 	});
 });
 
+describe("brief confidence and freshness — the retention loop (E3 2026-08-11)", () => {
+	function item(
+		eventType: string,
+		sourceStatus: "proof_backed" | "scan_backed",
+		overrides: Record<string, unknown> = {},
+	) {
+		return {
+			eventType,
+			metadata: {
+				sourceStatus,
+				...(sourceStatus === "proof_backed" ? { proofCaptureId: "proof-1" } : {}),
+				...overrides,
+			},
+		};
+	}
+
+	it("rates fully verified changes high", () => {
+		const items = [
+			item("landing_page_offer_changed", "proof_backed"),
+			item("landing_page_cta_changed", "proof_backed"),
+		];
+		expect(digestConfidenceLevel({ items })).toBe("high");
+		expect(digestConfidenceLabel({ items })).toBe(
+			"High confidence — every filed change is verified against stored evidence.",
+		);
+	});
+
+	it("rates check-spotted changes medium until evidence verifies them", () => {
+		const items = [item("ad_new", "scan_backed")];
+		expect(digestConfidenceLevel({ items })).toBe("medium");
+		expect(digestConfidenceLabel({ items })).toBe(
+			"Medium confidence — changes are check-spotted but not yet verified against stored evidence.",
+		);
+	});
+
+	it("rates mixed verified and check-spotted changes medium", () => {
+		const items = [
+			item("landing_page_offer_changed", "proof_backed"),
+			item("ad_new", "scan_backed"),
+		];
+		expect(digestConfidenceLevel({ items })).toBe("medium");
+	});
+
+	it("rates periods with unverified items low and names the count", () => {
+		const items = [
+			item("ad_new", "scan_backed", { status: "proof_pending" }),
+			item("ad_new", "proof_backed"),
+		];
+		expect(digestConfidenceLevel({ items })).toBe("low");
+		expect(digestConfidenceLabel({ items })).toBe(
+			"Low confidence — 1 of 2 filed changes is not backed by verified evidence.",
+		);
+	});
+
+	it("rates evidence-failed and evidence-pending periods low from the triage", () => {
+		expect(
+			digestConfidenceLabel({
+				items: [],
+				triage: { status: "evidence_failed", explanation: "An evidence check couldn't finish." },
+			}),
+		).toBe("Low confidence — an evidence check failed, so no change is confirmed this period.");
+		expect(
+			digestConfidenceLabel({
+				items: [],
+				triage: { status: "evidence_pending", explanation: "A possible change was detected." },
+			}),
+		).toBe("Low confidence — detected changes are still waiting on their evidence check.");
+	});
+
+	it("rates completed quiet and routine periods high for what was checked", () => {
+		expect(
+			digestConfidenceLabel({
+				items: [],
+				triage: { status: "all_quiet", explanation: "Checks completed and nothing changed." },
+			}),
+		).toBe("High confidence — checks completed across the sources that ran.");
+		expect(
+			digestConfidenceLabel({
+				items: [],
+				triage: { status: "routine_only", explanation: "Routine changes only." },
+			}),
+		).toBe("High confidence — checks completed across the sources that ran.");
+	});
+
+	it("rates completed legacy heartbeats high and not-run periods not rated", () => {
+		expect(digestConfidenceLabel({ heartbeat: { runs: 3 } })).toBe(
+			"High confidence — completed checks reviewed the sources that ran.",
+		);
+		expect(digestConfidenceLabel({ heartbeat: { runs: 3 }, triage: { status: "not_run" } })).toBe(
+			"Not rated — no checks completed in this period, so nothing in this brief is confirmed.",
+		);
+	});
+
+	it("renders the explicit failure state when no confidence record exists", () => {
+		expect(digestConfidenceLevel({})).toBe("none");
+		expect(digestConfidenceLabel({})).toBe(
+			"No confidence record for this period — treat every claim in this brief as unverified.",
+		);
+	});
+
+	it("names the next Monday 03:00 UTC check as the weekly brief's expiry", () => {
+		// Filed Wednesday; the next weekly check is the coming Monday 03:00 UTC.
+		expect(
+			digestFreshUntilLabel({
+				cadence: "weekly",
+				after: "2026-07-15T09:14:00.000Z",
+				timeZone: "UTC",
+			}),
+		).toBe("Fresh until the next weekly check, Mon 20 Jul, 3:00 am.");
+	});
+
+	it("uses the last completed check as the freshness anchor when known", () => {
+		// Monday 04:00 UTC check: the same day's 03:00 slot already passed, so
+		// the next weekly check is the following Monday.
+		expect(
+			digestFreshUntilLabel({
+				cadence: "weekly",
+				after: "2026-07-20T04:00:00.000Z",
+				timeZone: "UTC",
+			}),
+		).toBe("Fresh until the next weekly check, Mon 27 Jul, 3:00 am.");
+	});
+
+	it("names the next 3-hour scan slot for daily digests", () => {
+		expect(
+			digestFreshUntilLabel({
+				cadence: "daily",
+				scanCadence: "every_3h",
+				after: "2026-06-02T00:00:00.000Z",
+				timeZone: "UTC",
+			}),
+		).toBe("Fresh until the next check, Tue 2 Jun, 3:00 am.");
+	});
+
+	it("names the next 6-hour scan slot for scout cadence", () => {
+		expect(
+			digestFreshUntilLabel({
+				cadence: "weekly",
+				scanCadence: "every_6h",
+				after: "2026-06-08T04:00:00.000Z",
+				timeZone: "UTC",
+			}),
+		).toBe("Fresh until the next check, Mon 8 Jun, 6:00 am.");
+	});
+
+	it("renders the explicit failure state when no next check is schedulable", () => {
+		expect(
+			digestFreshUntilLabel({
+				cadence: "weekly",
+				scanCadence: "none",
+				after: "2026-06-08T04:00:00.000Z",
+			}),
+		).toBe("Freshness unavailable — no next check is scheduled on file for this brief.");
+	});
+});
+
+describe("brief emails carry confidence and freshness (E3 2026-08-11)", () => {
+	function briefEmailInput(
+		overrides: Partial<Parameters<typeof buildDigestEmail>[0]> = {},
+	) {
+		return {
+			name: "Owner",
+			periodStart: "2026-06-01T00:00:00.000Z",
+			periodEnd: "2026-06-08T00:00:00.000Z",
+			cadence: "weekly" as const,
+			scanCadence: "weekly" as const,
+			timeZone: "UTC",
+			items: [digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed")],
+			fullDigestUrl: "https://0509.io/app/digests",
+			manageFrequencyUrl: "https://0509.io/app/notifications",
+			supportEmail: "support@0509.io",
+			supportMailto: "mailto:support@0509.io",
+			unsubscribeUrl: null,
+			...overrides,
+		};
+	}
+
+	it("carries confidence and the next-check expiry on a changes brief", () => {
+		const email = buildDigestEmail(briefEmailInput());
+
+		expect(email.html).toContain("<strong>Confidence:</strong>");
+		expect(email.html).toContain(
+			"High confidence — every filed change is verified against stored evidence.",
+		);
+		expect(email.html).toContain("<strong>Fresh until:</strong>");
+		expect(email.html).toContain(
+			"Fresh until the next weekly check, Mon 8 Jun, 3:00 am.",
+		);
+		expect(email.text).toContain(
+			"Confidence: High confidence — every filed change is verified against stored evidence.",
+		);
+		expect(email.text).toContain(
+			"Fresh until: Fresh until the next weekly check, Mon 8 Jun, 3:00 am.",
+		);
+	});
+
+	it("states low confidence and the plan cadence's next check for an evidence-failed brief", () => {
+		const email = buildDigestEmail(
+			briefEmailInput({
+				items: [],
+				scanCadence: "every_3h",
+				heartbeat: {
+					runs: 6,
+					watchlistsChecked: 2,
+					adsSeen: 40,
+					triage: {
+						status: "evidence_failed",
+						label: "Evidence check failed",
+						explanation:
+							"An evidence check couldn't finish, so nothing is confirmed yet.",
+						checkedAt: "2026-06-08T04:00:00.000Z",
+						checksCompleted: 6,
+						suppressedChanges: 0,
+						suppressionReasons: [],
+						nextAction:
+							"We'll retry at the next scheduled check. If it persists, email support and we'll dig in.",
+						noActionLine: "No change is confirmed without proof.",
+					},
+				},
+			}),
+		);
+
+		expect(email.html).toContain(
+			"Low confidence — an evidence check failed, so no change is confirmed this period.",
+		);
+		expect(email.html).toContain(
+			"Fresh until the next check, Mon 8 Jun, 6:00 am.",
+		);
+	});
+
+	it("carries the honest quiet confidence on an all-quiet brief", () => {
+		const email = buildDigestEmail(
+			briefEmailInput({
+				items: [],
+				heartbeat: {
+					runs: 7,
+					watchlistsChecked: 4,
+					adsSeen: 128,
+					triage: {
+						status: "all_quiet",
+						label: "All quiet",
+						explanation: "Checks completed and nothing changed across the sources that ran.",
+						checkedAt: "2026-06-08T04:00:00.000Z",
+						checksCompleted: 7,
+						suppressedChanges: 0,
+						suppressionReasons: [],
+						nextAction: "We check again at the next scheduled scan.",
+						noActionLine: "No action needed — nothing new to act on.",
+					},
+				},
+			}),
+		);
+
+		expect(email.html).toContain(
+			"High confidence — checks completed across the sources that ran.",
+		);
+		expect(email.html).toContain(
+			"Fresh until the next weekly check, Mon 15 Jun, 3:00 am.",
+		);
+	});
+
+	it("carries the explicit failure states on the missing-period-record brief", () => {
+		const email = buildDigestEmail(
+			briefEmailInput({ items: [], heartbeat: null }),
+		);
+
+		expect(email.html).toContain(
+			"No confidence record for this period — treat every claim in this brief as unverified.",
+		);
+		expect(email.html).toContain(
+			"Fresh until the next weekly check, Mon 8 Jun, 3:00 am.",
+		);
+		expect(email.text).toContain(
+			"Confidence: No confidence record for this period — treat every claim in this brief as unverified.",
+		);
+	});
+
+	it("keeps instant-alert accountability blocks free of confidence and freshness lines", () => {
+		const block = renderEmailAccountabilityBlock({
+			materialityReason: "A change was detected on a tracked competitor page.",
+			reviewerLabel: "Workspace owner",
+		});
+
+		expect(block).toContain("<strong>Why this matters:</strong>");
+		expect(block).toContain("<strong>Accountable reviewer:</strong>");
+		expect(block).not.toContain("<strong>Confidence:</strong>");
+		expect(block).not.toContain("<strong>Fresh until:</strong>");
+	});
+});
+
 describe("authenticated briefs route accountability (E2 2026-08-08)", () => {
 	type Props = { children?: ReactNode } & Record<string, unknown>;
 
@@ -1327,6 +1621,11 @@ describe("authenticated briefs route accountability (E2 2026-08-08)", () => {
 			selectedDigestAttempts: [],
 			canAccessDigests: true,
 			reviewerName,
+			// E3 (2026-08-11): the loader resolves the plan scan cadence and the
+			// filed period's digest cadence for the confidence/freshness rows.
+			plan: "starter",
+			scanCadence: "every_3h",
+			selectedDigestCadence: "weekly",
 		};
 	}
 
@@ -1372,6 +1671,79 @@ describe("authenticated briefs route accountability (E2 2026-08-08)", () => {
 		expect(markup).toContain("Priya");
 		expect(markup).toContain("Next action");
 		expect(markup).toContain("Review the changes in this brief before your next campaign decision.");
+	});
+
+	it("renders confidence and the next-check freshness on a price change brief (E3)", async () => {
+		const markup = await renderDigestsRoute(
+			digestFixture(
+				[
+					{
+						id: "item-1",
+						watchlistName: "Nykaa",
+						eventType: "landing_page_offer_changed",
+						title: "Landing page offer changed",
+						summary: "The offer moved.",
+						metadata: {
+							priorityScore: 95,
+							priorityBand: "High priority",
+							recommendedAction: "Review before the next campaign decision.",
+							proofTrail: "Verified from a page snapshot",
+							proofCaptureId: "proof-1",
+							sourceStatus: "proof_backed",
+						},
+					},
+				],
+				null,
+				"Priya",
+			),
+		);
+
+		expect(markup).toContain("Confidence");
+		expect(markup).toContain(
+			"High confidence — every filed change is verified against stored evidence.",
+		);
+		expect(markup).toContain("Fresh until");
+		expect(markup).toContain("Fresh until the next check, Wed 15 Jul, 3:00 am.");
+	});
+
+	it("renders the quiet confidence and weekly freshness for an all-quiet brief (E3)", async () => {
+		const markup = await renderDigestsRoute(
+			digestFixture(
+				[],
+				{
+					triage: {
+						status: "all_quiet",
+						label: "All quiet",
+						explanation: "Checks completed and nothing changed across the sources that ran.",
+						sourceStatus: "checked",
+						checkedAt: "2026-07-15T04:00:00.000Z",
+						checksCompleted: 7,
+						changesCaptured: 0,
+						suppressedChanges: 0,
+						suppressionReasons: [],
+						nextAction: "We check again at the next scheduled scan.",
+						noActionLine: "No action needed — nothing new to act on.",
+					},
+				},
+				"Priya",
+			),
+		);
+
+		expect(markup).toContain(
+			"High confidence — checks completed across the sources that ran.",
+		);
+		expect(markup).toContain("Fresh until the next check, Wed 15 Jul, 6:00 am.");
+	});
+
+	it("renders the confidence failure state when a brief has no period record (E3)", async () => {
+		const markup = await renderDigestsRoute(
+			digestFixture([], null, "Priya"),
+		);
+
+		expect(markup).toContain(
+			"No confidence record for this period — treat every claim in this brief as unverified.",
+		);
+		expect(markup).toContain("Fresh until");
 	});
 
 	it("renders the explicit failure state when no owner identity is available", async () => {
@@ -1494,3 +1866,64 @@ function digestItem(
     },
   };
 }
+
+describe("buildDigestEmail — brief retention frame (lane 1)", () => {
+  it("renders the four retention fields with previous-brief delta on the weekly brief", () => {
+    const email = buildDigestEmail({
+      name: "Priya",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+      ],
+      previousBriefItemCount: 2,
+      hasPreviousBrief: true,
+      nextScanAt: "2026-06-15T03:00:00.000Z",
+      nextScanLabel: "Mon 15 Jun, 3:00 am UTC",
+    });
+
+    expect(email.html).toContain("Brief retention");
+    expect(email.html).toContain("Since last brief:");
+    expect(email.html).toContain("Accountable reviewer:");
+    expect(email.html).toContain("Confidence:");
+    expect(email.html).toContain("Expiry:");
+    expect(email.html).toContain("Priya");
+    expect(email.html).toContain("1 change filed");
+    expect(email.html).toContain("1 change fewer than the previous brief");
+    expect(email.html).toContain("Expires at the next check");
+
+    expect(email.text).toContain("Brief retention:");
+    expect(email.text).toContain("Since last brief: 1 change filed");
+    expect(email.text).toContain("Accountable reviewer: Priya");
+    expect(email.text).toContain("Expiry: Expires at the next check");
+  });
+
+  it("renders the first-brief baseline delta when no previous brief is on file", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        digestItem("Boat", "CTA changed", 80, "scan_backed"),
+      ],
+      hasPreviousBrief: false,
+    });
+
+    expect(email.html).toContain("first brief on file");
+    expect(email.html).toContain("Expiry unset");
+  });
+});

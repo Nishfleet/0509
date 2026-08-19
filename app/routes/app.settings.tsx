@@ -72,7 +72,7 @@ export default function SettingsRoute() {
           />
           <RuledRow
             name="Billing & usage"
-            say="See your plan, evidence checks, and invoices — change plan here."
+            say="See your plan, proof captures, and invoices — change plan here."
             status="Billing"
             time=""
             to="/app/billing"
