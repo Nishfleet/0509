@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-type InstantChannel = "whatsapp" | "slack";
+type InstantChannel = "whatsapp" | "slack" | "teams";
 
 type Attempt = Record<string, unknown> & {
   id: string;
@@ -49,11 +49,21 @@ function target(channel: InstantChannel) {
     userId: "user-1",
     watchlistId: null,
     channel,
-    targetValue: channel === "whatsapp" ? "919876543210" : "slack:workspace/channel",
+    targetValue:
+      channel === "whatsapp"
+        ? "919876543210"
+        : channel === "slack"
+          ? "slack:workspace/channel"
+          : "teams:workspace/channel",
     validationStatus: "validated",
     isValidated: true,
     isOptedIn: true,
-    optInSource: channel === "whatsapp" ? "manual_whatsapp_setup" : "manual_slack_webhook",
+    optInSource:
+      channel === "whatsapp"
+        ? "manual_whatsapp_setup"
+        : channel === "slack"
+          ? "manual_slack_webhook"
+          : "manual_teams_webhook",
     optedInAt: "2026-07-15T00:00:00.000Z",
     isPaused: false,
     pausedAt: null,
@@ -79,15 +89,25 @@ function providerSuccess(channel: InstantChannel) {
         templateName: "confirmed_instant_customer_v1",
         errorMessage: null,
       }
-    : {
-        provider: "slack_incoming_webhook" as const,
-        status: "sent" as const,
-        webhookStatus: "delivered" as const,
-        providerMessageId: null,
-        providerStatusLastSeenAt: "2026-07-15T12:00:00.000Z",
-        errorMessage: null,
-        deliveredAt: "2026-07-15T12:00:00.000Z",
-      };
+    : channel === "teams"
+      ? {
+          provider: "microsoft_teams_incoming_webhook" as const,
+          status: "sent" as const,
+          webhookStatus: "delivered" as const,
+          providerMessageId: null,
+          providerStatusLastSeenAt: "2026-07-15T12:00:00.000Z",
+          errorMessage: null,
+          deliveredAt: "2026-07-15T12:00:00.000Z",
+        }
+      : {
+          provider: "slack_incoming_webhook" as const,
+          status: "sent" as const,
+          webhookStatus: "delivered" as const,
+          providerMessageId: null,
+          providerStatusLastSeenAt: "2026-07-15T12:00:00.000Z",
+          errorMessage: null,
+          deliveredAt: "2026-07-15T12:00:00.000Z",
+        };
 }
 
 function providerAmbiguous(channel: InstantChannel) {
@@ -97,7 +117,7 @@ function providerAmbiguous(channel: InstantChannel) {
     webhookStatus: "provider_unknown" as const,
     providerMessageId: null,
     errorMessage: `${channel} transport outcome is unknown.`,
-    ...(channel === "slack" ? { deliveredAt: null } : {}),
+    ...(channel === "whatsapp" ? {} : { deliveredAt: null }),
   };
 }
 
@@ -118,7 +138,12 @@ function installMocks(
   let failDispatchMarkOnce = options.failDispatchMarkOnce === true;
   let failFinalizeOnce = options.failFinalizeOnce === true;
   const deliveryTarget = target(channel);
-  const provider = channel === "whatsapp" ? "whatsapp_cloud_api" : "slack_incoming_webhook";
+  const provider =
+    channel === "whatsapp"
+      ? "whatsapp_cloud_api"
+      : channel === "slack"
+        ? "slack_incoming_webhook"
+        : "microsoft_teams_incoming_webhook";
   const providerSend = vi.fn();
   for (const result of options.providerResults ?? [providerSuccess(channel)]) {
     providerSend.mockResolvedValueOnce(result);
@@ -138,6 +163,21 @@ function installMocks(
           },
         }
       : { ok: true, webhookUrl: "https://hooks.slack.test/services/redacted" },
+  );
+  const prepareTeamsWebhookTarget = vi.fn().mockResolvedValue(
+    options.slackPreparationFailure
+      ? {
+          ok: false,
+          result: {
+            ...providerSuccess("teams"),
+            status: "failed",
+            webhookStatus: "failed",
+            providerStatusLastSeenAt: null,
+            errorMessage: "Teams webhook could not be decrypted.",
+            deliveredAt: null,
+          },
+        }
+      : { ok: true, webhookUrl: "https://acme.webhook.office.test/webhookb2/redacted" },
   );
 
   const getDeliveryAttemptByIdempotencyKey = vi.fn(async (_env: unknown, key: string) => {
@@ -206,6 +246,7 @@ function installMocks(
       emailEnabled: false,
       whatsappEnabled: channel === "whatsapp",
       slackEnabled: channel === "slack",
+      teamsEnabled: channel === "teams",
       quietHours: null,
       timezone: "Asia/Kolkata",
       createdAt: "2026-07-15T00:00:00.000Z",
@@ -234,6 +275,12 @@ function installMocks(
     sendSlackWebhookUrl: channel === "slack" ? providerSend : vi.fn(),
     sendSlackWebhookMessage: channel === "slack" ? providerSend : vi.fn(),
   }));
+  vi.doMock("~/lib/teams-webhook.server", () => ({
+    TEAMS_PROVIDER: "microsoft_teams_incoming_webhook",
+    prepareTeamsWebhookTarget,
+    sendTeamsWebhookUrl: channel === "teams" ? providerSend : vi.fn(),
+    sendTeamsWebhookMessage: channel === "teams" ? providerSend : vi.fn(),
+  }));
 
   return {
     createDeliveryAttempt,
@@ -242,6 +289,7 @@ function installMocks(
     },
     providerSend,
     prepareSlackWebhookTarget,
+    prepareTeamsWebhookTarget,
     setAttemptUpdatedAt(value: string) {
       if (attempt) attempt = { ...attempt, updatedAt: value };
     },
@@ -258,6 +306,8 @@ beforeEach(() => {
   }));
   vi.doMock("~/lib/ga-customer-surface", () => ({
     isSlackDeliveryCustomerFacing: () => true,
+    isSlackWebhookDeliveryCustomerFacing: () => true,
+    isTeamsWebhookDeliveryCustomerFacing: () => true,
     isWhatsAppDeliveryCustomerFacing: () => true,
   }));
 });
@@ -268,7 +318,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe.each<InstantChannel>(["whatsapp", "slack"])(
+describe.each<InstantChannel>(["whatsapp", "slack", "teams"])(
   "instant %s delivery claims",
   (channel) => {
     it("lets concurrent first workers invoke the provider at most once", async () => {
@@ -369,6 +419,20 @@ describe.each<InstantChannel>(["whatsapp", "slack"])(
     });
   },
 );
+
+it("fails Teams local preparation before crossing the provider boundary", async () => {
+  const state = installMocks("teams", { slackPreparationFailure: true });
+  const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+
+  await deliverWatchlistAlerts({} as never, alertInput as never);
+
+  expect(state.prepareTeamsWebhookTarget).toHaveBeenCalledTimes(1);
+  expect(state.providerSend).not.toHaveBeenCalled();
+  expect(state.attempt).toMatchObject({
+    status: "failed",
+    webhookStatus: "failed",
+  });
+});
 
 it("fails Slack local preparation before crossing the provider boundary", async () => {
   const state = installMocks("slack", { slackPreparationFailure: true });
