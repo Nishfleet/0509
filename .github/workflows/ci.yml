@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           sha_pattern='^[a-f0-9]{40}$'
-          test "$GITHUB_REPOSITORY" = "nish3451/0509"
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
           case "$GITHUB_EVENT_NAME" in
             pull_request)
