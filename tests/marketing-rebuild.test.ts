@@ -93,7 +93,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Sample proof-backed brief");
     expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
     expect(marketingRoute).toContain("Your growth team would&rsquo;ve found out from a client.");
-    expect(marketingRoute).toContain("Meta ads and landing pages");
+    expect(marketingRoute).toContain("landing pages for price, offer, and CTA changes");
     expect(marketingRoute).toContain("before your alarm goes off");
     expect(marketingRoute).not.toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
     expect(marketingRoute).toContain("start from the brands you already track");
@@ -185,7 +185,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("Start with Scout");
     expect(marketingRoute).not.toContain("Dodo price syncing");
     expect(marketingRoute).not.toContain("Extra check capacity");
-    expect(marketingRoute).not.toContain("No unlimited claims");
+    expect(marketingRoute).not.toContain("unlimited");
     expect(marketingRoute).not.toContain("3 offer changes ready");
     expect(marketingRoute).not.toContain("Nykaa changed onboarding bundle");
     expect(marketingRoute).not.toContain("boAt removed COD offer");

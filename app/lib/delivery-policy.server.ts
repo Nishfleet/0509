@@ -50,6 +50,7 @@ export function resolveDeliveryConfig(input: {
     emailEnabled: source.emailEnabled,
     whatsappEnabled: source.whatsappEnabled,
     slackEnabled: source.slackEnabled,
+    teamsEnabled: source.teamsEnabled,
     quietHours: source.quietHours,
     timezone: source.timezone,
   };
@@ -161,6 +162,9 @@ function resolveAllowedChannels(config: EffectiveDeliveryConfig): DeliveryChanne
   }
   if (config.slackEnabled) {
     channels.push("slack");
+  }
+  if (config.teamsEnabled) {
+    channels.push("teams");
   }
 
   return channels;

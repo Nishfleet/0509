@@ -45,7 +45,7 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
-export const REPO = "nish3451/0509";
+export const REPO = "Nishfleet/0509";
 export const DEPLOY_WORKFLOW = "deploy-production.yml";
 export const MIGRATIONS_PATH = "migrations";
 export const SHA_PATTERN = /^[0-9a-f]{40}$/u;

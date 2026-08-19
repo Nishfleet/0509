@@ -27,6 +27,9 @@ import { ClientRoomWriteConflictError } from "~/lib/data/customer-api-rooms.serv
 import type { AppEnv } from "~/lib/env.server";
 import type { OwnedReportDataSource } from "~/lib/report-loader.server";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
+import { buildCourtPack } from "~/lib/court-pack-builder.server";
+import { CourtPackView } from "~/components/court-pack-view";
+import type { CourtPack } from "~/lib/court-pack";
 import type { PlanFamily } from "~/lib/plan-entitlements";
 import { createReportId, parseReportId } from "~/lib/report";
 import {
@@ -141,11 +144,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ),
   ]);
   const memories = uniqueAgentMemories([...recentMemories, ...roomMemories]);
+  const packs = canUsePlanFeature(plan, "client_reports")
+    ? await buildActiveRoomCourtPacks(env, workspaceUserId, currentRoomStates)
+    : [];
 
   return {
     plan,
     canManageClientRooms: canUsePlanFeature(plan, "client_reports"),
     rooms: currentRoomStates.map((state) => safeClientRoomForUi(state.room)),
+    packs,
     roomsMayBeTruncated: rooms.length >= CLIENT_ROOM_DISPLAY_LIMIT,
     roomMemoryUnavailable,
     approvalUnavailableRoomIds: currentRoomStates
@@ -697,7 +704,7 @@ export default function ClientsRoute() {
         <PartialDataNotice message="Saved client context could not be loaded. Existing room memory may be missing from this view; refresh before editing or sending." />
       ) : null}
       {approvalUnavailableRoomIds.size > 0 ? (
-        <PartialDataNotice message="One or more report approvals could not be rechecked. Their saved approvals remain unchanged, but client readiness is unavailable until the evidence check recovers." />
+        <PartialDataNotice message="One or more report approvals could not be rechecked. Their saved approvals remain unchanged, but client readiness is unavailable until the proof capture recovers." />
       ) : null}
 
       {actionData?.message ? (
@@ -762,6 +769,9 @@ export default function ClientsRoute() {
               memories={memoriesByClientRoomId.get(room.id) ?? []}
               roomMemoryUnavailable={data.roomMemoryUnavailable}
               room={room}
+              pack={
+                data.packs?.find((candidate) => candidate.roomId === room.id)
+              }
             />
           ))}
           {activeRooms.length === 0 ? (
@@ -1138,6 +1148,7 @@ function ClientRoomCard({
   canManage,
   initiallyOpen,
   memories,
+  pack,
   roomMemoryUnavailable,
   room,
 }: {
@@ -1147,6 +1158,7 @@ function ClientRoomCard({
   memories: Array<{ key: string }>;
   roomMemoryUnavailable: boolean;
   room: ClientRoomRecord;
+  pack?: CourtPack;
 }) {
   const handoff = summarizeClientRoomHandoff(
     room,
@@ -1190,6 +1202,7 @@ function ClientRoomCard({
           </div>
         </dl>
 
+        {pack ? <CourtPackView pack={pack} /> : null}
         <div className="f9-rooms-actions">
           {room.resourceRefs.map((ref) => (
             <Link className="f9-wk-lnk" key={`${ref.resourceType}:${ref.resourceId}`} to={resourceHref(ref)}>
@@ -1682,6 +1695,27 @@ async function loadOwnedRoomReport(
     requireActiveWatchlist: true,
     verifyReportIdentity: true,
   });
+}
+
+/**
+ * Court Pack assembly is wiring-only: active rooms that actually link reports
+ * (the only rooms that render a pack). Archived and report-less rooms skip the
+ * work, and the existing `client_reports` plan gate stays in front of it.
+ */
+async function buildActiveRoomCourtPacks(
+  env: AppEnv,
+  userId: string,
+  roomStates: Array<{ room: ClientRoomRecord; approvalUnavailable: boolean }>,
+) {
+  const data = await import("~/lib/data.server");
+  return Promise.all(
+    roomStates
+      .filter(({ room }) => room.status === "active")
+      .filter(({ room }) =>
+        room.resourceRefs.some((ref) => ref.resourceType === "report"),
+      )
+      .map(({ room }) => buildCourtPack(env, userId, room, data)),
+  );
 }
 
 function toMemorySummary(

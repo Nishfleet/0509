@@ -99,6 +99,7 @@ export interface CompetitorDetailProps {
   canInstantAlert: boolean;
   canEmailDelivery: boolean;
   showSlackDelivery: boolean;
+  showTeamsDelivery: boolean;
   /** Capabilities named by the one page-level upgrade action. */
   lockedCapabilities: string[];
   /** The capture-window rollup failed; aggregate counts must not become zero/quiet. */
@@ -250,6 +251,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           canInstantAlert={props.canInstantAlert}
           data={data}
           showSlackDelivery={props.showSlackDelivery}
+          showTeamsDelivery={props.showTeamsDelivery}
           watchlistId={watchlist.id}
         />
         <DeliveryTargetsSection

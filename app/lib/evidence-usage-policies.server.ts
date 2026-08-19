@@ -11,20 +11,20 @@ export function defineEvidenceCheckBillableUnit(): "successful_proof_capture" {
 }
 
 /**
- * Scheduled competitor scans are not evidence checks today.
+ * Scheduled competitor scans are not proof captures today.
  * Only successful proof captures gated by proof policy consume allowance.
  */
 export function scheduledMonitoringConsumesEvidenceCheck(): boolean {
   return false;
 }
 
-/** Purchased checks are retained forever but only spendable on an active paid plan. */
+/** Purchased proof captures are retained forever but only spendable on an active paid plan. */
 export function topUpSpendRequiresActivePaidPlan(planFamily: PlanFamily): boolean {
   return planFamily === "scout" || planFamily === "starter" || planFamily === "agency";
 }
 
 /**
- * Full top-up refunds claw back only the unspent purchased checks.
+ * Full top-up refunds claw back only the unspent purchased proof captures.
  * Partial refunds with money amounts claw back a prorated share of remaining
  * credits: min(remaining, round(remaining × refundAmount/paymentAmount)).
  * Partial without amounts (and unknown shapes) stay manual-review only.
