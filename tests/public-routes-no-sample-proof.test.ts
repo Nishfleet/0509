@@ -40,4 +40,16 @@ describe("public routes and sample-proof fixtures", () => {
       }
     }
   });
+
+  it("no public route reintroduces an inline illustrative proof fixture", () => {
+    // The homepage once inlined a `demoProof` object; guard the class so a
+    // sample/illustrative fixture cannot silently return via a new route.
+    for (const name of routeFiles) {
+      const source = readFileSync(join(routesDir, name), "utf8");
+      expect(
+        source,
+        `app/routes/${name} must not reintroduce an inline sample-proof fixture`,
+      ).not.toMatch(/const\s+demoProof\s*=|from\s+["']~\/lib\/demo-proof["']/);
+    }
+  });
 });
