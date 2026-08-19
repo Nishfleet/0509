@@ -140,6 +140,61 @@ describe("exact production candidate workflow", () => {
     expect(steps[verifyIndex]?.env).not.toHaveProperty("TOLERATE_MAIN_DRIFT");
   });
 
+  it("offers the chain bootstrap as an optional dispatch input wired only to the release gate", () => {
+    // The repository rename (nish3451/0509 -> Nishfleet/0509) reset GitHub's
+    // deploy-production run history to zero, which deadlocked the
+    // last-successful-deploy chain: no deploy could succeed without a prior
+    // success, and no prior success could exist without a successful deploy.
+    // The input exists to break that deadlock exactly once.
+    expect(
+      workflow.on.workflow_dispatch?.inputs?.bootstrap_previous_success_sha,
+    ).toEqual({
+      description:
+        "One-time chain bootstrap; empty unless GitHub has zero successful deploys",
+      required: false,
+      default: "",
+      type: "string",
+    });
+
+    // Optional by construction: a push-triggered or plain dispatch run must
+    // stay byte-identical to today's behaviour, which means the env resolves
+    // to the empty string and the verifier keeps failing closed.
+    const deploy = workflow.jobs.deploy;
+    const deployStep = deploy?.steps?.[stepIndex(deploy, "Deploy")];
+    expect(deployStep?.env?.BOOTSTRAP_PREVIOUS_SUCCESS_SHA).toBe(
+      "${{ inputs.bootstrap_previous_success_sha || '' }}",
+    );
+
+    // Blast radius: the release gate is the only consumer. No authorizing,
+    // pinning, evidence-generating, or provider-mutating step may read it,
+    // and no job-level env may leak it to every step in a job.
+    const consumers: string[] = [];
+    for (const [jobName, job] of Object.entries(workflow.jobs)) {
+      for (const key of Object.keys(job.env ?? {})) {
+        if (key === "BOOTSTRAP_PREVIOUS_SUCCESS_SHA") {
+          consumers.push(`${jobName}:<job env>`);
+        }
+      }
+      for (const step of job.steps ?? []) {
+        for (const key of Object.keys(step.env ?? {})) {
+          if (key === "BOOTSTRAP_PREVIOUS_SUCCESS_SHA") {
+            consumers.push(`${jobName}:${step.name ?? step.uses ?? "<step>"}`);
+          }
+        }
+      }
+    }
+    expect(consumers).toEqual(["deploy:Deploy"]);
+
+    // The input is inert everywhere else in the file, including the
+    // authorizer's dispatch validation, which must not start treating it as
+    // an authorization token.
+    expect(
+      workflowSource.match(/inputs\.bootstrap_previous_success_sha/g),
+    ).toHaveLength(1);
+    const authorizeStep = workflow.jobs.authorize_release?.steps?.[0];
+    expect(JSON.stringify(authorizeStep)).not.toContain("bootstrap");
+  });
+
   it("pins every downstream checkout and rechecks main at each mutation boundary", () => {
     const prepare = workflow.jobs.prepare_remote_restore_evidence;
     const deploy = workflow.jobs.deploy;
