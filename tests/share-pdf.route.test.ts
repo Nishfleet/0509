@@ -626,7 +626,20 @@ describe("report_pdf browser-job attribution rows", () => {
     const harness = telemetryHarness();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-13T12:00:00.000Z"));
-    mockCollaborators({ plan: "agency" });
+    // The AGENCY_SHARE approval window is anchored to real module-load time,
+    // which would be in the future once the clock is mocked to 2026-08-13 and
+    // the approval would fail (approvalInFuture -> 409). Build a snapshot whose
+    // reviewedAt/expiry explicitly covers the mocked clock.
+    mockCollaborators({
+      plan: "agency",
+      share: {
+        ...AGENCY_SHARE,
+        snapshotPayload: createApprovedReportSnapshot(
+          PDF_TEST_REPORT,
+          "2026-08-13T00:00:00.000Z",
+        ),
+      },
+    });
     makePuppeteerMocks({
       limitsHook: () => {
         vi.advanceTimersByTime(5_000);
