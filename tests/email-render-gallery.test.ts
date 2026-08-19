@@ -324,9 +324,11 @@ describe("email render gallery", () => {
       ],
       watchlistUrl: "https://0509.io/app/watchlists?watchlist=wl1",
       billingUrl: "https://0509.io/app/billing",
+      proofCaptureSucceeded: true,
     });
     record("activation-3ads", "Activation result (3 ads)", true, "Your activation scan found 12 ads for Glowkart", html, UNSUB);
     expect(html).toContain("Top ads");
+    expect(html).toContain("proof-backed brief");
   });
 
   it("activation result — no live ads", () => {
@@ -337,9 +339,11 @@ describe("email render gallery", () => {
       topAds: [],
       watchlistUrl: "https://0509.io/app/watchlists?watchlist=wl1",
       billingUrl: "https://0509.io/app/billing",
+      proofCaptureSucceeded: false,
     });
     record("activation-none", "Activation result (no ads)", true, "Your activation scan for Glowkart found no live ads", html, UNSUB);
     expect(html).toContain("useful signal");
+    expect(html).toContain("no evidence check was used");
   });
 
   it("instant alert — single change with before/after diff and creative", () => {

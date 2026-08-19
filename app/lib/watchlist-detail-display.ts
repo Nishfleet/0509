@@ -174,7 +174,7 @@ export function buildCompetitorFactRows(input: {
       missingLabel: "not recorded",
     },
     {
-      key: "Evidence checks",
+      key: "Proof captures",
       value: formatEvidenceAttempts(input.proofSummary),
       missingLabel: "none yet",
     },
