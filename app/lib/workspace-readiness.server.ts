@@ -223,7 +223,7 @@ export async function getWorkspaceReadiness(
       status: hasFirstValue ? "ready" : proofUsage.used > 0 ? "needs_proof" : "needs_setup",
       detail:
         successfulProofs > 0
-          ? `${successfulProofs} successful evidence check${successfulProofs === 1 ? "" : "s"} recorded.`
+          ? `${successfulProofs} successful proof capture${successfulProofs === 1 ? "" : "s"} recorded.`
           : noChangeBaselines > 0
             ? `${noChangeBaselines} successful no-change baseline${noChangeBaselines === 1 ? "" : "s"} recorded.`
           : proofUsage.used > 0
@@ -276,7 +276,7 @@ export async function getWorkspaceReadiness(
         hasBillingPaymentIssue
           ? "Payment issue needs review before retained monitoring is ready."
           : proofUsage.limit > 0
-            ? `${proofUsage.remaining} evidence checks left this month.`
+            ? `${proofUsage.remaining} proof captures left this month.`
             : "Choose a plan before retained monitoring.",
       action:
         proofUsage.limit > 0 && !hasBillingPaymentIssue

@@ -50,7 +50,8 @@ export default function HelpRoute() {
         <p>
           Free lets you watch one competitor: an activation scan when you add it, then a weekly check with a weekly
           email brief. Paid plans add 3–6 hour checks, daily briefs, evidence, and more competitors, subject to the
-          plan and account configuration.
+          plan and account configuration. Proof captures are saved for each recorded change, with generous monthly
+          caps and purchased proof-capture packs that never expire.
         </p>
       </PublicDocBlock>
 
