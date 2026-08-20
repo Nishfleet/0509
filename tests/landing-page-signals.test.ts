@@ -728,6 +728,76 @@ describe("extractLandingPageSignals", () => {
     });
   });
 
+  it("ignores google ad manager divs identified only by data-ad-* attributes", () => {
+    // Google Ad Manager slots are bare <div>s with `data-ad-slot` /
+    // `data-ad-unit` / `data-ad-client` / `data-ad-format` and no id or class.
+    // The token path above never sees them; the data-attribute path must.
+    const html = `
+      <html>
+        <body>
+          <div data-ad-slot="1234567890" data-ad-format="auto">
+            <a href="#">Buy now</a>
+            <p>$19.99</p>
+          </div>
+          <div data-ad-unit="Leaderboard-Top" data-ad-client="ca-pub-1">
+            <a href="#">Claim deal</a>
+            <p>₹199</p>
+          </div>
+          <main>
+            <button>Book demo</button>
+            <p>Team plan $79.99</p>
+          </main>
+        </body>
+      </html>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Book demo",
+      priceText: "$79.99",
+      formPresent: false,
+    });
+  });
+
+  it("ignores GAM-style boolean data-ad-layout attributes with no id or class", () => {
+    // Boolean attributes (no value) are common when an ad tag is in-article
+    // (`data-ad-layout="in-article"` is the only state marker carried).
+    const html = `
+      <div data-ad-slot data-ad-layout="in-article">
+        <a href="#">Shop now</a>
+        <p>$9.99</p>
+      </div>
+      <main><button>Buy now</button><p>$49.99</p></main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: "$49.99",
+    });
+  });
+
+  it("keeps real content when the data-ad-* literal appears inside an attribute value", () => {
+    // A media page may legitimately carry the phrase "data-ad-slot" in
+    // surrounding meta content (e.g. a developer article quoting the
+    // attribute name). The data-attribute path reads attribute NAMES outside
+    // quotes, so a value that contains the phrase "data-ad-slot" must not
+    // strip anything; the recognised attribute only fires on the bare
+    // <div data-ad-slot=...> form.
+    const html = `
+      <div class="docs">
+        <p>Use a div with data-ad-slot to load a unit.</p>
+      </div>
+      <main>
+        <a href="/shop">Shop now</a>
+        <p>Team plan $79.99</p>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Shop now",
+      priceText: "$79.99",
+    });
+  });
+
   it("keeps signals from unmarked product content wrappers", () => {
     const html = `
       <div class="product-card">
