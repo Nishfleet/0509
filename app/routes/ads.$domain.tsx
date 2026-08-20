@@ -58,6 +58,15 @@ export interface BrandPageLoaderData {
   brandName: string;
   hasCachedAds: boolean;
   ads: AdRecord[];
+  /**
+   * The subset of `ads` that carry VERIFIED link evidence to the domain
+   * (landing-page or advertiser-domain match). Attribution copy, the stat
+   * line, and analytics are built ONLY from this subset — creatives that
+   * merely match the search text are rendered but never described as linking.
+   * Computed in the loader so the client bundle never touches the server-only
+   * evidence module.
+   */
+  verifiedLinkedAds: AdRecord[];
   checkedAgo: string | null;
   /**
    * ISO timestamp of the underlying Ad Library check — the machine-readable
@@ -77,6 +86,18 @@ export interface BrandPageLoaderData {
    * domain — the page must not claim the brand owns or runs them.
    */
   brandOwnedAdCount: number;
+  /**
+   * How many cached creatives carry VERIFIED link evidence to the domain
+   * (landing-page or advertiser-domain match). Only these may be described as
+   * "linking to" / "pointing at" / "running for" the domain.
+   */
+  verifiedLinkCount: number;
+  /**
+   * Cached creatives the provider returned for the domain WITHOUT verified
+   * link evidence (text-mention and provider-candidate matches). These render
+   * on the wall but are described as "matching the search", never as linking.
+   */
+  unverifiedMatchCount: number;
   teaser: BrandIntelTeaser | null;
   aggression: BrandPageAggression | null;
   changeEvents: BrandChangeEvent[];
@@ -113,6 +134,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   }
 
   const {
+    adHasVerifiedDomainLink,
     brandPageAdLibraryCountryLabel,
     buildBrandChangeFeed,
     buildBrandIntelTeaser,
@@ -148,18 +170,31 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   const emergencyNoindex = env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0";
   const noindex = emergencyNoindex || !snapshot || !snapshot.freshForIndexing;
 
+  // Attribution analytics (score, teaser, change feed, ownership) derive ONLY
+  // from creatives with verified link evidence. Ads the provider returned as
+  // text-mention / provider candidates may be real creatives, but they are not
+  // the searched brand's ads — no score or "what changed" may be built on
+  // them. They still render on the wall, labeled as matching the search.
+  const snapshotAds = snapshot?.ads ?? [];
+  const verifiedLinkedAds = snapshot
+    ? snapshotAds.filter((ad) => adHasVerifiedDomainLink(ad, brand.domain))
+    : [];
+
   return {
     domain: brand.domain,
     brandName: brand.displayName,
     hasCachedAds: Boolean(snapshot),
-    ads: snapshot?.ads ?? [],
+    ads: snapshotAds,
+    verifiedLinkedAds,
     checkedAgo: freshness?.checkedAgo ?? null,
     lastCheckedAt: snapshot?.fetchedAt ?? null,
     freshForLiveClaim: freshness?.freshForLiveClaim ?? false,
-    brandOwnedAdCount: snapshot ? countBrandOwnedAds(snapshot.ads, brand.domain) : 0,
-    teaser: snapshot ? buildBrandIntelTeaser(snapshot.ads, now) : null,
-    aggression: snapshot ? computeBrandPageAggressionScore(snapshot.ads, now) : null,
-    changeEvents: snapshot ? buildBrandChangeFeed(snapshot.ads, now) : [],
+    brandOwnedAdCount: countBrandOwnedAds(verifiedLinkedAds, brand.domain),
+    verifiedLinkCount: verifiedLinkedAds.length,
+    unverifiedMatchCount: snapshotAds.length - verifiedLinkedAds.length,
+    teaser: snapshot ? buildBrandIntelTeaser(verifiedLinkedAds, now) : null,
+    aggression: snapshot ? computeBrandPageAggressionScore(verifiedLinkedAds, now) : null,
+    changeEvents: snapshot ? buildBrandChangeFeed(verifiedLinkedAds, now) : [],
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
     canonicalPath: `/ads/${brand.domain}`,
@@ -180,13 +215,21 @@ export function brandPageTitle(data: BrandPageLoaderData): string {
     return `${data.brandName} Facebook & Instagram ads | Five to Nine`;
   }
   // "{Brand} ads" is an ownership claim — only safe when every cached creative
-  // is actually the brand's own. Mixed or other-advertiser captures describe
-  // the page honestly as "Meta ads linking to {domain}".
+  // is actually the brand's own. "Linking to" is a link claim — only safe when
+  // the capture carries verified link evidence. Captures that only MATCH the
+  // search (text-mention / provider candidates) must say so, never "linking".
   const allBrandOwned =
     data.ads.length > 0 && data.brandOwnedAdCount === data.ads.length;
-  const subject = allBrandOwned
-    ? `${data.brandName} Facebook & Instagram ads`
-    : `${data.brandName}: Meta ads linking to ${data.domain}`;
+  let subject: string;
+  if (allBrandOwned) {
+    subject = `${data.brandName} Facebook & Instagram ads`;
+  } else if (data.verifiedLinkCount === 0) {
+    subject = `${data.brandName}: Meta ads matching ${data.domain}`;
+  } else if (data.unverifiedMatchCount > 0) {
+    subject = `${data.brandName}: Meta ads linking to ${data.domain} and more matching it`;
+  } else {
+    subject = `${data.brandName}: Meta ads linking to ${data.domain}`;
+  }
   if (data.freshForLiveClaim && data.checkedAgo) {
     return `${subject} right now | Five to Nine`;
   }
@@ -233,14 +276,23 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
   const totalCount = data.ads.length;
   const adWord = totalCount === 1 ? "ad" : "ads";
   const otherCount = totalCount - data.brandOwnedAdCount;
+  const linkWord = data.verifiedLinkCount === 1 ? "ad" : "ads";
+  const unverifiedWord = data.unverifiedMatchCount === 1 ? "ad" : "ads";
   const check = `a public check of ${adLibrarySourcePhrase(data.adLibraryCountry)} ${data.checkedAgo}`;
+  const unverifiedTail =
+    data.unverifiedMatchCount > 0
+      ? ` Another ${data.unverifiedMatchCount} ${unverifiedWord} matched the search without a verified link to ${data.domain}.`
+      : "";
+  if (data.verifiedLinkCount === 0) {
+    return `See ${totalCount} Meta ${adWord} matching ${data.domain}, from ${check}. Their link to the site is not verified. Get an email when the ads or offers change.`;
+  }
   if (totalCount > 0 && data.brandOwnedAdCount === totalCount) {
-    return `See ${totalCount} Meta ${adWord} from ${data.brandName} (${data.domain}), from ${check}. Get an email when their ads or offer change.`;
+    return `See ${totalCount} Meta ${adWord} from ${data.brandName} (${data.domain}), from ${check}. Get an email when their ads or offer change.${unverifiedTail}`;
   }
   if (data.brandOwnedAdCount === 0) {
-    return `See ${totalCount} Meta ${adWord} from other advertisers linking to ${data.domain}, from ${check}. Get an email when the ads or offers change.`;
+    return `See ${data.verifiedLinkCount} Meta ${linkWord} from other advertisers linking to ${data.domain}, from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
   }
-  return `See ${totalCount} Meta ${adWord} linking to ${data.domain} — ${data.brandOwnedAdCount} from ${data.brandName} and ${otherCount} from other advertisers — from ${check}. Get an email when the ads or offers change.`;
+  return `See ${data.verifiedLinkCount} Meta ${linkWord} linking to ${data.domain} — ${data.brandOwnedAdCount} from ${data.brandName} and ${otherCount} from other advertisers — from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
@@ -327,7 +379,9 @@ function BrandAdsResults({
   signupPath: string;
 }) {
   const teaser = data.teaser;
-  const totalCount = teaser?.totalCount ?? data.ads.length;
+  // The wall always shows every cached creative; attribution analytics above
+  // it speak only about the verified-linked subset (see the loader).
+  const totalCount = data.ads.length;
   const adWord = totalCount === 1 ? "ad" : "ads";
   const watchLabel = `Watch ${data.domain}`;
   const allBrandOwned = totalCount > 0 && data.brandOwnedAdCount === totalCount;
@@ -355,7 +409,7 @@ function BrandAdsResults({
                 {brandHeadline(data, totalCount, adWord, allBrandOwned, noneBrandOwned)}
               </h1>
               <p className="f9-ads-subline">
-                {heroDetailSentence(teaser, data.freshForLiveClaim, allBrandOwned, noneBrandOwned, data.domain)}
+                {heroDetailSentence(data, teaser, data.freshForLiveClaim, allBrandOwned, noneBrandOwned, data.domain)}
                 <b>Point us at your competitor and you'll never hear their next move from a client first.</b>
               </p>
             </div>
@@ -383,10 +437,10 @@ function BrandAdsResults({
         </div>
       </section>
 
-      {/* 3. STAT LINE */}
+      {/* 3. STAT LINE — built only from verified-linked creatives (see loader) */}
       {teaser ? (
         <BrandStatLine
-          ads={data.ads}
+          ads={data.verifiedLinkedAds}
           aggression={data.aggression}
           freshnessLabel={data.checkedAgo}
           fresh={data.freshForLiveClaim}
@@ -466,9 +520,10 @@ function BrandAdsResults({
 
 /**
  * The H1 verdict. "{Brand} is running N Meta ads" is an ownership claim —
- * it only applies when every cached creative is the brand's own ad. When the
- * creatives are other advertisers' ads linking to the domain, the headline
- * attributes them to the domain instead; a mixed capture names the split.
+ * it only applies when every cached creative is the brand's own. "Pointing at
+ * {domain}" is a link claim — it only applies when the capture carries
+ * verified link evidence. Creatives that merely match the search (text-mention
+ * / provider candidates) are "matching {domain}", never "pointing at" it.
  */
 function brandHeadline(
   data: BrandPageLoaderData,
@@ -478,21 +533,32 @@ function brandHeadline(
   noneBrandOwned: boolean,
 ): ReactNode {
   const hl = (node: ReactNode) => <span className="f9-ads-hl">{node}</span>;
-  const countPhrase = `${totalCount} Meta ${adWord}`;
 
+  // No verified link evidence: the wall is real creatives matching the search.
+  // The page must not claim they point at, link to, or run for the domain.
+  if (data.verifiedLinkCount === 0) {
+    const matchPhrase = `${totalCount} Meta ${adWord}`;
+    return data.freshForLiveClaim
+      ? <>{hl(matchPhrase)}{` ${totalCount === 1 ? "is" : "are"} matching ${data.domain} right now.`}</>
+      : <>{`The last check found `}{hl(matchPhrase)}{` matching ${data.domain}.`}</>;
+  }
+
+  // Verified link evidence exists — speak about the verified capture only;
+  // unverified matches get their own honest line in the subline.
+  const verifiedPhrase = `${data.verifiedLinkCount} Meta ${adWord}`;
   if (allBrandOwned) {
     return data.freshForLiveClaim
-      ? <>{`${data.brandName} is running `}{hl(countPhrase)}{" right now."}</>
-      : <>{`${data.brandName} was running `}{hl(countPhrase)}{" at the last check."}</>;
+      ? <>{`${data.brandName} is running `}{hl(verifiedPhrase)}{" right now."}</>
+      : <>{`${data.brandName} was running `}{hl(verifiedPhrase)}{" at the last check."}</>;
   }
 
   if (noneBrandOwned) {
     return data.freshForLiveClaim
-      ? <>{hl(countPhrase)}{` ${totalCount === 1 ? "is" : "are"} pointing at ${data.domain} right now.`}</>
-      : <>{`The last check found `}{hl(countPhrase)}{` pointing at ${data.domain}.`}</>;
+      ? <>{hl(verifiedPhrase)}{` ${data.verifiedLinkCount === 1 ? "is" : "are"} pointing at ${data.domain} right now.`}</>
+      : <>{`The last check found `}{hl(verifiedPhrase)}{` pointing at ${data.domain}.`}</>;
   }
 
-  const splitPhrase = `${data.brandOwnedAdCount} of these ${countPhrase}`;
+  const splitPhrase = `${data.brandOwnedAdCount} of these ${verifiedPhrase}`;
   return data.freshForLiveClaim
     ? <>{`${data.brandName} is running `}{hl(splitPhrase)}{" right now."}</>
     : <>{`${data.brandName} was running `}{hl(splitPhrase)}{" at the last check."}</>;
@@ -503,13 +569,43 @@ function brandHeadline(
  * Present tense is a live claim — kept only while the capture is fresh. The
  * "they" of the brand is only safe when the creatives are the brand's own;
  * other-advertiser captures attribute the texture to the advertisers instead.
+ * "Linking to" is used only for the verified-linked capture; unverified
+ * matches are described as matching the search, with their unproven link
+ * called out in the same breath.
  */
 function heroDetailSentence(
+  data: BrandPageLoaderData,
   teaser: BrandIntelTeaser | null,
   fresh: boolean,
   allBrandOwned: boolean,
   noneBrandOwned: boolean,
   domain: string,
+): string {
+  const sentence = heroDetailBase(
+    teaser,
+    fresh,
+    allBrandOwned,
+    noneBrandOwned,
+    domain,
+    data.verifiedLinkCount,
+  );
+  if (data.unverifiedMatchCount > 0) {
+    const word = data.unverifiedMatchCount === 1 ? "ad" : "ads";
+    if (data.verifiedLinkCount === 0) {
+      return `${sentence}These matched the search for ${domain} — their link to the site is not verified. `;
+    }
+    return `${sentence}Another ${data.unverifiedMatchCount} ${word} matched the search without a verified link to ${domain}. `;
+  }
+  return sentence;
+}
+
+function heroDetailBase(
+  teaser: BrandIntelTeaser | null,
+  fresh: boolean,
+  allBrandOwned: boolean,
+  noneBrandOwned: boolean,
+  domain: string,
+  verifiedLinkCount: number,
 ): string {
   if (!teaser) return "";
   const parts: string[] = [];
@@ -534,14 +630,20 @@ function heroDetailSentence(
   }
 
   if (noneBrandOwned) {
+    // No verified link evidence: these creatives merely match the search —
+    // "linking to" would overclaim the connection.
+    const linkPhrase =
+      verifiedLinkCount === 0 ? "ads matching" : "ads that link to";
     if (parts.length === 0) {
       return fresh
-        ? `Other advertisers are running ads that link to ${domain}. `
-        : `At the last check, other advertisers were running ads that link to ${domain}. `;
+        ? `Other advertisers are running ${linkPhrase} ${domain}. `
+        : `At the last check, other advertisers were running ${linkPhrase} ${domain}. `;
     }
+    const testingPhrase =
+      verifiedLinkCount === 0 ? "on ads matching" : "on ads linking to";
     return fresh
-      ? `Other advertisers are testing ${parts.join(" and ")} on ads linking to ${domain}. `
-      : `At the last check, other advertisers were testing ${parts.join(" and ")} on ads linking to ${domain}. `;
+      ? `Other advertisers are testing ${parts.join(" and ")} ${testingPhrase} ${domain}. `
+      : `At the last check, other advertisers were testing ${parts.join(" and ")} ${testingPhrase} ${domain}. `;
   }
 
   // Mixed ownership: the headline already states the split — no extra claim.
@@ -554,6 +656,9 @@ function closerHeadline(
   allBrandOwned: boolean,
   noneBrandOwned: boolean,
 ): string {
+  if (data.verifiedLinkCount === 0) {
+    return `The advertisers running ads matching ${data.domain} will change their next ad. `;
+  }
   if (allBrandOwned) {
     return `${data.brandName} will change their next ad. `;
   }
@@ -575,13 +680,21 @@ function closerHonestyLine(
   const tail =
     " This page never runs a live scrape — a live search refreshes it. Coverage and freshness are labeled and vary by source. The Ad Aggression Score is computed from a public formula. ";
 
+  const unverifiedNote =
+    data.unverifiedMatchCount > 0
+      ? ` Another ${data.unverifiedMatchCount} ${data.unverifiedMatchCount === 1 ? "ad" : "ads"} matched the search for ${data.domain} without a verified link.`
+      : "";
+
+  if (data.verifiedLinkCount === 0) {
+    return `Ad creatives are real Meta Ad Library ads that matched the search for ${data.domain}${cached}. Their link to the site is not verified.${tail}`;
+  }
   if (allBrandOwned) {
-    return `Ad creatives are ${data.brandName}'s real ads from ${source}${cached}.${tail}`;
+    return `Ad creatives are ${data.brandName}'s real ads from ${source}${cached}.${tail}${unverifiedNote}`;
   }
   if (noneBrandOwned) {
-    return `Ad creatives are real ads from ${source}, run by other advertisers linking to ${data.domain}${cached}.${tail}`;
+    return `Ad creatives are real ads from ${source}, run by other advertisers linking to ${data.domain}${cached}.${tail}${unverifiedNote}`;
   }
-  return `Ad creatives are real ads from ${source} linking to ${data.domain}${cached} — ${data.brandOwnedAdCount} run by ${data.brandName} and ${otherCount} by other advertisers.${tail}`;
+  return `Ad creatives are real ads from ${source} linking to ${data.domain}${cached} — ${data.brandOwnedAdCount} run by ${data.brandName} and ${otherCount} by other advertisers.${tail}${unverifiedNote}`;
 }
 
 /**

@@ -641,10 +641,7 @@ function validateDodoAnnualPricePair(
   if (monthlyCountry && annualCountry && monthlyCountry !== annualCountry) {
     return { ...base, valid: false, reason: "billing_context_mismatch" };
   }
-  if (
-    Math.abs(annualValidationAmount - expectedAnnualAmount) >
-    annualRoundingAllowance(expectedAnnualAmount)
-  ) {
+  if (Math.abs(annualValidationAmount - expectedAnnualAmount) > annualRoundingAllowance(expectedAnnualAmount)) {
     return { ...base, valid: false, reason: "amount_mismatch" };
   }
 

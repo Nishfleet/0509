@@ -6,6 +6,17 @@ import {
   resolveHookAndOffer,
   withStructuredAnalysis,
 } from "~/lib/analysis.server";
+import {
+  mapDiscoveryFailureOutcome,
+  recordBrowserJobTelemetry,
+  resolveSourceForRouteContext,
+  resolveWorkerVersionId,
+  sha256Hex,
+  type ActualBrowserProvider,
+  type BrowserJobPlanTier,
+  type BrowserJobRouteContext,
+  type BrowserJobSource,
+} from "~/lib/browser-job-telemetry.server";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import {
   type BrowserRunQuickActionScrapeElement,
@@ -15,7 +26,7 @@ import {
   hasBrowserRunQuickActions,
 } from "~/lib/browser-run.server";
 import { isoFromCountryName } from "~/lib/countries";
-import { normalizeNumericPageId } from "~/lib/normalize";
+import { fingerprintSavedQuery, normalizeNumericPageId } from "~/lib/normalize";
 import { truncateTextSafe } from "~/lib/text-safe";
 import {
   findStartedRunningLine,
@@ -91,6 +102,29 @@ export interface SearchMetaLibraryByBrowserOptions {
    * Default `shallow` keeps scheduled/watchlist scans on their existing page budget.
    */
   mode?: MetaLibraryBrowserMode;
+  /** Attribution context recorded in `browser_job_telemetry` (optional). */
+  routeContext?: BrowserJobRouteContext;
+  planTier?: BrowserJobPlanTier | null;
+  source?: BrowserJobSource;
+  /**
+   * Top-level job correlation id. Callers that orchestrate a multi-leg job
+   * (ad-source resolver) pass the SAME random id to every provider leg so one
+   * job = one chain of attempts. Defaults to a fresh random id.
+   */
+  jobId?: string;
+  /**
+   * Out-param attempt counter. When provided, it is incremented as legs are
+   * recorded so the caller can continue numbering a later fallback leg
+   * (e.g. customer Meta API after the browser chain failed).
+   */
+  telemetryAttempts?: { used: number };
+  /**
+   * Request ExecutionContext when the caller actually has one. When present,
+   * telemetry row writes are registered with `waitUntil` so they still land
+   * after the response (background completion preserved) while the bounded
+   * race still caps how long discovery may wait on a slow write.
+   */
+  executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
 }
 const BROWSERLESS_BQL_MUTATION = `
 mutation MetaLibraryLiveFallback($url: String!, $userAgent: String!) {
@@ -128,6 +162,8 @@ interface QuickActionExtractionPayload {
   loginWall: boolean;
   noResults: boolean;
   rateLimited: boolean;
+  /** Provider-reported browser milliseconds (X-Browser-Ms-Used) when known. */
+  browserMsUsed?: number | null;
 }
 
 type BrowserInstance = Awaited<ReturnType<typeof puppeteer.launch>>;
@@ -171,34 +207,126 @@ export async function searchMetaLibraryByBrowser(
     );
   }
 
+  const jobId = options.jobId ?? crypto.randomUUID();
+  // Started immediately but only awaited at leg terminal points, so the
+  // provider path never waits on the digest (also keeps fake-timer tests
+  // deterministic: the launch-timeout timer registers on the call stack).
+  const idempotencyKeyPromise = sha256Hex(`meta_discovery:${fingerprintSavedQuery(query)}`);
+  const routeContext = options.routeContext ?? "public_search";
+  const planTier = options.planTier ?? null;
+  const source = resolveSourceForRouteContext(routeContext, options.source);
+  let attempt = 0;
+  const nextAttempt = () => {
+    attempt += 1;
+    if (options.telemetryAttempts) {
+      options.telemetryAttempts.used = attempt;
+    }
+    return attempt;
+  };
+
+  // One bounded row per leg attempt: the actual provider (Cloudflare Browser
+  // Run sessions, Quick Actions, or Browserless BQL) is only knowable inside
+  // the fallback chain, so attribution is recorded here at each leg's
+  // terminal point. Queries that need one row per job pick the last attempt
+  // per job_id. Never throws into the product path.
+  const recordAttempt = async (
+    actualProvider: ActualBrowserProvider,
+    startedAt: string,
+    result: SearchResponse | null,
+    error: CommercialDiscoveryError | null,
+    browserMsUsed: number | null,
+  ) => {
+    // Duration is measured from the SAME recorded startedAt: endedAt and
+    // durationMs are captured together up front, before the idempotency
+    // digest await, so a slow digest can never inflate the recorded window.
+    const endedAt = new Date().toISOString();
+    const durationMs = Math.max(0, Date.parse(endedAt) - Date.parse(startedAt));
+    return recordBrowserJobTelemetry(
+      env,
+      {
+        jobId,
+        idempotencyKey: await idempotencyKeyPromise,
+        jobKind: "meta_discovery",
+        actualProvider,
+        routeContext,
+        planTier,
+        source,
+        attempt: nextAttempt(),
+        startedAt,
+        endedAt,
+        durationMs,
+        browserMsUsed,
+        outcome: error
+          ? mapDiscoveryFailureOutcome(error.failureClass)
+          : result && result.ads.length === 0
+            ? "empty"
+            : "succeeded",
+        resultCount: result?.ads.length ?? null,
+        workerVersion: resolveWorkerVersionId(env),
+      },
+      {
+        // Preserve background completion when the caller has a request
+        // ExecutionContext (see `SearchMetaLibraryByBrowserOptions`).
+        executionContext: options.executionContext,
+      },
+    );
+  };
+
+  const runLeg = async (
+    actualProvider: ActualBrowserProvider,
+    startedAt: string,
+    fn: () => Promise<MetaDiscoveryLegResult>,
+  ) => {
+    try {
+      const { result, browserMsUsed } = await fn();
+      await recordAttempt(actualProvider, startedAt, result, null, browserMsUsed);
+      return result;
+    } catch (error) {
+      const normalizedError = normalizeCommercialDiscoveryError(error);
+      await recordAttempt(actualProvider, startedAt, null, normalizedError, null);
+      throw normalizedError;
+    }
+  };
+
   try {
     if (!browserBinding) {
-      return await searchMetaLibraryByQuickActions(env, query);
+      return await runLeg("cloudflare_quick_actions", new Date().toISOString(), () =>
+        searchMetaLibraryByQuickActions(env, query),
+      );
     }
 
     try {
-      return await searchMetaLibraryViaSessions(
-        env,
-        browserBinding,
-        query,
-        mode,
-      );
+      return await runLeg("cloudflare_browser_run", new Date().toISOString(), async () => ({
+        result: await searchMetaLibraryViaSessions(env, browserBinding, query, mode),
+        browserMsUsed: null,
+      }));
     } catch (error) {
       const normalizedError = normalizeCommercialDiscoveryError(error);
       if (!shouldUseQuickActionsFallback(env, normalizedError)) {
         throw normalizedError;
       }
 
-      return await searchMetaLibraryByQuickActions(env, query);
+      return await runLeg("cloudflare_quick_actions", new Date().toISOString(), () =>
+        searchMetaLibraryByQuickActions(env, query),
+      );
     }
   } catch (error) {
     const normalizedError = normalizeCommercialDiscoveryError(error);
     if (shouldUseBrowserlessFallback(env, normalizedError)) {
-      return searchMetaLibraryByBrowserless(env, query);
+      return await runLeg("browserless_bql", new Date().toISOString(), async () => ({
+        result: await searchMetaLibraryByBrowserless(env, query),
+        browserMsUsed: null,
+      }));
     }
 
     throw normalizedError;
   }
+}
+
+interface MetaDiscoveryLegResult {
+  result: SearchResponse;
+  /** Provider-reported browser milliseconds (Quick Actions header) when known. */
+  browserMsUsed: number | null;
 }
 
 /** Keep first occurrence per library id (stable order across scroll passes). */
@@ -896,7 +1024,7 @@ export function createSessionCardExtractionScript() {
 async function searchMetaLibraryByQuickActions(
   env: AppEnv,
   query: NormalizedSavedQuery,
-): Promise<SearchResponse> {
+): Promise<MetaDiscoveryLegResult> {
   try {
     const extracted = await extractMetaLibraryByQuickActions(env, query);
     if (extracted.cards.length === 0) {
@@ -915,7 +1043,10 @@ async function searchMetaLibraryByQuickActions(
       }
 
       if (extracted.noResults) {
-        return emptyMetaLibraryResponse();
+        return {
+          result: emptyMetaLibraryResponse(),
+          browserMsUsed: extracted.browserMsUsed ?? null,
+        };
       }
 
       throw new CommercialDiscoveryError(
@@ -925,11 +1056,14 @@ async function searchMetaLibraryByQuickActions(
     }
 
     return {
-      ads: normalizeAndFilterExtractedCards(extracted.cards, query),
-      nextCursor: null,
-      source: "meta_library_browser",
-      provider: "meta_library_browser",
-      cacheStatus: "miss",
+      result: {
+        ads: normalizeAndFilterExtractedCards(extracted.cards, query),
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+      },
+      browserMsUsed: extracted.browserMsUsed ?? null,
     };
   } catch (error) {
     throw normalizeCommercialDiscoveryError(error);
@@ -987,7 +1121,10 @@ async function extractMetaLibraryByQuickActions(
       }
     }
 
-    return extracted;
+    return {
+      ...extracted,
+      browserMsUsed: quickActionContent.browserMsUsed ?? null,
+    };
   } catch (error) {
     const normalizedError = normalizeCommercialDiscoveryError(error);
     if (!shouldUseQuickActionScrapeFallback(normalizedError)) {
@@ -1916,7 +2053,10 @@ async function scrapeMetaLibraryByQuickActions(
     );
   }
 
-  return extractQuickActionPayloadFromScrape(scraped.elements);
+  return {
+    ...extractQuickActionPayloadFromScrape(scraped.elements),
+    browserMsUsed: scraped.browserMsUsed ?? null,
+  };
 }
 
 function extractQuickActionPayloadFromScrape(
