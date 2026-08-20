@@ -11,7 +11,10 @@
 # Freshness contract (2026-08-12): stale must never look fresh. The self-check
 # verifies the published payload is actually current before declaring success;
 # a single transient blip is retried once, and only a second consecutive
-# failure pages Nish (notify-email -> ops-notify Worker -> email).
+# failure pages Nish. Paging (2026-08-19): at most ONE alert per distinct
+# cause per 6h, sent via Telegram (hermes send -> outbound gate) instead of
+# email; email remains as a weekly fallback only (notify-email -> ops-notify
+# Worker -> email).
 #
 # Every path/threshold is overridable via env so the hermetic regression test
 # (test_refresh.sh) can run this against a throwaway directory.
@@ -20,11 +23,24 @@ umask 077
 
 DIR=${CONSOLE_DIR:-/home/nish/workspaces/agent-state/backlog-console}
 LOG=${CONSOLE_LOG:-$DIR/refresh.log}
-PAGE=${CONSOLE_PAGE_CMD:-/home/nish/.local/bin/notify-email}
 PYTHON=${CONSOLE_PYTHON:-python3}
 PUSH_SH=${CONSOLE_PUSH_SH:-$DIR/push.sh}
 CF_ENV=${CONSOLE_CF_ENV:-/home/nish/.config/fleet-console/cf.env}
 LOGGER=${CONSOLE_LOGGER:-logger}
+# Paging channels (2026-08-19): Telegram is the primary alert path (hermes send
+# via the outbound gate); email (notify-email -> ops-notify Worker) is only a
+# weekly fallback. Both overridable so the hermetic regression test can run
+# against fakes.
+TELEGRAM=${CONSOLE_TELEGRAM_CMD:-/home/nish/.local/bin/hermes}
+EMAIL=${CONSOLE_EMAIL_CMD:-/home/nish/.local/bin/notify-email}
+# Alert rate limit (2026-08-19): at most ONE alert per distinct cause per
+# ALERT_MIN_INTERVAL_S (6h). Email is additionally capped to at most once per
+# cause per EMAIL_WEEKLY_S (7d) - a weekly fallback only. State is stored in
+# STATE_DIR keyed by a hash of the normalised failure, so the same root cause
+# (e.g. "push auth failing") maps to the same key even as data.json ages drift.
+ALERT_MIN_INTERVAL_S=${CONSOLE_ALERT_MIN_INTERVAL_S:-21600}
+EMAIL_WEEKLY_S=${CONSOLE_EMAIL_WEEKLY_S:-604800}
+STATE_DIR=${CONSOLE_STATE_DIR:-$DIR/.alerts}
 # Freshness bound. After a successful refresh data.json is < 540s old (the
 # push.sh debounce floor) or was already fresh and simply pushed, so 1h is a
 # generous ceiling that still catches a multi-hour freeze like the 28h incident
@@ -98,10 +114,81 @@ if run_once && is_fresh; then
   log "refresh ok after retry"
   exit 0
 fi
-# Repeated failure -> page Nish. Only now, never on the first failure.
+# --- paging (2026-08-19): rate-limited Telegram alert, email weekly fallback ---
+#
+# A distinct-cause key for the alert rate limiter. The same root cause (e.g.
+# "push auth failing") must map to the same key even as data.json / .last-push-ok
+# ages drift between runs, so we strip timestamps, drop digits/whitespace, and
+# lowercase the last log lines before hashing.
+cause_key() {
+  local out
+  out=$(tail -n 10 "$LOG" 2>/dev/null \
+    | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+ ?//' \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[0-9]+//g; s/[[:space:]]+/ /g; s/^ //; s/ $//' \
+    | grep -v '^$') || true
+  printf '%s\n' "$out" | sha1sum | cut -d' ' -f1
+}
+
+# Primary alert channel: Telegram. Subject + body go through `hermes send` so
+# the outbound gate classifies/logs them (console-failure vocabulary is treated
+# as a hard failure). Returns the hermes exit code.
+telegram_page() {
+  local subject=$1 body=$2 tmp rc
+  tmp=$(mktemp "${TMPDIR:-/tmp}/backlog-console-alert.XXXXXX") || return 1
+  printf '%s\n' "$body" >"$tmp"
+  "$TELEGRAM" send --subject "$subject" --file "$tmp" >>"$LOG" 2>&1
+  rc=$?
+  rm -f -- "$tmp"
+  return $rc
+}
+
+# Weekly-fallback channel: email via notify-email -> ops-notify Worker.
+email_page() {
+  "$EMAIL" "$1" "$2" >>"$LOG" 2>&1
+}
+
+# Page Nish for a repeated staleness failure. Rate-limited to ONE alert per
+# distinct cause per ALERT_MIN_INTERVAL_S; Telegram is primary, email is only a
+# weekly fallback (used when Telegram fails, at most once per cause per
+# EMAIL_WEEKLY_S). Freshness DETECTION above is untouched - only the paging
+# channel and rate change.
+page_nish() {
+  local key now last_alert last_email telegram_ok
+  key=$(cause_key)
+  mkdir -p "$STATE_DIR"
+  now=$(date +%s)
+  last_alert=$(cat "$STATE_DIR/$key.alert" 2>/dev/null || echo 0)
+  if [ $(( now - last_alert )) -lt "$ALERT_MIN_INTERVAL_S" ]; then
+    log "alert suppressed: same cause already paged $(( now - last_alert ))s ago (< ${ALERT_MIN_INTERVAL_S}s)"
+    jlog "refresh FAILED after retry (alert suppressed - already paged this cause within ${ALERT_MIN_INTERVAL_S}s)"
+    return 0
+  fi
+  telegram_ok=0
+  if telegram_page "$1" "$2"; then
+    telegram_ok=1
+    log "paged via Telegram"
+  else
+    log "Telegram page failed - trying weekly email fallback"
+  fi
+  last_email=$(cat "$STATE_DIR/$key.email" 2>/dev/null || echo 0)
+  if [ "$telegram_ok" -eq 0 ] \
+    && [ $(( now - last_email )) -ge "$EMAIL_WEEKLY_S" ]; then
+    if email_page "$1" "$2"; then
+      log "emailed (weekly fallback)"
+      echo "$now" >"$STATE_DIR/$key.email"
+    else
+      log "email page delivery failed"
+    fi
+  fi
+  echo "$now" >"$STATE_DIR/$key.alert"
+  return 0
+}
+
+# Repeated failure -> page Nish. Only now, never on the first failure. The page
+# is rate-limited to at most ONE alert per distinct cause per ALERT_MIN_INTERVAL_S
+# and routed via Telegram with email as a weekly fallback only (2026-08-19).
 log "refresh FAILED after retry - paging"
 jlog "refresh FAILED after retry: $(tail -n 3 "$LOG" 2>/dev/null | tr '\n' ' ')"
-if ! "$PAGE" "Fleet Backlog Console refresh FAILED" "$(diag)" >>"$LOG" 2>&1; then
-  log "page delivery failed"
-fi
+page_nish "Fleet Backlog Console refresh FAILED" "$(diag)"
 exit 1
