@@ -16109,3 +16109,12 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   margin: 0 auto;
   padding: 2rem 1.5rem 4rem;
 }
+
+/* Mobile first-viewport budget (375x812): keep the live-search action
+   above the fold - trims only, no hiding (journey-1 fold gate). */
+@media (max-width: 600px) {
+  .ld-hero-grid .ld-wall { font-size: 2.3rem; }
+  .ld-deck-copy { font-size: 0.95rem; line-height: 1.45; margin-top: 12px; }
+  .ld-hero-copy .ld-command { margin-top: 12px; }
+  .ld-case { margin-bottom: 8px; }
+}
