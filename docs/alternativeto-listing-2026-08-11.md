@@ -22,6 +22,30 @@ decisions on a few fields — see [Owner decisions](#owner-decisions).
   AlternativeTo account**, then the prepared suggestion can be submitted
   with the fields below.
 
+## Asset & re-verification update (2026-08-12)
+
+- **Assets are now committed to the repo** under
+  `docs/assets/alternativeto/` — the submission no longer waits on any
+  asset work: squared 512x512 transparent icon
+  (`five-to-nine-icon-512.png` + squared SVG source
+  `five-to-nine-icon.svg`), homepage screenshot
+  (`screenshot-homepage.png`, 1280x900, live hero), public search results
+  screenshot with a real example query (`screenshot-search-results.png`,
+  Flipkart via the no-account preview), and the pre-search form state
+  (`screenshot-search-preview.png`). All captured from the live
+  `https://0509.io` on 2026-08-12; all content is public (no account
+  surfaces, no personal data).
+- **Re-verification status:** `https://0509.io` reachable (HTTP 200,
+  2026-08-12). AlternativeTo itself (the `five-to-nine` name-404 check,
+  tag pages, competitor pages) could not be re-fetched from this VPS —
+  AlternativeTo's Cloudflare Turnstile challenge blocks datacenter IPs —
+  so the 2026-08-11 verification of those pages stands as the last
+  confirmed state. Nothing in the 2026-08-11 field values depends on
+  a change between the two dates.
+- Remaining unchecked assets (`sample brief`, `watchlist surface`) need an
+  account and are optional; the committed three screenshots plus icon
+  already exceed AlternativeTo's attachment expectations.
+
 ## How AlternativeTo listing works (verified from official FAQ, 2026-08-11)
 
 AlternativeTo is a free, crowd-sourced software directory. Anyone can add
@@ -182,15 +206,26 @@ Commerce** (Dozier.io's category). No submitter action needed.
 
 ### Icon
 
-- Use `brand/five-to-nine-colored-logo.svg` as the source.
-- AlternativeTo spec: **squared PNG or SVG, 280x280 or bigger, transparent
-  background**. The repo asset is a 920x220 wide lockup (colored 59 mark +
-  dark wordmark), so export a squared icon variant (e.g., the 59 mark on a
-  transparent square canvas) at 280x280+ before submitting.
+- **Ready:** use `docs/assets/alternativeto/five-to-nine-icon-512.png`
+  (512x512, transparent background, squared mark-only variant — exceeds the
+  280x280 minimum; corner transparency and gradient tile verified on
+  2026-08-12). The squared SVG source
+  `docs/assets/alternativeto/five-to-nine-icon.svg` is committed alongside
+  it if AlternativeTo prefers an SVG upload.
+- Derived from `brand/five-to-nine-colored-logo.svg` (the 59 mark on a
+  transparent square canvas); the original lockup itself is not squared and
+  must not be uploaded as the icon.
 
 ### Screenshots
 
-See [Asset checklist](#asset-checklist).
+- **Ready:** `docs/assets/alternativeto/screenshot-homepage.png` (live hero,
+  1280x900), `docs/assets/alternativeto/screenshot-search-results.png`
+  (public no-account search showing real results for an example query,
+  captured from the live site 2026-08-12), and
+  `docs/assets/alternativeto/screenshot-search-preview.png` (form state).
+  All public surfaces; no personal or non-public workspace content.
+- Optional remaining: a brief/digest preview and a watchlist surface need
+  an internal account; not required for submission.
 
 ## Suggest Five to Nine as an alternative (post-approval)
 
@@ -288,18 +323,25 @@ homepage copy in `app/routes/marketing.tsx`, and AlternativeTo FAQ rules:
 
 ## Asset checklist
 
-- [ ] Export squared icon (280x280+ PNG or SVG, transparent background)
-      from `brand/five-to-nine-colored-logo.svg` (mark-only or lockup on a
-      square canvas).
-- [ ] Screenshot: homepage hero (`https://0509.io/`).
-- [ ] Screenshot: public search preview with an example query
-      (`https://0509.io/search`), which needs no account.
+- [x] Squared icon — **done 2026-08-12**:
+      `docs/assets/alternativeto/five-to-nine-icon-512.png` (512x512 PNG,
+      transparent background, verified corners + gradient) with squared SVG
+      source `docs/assets/alternativeto/five-to-nine-icon.svg`.
+- [x] Screenshot: homepage hero — **done 2026-08-12**:
+      `docs/assets/alternativeto/screenshot-homepage.png` (live
+      `https://0509.io/`, 1280x900).
+- [x] Screenshot: public search preview — **done 2026-08-12**:
+      `docs/assets/alternativeto/screenshot-search-results.png` (live
+      no-account search with an example query; plus the form state in
+      `screenshot-search-preview.png`).
 - [ ] Screenshot: sample brief / morning-brief preview section on the
-      homepage, or a real digest from an existing account.
+      homepage, or a real digest from an existing account — optional;
+      needs an internal account or homepage section crop.
 - [ ] Screenshot: watchlist surface showing baseline + change evidence
-      (account needed; use an internal account).
-- [ ] Verify every screenshot shows no personal/private data (mask emails
-      and any non-public workspace content).
+      (account needed; use an internal account) — optional.
+- [x] Verify every screenshot shows no personal/private data — **done
+      2026-08-12**: all captured assets are public surfaces (homepage,
+      no-account search results); no emails or workspace content visible.
 
 ## Submission process (verified from AlternativeTo FAQ, 2026-08-11)
 
@@ -342,7 +384,9 @@ homepage copy in `app/routes/marketing.tsx`, and AlternativeTo FAQ rules:
 3. Approve the short + full description versions, tags, and features to
    paste.
 4. Approve the "suggest as alternative" target list (3–5 recommended).
-5. Capture and attach the asset checklist screenshots + squared icon.
+5. Attach the committed assets (`docs/assets/alternativeto/` — squared
+   icon PNG/SVG, homepage screenshot, search results + form screenshots,
+   all captured 2026-08-12) to the submission.
 6. Confirm analytics referer filter for `alternativeto.net` exists.
 
 After the owner confirms these, the manual submission itself is a ~15-minute
