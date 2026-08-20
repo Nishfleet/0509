@@ -124,13 +124,20 @@ jobs:
           AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           set -euo pipefail
-          # Authoritative PR changed-file list (paginated; every page merged).
+          # Authoritative PR changed-file list. `gh api --paginate` applies
+          # --jq PER PAGE and concatenates the per-page results, so when a PR
+          # exceeds one page (>100 items) the raw output is N back-to-back
+          # arrays, which is not a single valid JSON document and would crash
+          # `--argjson` below. Emit one object per line (--jq '.[] | …') and
+          # then slurp the whole stream into one array so the result is always
+          # a single array regardless of page count. Applies to every
+          # paginated fetch in this step.
           files_json="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
-            --jq '[.[] | {filename, previous_filename}]')"
-          # Authoritative review list (paginated; states include DISMISSED so
-          # dismissals can never masquerade as approvals).
+            --jq '.[] | {filename, previous_filename}' | jq -s .)"
+          # Authoritative review list (states include DISMISSED so dismissals
+          # can never masquerade as approvals).
           reviews_json="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews?per_page=100" \
-            --jq '[.[] | {state, submitted_at, user: (.user.login // ""), commit_id}]')"
+            --jq '.[] | {state, submitted_at, user: (.user.login // ""), commit_id}' | jq -s .)"
           # Head commit date proves an approval is current, not stale.
           head_date="$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq '.commit.committer.date // ""')"
           # Sole-admin attestation comments (paginated). Only comments whose
@@ -141,7 +148,7 @@ jobs:
           # bounds the permission lookups below to the handful of logins that
           # actually attested, rather than every commenter on the PR.
           comments_json="$(gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" \
-            --jq '[.[] | {body: (.body // ""), user: (.user.login // "")}]')"
+            --jq '.[] | {body: (.body // ""), user: (.user.login // "")}' | jq -s .)"
           attestations_json="$(printf '%s' "$comments_json" | jq -c '
             [ .[]
               | . as $c
