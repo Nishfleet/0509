@@ -4,14 +4,107 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pricingPlans, usageBundles } from "~/lib/pricing";
 
-describe("marketing pricing latency", () => {
+describe("marketing pricing SSR", () => {
   beforeEach(() => {
     vi.resetModules();
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.resetModules();
+  });
+
+  const commercialLaunch = {
+    scoutSaleOpen: true,
+    starterSaleOpen: true,
+    agencySaleOpen: false,
+  };
+
+  const availablePreview = {
+    available: true,
+    provider: "dodo",
+    source: "dodo_checkout_preview",
+    country: "US",
+    adaptiveCurrency: true,
+    feesInclusive: true,
+    prices: {
+      starter: {
+        monthly: { display: "$99", amount: 9900, currency: "USD", billingCountry: "US" },
+      },
+    },
+    annualValidation: {},
+    usageBundles: {},
+  };
+
+  it("publishes the Dodo pricing preview in the loader when it responds within the SSR bound", async () => {
+    const previewDodo0509PlanPrices = vi.fn().mockResolvedValue(availablePreview);
+    const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
+
+    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
+    }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+
+    const { headers, loader } = await import("~/routes/marketing");
+    const response = (await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/"),
+    } as never)) as Response;
+
+    expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
+    expect(response).toBeInstanceOf(Response);
+    // Country-specific prices are embedded in this HTML: it must be
+    // browser-only so a shared cache never replays one country's prices
+    // for another visitor.
+    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+    expect(response.headers.get("vary")).toContain("cookie");
+    // React Router only merges Set-Cookie from loader responses into the
+    // document; the route-level headers export must carry the rest through.
+    const documentHeaders = headers({
+      loaderHeaders: response.headers,
+      parentHeaders: new Headers(),
+      actionHeaders: new Headers(),
+      errorHeaders: undefined,
+    });
+    expect(documentHeaders.get("cache-control")).toBe("private, max-age=300");
+    await expect(response.json()).resolves.toEqual({
+      pricingPreview: availablePreview,
+      commercialLaunch,
+    });
+    expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
+      DODO_0509_API_KEY: "provider-key",
+    });
+  });
+
+  it("falls back to the checkout-localized preview when Dodo exceeds the SSR bound", async () => {
+    vi.useFakeTimers();
+    const previewDodo0509PlanPrices = vi.fn(() => new Promise<never>(() => {}));
+    const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
+
+    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
+    }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+
+    const { loader } = await import("~/routes/marketing");
+    const loading = loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/"),
+    } as never);
+
+    await vi.advanceTimersByTimeAsync(2_500);
+    const result = await loading;
+
+    // The homepage document never blocks on a slow Dodo preview: it degrades
+    // to the honest checkout-localized fallback and the client-side
+    // /api/pricing-preview fetch takes over near the fold.
+    expect(result).toEqual({
+      pricingPreview: { available: false },
+      commercialLaunch,
+    });
   });
 
   it("waits for a Dodo preview only up to the SSR bound, then falls back", async () => {

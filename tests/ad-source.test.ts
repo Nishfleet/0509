@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { sha256Hex, recordBrowserJobTelemetry } from "~/lib/browser-job-telemetry.server";
 import type { NormalizedSavedQuery, SearchResponse } from "~/lib/types";
-import { DISCOVERY_ADVERTISER_FILTER_EPOCH } from "~/lib/discovery-cache.server";
+import { DISCOVERY_ADVERTISER_FILTER_EPOCH, buildDiscoveryCacheKey } from "~/lib/discovery-cache.server";
+import { fingerprintSavedQuery } from "~/lib/normalize";
+import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 beforeEach(() => {
   vi.resetModules();
@@ -3751,10 +3754,14 @@ describe("searchAdsViaSourceResolver", () => {
       ads: [{ metaAdId: "meta-nykaa-1" }],
     });
     // The response is out while the refresh is still running: the browser
-    // promise is unresolved and the capture was handed to waitUntil.
+    // promise is unresolved and the capture was handed to waitUntil. The
+    // immediate stale serve also records its cache telemetry row through the
+    // same executionContext (one additional waitUntil registration for the
+    // background write).
     expect(browserSearch).toHaveBeenCalledTimes(1);
     expect(upsertDiscoveryCacheEntry).not.toHaveBeenCalled();
-    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(waitUntil).toHaveBeenCalledTimes(2);
+    expect(waitUntil.mock.calls[1]?.[0]).toBeInstanceOf(Promise);
 
     const background = waitUntil.mock.calls[0]?.[0];
     resolveSearch(buildLiveBrowserResult());
@@ -5374,5 +5381,842 @@ describe("hasFreshDiscoveryCacheEntry", () => {
       hasFreshDiscoveryCacheEntry({ DB: {} as D1Database } as never, query, null),
     ).resolves.toBe(false);
     expect(getDiscoveryCacheEntry).not.toHaveBeenCalled();
+  });
+});
+
+describe("browser-job attribution correlation (migration 0075)", () => {
+  function telemetryHarness() {
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
+    return harness;
+  }
+
+  it("correlates the browser chain and the Meta API fallback under one job id", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      constructor(
+        message: string,
+        public readonly failureClass: string,
+      ) {
+        super(message);
+        this.name = "CommercialDiscoveryError";
+      }
+    }
+
+    const harness = telemetryHarness();
+    // Simulates the real browser chain consuming its first attempt before
+    // failing with a login wall (the real module increments the out-param).
+    const browserSearch = vi.fn(async (_env: unknown, _query: unknown, options: { jobId?: string; telemetryAttempts?: { used: number } }) => {
+      if (options?.telemetryAttempts) {
+        options.telemetryAttempts.used = 1;
+      }
+      throw new MockCommercialDiscoveryError("Meta Ad Library returned a login wall.", "login_wall");
+    });
+    const apiSearch = vi.fn().mockResolvedValue(
+      buildLiveBrowserResult({
+        source: "meta",
+        provider: undefined,
+      }),
+    );
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: harness.db,
+        META_AD_LIBRARY_TOKEN: "live-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+        customerMetaAdLibraryToken: "customer-token",
+        planTier: "starter",
+      },
+    );
+
+    expect(result).toMatchObject({ source: "meta_api", provider: "meta_api" });
+    // The resolver generated ONE top-level job id and passed it into the
+    // browser call; the Meta API fallback row continues that same job.
+    const browserCallOptions = browserSearch.mock.calls[0]?.[2] ?? {};
+    const jobId = browserCallOptions.jobId as string;
+    expect(jobId).toMatch(/^[0-9a-f-]{36}$/u);
+
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].job_id).toBe(jobId);
+    expect(rows[0]).toMatchObject({
+      job_kind: "meta_discovery",
+      actual_provider: "customer_meta_api",
+      route_context: "public_search",
+      plan_tier: "starter",
+      attempt: 2, // continues after the simulated browser chain attempt
+      outcome: "succeeded",
+    });
+    // Stable SHA-256 fingerprint of the canonical correlation input — never
+    // the raw query text.
+    expect(String(rows[0].idempotency_key)).toMatch(/^[0-9a-f]{64}$/u);
+    expect(String(rows[0].idempotency_key)).not.toContain("nykaa");
+    harness.close();
+  });
+
+  it("persists only a SHA-256 fingerprint of the cache key — the raw paging cursor never lands", async () => {
+    const harness = telemetryHarness();
+    const rawCursor = "abc+def/ghi==-page2";
+    const cachedAt = new Date(Date.now() - 60_000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: `meta_library_browser:fp:india:${rawCursor}`,
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp",
+      country: "India",
+      cursor: rawCursor,
+      payload: {
+        ads: [{ metaAdId: "cache-hit-1" }],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "hit",
+      },
+      fetchedAt: cachedAt,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      browserMsUsed: null,
+      createdAt: cachedAt,
+      updatedAt: cachedAt,
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: vi.fn(),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: vi.fn(),
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      { BROWSER: { fetch: vi.fn() } as unknown as Fetcher, DB: harness.db } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      rawCursor,
+      { purpose: "public_search" },
+    );
+
+    expect(result.ads).toHaveLength(1);
+    const rows = harness.sqlite
+      .prepare("SELECT idempotency_key, job_id FROM browser_job_telemetry")
+      .all() as Array<{ idempotency_key: string; job_id: string }>;
+    expect(rows).toHaveLength(1);
+    // Bounded SHA-256 fingerprint; no cursor, URL, or query text anywhere.
+    expect(rows[0].idempotency_key).toMatch(/^[0-9a-f]{64}$/u);
+    expect(rows[0].idempotency_key).not.toContain(rawCursor);
+    expect(rows[0].idempotency_key).not.toContain("abc");
+    expect(rows[0].idempotency_key).not.toContain("nykaa");
+    expect(rows[0].job_id).toMatch(/^[0-9a-f-]{36}$/u);
+    harness.close();
+  });
+
+  it("continues one job id with strictly increasing attempts from live failure through the stale cache serve", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      constructor(
+        message: string,
+        public readonly failureClass: string,
+      ) {
+        super(message);
+        this.name = "CommercialDiscoveryError";
+      }
+    }
+
+    const harness = telemetryHarness();
+    // Simulates the real browser chain: the leg records its OWN telemetry row
+    // through the shared attempt allocator before failing (the real module
+    // increments the out-param at each leg's terminal point).
+    const browserSearch = vi.fn(
+      async (
+        _env: unknown,
+        _query: unknown,
+        options: {
+          jobId?: string;
+          routeContext?: string;
+          planTier?: string | null;
+          source?: string;
+          telemetryAttempts?: { used: number };
+          executionContext?: unknown;
+        },
+      ) => {
+        const startedAt = new Date().toISOString();
+        options.telemetryAttempts!.used += 1;
+        await recordBrowserJobTelemetry(
+          _env as never,
+          {
+            jobId: options.jobId ?? "job-0001",
+            idempotencyKey: "deadbeef".repeat(8),
+            jobKind: "meta_discovery",
+            actualProvider: "cloudflare_browser_run",
+            routeContext: (options.routeContext ?? "public_search") as never,
+            planTier: (options.planTier ?? null) as never,
+            source: (options.source ?? "manual") as never,
+            attempt: options.telemetryAttempts!.used,
+            startedAt,
+            endedAt: new Date().toISOString(),
+            durationMs: 5,
+            outcome: "failed",
+            resultCount: null,
+          },
+          { executionContext: (options.executionContext ?? null) as never },
+        );
+        throw new MockCommercialDiscoveryError("selector drift", "selector_drift");
+      },
+    );
+    const fetchedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_library_browser:fp-stale-attribution:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-stale-attribution",
+      country: "India",
+      cursor: null,
+      payload: {
+        ...buildLiveBrowserResult(),
+        discoveryEmptyReason: null,
+        discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+      },
+      fetchedAt,
+      expiresAt: new Date(Date.now() - 60 * 1000).toISOString(),
+      browserMsUsed: 12_000,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(0),
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: vi.fn(),
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: harness.db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "stale-attribution",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search" },
+    );
+
+    // Customer-visible stale/degraded shape is preserved unchanged.
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "stale",
+      discoveryStatus: "cache_only",
+      ads: [{ metaAdId: "meta-nykaa-1" }],
+    });
+
+    const browserCallOptions = browserSearch.mock.calls[0]?.[2] ?? {};
+    const jobId = browserCallOptions.jobId as string;
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+    // ONE job id across the failed live leg AND the cache serve.
+    expect(new Set(rows.map((row) => row.job_id)).size).toBe(1);
+    expect(rows[0].job_id).toBe(jobId);
+    // Strictly increasing attempts: the live failure owns 1, the cache serve
+    // continues the shared allocator at 2 (no duplicate attempt numbers).
+    expect(rows.map((row) => row.attempt)).toEqual([1, 2]);
+    expect(rows[0]).toMatchObject({
+      actual_provider: "cloudflare_browser_run",
+      outcome: "failed",
+    });
+    expect(rows[1]).toMatchObject({
+      actual_provider: "cache",
+      cache_status: "stale",
+      outcome: "degraded",
+      result_count: 1,
+    });
+    harness.close();
+  });
+
+  it("records the background stale serve under the job id while the warming capture runs", async () => {
+    const harness = telemetryHarness();
+    const browserSearch = vi.fn(
+      async (
+        _env: unknown,
+        _query: unknown,
+        options: { jobId?: string },
+      ) => new Promise<SearchResponse>(() => undefined),
+    );
+    const waitUntil = vi.fn();
+    const fetchedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_library_browser:fp-bg-stale:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-bg-stale",
+      country: "India",
+      cursor: null,
+      payload: {
+        ...buildLiveBrowserResult(),
+        discoveryEmptyReason: null,
+        discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+      },
+      fetchedAt,
+      expiresAt: new Date(Date.now() - 60 * 1000).toISOString(),
+      browserMsUsed: 12_000,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(0),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: vi.fn(),
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: harness.db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "bg-stale",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search", executionContext: { waitUntil } },
+    );
+
+    expect(result).toMatchObject({
+      cacheStatus: "stale",
+      discoveryStatus: "cache_only",
+      discoveryProgress: "warming",
+      ads: [{ metaAdId: "meta-nykaa-1" }],
+    });
+    // The warming capture was handed to waitUntil; the immediate stale serve
+    // is attributed to the SAME job id. The serve's telemetry row is also
+    // registered with waitUntil (background completion), so two registrations.
+    expect(waitUntil).toHaveBeenCalledTimes(2);
+    expect(waitUntil.mock.calls[1]?.[0]).toBeInstanceOf(Promise);
+    const browserCallOptions = browserSearch.mock.calls[0]?.[2] ?? {};
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].job_id).toBe(browserCallOptions.jobId);
+    expect(rows[0]).toMatchObject({
+      actual_provider: "cache",
+      cache_status: "stale",
+      outcome: "degraded",
+      attempt: 1,
+    });
+    harness.close();
+  });
+
+  it("records the lease-resolved stale serve under the waiting job id", async () => {
+    const harness = telemetryHarness();
+    // Real lease table with a row owned by ANOTHER isolate: this request's
+    // acquisition is ignored, so it waits for lease resolution and serves the
+    // stale entry. Telemetry still writes to the real sqlite harness.
+    harness.sqlite.exec(`
+      CREATE TABLE discovery_query_lease (
+        cache_key TEXT PRIMARY KEY NOT NULL,
+        provider TEXT NOT NULL,
+        route_context TEXT NOT NULL,
+        holder_id TEXT NOT NULL,
+        lease_expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    const query: NormalizedSavedQuery = {
+      mode: "keyword",
+      filters: {
+        query: "lease-stale",
+        country: "India",
+        platform: "all",
+        creativeType: "all",
+        status: "all",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+    };
+    const leaseCacheKey = buildDiscoveryCacheKey({
+      provider: "meta_library_browser",
+      fingerprint: fingerprintSavedQuery(query),
+      country: "India",
+      cursor: null,
+    });
+    const future = new Date(Date.now() + 180_000).toISOString();
+    const now = new Date().toISOString();
+    harness.sqlite
+      .prepare(
+        `INSERT INTO discovery_query_lease (
+          cache_key, provider, route_context, holder_id, lease_expires_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(leaseCacheKey, "meta_library_browser", "public_search", "other-isolate", future, now, now);
+
+    const browserSearch = vi.fn();
+    const fetchedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: leaseCacheKey,
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: fingerprintSavedQuery(query),
+      country: "India",
+      cursor: null,
+      payload: {
+        ...buildLiveBrowserResult(),
+        discoveryEmptyReason: null,
+        discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+      },
+      fetchedAt,
+      expiresAt: new Date(Date.now() - 60 * 1000).toISOString(),
+      browserMsUsed: 12_000,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(0),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: vi.fn(),
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: harness.db,
+      } as never,
+      query,
+      null,
+      { purpose: "public_search", executionContext: { waitUntil: vi.fn() } },
+    );
+
+    expect(result).toMatchObject({
+      cacheStatus: "stale",
+      discoveryStatus: "cache_only",
+      discoveryProgress: "warming",
+      ads: [{ metaAdId: "meta-nykaa-1" }],
+    });
+    expect(browserSearch).not.toHaveBeenCalled();
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].job_id).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(rows[0]).toMatchObject({
+      actual_provider: "cache",
+      cache_status: "stale",
+      outcome: "degraded",
+      attempt: 1,
+      result_count: 1,
+    });
+    harness.close();
+  });
+
+  it("records the lease-resolved fresh hit under the waiting job id", async () => {
+    const harness = telemetryHarness();
+    harness.sqlite.exec(`
+      CREATE TABLE discovery_query_lease (
+        cache_key TEXT PRIMARY KEY NOT NULL,
+        provider TEXT NOT NULL,
+        route_context TEXT NOT NULL,
+        holder_id TEXT NOT NULL,
+        lease_expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    const query: NormalizedSavedQuery = {
+      mode: "keyword",
+      filters: {
+        query: "lease-hit",
+        country: "India",
+        platform: "all",
+        creativeType: "all",
+        status: "all",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+    };
+    const leaseCacheKey = buildDiscoveryCacheKey({
+      provider: "meta_library_browser",
+      fingerprint: fingerprintSavedQuery(query),
+      country: "India",
+      cursor: null,
+    });
+    const future = new Date(Date.now() + 180_000).toISOString();
+    const now = new Date().toISOString();
+    harness.sqlite
+      .prepare(
+        `INSERT INTO discovery_query_lease (
+          cache_key, provider, route_context, holder_id, lease_expires_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(leaseCacheKey, "meta_library_browser", "public_search", "other-isolate", future, now, now);
+
+    const browserSearch = vi.fn();
+    // Unexpired entry fetched 1.5s ago: outside the 1s forceLive shared-hit
+    // window but fresh enough for the lease freshness skew, so the waiter
+    // resolves it as a healthy hit.
+    const fetchedAt = new Date(Date.now() - 1500).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: leaseCacheKey,
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: fingerprintSavedQuery(query),
+      country: "India",
+      cursor: null,
+      payload: {
+        ...buildLiveBrowserResult(),
+        discoveryEmptyReason: null,
+        discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+      },
+      fetchedAt,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      browserMsUsed: 12_000,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(0),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: vi.fn(),
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: harness.db,
+      } as never,
+      query,
+      null,
+      { purpose: "public_search", forceLive: true, acceptCacheYoungerThanMs: 1000 },
+    );
+
+    expect(result).toMatchObject({
+      cacheStatus: "hit",
+      discoveryStatus: "healthy",
+      ads: [{ metaAdId: "meta-nykaa-1" }],
+    });
+    expect(browserSearch).not.toHaveBeenCalled();
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actual_provider: "cache",
+      cache_status: "hit",
+      outcome: "succeeded",
+      attempt: 1,
+      result_count: 1,
+    });
+    harness.close();
+  });
+
+  it("starts the fallback Meta API leg at the provider call, excluding pre-provider work (controlled clock)", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      constructor(
+        message: string,
+        public readonly failureClass: string,
+      ) {
+        super(message);
+        this.name = "CommercialDiscoveryError";
+      }
+    }
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
+        const harness = telemetryHarness();
+
+    // Each provider-state lookup consumes 5s of fake clock. The recorded
+    // fallback leg must start AFTER them (immediately before the provider
+    // call) so pre-provider work is excluded from the recorded duration.
+    const getDiscoveryProviderState = vi.fn(async () => {
+      vi.setSystemTime(new Date(Date.now() + 5000));
+      return null;
+    });
+    const apiSearch = vi.fn().mockImplementation(async () => {
+      vi.setSystemTime(new Date(Date.now() + 4000));
+      return buildLiveBrowserResult({ source: "meta", provider: undefined });
+    });
+    const browserSearch = vi.fn().mockRejectedValue(
+      new MockCommercialDiscoveryError("Meta Ad Library returned a login wall.", "login_wall"),
+    );
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(0),
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: harness.db,
+        META_AD_LIBRARY_TOKEN: "live-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search" },
+    );
+
+    expect(result).toMatchObject({ source: "meta_api", provider: "meta_api" });
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    // The leg starts at the provider call (T0 + 5s resolver lookup + 5s
+    // fallback lookup), NOT at the fallback entry: the provider call consumed
+    // the final 4s and nothing before it counts.
+    expect(rows[0].started_at).toBe("2026-07-21T12:00:10.000Z");
+    expect(rows[0].duration_ms).toBe(4000);
+    expect(rows[0]).toMatchObject({
+      actual_provider: "customer_meta_api",
+      outcome: "succeeded",
+    });
+    harness.close();
+  });
+
+  it("starts the direct Meta API leg at the provider call, excluding pre-provider work (controlled clock)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
+        const harness = telemetryHarness();
+
+    // The cache/D1 lookup consumes 4s of fake clock before the provider call;
+    // the recorded direct leg must start AFTER it (immediately before the
+    // provider call) so pre-provider work is excluded from the duration.
+    const getDiscoveryCacheEntry = vi.fn(async () => {
+      vi.setSystemTime(new Date(Date.now() + 4000));
+      return null;
+    });
+    const apiSearch = vi.fn().mockImplementation(async () => {
+      vi.setSystemTime(new Date(Date.now() + 5000));
+      return buildLiveBrowserResult({
+        source: "meta_api",
+        provider: "meta_api",
+      });
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: vi.fn(),
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(0),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        DB: harness.db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+        forceLive: true,
+        customerMetaAdLibraryToken: "customer-token",
+      },
+    );
+
+    expect(result).toMatchObject({
+      provider: "meta_api",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+    const rows = harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    // The leg starts at the provider call (T0 + 4s cache/D1 lookup), NOT at
+    // the resolver start: the provider call consumed the final 5s and nothing
+    // before it counts.
+    expect(rows[0].started_at).toBe("2026-07-21T12:00:04.000Z");
+    expect(rows[0].duration_ms).toBe(5000);
+    expect(rows[0]).toMatchObject({
+      actual_provider: "customer_meta_api",
+      outcome: "succeeded",
+    });
+    harness.close();
   });
 });
