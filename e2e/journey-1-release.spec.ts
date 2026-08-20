@@ -214,7 +214,7 @@ for (const viewport of viewports) {
     await expectFocusTransition(homeSubmit, trialLink);
     await expectFocusTransition(
       trialLink,
-      page.getByRole("link", { name: "Review sample brief" }),
+      page.getByRole("link", { name: "Review the proof brief" }),
     );
     await expectVisibleKeyboardFocus(homeWebsite);
     await expectPhoneTouchTargets(page);
