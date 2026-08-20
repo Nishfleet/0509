@@ -55,7 +55,7 @@ to Nine passes every guideline:
 |---|---|
 | SaaS, IaaS & PaaS products and services are accepted | Yes — SaaS competitor-monitoring product, not an agency, blog, or store. |
 | **Products that are not released yet will be rejected immediately** | Live in public early access since 2026-06-15 with working email magic-link signup at `https://0509.io/auth/signup`; public search preview works without an account. Not a waiting list. |
-| Landing pages with an email form for a waiting list are rejected | Full product site: features, sample brief, pricing, FAQ, docs, and a working signup flow. |
+| Landing pages with an email form for a waiting list are rejected | Full product site: features, proof brief, pricing, FAQ, docs, and a working signup flow. |
 | Products using free subdomains are rejected (e.g. `my-app.vercel.com`) | Own custom domain — `https://0509.io` is the submission URL. Never use `0509.in` (legacy redirect-only). |
 | Products must be in English | Yes. |
 | Software development agencies are rejected | Not an agency. |
@@ -292,7 +292,7 @@ code.
       "Landing page" screenshot on the product page.
 - [ ] Screenshot: public search preview with an example query
       (`https://0509.io/search`), which needs no account.
-- [ ] Screenshot: sample brief / digest from an internal account, showing
+- [ ] Screenshot: proof brief / digest from an internal account, showing
       baseline + change evidence (account needed).
 - [ ] Verify every screenshot shows no personal/private data (mask emails and
       any non-public workspace content).

@@ -37,7 +37,7 @@ passes every guideline:
 | Product should be relatively new (pre-launch / private beta / recently launched) | Live since 2026-06-15 in public early access (~8.5 weeks as of 2026-08-12). See [Launch-status wording](#launch-status-wording) before submitting — the older the launch, the weaker the fit. |
 | Not featured on BetaList before | Correct — no prior listing. Each startup gets one pre-launch and one launch feature. |
 | Needs to be a technology startup | Yes — SaaS competitor-monitoring product, not a blog/newsletter/store. |
-| Distinct, decent-looking landing page | Yes — custom-designed `https://0509.io` marketing site (no template), with product info, sample brief, FAQ, and pricing. |
+| Distinct, decent-looking landing page | Yes — custom-designed `https://0509.io` marketing site (no template), with product info, proof brief, FAQ, and pricing. |
 | Visitors should be able to sign up or get access | Yes — live email magic-link signup at `https://0509.io/auth/signup`; public search preview works without an account. |
 | Own domain (no free-hosting subdomain, no app-store link) | Yes — `https://0509.io` is the submission URL. Never use `0509.in` (legacy redirect-only). |
 
@@ -170,7 +170,7 @@ live homepage copy in `app/routes/marketing.tsx`:
 - [ ] Screenshot: homepage hero (`https://0509.io/`).
 - [ ] Screenshot: public search preview with an example query
       (`https://0509.io/search`), which needs no account.
-- [ ] Screenshot: sample brief / morning-brief preview section on the
+- [ ] Screenshot: proof brief / morning-brief preview section on the
       homepage, or a real digest from an existing account.
 - [ ] Screenshot: watchlist surface showing baseline + change evidence
       (account needed; use an internal account).

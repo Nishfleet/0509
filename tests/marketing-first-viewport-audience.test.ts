@@ -75,7 +75,7 @@ describe("first viewport names the audience (product-live/0509-first-viewport-au
     expect(marketingRouteText).toContain("watches competitors&rsquo; landing pages for price, offer, and CTA changes");
     expect(marketingRouteText).toContain("saves the screenshots");
     expect(marketingRouteText).toContain("before your alarm goes off");
-    expect(marketingRouteText).toContain("Sample proof-backed brief");
+    expect(marketingRouteText).toContain("Proof-backed brief");
     expect(marketingRouteText).toContain("A rival page changed while your growth team was offline");
   });
 });

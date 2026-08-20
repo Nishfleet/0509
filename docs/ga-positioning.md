@@ -20,7 +20,7 @@
 
 ## What stays honest
 
-- Sample proof on homepage is labeled sample.
+- Homepage proof brief renders real cached captures; an honest no-live-proof state replaces any sample fixture.
 - Live search results labeled fresh/recent/sample.
 - No WhatsApp delivery claims until provider configured.
 - No unlimited monitoring claims — evidence checks are metered.
