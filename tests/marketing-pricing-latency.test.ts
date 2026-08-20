@@ -318,11 +318,13 @@ describe("marketing pricing monthly cadence note", () => {
 
     // Scout, Starter, and Agency each render one plan card.
     expect(planCardNotes(markup)).toEqual(["Billed monthly", "Billed monthly", "Billed monthly"]);
-    // Prices stay localized and no annual-only savings claim appears when
-    // annual checkout is not available.
-    expect(markup).toContain("Localized at checkout");
+    // Published USD anchor prices render from first paint, and the annual
+    // toggle is usable (annual = 8x monthly = 4 months free).
+    expect(markup).toContain("$11 USD");
+    expect(markup).toContain("$59 USD");
+    expect(markup).toContain("$199 USD");
+    expect(markup).toContain("4 months free");
     expect(markup).not.toContain("Billed annually");
-    expect(markup).not.toContain("4 months free");
   });
 
   it("keeps the annual price note only on plans with annual checkout available", async () => {

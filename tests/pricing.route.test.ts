@@ -164,7 +164,14 @@ describe("pricing section render smoke", () => {
     expect(markup).toContain("Scout");
     expect(markup).toContain("Starter");
     expect(markup).toContain("Agency");
-    expect(markup).toContain("Localized at checkout");
+    // Published USD anchor prices render from first paint, before the live
+    // Dodo preview resolves.
+    expect(markup).toContain("$11 USD/mo");
+    expect(markup).toContain("$59 USD/mo");
+    expect(markup).toContain("$199 USD/mo");
+    expect(markup).toContain("$59 USD");
+    expect(markup).toContain("$179 USD");
+    expect(markup).toContain("$599 USD");
     expect(markup).toContain("Common billing questions");
   });
 });

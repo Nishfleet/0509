@@ -71,11 +71,11 @@
     {
       "claimId": "AUDIT-PRICING-DODO-LOCALIZED",
       "registryClaim": "BILLING-PORTAL-PLAN-CHANGE",
-      "text": "Display prices load from Dodo Payments in your local currency at preview time. We never hardcode checkout amounts in the app.",
+      "text": "Published plan prices are shown on this page. Checkout shows the exact amount in your local currency, loaded from Dodo Payments at preview time.",
       "surface": "pricing billing FAQ, pricing section",
-      "liveQueryOrTest": "tests/pricing.test.ts → 'keeps visible fallback pricing neutral until live prices return' (monthlyLabel='Localized at checkout'), 'does not branch copy by India versus rest of world anymore'; tests/dodo-pricing.server.test.ts, tests/pricing.route.test.ts",
+      "liveQueryOrTest": "tests/pricing.test.ts → 'publishes the real per-plan USD prices on the plan labels', 'publishes real per-pack USD prices on the bundle labels'; tests/dodo-pricing.server.test.ts, tests/pricing.route.test.ts, tests/marketing-pricing-latency.test.ts",
       "currentResult": "pass",
-      "resultDetail": "All plan monthlyLabel/yearlyLabel are 'Localized at checkout' / 'Billed annually — 4 months free'. No hardcoded monetary amounts. Region pricing dropped in migration 0016.",
+      "resultDetail": "Plan monthlyLabel/yearlyLabel publish USD list prices ($11/$59/$199 monthly, 8x annual; proof packs $59/$179/$599) via PUBLISHED_PLAN_PRICES_USD/PUBLISHED_BUNDLE_PRICES_USD. Checkout amounts are never hardcoded — the live Dodo preview overrides the anchors in the buyer's currency. Region pricing dropped in migration 0016.",
       "betOrCopyChange": "bet 4 (the plan-gated feature catalog)",
       "nishReserved": false
     },
