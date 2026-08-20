@@ -21,6 +21,7 @@ beforeEach(() => {
       // routes without a data-router context (same pattern as
       // tests/ads-brand-page.render.test.tsx) so the router hook is a no-op.
       useRouteLoaderData: () => undefined,
+      useLoaderData: () => ({ proofBrief: null }),
       Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
@@ -162,19 +163,27 @@ describe("competitor monitoring category page", () => {
     expect(source).toContain("Source and freshness");
   });
 
-  it("labels the sample as illustrative with no live captures attached", async () => {
+  it("renders real proof, never a sample or illustrative fixture", async () => {
     const { default: CompetitorMonitoringCategoryRoute } = await import(
       "~/routes/competitor-monitoring"
     );
     const markup = renderToStaticMarkup(createElement(CompetitorMonitoringCategoryRoute));
 
-    expect(markup).toContain("Sample proof");
-    expect(markup).toContain("This sample trail is illustrative — no live captures are attached");
-    expect(markup).toContain("Proof status");
-    expect(markup).toContain("Not available in this sample");
-    expect(markup).toContain("no proof, no claim");
-    // The sample links to the live, working preview rather than faking results.
-    expect(markup).toContain("Try the live search preview");
+    // The proof brief is real data; the page never labels anything sample or
+    // illustrative and never renders a fake evidence trail.
+    expect(markup).toContain("Proof brief");
+    expect(markup).not.toContain("Sample proof");
+    expect(markup).not.toContain("sample");
+    expect(markup).not.toContain("illustrative");
+    expect(markup).not.toContain("no live captures are attached");
+    expect(markup).not.toContain("Not available in this sample");
+
+    // With no real capture the page renders the honest state and links to the
+    // live preview instead of faking results.
+    expect(markup).toContain("No live proof right now");
+    expect(markup).toContain("We haven’t captured this competitor recently.");
+    expect(markup).toContain("Run the search preview");
+    expect(markup).toContain("Create an account");
   });
 
   it("never hardcodes prices or claims unsupported superiority", async () => {

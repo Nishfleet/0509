@@ -9,13 +9,13 @@
 - Promise: `Track your brand and competitors today. See what changed, with proof. Know what to do next.`
 - Story: `Five to Nine` closes the gap between when a team stops checking and when the next decision gets made.
 - Positioning: lead with proof-backed competitor monitoring (Market Desk) and entity tracking across declared sources (Presence Desk), not a generic internet scanner.
-- Product shape: the public hook is a read-only search preview plus a sample watch; signed-in save and track starts the real monitoring product; workspace memory is the compounding layer.
+- Product shape: the public hook is a read-only search preview plus a live proof brief; signed-in save and track starts the real monitoring product; workspace memory is the compounding layer.
 
 Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-north-star.md`
 
 ## Product shape
 
-- `Public trial` is the public hook: logged-out buyers can run a read-only search preview with explicit coverage/freshness truth and inspect a sample tracked competitor, source trail, and digest preview before creating an account.
+- `Public trial` is the public hook: logged-out buyers can run a read-only search preview with explicit coverage/freshness truth and inspect a real tracked competitor's source trail and proof brief before creating an account.
 - `Analysis` is available after the preview: signed-in users save searches, track competitors, inspect deeper evidence, and save useful findings.
 - `Monitoring` is the retention loop: watchlists, run history, change detection, insight-depth summaries, observed campaign duration, daily and weekly digests.
 - `Presence Desk` tracks your brand and competitors across declared sources with proof-backed entity briefs. Website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval. Additional entity kinds such as clients, products, and creators require the planned entity-kind metadata slice.
@@ -41,7 +41,7 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/status` public launch and operations status
 - `/changelog` public product changelog
 - `/trust` public trust and security basics
-- `/api/demo-proof` sample public brief payload for buyer and agent evaluation
+- `/api/demo-proof` live proof brief payload for buyer and agent evaluation (real cached captures; never sample data)
 - `/api/mcp` MCP JSON-RPC endpoint for account-owned readiness, exports, and narrow audited workspace actions with a customer API key
 - `/api/v1` machine-readable customer API index for workspace readiness, account exports, and audited agent actions
 - `/api/v1/:resourceType/:resourceId` customer API-key export endpoint for account-owned collections, watchlists, and digests
@@ -136,7 +136,7 @@ Important bindings and secrets:
 - Cloudflare cost policy: stay on the included/free tier by default. Do not enable usage-billed add-ons just because they exist; enable them when the missing capability is materially hampering product quality, operations, or launch.
 - `LANDING_PAGE_ARTIFACTS` is optional right now. If R2 is not enabled, landing-page snapshots still work and simply return `artifactKey: null` instead of persisting raw HTML.
 - R2 is now provisioned for `0509` as the `0509-landing-page-artifacts` bucket, but it is still an enhancement path rather than a launch blocker.
-- Public pricing display is Dodo-backed. The landing page and `/api/pricing-preview` load localized checkout preview from the Dodo 0509 brand using the configured Dodo account API key, brand id, and product ids. Do not show hardcoded visible currency or fixed local prices as product truth. There is no free retained-monitoring plan. Buyers can review public read-only search and the sample watch before signup. Current caps are Scout: 3 watchlists, 10 collections, weekly digests, 50 proof captures/month; Starter: 10 watchlists, 25 collections, daily and weekly digests, 250 proof captures/month; Agency: 75 watchlists, 250 collections, daily and weekly digests, 2,500 proof captures/month. Workspaces warn after 80% proof-capture usage. Usage bundles are overflow proof-capture packs, not unlimited monitoring; included proof captures reset monthly without rollover, and purchased proof-capture packs never expire and carry over until used.
+- Public pricing display is Dodo-backed. The landing page and `/api/pricing-preview` load localized checkout preview from the Dodo 0509 brand using the configured Dodo account API key, brand id, and product ids. Do not show hardcoded visible currency or fixed local prices as product truth. There is no free retained-monitoring plan. Buyers can review public read-only search and the live proof brief before signup. Current caps are Scout: 3 watchlists, 10 collections, weekly digests, 50 proof captures/month; Starter: 10 watchlists, 25 collections, daily and weekly digests, 250 proof captures/month; Agency: 75 watchlists, 250 collections, daily and weekly digests, 2,500 proof captures/month. Workspaces warn after 80% proof-capture usage. Usage bundles are overflow proof-capture packs, not unlimited monitoring; included proof captures reset monthly without rollover, and purchased proof-capture packs never expire and carry over until used.
 - Broad launch is gated by `npm run launch:readiness`, including pricing, billing, evidence/email, production, and provider canaries. `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret so the canary can confirm it bypassed cache and provider cooldown. The production canary checks recent monitoring, saved evidence, sent email digest signals, and provider-canary success. Slack and WhatsApp are not public GA delivery channels; do not require or advertise them for launch unless a future product decision reintroduces them with verified evidence.
 - Use `npm run provider:bakeoff:launch` when comparing discovery providers for launch. The default bakeoff is useful for debugging, but the launch gate requires `current_0509` to return fresh live Ad Library results, not API fallback or cached live results.
 - The old `src/` Next.js app remains in the repo as legacy reference material and is no longer the live production runtime.

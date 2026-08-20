@@ -2449,7 +2449,7 @@ export default function SearchRoute() {
               </p>
               <div className="f9-wk-acts">
                 <Link className="f9-wk-lnk" to="/#demo">
-                  See a sample brief{" "}
+                  See a proof brief{" "}
                   <span aria-hidden="true" className="f9-wk-chev">
                     &rsaquo;
                   </span>

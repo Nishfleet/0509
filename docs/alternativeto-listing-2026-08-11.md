@@ -334,7 +334,7 @@ homepage copy in `app/routes/marketing.tsx`, and AlternativeTo FAQ rules:
       `docs/assets/alternativeto/screenshot-search-results.png` (live
       no-account search with an example query; plus the form state in
       `screenshot-search-preview.png`).
-- [ ] Screenshot: sample brief / morning-brief preview section on the
+- [ ] Screenshot: proof brief / morning-brief preview section on the
       homepage, or a real digest from an existing account — optional;
       needs an internal account or homepage section crop.
 - [ ] Screenshot: watchlist surface showing baseline + change evidence
