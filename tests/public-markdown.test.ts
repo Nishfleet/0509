@@ -63,7 +63,11 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("summarizes customer-facing surfaces without exposing private account activity");
     expect(PUBLIC_MARKDOWN).toContain("Email delivery is in product scope for eligible accounts");
     expect(PUBLIC_MARKDOWN).toContain("Public Markdown separates local capability, configured paths, and live proof");
-    expect(PUBLIC_MARKDOWN).not.toMatch(/Public read-only search[^.\n]*(?:is|are) available/i);
+    // Public search and checkout are live — the old hedges are gone (scout 2026-08-21,
+    // verified: /search returns 200, /api/pricing-preview returns available:true provider:dodo).
+    expect(PUBLIC_MARKDOWN).toContain("Public search is live for anonymous buyers");
+    expect(PUBLIC_MARKDOWN).not.toContain("this text does not claim live availability");
+    expect(PUBLIC_MARKDOWN).not.toContain("this text does not claim live search availability");
     expect(PUBLIC_MARKDOWN).not.toContain("Public live search");
     expect(PUBLIC_MARKDOWN).not.toMatch(/Email delivery is available/i);
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric evidence, creative timeline, and landing-page history");
@@ -115,7 +119,13 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).not.toContain("Slack delivery can be connected from Integrations");
     expect(LLMS_TEXT).toContain("summarizes customer-facing surfaces without exposing private account activity");
     expect(LLMS_TEXT).toContain("Email delivery is in product scope for eligible accounts");
-    expect(LLMS_TEXT).not.toMatch(/Public read-only search[^.\n]*(?:is|are) available/i);
+    // llms.txt now states search and checkout are live, with citable URLs (scout 2026-08-21).
+    expect(LLMS_TEXT).toContain("Public search is live for anonymous buyers");
+    expect(LLMS_TEXT).toContain("Checkout is live via Dodo Payments");
+    expect(LLMS_TEXT).toContain("https://0509.io/search");
+    expect(LLMS_TEXT).toContain("https://0509.io/compare/magicbrief");
+    expect(LLMS_TEXT).not.toContain("this text does not claim live search availability");
+    expect(LLMS_TEXT).not.toContain("this text does not claim live checkout or provider proof");
     expect(LLMS_TEXT).not.toMatch(/Email delivery is available/i);
     expect(LLMS_TEXT).not.toContain("WhatsApp delivery is not launch-scoped yet");
     expect(LLMS_TEXT).not.toContain("/api/mcp");
@@ -143,9 +153,12 @@ describe("public markdown", () => {
   it("labels configured capability separately from live proof", () => {
     const markdown = `${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`;
 
-    expect(markdown).toContain("this text does not claim live checkout or provider proof");
+    // Checkout is live via Dodo (verified 2026-08-21); the old hedge is retired.
+    expect(markdown).toContain("Checkout is live via Dodo Payments");
+    expect(markdown).not.toContain("this text does not claim live checkout or provider proof");
+    // Export success and email delivery hedges stay — those surfaces are account-gated.
     expect(markdown).toContain("this text does not claim live export success");
-    expect(markdown).not.toMatch(/\b(?:saved watchlists?|digests?|reports?|share links?|exports?|checkout)\b[^.\n]{0,70}\b(?:is|are)\s+(?:live|available)\b/i);
+    expect(markdown).not.toMatch(/\b(?:saved watchlists?|digests?|reports?|share links?|exports?)\b[^.\n]{0,70}\b(?:is|are)\s+(?:live|available)\b/i);
     expect(markdown).not.toMatch(/\bemail delivery\b[^.\n]{0,50}\b(?:is|are)\s+(?:live|available)\b/i);
   });
 });

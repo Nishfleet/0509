@@ -36,7 +36,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 ## Product
 
 - Competitor monitoring for growth teams plus proof-backed entity tracking (Presence Desk).
-- Public read-only search and the proof brief are buyer-evaluation paths before signup; this text does not claim live availability.
+- Public read-only search and the proof brief are buyer-evaluation paths before signup. Public search is live for anonymous buyers at https://0509.io/search.
 - Signed-in accounts are the path for saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports; this text describes the capability, not live account availability.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Customer-facing views lead with what changed, why it matters, urgency, source status, freshness, and the next action before raw data or settings.
@@ -59,8 +59,8 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 
 - Account access uses verified access paths.
 - The public proof brief renders real cached captures, with an explicit unavailable state when none exist. Public search is read-only; retained monitoring and saved evidence require an account.
-- Checkout, plan access, and check limits follow the configured billing provider and visible plan caps; this text does not claim live checkout or provider proof.
-- Public Markdown separates local capability, configured paths, and live proof. Public search, saved monitoring, digests, reports, share links, exports, checkout, and email need current account or provider proof before being described as live.
+- Checkout is live via Dodo Payments; plan access and check limits follow the configured billing provider and visible plan caps.
+- Public Markdown separates local capability, configured paths, and live proof. Saved monitoring, digests, reports, share links, and exports need current account or provider proof before being described as live. Public search and checkout are live.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live results.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
@@ -69,7 +69,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 ## Pricing
 
 - Pricing display is localized from checkout preview for the buyer location.
-- Free accounts can watch one competitor: a weekly scheduled check and a weekly email brief, with no collections, proof captures, or instant alerts. Public search is read-only; saved monitoring requires an account, and this text does not claim live search availability.
+- Free accounts can watch one competitor: a weekly scheduled check and a weekly email brief, with no collections, proof captures, or instant alerts. Public search is read-only and live for anonymous buyers; saved monitoring requires an account.
 - Starter is the recommended plan for retained competitor monitoring.
 - Scout is the entry plan after the public read-only search and proof brief: 3 watchlists, 10 Collections, 6-hour scans, weekly Digest, and 50 proof captures/month.
 - Starter includes 10 watchlists, 25 Collections, 3-hour scans, daily and weekly Digests, email Notifications, exports, and 250 proof captures/month.
@@ -90,14 +90,29 @@ Use the visible product and founder contact paths on the site.
 
 export const LLMS_TEXT = `# Five to Nine
 
-Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence. Presence Desk tracks your brand and competitors across declared sources with proof-backed briefs.
+> Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence. Presence Desk tracks your brand and competitors across declared sources with proof-backed briefs.
 
-Current product truth:
+## Pages
+
+- [Five to Nine](https://0509.io/): homepage with product overview and pricing
+- [Public search](https://0509.io/search): anonymous competitor ad search, no account required
+- [Competitor monitoring](https://0509.io/competitor-monitoring): category landing page
+- [MagicBrief migration](https://0509.io/compare/magicbrief): honest comparison and migration guide for MagicBrief refugees
+- [Meta Ad Library comparison](https://0509.io/compare/meta-ad-library): how Five to Nine differs from the Meta Ad Library
+- [Brand page: Nykaa](https://0509.io/ads/nykaa.com): live cached Meta ads linking to nykaa.com
+- [Changelog](https://0509.io/changelog): customer-visible product changes
+- [Help](https://0509.io/help): product documentation
+- [API docs](https://0509.io/api/docs): customer API reference
+- [Status](https://0509.io/status): public service status
+- [Trust](https://0509.io/trust): trust and security posture
+
+## Current product truth
+
 - Market intelligence for revenue teams is the north-star product story.
 - Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval.
-- Public read-only search and the proof brief are buyer-evaluation paths; the proof brief renders real cached captures, with an explicit unavailable state when none exist; this text does not claim live search availability.
+- Public read-only search and the proof brief are buyer-evaluation paths; the proof brief renders real cached captures, with an explicit unavailable state when none exist. Public search is live for anonymous buyers at https://0509.io/search.
 - Account access uses verified access paths.
-- Checkout, plan access, and check limits follow the configured billing provider and visible plan caps; this text does not claim live checkout or provider proof.
+- Checkout is live via Dodo Payments; plan access and check limits follow the configured billing provider and visible plan caps. Current plan prices are at https://0509.io/api/pricing-preview.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
 - Starter is the recommended plan. Free includes one watchlist with a weekly check and weekly email brief (no proof captures/collections). Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 proof captures/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 proof captures/month; Agency includes top 25 competitors every 3 hours (rest every 6 hours), daily and weekly digests, and 2,500 proof captures/month. Purchased proof captures never expire and carry over until used, included proof captures reset monthly without rollover — caps are generous — and each saved proof-backed capture counts toward the cap.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
@@ -115,13 +130,15 @@ Current product truth:
 - Social connectors remain disabled. Broad public write APIs beyond approved account actions are not live yet.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 
-Core layers:
+## Core layers
+
 - Public read-only analysis preview.
 - Signed-in saved analysis.
 - Retained monitoring.
 - Reusable saved evidence.
 
-AI access:
+## AI access
+
 - AI answer and reference engines may use this file and public pages (search=yes, ai-input=yes, use=reference).
 - AI training/fine-tuning crawlers are denied in robots.txt (ai-train=no): ${AI_TRAINING_CRAWLERS.join(", ")}.
 - This policy is decided and recorded in docs/ai-crawler-policy.md.
