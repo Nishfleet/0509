@@ -2,15 +2,29 @@ import type { NormalizedSavedQuery, SearchFilters, SearchMode } from "~/lib/type
 
 const COMPARISON_WHITESPACE = /\s+/g;
 
-// Script-driven churn tokens that make landing-page headlines change between
-// scans without the copy actually changing: countdown timers ("Deal ends in
-// 00:59:59"), rolling calendar dates ("Offer valid until aug 12"), live
-// audience counters ("12 people viewing now"), and live inventory/urgency
-// counters ("only 3 left", "120 sold"). These are stripped ONLY from the
-// comparison hash, so a churning page stays silent while real headline
-// rewrites (the "copy structure" signal) still fire. The raw and normalized
-// strings keep the full text for display and evidence.
-const HEADLINE_CHURN_PATTERNS: RegExp[] = [
+// Script-driven churn tokens shared by the headline hash AND the CTA/offer
+// comparison (#762): countdown timers ("Deal ends in 00:59:59"), rolling
+// calendar dates ("Offer valid until aug 12"), live audience counters
+// ("12 people viewing now"), and live inventory/urgency counters ("only 3
+// left", "120 sold"). These are stripped ONLY from the comparison hash, so a
+// churning page stays silent while real headline rewrites (the "copy
+// structure" signal) still fire. The raw and normalized strings keep the full
+// text for display and evidence.
+//
+// Two consequences to keep in mind before editing this list:
+//
+//  1. These patterns feed the stored `normalizedHeadlineHash` for every
+//     watched page. ANY edit here — even a typo fix in a regex — silently
+//     invalidates every stored hash and fires a one-time headline-change
+//     alert on every watched page. Treat additions as a deliberate
+//     churn-class decision, not a cleanup.
+//
+//  2. The keyword patterns are deliberately lowercase-only (no `/i` flags)
+//     so callers MUST lowercase before calling `stripChurnTokens` —
+//     `normalizeHeadline` does it via the headline pipeline, and the
+//     watch-event evaluator does it via `churnStableFieldValue`. See the
+//     `stripChurnTokens` doc comment for the caller contract.
+const CHURN_PATTERNS: RegExp[] = [
   // Countdown / clock timers: "Deal ends in 00:59:59", "Offer valid till 12:30".
   /\b\d{1,2}:\d{2}(?::\d{2})?\b/g,
   // Rolling calendar dates: "12/08/2026", "2026-08-12", "aug 12, 2026".
@@ -43,11 +57,15 @@ export function normalizeHeadline(value: string) {
  * customer-visible CTA/offer event on every scan even though the page's own
  * copy never changed. When churn tokens are the only difference, the two
  * comparison values normalize to the same string and no event is emitted.
+ *
+ * Caller contract: the patterns are deliberately lowercase-only (no `/i`
+ * flags), so callers MUST lowercase before invoking — see the warning on
+ * `CHURN_PATTERNS`. Returns "" for empty/null/undefined input.
  */
 export function stripChurnTokens(value: string | null | undefined) {
   if (!value) return "";
   let stripped = value;
-  for (const pattern of HEADLINE_CHURN_PATTERNS) {
+  for (const pattern of CHURN_PATTERNS) {
     stripped = stripped.replace(pattern, " ");
   }
   return stripped.replace(COMPARISON_WHITESPACE, " ").trim();

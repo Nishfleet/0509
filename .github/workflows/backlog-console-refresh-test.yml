@@ -1,0 +1,32 @@
+name: backlog-console-refresh test
+
+# Hermetic regression test for automation/backlog-console/refresh.sh.
+#
+# This lives in its OWN workflow (not ci.yml) on purpose: ci.yml,
+# secret-scan.yml and required-verifier-integrity.yml are protected verifier
+# definitions, and the required-verifier-integrity gate fails closed if a PR
+# edits them without an independent admin approval. The refresh.sh credential
+# + fail-loud regression is real product coverage, so we run it as a separate,
+# non-protected check instead of touching the required-verifier surface.
+
+on:
+  pull_request:
+    paths:
+      - "automation/backlog-console/**"
+  push:
+    branches: [main]
+    paths:
+      - "automation/backlog-console/**"
+
+permissions:
+  contents: read
+
+jobs:
+  test-refresh:
+    name: backlog-console-refresh hermetic test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Run hermetic refresh regression test
+        run: bash automation/backlog-console/test_refresh.sh

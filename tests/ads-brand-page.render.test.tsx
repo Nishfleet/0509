@@ -66,8 +66,8 @@ function ad(overrides: Partial<AdRecord> = {}): AdRecord {
 }
 
 const teaser = {
-  totalCount: 34,
-  activeCount: 28,
+  totalCount: 6,
+  activeCount: 6,
   longestRunningDays: 126,
   longestRunningHook: "Charge shin guards",
   formats: ["image", "video", "carousel"],
@@ -82,8 +82,8 @@ const aggression = {
   formulaVersion: 1 as const,
   windowDays: 21,
   adsPerWeek: 6,
-  adCount: 34,
-  activeCount: 28,
+  adCount: 6,
+  activeCount: 6,
 };
 
 const changeEvents = [
@@ -104,10 +104,18 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     brandName: "Nike",
     hasCachedAds: true,
     ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
+    // Every fixture creative links to nike.com (landing page), so the whole
+    // capture carries verified link evidence by default — mirror the loader's
+    // verifiedLinkedAds output for the same fixture set.
+    verifiedLinkedAds: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-08-09T10:00:00.000Z",
     freshForLiveClaim: false,
     brandOwnedAdCount: 6,
+    // Every fixture creative links to nike.com (landing page), so the whole
+    // capture carries verified link evidence by default.
+    verifiedLinkCount: 6,
+    unverifiedMatchCount: 0,
     teaser,
     aggression,
     changeEvents,
@@ -125,12 +133,12 @@ describe("/ads/:domain — Case File render", () => {
     // Sections present.
     expect(markup).toContain("ld-ticker"); // capture ticker
     expect(markup).toContain("Nike was running");
-    expect(markup).toContain("34 Meta ads");
+    expect(markup).toContain("6 Meta ads");
     expect(markup).toContain("Ad Aggression Score");
     expect(markup).toContain("f9-ads-watch-strip");
     expect(markup).toContain("f9-ads-statline");
     expect(markup).toContain("What changed this week");
-    expect(markup).toContain("All 34 ads, on the wall");
+    expect(markup).toContain("All 6 ads, on the wall");
     expect(markup).toContain("Be the first to know");
 
     // Order: ticker → hero headline → score → CTA strip → stat line →
@@ -142,7 +150,7 @@ describe("/ads/:domain — Case File render", () => {
       "f9-ads-watch-strip",
       "f9-ads-statline",
       "What changed this week",
-      "All 34 ads, on the wall",
+      "All 6 ads, on the wall",
       "Be the first to know",
     ].map((needle) => markup.indexOf(needle));
     const sorted = [...order].sort((a, b) => a - b);
@@ -160,7 +168,7 @@ describe("/ads/:domain — Case File render", () => {
     );
     // The closer honesty line names it too.
     expect(markup).toContain(
-      "Ad creatives are real ads from the public India Ad Library linking to nike.com",
+      "Ad creatives are Nike&#x27;s real ads from the public India Ad Library, cached about 2 hours ago.",
     );
     // And the meta description / JSON-LD description.
     expect(markup).toContain(
@@ -185,8 +193,8 @@ describe("/ads/:domain — Case File render", () => {
   it("shows the honest overflow tile and the signup CTA carrying the domain", async () => {
     const markup = await render(populated());
 
-    // 34 total − 5 shown = +29 more.
-    expect(markup).toContain("+29");
+    // 6 total − 5 shown = +1 more.
+    expect(markup).toContain("+1");
     expect(markup).toContain("more ads on record");
     // Primary CTA carries the domain into the Overview setup card.
     expect(markup).toContain(
@@ -203,7 +211,7 @@ describe("/ads/:domain — Case File render", () => {
     // Exactly 5: the 6th ad hides behind the overflow tile, which is a
     // conversion cell, not a card.
     expect((markup.match(/Since 1 Jun 2026/g) ?? []).length).toBe(5);
-    expect(markup).toContain("+29");
+    expect(markup).toContain("+1");
   });
 
   it("renders no capture-date pill when the creative's first-seen proof is missing", async () => {
@@ -234,7 +242,7 @@ describe("/ads/:domain — Case File render", () => {
 
     expect(markup).not.toContain("What changed this week");
     // The rest of the page still renders.
-    expect(markup).toContain("All 34 ads, on the wall");
+    expect(markup).toContain("All 6 ads, on the wall");
   });
 
   it("renders the teaching shell (not a dotted apology) on a cache miss", async () => {
@@ -303,9 +311,9 @@ describe("/ads/:domain — Case File render", () => {
 
     // Fresh capture reads present tense; stale capture reads "at the last
     // check", mirroring the hero line and the caption flip above.
-    expect(fresh).toContain(">28 active<");
-    expect(stale).toContain("28 active at last check");
-    expect(stale).not.toContain(">28 active<");
+    expect(fresh).toContain(">6 active<");
+    expect(stale).toContain("6 active at last check");
+    expect(stale).not.toContain(">6 active<");
   });
 
   it("stops telling visitors the brand is running ads when the creatives are other advertisers'", async () => {
@@ -316,7 +324,7 @@ describe("/ads/:domain — Case File render", () => {
 
     // No brand-owned claim anywhere — the headline attributes to the domain.
     expect(stale).toContain("The last check found ");
-    expect(stale).toContain("34 Meta ads");
+    expect(stale).toContain("6 Meta ads");
     expect(stale).toContain("pointing at nike.com");
     expect(stale).toContain("nike.com · on record");
     expect(stale).not.toContain("Nike was running ");
@@ -324,7 +332,7 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).not.toContain("Nike · live");
 
     // Fresh capture: same attribution, honest present tense for the capture.
-    expect(fresh).toContain("34 Meta ads");
+    expect(fresh).toContain("6 Meta ads");
     expect(fresh).toContain("are pointing at nike.com right now.");
     expect(fresh).toContain("Other advertisers are testing");
     expect(fresh).toContain("nike.com · live");
@@ -344,22 +352,85 @@ describe("/ads/:domain — Case File render", () => {
     );
 
     expect(stale).toContain("Nike was running ");
-    expect(stale).toContain("2 of these 34 Meta ads");
+    expect(stale).toContain("2 of these 6 Meta ads");
     expect(stale).toContain("at the last check.");
     expect(fresh).toContain("Nike is running ");
-    expect(fresh).toContain("2 of these 34 Meta ads");
+    expect(fresh).toContain("2 of these 6 Meta ads");
     expect(fresh).toContain("right now.");
 
     // The closer states exactly who runs what.
     expect(stale).toContain(
-      "2 run by Nike and 32 by other advertisers",
+      "2 run by Nike and 4 by other advertisers",
     );
     expect(stale).toContain(
       "Nike and the other advertisers linking to nike.com will change their next ad.",
     );
     // Mixed copy never over-claims a full brand-owned wall or the reverse.
     expect(stale).not.toContain("Nike's real ads");
-    expect(stale).not.toContain("34 Meta ads are pointing at");
+    expect(stale).not.toContain("6 Meta ads are pointing at");
+  });
+
+  it("never claims ads POINT AT the domain when no creative has verified link evidence", async () => {
+    const stale = await render(
+      populated({
+        brandOwnedAdCount: 0,
+        verifiedLinkCount: 0,
+        unverifiedMatchCount: 6,
+        teaser: { ...teaser, totalCount: 0, activeCount: 0 },
+        aggression: null,
+        changeEvents: [],
+      }),
+    );
+    const fresh = await render(
+      populated({
+        brandOwnedAdCount: 0,
+        verifiedLinkCount: 0,
+        unverifiedMatchCount: 6,
+        checkedAgo: "about 5 minutes ago",
+        freshForLiveClaim: true,
+        teaser: { ...teaser, totalCount: 0, activeCount: 0 },
+        aggression: null,
+        changeEvents: [],
+      }),
+    );
+
+    // The headline says "matching", never "pointing at"/"linking to".
+    expect(stale).toContain("The last check found ");
+    expect(stale).toContain("6 Meta ads");
+    expect(stale).toContain("matching nike.com");
+    expect(stale).not.toContain("pointing at nike.com");
+    expect(stale).not.toContain("linking to nike.com");
+    expect(fresh).toContain("are matching nike.com right now.");
+    // The subline says the connection is not verified.
+    expect(stale).toContain("Their link to the site is not verified");
+    // The closer stays honest about the unverified link.
+    expect(stale).toContain("Ad creatives are real Meta Ad Library ads that matched the search for nike.com");
+    expect(stale).toContain("The advertisers running ads matching nike.com will change their next ad.");
+    // No score is built from text-mention matches.
+    expect(stale).not.toContain("f9-ads-score-num");
+  });
+
+  it("counts only verified-linked creatives in linking language when the capture mixes matches", async () => {
+    const stale = await render(
+      populated({
+        brandOwnedAdCount: 1,
+        verifiedLinkCount: 1,
+        unverifiedMatchCount: 5,
+        teaser: { ...teaser, totalCount: 1, activeCount: 1 },
+        aggression: null,
+      }),
+    );
+
+    // The headline speaks about the verified capture; the subline names the
+    // unverified matches instead of folding them into the link count.
+    expect(stale).toContain("Nike was running ");
+    expect(stale).toContain("1 Meta ad");
+    expect(stale).toContain("at the last check.");
+    expect(stale).toContain(
+      "Another 5 ads matched the search without a verified link to nike.com.",
+    );
+    // The wall still carries every cached creative.
+    expect(stale).toContain("All 6 ads, on the wall");
   });
 
   it("never labels a creative with the brand name when its advertiser is unconfirmed", async () => {
@@ -367,7 +438,12 @@ describe("/ads/:domain — Case File render", () => {
       ad({ metaAdId: `ad-${i}`, advertiser: i === 0 ? "" : "Nike" }),
     );
     const markup = await render(
-      populated({ ads, brandOwnedAdCount: 4, teaser: { ...teaser, totalCount: 5 } }),
+      populated({
+        ads,
+        brandOwnedAdCount: 4,
+        verifiedLinkCount: 5,
+        teaser: { ...teaser, totalCount: 5 },
+      }),
     );
 
     // The unconfirmed creative is counted as other advertisers' — never
