@@ -7,13 +7,21 @@ import {
   utf8ByteLength,
 } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
-import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
+import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import {
   extractLandingPageSignals,
   LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
 } from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
 import { normalizePublicHttpUrl, resolvePublicHttpUrl } from "~/lib/public-url.server";
+import {
+  recordBrowserJobTelemetry,
+  resolveSourceForRouteContext,
+  resolveWorkerVersionId,
+  type BrowserJobPlanTier,
+  type BrowserJobRouteContext,
+  type BrowserJobSource,
+} from "~/lib/browser-job-telemetry.server";
 import type { LandingPageSnapshotData, ProofDeviceProfile, ProofRenderMode } from "~/lib/types";
 import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 
@@ -168,6 +176,74 @@ interface BrowserRequestLike {
 
 interface RenderedCaptureOptions {
   persistArtifacts?: boolean;
+  /** Bounded attribution context recorded in `browser_job_telemetry` (optional).
+   * Never carries URLs, tokens, or content. */
+  jobId?: string;
+  routeContext?: BrowserJobRouteContext;
+  planTier?: BrowserJobPlanTier | null;
+  source?: BrowserJobSource;
+  /**
+   * Attempt number within the job's ordered leg chain. Landing capture passes
+   * 2 when this rendered leg follows the plain-http leg (which owns 1).
+   */
+  attempt?: number;
+  /**
+   * Stable idempotency fingerprint (SHA-256 of the canonical URL) provided by
+   * the orchestrating caller; the row's idempotency_key becomes
+   * `<fingerprint>:<provider>`. Defaults to a job-scoped key.
+   */
+  idempotencyKey?: string;
+  /**
+   * Out-param attempt counter shared across the rendered chain
+   * (browser_run → browserless). Each leg that records a row writes its
+   * attempt number here, so the next leg in the chain continues the job's
+   * ordered numbering instead of claiming the same attempt again.
+   */
+  telemetryAttempts?: { used: number };
+  /**
+   * Request ExecutionContext when the caller actually has one. When present,
+   * row writes are registered with `waitUntil` so they still land after the
+   * response (background completion preserved) while the bounded race still
+   * caps how long this leg may wait on a slow write.
+   */
+  executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
+}
+
+type RenderedLegOutcome = "succeeded" | "failed" | "rate_limited" | "timeout";
+
+/**
+ * Truthful provider-error classification for a rendered leg: a bounded
+ * provider timeout (internal Abort, PromiseTimeout, or an explicit timeout
+ * signal) is `timeout`, a provider HTTP 429/rate-limit is `rate_limited`,
+ * and every other error is `failed`. Message-based so it also matches
+ * provider errors from any module-registry epoch (vitest resetModules).
+ */
+function classifyRenderedLegError(error: unknown): RenderedLegOutcome {
+  if (error instanceof Error) {
+    const name = error.name;
+    const message = error.message.toLowerCase();
+    if (name === "AbortError" || name === "PromiseTimeoutError") {
+      return "timeout";
+    }
+    if (message.includes("429") || message.includes("rate limit")) {
+      return "rate_limited";
+    }
+    if (message.includes("timeout") || message.includes("timed out")) {
+      return "timeout";
+    }
+  }
+  return "failed";
+}
+
+/** Provider HTTP status → truthful leg outcome (429 rate limit, 408/504 timeout). */
+function classifyProviderHttpOutcome(status: number): RenderedLegOutcome {
+  if (status === 429) {
+    return "rate_limited";
+  }
+  if (status === 408 || status === 504) {
+    return "timeout";
+  }
+  return "failed";
 }
 
 export class BrowserRunQuickActionError extends Error {
@@ -202,6 +278,51 @@ export async function captureBrowserRunSnapshot(
     return null;
   }
 
+  const jobId = options.jobId ?? crypto.randomUUID();
+  const routeContext = options.routeContext ?? "proof_capture";
+  const startedAt = new Date().toISOString();
+  // One row per leg at its terminal point; the next leg in the chain
+  // continues from the recorded attempt number via the shared out-param.
+  let nextAttempt = options.attempt ?? 1;
+  const recordRun = (
+    outcome: RenderedLegOutcome,
+    metadata: { reason?: string; captureWarningCodes?: string[] } = {},
+  ) => {
+    const attempt = nextAttempt;
+    nextAttempt += 1;
+    if (options.telemetryAttempts) {
+      options.telemetryAttempts.used = attempt;
+    }
+    const endedAt = new Date().toISOString();
+    return recordBrowserJobTelemetry(
+      env,
+      {
+        jobId,
+        jobKind: "landing_snapshot",
+        actualProvider: "cloudflare_browser_run",
+        routeContext,
+        planTier: options.planTier ?? null,
+        source: resolveSourceForRouteContext(routeContext, options.source),
+        attempt,
+        startedAt,
+        endedAt,
+        durationMs: Math.max(0, Date.parse(endedAt) - Date.parse(startedAt)),
+        browserMsUsed: null,
+        outcome,
+        resultCount: outcome === "succeeded" ? 1 : null,
+        workerVersion: resolveWorkerVersionId(env),
+        cronTask: routeContext === "watchlist_scan" || routeContext === "scheduled_warmup" ? "cron" : null,
+        idempotencyKey: `${options.idempotencyKey ?? jobId}:cloudflare_browser_run`,
+      },
+      {
+        // Preserve background completion: when a real request ExecutionContext
+        // exists, the row write is registered with waitUntil so it still lands
+        // after the response; the bounded race still caps the wait here.
+        executionContext: options.executionContext,
+      },
+    );
+  };
+
   const targetUrl = publicUrl.toString();
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
 
@@ -223,10 +344,12 @@ export async function captureBrowserRunSnapshot(
 
     const html = await page.content();
     if (utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES) {
+      await recordRun("failed", { reason: "html_oversized" });
       return null;
     }
     const canonicalUrl = (await resolvePublicHttpUrl(page.url() || targetUrl))?.toString();
     if (!canonicalUrl) {
+      await recordRun("failed", { reason: "canonical_unresolved" });
       return null;
     }
     let screenshot: Uint8Array | ArrayBuffer | Buffer | null = null;
@@ -242,7 +365,7 @@ export async function captureBrowserRunSnapshot(
       logRenderedCaptureWarning("screenshot_capture_failed", error);
     }
 
-    return await buildBrowserRenderedSnapshot(env, {
+    const snapshot = await buildBrowserRenderedSnapshot(env, {
       url: targetUrl,
       canonicalUrl,
       html,
@@ -253,8 +376,22 @@ export async function captureBrowserRunSnapshot(
       pageLoadStrategy,
       gotoAttempts,
     });
+    if (!snapshot) {
+      await recordRun("failed", {
+        reason: "snapshot_unusable",
+        captureWarningCodes,
+      });
+      return null;
+    }
+    await recordRun("succeeded", { captureWarningCodes });
+    return snapshot;
   } catch (error) {
     logRenderedCaptureWarning("browser_render_failed", error);
+    // Truthful attribution: a bounded provider timeout (launch/navigation
+    // abort or PromiseTimeout) is `timeout` and a provider 429/rate-limit is
+    // `rate_limited`; only other errors are `failed`. Customer-visible
+    // behavior (returning null so the chain falls back) never changes.
+    await recordRun(classifyRenderedLegError(error), { reason: "browser_render_failed" });
     return null;
   } finally {
     await browser?.close().catch(() => undefined);
@@ -305,15 +442,37 @@ function isBrowserlessProofOriginAllowed(env: AppEnv, url: URL) {
   return allowedOrigins.has(url.origin);
 }
 
+/**
+ * Rendered capture chain: Browser Run session first, Browserless BQL second.
+ *
+ * One fresh random `jobId` is derived ONCE here and shared by every leg of
+ * the chain (callers that already hold a top-level job id pass it through).
+ * The shared `telemetryAttempts` out-param keeps the legs' attempt numbers
+ * centrally ordered: when the Browser Run leg actually ran and recorded its
+ * row, the Browserless leg continues with the next attempt; when the Browser
+ * Run binding never ran (unconfigured/unusable), the Browserless leg keeps
+ * the caller's attempt so no two legs ever claim the same number.
+ */
 export async function captureRenderedLandingPageSnapshot(
   env: AppEnv,
   url: string,
   options: RenderedCaptureOptions = {},
 ): Promise<LandingPageSnapshotData | null> {
-  return (
-    (await captureBrowserRunSnapshot(env, url, options)) ??
-    (await captureBrowserlessProofSnapshot(env, url, options))
-  );
+  const jobId = options.jobId ?? crypto.randomUUID();
+  const telemetryAttempts = options.telemetryAttempts ?? {
+    used: (options.attempt ?? 1) - 1,
+  };
+  const chainOptions = { ...options, jobId, telemetryAttempts };
+
+  const snapshot = await captureBrowserRunSnapshot(env, url, chainOptions);
+  if (snapshot) {
+    return snapshot;
+  }
+
+  return captureBrowserlessProofSnapshot(env, url, {
+    ...chainOptions,
+    attempt: telemetryAttempts.used + 1,
+  });
 }
 
 export async function captureBrowserlessProofSnapshot(
@@ -326,6 +485,51 @@ export async function captureBrowserlessProofSnapshot(
     return null;
   }
 
+  const jobId = options.jobId ?? crypto.randomUUID();
+  const routeContext = options.routeContext ?? "proof_capture";
+  const startedAt = new Date().toISOString();
+  // One row per leg at its terminal point; the attempt number continues the
+  // chain set by `captureRenderedLandingPageSnapshot` (see the shared
+  // out-param there).
+  let nextAttempt = options.attempt ?? 1;
+  const recordRun = (
+    outcome: RenderedLegOutcome,
+    metadata: { reason?: string; captureWarningCodes?: string[] } = {},
+  ) => {
+    const attempt = nextAttempt;
+    nextAttempt += 1;
+    if (options.telemetryAttempts) {
+      options.telemetryAttempts.used = attempt;
+    }
+    const endedAt = new Date().toISOString();
+    return recordBrowserJobTelemetry(
+      env,
+      {
+        jobId,
+        jobKind: "landing_snapshot",
+        actualProvider: "browserless_bql",
+        routeContext,
+        planTier: options.planTier ?? null,
+        source: resolveSourceForRouteContext(routeContext, options.source),
+        attempt,
+        startedAt,
+        endedAt,
+        durationMs: Math.max(0, Date.parse(endedAt) - Date.parse(startedAt)),
+        browserMsUsed: null,
+        outcome,
+        resultCount: outcome === "succeeded" ? 1 : null,
+        workerVersion: resolveWorkerVersionId(env),
+        cronTask: routeContext === "watchlist_scan" || routeContext === "scheduled_warmup" ? "cron" : null,
+        idempotencyKey: `${options.idempotencyKey ?? jobId}:browserless_bql`,
+      },
+      {
+        // Preserve background completion when the caller has a request
+        // ExecutionContext (see `RenderedCaptureOptions.executionContext`).
+        executionContext: options.executionContext,
+      },
+    );
+  };
+
   const targetUrl = publicUrl.toString();
   for (let attempt = 1; attempt <= MAX_BROWSERLESS_PROOF_RETRIES + 1; attempt += 1) {
     try {
@@ -333,6 +537,7 @@ export async function captureBrowserlessProofSnapshot(
         env,
         targetUrl,
         options,
+        recordRun,
       );
       if (snapshot) {
         return snapshot;
@@ -374,6 +579,10 @@ async function attemptBrowserlessProofSnapshot(
   env: AppEnv,
   targetUrl: string,
   options: RenderedCaptureOptions,
+  recordRun: (
+    outcome: RenderedLegOutcome,
+    metadata?: { reason?: string; captureWarningCodes?: string[] },
+  ) => Promise<unknown>,
 ): Promise<{
   snapshot: LandingPageSnapshotData | null;
   retryable: boolean;
@@ -396,14 +605,31 @@ async function attemptBrowserlessProofSnapshot(
       },
       { timeoutMs: BROWSERLESS_PROOF_TIMEOUT_MS },
     );
+    // Truthful provider-status classification comes BEFORE any body
+    // handling: an error-status response with an empty or malformed body must
+    // still be attributed by its status (429 → rate_limited, 408/504 →
+    // timeout) instead of degrading to a generic `failed` empty/malformed
+    // body row. Other error statuses stay `failed` with a bounded reason.
+    if (!response.ok) {
+      releaseFetchTimeout(response);
+      const outcome = classifyProviderHttpOutcome(response.status);
+      await recordRun(outcome, {
+        reason: "provider_http_error",
+      });
+      // Only HTTP 429/5xx provider responses are transient and worth a
+      // bounded retry; other HTTP errors are permanent.
+      return { snapshot: null, retryable: isTransientHttpStatus(response.status) };
+    }
     const responseText = await readResponseTextWithinLimit(response, MAX_BROWSERLESS_RESPONSE_BYTES);
     if (!responseText) {
+      await recordRun("failed", { reason: "empty_response" });
       return { snapshot: null, retryable: true };
     }
     let payload: BrowserlessProofPayload = null;
     try {
       payload = JSON.parse(responseText) as BrowserlessProofPayload;
     } catch {
+      await recordRun("failed", { reason: "malformed_response" });
       return { snapshot: null, retryable: true };
     }
 
@@ -417,18 +643,22 @@ async function attemptBrowserlessProofSnapshot(
       documentUrls.map((requestUrl) => resolvePublicHttpUrl(requestUrl)),
     );
     if (
-      !response.ok ||
       !html ||
       utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES ||
       !canonicalUrl ||
       publicDocumentUrls.some((requestUrl) => !requestUrl)
     ) {
-      // Only HTTP 429/5xx responses are transient; empty/oversized HTML and
-      // non-public canonical/document URLs are permanent outcomes.
-      return {
-        snapshot: null,
-        retryable: !response.ok && isTransientHttpStatus(response.status),
-      };
+      // Provider HTTP error statuses were already classified above (status
+      // first, before the body); these are content/security failures and stay
+      // `failed` (they are not provider errors).
+      await recordRun("failed", {
+        reason: !canonicalUrl
+          ? "canonical_unresolved"
+          : publicDocumentUrls.some((requestUrl) => !requestUrl)
+            ? "non_public_document_request"
+            : "html_missing_or_oversized",
+      });
+      return { snapshot: null, retryable: false };
     }
     const captureWarningCodes: string[] = [];
     let screenshot: Uint8Array | null = null;
@@ -454,9 +684,26 @@ async function attemptBrowserlessProofSnapshot(
       persistArtifacts: options.persistArtifacts,
       captureWarningCodes,
     });
+    if (!snapshot) {
+      await recordRun("failed", {
+        reason: "snapshot_unusable",
+        captureWarningCodes,
+      });
+      return { snapshot: null, retryable: false };
+    }
+    await recordRun("succeeded", { captureWarningCodes });
     return { snapshot, retryable: false };
   } catch (error) {
     logRenderedCaptureWarning("browserless_render_failed", error);
+    // Truthful attribution: a bounded provider timeout (fetch abort or
+    // PromiseTimeout) is `timeout` and a provider 429/rate-limit is
+    // `rate_limited`; only other errors are `failed`. Customer-visible
+    // behavior (returning null so the chain falls back) never changes.
+    const outcome = classifyRenderedLegError(error);
+    await recordRun(outcome, { reason: "browserless_render_failed" });
+    // A thrown provider failure (network abort, timeout, rate-limit) is
+    // transient and worth a single bounded retry; the wrapper caps attempts
+    // so a paid call is never wasted on repeated deterministic failures.
     return { snapshot: null, retryable: true };
   }
 }

@@ -511,6 +511,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         customerMetaAdLibraryToken,
         executionContext: cloudflare?.ctx,
         hydratePersisted: Boolean(session),
+        // Optional attribution: only attach the plan tier when the caller
+        // actually resolved one; anonymous searches omit it so the call
+        // contract that existing callers assert stays unchanged.
+        ...(plan ? { planTier: plan } : {}),
       })
     : {
         result: await (
@@ -525,6 +529,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
             // Cold path: an uncached first query returns the warming state
             // immediately and the browser capture finishes via waitUntil.
             executionContext: cloudflare?.ctx ?? null,
+            // Optional attribution: omit when no plan tier was resolved.
+            ...(plan ? { planTier: plan } : {}),
             ...(customerMetaAdLibraryToken
               ? { customerMetaAdLibraryToken }
               : {}),
@@ -548,6 +554,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     {
       enrichSelected: Boolean(session) && !providerDeny.enabled,
       hydratePersisted: Boolean(session),
+      // Optional attribution: omit when no plan tier was resolved.
+      ...(plan ? { planTier: plan } : {}),
       // WP-11: paint base ad immediately; OCR/landing/translation finish via waitUntil.
       ...(typeof waitUntil === "function" ? { waitUntil } : {}),
     },

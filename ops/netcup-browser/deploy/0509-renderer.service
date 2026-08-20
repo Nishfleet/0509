@@ -1,0 +1,29 @@
+[Unit]
+Description=0509 Netcup renderer (bounded browser-rendering foundation, loopback only)
+Wants=network-online.target
+After=network-online.target camofox-browser.service
+
+[Service]
+Type=simple
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=-/home/nish/.config/0509-renderer/public.env
+EnvironmentFile=-/home/nish/.config/0509-renderer/secrets.env
+ExecStart=/home/nish/.local/bin/node __INSTALL_DIR__/src/renderer-server.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=25
+KillMode=mixed
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=read-only
+ProtectSystem=strict
+# Explicit resource limits (dedicated cgroup for this service only).
+MemoryHigh=1.5G
+MemoryMax=2G
+CPUQuota=150%
+TasksMax=128
+# The service runs at most one job at a time; leave room for camofox + product.
+Nice=5
+
+[Install]
+WantedBy=default.target
