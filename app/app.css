@@ -2551,11 +2551,11 @@ one signal-green accent.
 .f9-legal-page .ld-nav-pill:hover { background: #2a2820; }
 
 .ld-hero {
-  padding: clamp(18px, 3vw, 34px) clamp(20px, 4vw, 48px) 0;
+  padding: clamp(14px, 2vw, 24px) clamp(20px, 4vw, 48px) 0;
 }
 
 .f9-home .ld-hero .f9-announcement {
-  margin-bottom: 22px;
+  margin-bottom: 14px;
 }
 
 @media (max-width: 600px) {
@@ -2653,7 +2653,7 @@ one signal-green accent.
 }
 
 .ld-command {
-  margin: clamp(26px, 4vw, 40px) 0 0;
+  margin: clamp(18px, 2.5vw, 28px) 0 0;
   display: flex;
   align-items: stretch;
   max-width: 1120px;
@@ -4656,15 +4656,15 @@ one signal-green accent.
 .ld-hero-grid .ld-wall {
   /* Keep the proof wall forceful without pushing the no-account search below
      the first desktop viewport. */
-  font-size: clamp(2.75rem, 6.6vw, 5.9rem);
+  font-size: clamp(2.6rem, 5vw, 4.5rem);
 }
 
 .ld-deck-copy {
-  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  font-size: clamp(1rem, 1.4vw, 1.2rem);
   line-height: 1.5;
   font-weight: 500;
   max-width: 540px;
-  margin: clamp(22px, 3vw, 34px) 0 0;
+  margin: clamp(16px, 2vw, 24px) 0 0;
 }
 
 .ld-deck-copy b {

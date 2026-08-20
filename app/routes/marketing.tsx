@@ -748,12 +748,6 @@ export default function MarketingRoute() {
           <div className="ld-hero-copy">
             {heroWall}
 
-            <p className="ld-deck-copy">
-              Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
-              landing pages for price, offer, and CTA changes, saves the screenshots, and files the brief —{" "}
-              <b>before your alarm goes off.</b>
-            </p>
-
             <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
               <input
                 aria-label="Competitor website"
@@ -768,6 +762,12 @@ export default function MarketingRoute() {
                 Preview available ads <span aria-hidden="true">→</span>
               </button>
             </Form>
+
+            <p className="ld-deck-copy">
+              Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
+              landing pages for price, offer, and CTA changes, saves the screenshots, and files the brief —{" "}
+              <b>before your alarm goes off.</b>
+            </p>
 
             <div className="f9-hero-proof-actions" aria-label="Proof brief before signup">
               <Link to={publicSearchTrialPath}>Try with Nykaa</Link>
