@@ -728,7 +728,7 @@ export default function MarketingRoute() {
       <p className="ld-sr-only">
         {proofBrief
           ? `A real proof brief for ${proofBrief.competitorName}: ${proofBrief.adCount} Meta ads with captured hooks, offers, and source links.`
-          : "Five to Nine watches competitors' Meta ads and landing pages, then sends screenshot evidence and change alerts."}
+          : "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then sends screenshot evidence and change alerts."}
       </p>
 
       <MarketingNav />
