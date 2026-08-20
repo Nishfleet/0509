@@ -3,14 +3,42 @@
 **Item:** Prepare a manual SaaSHub listing for Five to Nine
 [scout 2026-08-09, risk: green] [traction] [unreviewed-by-grok]
 
-**Status:** PREPARED, NOT SUBMITTED. This document contains every field the
-SaaSHub product submission needs, grounded in the official SaaSHub submission
-guidelines (`https://www.saashub.com/services/submit`, checked 2026-08-11) and
-the repo's canonical product copy. The base listing is **free**; submission
-requires a SaaSHub account, an inbox on the `0509.io` domain for ownership
-verification, and owner approval of a few personal fields plus tagline and
-description — see [Owner decisions](#owner-decisions). The optional paid
-`$99/month` featured listing is a separate decision and is NOT required.
+**Status:** PACKET CLOSED — NEEDS-NISH manual submission, declined by the
+growth loop after 9 days idle (2026-08-20). This document remains a complete,
+ready-to-paste listing kit for future manual submission by Nish. The growth-loop
+packet (`saashub-listing-20260811.md`) was moved to `packets/0509/done/` with an
+explicit decline recorded in `growth-loop/journal.md` — see
+[Decline rationale](#decline-rationale-2026-08-20).
+
+**Original status (preserved below):** PREPARED, NOT SUBMITTED. This document
+contains every field the SaaSHub product submission needs, grounded in the
+official SaaSHub submission guidelines
+(`https://www.saashub.com/services/submit`, checked 2026-08-11) and the repo's
+canonical product copy. The base listing is **free**; submission requires a
+SaaSHub account, an inbox on the `0509.io` domain for ownership verification,
+and owner approval of a few personal fields plus tagline and description — see
+[Owner decisions](#owner-decisions). The optional paid `$99/month` featured
+listing is a separate decision and is NOT required.
+
+## Decline rationale (2026-08-20)
+
+The growth-loop packet `saashub-listing-20260811.md` sat unprocessed outside
+`done/` for 9 days (2026-08-11 → 2026-08-20). The listing cannot be worked to
+completion by an automated agent:
+
+- **SaaSHub submission is a Nish-reserved action.** It requires a SaaSHub
+  account, domain-email ownership verification (`support@0509.io`), and owner
+  decisions on personal fields (founder name, HQ city, tagline/description
+  version). No unattended signup, verification, or submission is permitted.
+- **The venue-policy allowlist is empty.** SaaSHub is classified `unknown` —
+  the venue guard (`venue-claim`) blocks automated action with exit 4.
+- **PR #667 (PrimeSpy.net slug fix) was merged 2026-08-12**, but the manual
+  submission step was never taken by Nish.
+
+Per the growth-loop orphan policy, the packet is closed with an explicit
+decline rather than silently deleted. This document is preserved as the
+authoritative listing kit; Nish can submit manually at any time using the
+fields below.
 
 ## Submission status (recorded 2026-08-11)
 
