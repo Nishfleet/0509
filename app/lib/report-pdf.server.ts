@@ -16,6 +16,12 @@ import puppeteer from "@cloudflare/puppeteer";
 
 import { isApprovedReportSnapshot } from "~/lib/report-approval";
 
+import {
+  mapPdfErrorOutcome,
+  recordBrowserJobTelemetry,
+  resolveWorkerVersionId,
+  type BrowserJobOutcome,
+} from "~/lib/browser-job-telemetry.server";
 import type { AppEnv } from "~/lib/env.server";
 import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
@@ -99,6 +105,55 @@ export async function renderShareReportPdfResponse(
     );
   }
 
+  // Attribution context (browser_job_telemetry, migration 0075). Recording
+  // starts only where a real Cloudflare Browser Run attempt begins: the gates
+  // before it (not_found, pdf_unavailable, evidence_not_ready, plan_gated)
+  // and the pre-provider config/capacity gates (pdf_unconfigured,
+  // capacity_unavailable, capacity_exhausted, single-flight, daily cap)
+  // reject the request before any browser job exists, so no row claiming a
+  // provider attempt is written there. jobId is a random id per request;
+  // idempotencyKey is the immutable report-content SHA-256 fingerprint. Only
+  // the sharer's plan family is persisted — never tokens, URLs, or content.
+  const pdfJobId = crypto.randomUUID();
+  const pdfContentFingerprint = await reportPdfContentFingerprint(share.snapshotPayload);
+  // Provider-attempt start: assigned immediately before the actual Browser
+  // Run acquisition (after token hashing, capacity lookup, single-flight,
+  // and daily-cap gates), so the recorded duration is the provider window
+  // only and never claims pre-provider gate milliseconds.
+  let pdfProviderStartedAt = new Date().toISOString();
+  const recordPdfJob = (
+    outcome: BrowserJobOutcome,
+    detail: { resultBytes?: number | null } = {},
+  ) => {
+    // endedAt and durationMs are captured together so the recorded duration
+    // is exactly the recorded window from the same recorded startedAt.
+    const endedAt = new Date().toISOString();
+    return recordBrowserJobTelemetry(env, {
+      jobId: pdfJobId,
+      idempotencyKey: pdfContentFingerprint,
+      jobKind: "report_pdf",
+      actualProvider: "cloudflare_browser_run",
+      routeContext: "share_pdf",
+      planTier: sharerPlan,
+      source: "manual",
+      attempt: 1,
+      startedAt: pdfProviderStartedAt,
+      endedAt,
+      durationMs: Math.max(0, Date.parse(endedAt) - Date.parse(pdfProviderStartedAt)),
+      outcome,
+      resultCount: null,
+      resultBytes: detail.resultBytes ?? null,
+      workerVersion: resolveWorkerVersionId(env),
+      cronTask: null,
+    }, {
+      // Preserve background completion: when a real request ExecutionContext
+      // exists, the row write is registered with waitUntil so it still lands
+      // after the PDF response; the bounded race still caps how long the
+      // render path may wait on a slow write.
+      executionContext: ctx,
+    });
+  };
+
   const origin = resolveConfiguredOrigin(env);
   if (!env.BROWSER || !origin) {
     return pdfErrorResponse(
@@ -136,7 +191,7 @@ export async function renderShareReportPdfResponse(
   const singleFlightLimited = await claimSharePdfSingleFlight(env, {
     sharerUserId: share.userId,
     resourceId: share.resourceId,
-    contentFingerprint: await reportPdfContentFingerprint(share.snapshotPayload),
+    contentFingerprint: pdfContentFingerprint,
   });
   if (singleFlightLimited) {
     return singleFlightLimited;
@@ -156,6 +211,10 @@ export async function renderShareReportPdfResponse(
 
   let browser: PdfBrowser | null = null;
   try {
+    // The provider attempt begins here: every pre-provider gate (origin,
+    // config, capacity lookup, single-flight, daily cap) has passed, so the
+    // recorded startedAt/duration reflect the real Browser Run window only.
+    pdfProviderStartedAt = new Date().toISOString();
     browser = await promiseWithTimeout(
       puppeteer.launch(env.BROWSER),
       PDF_LAUNCH_TIMEOUT_MS,
@@ -169,6 +228,9 @@ export async function renderShareReportPdfResponse(
     );
 
     if (pdf.byteLength > PDF_MAX_BYTES) {
+      await recordPdfJob(mapPdfErrorOutcome("pdf_too_large"), {
+        resultBytes: pdf.byteLength,
+      });
       return pdfErrorResponse(
         502,
         "pdf_too_large",
@@ -176,6 +238,8 @@ export async function renderShareReportPdfResponse(
         prefersHtml,
       );
     }
+
+    await recordPdfJob("succeeded", { resultBytes: pdf.byteLength });
 
     return new Response(pdf as unknown as BodyInit, {
       status: 200,
@@ -193,6 +257,7 @@ export async function renderShareReportPdfResponse(
       redactShareToken(error instanceof Error ? error.message : String(error ?? ""), share.token),
     );
     if (isPromiseTimeoutError(error)) {
+      await recordPdfJob(mapPdfErrorOutcome("pdf_render_timeout"));
       return pdfErrorResponse(
         504,
         "pdf_render_timeout",
@@ -200,6 +265,13 @@ export async function renderShareReportPdfResponse(
         prefersHtml,
       );
     }
+    // Truthful attribution: a provider-side 429/rate-limit during the real
+    // render attempt is recorded as `rate_limited`, never as a generic
+    // failure. The customer-visible response stays unchanged.
+    const renderOutcome = isRateLimitedRenderError(error)
+      ? "rate_limited"
+      : mapPdfErrorOutcome("pdf_render_failed");
+    await recordPdfJob(renderOutcome);
     return pdfErrorResponse(
       502,
       "pdf_render_failed",
@@ -340,6 +412,17 @@ function redactShareToken(message: string, token: string) {
 // a different module-registry epoch (vitest resetModules).
 function isPromiseTimeoutError(error: unknown) {
   return error instanceof Error && error.name === "PromiseTimeoutError";
+}
+
+/**
+ * A real render attempt that hits a provider 429/rate limit (Browser Run
+ * launch, navigation, or CDP) is attributed as `rate_limited`, matching the
+ * discovery contract's 429 → rate_limited mapping. Message-based so it also
+ * matches provider errors from any module-registry epoch.
+ */
+function isRateLimitedRenderError(error: unknown) {
+  const message = (error instanceof Error ? error.message : String(error ?? "")).toLowerCase();
+  return message.includes("429") || message.includes("rate limit");
 }
 
 // GET /share/:token/pdf is reached both by real browser navigations (which send
