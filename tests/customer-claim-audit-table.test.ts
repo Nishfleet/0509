@@ -147,12 +147,16 @@ describe("BET 10 claim-by-claim audit table", () => {
     expect(EVIDENCE_USAGE_CUSTOMER_COPY).toMatch(/never expire/iu);
     expect(usageBundles().length).toBe(3);
 
-    // Sample 4: AUDIT-PRICING-DODO-LOCALIZED — no hardcoded prices.
+    // Sample 4: AUDIT-PRICING-DODO-LOCALIZED — published USD list prices on
+    // the page, checkout still localizes via Dodo (no hardcoded checkout
+    // amounts).
     const dodo = audit.claims.find((c) => c.claimId === "AUDIT-PRICING-DODO-LOCALIZED");
     expect(dodo).toBeTruthy();
     expect(dodo!.currentResult).toBe("pass");
     for (const plan of pricingPlans()) {
-      expect(plan.monthlyLabel).toBe("Localized at checkout");
+      // Published USD anchor labels, not "Localized at checkout".
+      expect(plan.monthlyLabel).toMatch(/^\$\d+ USD\/mo$/);
+      expect(plan.yearlyLabel).toMatch(/^\$\d+ USD\/year$/);
     }
 
     // Sample 5: AUDIT-SAVES-SCREENSHOTS — the data-outruns-copy claim.
