@@ -110,6 +110,35 @@ describe("stripChurnTokens", () => {
     expect(stripChurnTokens("Buy 2 Get 1 Free")).toBe("Buy 2 Get 1 Free");
     expect(stripChurnTokens("50% off this week")).toBe("50% off this week");
   });
+
+  // Caller-contract: stripChurnTokens patterns are deliberately lowercase-only
+  // so callers MUST lowercase before calling (normalizeHeadline and the
+  // watch-event evaluator do this). These tests pin the contract.
+  it("strips fully on lowercased inputs from every churn family", () => {
+    // Rolling date (month-name + day, ISO, slashed).
+    expect(stripChurnTokens("offer valid till aug 12")).toBe("offer valid till");
+    expect(stripChurnTokens("flash sale until 2026-08-13")).toBe("flash sale until");
+    expect(stripChurnTokens("diwali deals 10/20/2026")).toBe("diwali deals");
+    // Inventory / urgency counter — strips the whole token when "only N left"
+    // / "N sold" / "N seats" / "N remaining" / "N spots" is the entire input.
+    expect(stripChurnTokens("only 3 left")).toBe("");
+    expect(stripChurnTokens("120 sold today")).toBe("today");
+    expect(stripChurnTokens("5 seats remaining")).toBe("remaining");
+    // Viewer / audience counter.
+    expect(stripChurnTokens("12 people viewing now")).toBe("now");
+    expect(stripChurnTokens("9 people viewing now")).toBe("now");
+    // Countdown / clock timer.
+    expect(stripChurnTokens("deal ends in 00:59:59")).toBe("deal ends in");
+    expect(stripChurnTokens("offer valid till 12:30")).toBe("offer valid till");
+  });
+
+  it("does NOT strip mixed-case inputs (caller must lowercase first)", () => {
+    // The patterns have no /i flags — "Aug 12" / "ONLY 3 LEFT" survive intact.
+    // This documents why every call site lowercases before invoking.
+    expect(stripChurnTokens("Offer valid till Aug 12")).toBe("Offer valid till Aug 12");
+    expect(stripChurnTokens("ONLY 3 LEFT")).toBe("ONLY 3 LEFT");
+    expect(stripChurnTokens("12 People Viewing Now")).toBe("12 People Viewing Now");
+  });
 });
 
 describe("fingerprintSavedQuery", () => {

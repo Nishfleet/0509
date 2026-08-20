@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly Fleet Backlog Console refresh
+
+[Timer]
+OnCalendar=*-*-* *:24:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target
