@@ -72,6 +72,7 @@ describe("marketing pricing SSR", () => {
     await expect(response.json()).resolves.toEqual({
       pricingPreview: availablePreview,
       commercialLaunch,
+      proofBrief: null,
     });
     expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
       DODO_0509_API_KEY: "provider-key",
@@ -104,6 +105,7 @@ describe("marketing pricing SSR", () => {
     expect(result).toEqual({
       pricingPreview: { available: false },
       commercialLaunch,
+      proofBrief: null,
     });
   });
 
@@ -123,6 +125,9 @@ describe("marketing pricing SSR", () => {
       getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
     }));
     vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+    vi.doMock("~/lib/public-proof.server", () => ({
+      loadPublicProofBrief: vi.fn().mockResolvedValue(null),
+    }));
 
     const { loader } = await import("~/routes/marketing");
     const start = Date.now();
@@ -137,6 +142,7 @@ describe("marketing pricing SSR", () => {
     expect(result).toEqual({
       pricingPreview: { available: false },
       commercialLaunch,
+      proofBrief: null,
     });
     expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
     expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
@@ -209,6 +215,9 @@ describe("marketing pricing SSR", () => {
       getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
     }));
     vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+    vi.doMock("~/lib/public-proof.server", () => ({
+      loadPublicProofBrief: vi.fn().mockResolvedValue(null),
+    }));
 
     const { loader } = await import("~/routes/marketing");
     const response = (await loader({
