@@ -4,7 +4,7 @@
 
 Branch: `lane2/dynamic-sitemap-brand-pages-already-resolved`
 Base: `origin/main` at `7960292d` (#737)
-PR: nish3451/0509#745
+PR: Nishfleet/0509#745
 
 ## Item
 
