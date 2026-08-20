@@ -87,7 +87,7 @@ traffic-serving version.
 ## Deliverables
 
 - Branch `0509-lane4-685-v2-runtime-reverified` pushed; PR opened on
-  `origin/main`.
+  `origin/main`: https://github.com/Nishfleet/0509/pull/818.
 - Evidence record committed on the lane branch; lane claims published
   to `/home/nish/workspaces/agent-state/lanes/0509/lane-4.json`.
 
