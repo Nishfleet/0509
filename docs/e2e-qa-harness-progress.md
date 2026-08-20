@@ -90,7 +90,7 @@ The validator rejects missing, stale, malformed, non-0509, account-hash-mismatch
 
 - Production authenticated smoke passed on 2026-07-01 with fresh local internal-account auth state. Recapture `.auth/0509-internal.json` and `.auth/0509-internal.meta.json` when the local state expires.
 - Local Presence canary now follows the current GA rollout and does not need `PRESENCE_INTERNAL_WORKSPACE_ID` unless the rollout is explicitly changed back to `internal`.
-- Bugbot is enabled for `nish3451/0509`; the final PR head must have no accepted/actionable Bugbot findings before merge.
+- Bugbot is enabled for `Nishfleet/0509`; the final PR head must have no accepted/actionable Bugbot findings before merge.
 - In-app Codex Browser opened the local E2E app at `http://127.0.0.1:4179/` and confirmed the Five to Nine title, primary headline, and sign-in surface.
 
 ## Final Verification
