@@ -377,7 +377,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         }),
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Add competitor", exact: true })).toBeVisible();
-      await expect(page.getByRole("link", { name: "See a sample brief" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "See a proof brief" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       await expectPhoneTouchTargets(page);
 
