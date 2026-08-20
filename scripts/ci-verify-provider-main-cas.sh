@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
+# Protected file: changes here require either an independent review or a
+# sole-admin `verifier-attest:` comment (see CLAUDE.md and
+# .github/workflows/required-verifier-integrity.yml).
 set -euo pipefail
 
-canonical_repository="nish3451/0509"
+canonical_repository="Nishfleet/0509"
 canonical_ref="refs/heads/main"
 sha_pattern='^[a-f0-9]{40}$'
 

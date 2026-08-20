@@ -109,7 +109,7 @@ function mockBillingLoaderDependencies(input: {
   }));
   vi.doMock("~/lib/plan.server", () => ({
     PLAN_LIMITS: {
-      free: { watchlists: 1, collections: 0, digests: false, digestCadence: "none", proofCapturesPerMonth: 0 },
+      free: { watchlists: 1, collections: 1, digests: false, digestCadence: "none", proofCapturesPerMonth: 1 },
       starter: { watchlists: 10, collections: 25, digests: true, digestCadence: "weekly", proofCapturesPerMonth: 250 },
     },
     checkPlanLimit,

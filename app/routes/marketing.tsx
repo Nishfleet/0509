@@ -1,6 +1,11 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type {
+  HeadersArgs,
+  LinksFunction,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
@@ -40,6 +45,15 @@ const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 
 export const links: LinksFunction = () => canonicalLinks("/");
+
+// React Router merges only Set-Cookie from loader responses into the document
+// response; every other header needs a route-level `headers` export. Without
+// this, the private cache-control set by the SSR-pricing loader would be
+// dropped and the worker would stamp the generic public policy on HTML that
+// embeds buyer-country prices.
+export function headers({ loaderHeaders }: HeadersArgs) {
+  return loaderHeaders;
+}
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
@@ -909,10 +923,11 @@ export default function MarketingRoute() {
             <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
           </div>
           <p className="ld-pricing-note">
-            Free: watch 1 competitor with a weekly email brief. Paid plans add 3–6 hour checks,
-            evidence, more competitors, Collections, daily briefs, and clear, generous
-            proof-capture caps. Save winning ads to collections — and see how long each ad has
-            been running when the Ad Library shares dates.
+            Free: watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1
+            Collection. No card required. Paid plans add 3–6 hour checks, evidence,
+            more competitors, Collections, daily briefs, and clear check caps. Save
+            winning ads to collections — and see how long each ad has been running when the Ad Library
+            shares dates.
           </p>
           <div className="f9-cycle-toggle" role="group" aria-label="Billing cycle">
             <button
