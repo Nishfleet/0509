@@ -29,6 +29,53 @@ Who may merge: anyone — Nish, Codex, or Claude — once the change has an
 independent review and its checks are green. Do not merge over a failing or
 pending required check, and never force-merge.
 
+### Changing a protected verifier: the sole-admin attestation path
+
+`.github/workflows/required-verifier-integrity.yml` blocks any PR that touches
+a protected verifier definition — `ci.yml`, `secret-scan.yml`, the gate's own
+workflow and scripts, and the production deploy-authorization chain
+(`deploy-production.yml`, `finalize-production-soak.yml`,
+`scripts/ci-verify-production-candidate.sh`,
+`scripts/ci-verify-provider-main-cas.sh`) — unless the change is independently
+approved. This repository has exactly one collaborator and GitHub forbids
+approving your own pull request, so that requirement alone is impossible to
+satisfy here.
+
+Nish decided on 2026-08-20 to keep the gate and add a second, deliberately loud
+remedy rather than allow self-approval. Two ways to unblock such a PR:
+
+1. **Independent review (preferred).** A repository admin or maintainer other
+   than the PR author submits an APPROVED review dated at or after the current
+   head commit. This stays first-class and is tried first. The moment a second
+   admin/maintainer exists on this repo, this becomes the only path to use and
+   the attestation path should be deleted.
+2. **Sole-admin attestation.** A repository **admin** posts a PR comment whose
+   entire body is exactly:
+
+   ```
+   verifier-attest: <40-hex current head sha>
+   ```
+
+   Then re-run the `required-verifier-integrity` check.
+
+Attestation rules worth knowing before reaching for it:
+
+- Admin permission is verified through the collaborator-permission API, not
+  from the comment or its `author_association`. `maintain` is not enough.
+- The sha must equal the PR's **current** head sha. Pushing any new commit
+  invalidates the attestation, exactly as it dismisses a stale approval — post
+  a fresh one against the new sha.
+- The body must match exactly. A comment that merely mentions the phrase in
+  prose does not attest.
+- Using it is never quiet: the job prints a `::warning::` annotation and writes
+  a job-summary entry naming the attesting admin, the sha, and the fact that no
+  independent reviewer saw the change. That record is the point — it is what
+  makes this different from a `gh pr merge --admin` bypass, which leaves
+  nothing behind.
+
+Prefer remedy 1 whenever a second reviewer exists. Remedy 2 is a
+single-collaborator accommodation, not a shortcut.
+
 Deploy-gate e2e (Gate-B journeys, restore-evidence) is Codex-owned; product
 changes that alter public copy/states require the gate specs to be updated in the
 same landing sequence.
