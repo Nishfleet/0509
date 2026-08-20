@@ -840,7 +840,11 @@ describe("captureLandingPageSnapshot", () => {
   });
 
   it("releases fetch timeout timers on non-OK fetch responses without rendered fallback", async () => {
-    vi.useFakeTimers();
+    // Only fake setTimeout/clearTimeout so crypto.subtle.digest (used by the
+    // telemetry idempotency hash) and Response body readers can still resolve
+    // via the real event loop. The bounded retry's sleep(250) uses setTimeout,
+    // which is the only timer we need to control here.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     mockFetchWithDns(
       vi.fn(async () => new Response("blocked", { status: 500 })) as never,
     );
@@ -850,6 +854,12 @@ describe("captureLandingPageSnapshot", () => {
       "https://example.com/glow",
       { allowRenderedFallback: false },
     );
+    // Let the initial async work (DNS resolution, telemetry hash, first fetch
+    // attempt) complete by yielding to the real event loop. setImmediate is
+    // not faked by our config, so I/O callbacks and microtasks drain.
+    for (let i = 0; i < 20; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
     // The transient 500 is retried once (bounded retry); advance the fake
     // clock through the retry delay so the second attempt can run.
     await vi.advanceTimersByTimeAsync(1_000);

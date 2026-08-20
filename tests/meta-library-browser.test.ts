@@ -3347,7 +3347,9 @@ describe("ordered multi-provider meta discovery attempts", () => {
     );
 
     expect(result.ads).toHaveLength(1);
-    expect(nonDnsFetchCalls(fetch)).toHaveLength(2);
+    // Three non-DNS fetch calls: Quick Actions timeout (retried once by the
+    // bounded retry) + the Browserless BQL leg that succeeds.
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(3);
     const rows = harness.sqlite
       .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
       .all() as Array<Record<string, unknown>>;
