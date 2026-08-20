@@ -72,6 +72,7 @@ describe("marketing pricing SSR", () => {
     await expect(response.json()).resolves.toEqual({
       pricingPreview: availablePreview,
       commercialLaunch,
+      proofBrief: null,
     });
     expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
       DODO_0509_API_KEY: "provider-key",
@@ -104,6 +105,7 @@ describe("marketing pricing SSR", () => {
     expect(result).toEqual({
       pricingPreview: { available: false },
       commercialLaunch,
+      proofBrief: null,
     });
   });
 
