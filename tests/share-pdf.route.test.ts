@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PromiseTimeoutError } from "~/lib/fetch-timeout.server";
 import { createApprovedReportSnapshot } from "~/lib/report-approval";
+import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 const PDF_TEST_REPORT = {
   kind: "report" as const,
@@ -63,6 +64,8 @@ function makePuppeteerMocks(options: {
   goto?: () => Promise<unknown>;
   limits?: { allowedBrowserAcquisitions: number; timeUntilNextAllowedBrowserAcquisition: number };
   limitsError?: unknown;
+  limitsHook?: () => void;
+  launchError?: unknown;
 } = {}) {
   const page = {
     goto: vi.fn(async (..._args: unknown[]) => (options.goto ? options.goto() : undefined)),
@@ -73,11 +76,17 @@ function makePuppeteerMocks(options: {
     newPage: vi.fn(async () => page),
     close: vi.fn(async () => undefined),
   };
-  const launch = vi.fn(async () => browser);
+  const launch = vi.fn(async () => {
+    if (options.launchError !== undefined) {
+      throw options.launchError;
+    }
+    return browser;
+  });
   const limits = vi.fn(async () => {
     if (options.limitsError !== undefined) {
       throw options.limitsError;
     }
+    options.limitsHook?.();
     return options.limits ?? {
       allowedBrowserAcquisitions: 3,
       timeUntilNextAllowedBrowserAcquisition: 0,
@@ -96,10 +105,11 @@ function mockCollaborators(input: {
   plan?: string;
   ipLimit?: Response | null;
   dailyLimit?: Response | null;
+  singleFlightLimited?: Response | null;
 }) {
   const enforceSharePdfRateLimit = vi.fn(async () => input.ipLimit ?? null);
   const enforceSharePdfDailyCap = vi.fn(async () => input.dailyLimit ?? null);
-  const claimSharePdfSingleFlight = vi.fn(async () => null);
+  const claimSharePdfSingleFlight = vi.fn(async () => input.singleFlightLimited ?? null);
   const share = input.share === undefined ? AGENCY_SHARE : input.share;
   const getShareLink = vi.fn(async () => share);
   const getUserPlan = vi.fn(async () => input.plan ?? "agency");
@@ -137,6 +147,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
   vi.doUnmock("@cloudflare/puppeteer");
@@ -437,5 +448,221 @@ describe("GET /share/:token/pdf", () => {
     expect(reportPdfFilename({ title: "Diwali Push / मेगा सेल 2026" })).toBe(
       "diwali-push-2026.pdf",
     );
+  });
+});
+
+describe("report_pdf browser-job attribution rows", () => {
+  function telemetryHarness() {
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0076_browser_job_telemetry.sql");
+    return harness;
+  }
+
+  function telemetryRows(harness: ReturnType<typeof createSqliteD1>) {
+    return harness.sqlite
+      .prepare("SELECT * FROM browser_job_telemetry")
+      .all() as Array<Record<string, unknown>>;
+  }
+
+  it("records a succeeded report_pdf row with the sharer's paid tier", async () => {
+    const harness = telemetryHarness();
+    makePuppeteerMocks();
+    mockCollaborators({ plan: "agency" });
+
+    const response = await runPdfRequest(makeEnv({ DB: harness.db }));
+
+    expect(response.status).toBe(200);
+    const rows = telemetryRows(harness);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      job_kind: "report_pdf",
+      actual_provider: "cloudflare_browser_run",
+      route_context: "share_pdf",
+      plan_tier: "agency",
+      source: "manual",
+      outcome: "succeeded",
+      result_count: null,
+      result_bytes: 4,
+    });
+    expect(String(rows[0].idempotency_key)).toMatch(/^[0-9a-f]{64}$/u);
+    expect(String(rows[0].job_id)).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(String(rows[0].job_id)).not.toContain("token-1");
+    expect(String(rows[0].job_id)).not.toBe(String(rows[0].idempotency_key));
+    // Duration is measured from the same recorded started_at.
+    expect(Math.abs(
+      Number(rows[0].duration_ms) -
+        (Date.parse(String(rows[0].ended_at)) - Date.parse(String(rows[0].started_at))),
+    )).toBeLessThanOrEqual(2);
+    harness.close();
+  });
+
+  it("uses a distinct random job id per request with a stable content fingerprint", async () => {
+    const harness = telemetryHarness();
+    makePuppeteerMocks();
+    mockCollaborators({ plan: "agency" });
+
+    const first = await runPdfRequest(makeEnv({ DB: harness.db }));
+    expect(first.status).toBe(200);
+    const second = await runPdfRequest(makeEnv({ DB: harness.db }));
+    expect(second.status).toBe(200);
+
+    const rows = telemetryRows(harness);
+    expect(rows).toHaveLength(2);
+    // Independent requests must never share a job id...
+    expect(rows[0].job_id).not.toBe(rows[1].job_id);
+    // ...but the same report content keeps one stable idempotency fingerprint.
+    expect(rows[0].idempotency_key).toBe(rows[1].idempotency_key);
+    harness.close();
+  });
+
+  it("records no provider attempt for capacity or single-flight gates", async () => {
+    // Capacity gate: no Cloudflare Browser Run attempt ever started, so no
+    // row may claim `cloudflare_browser_run`.
+    const harness = telemetryHarness();
+    mockCollaborators({});
+    makePuppeteerMocks({
+      limits: { allowedBrowserAcquisitions: 0, timeUntilNextAllowedBrowserAcquisition: 12_000 },
+    });
+
+    const exhausted = await runPdfRequest(makeEnv({ DB: harness.db }));
+    expect(exhausted.status).toBe(503);
+    expect(telemetryRows(harness)).toHaveLength(0);
+
+    // Single-flight gate (pre-render): still no provider attempt.
+    const limited = new Response("{}", { status: 429 });
+    vi.resetModules();
+    mockCollaborators({ singleFlightLimited: limited });
+    makePuppeteerMocks();
+
+    const blocked = await runPdfRequest(makeEnv({ DB: harness.db }));
+    expect(blocked.status).toBe(429);
+    expect(telemetryRows(harness)).toHaveLength(0);
+    harness.close();
+  });
+
+  it("records a rate_limited row when a real render attempt is 429-limited", async () => {
+    const harness = telemetryHarness();
+    mockCollaborators({});
+    makePuppeteerMocks({
+      launchError: new Error("Unable to create new browser: code: 429: message: Rate limit exceeded"),
+    });
+
+    const response = await runPdfRequest(makeEnv({ DB: harness.db }));
+    expect(response.status).toBe(502);
+    const rows = telemetryRows(harness);
+    expect(rows).toHaveLength(1);
+    // Truthful mapping: a provider 429 during the real render attempt is
+    // `rate_limited` (never a generic `failed`), while the customer-visible
+    // response stays unchanged.
+    expect(rows[0]).toMatchObject({
+      job_kind: "report_pdf",
+      actual_provider: "cloudflare_browser_run",
+      outcome: "rate_limited",
+    });
+    harness.close();
+  });
+
+  it("records a timeout row when the real render attempt times out", async () => {
+    const harness = telemetryHarness();
+    mockCollaborators({});
+    makePuppeteerMocks({
+      goto: async () => {
+        throw new PromiseTimeoutError("goto https://0509.io/share/token-1?pdf=1 timed out");
+      },
+    });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await runPdfRequest(makeEnv({ DB: harness.db }));
+    expect(response.status).toBe(504);
+    const rows = telemetryRows(harness);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      job_kind: "report_pdf",
+      actual_provider: "cloudflare_browser_run",
+      outcome: "timeout",
+    });
+    harness.close();
+  });
+
+  it("registers the row write with waitUntil when an ExecutionContext exists", async () => {
+    const harness = telemetryHarness();
+    makePuppeteerMocks();
+    mockCollaborators({ plan: "agency" });
+    const waitUntil = vi.fn();
+
+    const { renderShareReportPdfResponse } = await import("~/lib/report-pdf.server");
+    const response = await renderShareReportPdfResponse(
+      makeEnv({ DB: harness.db }),
+      new Request("https://0509.io/share/token-1/pdf"),
+      "token-1",
+      { waitUntil } as unknown as ExecutionContext,
+    );
+
+    expect(response.status).toBe(200);
+    // The bounded write is registered for background completion without ever
+    // blocking the response; the row still lands.
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(waitUntil.mock.calls[0]?.[0]).toBeInstanceOf(Promise);
+    expect(telemetryRows(harness)).toHaveLength(1);
+    harness.close();
+  });
+
+  it("records nothing for gates that reject before any browser-capable job", async () => {
+    const harness = telemetryHarness();
+    mockCollaborators({ share: null });
+    makePuppeteerMocks();
+
+    const response = await runPdfRequest(makeEnv({ DB: harness.db }));
+    expect(response.status).toBe(404);
+    expect(telemetryRows(harness)).toHaveLength(0);
+    harness.close();
+  });
+
+  it("starts the provider duration at the actual launch, after every pre-provider gate (controlled clock)", async () => {
+    // The capacity preflight consumes 5s of pre-provider time. The recorded
+    // startedAt/duration must reflect the real Browser Run window only —
+    // never the request start — while the job id and content fingerprint
+    // stay stable and gates still claim no provider attempt.
+    const harness = telemetryHarness();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-13T12:00:00.000Z"));
+    // The AGENCY_SHARE approval window is anchored to real module-load time,
+    // which would be in the future once the clock is mocked to 2026-08-13 and
+    // the approval would fail (approvalInFuture -> 409). Build a snapshot whose
+    // reviewedAt/expiry explicitly covers the mocked clock.
+    mockCollaborators({
+      plan: "agency",
+      share: {
+        ...AGENCY_SHARE,
+        snapshotPayload: createApprovedReportSnapshot(
+          PDF_TEST_REPORT,
+          "2026-08-13T00:00:00.000Z",
+        ),
+      },
+    });
+    makePuppeteerMocks({
+      limitsHook: () => {
+        vi.advanceTimersByTime(5_000);
+      },
+    });
+
+    const response = await runPdfRequest(makeEnv({ DB: harness.db }));
+    expect(response.status).toBe(200);
+
+    const rows = telemetryRows(harness);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      job_kind: "report_pdf",
+      actual_provider: "cloudflare_browser_run",
+      outcome: "succeeded",
+      // Provider start is AFTER the 5s capacity preflight, and the recorded
+      // duration is the provider window only (0ms), never ~5000ms.
+      started_at: "2026-08-13T12:00:05.000Z",
+      duration_ms: 0,
+    });
+    expect(String(rows[0].job_id)).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(String(rows[0].idempotency_key)).toMatch(/^[0-9a-f]{64}$/u);
+    vi.useRealTimers();
+    harness.close();
   });
 });

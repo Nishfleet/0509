@@ -3,6 +3,56 @@
 Three remediation lanes wrote evidence to this path independently. All are kept
 verbatim below.
 
+# Thin rendered content on /search — dogfood 694ddbd68e95 (lane 14 re-run, 2026-08-10)
+
+**Status: already fixed; PR #563 open and MERGEABLE; this lane re-verified the
+fix on the current PR tip and records the evidence. No duplicate PR opened
+(backlog note directs lanes not to open a second thin-content PR).**
+
+Branch: `lane14/search-thin-content-refresh` (tracks PR branch
+`fix/search-thin-content`)
+Pull request: https://github.com/nish3451/0509/pull/563
+
+## Item
+
+- [dogfood `694ddbd68e95`] Thin rendered content on /search — "207 rendered
+  words found", page scope `/search` (`runs/20260808T074205Z-msk2fl3n.json`).
+
+## Verdict
+
+The item's fix is already in flight as PR #563 (commit `dab25d68`,
+"fix(search): clear dogfood 694ddbd68e95 thin-content warning on /search and
+/auth/login"), which adds a "What a search returns" scope section to the
+`/search` idle state (app/routes/search.tsx), a second proof row + one-time-link
+note to `/auth/login`, `.f9-search-scope-list` styling, and regression tests.
+Prior lanes recorded the original verification (same SEO engine the dogfood job
+wraps: /search 398 rendered words, zero findings; login ~285 by deterministic
+math) in this file's 694ddbd68e95 / 69e1b4be47bf entries.
+
+This lane re-verified the current PR tip (commit `38115300`, after main merge
+including #600's /search JSON-LD):
+
+- `npm run typecheck`: passed.
+- `npx vitest run tests/search-submission-settle.test.tsx
+  tests/search-language.test.tsx tests/auth-login-content-depth.test.tsx
+  tests/funnel-seo.test.ts`: 4 files, 37/37 passed.
+- `gh pr view 563`: `mergeable: MERGEABLE`, `state: OPEN`; CI in progress
+  (codex-node-checks/Gitleaks queued, authorize jobs pass).
+
+## Note for future runs (test-harness gotcha)
+
+This VPS login shell sets `NODE_ENV=production`. Under that env, `react` loads
+its production build, whose top-level export has NO `act`, so tests importing
+`import { act } from "react"` (a repo-wide pattern) fail with
+"act is not a function". This affects clean `origin/main` equally and is not a
+code regression. Run tests with `env -u NODE_ENV npx vitest run …` (as CI does;
+CI passes). Verified: `env -u NODE_ENV` turns the 8 failures in
+`search-submission-settle.test.tsx` into 13/13 pass.
+
+## Files
+
+- `.lane/report.md` — evidence record only; no product code touched.
+
 - [MONEY silent-failure remediation](#money-silent-failure-remediation) — PR #445, branch `fix/silent-fixmoney` (landed on `main`)
 - [Silent-failure observability remediation](#silent-failure-observability-remediation) — PR #447, branch `fix/silent-fixobserve`
 
@@ -307,6 +357,73 @@ Loaded `https://0509.io/` in a real browser (Camoufox):
 - `git diff --check`: clean (markdown-only change; no product code touched).
 
 ---
+# Thin rendered content on /search + /auth/login — dogfood 694ddbd68e95
+
+**Status: fixed; product code change with regression tests.**
+
+Branch: `fix/search-thin-content`
+Base: `origin/main` at `2ebd8082`
+Pull request: https://github.com/nish3451/0509/pull/563
+
+## Item
+
+- [dogfood `694ddbd68e95`] Thin rendered content on /search — "207 rendered
+  words found", page scope `/search` (`runs/20260808T074205Z-msk2fl3n.json`).
+- The same backlog item's evidence also covers issue-15: "Thin rendered
+  content on /auth/login — 193 rendered words found".
+
+## Verdict
+
+Both pages rendered below the SEO Fix Kit engine's 250-word thin-content floor
+(`audit-engine.js`: `rendered.wordCount < 250`). Live reproduction on
+2026-08-09 confirmed the finding is still active: `document.body.textContent`
+on https://0509.io/search = 207 words, on /auth/login = 193 words (engine's
+exact counting method, browser-rendered).
+
+The fix adds honest, page-specific content — the engine's own suggested fix is
+"add useful page-specific detail, proof, examples, and next steps":
+
+- `/search` idle state: a "What a search returns" section under the quiet
+  lede — what the public preview searches (Meta Ad Library, the four
+  placements), what comes back (current and recent ads, the offer read off
+  the landing page, the proof capture), and the honest limits + next step
+  (coverage and freshness vary, rate-limited, sign in to watch). No specimen,
+  no sample card, no diagram — the page's boringness budget and BL-031
+  language contracts (one caps-mono kicker, three filled buttons, no dead
+  classes) are preserved and locked by tests.
+- `/auth/login` story column: a second proof row (Digests, Reports, Team
+  workspaces) plus a one-time-link note, all matching existing feature truth
+  (digest email delivery with proof, report builder, team invites, Better Auth
+  magic links).
+
+## Verification
+
+- SEO engine rerun against the changed code (same engine the dogfood job
+  wraps, `proof-seo/server/audit/engine.js`, `pageSpeed: false`), local
+  dev server: `/search` rendered word count **398**, **zero findings on the
+  page** — the thin-content finding no longer fires.
+- `/auth/login` cannot be crawled locally (auth-route rate limiter is
+  fail-closed and the local D1/remote D1 path is unavailable in this lane's
+  env), so it is verified deterministically: live baseline 193 = 74 visible +
+  ~119 deterministic SSR script tokens; this change adds 92 unconditional
+  visible tokens → **~285 rendered words** on the deployed page (measured
+  fragment test floor: 184 ≥ 180).
+- Regression tests: `tests/search-submission-settle.test.tsx` (idle render
+  contains the scope copy and fragment word floor ≥ 250),
+  `tests/search-language.test.tsx` (source contract: new section, one kicker,
+  three fills, no specimen), `tests/auth-login-content-depth.test.tsx` (new
+  proof row + story depth floor 180).
+- Full suite: 423 files, 4835/4835 passed; `npm run typecheck` passed;
+  `git diff --check` clean.
+
+## Files
+
+- `app/routes/search.tsx` — idle-state scope section
+- `app/routes/auth.login.tsx` — second proof row + link note
+- `app/app.css` — `.f9-search-scope-list` + section-title margin rule
+- `tests/search-submission-settle.test.tsx`, `tests/search-language.test.tsx`,
+  `tests/auth-login-content-depth.test.tsx` (new)
+
 # AI Answer Readiness: rendered pages lack extractable detail — dogfood 69e1b4be47bf
 
 **Status: root-cause resolution verified against the in-flight fix (PR #563);
@@ -373,6 +490,36 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 
 - `.lane/report.md` — evidence record only; no product code touched.
 
+---
+# PR #563 conflict repair — merge main back in (lane 1, 2026-08-10)
+
+**Status: repaired; PR MERGEABLE again; code checks green locally. CI
+authorize jobs fail repo-wide on the GitHub account spending-limit issue, not
+on this branch's code.**
+
+Branch: `fix/search-thin-content` (PR #563)
+Base: `origin/main` at `24cc2d45`
+
+## What happened
+
+PR #563's CI was fully green (2026-08-09) but the PR went DIRTY as main moved
+past it (merged #567, #565, #582). Lane 1 (2026-08-10) merged latest `main`
+into the branch and resolved two conflicts:
+
+- `app/routes/search.tsx` — kept the PR's "What a search returns" scope
+  section (the thin-content fix), but aligned copy with #567's honesty gate:
+  the idle lede adopts main's version (no unqualified "right now" promise),
+  and the scope lede no longer claims the competitor is "running right now"
+  when the discovery cache can serve cached inventory.
+- `.lane/report.md` — union of the 694ddbd68e95 and 69e1b4be47bf ledger
+  entries.
+
+## Verification
+
+- `npm run typecheck` clean.
+- Full suite: 424 files, 4849/4849 passed.
+- `git diff --check` clean.
+- `gh pr view 563` → `mergeable: MERGEABLE` after push.
 ---
 # Brand "is running"/owns-Meta-ads claims on visitor pages (2026-08-10 lane 10) — already resolved by PRs #550 and #561
 
