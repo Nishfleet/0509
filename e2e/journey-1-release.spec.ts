@@ -33,7 +33,7 @@ async function expectMarketingPrimaryNavigation(page: Page): Promise<void> {
   const navigation = page.getByRole("navigation", { name: "Primary", exact: true });
   await expect(navigation).toBeVisible();
 
-  for (const label of ["Search preview", "Sample brief", "Pricing"] as const) {
+  for (const label of ["Search preview", "Proof brief", "Pricing"] as const) {
     const link = navigation.getByRole("link", { name: label, exact: true });
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute("href", /\S+/u);
@@ -184,7 +184,7 @@ for (const viewport of viewports) {
 
     // First visit: establish the product promise without an account.
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: /They cut.*price/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /saved the proof|before the call/i })).toBeVisible();
     await expect(page.getByText("No account needed.", { exact: true })).toBeVisible();
     const trialLink = page.getByRole("link", { name: "Try with Nykaa" });
     await expect(trialLink).toBeVisible();
