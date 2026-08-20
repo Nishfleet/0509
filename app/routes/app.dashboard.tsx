@@ -783,9 +783,9 @@ export default function AppDashboardRoute() {
           {proofUsage.warningLevel === "exhausted"
             ? proofUsage.plan === "free"
               ? "You've used your free plan's proof-backed capture for this month. "
-              : "You've used all your proof captures. "
-            : "You've used over 80% of your proof captures. "}
-          {proofUsage.used} of {proofUsage.limit} proof captures used in the current billing period.
+              : "You've used all your evidence checks. "
+            : "You've used over 80% of your evidence checks. "}
+          {proofUsage.used} of {proofUsage.limit} checks used in the current billing period.
           {proofUsage.upgradeTarget
             ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
             : proofUsage.plan === "free"
