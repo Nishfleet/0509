@@ -1,6 +1,6 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
 import { useEffect, useState } from "react";
-import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { HeadersArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
@@ -40,6 +40,15 @@ const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 
 export const links: LinksFunction = () => canonicalLinks("/");
+
+// React Router merges only Set-Cookie from loader responses into the document
+// response; every other header needs a route-level `headers` export. Without
+// this, the private cache-control set by the SSR-pricing loader would be
+// dropped and the worker would stamp the generic public policy on HTML that
+// embeds buyer-country prices.
+export function headers({ loaderHeaders }: HeadersArgs) {
+  return loaderHeaders;
+}
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

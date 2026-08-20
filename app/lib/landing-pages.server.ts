@@ -1,5 +1,16 @@
 import { captureRenderedLandingPageSnapshot } from "~/lib/browser-run.server";
-import { readResponseTextWithinLimit } from "~/lib/bounded-response.server";
+import { readResponseTextWithinLimit, utf8ByteLength } from "~/lib/bounded-response.server";
+import {
+  mapLandingFailureOutcome,
+  recordBrowserJobTelemetry,
+  resolveSourceForRouteContext,
+  resolveWorkerVersionId,
+  sha256Hex,
+  type BrowserJobOutcome,
+  type BrowserJobPlanTier,
+  type BrowserJobRouteContext,
+  type BrowserJobSource,
+} from "~/lib/browser-job-telemetry.server";
 import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import {
@@ -36,6 +47,7 @@ export type LandingPageCaptureFailureReasonCode =
   | "landing_redirect_blocked"
   | "landing_redirect_limit"
   | "landing_blocked"
+  | "landing_rate_limited"
   | "landing_http_error"
   | "landing_fetch_failed"
   | "landing_content_empty_or_oversized";
@@ -51,11 +63,50 @@ interface CaptureLandingPageSnapshotOptions {
   /** Persist only when the caller will create an owner-addressable D1 reference. */
   persistArtifacts?: boolean;
   preferRendered?: boolean;
+  /** Attribution context recorded in `browser_job_telemetry` (optional).
+   * Never carries URLs, tokens, or content. Defaults derive from existing
+   * caller signals: `onFailure` presence ⇒ proof_capture/scheduled, else
+   * selection_enrichment/manual. */
+  routeContext?: BrowserJobRouteContext;
+  planTier?: BrowserJobPlanTier | null;
+  source?: BrowserJobSource;
+  /**
+   * Request ExecutionContext when the caller actually has one. When present,
+   * telemetry row writes are registered with `waitUntil` so they still land
+   * after the response (background completion preserved) while the bounded
+   * race still caps how long the capture may wait on a slow write.
+   */
+  executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
 }
 
 interface LandingPageCaptureAttemptState {
   captureWarningCodes: string[];
   renderedAttempted: boolean;
+}
+
+/** Bounded attribution context for one landing-snapshot job (never raw content). */
+interface LandingPageTelemetryContext {
+  /** Random per top-level request; shared by every leg of the job. */
+  jobId: string;
+  /** Stable SHA-256 fingerprint of the canonical URL — never the raw URL. */
+  idempotencyKey: string;
+  routeContext: BrowserJobRouteContext;
+  planTier: BrowserJobPlanTier | null;
+  source: BrowserJobSource;
+  startedAt: string;
+  /**
+   * Start of the current plain-http leg, captured immediately before that
+   * leg's first fetch so a rendered-first failure (or any earlier work) is
+   * never included in the HTTP leg's recorded duration. Null until the leg
+   * actually begins.
+   */
+  plainHttpStartedAt: string | null;
+  /** Caller's optional request ExecutionContext (background completion). */
+  executionContext: Pick<ExecutionContext, "waitUntil"> | null;
+  /** Central per-job attempt counter (plain-http legs + rendered legs). */
+  attemptUsed: number;
+  /** True once the plain-http leg row exists for this job (no double rows). */
+  plainHttpRecorded: boolean;
 }
 
 export async function captureLandingPageSnapshot(
@@ -64,14 +115,85 @@ export async function captureLandingPageSnapshot(
   options: CaptureLandingPageSnapshotOptions = {},
 ): Promise<LandingPageSnapshotData | null> {
   const publicUrl = await resolvePublicHttpUrl(url);
+  const routeContext =
+    options.routeContext ?? (options.onFailure ? "proof_capture" : "selection_enrichment");
+  const telemetry: LandingPageTelemetryContext = {
+    jobId: crypto.randomUUID(),
+    // Stable across retries of the same URL; the raw URL never reaches the
+    // telemetry table (writer bounds reject raw URLs anyway).
+    idempotencyKey: await sha256Hex(`landing:${publicUrl?.toString() ?? url}`),
+    routeContext,
+    planTier: options.planTier ?? null,
+    source: resolveSourceForRouteContext(routeContext, options.source),
+    startedAt: new Date().toISOString(),
+    plainHttpStartedAt: null,
+    executionContext: options.executionContext ?? null,
+    attemptUsed: 0,
+    plainHttpRecorded: false,
+  };
   if (!publicUrl) {
+    await recordLandingLeg(env, telemetry, mapLandingFailureOutcome("landing_url_invalid"));
     return failLandingCapture(options, "landing_url_invalid");
   }
 
   return captureLandingPageSnapshotAt(env, publicUrl, options, 0, {
     captureWarningCodes: [],
     renderedAttempted: false,
-  });
+  }, telemetry);
+}
+
+/**
+ * One bounded `plain_http` attribution row for this landing job (never
+ * throws). The attempt counter increments centrally: the plain-http leg owns
+ * the next attempt number, and rendered legs continue after it. The recorded
+ * startedAt/duration are the plain-http leg's own window
+ * (`plainHttpStartedAt`, captured immediately before the leg's fetch), never
+ * the job start — so rendered-first time can never inflate the HTTP duration.
+ */
+function recordLandingLeg(
+  env: AppEnv,
+  telemetry: LandingPageTelemetryContext,
+  outcome: BrowserJobOutcome,
+  detail: { resultCount?: number | null; resultBytes?: number | null } = {},
+) {
+  telemetry.attemptUsed += 1;
+  telemetry.plainHttpRecorded = true;
+  // endedAt and durationMs are captured together so the recorded duration is
+  // exactly the recorded window (ended_at - started_at), never a re-read of
+  // the clock with a different origin. Pre-fetch validation failures fall
+  // back to the job start (nothing meaningful ran before them).
+  const legStartedAt = telemetry.plainHttpStartedAt ?? telemetry.startedAt;
+  const endedAt = new Date().toISOString();
+  return recordBrowserJobTelemetry(
+    env,
+    {
+      jobId: telemetry.jobId,
+      idempotencyKey: `${telemetry.idempotencyKey}:plain_http`,
+      jobKind: "landing_snapshot",
+      actualProvider: "plain_http",
+      routeContext: telemetry.routeContext,
+      planTier: telemetry.planTier,
+      source: telemetry.source,
+      attempt: telemetry.attemptUsed,
+      startedAt: legStartedAt,
+      endedAt,
+      durationMs: Math.max(0, Date.parse(endedAt) - Date.parse(legStartedAt)),
+      outcome,
+      resultCount: detail.resultCount ?? null,
+      resultBytes: detail.resultBytes ?? null,
+      workerVersion: resolveWorkerVersionId(env),
+      cronTask:
+        telemetry.routeContext === "watchlist_scan" ||
+        telemetry.routeContext === "scheduled_warmup"
+          ? "cron"
+          : null,
+    },
+    {
+      // Preserve background completion when the caller has a request
+      // ExecutionContext (see `CaptureLandingPageSnapshotOptions`).
+      executionContext: telemetry.executionContext,
+    },
+  );
 }
 
 async function captureLandingPageSnapshotAt(
@@ -80,14 +202,30 @@ async function captureLandingPageSnapshotAt(
   options: CaptureLandingPageSnapshotOptions,
   redirectCount: number,
   state: LandingPageCaptureAttemptState,
+  telemetry: LandingPageTelemetryContext,
+  plainHttpStartedAt: string | null = null,
 ): Promise<LandingPageSnapshotData | null> {
+  // Pre-fetch validation failures keep the leg's start (from the first fetch
+  // of the chain when one already ran; otherwise the job start, which is
+  // truthful because nothing ran before the validation).
+  telemetry.plainHttpStartedAt ??= plainHttpStartedAt;
   if (redirectCount > MAX_LANDING_PAGE_REDIRECTS) {
+    await recordLandingLeg(
+      env,
+      telemetry,
+      mapLandingFailureOutcome("landing_redirect_limit"),
+    );
     return failLandingCapture(options, "landing_redirect_limit", { redirectCount });
   }
 
   try {
     const resolvedUrl = await resolvePublicHttpUrl(url);
     if (!resolvedUrl) {
+      await recordLandingLeg(
+        env,
+        telemetry,
+        mapLandingFailureOutcome("landing_redirect_blocked"),
+      );
       return failLandingCapture(options, "landing_redirect_blocked", { redirectCount });
     }
 
@@ -98,6 +236,7 @@ async function captureLandingPageSnapshotAt(
         env,
         resolvedUrl.toString(),
         options,
+        telemetry,
       );
       if (renderedSnapshot) {
         return renderedSnapshot;
@@ -105,6 +244,11 @@ async function captureLandingPageSnapshotAt(
       captureWarningCodes.push("rendered_fallback_failed");
     }
 
+    // The plain-http leg begins here: its start timestamp is captured
+    // immediately before the fetch (once per leg — redirect hops continue
+    // the same leg), so rendered-first time or any earlier work is never
+    // included in the HTTP leg's recorded duration.
+    telemetry.plainHttpStartedAt ??= new Date().toISOString();
     const { fetchAttempts, response } = await fetchLandingPageWithTransientRetry(
       resolvedUrl.toString(),
     );
@@ -119,8 +263,10 @@ async function captureLandingPageSnapshotAt(
             options,
             redirectCount + 1,
             state,
+            telemetry,
+            telemetry.plainHttpStartedAt,
           )
-        : failLandingCapture(options, "landing_redirect_blocked", {
+        : recordFailedLanding(env, telemetry, options, "landing_redirect_blocked", {
             fetchStatus: response.status,
             redirectCount,
           });
@@ -129,7 +275,7 @@ async function captureLandingPageSnapshotAt(
     const finalUrl = await resolvePublicHttpUrl(response.url || resolvedUrl.toString());
     if (!finalUrl) {
       releaseFetchTimeout(response);
-      return failLandingCapture(options, "landing_redirect_blocked", {
+      return recordFailedLanding(env, telemetry, options, "landing_redirect_blocked", {
         fetchStatus: response.status,
         redirectCount,
       });
@@ -139,18 +285,26 @@ async function captureLandingPageSnapshotAt(
       const fetchStatus = response.status;
       releaseFetchTimeout(response);
       const reasonCode =
-        fetchStatus === 401 || fetchStatus === 403 || fetchStatus === 429
-          ? "landing_blocked"
-          : "landing_http_error";
+        fetchStatus === 429
+          ? "landing_rate_limited"
+          : fetchStatus === 401 || fetchStatus === 403
+            ? "landing_blocked"
+            : "landing_http_error";
       if (
         options.allowRenderedFallback !== false &&
         !state.renderedAttempted
       ) {
+        // Record the failed plain-http leg BEFORE the rendered fallback runs,
+        // so rows keep the job's ordered attempts (plain_http = N, rendered =
+        // N+1) instead of writing the failed row after a rendered success.
         state.renderedAttempted = true;
-        const rendered = await captureRenderedSnapshot(env, finalUrl.toString(), options);
-        if (rendered) return rendered;
+        await recordLandingLeg(env, telemetry, mapLandingFailureOutcome(reasonCode));
+        const rendered = await captureRenderedSnapshot(env, finalUrl.toString(), options, telemetry);
+        if (rendered) {
+          return rendered;
+        }
       }
-      return failLandingCapture(options, reasonCode, { fetchStatus });
+      return recordFailedLanding(env, telemetry, options, reasonCode, { fetchStatus });
     }
 
     const html = await readResponseTextWithinLimit(response, MAX_LANDING_PAGE_HTML_BYTES);
@@ -160,12 +314,23 @@ async function captureLandingPageSnapshotAt(
         !state.renderedAttempted
       ) {
         state.renderedAttempted = true;
-        const rendered = await captureRenderedSnapshot(env, finalUrl.toString(), options);
-        if (rendered) return rendered;
+        await recordLandingLeg(
+          env,
+          telemetry,
+          mapLandingFailureOutcome("landing_content_empty_or_oversized"),
+        );
+        const rendered = await captureRenderedSnapshot(env, finalUrl.toString(), options, telemetry);
+        if (rendered) {
+          return rendered;
+        }
       }
-      return failLandingCapture(options, "landing_content_empty_or_oversized", {
-        fetchStatus: response.status,
-      });
+      return recordFailedLanding(
+        env,
+        telemetry,
+        options,
+        "landing_content_empty_or_oversized",
+        { fetchStatus: response.status },
+      );
     }
     const signals = extractLandingPageSignals(html, { documentMode: "raw" });
     const hasMeaningfulBodyText = hasMeaningfulLandingPageBodyText(html, {
@@ -186,7 +351,13 @@ async function captureLandingPageSnapshotAt(
       looksLikeSignalEmptyShell
     ) {
       state.renderedAttempted = true;
-      const renderedSnapshot = await captureRenderedSnapshot(env, canonicalUrl, options);
+      // The plain-http leg honestly returned an empty shell: record it before
+      // the rendered fallback so attempt order stays truthful.
+      await recordLandingLeg(env, telemetry, "empty", {
+        resultCount: 1,
+        resultBytes: utf8ByteLength(html),
+      });
+      const renderedSnapshot = await captureRenderedSnapshot(env, canonicalUrl, options, telemetry);
       if (renderedSnapshot) {
         return renderedSnapshot;
       }
@@ -202,7 +373,7 @@ async function captureLandingPageSnapshotAt(
       }
     }
 
-    return {
+    const snapshot: LandingPageSnapshotData = {
       rawUrl: url.toString(),
       canonicalUrl,
       rawHeadline: normalized.raw,
@@ -231,17 +402,45 @@ async function captureLandingPageSnapshotAt(
         fetchStatus: response.status,
       },
     };
+    const outcome = looksLikeSignalEmptyShell ? "empty" : "succeeded";
+    if (!telemetry.plainHttpRecorded) {
+      await recordLandingLeg(env, telemetry, outcome, {
+        resultCount: 1,
+        resultBytes: utf8ByteLength(html),
+      });
+    }
+    return snapshot;
   } catch (error) {
     logLandingCaptureWarning("landing_fetch_failed", error);
+    // Truthful mapping: a fetch that hit the bounded timeout (internal abort
+    // signal or PromiseTimeoutError) is attributed as `timeout`, never as a
+    // generic failure. The customer-visible reasonCode stays unchanged.
+    const timeoutOutcome: BrowserJobOutcome | undefined = isFetchTimeoutError(error)
+      ? "timeout"
+      : undefined;
     if (
       options.allowRenderedFallback !== false &&
       !state.renderedAttempted
     ) {
       state.renderedAttempted = true;
-      const rendered = await captureRenderedSnapshot(env, url.toString(), options);
-      if (rendered) return rendered;
+      await recordLandingLeg(
+        env,
+        telemetry,
+        timeoutOutcome ?? mapLandingFailureOutcome("landing_fetch_failed"),
+      );
+      const rendered = await captureRenderedSnapshot(env, url.toString(), options, telemetry);
+      if (rendered) {
+        return rendered;
+      }
     }
-    return failLandingCapture(options, "landing_fetch_failed");
+    return recordFailedLanding(
+      env,
+      telemetry,
+      options,
+      "landing_fetch_failed",
+      {},
+      timeoutOutcome,
+    );
   }
 }
 
@@ -249,11 +448,32 @@ async function captureRenderedSnapshot(
   env: AppEnv,
   url: string,
   options: CaptureLandingPageSnapshotOptions,
+  telemetry: LandingPageTelemetryContext,
 ) {
+  // The rendered chain (Browser Run → Browserless) continues the job's
+  // ordered attempt chain and may record more than one row. The shared
+  // out-param reports every attempt the chain actually used, and the central
+  // counter syncs to it afterwards so any later leg (e.g. a final plain-http
+  // record) continues from the true last attempt.
+  const attribution = {
+    jobId: telemetry.jobId,
+    routeContext: telemetry.routeContext,
+    planTier: telemetry.planTier,
+    source: telemetry.source,
+    attempt: telemetry.attemptUsed + 1,
+    idempotencyKey: telemetry.idempotencyKey,
+    telemetryAttempts: { used: telemetry.attemptUsed },
+    executionContext: telemetry.executionContext,
+  };
   try {
-    return await (options.persistArtifacts === false
-      ? captureRenderedLandingPageSnapshot(env, url, { persistArtifacts: false })
-      : captureRenderedLandingPageSnapshot(env, url));
+    const snapshot = await (options.persistArtifacts === false
+      ? captureRenderedLandingPageSnapshot(env, url, {
+          persistArtifacts: false,
+          ...attribution,
+        })
+      : captureRenderedLandingPageSnapshot(env, url, attribution));
+    telemetry.attemptUsed = attribution.telemetryAttempts.used;
+    return snapshot;
   } catch (error) {
     logLandingCaptureWarning("rendered_fallback_failed", error);
     return null;
@@ -309,6 +529,38 @@ function sleep(ms: number) {
 
 function isRedirectStatus(status: number) {
   return status >= 300 && status < 400;
+}
+
+/**
+ * Record the failed plain-http leg (once per job), then run the caller's
+ * failure hook. Legs already recorded before a rendered fallback never
+ * double-record. `outcomeOverride` lets the caller attribute a truthful
+ * outcome (e.g. `timeout`) without changing the customer-visible reasonCode.
+ */
+async function recordFailedLanding(
+  env: AppEnv,
+  telemetry: LandingPageTelemetryContext,
+  options: CaptureLandingPageSnapshotOptions,
+  reasonCode: LandingPageCaptureFailureReasonCode,
+  metadata: Record<string, unknown> = {},
+  outcomeOverride?: BrowserJobOutcome,
+) {
+  if (!telemetry.plainHttpRecorded) {
+    await recordLandingLeg(
+      env,
+      telemetry,
+      outcomeOverride ?? mapLandingFailureOutcome(reasonCode),
+    );
+  }
+  return failLandingCapture(options, reasonCode, metadata);
+}
+
+/** A fetch that hit the bounded timeout: internal abort or promise timeout. */
+function isFetchTimeoutError(error: unknown) {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || error.name === "PromiseTimeoutError")
+  );
 }
 
 function failLandingCapture(
