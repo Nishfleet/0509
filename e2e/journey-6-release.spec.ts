@@ -294,7 +294,7 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       await expectVisibleKeyboardFocus(page.getByRole("alert"));
       await expectExperience(page);
       await page.goto("/");
-      await expect(page.getByRole("heading", { name: /They cut.*price/i })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: /saved the proof|before the call/i })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Temporarily unavailable" })).toHaveCount(0);
       await context.setExtraHTTPHeaders({ [fixtureModeHeader]: "1" });
       const recovery = await replay(page, "/api/e2e/auth/replay", "e2e-starter", recoveryKey, recoveryRun, "j6");
