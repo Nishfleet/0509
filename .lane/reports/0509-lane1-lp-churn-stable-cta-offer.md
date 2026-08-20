@@ -1,6 +1,6 @@
 # Lane 1 report — churn-stable CTA and offer comparison
 
-Branch: `0509-lane1-lp-churn-stable-cta-offer` · PR: https://github.com/nish3451/0509/pull/762
+Branch: `0509-lane1-lp-churn-stable-cta-offer` · PR: https://github.com/Nishfleet/0509/pull/762
 Item: Importance/noise filter on LP changes — suppress CSS/script/ad-slot churn; alert only on offer/price/CTA/copy-structure.
 
 ## Outcome

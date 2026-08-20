@@ -63,7 +63,7 @@ main within hours, and the pipeline self-heals on the next tick by design.
 
 - `gh run list --workflow deploy-production.yml` / `gh run view <id>` —
   conclusions, SHAs, job logs above.
-- `gh api repos/nish3451/0509/deployments` — production deployment records,
+- `gh api repos/Nishfleet/0509/deployments` — production deployment records,
   including 18:24:41Z for `2b91842b` (today).
 - `/home/nish/workspaces/agent-state/lanes/auto-deploy.log` — dispatcher
   per-tick record (`NOTIFY: shipped … all gates green`, the `could not be
