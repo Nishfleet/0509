@@ -103,5 +103,5 @@ These are not proven by repo code alone:
 Use this body when explicit protected-command approval is given:
 
 ```sh
-SAFE_DEPLOY_APPROVED='gh pr create' gh pr create --repo nish3451/0509 --base main --head codex/final-self-serve-ga-hardening-20260625 --title "fix(launch): close final self-serve SaaS gaps" --body-file docs/final-self-serve-ga-pr-body.md
+SAFE_DEPLOY_APPROVED='gh pr create' gh pr create --repo Nishfleet/0509 --base main --head codex/final-self-serve-ga-hardening-20260625 --title "fix(launch): close final self-serve SaaS gaps" --body-file docs/final-self-serve-ga-pr-body.md
 ```
