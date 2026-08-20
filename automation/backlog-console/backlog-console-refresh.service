@@ -1,0 +1,15 @@
+[Unit]
+Description=Regenerate and republish the Fleet Backlog Console (deterministic, zero-token)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/nish
+Environment=PATH=/home/nish/.local/bin:/usr/local/bin:/usr/bin:/bin
+TimeoutStartSec=15m
+# Deterministic zero-token refresh (2026-08-18): replaces the hourly Claude
+# Haiku call. refresh.sh assembles the console from fleet2 var state / git /
+# systemd via generate.py, deploys to nish.sh via push.sh, and runs a freshness
+# self-check that re-runs once and only pages after a repeated failure.
+# refresh.sh sources fleet-console/cf.env for the Cloudflare credentials that
+# systemd --user does not inherit from the interactive shell (2026-08-19 fix).
+ExecStart=/bin/bash /home/nish/.local/bin/backlog-console-refresh.sh
