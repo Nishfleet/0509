@@ -1,7 +1,7 @@
 # Lane 1 report — MagicBrief migration blitz (0509)
 
 Branch: `0509-lane1-magicbrief-rejected-columns-panel`
-PR: https://github.com/nish3451/0509/pull/754
+PR: https://github.com/Nishfleet/0509/pull/754
 
 ## Outcome
 
