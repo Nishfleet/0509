@@ -234,6 +234,40 @@ describe("/ads/:domain loader", () => {
     expect(result.freshForLiveClaim).toBe(true);
   });
 
+  it("withholds the live claim at the exact moments-ago boundary so the stamp and the claim never disagree", async () => {
+    // The loader computes its own `now` a moment after the fixture timestamp,
+    // so pin the snapshot directly with a fixed `now`: the live claim must
+    // flip at EXACTLY the same 2-minute boundary the "Last checked" stamp
+    // uses ("moments ago"), not one millisecond later.
+    const now = new Date("2026-08-09T12:00:00.000Z");
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({ fetchedAt: new Date(now.getTime() - 120 * 1000).toISOString() }),
+    });
+
+    const { formatBrandPageCheckedAgo, loadBrandPageCacheSnapshot } = await import(
+      "~/lib/brand-page.server"
+    );
+    const atBoundary = await loadBrandPageCacheSnapshot(mocks.env as never, {
+      domain: "nykaa.com",
+      visitorCountry: "all",
+      now,
+    });
+    const justInside = await loadBrandPageCacheSnapshot(mocks.env as never, {
+      domain: "nykaa.com",
+      visitorCountry: "all",
+      now: new Date(now.getTime() - 1),
+    });
+
+    expect(atBoundary).not.toBeNull();
+    expect(formatBrandPageCheckedAgo(atBoundary!.fetchedAt, now)).toBe("about 2 minutes ago");
+    expect(atBoundary?.freshForLiveClaim).toBe(false);
+
+    // One millisecond inside the window the stamp still says "moments ago"
+    // and the live claim is still honest — the flip is exactly at the
+    // boundary, never a whole bucket earlier.
+    expect(justInside?.freshForLiveClaim).toBe(true);
+  });
+
   it("keeps the live claim and checked-ago stamp on one post-read clock across a 2ms cache-read gap", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
