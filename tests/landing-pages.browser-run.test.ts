@@ -650,8 +650,11 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     );
 
     const pageFetches = nonDnsFetchCalls(fetch);
+    // The static fetch fails twice (bounded transient retry), then the
+    // rendered fallback runs and succeeds through Browserless.
     expect(pageFetches[0]).toEqual(["https://example.com/glow", expect.any(Object)]);
-    expect(pageFetches[1]).toEqual([
+    expect(pageFetches[1]).toEqual(["https://example.com/glow", expect.any(Object)]);
+    expect(pageFetches[2]).toEqual([
       expect.stringContaining("browserless.io/stealth/bql"),
       expect.objectContaining({
         method: "POST",
@@ -1548,9 +1551,13 @@ describe("rendered leg provider-error fidelity", () => {
     const rows = harness.sqlite
       .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
       .all() as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows[0]).toMatchObject({ actual_provider: "plain_http", outcome: "blocked" });
     expect(rows[1]).toMatchObject({
+      actual_provider: "browserless_bql",
+      outcome: "rate_limited",
+    });
+    expect(rows[2]).toMatchObject({
       actual_provider: "browserless_bql",
       outcome: "rate_limited",
     });
@@ -1584,9 +1591,13 @@ describe("rendered leg provider-error fidelity", () => {
     const rows = harness.sqlite
       .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
       .all() as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows[0]).toMatchObject({ actual_provider: "plain_http", outcome: "blocked" });
     expect(rows[1]).toMatchObject({
+      actual_provider: "browserless_bql",
+      outcome: "timeout",
+    });
+    expect(rows[2]).toMatchObject({
       actual_provider: "browserless_bql",
       outcome: "timeout",
     });
@@ -1622,8 +1633,12 @@ describe("rendered leg provider-error fidelity", () => {
     const rows = harness.sqlite
       .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
       .all() as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows[1]).toMatchObject({
+      actual_provider: "browserless_bql",
+      outcome: "rate_limited",
+    });
+    expect(rows[2]).toMatchObject({
       actual_provider: "browserless_bql",
       outcome: "rate_limited",
     });
@@ -1657,8 +1672,12 @@ describe("rendered leg provider-error fidelity", () => {
     const rows = harness.sqlite
       .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
       .all() as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows[1]).toMatchObject({
+      actual_provider: "browserless_bql",
+      outcome: "rate_limited",
+    });
+    expect(rows[2]).toMatchObject({
       actual_provider: "browserless_bql",
       outcome: "rate_limited",
     });
@@ -1727,8 +1746,12 @@ describe("rendered leg provider-error fidelity", () => {
     const rows = harness.sqlite
       .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
       .all() as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows[1]).toMatchObject({
+      actual_provider: "browserless_bql",
+      outcome: "timeout",
+    });
+    expect(rows[2]).toMatchObject({
       actual_provider: "browserless_bql",
       outcome: "timeout",
     });
@@ -1764,8 +1787,12 @@ describe("rendered leg provider-error fidelity", () => {
     const rows = harness.sqlite
       .prepare("SELECT * FROM browser_job_telemetry ORDER BY attempt ASC")
       .all() as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows[1]).toMatchObject({
+      actual_provider: "browserless_bql",
+      outcome: "failed",
+    });
+    expect(rows[2]).toMatchObject({
       actual_provider: "browserless_bql",
       outcome: "failed",
     });
@@ -1821,5 +1848,193 @@ describe("rendered-first duration origin (controlled clock)", () => {
     });
     vi.useRealTimers();
     harness.close();
+  });
+});
+describe("captureLandingPageSnapshot transient retry", () => {
+  it("retries a transient HTTP 500 once and keeps the successful retry", async () => {
+    let calls = 0;
+    mockFetchWithDns(
+      vi.fn(async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Response("boom", { status: 500 });
+        }
+        return new Response(
+          '<html><head><title>Retried page</title></head><body><a href="/buy">Buy now</a><p>$49</p></body></html>',
+          { status: 200 },
+        );
+      }) as never,
+    );
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/retry");
+
+    expect(calls).toBe(2);
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Retried page",
+      captureMethod: "landing_page_fetch",
+      metadata: expect.objectContaining({ fetchAttempts: 2 }),
+    });
+  });
+
+  it("does not retry a non-transient HTTP 403", async () => {
+    const fetch = mockFetchWithDns(
+      vi.fn(async () => new Response("blocked", { status: 403 })) as never,
+    );
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const onFailure = vi.fn();
+    await expect(
+      captureLandingPageSnapshot({}, "https://example.com/blocked", { onFailure }),
+    ).resolves.toBeNull();
+
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(1);
+    expect(onFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ reasonCode: "landing_blocked" }),
+    );
+  });
+
+  it("escalates the goto wait strategy when a JS-heavy page never reaches network idle", async () => {
+    mockFetchWithDns(
+      vi.fn(async () => {
+        throw new Error("fetch failed");
+      }) as never,
+    );
+    const page = {
+      goto: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Timeout exceeded while waiting for networkidle2"))
+        .mockResolvedValueOnce(undefined),
+      on: vi.fn(),
+      setUserAgent: vi.fn(),
+      setRequestInterception: vi.fn(),
+      setViewport: vi.fn(),
+      content: vi.fn().mockResolvedValue(
+        "<html><head><title>SPA hydrated</title></head><body><button>Book now</button><form><input name=\"email\" /></form></body></html>",
+      ),
+      screenshot: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+      url: vi.fn().mockReturnValue("https://example.com/spa"),
+    };
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch: vi.fn().mockResolvedValue(browser) },
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      { BROWSER: {} as Fetcher },
+      "https://example.com/spa",
+    );
+
+    expect(page.goto).toHaveBeenCalledTimes(2);
+    expect(page.goto).toHaveBeenNthCalledWith(
+      1,
+      "https://example.com/spa",
+      expect.objectContaining({ waitUntil: "networkidle2" }),
+    );
+    expect(page.goto).toHaveBeenNthCalledWith(
+      2,
+      "https://example.com/spa",
+      expect.objectContaining({ waitUntil: "load" }),
+    );
+    expect(snapshot).toMatchObject({
+      rawHeadline: "SPA hydrated",
+      captureMethod: "browser_render",
+      metadata: expect.objectContaining({
+        pageLoadStrategy: "load",
+        gotoAttempts: 2,
+        renderProvider: "cloudflare_browser_run",
+      }),
+    });
+  });
+
+  it("retries a transient Browserless 5xx once and succeeds on the retry", async () => {
+    let browserlessCalls = 0;
+    mockFetchWithDns(
+      vi.fn(async (input) => {
+        if (!String(input).includes("browserless.io/stealth/bql")) {
+          throw new Error("fetch failed");
+        }
+        browserlessCalls += 1;
+        if (browserlessCalls === 1) {
+          return new Response("upstream failed", { status: 500 });
+        }
+        return new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: "<html><head><title>Retried render</title></head><body><a>Claim deal</a></body></html>",
+              },
+              screenshot: { base64: btoa(String.fromCharCode(1, 2, 3)) },
+              documentRequests: [{ url: "https://www.example.com/glow" }],
+              url: { url: "https://www.example.com/glow" },
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      }) as never,
+    );
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
+      },
+      "https://example.com/glow",
+    );
+
+    expect(browserlessCalls).toBe(2);
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Retried render",
+      captureMethod: "browser_render",
+      metadata: expect.objectContaining({ renderProvider: "browserless_bql" }),
+    });
+  });
+
+  it("does not waste a Browserless retry on a permanent private canonical URL", async () => {
+    mockFetchWithDns(
+      vi.fn(async (input) => {
+        if (!String(input).includes("browserless.io/stealth/bql")) {
+          throw new Error("fetch failed");
+        }
+        return new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: "<html><head><title>Private redirect</title></head><body></body></html>",
+              },
+              documentRequests: [{ url: "https://www.example.com/glow" }],
+              url: { url: "http://127.0.0.1/private" },
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      }) as never,
+    );
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
+      },
+      "https://example.com/glow",
+    );
+
+    expect(snapshot).toBeNull();
   });
 });

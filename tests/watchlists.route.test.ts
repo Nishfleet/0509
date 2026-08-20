@@ -2445,7 +2445,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain(
       "Add your first competitor and its first check starts immediately.",
     );
-    expect(markup).toContain("See a sample brief");
+    expect(markup).toContain("See a proof brief");
     // The screen still carries exactly one filled button, and it is the
     // header's — the one thing this page exists to do.
     expect(markup).not.toContain("f9-evidence-cta--rank1");
