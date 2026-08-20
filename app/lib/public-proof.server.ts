@@ -155,7 +155,9 @@ export function buildPublicProofBrief(
 function buildSummary(ads: AdRecord[], input: { website: string; country: string }): string {
   const countryPhrase =
     input.country === "all" ? "in the Meta Ad Library" : `in the ${input.country} Ad Library`;
-  return `${ads.length} public Meta ads link to ${input.website}${countryPhrase}. Every source below opens the same page any visitor can open.`;
+  // The separator is part of the template, not the phrase: without it the
+  // live homepage brief rendered "…link to nykaa.comin the Meta Ad Library."
+  return `${ads.length} public Meta ads link to ${input.website} ${countryPhrase}. Every source below opens the same page any visitor can open.`;
 }
 
 function buildDecision(
