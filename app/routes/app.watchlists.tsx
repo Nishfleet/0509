@@ -725,7 +725,7 @@ export default function WatchlistsRoute() {
           </p>
           <div className="f9-wk-acts">
             <Link className="f9-wk-lnk" to="/#demo">
-              See a sample brief <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+              See a proof brief <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           </div>
         </section>

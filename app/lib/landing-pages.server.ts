@@ -33,6 +33,14 @@ const H1_REGEX = /<h1[^>]*>(.*?)<\/h1>/i;
 const MAX_LANDING_PAGE_REDIRECTS = 5;
 const MAX_LANDING_PAGE_HTML_BYTES = 1_000_000;
 const LANDING_PAGE_FETCH_TIMEOUT_MS = 12_000;
+/**
+ * Capture reliability: transient fetch failures (network errors, HTTP 429,
+ * and 5xx responses) are retried once before falling back to a rendered
+ * capture — a single cold request often loses to a warm one on the same
+ * page, and the whole point of the pipeline is a saved real proof.
+ */
+const MAX_LANDING_PAGE_FETCH_ATTEMPTS = 2;
+const LANDING_PAGE_FETCH_RETRY_DELAY_MS = 250;
 
 export type LandingPageCaptureFailureReasonCode =
   | "landing_url_invalid"
@@ -241,15 +249,8 @@ async function captureLandingPageSnapshotAt(
     // the same leg), so rendered-first time or any earlier work is never
     // included in the HTTP leg's recorded duration.
     telemetry.plainHttpStartedAt ??= new Date().toISOString();
-    const response = await fetchWithTimeout(
+    const { fetchAttempts, response } = await fetchLandingPageWithTransientRetry(
       resolvedUrl.toString(),
-      {
-        redirect: "manual",
-        headers: {
-          "user-agent": "0509-bot/1.0 (+https://0509.io)",
-        },
-      },
-      { timeoutMs: LANDING_PAGE_FETCH_TIMEOUT_MS },
     );
 
     if (isRedirectStatus(response.status)) {
@@ -387,6 +388,7 @@ async function captureLandingPageSnapshotAt(
       metadata: {
         captureMethod: "landing_page_fetch",
         captureWarningCodes,
+        ...(fetchAttempts > 1 ? { fetchAttempts } : {}),
         ...(looksLikeSignalEmptyShell
           ? { unreadableReasonCode: "landing_signals_not_detected" }
           : {}),
@@ -476,6 +478,53 @@ async function captureRenderedSnapshot(
     logLandingCaptureWarning("rendered_fallback_failed", error);
     return null;
   }
+}
+
+async function fetchLandingPageWithTransientRetry(
+  url: string,
+): Promise<{ fetchAttempts: number; response: Response }> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= MAX_LANDING_PAGE_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(
+        url,
+        {
+          redirect: "manual",
+          headers: {
+            "user-agent": "0509-bot/1.0 (+https://0509.io)",
+          },
+        },
+        { timeoutMs: LANDING_PAGE_FETCH_TIMEOUT_MS },
+      );
+      // Redirects are handled by the caller; only 429/5xx responses are
+      // transient. 4xx failures (blocked, not found) are never retried.
+      if (
+        attempt < MAX_LANDING_PAGE_FETCH_ATTEMPTS &&
+        !isRedirectStatus(response.status) &&
+        isTransientFetchStatus(response.status)
+      ) {
+        releaseFetchTimeout(response);
+        await sleep(LANDING_PAGE_FETCH_RETRY_DELAY_MS);
+        continue;
+      }
+      return { fetchAttempts: attempt, response };
+    } catch (error) {
+      lastError = error;
+      if (attempt >= MAX_LANDING_PAGE_FETCH_ATTEMPTS) {
+        throw error;
+      }
+      await sleep(LANDING_PAGE_FETCH_RETRY_DELAY_MS);
+    }
+  }
+  throw lastError;
+}
+
+function isTransientFetchStatus(status: number) {
+  return status === 429 || status >= 500;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isRedirectStatus(status: number) {

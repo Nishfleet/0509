@@ -47,6 +47,23 @@ const MAX_RENDERED_HTML_BYTES = 1_000_000;
 const MAX_RENDERED_SCREENSHOT_BYTES = 3_000_000;
 const MAX_BROWSERLESS_RESPONSE_BYTES = 6_000_000;
 const BROWSERLESS_PROOF_TIMEOUT_MS = 30_000;
+/**
+ * JS-heavy pages (SPAs, long-polling, chat widgets) often never reach
+ * network idle. The first goto attempt uses networkidle2; on failure the
+ * capture retries with `load` so a readable rendered proof is still saved.
+ * Bounded: two strategies, never more.
+ */
+const BROWSER_RUN_GOTO_STRATEGIES = [
+  { waitUntil: "networkidle2" as const, timeoutMs: 30_000 },
+  { waitUntil: "load" as const, timeoutMs: 20_000 },
+];
+/** Retry budget for transient Browserless failures (2 attempts total). */
+const MAX_BROWSERLESS_PROOF_RETRIES = 1;
+const BROWSERLESS_RETRY_DELAY_MS = 300;
+/** Retry budget for Browser Run Quick Action calls (2 attempts total). */
+const QUICK_ACTION_MAX_ATTEMPTS = 2;
+const QUICK_ACTION_RETRY_MAX_DELAY_MS = 1_000;
+const QUICK_ACTION_RETRY_DELAY_MS = 250;
 const BROWSER_RUN_QUICK_ACTION_TIMEOUT_MS = 30_000;
 const BROWSER_RUN_QUICK_ACTION_JSON_MAX_BYTES = 6_000_000;
 const DEFAULT_BROWSERLESS_PROOF_ALLOWED_ORIGINS = new Set([
@@ -320,10 +337,10 @@ export async function captureBrowserRunSnapshot(
     await installPublicBrowserRequestGuard(page);
     await page.setUserAgent(MOBILE_USER_AGENT);
     await page.setViewport(MOBILE_VIEWPORT);
-    await page.goto(targetUrl, {
-      waitUntil: "networkidle2",
-      timeout: 30_000,
-    });
+    const { pageLoadStrategy, gotoAttempts } = await gotoWithEscalatingWaitStrategy(
+      page,
+      targetUrl,
+    );
 
     const html = await page.content();
     if (utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES) {
@@ -356,6 +373,8 @@ export async function captureBrowserRunSnapshot(
       provider: "cloudflare_browser_run",
       persistArtifacts: options.persistArtifacts,
       captureWarningCodes,
+      pageLoadStrategy,
+      gotoAttempts,
     });
     if (!snapshot) {
       await recordRun("failed", {
@@ -512,6 +531,62 @@ export async function captureBrowserlessProofSnapshot(
   };
 
   const targetUrl = publicUrl.toString();
+  for (let attempt = 1; attempt <= MAX_BROWSERLESS_PROOF_RETRIES + 1; attempt += 1) {
+    try {
+      const { snapshot, retryable } = await attemptBrowserlessProofSnapshot(
+        env,
+        targetUrl,
+        options,
+        recordRun,
+      );
+      if (snapshot) {
+        return snapshot;
+      }
+      // Permanent validation failures (non-public canonical URL, blocked
+      // document requests) are never retried — they would waste a paid call.
+      if (!retryable || attempt > MAX_BROWSERLESS_PROOF_RETRIES) {
+        return null;
+      }
+    } catch (error) {
+      logRenderedCaptureWarning("browserless_render_failed", error);
+      if (attempt > MAX_BROWSERLESS_PROOF_RETRIES) {
+        return null;
+      }
+    }
+    await sleep(BROWSERLESS_RETRY_DELAY_MS);
+  }
+  return null;
+}
+
+type BrowserlessProofPayload = {
+  data?: {
+    html?: {
+      html?: string;
+    };
+        screenshot?: {
+          base64?: string;
+        };
+        documentRequests?: Array<{
+          url?: string;
+        }>;
+        url?: {
+          url?: string;
+        };
+  };
+} | null;
+
+async function attemptBrowserlessProofSnapshot(
+  env: AppEnv,
+  targetUrl: string,
+  options: RenderedCaptureOptions,
+  recordRun: (
+    outcome: RenderedLegOutcome,
+    metadata?: { reason?: string; captureWarningCodes?: string[] },
+  ) => Promise<unknown>,
+): Promise<{
+  snapshot: LandingPageSnapshotData | null;
+  retryable: boolean;
+}> {
   try {
     const response = await fetchWithTimeout(
       buildBrowserlessBqlEndpoint(env),
@@ -537,34 +612,26 @@ export async function captureBrowserlessProofSnapshot(
     // body row. Other error statuses stay `failed` with a bounded reason.
     if (!response.ok) {
       releaseFetchTimeout(response);
-      await recordRun(classifyProviderHttpOutcome(response.status), {
+      const outcome = classifyProviderHttpOutcome(response.status);
+      await recordRun(outcome, {
         reason: "provider_http_error",
       });
-      return null;
+      // Only HTTP 429/5xx provider responses are transient and worth a
+      // bounded retry; other HTTP errors are permanent.
+      return { snapshot: null, retryable: isTransientHttpStatus(response.status) };
     }
     const responseText = await readResponseTextWithinLimit(response, MAX_BROWSERLESS_RESPONSE_BYTES);
     if (!responseText) {
       await recordRun("failed", { reason: "empty_response" });
-      return null;
+      return { snapshot: null, retryable: true };
     }
-    const payload = (JSON.parse(responseText) as
-      | {
-          data?: {
-            html?: {
-              html?: string;
-            };
-	            screenshot?: {
-	              base64?: string;
-	            };
-	            documentRequests?: Array<{
-	              url?: string;
-	            }>;
-	            url?: {
-	              url?: string;
-	            };
-          };
-        }
-      | null) ?? null;
+    let payload: BrowserlessProofPayload = null;
+    try {
+      payload = JSON.parse(responseText) as BrowserlessProofPayload;
+    } catch {
+      await recordRun("failed", { reason: "malformed_response" });
+      return { snapshot: null, retryable: true };
+    }
 
     const html = payload?.data?.html?.html ?? "";
     const screenshotBase64 = payload?.data?.screenshot?.base64 ?? "";
@@ -591,7 +658,7 @@ export async function captureBrowserlessProofSnapshot(
             ? "non_public_document_request"
             : "html_missing_or_oversized",
       });
-      return null;
+      return { snapshot: null, retryable: false };
     }
     const captureWarningCodes: string[] = [];
     let screenshot: Uint8Array | null = null;
@@ -622,19 +689,31 @@ export async function captureBrowserlessProofSnapshot(
         reason: "snapshot_unusable",
         captureWarningCodes,
       });
-      return null;
+      return { snapshot: null, retryable: false };
     }
     await recordRun("succeeded", { captureWarningCodes });
-    return snapshot;
+    return { snapshot, retryable: false };
   } catch (error) {
     logRenderedCaptureWarning("browserless_render_failed", error);
     // Truthful attribution: a bounded provider timeout (fetch abort or
     // PromiseTimeout) is `timeout` and a provider 429/rate-limit is
     // `rate_limited`; only other errors are `failed`. Customer-visible
     // behavior (returning null so the chain falls back) never changes.
-    await recordRun(classifyRenderedLegError(error), { reason: "browserless_render_failed" });
-    return null;
+    const outcome = classifyRenderedLegError(error);
+    await recordRun(outcome, { reason: "browserless_render_failed" });
+    // A thrown provider failure (network abort, timeout, rate-limit) is
+    // transient and worth a single bounded retry; the wrapper caps attempts
+    // so a paid call is never wasted on repeated deterministic failures.
+    return { snapshot: null, retryable: true };
   }
+}
+
+function isTransientHttpStatus(status: number) {
+  return status === 429 || status >= 500;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function captureBrowserRunQuickActionContent(
@@ -649,42 +728,23 @@ export async function captureBrowserRunQuickActionContent(
     return null;
   }
 
-  let response: Response;
-  try {
-    response = await fetchWithTimeout(
-      `https://api.cloudflare.com/client/v4/accounts/${env.BROWSER_RUN_ACCOUNT_ID.trim()}/browser-rendering/content?cacheTTL=0`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ ...options, url: publicUrl.toString() }),
-      },
-      { timeoutMs: BROWSER_RUN_QUICK_ACTION_TIMEOUT_MS },
-    );
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw buildBrowserRunQuickActionTimeoutError();
-    }
-    throw error;
-  }
-  const payload = await readResponseJsonWithinLimit<BrowserRunQuickActionEnvelope<string>>(
-    response,
-    BROWSER_RUN_QUICK_ACTION_JSON_MAX_BYTES,
+  return fetchQuickActionWithRetry(
+    env,
+    `https://api.cloudflare.com/client/v4/accounts/${env.BROWSER_RUN_ACCOUNT_ID.trim()}/browser-rendering/content?cacheTTL=0`,
+    { ...options, url: publicUrl.toString() },
+    (response, payload) => {
+      if (response.ok && !payload) {
+        throw buildBrowserRunQuickActionTimeoutError();
+      }
+      if (!response.ok || !payload?.success || typeof payload.result !== "string") {
+        throw buildBrowserRunQuickActionError(response, payload);
+      }
+      return {
+        browserMsUsed: parseBrowserMsUsedHeader(response.headers.get("X-Browser-Ms-Used")),
+        content: payload.result,
+      };
+    },
   );
-
-  if (response.ok && !payload) {
-    throw buildBrowserRunQuickActionTimeoutError();
-  }
-  if (!response.ok || !payload?.success || typeof payload.result !== "string") {
-    throw buildBrowserRunQuickActionError(response, payload);
-  }
-
-  return {
-    browserMsUsed: parseBrowserMsUsedHeader(response.headers.get("X-Browser-Ms-Used")),
-    content: payload.result,
-  };
 }
 
 export async function captureBrowserRunQuickActionScrape(
@@ -699,41 +759,120 @@ export async function captureBrowserRunQuickActionScrape(
     return null;
   }
 
-  let response: Response;
-  try {
-    response = await fetchWithTimeout(
-      `https://api.cloudflare.com/client/v4/accounts/${env.BROWSER_RUN_ACCOUNT_ID.trim()}/browser-rendering/scrape?cacheTTL=0`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ ...options, url: publicUrl.toString() }),
-      },
-      { timeoutMs: BROWSER_RUN_QUICK_ACTION_TIMEOUT_MS },
-    );
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw buildBrowserRunQuickActionTimeoutError();
+  return fetchQuickActionWithRetry(
+    env,
+    `https://api.cloudflare.com/client/v4/accounts/${env.BROWSER_RUN_ACCOUNT_ID.trim()}/browser-rendering/scrape?cacheTTL=0`,
+    { ...options, url: publicUrl.toString() },
+    (response, payload) => {
+      if (response.ok && !payload) {
+        throw buildBrowserRunQuickActionTimeoutError();
+      }
+      if (!response.ok || !payload?.success || !Array.isArray(payload.result)) {
+        throw buildBrowserRunQuickActionError(response, payload);
+      }
+      return {
+        browserMsUsed: parseBrowserMsUsedHeader(response.headers.get("X-Browser-Ms-Used")),
+        elements: payload.result.flatMap((entry) => normalizeScrapeResults(entry.results)),
+      };
+    },
+  );
+}
+
+/**
+ * Bounded retry for Browser Run Quick Action calls. Transient failures
+ * (429 rate limits, timeouts, 5xx, network errors) are retried once with a
+ * short bounded backoff that honors Retry-After without ever waiting long.
+ * The final error is preserved so callers can classify it honestly.
+ */
+async function fetchQuickActionWithRetry<TPayload, TResult>(
+  env: {
+    BROWSER_RUN_ACCOUNT_ID: string;
+    BROWSER_RUN_API_TOKEN: string;
+  },
+  endpoint: string,
+  body: unknown,
+  onResolved: (
+    response: Response,
+    payload: BrowserRunQuickActionEnvelope<TPayload> | null,
+  ) => TResult,
+): Promise<TResult> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= QUICK_ACTION_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      let response: Response;
+      try {
+        response = await fetchWithTimeout(
+          endpoint,
+          {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify(body),
+          },
+          { timeoutMs: BROWSER_RUN_QUICK_ACTION_TIMEOUT_MS },
+        );
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw buildBrowserRunQuickActionTimeoutError();
+        }
+        throw error;
+      }
+      const payload = await readResponseJsonWithinLimit<
+        BrowserRunQuickActionEnvelope<TPayload>
+      >(response, BROWSER_RUN_QUICK_ACTION_JSON_MAX_BYTES);
+
+      return onResolved(response, payload);
+    } catch (error) {
+      lastError = error;
+      if (!isQuickActionRetryable(error) || attempt >= QUICK_ACTION_MAX_ATTEMPTS) {
+        throw error;
+      }
+      const retryAfterMs =
+        error instanceof BrowserRunQuickActionError &&
+        error.retryAfterSeconds &&
+        error.retryAfterSeconds > 0
+          ? Math.min(error.retryAfterSeconds * 1000, QUICK_ACTION_RETRY_MAX_DELAY_MS)
+          : QUICK_ACTION_RETRY_DELAY_MS;
+      await sleep(retryAfterMs);
     }
-    throw error;
   }
-  const payload = await readResponseJsonWithinLimit<
-    BrowserRunQuickActionEnvelope<BrowserRunQuickActionScrapeResult[]>
-  >(response, BROWSER_RUN_QUICK_ACTION_JSON_MAX_BYTES);
+  throw lastError;
+}
 
-  if (response.ok && !payload) {
-    throw buildBrowserRunQuickActionTimeoutError();
+function isQuickActionRetryable(error: unknown) {
+  if (error instanceof BrowserRunQuickActionError) {
+    return error.status === 429 || error.status === 408 || error.status >= 500;
   }
-  if (!response.ok || !payload?.success || !Array.isArray(payload.result)) {
-    throw buildBrowserRunQuickActionError(response, payload);
-  }
+  return false;
+}
 
-  return {
-    browserMsUsed: parseBrowserMsUsedHeader(response.headers.get("X-Browser-Ms-Used")),
-    elements: payload.result.flatMap((entry) => normalizeScrapeResults(entry.results)),
-  };
+/**
+ * Navigate to a possibly JS-heavy page, escalating the wait strategy on
+ * failure. networkidle2 can hang forever on long-polling/chat/analytics
+ * pages; the second attempt uses `load`, which settles once the document
+ * loads. Returns which strategy succeeded and how many attempts were used.
+ */
+async function gotoWithEscalatingWaitStrategy(page: BrowserRunPage, targetUrl: string) {
+  let pageLoadStrategy: "networkidle2" | "load" = "networkidle2";
+  for (let attempt = 1; attempt <= BROWSER_RUN_GOTO_STRATEGIES.length; attempt += 1) {
+    const strategy = BROWSER_RUN_GOTO_STRATEGIES[attempt - 1];
+    try {
+      await page.goto(targetUrl, {
+        waitUntil: strategy.waitUntil,
+        timeout: strategy.timeoutMs,
+      });
+      pageLoadStrategy = strategy.waitUntil;
+      return { pageLoadStrategy, gotoAttempts: attempt };
+    } catch (error) {
+      if (attempt >= BROWSER_RUN_GOTO_STRATEGIES.length) {
+        throw error;
+      }
+      logRenderedCaptureWarning("browser_goto_retry", error);
+    }
+  }
+  return { pageLoadStrategy, gotoAttempts: BROWSER_RUN_GOTO_STRATEGIES.length };
 }
 
 async function buildBrowserRenderedSnapshot(
@@ -746,6 +885,8 @@ async function buildBrowserRenderedSnapshot(
     persistArtifacts?: boolean;
     screenshot: Uint8Array | ArrayBuffer | Buffer | null;
     captureWarningCodes?: string[];
+    pageLoadStrategy?: "networkidle2" | "load";
+    gotoAttempts?: number;
   },
 ): Promise<LandingPageSnapshotData | null> {
   const html = input.html;
@@ -805,6 +946,10 @@ async function buildBrowserRenderedSnapshot(
         renderMode: MOBILE_RENDER_MODE,
         deviceProfile: MOBILE_DEVICE_PROFILE,
         renderProvider: input.provider,
+        pageLoadStrategy: input.pageLoadStrategy,
+        ...(input.gotoAttempts && input.gotoAttempts > 1
+          ? { gotoAttempts: input.gotoAttempts }
+          : {}),
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         extractionWarnings: buildExtractionWarnings({
           headline,

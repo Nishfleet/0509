@@ -45,8 +45,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("Presence Desk: website/open-web is the active GA source");
     expect(PUBLIC_MARKDOWN).toContain("verified access paths");
     expect(PUBLIC_MARKDOWN).toContain("visible plan caps");
-    expect(PUBLIC_MARKDOWN).toContain("Public read-only search and a sample brief are buyer-evaluation paths before signup");
-    expect(PUBLIC_MARKDOWN).toContain("Public brief previews are sample-only");
+    expect(PUBLIC_MARKDOWN).toContain("Public read-only search and the proof brief are buyer-evaluation paths before signup");
+    expect(PUBLIC_MARKDOWN).toContain("The public proof brief renders real cached captures");
     expect(PUBLIC_MARKDOWN).toContain("exports support CSV and JSON export");
     expect(PUBLIC_MARKDOWN).toContain("Customer-facing views lead with what changed");
     expect(PUBLIC_MARKDOWN).toContain("Watchlist and digest CSV exports include decision fields");
@@ -70,7 +70,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Manual external evidence links can store user-supplied visible spend, impression, and reach values");
     expect(PUBLIC_MARKDOWN).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
     expect(PUBLIC_MARKDOWN).toContain("Starter is the recommended plan");
-    expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and sample brief");
+    expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and proof brief");
     expect(PUBLIC_MARKDOWN).toContain("6-hour scans, weekly Digest, and 50 proof captures/month");
     expect(PUBLIC_MARKDOWN).toContain("3-hour scans, daily and weekly Digests, email Notifications, exports, and 250 proof captures/month");
     expect(PUBLIC_MARKDOWN).toContain(
@@ -93,8 +93,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("Recent results must not be described as fresh live results");
     expect(LLMS_TEXT).toContain("Customer-facing views lead with what changed");
     expect(LLMS_TEXT).toContain("Watchlist and digest CSV exports include priority");
-    expect(LLMS_TEXT).toContain("Public read-only search is a buyer-evaluation path");
-    expect(LLMS_TEXT).toContain("sample brief previews are sample-only");
+    expect(LLMS_TEXT).toContain("Public read-only search and the proof brief are buyer-evaluation paths");
+    expect(LLMS_TEXT).toContain("the proof brief renders real cached captures");
     expect(LLMS_TEXT).toContain("Public read-only analysis preview");
     expect(LLMS_TEXT).toContain("Signed-in saved analysis");
     expect(LLMS_TEXT).toContain("user-supplied metric context");

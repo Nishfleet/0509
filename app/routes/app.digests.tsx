@@ -530,7 +530,7 @@ export default function DigestsRoute() {
             when something moved, or an honest all-quiet line when it did not.
           </p>
           <Link className="f9-wk-lnk" to="/#demo">
-            See a sample brief <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+            See a proof brief <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
           </Link>
         </section>
       )}
