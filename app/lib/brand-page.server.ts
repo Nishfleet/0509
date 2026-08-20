@@ -34,9 +34,12 @@ import {
 import type { AppEnv } from "~/lib/env.server";
 import { fingerprintSavedQuery, normalizeSavedQuery, parseSearchParams } from "~/lib/normalize";
 import {
+  comparableHostname,
+  hostnamesMatchDomainIntent,
   parseSearchInputFromWebsiteField,
   registrableDomainFromHostname,
 } from "~/lib/search-query";
+import { isVerifiedDomainMatchLevel, type DomainMatchLevel } from "~/lib/search-domain-match.server";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { buildSearchV2CacheKey, buildSearchV2SavedQuery } from "~/lib/search-v2.server";
 import type { AdRecord } from "~/lib/types";
@@ -71,6 +74,44 @@ export interface BrandPageDomain {
   domain: string;
   /** Title-cased brand label, e.g. "Nykaa". */
   displayName: string;
+}
+
+/**
+ * RFC 2606 / RFC 6761 reserved names can never be real competitor websites,
+ * yet generic public-suffix parsing treats `example.com` as an ordinary
+ * registrable domain. Accepting them here would let a /ads/:domain page
+ * attribute real Meta ads to a name that owns nothing (the Ad Library keyword
+ * search matches ads whose TEXT merely contains the reserved string, e.g.
+ * placeholder "example.com" copy). Reserved names 404 like any other
+ * non-domain, so no public page can ever claim ads point at them.
+ */
+const RESERVED_BRAND_PAGE_TLDS = new Set([
+  "example",
+  "invalid",
+  "localhost",
+  "test",
+  "local",
+]);
+const RESERVED_BRAND_PAGE_REGISTRABLES = new Set([
+  "example.com",
+  "example.net",
+  "example.org",
+]);
+
+export function isReservedBrandPageDomain(host: string): boolean {
+  const normalized = host.trim().toLowerCase();
+  const parts = normalized.split(".");
+  const topLevel = parts[parts.length - 1] ?? "";
+  if (RESERVED_BRAND_PAGE_TLDS.has(topLevel)) {
+    return true;
+  }
+  if (parts.length >= 2) {
+    const registrable = parts.slice(-2).join(".");
+    if (RESERVED_BRAND_PAGE_REGISTRABLES.has(registrable)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export interface BrandPageCacheSnapshot {
@@ -111,6 +152,9 @@ export function normalizeBrandPageDomain(param: string | undefined): BrandPageDo
     return null;
   }
   if (!BRAND_PAGE_DOMAIN_PATTERN.test(raw) || raw.includes("..")) {
+    return null;
+  }
+  if (isReservedBrandPageDomain(raw)) {
     return null;
   }
 
@@ -255,6 +299,66 @@ export function adIsBrandOwned(ad: AdRecord, brandDomain: string): boolean {
 /** How many of the cached creatives are ads the brand itself runs. */
 export function countBrandOwnedAds(ads: AdRecord[], brandDomain: string): number {
   return ads.filter((ad) => adIsBrandOwned(ad, brandDomain)).length;
+}
+
+/**
+ * Does this creative actually LINK to the searched domain? The public brand
+ * page may only say ads "point at" / "link to" / "are running for" {domain}
+ * when the capture carries verified link evidence. Two sources of proof:
+ *
+ *  1. The search-v2 pipeline's persisted `domainMatch` verdict — any VERIFIED
+ *     level (`exact_hostname`, `registrable_domain`, `verified_alias`,
+ *     `verified_advertiser_domain`, `verified_entity`) proves a connection;
+ *     `unverified_text_candidate` ("mentions {domain} in ad text only") and
+ *     `unverified_provider_candidate` (returned by the provider query) do NOT
+ *     — the creative may merely CONTAIN the searched string without linking.
+ *  2. A landing-page URL whose hostname (or registrable domain) matches the
+ *     searched domain — the same evidence the classifier uses for
+ *     `exact_hostname` / `registrable_domain` (covers captures persisted
+ *     before the domainMatch epoch).
+ *
+ * Anything else — text-only matches, blank landing pages, provider-returned
+ * candidates — is NOT a verified link, so the page describes it as
+ * "matching the search" instead of "linking to" the domain.
+ */
+export function adHasVerifiedDomainLink(
+  ad: AdRecord,
+  brandDomain: string,
+): boolean {
+  const matchLevel = ad.domainMatch?.level;
+  if (matchLevel && isVerifiedDomainMatchLevel(matchLevel as DomainMatchLevel)) {
+    return true;
+  }
+
+  const landingHost = extractHostname(ad.landingPageUrl);
+  if (!landingHost) {
+    return false;
+  }
+  return hostnamesMatchDomainIntent(landingHost, {
+    hostname: brandDomain,
+    comparableHostname: comparableHostname(brandDomain),
+    registrableDomain: registrableDomainFromHostname(brandDomain),
+  });
+}
+
+/** How many cached creatives carry verified link evidence to the domain. */
+export function countVerifiedLinkedAds(ads: AdRecord[], brandDomain: string): number {
+  return ads.filter((ad) => adHasVerifiedDomainLink(ad, brandDomain)).length;
+}
+
+function extractHostname(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    return url.hostname.trim().toLowerCase().replace(/\.$/, "");
+  } catch {
+    return null;
+  }
 }
 
 /** Whole-word (case-insensitive) containment: "Nykaa" matches "Nykaa Fashion", not "Nykaam". */

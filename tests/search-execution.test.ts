@@ -433,3 +433,57 @@ describe("search observability privacy", () => {
     expect(JSON.stringify(event)).not.toContain("private-competitor.example");
   });
 });
+
+describe("plan-tier propagation into discovery telemetry", () => {
+  it("carries the resolved plan family into every resolver call", async () => {
+    const legacyResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser" as const,
+      provider: "meta_library_browser" as const,
+      cacheStatus: "hit" as const,
+      discoveryStatus: "healthy" as const,
+    };
+    searchAdsViaSourceResolver
+      .mockResolvedValueOnce(legacyResult)
+      .mockResolvedValueOnce({ ...legacyResult, cacheStatus: "miss" as const });
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const waitUntil = vi.fn();
+    const { executeSearchWithRelevance } = await import("~/lib/search-execution.server");
+
+    await executeSearchWithRelevance({
+      env: { SEARCH_ROLLOUT_MODE: "shadow" } as never,
+      competitorWebsite: {
+        raw: "https://www.nykaa.com",
+        normalizedUrl: "https://nykaa.com",
+        host: "nykaa.com",
+        displayName: "Nykaa",
+        searchTerm: "nykaa.com",
+        error: null,
+      },
+      parsed: {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa.com",
+          country: "all",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+        fingerprint: "legacy-fingerprint",
+      },
+      scope: "exact",
+      cursor: null,
+      planTier: "agency",
+      executionContext: { waitUntil } as never,
+    });
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledTimes(2);
+    for (const call of searchAdsViaSourceResolver.mock.calls) {
+      expect(call[3]).toMatchObject({ planTier: "agency" });
+    }
+    info.mockRestore();
+  });
+});

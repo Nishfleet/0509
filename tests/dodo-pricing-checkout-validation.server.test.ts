@@ -14,6 +14,123 @@ function jsonResponse(payload: unknown, init: ResponseInit = {}) {
 }
 
 describe("Dodo 0509 checkout pricing validation", () => {
+  it("accepts adaptive-currency rounding in the 4-months-free annual validation", async () => {
+    // Live Dodo previews in adaptive currencies (observed 2026-08-11 in EUR)
+    // compute the annual tax-inclusive total per line, so the annual amount
+    // can differ from monthly x 8 by 1-2 minor units of conversion rounding
+    // (908 x 8 = 7264 vs an annual total of 7262). That must still validate
+    // as "4 months free"; only meaningful drift (e.g. 8x + a real amount)
+    // must fail closed.
+    const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body ?? "{}"));
+      const productId = body.product_cart?.[0]?.product_id;
+      const amounts: Record<string, number> = {
+        prod_scout_monthly: 908,
+        prod_scout_yearly: 7262,
+      };
+      const amount = amounts[productId] ?? 0;
+      return jsonResponse({
+        currency: "EUR",
+        billing_country: "DE",
+        current_breakup: {
+          total_amount: amount,
+        },
+        product_cart: [
+          {
+            product_id: productId,
+            is_subscription: true,
+            discounted_price: amount,
+            tax_inclusive: true,
+          },
+        ],
+        total_tax: 0,
+      });
+    });
+    const env = {
+      DODO_0509_API_KEY: "secret",
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_ENVIRONMENT: "test",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      DODO_0509_PRODUCT_SCOUT_YEARLY_ID: "prod_scout_yearly",
+    };
+    const request = new Request("https://0509.io/", {
+      headers: { "cf-ipcountry": "DE" },
+    });
+
+    const preview = await previewDodo0509PlanPrices({
+      env,
+      request,
+      fetcher: fetcher as never,
+      bypassCache: true,
+    });
+
+    expect(preview.annualValidation.scout).toMatchObject({
+      valid: true,
+      reason: "valid_4_months_free",
+      monthlyAmount: 908,
+      annualAmount: 7262,
+      expectedAnnualAmount: 7264,
+      currency: "EUR",
+      billingCountry: "DE",
+    });
+  });
+
+  it("still fails the 4-months-free annual validation on meaningful drift", async () => {
+    // Annual = 8x monthly plus a real amount (one extra month) must stay
+    // invalid: the rounding allowance is tiny and cannot mask a mispriced
+    // annual SKU.
+    const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body ?? "{}"));
+      const productId = body.product_cart?.[0]?.product_id;
+      const amounts: Record<string, number> = {
+        prod_scout_monthly: 908,
+        prod_scout_yearly: 8180,
+      };
+      const amount = amounts[productId] ?? 0;
+      return jsonResponse({
+        currency: "EUR",
+        billing_country: "DE",
+        current_breakup: {
+          total_amount: amount,
+        },
+        product_cart: [
+          {
+            product_id: productId,
+            is_subscription: true,
+            discounted_price: amount,
+            tax_inclusive: true,
+          },
+        ],
+        total_tax: 0,
+      });
+    });
+    const env = {
+      DODO_0509_API_KEY: "secret",
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_ENVIRONMENT: "test",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      DODO_0509_PRODUCT_SCOUT_YEARLY_ID: "prod_scout_yearly",
+    };
+    const request = new Request("https://0509.io/", {
+      headers: { "cf-ipcountry": "DE" },
+    });
+
+    const preview = await previewDodo0509PlanPrices({
+      env,
+      request,
+      fetcher: fetcher as never,
+      bypassCache: true,
+    });
+
+    expect(preview.annualValidation.scout).toMatchObject({
+      valid: false,
+      reason: "amount_mismatch",
+      monthlyAmount: 908,
+      annualAmount: 8180,
+      expectedAnnualAmount: 7264,
+    });
+  });
+
   it("validates annual savings against product price, not tax-inclusive checkout totals", async () => {
     const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body ?? "{}"));

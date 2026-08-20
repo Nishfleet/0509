@@ -8,6 +8,7 @@ import {
   upsertAd,
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
+import type { BrowserJobPlanTier } from "~/lib/browser-job-telemetry.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 import {
   buildTranslatedAnalysisField,
@@ -26,6 +27,11 @@ export type PrepareSearchResultSelectionOptions = {
    * Tests and non-Worker callers omit this and keep the synchronous path.
    */
   waitUntil?: (promise: Promise<unknown>) => void;
+  /**
+   * Resolved plan family of the signed-in actor, recorded on the
+   * selection-enrichment landing telemetry rows. Anonymous visitors omit it.
+   */
+  planTier?: BrowserJobPlanTier | null;
 };
 
 /** FIX-13: prevent a revalidation from scheduling a second enrichment while one runs. */
@@ -99,7 +105,7 @@ export async function prepareSearchResultSelection(
       selectionEnrichmentPending = true;
       if (claimed) {
         options.waitUntil(
-          enrichAndPersistSelectedAd(env, selectedAdBase, providerResultIsFresh)
+          enrichAndPersistSelectedAd(env, selectedAdBase, providerResultIsFresh, options.planTier ?? null)
             .catch((error) => {
               // Background enrichment must never throw into the Worker isolate.
               console.warn(
@@ -120,6 +126,7 @@ export async function prepareSearchResultSelection(
         env,
         selectedAdBase,
         providerResultIsFresh,
+        options.planTier ?? null,
       );
     }
     // When needsWork is false, hydrated/persisted evidence already filled the
@@ -140,6 +147,7 @@ async function enrichAndPersistSelectedAd(
   env: AppEnv,
   selectedAdBase: AdRecord,
   providerResultIsFresh: boolean,
+  planTier: BrowserJobPlanTier | null = null,
 ): Promise<AdRecord> {
   const creativeSourceUrl =
     selectedAdBase.adSnapshotUrl?.trim() ||
@@ -164,6 +172,8 @@ async function enrichAndPersistSelectedAd(
     selectedAdBase.landingPageUrl && !selectedAdBase.landingPage
       ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl, {
           persistArtifacts: Boolean(env.DB),
+          routeContext: "selection_enrichment",
+          planTier,
         })
       : Promise.resolve(selectedAdBase.landingPage ?? null),
     creativeCapturePromise,
