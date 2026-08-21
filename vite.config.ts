@@ -8,6 +8,19 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import { resolveLocalReleaseCloudflareInspectorPort } from "./scripts/local-release-server.mjs";
 
 const require = createRequire(import.meta.url);
+
+// Vitest only defaults NODE_ENV to "test" when it is unset (`NODE_ENV ??=` in
+// prepareVitest), so an inherited NODE_ENV=production survives into config
+// evaluation and vite's environment setup in the main process — the
+// `test.env` pin below only reaches the pool workers. Two failures follow:
+// react@19.2.8 resolves its production build, whose `act` export is undefined
+// ("act is not a function"), and happy-dom suites that import `node:*`
+// modules get them browser-externalized by vite's client environment
+// ("No such built-in module: node:"). Normalize it for vitest processes only;
+// dev/build/preview never set VITEST and are untouched.
+if (process.env.VITEST === "true") {
+  process.env.NODE_ENV = "test";
+}
 const reactRouterDevRoot = path.dirname(require.resolve("@react-router/dev/package.json"));
 const e2ePersistPath = process.env.E2E_PERSIST_PATH ?? ".wrangler/e2e-state";
 const isE2ETestMode = String(process.env.E2E_TEST_MODE) === "1";
