@@ -355,6 +355,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       cloudflare?.ctx,
     );
     if (rateLimitResponse) {
+      const { emitFunnelSearchError } = await import("~/lib/funnel-measurement.server");
+      emitFunnelSearchError(env, request, "rate_limited");
       // Anonymous throttling is a normal, recoverable product state, not an
       // internal failure: throw an explicit in-product 429 document whose
       // body names the limit and the recovery path, and keep the limiter's
@@ -500,47 +502,65 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const useSearchV2 =
     Boolean(competitorWebsite.raw) &&
     (shouldApplySearchV2(env) || shouldRunSearchV2Shadow(env));
-  const searchExecution = useSearchV2
-    ? await executeSearchWithRelevance({
-        env,
-        competitorWebsite,
-        parsed,
-        scope: searchScope,
-        cursor: url.searchParams.get("after"),
-        forceLive,
-        customerMetaAdLibraryToken,
-        executionContext: cloudflare?.ctx,
-        hydratePersisted: Boolean(session),
-        // Optional attribution: only attach the plan tier when the caller
-        // actually resolved one; anonymous searches omit it so the call
-        // contract that existing callers assert stays unchanged.
-        ...(plan ? { planTier: plan } : {}),
-      })
-    : {
-        result: await (
-          await import("~/lib/ad-source.server")
-        ).searchAdsViaSourceResolver(
+  const { emitFunnelSearchSubmit, emitFunnelSearchResult, emitFunnelSearchError, funnelErrorKindFromUnknown } =
+    await import("~/lib/funnel-measurement.server");
+  // Submit counts a fresh query only — never an ad-selection reload or a
+  // pagination step, each of which reruns this loader for the same search.
+  const isSelectionReload = url.searchParams.has("selected");
+  const isPaginationStep = Boolean(url.searchParams.get("after"));
+  if (!isSelectionReload && !isPaginationStep) {
+    emitFunnelSearchSubmit(env, request);
+  }
+
+  let searchExecution;
+  try {
+    searchExecution = useSearchV2
+      ? await executeSearchWithRelevance({
           env,
-          normalizeSavedQuery(parsed.mode, parsed.filters),
-          url.searchParams.get("after"),
-          {
-            purpose: "public_search",
-            forceLive,
-            // Cold path: an uncached first query returns the warming state
-            // immediately and the browser capture finishes via waitUntil.
-            executionContext: cloudflare?.ctx ?? null,
-            // Optional attribution: omit when no plan tier was resolved.
-            ...(plan ? { planTier: plan } : {}),
-            ...(customerMetaAdLibraryToken
-              ? { customerMetaAdLibraryToken }
-              : {}),
-          },
-        ),
-        query: normalizeSavedQuery(parsed.mode, parsed.filters),
-        searchScope,
-        displayDomain: competitorWebsite.host,
-        relevanceApplied: false,
-      };
+          competitorWebsite,
+          parsed,
+          scope: searchScope,
+          cursor: url.searchParams.get("after"),
+          forceLive,
+          customerMetaAdLibraryToken,
+          executionContext: cloudflare?.ctx,
+          hydratePersisted: Boolean(session),
+          // Optional attribution: only attach the plan tier when the caller
+          // actually resolved one; anonymous searches omit it so the call
+          // contract that existing callers assert stays unchanged.
+          ...(plan ? { planTier: plan } : {}),
+        })
+      : {
+          result: await (
+            await import("~/lib/ad-source.server")
+          ).searchAdsViaSourceResolver(
+            env,
+            normalizeSavedQuery(parsed.mode, parsed.filters),
+            url.searchParams.get("after"),
+            {
+              purpose: "public_search",
+              forceLive,
+              // Cold path: an uncached first query returns the warming state
+              // immediately and the browser capture finishes via waitUntil.
+              executionContext: cloudflare?.ctx ?? null,
+              // Optional attribution: omit when no plan tier was resolved.
+              ...(plan ? { planTier: plan } : {}),
+              ...(customerMetaAdLibraryToken
+                ? { customerMetaAdLibraryToken }
+                : {}),
+            },
+          ),
+          query: normalizeSavedQuery(parsed.mode, parsed.filters),
+          searchScope,
+          displayDomain: competitorWebsite.host,
+          relevanceApplied: false,
+        };
+  } catch (error) {
+    // Coarse request-scoped failure record only; the search failure itself is
+    // rethrown unchanged so the existing error UX owns the response.
+    emitFunnelSearchError(env, request, funnelErrorKindFromUnknown(error));
+    throw error;
+  }
 
   const waitUntil = cloudflare?.ctx?.waitUntil?.bind(cloudflare?.ctx);
   const {
@@ -560,6 +580,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       ...(typeof waitUntil === "function" ? { waitUntil } : {}),
     },
   );
+
+  emitFunnelSearchResult(env, request, hydratedResult.ads.length);
 
   // WHAT-TO-STEAL cost design: computed synchronously (small model, ~1-2s) and
   // only for signed-in users on fresh (cache-miss), non-demo searches with >=3
