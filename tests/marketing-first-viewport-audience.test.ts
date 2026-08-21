@@ -38,6 +38,22 @@ describe("first viewport names the audience (product-live/0509-first-viewport-au
     expect(deckIndex).toBeLessThan(marketingRoute.indexOf('<section className="ld-proof"'));
   });
 
+  // The detector's first-viewport probe reads leaf elements only
+  // (children.length === 0). The deck paragraph's text is not a leaf, so the
+  // audience identifier must also appear in a leaf element inside p.ld-case —
+  // the hero situation headline — or the live check cannot see it.
+  it("names the audience in a first-viewport leaf element (the p.ld-case headline the detector reads)", () => {
+    const headline = "A rival page changed while your growth team was offline";
+    expect(marketingRoute).toContain(headline);
+    const caseIndex = marketingRoute.indexOf('<p className="ld-case">');
+    const headlineIndex = marketingRoute.indexOf(headline);
+    expect(caseIndex).toBeGreaterThan(-1);
+    expect(headlineIndex).toBeGreaterThan(caseIndex);
+    expect(headlineIndex).toBeLessThan(marketingRoute.indexOf('<section className="ld-proof"'));
+    // The old generic-only headline must be gone from the first viewport.
+    expect(marketingRoute).not.toContain("A rival page changed while your team was offline");
+  });
+
   it("keeps the deck paragraph visible (no display:none / visibility:hidden / aria-hidden)", () => {
     expect(deckCssRules.length).toBeGreaterThan(0);
     for (const rule of deckCssRules) {
@@ -56,10 +72,10 @@ describe("first viewport names the audience (product-live/0509-first-viewport-au
   });
 
   it("keeps the mechanism and evidence claims of the deck intact", () => {
-    expect(marketingRouteText).toContain("watches competitors&rsquo; Meta ads and landing pages");
+    expect(marketingRouteText).toContain("watches competitors&rsquo; landing pages for price, offer, and CTA changes");
     expect(marketingRouteText).toContain("saves the screenshots");
     expect(marketingRouteText).toContain("before your alarm goes off");
-    expect(marketingRouteText).toContain("Sample proof-backed brief");
-    expect(marketingRouteText).toContain("A rival page changed while your team was offline");
+    expect(marketingRouteText).toContain("Proof-backed brief");
+    expect(marketingRouteText).toContain("A rival page changed while your growth team was offline");
   });
 });

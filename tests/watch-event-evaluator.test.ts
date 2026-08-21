@@ -236,6 +236,449 @@ describe("watch event evaluator", () => {
     expect(result.events).toEqual([]);
   });
 
+  it("does not emit a CTA change when only a countdown timer in the CTA ticks", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Claim offer · 00:58:21",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Claim offer · 00:59:59",
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("still emits a CTA change when the CTA copy actually changes", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Claim offer · 00:59:59",
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("confirmed");
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        eventType: "landing_page_cta_changed",
+        status: "confirmed",
+        metadata: expect.objectContaining({
+          from: "Claim offer · 00:59:59",
+          to: "Shop now",
+        }),
+      }),
+    ]);
+  });
+
+  it("does not emit an offer change when only an UPPERCASE inventory counter in the price line ticks", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "ONLY 3 LEFT · ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: "ONLY 2 LEFT · ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("does not emit an offer change when only an inventory counter in the price line ticks", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Only 3 left at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: "Only 2 left at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("does not emit an offer change when only a rolling date in the price line ticks", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499, offer valid till aug 13",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: "Starting at ₹499, offer valid till aug 12",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("still emits an offer change when the price itself changes", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹799",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("confirmed");
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        eventType: "landing_page_offer_changed",
+        status: "confirmed",
+        metadata: expect.objectContaining({
+          from: "Starting at ₹499",
+          to: "Starting at ₹799",
+        }),
+      }),
+    ]);
+  });
+
+  it("does not emit an offer change when only a Title-Case rolling date in the price line ticks", () => {
+    // Title-Case "Aug" must strip too — the inventory pattern is lowercase but
+    // the offer/offer path lowercases first, mirroring the headline path.
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499, offer valid till Aug 13",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: "Starting at ₹499, offer valid till Aug 12",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("does not emit a CTA change when only a Title-Case viewer counter in the CTA ticks", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "18 People Viewing Now · Claim offer",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "12 People Viewing Now · Claim offer",
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("does not emit a CTA change when only an ALL-CAPS countdown timer ticks", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "CLAIM OFFER · 00:12:01",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "CLAIM OFFER · 00:59:59",
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("still emits a CTA change when the ALL-CAPS copy actually changes", () => {
+    // Positive control: with ALL-CAPS input the churn-stable guard must NOT
+    // swallow a real CTA change. If the helper ever lowercased aggressively
+    // and short-circuited to "", this event would disappear.
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "BUY TODAY",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "SHOP NOW",
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("confirmed");
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        eventType: "landing_page_cta_changed",
+        status: "confirmed",
+        metadata: expect.objectContaining({
+          from: "SHOP NOW",
+          to: "BUY TODAY",
+        }),
+      }),
+    ]);
+  });
+
+  it("emits an offer change when the previous price line strips to empty (pure churn) but the new one carries real copy", () => {
+    // Guard: "Only 3 left" churn-strips to "" — that's present-but-pure-churn,
+    // NOT a missing field. A real "Sold out at ₹499" change must still fire.
+    // The previous bug treated "" as missing and silently suppressed this.
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Sold out at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: "Only 3 left",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("confirmed");
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        eventType: "landing_page_offer_changed",
+        status: "confirmed",
+        metadata: expect.objectContaining({
+          from: "Only 3 left",
+          to: "Sold out at ₹499",
+        }),
+      }),
+    ]);
+  });
+
+  it("does not emit an offer change when the price line is missing on one side (null stays missing)", () => {
+    // Guard: a missing price field on the previous side is genuinely missing,
+    // not "present-but-pure-churn". The change must be suppressed even if the
+    // current side carries real copy — null on one side cannot become an event.
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Sold out at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v4",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Shop now",
+          priceText: null,
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
   it("suppresses duplicate proof-backed alerts within the suppression window", () => {
     const result = evaluateProofBackedEvents({
       proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",

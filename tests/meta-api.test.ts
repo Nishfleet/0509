@@ -250,4 +250,51 @@ describe("searchAds", () => {
       }),
     ).rejects.toBeInstanceOf(MetaApiError);
   });
+
+  it("never splits an emoji when deriving the preview subhead from a long body", async () => {
+    // Units 0..118 are filler, unit 119 is the HIGH half of 🌟 (U+1F31F): a
+    // plain body.slice(0, 120) would orphan it and the subhead would render
+    // the U+FFFD replacement character on /search.
+    const body = "a".repeat(115) + "cod" + "a" + "🌟 more copy after the cut";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "ad-emoji-boundary",
+              page_name: "Nykaa",
+              ad_creative_bodies: [body],
+              ad_creative_link_titles: [],
+              ad_creative_link_descriptions: [],
+              ad_creative_link_captions: [],
+              publisher_platforms: ["facebook"],
+              ad_reached_countries: ["IN"],
+              ad_active_status: "ACTIVE",
+              ad_delivery_start_time: null,
+              ad_snapshot_url: null,
+              media_type: "IMAGE",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const result = await searchAds(
+      { META_AD_LIBRARY_TOKEN: "token" } as never,
+      query,
+      null,
+      { allowDemoFallback: false },
+    );
+
+    expect(result.ads).toHaveLength(1);
+    expect(result.ads[0]!.previewSubhead).toBe("a".repeat(115) + "cod" + "a");
+    expect(/[\uD800-\uDFFF]/.test(result.ads[0]!.previewSubhead)).toBe(false);
+    expect(result.ads[0]!.previewSubhead.includes("\uFFFD")).toBe(false);
+  });
 });

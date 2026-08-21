@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 const DATABASE = "0509";
-const REPOSITORY = "nish3451/0509";
+const REPOSITORY = "Nishfleet/0509";
 
 /** @param {Date} generatedAt */
 export function buildSignalSql(generatedAt) {
@@ -78,9 +78,10 @@ export function marketSignalFailureMessage(detail) {
 }
 
 /**
+ * @template T
  * @param {string} command
  * @param {string[]} args
- * @returns {any}
+ * @returns {T}
  */
 function runJson(command, args) {
   let output;
@@ -161,12 +162,54 @@ export function summarizeIssues(issues, now = new Date()) {
   };
 }
 
-/** @param {{d1: any; issues: Issue[]; generatedAt?: Date}} input */
+/**
+ * Fetch the repository issue list with the GitHub CLI. Fails loudly only for
+ * genuinely unexpected outcomes; a read failure on the issues API (most
+ * commonly HTTP 403 "Resource not accessible by integration" when the token
+ * lacks issues:read) degrades to a clearly-labeled unavailable section instead
+ * of failing the whole snapshot. D1 is the primary signal; issue metadata is
+ * secondary and the workflow's failure surface must not depend on it.
+ *
+ * @returns {Issue[] | { unavailable: true }}
+ */
+export function fetchIssues() {
+  /** @type {any[]} */
+  let issuePages;
+  try {
+    issuePages = runJson("gh", [
+      "api",
+      "--paginate",
+      "--slurp",
+      `repos/${REPOSITORY}/issues?state=all&per_page=100`,
+    ]);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    if (detail.includes("HTTP 403") || detail.includes("Resource not accessible")) {
+      process.stderr.write(`market_signal_github_issues_unavailable: ${detail}\n`);
+      return { unavailable: true };
+    }
+    throw error;
+  }
+  return /** @type {Issue[]} */ (issuePages.flat().filter((issue) => !issue.pull_request).map((issue) => ({
+    number: issue.number,
+    title: issue.title,
+    state: String(issue.state).toUpperCase(),
+    labels: issue.labels,
+    createdAt: issue.created_at,
+    closedAt: issue.closed_at,
+    url: issue.html_url,
+  })));
+}
+
+/**
+ * @param {{d1: any; issues: Issue[] | { unavailable: true }; generatedAt?: Date}} input
+ */
 export function buildSnapshot({ d1, issues, generatedAt = new Date() }) {
   /** @param {number} milliseconds */
   const iso = (milliseconds) => new Date(milliseconds).toISOString();
   const end = generatedAt.getTime();
   const day = 86_400_000;
+  const githubUnavailable = "unavailable" in issues && issues.unavailable === true;
   return {
     schemaVersion: 1,
     generatedAt: generatedAt.toISOString(),
@@ -178,8 +221,13 @@ export function buildSnapshot({ d1, issues, generatedAt = new Date() }) {
       previous7d: { start: iso(end - 14 * day), end: iso(end - 7 * day) },
     },
     product: parseD1Response(d1),
-    github: summarizeIssues(issues, generatedAt),
-    sourceHealth: { cloudflareD1: "ok", githubIssues: "ok" },
+    github: githubUnavailable
+      ? { unavailable: true }
+      : summarizeIssues(/** @type {Issue[]} */ (issues), generatedAt),
+    sourceHealth: {
+      cloudflareD1: "ok",
+      githubIssues: githubUnavailable ? "unavailable" : "ok",
+    },
     privacy: "Aggregate product metrics and repository issue metadata only; no customer identity or message body.",
   };
 }
@@ -191,22 +239,7 @@ function main() {
 
   const generatedAt = new Date();
   const d1 = runJson("wrangler", ["d1", "execute", DATABASE, "--remote", "--command", buildSignalSql(generatedAt), "--json"]);
-  /** @type {Array<Array<any>>} */
-  const issuePages = runJson("gh", [
-    "api",
-    "--paginate",
-    "--slurp",
-    `repos/${REPOSITORY}/issues?state=all&per_page=100`,
-  ]);
-  const issues = issuePages.flat().filter((issue) => !issue.pull_request).map((issue) => ({
-    number: issue.number,
-    title: issue.title,
-    state: String(issue.state).toUpperCase(),
-    labels: issue.labels,
-    createdAt: issue.created_at,
-    closedAt: issue.closed_at,
-    url: issue.html_url,
-  }));
+  const issues = fetchIssues();
   const rendered = `${JSON.stringify(buildSnapshot({ d1, issues, generatedAt }), null, 2)}\n`;
   if (outputPath) {
     mkdirSync(dirname(outputPath), { recursive: true, mode: 0o700 });

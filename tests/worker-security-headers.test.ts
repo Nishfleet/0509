@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL,
   EXPECTED_PUBLIC_HOME_CACHE_CONTROL,
   EXPECTED_SCRIPT_SRC_BEACON_HOST,
 } from "../scripts/check-live-public-home.mjs";
@@ -236,13 +237,42 @@ describe("Worker security headers", () => {
     });
 
     it("keeps the live public-home deploy gate coupled to the product policy", () => {
-      // The scripts/check-live-public-home.mjs deploy gate asserts an EXACT
-      // cache-control on https://0509.io/. If the product policy ever changes
-      // without the gate's expectation moving with it (the 2026-07-20 stale-gate
-      // incident: gate still wanted no-store after PR #360 shipped
+      // The scripts/check-live-public-home.mjs deploy gate asserts EXACT
+      // cache-control values on https://0509.io/. If the product policy ever
+      // changes without the gate's expectation moving with it (the 2026-07-20
+      // stale-gate incident: gate still wanted no-store after PR #360 shipped
       // public, max-age=300), deploys would fail on a policy that is actually
       // correct. Import both constants and assert they can never diverge.
       expect(EXPECTED_PUBLIC_HOME_CACHE_CONTROL).toBe(PUBLIC_HTML_CACHE_CONTROL);
+      // The SSR-pricing variant (private) must stay within the same bounded,
+      // SWR-free stale window the gate enforces for the shared-cache variant.
+      expect(COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL).toBe("private, max-age=300");
+      expect(COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL).not.toContain("stale-while-revalidate");
+    });
+
+    it("honors an explicitly-set cache-control on public cacheable HTML", () => {
+      // The marketing page embeds buyer-country Dodo prices in its SSR HTML,
+      // so it sets `private, max-age=300` itself. The worker must respect that
+      // instead of stamping the generic public policy — a shared cache must
+      // never replay one country's prices for another visitor.
+      const response = withSecurityHeaders(
+        new Response("<!doctype html>", {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "private, max-age=300",
+            "vary": "cookie",
+          },
+        }),
+        new Request("https://0509.io/"),
+      );
+
+      expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+      expect(response.headers.get("vary")).toBe("cookie");
+      // Security headers still apply to the private variant.
+      expect(response.headers.get("strict-transport-security")).toBe(
+        SECURITY_HEADERS["strict-transport-security"],
+      );
+      expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     });
 
     it("keeps the live deploy gate's beacon-CSP contract coupled to the product policy", () => {
@@ -252,6 +282,34 @@ describe("Worker security headers", () => {
       // silently records zero page views. Import both constants and assert they
       // can never diverge.
       expect(EXPECTED_SCRIPT_SRC_BEACON_HOST).toBe(CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC);
+    });
+
+    it("honors an app-set cache-control on cacheable HTML instead of stamping the public policy", () => {
+      // The marketing page embeds buyer-country Dodo prices in its SSR HTML
+      // and therefore serves `private, max-age=300` (browser-only: a shared
+      // cache must never replay one country's prices for another). The worker
+      // must not override that with the generic public policy, and must not
+      // fall into the no-store branch either.
+      const response = withSecurityHeaders(
+        htmlResponse({
+          headers: {
+            "cache-control": COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL,
+            vary: "cookie",
+          },
+        }),
+        new Request("https://0509.io/"),
+      );
+
+      expect(response.headers.get("cache-control")).toBe(COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL);
+      expect(response.headers.get("vary")).toBe("cookie");
+      expect(response.headers.has("cloudflare-cdn-cache-control")).toBe(false);
+      expect(response.headers.has("pragma")).toBe(false);
+      expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+      // The live deploy gate accepts both bounded policies so the SSR-pricing
+      // variant cannot break the deploy chain.
+      expect(
+        [EXPECTED_PUBLIC_HOME_CACHE_CONTROL, COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL],
+      ).toContain(response.headers.get("cache-control"));
     });
   });
 

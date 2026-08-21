@@ -34,7 +34,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const linkSent = url.searchParams.get("sent") === "1";
   const message = linkSent
       ? "Check your email. The setup link will verify you and create the account."
-      : null;
+      : magicbriefMigrationMessage(url.searchParams.get("source"));
   const error = signupErrorMessage(url.searchParams.get("error"));
   const oauthProviders = enabledBetterAuthOAuthProviders(env);
 
@@ -47,6 +47,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ...(message ? { message } : {}),
     ...(error ? { error } : {}),
   };
+}
+
+/**
+ * MagicBrief wind-down capture: a visitor landing on signup straight from the
+ * migration page's CTA gets the migration path on the same screen instead of a
+ * generic pitch. The message stays inside the honest boundary the migration
+ * page already promises — competitor lists import as watchlists; collections,
+ * boards, analytics history, and past evidence are recreated with help.
+ */
+function magicbriefMigrationMessage(source: string | null): string | null {
+  if (source !== "magicbrief-migration") {
+    return null;
+  }
+  return (
+    "Coming from MagicBrief? Sign up, then use the setup checklist's competitor import " +
+    "to turn your list into watchlists. Collections, boards, analytics history, and past " +
+    "evidence are not migrated — you recreate them with our help."
+  );
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
@@ -148,13 +166,15 @@ export default function SignupRoute() {
           <div className="f9-auth-proof-list">
             <div>
               <strong>Free weekly watch</strong>
-              <p>Your free account watches one competitor: an activation scan when you add it, then a weekly check with
-              a weekly email brief. No card needed.</p>
+              <p>Your free account watches one competitor: an activation scan when you add it (with one
+              proof-backed brief), then a weekly check with a weekly email brief, plus one saved
+              Collection. No card needed.</p>
             </div>
             <div>
               <strong>Proof on paid plans</strong>
-              <p>Paid plans save every confirmed change with the screenshot, page text, and original link — evidence
-              your next call can cite.</p>
+              <p>Paid plans save every confirmed change with the screenshot, page text, and original link —
+              evidence your next call can cite. Free includes your first proof-backed brief; paid plans keep
+              it coming.</p>
             </div>
             <div>
               <strong>Faster checks</strong>

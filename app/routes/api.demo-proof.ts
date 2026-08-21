@@ -1,15 +1,27 @@
 import type { LoaderFunctionArgs } from "react-router";
 
-import { demoProof } from "~/lib/demo-proof";
+import { loadPublicProofBrief, type PublicProofBrief } from "~/lib/public-proof.server";
+import { getEnv } from "~/lib/context.server";
 
-export function loader({ request }: LoaderFunctionArgs) {
+/**
+ * Public proof brief endpoint.
+ *
+ * Route path kept as /api/demo-proof for compatibility with published venue
+ * listings; the payload is REAL proof from the discovery cache — never the
+ * old illustrative fixture. When no usable real capture exists the response
+ * says so explicitly (status: "unavailable"); sample data is never served.
+ */
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const env = getEnv(context);
+  const brief = await loadPublicProofBrief(env);
+
   const url = new URL(request.url);
   const wantsMarkdown =
     url.searchParams.get("format") === "markdown" ||
     (request.headers.get("Accept") ?? "").toLowerCase().includes("text/markdown");
 
   if (wantsMarkdown) {
-    return new Response(formatDemoProofMarkdown(), {
+    return new Response(formatPublicProofBriefMarkdown(brief), {
       headers: {
         "content-type": "text/markdown; charset=utf-8",
         "cache-control": "public, max-age=300",
@@ -18,29 +30,50 @@ export function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  return Response.json(demoProof, {
-    headers: {
-      "cache-control": "public, max-age=300",
-      vary: "Accept",
+  return Response.json(
+    brief
+      ? { status: "live", ...brief }
+      : {
+          status: "unavailable",
+          message:
+            "No live proof capture is available right now. Run the public search preview to see current competitor ads.",
+        },
+    {
+      headers: {
+        "cache-control": "public, max-age=300",
+        vary: "Accept",
+      },
     },
-  });
+  );
 }
 
-function formatDemoProofMarkdown() {
-  const proofItems = demoProof.proofTrail
-    .map((item) => `- ${item.signal}: ${item.evidence} (${item.source})`)
+function formatPublicProofBriefMarkdown(brief: PublicProofBrief | null) {
+  if (!brief) {
+    return `# Five to Nine Proof Brief
+
+Status: unavailable. No live proof capture is available right now. Run the public search preview to see current competitor ads.
+`;
+  }
+
+  const proofItems = brief.proofTrail
+    .map(
+      (item) =>
+        `- ${item.signal}: ${item.evidence} (${item.source}${item.sourceUrl ? ` — ${item.sourceUrl}` : ""})`,
+    )
     .join("\n");
-  const hooks = demoProof.insightPreview.topHooks.map((hook) => `- ${hook}`).join("\n");
+  const hooks = brief.insights.topHooks.map((hook) => `- ${hook}`).join("\n");
+  const mix = brief.insights.mediaMix
+    .map((entry) => `- ${entry.channel}: ${entry.count}`)
+    .join("\n");
+  const timeline = brief.insights.timeline.map((item) => `- ${item}`).join("\n");
 
-  return `# Five to Nine Sample Brief
+  return `# Five to Nine Proof Brief
 
-Status: sample only. The public search preview is read-only and provider coverage varies; retained monitoring requires an account.
+Status: live — rendered from real cached captures (${brief.adCount} creatives, last checked ${brief.checkedAgoLabel}).
 
-Competitor: ${demoProof.competitor.name} (${demoProof.competitor.website})
-
-Tracked preview: ${demoProof.trackedPreview.watchlistName}
-Cadence: ${demoProof.trackedPreview.cadence}
-Saved competitor: ${demoProof.trackedPreview.savedCompetitor}
+Competitor: ${brief.competitorName} (${brief.website})
+Ad Library: ${brief.adLibraryCountry ? `${brief.adLibraryCountry} Ad Library` : "Meta Ad Library (all countries)"}
+Captured: ${brief.fetchedAt}
 
 ## Source Trail
 
@@ -48,28 +81,25 @@ ${proofItems}
 
 ## Decision Summary
 
-- Subject: ${demoProof.digestPreview.subject}
-- What changed: ${demoProof.digestPreview.whatChanged}
-- Why it matters: ${demoProof.digestPreview.whyItMatters}
-- Urgency: ${demoProof.digestPreview.priority}
-- Source status: ${demoProof.digestPreview.proofStatus}
-- Source: ${demoProof.digestPreview.source}
-- Freshness: ${demoProof.digestPreview.freshness}
-- Next action: ${demoProof.digestPreview.recommendedMove}
-
-## Digest Preview
-
-- Subject: ${demoProof.digestPreview.subject}
-- Priority: ${demoProof.digestPreview.priority}
-- Recommended move: ${demoProof.digestPreview.recommendedMove}
-- Confidence: ${demoProof.digestPreview.confidence}
+- Subject: ${brief.decision.subject}
+- What changed: ${brief.decision.whatChanged}
+- Why it matters: ${brief.decision.whyItMatters}
+- Urgency: ${brief.decision.priority}
+- Proof status: ${brief.decision.proofStatus}
+- Source: ${brief.decision.source}
+- Freshness: ${brief.decision.freshness}
+- Next action: ${brief.decision.nextAction}
 
 ## Top Hooks
 
 ${hooks}
 
-## Digest Markdown
+## Media Mix
 
-${demoProof.exports.digestMarkdown}
+${mix}
+
+## Timeline
+
+${timeline}
 `;
 }

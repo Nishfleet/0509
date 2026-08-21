@@ -641,11 +641,28 @@ function validateDodoAnnualPricePair(
   if (monthlyCountry && annualCountry && monthlyCountry !== annualCountry) {
     return { ...base, valid: false, reason: "billing_context_mismatch" };
   }
-  if (annualValidationAmount !== expectedAnnualAmount) {
+  if (Math.abs(annualValidationAmount - expectedAnnualAmount) > annualRoundingAllowance(expectedAnnualAmount)) {
     return { ...base, valid: false, reason: "amount_mismatch" };
   }
 
   return { ...base, valid: true, reason: "valid_4_months_free" };
+}
+
+// Adaptive-currency Dodo previews compute the annual tax-inclusive total per
+// line, so the annual amount can differ from monthly x 8 by a few minor units
+// of currency-conversion rounding (observed live: EUR and PLN totals off by
+// 1-2 units, GB exact). The "4 months free" claim stays honest within this
+// allowance — a tiny fraction of a percent, far below any real price
+// difference — while still rejecting a Dodo configuration that drifts from
+// pay-8-months by a meaningful amount.
+const ANNUAL_ROUNDING_ALLOWANCE_FACTOR = 0.001;
+const MIN_ANNUAL_ROUNDING_ALLOWANCE_UNITS = 4;
+
+function annualRoundingAllowance(expectedAnnualAmount: number): number {
+  return Math.max(
+    MIN_ANNUAL_ROUNDING_ALLOWANCE_UNITS,
+    Math.ceil(expectedAnnualAmount * ANNUAL_ROUNDING_ALLOWANCE_FACTOR),
+  );
 }
 
 function missingAnnualValidation(

@@ -70,7 +70,7 @@ This file records the fixed-candidate June 25 hotfix and polish evidence. Its te
 
 ## Deployment
 
-- **PR:** https://github.com/nish3451/0509/pull/246 (follow-up https://github.com/nish3451/0509/pull/247)
+- **PR:** https://github.com/Nishfleet/0509/pull/246 (follow-up https://github.com/Nishfleet/0509/pull/247)
 - **Merge commits:** `5edb1bf` (hotfix), `6cd62d5` (help copy)
 - **Runtime commit:** `6cd62d58db85463b2bc5375f0c52519922ee3821`
 - **Worker version:** `61e32596-383e-4c73-8ec3-cc4012b55c0a`
@@ -126,7 +126,7 @@ This file records the fixed-candidate June 25 hotfix and polish evidence. Its te
 
 ### Deployment
 
-- **PR:** https://github.com/nish3451/0509/pull/249
+- **PR:** https://github.com/Nishfleet/0509/pull/249
 - **Merge commit:** `321d7c9bbca16ff9da3c7c2d2ec620453a01338b`
 - **Runtime commit:** `321d7c9bbca16ff9da3c7c2d2ec620453a01338b`
 - **Worker version:** `2ff3c030-39c1-4977-87a2-dd6347f05081`

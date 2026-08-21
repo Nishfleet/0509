@@ -38,7 +38,8 @@ import {
 } from "~/lib/competitor-list-display";
 import { toCustomerDiscoveryStatus } from "~/lib/discovery-customer-copy";
 import {
-  isSlackDeliveryCustomerFacing,
+  isSlackWebhookDeliveryCustomerFacing,
+  isTeamsWebhookDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
@@ -290,7 +291,8 @@ export default function WatchlistsRoute() {
     bulkFetcher.submit(formData, { method: "post" });
   };
   const pauseResumePending = pauseResumeFetcher.state !== "idle";
-  const showSlackDelivery = isSlackDeliveryCustomerFacing();
+  const showSlackDelivery = isSlackWebhookDeliveryCustomerFacing();
+  const showTeamsDelivery = isTeamsWebhookDeliveryCustomerFacing();
   const canExport = canUsePlanFeature(data.plan, "export_csv") && canUsePlanFeature(data.plan, "export_json");
   const canReport = canUsePlanFeature(data.plan, "client_reports");
   const canShare = canUsePlanFeature(data.plan, "share_links");
@@ -640,6 +642,7 @@ export default function WatchlistsRoute() {
             nextScanLabel={nextScanLabel}
             renderedAt={renderedAt}
             showSlackDelivery={showSlackDelivery}
+            showTeamsDelivery={showTeamsDelivery}
             sourceCanSchedule={sourceCanSchedule}
             trackingPresentation={trackingPresentation}
             watchlist={selectedWatchlist}
@@ -722,7 +725,7 @@ export default function WatchlistsRoute() {
           </p>
           <div className="f9-wk-acts">
             <Link className="f9-wk-lnk" to="/#demo">
-              See a sample brief <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+              See a proof brief <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           </div>
         </section>

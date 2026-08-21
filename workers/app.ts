@@ -131,6 +131,19 @@ export default {
           return withSecurityHeaders(artifactResponse, request);
         }
       }
+
+      // Visual diff: stored proof-capture screenshots behind the watchlist
+      // change feed's before/now plates. Same unguessable-key model as the
+      // creative thumbnails; raster-only, key-shape-gated.
+      const { parseProofScreenshotPathname } = await import("../app/lib/proof-screenshot");
+      const { serveProofScreenshot } = await import("../app/lib/proof-screenshot.server");
+      const proofKey = parseProofScreenshotPathname(url.pathname);
+      if (proofKey) {
+        const screenshotResponse = await serveProofScreenshot(env, request, proofKey);
+        if (screenshotResponse) {
+          return withSecurityHeaders(screenshotResponse, request);
+        }
+      }
     }
 
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
@@ -232,7 +245,7 @@ export default {
 			),
 		);
       ctx.waitUntil(
-        observe("discovery_warmup", runScheduledDiscoveryWarmup(env)).then(
+        observe("discovery_warmup", runScheduledDiscoveryWarmup(env, ctx)).then(
           undefined,
           (error) => reportScheduledTaskFailure(env, "discovery_warmup", error),
         ),
@@ -329,6 +342,10 @@ export default {
         digestLookbackDays: scheduledTask.digestLookbackDays,
         cron: controller.cron,
         scheduledTime: controller.scheduledTime,
+        // The scheduled handler's real ExecutionContext: slow telemetry row
+        // writes are registered with waitUntil (background completion, never
+        // request latency) down through scans and proof captures.
+        executionContext: ctx,
       })).then(
         async (result) => {
           console.log("scheduled monitoring completed", {

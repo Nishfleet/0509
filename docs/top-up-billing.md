@@ -2,8 +2,8 @@
 
 ## SKUs (quantities only)
 
-| Slug | Checks |
-|------|--------|
+| Slug | Proof captures |
+|------|----------------|
 | `burst_500_v1` | 500 |
 | `campaign_2000_v1` | 2,000 |
 | `scale_7500_v1` | 7,500 |
@@ -16,7 +16,7 @@ currency or fixed local prices in this doc.
 - Grants are immutable; provider payment id is unique per grant.
 - No expiry timestamp — ownership survives cancellation, price changes, and SKU retirement.
 - Spending requires an active Scout, Starter, or Agency plan (`topUpSpendRequiresActivePaidPlan`).
-- Canceled workspaces retain balance; UI explains purchased checks return when a paid plan is active.
+- Canceled workspaces retain balance; UI explains purchased proof captures return when a paid plan is active.
 
 ## Ledger
 

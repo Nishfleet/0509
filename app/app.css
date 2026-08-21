@@ -1719,6 +1719,30 @@ button[aria-busy="true"] {
   gap: 10px;
 }
 
+.f9-import-rejected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--amber-wash, #fff8e6);
+  box-shadow: 0 0 0 1px rgba(6, 22, 41, 0.1);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.f9-import-rejected code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px rgba(6, 22, 41, 0.1);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .f9-import-summary {
   display: flex;
   flex-wrap: wrap;
@@ -2527,11 +2551,11 @@ one signal-green accent.
 .f9-legal-page .ld-nav-pill:hover { background: #2a2820; }
 
 .ld-hero {
-  padding: clamp(18px, 3vw, 34px) clamp(20px, 4vw, 48px) 0;
+  padding: clamp(14px, 2vw, 24px) clamp(20px, 4vw, 48px) 0;
 }
 
 .f9-home .ld-hero .f9-announcement {
-  margin-bottom: 22px;
+  margin-bottom: 14px;
 }
 
 @media (max-width: 600px) {
@@ -2629,7 +2653,7 @@ one signal-green accent.
 }
 
 .ld-command {
-  margin: clamp(26px, 4vw, 40px) 0 0;
+  margin: clamp(18px, 2.5vw, 28px) 0 0;
   display: flex;
   align-items: stretch;
   max-width: 1120px;
@@ -4553,6 +4577,73 @@ one signal-green accent.
   color: var(--ld-green-ink);
 }
 
+/* MagicBrief migration CTA — the wind-down capture block on /compare/magicbrief.
+   Inline flex with the honest not-imported boundary kept on the page; the button
+   is the only self-serve migration action. */
+.ld-migration-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(20px, 4vw, 40px);
+  border: 2.5px solid var(--ld-ink);
+  border-radius: 8px;
+  background: var(--ld-card);
+  padding: clamp(24px, 4vw, 40px);
+}
+
+.ld-migration-cta h2 {
+  margin: 0 0 10px;
+}
+
+.ld-migration-cta p {
+  margin: 0;
+  max-width: 620px;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+}
+
+.ld-cta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 24px;
+  border: 2.5px solid var(--ld-ink);
+  border-radius: 8px;
+  background: var(--ld-green-ink);
+  color: #fff;
+  font-family: var(--ld-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.ld-cta-button:hover {
+  background: var(--ld-green);
+  color: var(--ld-ink);
+}
+
+.ld-cta-button:focus-visible {
+  outline: 3px solid var(--ld-green);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .ld-migration-cta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ld-cta-button {
+    width: 100%;
+  }
+}
+
 /* Hero radar — "we work while you sleep" as an instrument (2026-06-12) */
 
 .ld-hero-grid {
@@ -4565,15 +4656,15 @@ one signal-green accent.
 .ld-hero-grid .ld-wall {
   /* Keep the proof wall forceful without pushing the no-account search below
      the first desktop viewport. */
-  font-size: clamp(2.75rem, 6.6vw, 5.9rem);
+  font-size: clamp(2.6rem, 5vw, 4.5rem);
 }
 
 .ld-deck-copy {
-  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  font-size: clamp(1rem, 1.4vw, 1.2rem);
   line-height: 1.5;
   font-weight: 500;
   max-width: 540px;
-  margin: clamp(22px, 3vw, 34px) 0 0;
+  margin: clamp(16px, 2vw, 24px) 0 0;
 }
 
 .ld-deck-copy b {
@@ -7955,6 +8046,22 @@ reds soften --- */
   font-size: 10.5px;
   letter-spacing: 0.04em;
   color: var(--ink-faint);
+}
+
+/* Visual diff screenshot — the stored capture's own frame, rendered INSIDE
+   the diff pane. The image is the page we captured, not a live re-render:
+   the frame is the capture's own edge, never a live re-render: same 1px rule
+   weight as the plate, and the image keeps its aspect ratio at any width.
+   Square corners — the Evidence Desk surface rule (radius 0) applies to
+   every surface, including captured frames. */
+.f9-evidence-diff-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 4px;
+  border: 1px solid var(--ed-rule);
+  border-radius: 0;
+  background: var(--ed-surface);
 }
 
 /* --- §6.8 specimen empty state --- */
@@ -16001,4 +16108,13 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   max-width: 1080px;
   margin: 0 auto;
   padding: 2rem 1.5rem 4rem;
+}
+
+/* Mobile first-viewport budget (375x812): keep the live-search action
+   above the fold - trims only, no hiding (journey-1 fold gate). */
+@media (max-width: 600px) {
+  .ld-hero-grid .ld-wall { font-size: 2.3rem; }
+  .ld-deck-copy { font-size: 0.95rem; line-height: 1.45; margin-top: 12px; }
+  .ld-hero-copy .ld-command { margin-top: 12px; }
+  .ld-case { margin-bottom: 8px; }
 }

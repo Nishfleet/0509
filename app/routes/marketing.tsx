@@ -1,11 +1,10 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
-import { useEffect, useState, type ReactNode } from "react";
-import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useEffect, useState } from "react";
+import type { HeadersArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { SubmitButton } from "~/components/submit-button";
-import { demoProof } from "~/lib/demo-proof";
 import {
   DODO_ANNUAL_SAVINGS_LABEL,
   dodoAnnualSavingsIsValid,
@@ -23,17 +22,33 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import type { AppEnv } from "~/lib/env.server";
 import type { RootLoaderData } from "~/root";
+import type { PublicProofBrief } from "~/lib/public-proof.server";
 
 // Kept under ~155 characters so search results show the whole line instead of
 // truncating mid-sentence. The audit flagged the previous 166-character copy.
-// Same claims, nothing new promised.
+// Same claims, nothing new promised. The hero leads with what a scheduled
+// reliability check proves every day: public landing-page change monitoring
+// with screenshot evidence. Meta Ad Library coverage is named as a public
+// source below and in the FAQ, not promised as a scheduled first-class lane
+// until the Meta discovery reliability check publishes a green state on a
+// schedule.
 const marketingDescription =
-  "Five to Nine watches competitors' Meta ads and landing pages, then sends screenshot evidence and change alerts before your next meeting.";
+  "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then sends screenshot evidence and change alerts before your next meeting.";
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 
 export const links: LinksFunction = () => canonicalLinks("/");
+
+// React Router merges only Set-Cookie from loader responses into the document
+// response; every other header needs a route-level `headers` export. Without
+// this, the private cache-control set by the SSR-pricing loader would be
+// dropped and the worker would stamp the generic public policy on HTML that
+// embeds buyer-country prices.
+export function headers({ loaderHeaders }: HeadersArgs) {
+  return loaderHeaders;
+}
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
@@ -44,26 +59,98 @@ export const meta: MetaFunction = () =>
 
 const noPricingPreview = { available: false } as const;
 
-export async function loader({ context }: LoaderFunctionArgs) {
+// Published prices: the marketing page renders real per-plan Dodo prices in
+// the server-rendered HTML instead of waiting for a client-side fetch. The
+// Dodo checkout preview can take a second or two on a cold cache, so the
+// document request waits only up to this bound; when Dodo is slower than the
+// bound the loader degrades to the honest checkout-localized fallback and the
+// existing client-side /api/pricing-preview fetch takes over near the fold.
+const MARKETING_PRICING_SSR_TIMEOUT_MS = 2500;
+
+async function pricingPreviewWithinBound({
+  env,
+  request,
+}: {
+  env: AppEnv;
+  request: Request;
+}): Promise<LocalPricingPreview | typeof noPricingPreview> {
+  const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const preview = await Promise.race([
+      previewDodo0509PlanPrices({ env, request }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("pricing preview exceeded SSR bound")),
+          MARKETING_PRICING_SSR_TIMEOUT_MS,
+        );
+      }),
+    ]);
+    return preview.available ? preview : noPricingPreview;
+  } catch {
+    return noPricingPreview;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const env = getEnv(context);
+  const commercialLaunch = publicCommercialLaunchSummary(env);
+  const pricingPreview = await pricingPreviewWithinBound({ env, request });
 
-  return {
-    // Keep the document request provider-independent. The client hydrates
-    // buyer-country pricing from /api/pricing-preview after the page is
-    // visible, so an unavailable provider never blocks the homepage HTML.
-    pricingPreview: noPricingPreview,
-    commercialLaunch: publicCommercialLaunchSummary(env),
-  };
+  let proofBrief: PublicProofBrief | null = null;
+  try {
+    const { loadPublicProofBrief } = await import("~/lib/public-proof.server");
+    proofBrief = await loadPublicProofBrief(env);
+  } catch (error) {
+    // A cache-read hiccup degrades to the honest "no live proof yet" state,
+    // never a 500 and never a sample fixture.
+    console.warn("Homepage proof brief load failed; rendering the honest state.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    proofBrief = null;
+  }
+
+  if (pricingPreview.available) {
+    // Buyer-country prices are embedded in this HTML, so the response must
+    // never be shared-cached: a cached DE/EUR variant would otherwise be
+    // served to a US visitor (and vice versa). The worker honors an
+    // explicitly-set cache-control on cacheable HTML paths instead of
+    // stamping the generic public, max-age=300 policy.
+    return Response.json(
+      { pricingPreview, commercialLaunch, proofBrief },
+      { headers: { "Cache-Control": "private, max-age=300", Vary: "cookie" } },
+    );
+  }
+
+  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief };
 }
 
-const tickerEvents = [
-  ["02:14", "New Meta ad set — third repeat of the routine-first hook", "ad library"],
-  ["03:47", "Pricing page — plan renamed, anchor price added", "screenshot saved"],
-  ["04:58", "Lead form appeared on the campaign landing page", "page text + link"],
-  ["05:09", "Morning brief delivered — 3 changes, 9 pieces of evidence", "sample brief"],
-] as const;
+/**
+ * Real-data ticker events for the homepage marquee. Every timestamp traces to
+ * a real capture clock from the proof brief; when no live proof exists the
+ * ticker makes no time claims at all.
+ */
+function buildTickerEvents(brief: PublicProofBrief | null) {
+  if (!brief) {
+    return [
+      ["Proof-backed monitoring", "screenshot evidence"],
+      ["Every change keeps its source link", "source trail"],
+      ["The brief files what moved", "morning brief"],
+    ] as const;
+  }
+
+  const firstTime = proofTimeLabel(brief.proofTrail[0]?.capturedAt ?? brief.fetchedAt);
+  const topHook = brief.insights.topHooks[0]?.trim() ?? "offer";
+  return [
+    [`${firstTime}`, `New Meta ad captured — “${truncateHook(topHook)}”`, "ad library"],
+    [`${firstTime}`, `${brief.adCount} creatives on record for ${brief.website}`, "source links"],
+    [`${firstTime}`, `Proof brief ready — ${brief.activeAdCount} active`, "brief"],
+  ] as const;
+}
 
 const howSteps = [
   {
@@ -146,19 +233,19 @@ export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
 export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry[] {
   return [
     {
-      question: "What uses checks?",
+      question: "What uses proof captures?",
       answer:
-        "Scheduled scans are included with your plan. A check is used when Five to Nine saves a proof-backed capture with screenshots, page text, and the original link.",
+        "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with screenshots, page text, and the original link.",
     },
     {
-      question: "Do unused checks roll over?",
+      question: "Do unused proof captures roll over?",
       answer:
-        "Included checks reset every month and do not roll over. Purchased checks never expire.",
+        "Included proof captures reset every month and do not roll over — the caps are generous. Purchased proof captures never expire and carry over until you use them.",
     },
     {
       question: "What changes on Agency?",
       answer:
-        "Agency includes 75 watchlists, 250 Collections, 2,500 checks/month, team seats, API/MCP access, client reports, and shared report branding.",
+        "Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team seats, API/MCP access, client reports, and shared report branding.",
     },
     agencySaleOpen
       ? {
@@ -308,43 +395,18 @@ function bundleValueLabel(
 ) {
   const price = preview?.usageBundles?.[bundleId];
   if (!Number.isFinite(price?.amount) || !Number.isFinite(creditQuantity) || Number(creditQuantity) <= 0) {
-    return "Purchased checks never expire";
+    return "Purchased proof captures never expire";
   }
   const unit = formatMinorCurrency(
     Number(price?.amount) / Number(creditQuantity),
     price?.currency,
     { roundWhole: false },
   );
-  return unit ? `${unit} per check` : "Purchased checks never expire";
+  return unit ? `${unit} per proof capture` : "Purchased proof captures never expire";
 }
 
 function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBundleSlug) {
   return Boolean(preview?.usageBundles?.[bundleId]?.display);
-}
-
-// Sample-proof fields must never render blank. An empty fixture value
-// degrades to the explicit unavailable state instead of an empty label.
-export function sampleProofValue(value: string): string {
-  return value.trim() || "Not available in this sample";
-}
-
-// The sample digest export is stored as markdown for the raw-export API
-// contract. On the homepage, render the small supported subset — bold
-// emphasis and line breaks — instead of leaking raw markdown syntax into
-// the visible "Brief export" preview.
-export function renderDigestMarkdownPreview(markdown: string): ReactNode {
-  const lines = markdown.split("\n");
-  return lines.map((line, index) => (
-    <span key={index}>
-      {renderDigestMarkdownLine(line)}
-      {index < lines.length - 1 ? <br /> : null}
-    </span>
-  ));
-}
-
-function renderDigestMarkdownLine(line: string): ReactNode {
-  const emphasis = line.match(/^\*(.+)\*$/);
-  return emphasis ? <strong>{emphasis[1]}</strong> : line;
 }
 
 export function planIntentPath(
@@ -357,6 +419,34 @@ export function planIntentPath(
   return `/auth/signup?redirectTo=${encodeURIComponent(billingPath)}`;
 }
 
+/** "03:47 AM" style clock for a real capture timestamp. */
+function proofTimeLabel(iso: string | null | undefined): string {
+  const parsed = iso ? new Date(iso) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return "recently";
+  }
+  return parsed.toLocaleString("en", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function truncateHook(value: string, maxLength = 26) {
+  const trimmed = value.trim();
+  return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength - 1)}…` : trimmed;
+}
+
+/** Short host for the proof-shot URL bar, e.g. "facebook.com/ads/library". */
+function proofShotHost(sourceUrl: string | null): string {
+  if (!sourceUrl) return "source page";
+  try {
+    const url = new URL(sourceUrl);
+    return `${url.hostname.replace(/^www\./, "")}${url.pathname !== "/" ? url.pathname.slice(0, 24) : ""}`;
+  } catch {
+    return "source page";
+  }
+}
+
 export default function MarketingRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const routeData = useLoaderData<typeof loader>();
@@ -365,6 +455,7 @@ export default function MarketingRoute() {
     starterSaleOpen: true,
     agencySaleOpen: false,
   };
+  const proofBrief = routeData.proofBrief ?? null;
   const primaryCta = rootData.session ? "/app" : "/auth/signup";
   const primaryLabel = rootData.session ? "Open app" : "Create account";
   const [localPricing, setLocalPricing] = useState<LocalPricingPreview | null>(
@@ -516,11 +607,13 @@ export default function MarketingRoute() {
     };
   }, [localPricing?.available]);
 
+  const tickerEvents = buildTickerEvents(proofBrief);
+
   const tickerRun = (
     <span className="ld-ticker-run">
-      <em>Sample brief</em>
+      <em>Proof brief</em>
       {tickerEvents.map(([time, event, evidence]) => (
-        <span className="ld-ticker-item" key={time}>
+        <span className="ld-ticker-item" key={event}>
           <b>{time}</b> {event} <small>[{evidence}]</small>
         </span>
       ))}
@@ -531,6 +624,95 @@ export default function MarketingRoute() {
     ...productFaqEntries,
     ...billingFaqJsonLdEntries(commercialLaunch.agencySaleOpen),
   ]);
+
+  const heroTopHook = proofBrief?.insights.topHooks[0]?.trim() ?? null;
+  const heroProofTime = proofBrief
+    ? proofTimeLabel(proofBrief.proofTrail[0]?.capturedAt ?? proofBrief.fetchedAt)
+    : null;
+  const heroWall = proofBrief && heroTopHook ? (
+    <h1 className="ld-wall">
+      <span className="ld-row">“{truncateHook(heroTopHook, 30)}”</span>
+      <span className="ld-row">
+        {proofBrief.freshForLiveClaim ? "is the hook on" : "was the hook on"} {proofBrief.adCount}{" "}
+        Meta ads <i className="ld-flag">{heroProofTime}</i>
+      </span>
+      <span className="ld-row ld-row-indent">linking to {proofBrief.website}.</span>
+      <span className="ld-row">We saved the proof.</span>
+    </h1>
+  ) : (
+    <h1 className="ld-wall">
+      <span className="ld-row">Know when</span>
+      <span className="ld-row">competitors change</span>
+      <span className="ld-row ld-row-indent">
+        <ins className="ld-ins">
+          the offer<i className="ld-flag">proof</i>
+        </ins>{" "}
+        before
+      </span>
+      <span className="ld-row">the call.</span>
+    </h1>
+  );
+
+  const heroShotCards = proofBrief ? (
+    proofBrief.proofTrail.map((item) => (
+      <a
+        className="ld-shot"
+        key={item.id}
+        href={item.sourceUrl ?? undefined}
+        target="_blank"
+        rel="noreferrer"
+      >
+        <span className="ld-stamp ld-stamp-green">
+          {item.signal} · {proofTimeLabel(item.capturedAt)}
+        </span>
+        <span className="ld-shot-bar">
+          <i />
+          <i />
+          <i />
+          <span>{proofShotHost(item.sourceUrl)}</span>
+        </span>
+        <span className="ld-shot-body">
+          <strong>{truncateHook(item.evidence, 60)}</strong>
+          <span className="ld-shot-meta">Open the same public page →</span>
+        </span>
+      </a>
+    ))
+  ) : (
+    <div className="ld-shot ld-shot-empty">
+      <span className="ld-stamp">No live proof yet</span>
+      <span className="ld-shot-body">
+        <strong>We haven’t captured this competitor recently.</strong>
+        <span className="ld-shot-meta">
+          <Link to="/search">Run the public search preview →</Link>
+        </span>
+      </span>
+    </div>
+  );
+
+  const briefStrip = proofBrief ? (
+    <aside className="ld-brief-strip" aria-label="Proof brief">
+      <b>Proof brief — {proofBrief.activeAdCount} of {proofBrief.adCount} ads active</b>
+      <ul>
+        {proofBrief.proofTrail.map((item) => (
+          <li key={item.id}>{item.signal}: {truncateHook(item.evidence, 48)}</li>
+        ))}
+      </ul>
+      <small>
+        Real captures from the Meta Ad Library — last checked {proofBrief.checkedAgoLabel}. Every
+        row links to the same public page.
+      </small>
+    </aside>
+  ) : (
+    <aside className="ld-brief-strip" aria-label="Proof brief">
+      <b>Proof brief</b>
+      <ul>
+        <li>Every change keeps a screenshot and source link</li>
+        <li>The brief files what moved and why it matters</li>
+        <li>No proof, no claim</li>
+      </ul>
+      <small>Live proof appears here after the first scan of a competitor.</small>
+    </aside>
+  );
 
   return (
     <main className="f9-home">
@@ -544,8 +726,9 @@ export default function MarketingRoute() {
         </div>
       </div>
       <p className="ld-sr-only">
-        A sample competitor feed: timestamped changes with saved evidence, ending in the
-        05:09 morning brief.
+        {proofBrief
+          ? `A real proof brief for ${proofBrief.competitorName}: ${proofBrief.adCount} Meta ads with captured hooks, offers, and source links.`
+          : "Five to Nine watches competitors' Meta ads and landing pages, then sends screenshot evidence and change alerts."}
       </p>
 
       <MarketingNav />
@@ -557,29 +740,17 @@ export default function MarketingRoute() {
         </Link>
 
         <p className="ld-case">
-          <span className="ld-rec">Sample proof-backed brief</span>
-          <span>A rival page changed while your team was offline</span>
+          <span className="ld-rec">Proof-backed brief</span>
+          <span>A rival page changed while your growth team was offline</span>
         </p>
 
         <div className="ld-hero-grid">
           <div className="ld-hero-copy">
-            <h1 className="ld-wall">
-              <span className="ld-row">They cut</span>
-              <span className="ld-row">
-                the price <s className="ld-del">$159</s>
-              </span>
-              <span className="ld-row ld-row-indent">
-                <ins className="ld-ins">
-                  $129<i className="ld-flag">03:47 AM</i>
-                </ins>{" "}
-                last
-              </span>
-              <span className="ld-row">night.</span>
-            </h1>
+            {heroWall}
 
             <p className="ld-deck-copy">
               Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
-              Meta ads and landing pages, saves the screenshots, and files the brief —{" "}
+              landing pages for price, offer, and CTA changes, saves the screenshots, and files the brief —{" "}
               <b>before your alarm goes off.</b>
             </p>
 
@@ -598,19 +769,19 @@ export default function MarketingRoute() {
               </button>
             </Form>
 
-            <div className="f9-hero-proof-actions" aria-label="Sample brief before signup">
+            <div className="f9-hero-proof-actions" aria-label="Proof brief before signup">
               <Link to={publicSearchTrialPath}>Try with Nykaa</Link>
-              <a href="#demo">Review sample brief</a>
+              <a href="#demo">Review the proof brief</a>
             </div>
 
             <p className="ld-honest" role="note">
               <strong>No account needed.</strong> Preview one competitor now. We label source,
-              freshness, coverage, cached results, and sample evidence separately.
+              freshness, coverage, cached results, and proof freshness separately.
             </p>
           </div>
 
           <div className="ld-hero-side">
-            <div className="ld-stack" aria-hidden="true">
+            <div className="ld-stack" aria-label="Real captured competitor evidence">
               <svg className="ld-thread" viewBox="0 0 420 560" aria-hidden="true">
                 <path
                   d="M190 80 C 300 120, 310 190, 260 250 M 240 340 C 160 390, 150 430, 180 470"
@@ -620,66 +791,13 @@ export default function MarketingRoute() {
                   strokeDasharray="5 4"
                 />
               </svg>
-              <div className="ld-shot ld-shot-before">
-                <span className="ld-stamp ld-stamp-red">Before — 21:00</span>
-                <div className="ld-shot-bar">
-                  <i />
-                  <i />
-                  <i />
-                  <span>birchandstone.example/pricing</span>
-                </div>
-                <div className="ld-shot-body">
-                  <div className="ld-sk ld-sk-h" />
-                  <div className="ld-sk" />
-                  <div className="ld-sk ld-sk-s" />
-                  <p className="ld-shot-price ld-price-old">Offer page</p>
-                  <div className="ld-sk ld-sk-s" />
-                </div>
-              </div>
-              <div className="ld-shot ld-shot-after">
-                <span className="ld-stamp ld-stamp-green">After — 03:47 · screenshot saved</span>
-                <div className="ld-shot-bar">
-                  <i />
-                  <i />
-                  <i />
-                  <span>birchandstone.example/pricing</span>
-                </div>
-                <div className="ld-shot-body">
-                  <div className="ld-sk ld-sk-h" />
-                  <div className="ld-sk" />
-                  <div className="ld-sk ld-sk-s" />
-                  <p className="ld-shot-price">
-                    <em>Bundle angle</em>
-                  </p>
-                  <div className="ld-sk ld-sk-s" />
-                </div>
-              </div>
-              <div className="ld-shot ld-shot-form">
-                <span className="ld-stamp ld-stamp-green">04:58 · new</span>
-                <div className="ld-shot-bar">
-                  <i />
-                  <i />
-                  <i />
-                  <span>campaign landing page</span>
-                </div>
-                <div className="ld-shot-body">
-                  <div className="ld-sk" />
-                  <div className="ld-sk ld-sk-s" />
-                  <p className="ld-form-row">+ lead form appeared here</p>
-                </div>
-              </div>
-              <span className="ld-diff-clip">Proof saved</span>
+              {heroShotCards}
+              {proofBrief ? (
+                <span className="ld-diff-clip">Real proof saved</span>
+              ) : null}
             </div>
 
-            <aside className="ld-brief-strip" aria-label="Sample brief">
-              <b>Morning brief — 3 moves to beat</b>
-              <ul>
-                <li>Price drop spotted before breakfast</li>
-                <li>New CTA pushing buyers to book</li>
-                <li>Lead form added overnight</li>
-              </ul>
-              <small>Sample evidence — no live captures attached. Next move ready by 05:09.</small>
-            </aside>
+            {briefStrip}
           </div>
         </div>
 
@@ -687,11 +805,12 @@ export default function MarketingRoute() {
 
       <section className="ld-proof" id="demo">
         <div className="ld-section-head">
-          <span className="ld-kicker">Sample brief</span>
-          <h2>Sample morning brief</h2>
+          <span className="ld-kicker">Proof brief</span>
+          <h2>{proofBrief ? "The morning brief — from a real watch" : "See the brief before you sign up"}</h2>
           <p>
-            Preview the morning brief before creating an account. See how Five to Nine turns one competitor move into a clear summary, proof status,
-            source, and next action before creating an account.
+            {proofBrief
+              ? `Real captures from the ${proofBrief.adLibraryCountry ? `${proofBrief.adLibraryCountry} Ad Library` : "Meta Ad Library"} for ${proofBrief.website}, checked ${proofBrief.checkedAgoLabel}. Every row links to the same public page you can open yourself.`
+              : "A brief groups one competitor's real captured changes — hooks, offers, CTAs, sources, and freshness — into one decision. Live proof appears here after the first scan; preview what it looks like with the search preview."}
           </p>
           <div className="ld-proof-actions">
             <Link to={publicSearchTrialPath}>Try the search preview</Link>
@@ -699,110 +818,153 @@ export default function MarketingRoute() {
           </div>
         </div>
 
-        <div className="ld-caseboard ld-reveal" aria-label="Sample Five to Nine evidence trail">
-          <article className="ld-case-lead">
-            <span className="ld-kicker">{demoProof.competitor.market}</span>
-            <h3>{demoProof.competitor.name}</h3>
-            <p>{demoProof.summary}</p>
-          </article>
-
-          <article className="ld-case-card">
-            <span className="ld-kicker">Decision summary</span>
-            <h4>{demoProof.digestPreview.subject}</h4>
-            <p>{demoProof.digestPreview.whyItMatters}</p>
-            <dl>
-              <div>
-                <dt>What changed</dt>
-                <dd>{sampleProofValue(demoProof.digestPreview.whatChanged)}</dd>
-              </div>
-              <div>
-                <dt>Why it matters</dt>
-                <dd>{sampleProofValue(demoProof.digestPreview.whyItMatters)}</dd>
-              </div>
-              <div>
-                <dt>Urgency</dt>
-                <dd>{sampleProofValue(demoProof.digestPreview.priority)}</dd>
-              </div>
-              <div>
-                <dt>Proof status</dt>
-                <dd>{sampleProofValue(demoProof.digestPreview.proofStatus)}</dd>
-              </div>
-              <div>
-                <dt>Source</dt>
-                <dd>{sampleProofValue(demoProof.digestPreview.source)}</dd>
-              </div>
-              <div>
-                <dt>Freshness</dt>
-                <dd>{sampleProofValue(demoProof.digestPreview.freshness)}</dd>
-              </div>
-              <div>
-                <dt>Next action</dt>
-                <dd>{sampleProofValue(demoProof.digestPreview.recommendedMove)}</dd>
-              </div>
-            </dl>
-          </article>
-
-          <article className="ld-case-card">
-            <span className="ld-kicker">Source trail</span>
-            <ul className="ld-trail">
-              {demoProof.proofTrail.map((item) => (
-                <li key={item.signal}>
-                  <strong>{sampleProofValue(item.signal)}</strong>
-                  <p>{sampleProofValue(item.evidence)}</p>
-                  <em>{sampleProofValue(item.source)}</em>
-                </li>
-              ))}
-            </ul>
-            <p className="ld-trail-note" role="note">
-              This sample trail is illustrative — no live captures are attached to this preview.
-              Saved watches attach real screenshots, page text, and original links.
-            </p>
-          </article>
-
-          <article className="ld-case-card">
-            <span className="ld-kicker">{demoProof.reportPreview.title}</span>
-            <h4>Client-ready view</h4>
-            <ul className="ld-trail">
-              {demoProof.reportPreview.rows.map((row) => (
-                <li key={row}>{row}</li>
-              ))}
-            </ul>
-          </article>
-
-          <div className="ld-intel" aria-label="Sample insight depth">
-            <article>
-              <span className="ld-kicker">Top hooks</span>
-              <ul>
-                {demoProof.insightPreview.topHooks.map((hook) => (
-                  <li key={hook}>{hook}</li>
-                ))}
-              </ul>
+        {proofBrief ? (
+          <div className="ld-caseboard ld-reveal" aria-label="Real Five to Nine evidence trail">
+            <article className="ld-case-lead">
+              <span className="ld-kicker">
+                {proofBrief.adLibraryCountry
+                  ? `${proofBrief.adLibraryCountry} Ad Library`
+                  : "Meta Ad Library"}
+              </span>
+              <h3>{proofBrief.competitorName}</h3>
+              <p>{proofBrief.summary}</p>
             </article>
-            <article>
-              <span className="ld-kicker">Media mix</span>
-              <ul>
-                {demoProof.insightPreview.mediaMix.map((item) => (
-                  <li key={item.channel}>
-                    <strong>{item.channel}</strong>
-                    <em>{item.share}</em>
+
+            <article className="ld-case-card">
+              <span className="ld-kicker">Decision summary</span>
+              <h4>{proofBrief.decision.subject}</h4>
+              <p>{proofBrief.decision.whyItMatters}</p>
+              <dl>
+                <div>
+                  <dt>What changed</dt>
+                  <dd>{proofBrief.decision.whatChanged}</dd>
+                </div>
+                <div>
+                  <dt>Why it matters</dt>
+                  <dd>{proofBrief.decision.whyItMatters}</dd>
+                </div>
+                <div>
+                  <dt>Urgency</dt>
+                  <dd>{proofBrief.decision.priority}</dd>
+                </div>
+                <div>
+                  <dt>Proof status</dt>
+                  <dd>{proofBrief.decision.proofStatus}</dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd>{proofBrief.decision.source}</dd>
+                </div>
+                <div>
+                  <dt>Freshness</dt>
+                  <dd>{proofBrief.decision.freshness}</dd>
+                </div>
+                <div>
+                  <dt>Next action</dt>
+                  <dd>
+                    {proofBrief.proofTrail[0]?.sourceUrl ? (
+                      <a href={proofBrief.proofTrail[0].sourceUrl} target="_blank" rel="noreferrer">
+                        {proofBrief.decision.nextAction} →
+                      </a>
+                    ) : (
+                      proofBrief.decision.nextAction
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </article>
+
+            <article className="ld-case-card">
+              <span className="ld-kicker">Source trail</span>
+              <ul className="ld-trail">
+                {proofBrief.proofTrail.map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.signal}</strong>
+                    <p>{item.evidence}</p>
+                    <em>
+                      {item.sourceUrl ? (
+                        <a href={item.sourceUrl} target="_blank" rel="noreferrer">
+                          {item.source} — open the same page →
+                        </a>
+                      ) : (
+                        item.source
+                      )}
+                    </em>
+                    <small>Captured {proofTimeLabel(item.capturedAt)}</small>
                   </li>
                 ))}
               </ul>
+              <p className="ld-trail-note" role="note">
+                Every row above is a real capture. Open the source link and check it yourself —
+                saved watches attach screenshots, page text, and original links.
+              </p>
             </article>
-            <article>
-              <span className="ld-kicker">Timeline</span>
-              <ul>
-                {demoProof.insightPreview.creativeTimeline.map((item) => (
-                  <li key={item}>{item}</li>
+
+            <article className="ld-case-card">
+              <span className="ld-kicker">Client-ready view</span>
+              <h4>Report preview</h4>
+              <ul className="ld-trail">
+                {proofBrief.reportRows.map((row) => (
+                  <li key={row}>{row}</li>
                 ))}
               </ul>
             </article>
-            <article>
-              <span className="ld-kicker">Brief export</span>
-              <p className="ld-export">{renderDigestMarkdownPreview(demoProof.exports.digestMarkdown)}</p>
+
+            <div className="ld-intel" aria-label="Insight depth from real captures">
+              <article>
+                <span className="ld-kicker">Top hooks</span>
+                <ul>
+                  {proofBrief.insights.topHooks.map((hook) => (
+                    <li key={hook}>{hook}</li>
+                  ))}
+                </ul>
+              </article>
+              <article>
+                <span className="ld-kicker">Media mix</span>
+                <ul>
+                  {proofBrief.insights.mediaMix.map((item) => (
+                    <li key={item.channel}>
+                      <strong>{item.channel}</strong>
+                      <em>{item.count}</em>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+              <article>
+                <span className="ld-kicker">Timeline</span>
+                <ul>
+                  {proofBrief.insights.timeline.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+              <article>
+                <span className="ld-kicker">Brief export</span>
+                <p className="ld-export">
+                  {proofBrief.decision.subject}
+                  {"\n"}Priority: {proofBrief.decision.priority}
+                  {"\n"}Proof: {proofBrief.adCount} real captures — {proofBrief.fetchedAt}
+                </p>
+              </article>
+            </div>
+          </div>
+        ) : (
+          <div className="ld-caseboard ld-reveal" aria-label="No live proof yet">
+            <article className="ld-case-card ld-case-empty">
+              <span className="ld-kicker">No live proof right now</span>
+              <h4>We haven’t captured this competitor recently.</h4>
+              <p>
+                The proof brief renders real captures from the public Meta Ad Library. Run the
+                search preview to see current ads and sources, or create an account to start a
+                scheduled watch.
+              </p>
+              <div className="ld-proof-actions">
+                <Link to={publicSearchTrialPath}>Run the search preview</Link>
+                <Link to="/auth/signup">Create an account</Link>
+              </div>
             </article>
           </div>
-        </div>
+        )}
       </section>
 
       <section className="ld-how" id="platform">
@@ -860,8 +1022,9 @@ export default function MarketingRoute() {
             <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
           </div>
           <p className="ld-pricing-note">
-            Free: watch 1 competitor with a weekly email brief. Paid plans add 3–6 hour checks,
-            evidence, more competitors, Collections, daily briefs, and clear check caps. Save
+            Free: watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1
+            Collection. No card required. Paid plans add 3–6 hour checks, evidence,
+            more competitors, Collections, daily briefs, and clear check caps. Save
             winning ads to collections — and see how long each ad has been running when the Ad Library
             shares dates.
           </p>
@@ -1016,16 +1179,18 @@ export default function MarketingRoute() {
           watchlists with you, person to person.
         </p>
 
-        <div className="ld-bundles" aria-label="Check packs">
+        <div className="ld-bundles" aria-label="Proof capture packs">
           <div className="ld-bundles-head">
-            <span className="ld-kicker">Check packs</span>
-            <h3>Extra checks when campaigns move fast.</h3>
+            <span className="ld-kicker">Proof capture packs</span>
+            <h3>Extra proof captures when campaigns move fast.</h3>
             <p>
-              Add purchased checks for busy weeks or big campaigns without changing the team&rsquo;s
-              plan. Purchased checks never expire.
+              Add purchased proof captures for busy weeks or big campaigns without changing the
+              team&rsquo;s plan. Purchased proof captures never expire and carry over until you
+              use them.
             </p>
             <p className="ld-check-pack-note">
-              Packs: 500 extra checks, 2,000 extra checks, or 7,500 extra checks.
+              Packs: 500 extra proof captures, 2,000 extra proof captures, or 7,500 extra proof
+              captures.
             </p>
           </div>
           <div className="ld-bundle-grid ld-reveal">
@@ -1051,24 +1216,26 @@ export default function MarketingRoute() {
           <h3>Common billing questions</h3>
           <dl className="proof-trail-list">
             <div>
-              <dt>What uses checks?</dt>
+              <dt>What uses proof captures?</dt>
               <dd>
-                Scheduled scans are included with your plan. A check is used when Five to Nine saves
-                a proof-backed capture with screenshots, page text, and the original link.
+                Scheduled scans are included with your plan and never touch your cap. A proof
+                capture is used when Five to Nine saves a confirmed change with screenshots,
+                page text, and the original link.
               </dd>
             </div>
             <div>
-              <dt>Do unused checks roll over?</dt>
+              <dt>Do unused proof captures roll over?</dt>
               <dd>
-                Included checks reset every month and do not roll over. Purchased checks never
-                expire.
+                Included proof captures reset every month and do not roll over — the caps are
+                generous. Purchased proof captures never expire and carry over until you use
+                them.
               </dd>
             </div>
             <div>
               <dt>What changes on Agency?</dt>
               <dd>
-                Agency includes 75 watchlists, 250 Collections, 2,500 checks/month, team seats,
-                API/MCP access, client reports, and shared report branding.
+                Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team
+                seats, API/MCP access, client reports, and shared report branding.
               </dd>
             </div>
             <div>

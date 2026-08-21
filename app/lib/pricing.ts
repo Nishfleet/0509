@@ -15,7 +15,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   const features: string[] = [];
 
   if (plan === "scout") {
-    features.push("Sample competitor brief before signup");
+    features.push("Proof brief before signup");
   }
 
   features.push(`${entitlements.watchlists} active watchlists`);
@@ -41,7 +41,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   }
 
   features.push(
-    `${entitlements.includedEvidenceChecksPerMonth.toLocaleString("en-US")} checks/month`,
+    `${entitlements.includedEvidenceChecksPerMonth.toLocaleString("en-US")} proof captures/month`,
   );
 
   if (plan === "scout") {
@@ -128,14 +128,14 @@ export function freeWeeklyDigestUpgradeNote(): string {
       : scout.scheduledScanCadence === "every_6h"
         ? "checks every 6 hours"
         : "checks weekly";
-  return `You're on the free weekly watch. Scout ${cadenceLabel} and unlocks ${scout.collections} Collections across ${scout.watchlists} competitors.`;
+  return `Your free watch includes an instant first scan, one proof-backed brief, and one saved Collection. Scout ${cadenceLabel} and unlocks ${scout.collections} Collections across ${scout.watchlists} competitors.`;
 }
 
 export const EVIDENCE_USAGE_CUSTOMER_COPY =
-  "Scheduled scans are included with your plan. A check is used when Five to Nine saves a proof-backed capture with screenshots, page text, and the original link. Included checks reset every month and do not roll over. Purchased checks never expire.";
+  "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with screenshots, page text, and the original link. Included caps are generous and reset monthly; purchased proof captures never expire and carry over until you use them.";
 
 export const TOP_UP_INACTIVE_PLAN_COPY =
-  "Your purchased checks are saved and will be available when a paid plan is active.";
+  "Your purchased proof captures are saved and will be available when a paid plan is active.";
 
 export function pricingPlans(): PricingPlan[] {
   return PLANS.map((plan) => ({ ...plan, features: [...plan.features] }));

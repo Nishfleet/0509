@@ -25,7 +25,7 @@ Every row scans in the visitor's geo country, and import limits (200 KB, 250 row
 
 ## Rejected — reported, never silently lost
 
-- **Unknown CSV columns** are reported through the parser/preview data contract as `preview.rejectedColumns` — for the illustrative fixture below those are `board`, `analytics_impressions`, `analytics_spend`, and `report_date` — and the parser keeps each row's full text in `row.raw`. The current onboarding UI renders row-level statuses (ready, duplicate, invalid, over plan) rather than a dedicated rejected-column panel, so until such a panel exists, treat your original source file as the proof-safe record of what the import did not carry.
+- **Unknown CSV columns** are reported through the parser/preview data contract as `preview.rejectedColumns` — for the illustrative fixture below those are `board`, `analytics_impressions`, `analytics_spend`, and `report_date` — and the preview panel lists them ("Columns not imported") while the parser keeps each row's full text in `row.raw`. Keep your original source file as the proof-safe record of what the import did not carry.
 - **Invalid rows** (for example a URL with embedded credentials, or a row that looks like it contains a secret) and **duplicate rows** are flagged with a reason in the preview — they are never silently dropped, and nothing is written until you select rows.
 - **Rows over the plan's watchlist cap** are marked "over plan" in the preview rather than vanishing.
 - Secret-looking notes, tags, or client labels are rejected before anything is written.
@@ -41,7 +41,7 @@ Every row scans in the visitor's geo country, and import limits (200 KB, 250 row
 
 1. Export whatever MagicBrief currently offers, or just list the brands you tracked.
 2. Build a competitor list: one domain, URL, or brand name per line — or a CSV with the recognized headers above.
-3. Paste or upload it into the Market Desk setup import and preview it — the current UI renders row-level statuses; `preview.rejectedColumns` is the parser/preview data contract, so keep your original file as the proof-safe record. Then create the watchlists.
+3. Paste or upload it into the Market Desk setup import and preview it — the preview shows row-level statuses plus any rejected columns (`preview.rejectedColumns` is the parser/preview data contract); keep your original file as the proof-safe record. Then create the watchlists.
 4. Recreate anything the import does not carry — notes, tags, collections/boards, and historical evidence — inside Five to Nine, and keep your original export as the source.
 5. Need help? Email the support address shown on the public migration page (`/compare/magicbrief`) and we'll move it with you, person to person.
 
@@ -55,4 +55,4 @@ name,website,notes,tags,client,board,analytics_impressions,analytics_spend,repor
 Blue Peak Foods,bluepeakfoods.com,Frozen line refresh,packaging,Client B,Product Board,,,
 ```
 
-Five to Nine maps `name`, `website`, `notes`, `tags`, and `client`; the parser/preview data contract returns `preview.rejectedColumns` as `board`, `analytics_impressions`, `analytics_spend`, and `report_date`, and retains each row's full text in `row.raw`. The current UI renders row-level statuses only — there is no dedicated rejected-column panel yet — so keep your original file as the proof-safe record. That behavior is proven deterministically by `tests/magicbrief-migration.test.ts` against the real parser.
+Five to Nine maps `name`, `website`, `notes`, `tags`, and `client`; the parser/preview data contract returns `preview.rejectedColumns` as `board`, `analytics_impressions`, `analytics_spend`, and `report_date`, the preview panel lists them as "Columns not imported", and the parser retains each row's full text in `row.raw`. That behavior is proven deterministically by `tests/magicbrief-migration.test.ts` against the real parser.

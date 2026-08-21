@@ -1,6 +1,14 @@
+import { sha256Hex } from "~/lib/browser-job-telemetry.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { ScheduledScanCadence } from "~/lib/plan-entitlements";
 import type { DiscoveryRouteContext } from "~/lib/types";
+
+/**
+ * Stable page-1 marker shared by the D1 cache key and the telemetry
+ * correlation input: a request with no paging cursor (or an empty one) is
+ * canonically page 1 and must hash identically forever.
+ */
+const DISCOVERY_PAGE_1_MARKER = "page-1";
 
 export function buildDiscoveryCacheKey(input: {
   provider: string;
@@ -12,8 +20,75 @@ export function buildDiscoveryCacheKey(input: {
     input.provider.trim().toLowerCase(),
     input.fingerprint.trim(),
     input.country.trim().toLowerCase().replace(/\s+/g, "-"),
-    (input.cursor ?? "page-1").trim(),
+    (input.cursor ?? DISCOVERY_PAGE_1_MARKER).trim(),
   ].join(":");
+}
+
+/**
+ * Upper bound for a raw paging cursor that may enter the canonical telemetry
+ * correlation input verbatim. Meta API cursors are opaque base64url tokens
+ * and can grow without bound; anything longer is fingerprinted first so no
+ * unbounded cursor can ever reach a persisted (hashed) key.
+ */
+export const TELEMETRY_CURSOR_MAX_LENGTH = 256;
+
+/**
+ * Bound a paging cursor before it enters any canonical correlation input:
+ * - null/empty -> the stable `page-1` marker (identical to the cache-key
+ *   page-1 marker, so page-1 hashing semantics never change);
+ * - at most `TELEMETRY_CURSOR_MAX_LENGTH` characters -> the trimmed cursor
+ *   verbatim (byte-stable);
+ * - longer -> a deterministic SHA-256 fingerprint (`cursor:<digest>`), so the
+ *   same oversized cursor always maps to the same bounded token.
+ * The raw cursor is never returned from here in a form that can be persisted.
+ */
+export async function normalizeCursorForTelemetry(
+  cursor: string | null | undefined,
+): Promise<string> {
+  const trimmed = cursor?.trim() ?? "";
+  if (!trimmed) {
+    return DISCOVERY_PAGE_1_MARKER;
+  }
+  if (trimmed.length <= TELEMETRY_CURSOR_MAX_LENGTH) {
+    return trimmed;
+  }
+  return `cursor:${await sha256Hex(trimmed)}`;
+}
+
+/**
+ * Canonical telemetry correlation input for one discovery request: the same
+ * provider / query-fingerprint / country / cursor components that form the D1
+ * cache key (so identical requests hash identically), but with the paging
+ * cursor bounded first (see `normalizeCursorForTelemetry`) — the raw cursor
+ * never enters the digest. Exact cache-key overrides (e.g. search-v2 domain
+ * keys) are the canonical input for those requests; their trailing cursor
+ * segment is replaced with the bounded cursor the same way. Callers feed the
+ * result into `sha256Hex` and persist ONLY the digest.
+ */
+export async function buildTelemetryCorrelationKey(input: {
+  provider: string;
+  fingerprint: string;
+  country: string;
+  cursor?: string | null;
+  cacheKeyOverride?: string | null;
+}): Promise<string> {
+  const boundedCursor = await normalizeCursorForTelemetry(input.cursor);
+  const override = input.cacheKeyOverride?.trim();
+  if (override) {
+    // Every override builder (legacy and search-v2) appends the cursor as
+    // the final `:...` segment; swap in the bounded cursor so an oversized
+    // raw cursor cannot inflate the digest input.
+    const lastColon = override.lastIndexOf(":");
+    if (lastColon > 0) {
+      return `${override.slice(0, lastColon + 1)}${boundedCursor}`;
+    }
+  }
+  return buildDiscoveryCacheKey({
+    provider: input.provider,
+    fingerprint: input.fingerprint,
+    country: input.country,
+    cursor: boundedCursor,
+  });
 }
 
 export function resolveDiscoveryCacheTtlMs(routeContext: DiscoveryRouteContext) {

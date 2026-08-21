@@ -5,6 +5,7 @@ import type {
   WatchEventStatus,
   WatchEventType,
 } from "~/lib/types";
+import { stripChurnTokens } from "~/lib/normalize";
 // Zero-noise period triage lives in an isomorphic module (the app route
 // renders it client-side); server callers keep importing this module.
 export {
@@ -224,9 +225,15 @@ function buildFieldChangeDraft(
   }
 
   if (eventType === "landing_page_offer_changed") {
-    const previousValue = normalizeFieldValue(previous.priceText);
-    const currentValue = normalizeFieldValue(current.priceText);
-    if (previousValue && currentValue && previousValue !== currentValue) {
+    // Churn-stable comparison: countdown timers, rolling dates, and live
+    // inventory counters in the price/offer line (e.g. "Only 3 left · ₹499")
+    // must not fire an offer event on every scan. The raw values are still
+    // stored for display and evidence. Explicit `!== null` guards distinguish
+    // missing fields (no event) from fields that strip to "" (pure churn — a
+    // real change on the other side must still fire).
+    const previousValue = churnStableFieldValue(previous.priceText);
+    const currentValue = churnStableFieldValue(current.priceText);
+    if (previousValue !== null && currentValue !== null && previousValue !== currentValue) {
       return {
         eventType,
         from: previous.priceText ?? "",
@@ -239,9 +246,12 @@ function buildFieldChangeDraft(
   }
 
   if (eventType === "landing_page_cta_changed") {
-    const previousValue = normalizeFieldValue(previous.ctaText);
-    const currentValue = normalizeFieldValue(current.ctaText);
-    if (previousValue && currentValue && previousValue !== currentValue) {
+    // Churn-stable comparison: a "Claim offer · 00:59:59" CTA ticking between
+    // scans is the same CTA. The raw values are still stored for display and
+    // evidence. Same missing-vs-pure-churn guard as the offer branch above.
+    const previousValue = churnStableFieldValue(previous.ctaText);
+    const currentValue = churnStableFieldValue(current.ctaText);
+    if (previousValue !== null && currentValue !== null && previousValue !== currentValue) {
       return {
         eventType,
         from: previous.ctaText ?? "",
@@ -308,6 +318,20 @@ function stringOrNull(value: unknown) {
 
 function normalizeFieldValue(value: string | null) {
   return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? null;
+}
+
+// Churn-stable comparison value for any landing-page field that flows through
+// the offer/CTA change test. Distinguishes three states explicitly:
+//   - null  : the field is genuinely missing on this capture (do not fire).
+//   - ""    : the field is present, but its churn-stable form is empty
+//             (e.g. "Only 3 left" strips entirely) — pure churn, NOT missing.
+//             A real change to a copy-bearing side must still fire.
+// `normalizeFieldValue` already lowercases and collapses whitespace, so
+// callers don't need an extra `.toLowerCase()` — behavior is identical to
+// the existing inline path on real copy.
+function churnStableFieldValue(value: string | null) {
+  const normalized = normalizeFieldValue(value);
+  return normalized === null ? null : stripChurnTokens(normalized);
 }
 
 /**

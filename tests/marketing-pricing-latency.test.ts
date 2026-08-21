@@ -4,17 +4,112 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pricingPlans, usageBundles } from "~/lib/pricing";
 
-describe("marketing pricing latency", () => {
+describe("marketing pricing SSR", () => {
   beforeEach(() => {
     vi.resetModules();
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.resetModules();
   });
 
-  it("returns the homepage loader without waiting for a Dodo preview", async () => {
+  const commercialLaunch = {
+    scoutSaleOpen: true,
+    starterSaleOpen: true,
+    agencySaleOpen: false,
+  };
+
+  const availablePreview = {
+    available: true,
+    provider: "dodo",
+    source: "dodo_checkout_preview",
+    country: "US",
+    adaptiveCurrency: true,
+    feesInclusive: true,
+    prices: {
+      starter: {
+        monthly: { display: "$99", amount: 9900, currency: "USD", billingCountry: "US" },
+      },
+    },
+    annualValidation: {},
+    usageBundles: {},
+  };
+
+  it("publishes the Dodo pricing preview in the loader when it responds within the SSR bound", async () => {
+    const previewDodo0509PlanPrices = vi.fn().mockResolvedValue(availablePreview);
+    const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
+
+    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
+    }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+
+    const { headers, loader } = await import("~/routes/marketing");
+    const response = (await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/"),
+    } as never)) as Response;
+
+    expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
+    expect(response).toBeInstanceOf(Response);
+    // Country-specific prices are embedded in this HTML: it must be
+    // browser-only so a shared cache never replays one country's prices
+    // for another visitor.
+    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+    expect(response.headers.get("vary")).toContain("cookie");
+    // React Router only merges Set-Cookie from loader responses into the
+    // document; the route-level headers export must carry the rest through.
+    const documentHeaders = headers({
+      loaderHeaders: response.headers,
+      parentHeaders: new Headers(),
+      actionHeaders: new Headers(),
+      errorHeaders: undefined,
+    });
+    expect(documentHeaders.get("cache-control")).toBe("private, max-age=300");
+    await expect(response.json()).resolves.toEqual({
+      pricingPreview: availablePreview,
+      commercialLaunch,
+      proofBrief: null,
+    });
+    expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
+      DODO_0509_API_KEY: "provider-key",
+    });
+  });
+
+  it("falls back to the checkout-localized preview when Dodo exceeds the SSR bound", async () => {
+    vi.useFakeTimers();
+    const previewDodo0509PlanPrices = vi.fn(() => new Promise<never>(() => {}));
+    const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
+
+    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
+    }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+
+    const { loader } = await import("~/routes/marketing");
+    const loading = loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/"),
+    } as never);
+
+    await vi.advanceTimersByTimeAsync(2_500);
+    const result = await loading;
+
+    // The homepage document never blocks on a slow Dodo preview: it degrades
+    // to the honest checkout-localized fallback and the client-side
+    // /api/pricing-preview fetch takes over near the fold.
+    expect(result).toEqual({
+      pricingPreview: { available: false },
+      commercialLaunch,
+      proofBrief: null,
+    });
+  });
+
+  it("waits for a Dodo preview only up to the SSR bound, then falls back", async () => {
     const previewDodo0509PlanPrices = vi.fn(
       () => new Promise<never>(() => {}),
     );
@@ -30,35 +125,118 @@ describe("marketing pricing latency", () => {
       getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
     }));
     vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+    vi.doMock("~/lib/public-proof.server", () => ({
+      loadPublicProofBrief: vi.fn().mockResolvedValue(null),
+    }));
 
     const { loader } = await import("~/routes/marketing");
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeout = setTimeout(
-        () => reject(new Error("marketing loader waited for pricing preview")),
-        250,
-      );
+    const start = Date.now();
+    const result = await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/"),
+    } as never);
+
+    // The document waits only the bounded SSR window (2.5s), then degrades to
+    // the honest checkout-localized fallback instead of blocking the page.
+    expect(Date.now() - start).toBeGreaterThanOrEqual(2300);
+    expect(result).toEqual({
+      pricingPreview: { available: false },
+      commercialLaunch,
+      proofBrief: null,
     });
+    expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
+    expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
+      DODO_0509_API_KEY: "provider-key",
+    });
+  });
 
-    try {
-      const result = await Promise.race([
-        loader({
-          context: { cloudflare: { env: {} } },
-        } as never),
-        timeoutPromise,
-      ]);
+  it("renders real per-plan prices in the SSR document when the preview is available", async () => {
+    const preview = {
+      available: true,
+      provider: "dodo",
+      source: "dodo_checkout_preview",
+      country: "US",
+      adaptiveCurrency: true,
+      feesInclusive: true,
+      prices: {
+        scout: {
+          monthly: { display: "$19", amount: 1900, currency: "USD", billingCountry: "US" },
+          yearly: { display: "$152", amount: 15200, currency: "USD", billingCountry: "US" },
+        },
+        starter: {
+          monthly: { display: "$59", amount: 5900, currency: "USD", billingCountry: "US" },
+          yearly: { display: "$472", amount: 47200, currency: "USD", billingCountry: "US" },
+        },
+        agency: {
+          monthly: { display: "$199", amount: 19900, currency: "USD", billingCountry: "US" },
+          yearly: { display: "$1,592", amount: 159200, currency: "USD", billingCountry: "US" },
+        },
+      },
+      annualValidation: {
+        scout: {
+          valid: true,
+          reason: "valid_4_months_free",
+          monthlyAmount: 1900,
+          annualAmount: 15200,
+          expectedAnnualAmount: 15200,
+          currency: "USD",
+          billingCountry: "US",
+        },
+        starter: {
+          valid: true,
+          reason: "valid_4_months_free",
+          monthlyAmount: 5900,
+          annualAmount: 47200,
+          expectedAnnualAmount: 47200,
+          currency: "USD",
+          billingCountry: "US",
+        },
+        agency: {
+          valid: true,
+          reason: "valid_4_months_free",
+          monthlyAmount: 19900,
+          annualAmount: 159200,
+          expectedAnnualAmount: 159200,
+          currency: "USD",
+          billingCountry: "US",
+        },
+      },
+      usageBundles: {},
+    };
+    const previewDodo0509PlanPrices = vi.fn().mockResolvedValue(preview);
+    const publicCommercialLaunchSummary = vi.fn(() => ({
+      scoutSaleOpen: true,
+      starterSaleOpen: true,
+      agencySaleOpen: false,
+    }));
 
-      expect(result).toEqual({
-        pricingPreview: { available: false },
-        commercialLaunch,
-      });
-      expect(previewDodo0509PlanPrices).not.toHaveBeenCalled();
-      expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
-        DODO_0509_API_KEY: "provider-key",
-      });
-    } finally {
-      if (timeout) clearTimeout(timeout);
-    }
+    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
+    }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+    vi.doMock("~/lib/public-proof.server", () => ({
+      loadPublicProofBrief: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { loader } = await import("~/routes/marketing");
+    const response = (await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/"),
+    } as never)) as Response;
+
+    expect(response.status).toBe(200);
+    // Buyer-country prices must never be shared-cached: a DE/EUR variant could
+    // otherwise be replayed for a US visitor.
+    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+    const data = (await response.json()) as {
+      pricingPreview: { prices?: Record<string, Record<string, { display: string }>> };
+      commercialLaunch: { scoutSaleOpen: boolean };
+    };
+    expect(data.pricingPreview.prices?.scout?.monthly?.display).toBe("$19");
+    expect(data.pricingPreview.prices?.starter?.monthly?.display).toBe("$59");
+    expect(data.pricingPreview.prices?.agency?.monthly?.display).toBe("$199");
+    expect(data.commercialLaunch.scoutSaleOpen).toBe(true);
   });
 });
 

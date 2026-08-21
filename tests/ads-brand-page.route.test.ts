@@ -30,6 +30,14 @@ const baseAd: AdRecord = {
   researchSummary: "Summary",
   source: "meta_library_browser",
   analysisFields: [],
+  // Verified link evidence: the search-v2 pipeline attached a confirmed
+  // landing-page/registrable-domain match to this creative, so the page may
+  // truthfully say it "links to nykaa.com".
+  domainMatch: {
+    level: "registrable_domain",
+    reason: "Landing page matches nykaa.com",
+    matchedDomain: "nykaa.com",
+  },
 };
 
 function cacheEntry(
@@ -77,11 +85,15 @@ interface MockOptions {
   entry?: ReturnType<typeof cacheEntry> | null;
   provider?: string;
   rateLimitResponse?: Response | null;
+  onCacheRead?: () => void;
 }
 
 function installBrandPageMocks(options: MockOptions = {}) {
   const env = options.env ?? { DB: {} };
-  const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(options.entry ?? null);
+  const getDiscoveryCacheEntry = vi.fn().mockImplementation(async () => {
+    options.onCacheRead?.();
+    return options.entry ?? null;
+  });
   const searchAdsViaSourceResolver = vi.fn();
   const hasFreshDiscoveryCacheEntry = vi.fn();
   const searchMetaLibraryByBrowser = vi.fn();
@@ -222,6 +234,64 @@ describe("/ads/:domain loader", () => {
     expect(result.freshForLiveClaim).toBe(true);
   });
 
+  it("withholds the live claim at the exact moments-ago boundary so the stamp and the claim never disagree", async () => {
+    // The loader computes its own `now` a moment after the fixture timestamp,
+    // so pin the snapshot directly with a fixed `now`: the live claim must
+    // flip at EXACTLY the same 2-minute boundary the "Last checked" stamp
+    // uses ("moments ago"), not one millisecond later.
+    const now = new Date("2026-08-09T12:00:00.000Z");
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({ fetchedAt: new Date(now.getTime() - 120 * 1000).toISOString() }),
+    });
+
+    const { formatBrandPageCheckedAgo, loadBrandPageCacheSnapshot } = await import(
+      "~/lib/brand-page.server"
+    );
+    const atBoundary = await loadBrandPageCacheSnapshot(mocks.env as never, {
+      domain: "nykaa.com",
+      visitorCountry: "all",
+      now,
+    });
+    const justInside = await loadBrandPageCacheSnapshot(mocks.env as never, {
+      domain: "nykaa.com",
+      visitorCountry: "all",
+      now: new Date(now.getTime() - 1),
+    });
+
+    expect(atBoundary).not.toBeNull();
+    expect(formatBrandPageCheckedAgo(atBoundary!.fetchedAt, now)).toBe("about 2 minutes ago");
+    expect(atBoundary?.freshForLiveClaim).toBe(false);
+
+    // One millisecond inside the window the stamp still says "moments ago"
+    // and the live claim is still honest — the flip is exactly at the
+    // boundary, never a whole bucket earlier.
+    expect(justInside?.freshForLiveClaim).toBe(true);
+  });
+
+  it("keeps the live claim and checked-ago stamp on one post-read clock across a 2ms cache-read gap", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const t0 = new Date("2026-08-14T12:00:00.000Z");
+      vi.setSystemTime(t0);
+      const fetchedAt = new Date(t0.getTime() - 119_999).toISOString();
+      const mocks = installBrandPageMocks({
+        entry: cacheEntry({ fetchedAt }),
+        onCacheRead: () => {
+          vi.setSystemTime(new Date(t0.getTime() + 2));
+        },
+      });
+
+      const result = await runLoader("nykaa.com", mocks.env);
+
+      expect(result.hasCachedAds).toBe(true);
+      expect(result.checkedAgo).toBe("about 2 minutes ago");
+      expect(result.freshForLiveClaim).toBe(false);
+      expect(result.freshForLiveClaim).toBe(result.checkedAgo === "moments ago");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("withholds the live-claim freshness for a capture minutes old — not just hours", async () => {
     const mocks = installBrandPageMocks({
       entry: cacheEntry({ fetchedAt: isoAgo(5 * 60 * 1000) }),
@@ -271,6 +341,56 @@ describe("/ads/:domain loader", () => {
     // Only the "Nykaa" creative is the brand's own; the two "BeautyDeals Hub"
     // creatives are other advertisers whose ads link to nykaa.com.
     expect(result.brandOwnedAdCount).toBe(1);
+  });
+
+  it("builds every attribution signal from verified-linked creatives only — text-mention matches never score the brand", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [
+            // 30-day-old first-seen: clears the 14-day aggression floor, so
+            // the score CAN compute from this creative alone.
+            { ...baseAd, firstSeenAt: isoAgo(30 * DAY_MS) },
+            // A real creative the provider returned for "nykaa.com" that merely
+            // MENTIONS nykaa in its text — no landing page, no domainMatch
+            // verdict. It must never feed the score, teaser, or change feed.
+            {
+              ...baseAd,
+              metaAdId: "meta-text-1",
+              advertiser: "BeautyDeals Hub",
+              landingPageUrl: null,
+              domainMatch: undefined,
+              previewHeadline: "Nykaa sale code inside!",
+              variantCount: 4,
+            },
+          ],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    // The wall carries both creatives…
+    expect(result.ads).toHaveLength(2);
+    // …but only one carries verified link evidence, and the loader exposes
+    // exactly that subset for the client (which must never re-derive it from
+    // the server-only evidence module).
+    expect(result.verifiedLinkCount).toBe(1);
+    expect(result.verifiedLinkedAds.map((ad) => ad.metaAdId)).toEqual(["meta-nykaa-1"]);
+    expect(result.unverifiedMatchCount).toBe(1);
+    expect(result.brandOwnedAdCount).toBe(1);
+    // The teaser/score/change feed speak only about the verified capture. The
+    // unverified ad's first-seen (5 days ago) sits INSIDE the change-feed
+    // window — an unfiltered feed would emit its event, so an empty feed
+    // proves the exclusion.
+    expect(result.teaser?.totalCount).toBe(1);
+    expect(result.aggression?.adCount).toBe(1);
+    expect(result.changeEvents).toHaveLength(0);
   });
 
   it("reports zero brand-owned creatives when every cached ad is another advertiser's", async () => {
@@ -383,6 +503,37 @@ describe("/ads/:domain loader", () => {
     expect(mocks.enforcePublicBrandPageRateLimit).not.toHaveBeenCalled();
   });
 
+  it("404s RFC-reserved names even when a cache entry exists — a reserved name can never own real ads", async () => {
+    const mocks = installBrandPageMocks({ entry: cacheEntry() });
+    const reserved = [
+      "example.com",
+      "www.example.com",
+      "zzz-noway-12345.example.com",
+      "example.net",
+      "example.org",
+      "brand.example",
+      "brand.invalid",
+      "brand.test",
+      "brand.localhost",
+      "brand.local",
+    ];
+
+    for (const domain of reserved) {
+      let thrown: unknown = null;
+      try {
+        await runLoader(domain, mocks.env);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown, `expected 404 for reserved ${JSON.stringify(domain)}`).toBeInstanceOf(Response);
+      expect((thrown as Response).status).toBe(404);
+    }
+
+    // Reserved names must never read the cache or burn the rate limiter.
+    expect(mocks.getDiscoveryCacheEntry).not.toHaveBeenCalled();
+    expect(mocks.enforcePublicBrandPageRateLimit).not.toHaveBeenCalled();
+  });
+
   it("throws the public rate-limit response when the bucket is exhausted", async () => {
     const limited = new Response("Too many requests", { status: 429 });
     const mocks = installBrandPageMocks({ entry: cacheEntry(), rateLimitResponse: limited });
@@ -487,6 +638,8 @@ describe("/ads/:domain meta", () => {
     canonicalPath: "/ads/nykaa.com",
     freshForLiveClaim: false,
     brandOwnedAdCount: 1,
+    verifiedLinkCount: 1,
+    unverifiedMatchCount: 0,
   };
 
   it("emits the brand title, honest description, and canonical URL without robots meta when indexable", async () => {
@@ -557,11 +710,56 @@ describe("/ads/:domain meta", () => {
       ...richData,
       ads: [baseAd, { ...baseAd, metaAdId: "meta-2" }],
       brandOwnedAdCount: 1,
+      verifiedLinkCount: 2,
     });
 
     const description = tags.find((tag) => tag.name === "description")?.content ?? "";
     expect(description).toContain("2 Meta ads linking to nykaa.com — 1 from Nykaa and 1 from other advertisers");
     expect(tags.some((tag) => tag.title?.includes("Nykaa Facebook & Instagram ads"))).toBe(false);
+  });
+
+  it("never claims ads LINK to the domain when the capture has no verified link evidence", async () => {
+    installBrandPageMocks();
+    // The cached creatives were returned by the provider query (text mention /
+    // provider candidate) — no landing page, no domainMatch verdict.
+    const unverifiedAd = { ...baseAd, metaAdId: "meta-text-1", domainMatch: undefined };
+    const tags = await metaFor({
+      ...richData,
+      ads: [unverifiedAd, { ...unverifiedAd, metaAdId: "meta-text-2" }],
+      brandOwnedAdCount: 0,
+      verifiedLinkCount: 0,
+      unverifiedMatchCount: 2,
+    });
+
+    expect(tags).toContainEqual({
+      title: "Nykaa: Meta ads matching nykaa.com — checked about 2 hours ago | Five to Nine",
+    });
+    const description = tags.find((tag) => tag.name === "description")?.content ?? "";
+    expect(description).toContain("2 Meta ads matching nykaa.com");
+    expect(description).toContain("Their link to the site is not verified");
+    // The unverified capture must never be described as linking to the domain.
+    expect(description).not.toContain("linking to nykaa.com");
+    expect(tags.some((tag) => tag.title?.includes("linking to nykaa.com"))).toBe(false);
+  });
+
+  it("counts only verified-linked creatives in linking language when matches are mixed", async () => {
+    installBrandPageMocks();
+    // 1 verified ad (baseAd) + 1 text-mention ad. The wall shows both, but the
+    // "linking to" counts must cover only the verified capture.
+    const unverifiedAd = { ...baseAd, metaAdId: "meta-text-1", domainMatch: undefined };
+    const tags = await metaFor({
+      ...richData,
+      ads: [baseAd, unverifiedAd],
+      brandOwnedAdCount: 1,
+      verifiedLinkCount: 1,
+      unverifiedMatchCount: 1,
+    });
+
+    const description = tags.find((tag) => tag.name === "description")?.content ?? "";
+    expect(description).toContain("1 Meta ad linking to nykaa.com — 1 from Nykaa");
+    expect(description).toContain(
+      "Another 1 ad matched the search without a verified link to nykaa.com.",
+    );
   });
 
   it("describes the honest shell without fabricating ad data", async () => {

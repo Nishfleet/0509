@@ -454,14 +454,10 @@ export default function CollectionsRoute() {
           ) : (
             <section aria-labelledby="collection-limit-title" className="f9-wk-sec f9-library-limit">
               <h2 className="f9-library-section-title" id="collection-limit-title">
-                {collectionLimit === 0
-                  ? "New collections start on Scout"
-                  : "Collection limit reached"}
+                Collection limit reached
               </h2>
               <p className="f9-library-note">
-                {collectionLimit === 0
-                  ? "Your saved evidence remains available, but Free does not include new collections. Compare plans to create another."
-                  : `You are using all ${collectionLimit} collections on this plan. Delete one you no longer need, or compare plans to keep more evidence sets side by side.`}
+                {`You are using all ${collectionLimit} ${collectionLimit === 1 ? "Collection" : "Collections"} on this plan. Delete one you no longer need, or compare plans to keep more evidence sets side by side.`}
               </p>
               <Link className="f9-wk-lnk" to="/app/billing?source=collections#plans">
                 Compare plans <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
