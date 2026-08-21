@@ -100,6 +100,20 @@ const categoryPromises = [
       "Octolens' category roundup argues competitor monitoring is \u201cseven different jobs, not one\u201d — price changes, ads, changelogs, and comparison pages are not the same workflow.",
     source: "https://octolens.com/blog/best-competitor-monitoring-tools",
   },
+  {
+    domain: "adversa.io — checked 2026-08-21",
+    title: "AI that triages the noise and scores each change",
+    detail:
+      "New entrant Adversa pitches straight at alert fatigue: it groups related changes into a single update, filters cosmetic edits like navigation and footers, and uses AI to explain what changed, how significant it was, and why it matters. Early tiers are sold as one-time lifetime deals.",
+    source: "https://adversa.io/",
+  },
+  {
+    domain: "whatchanged.co.uk — checked 2026-08-21",
+    title: "A real-time feed of every competitor site change",
+    detail:
+      "WhatChanged tracks competitor websites in real time with a diff-style change feed — new pages, removed content, pricing and navigation updates — built for SEO teams, content marketers, and founders, with lifetime discounts for early users.",
+    source: "https://whatchanged.co.uk/",
+  },
 ] as const;
 
 const categoryComplaints = [
@@ -187,7 +201,7 @@ export default function CompetitorMonitoringCategoryRoute() {
             name: "Competitor monitoring software | Five to Nine",
             description: pageDescription,
             pathname: "/competitor-monitoring",
-            dateModified: "2026-08-08",
+            dateModified: "2026-08-21",
           }),
         )}
       />
@@ -236,7 +250,7 @@ export default function CompetitorMonitoringCategoryRoute() {
           <h2>What competitor monitoring tools promise.</h2>
           <p>
             These are the vendors&rsquo; own current claims, checked by the research desk on 8
-            August 2026 and quoted with their source URLs below.
+            August 2026 and 21 August 2026 and quoted with their source URLs below.
           </p>
         </div>
 
@@ -431,12 +445,14 @@ export default function CompetitorMonitoringCategoryRoute() {
         </div>
         <div className="ld-quiet-grid" aria-label="Source and freshness limits">
           <article>
-            <span className="ld-kicker">Category evidence checked 2026-08-08</span>
+            <span className="ld-kicker">Category evidence checked 2026-08-08 and 2026-08-21</span>
             <h3>Each quote keeps its own source link</h3>
             <p>
               Every claim in the two sections above links to the page it came from, with the
-              check date on the card. If a vendor changes their page, this page is updated on the
-              next research-desk cycle — we do not restate old quotes as standing facts.
+              check date on the card. The 21 August 2026 cycle added the newest noise-triage
+              entrants, Adversa and WhatChanged, after checking their live pages. If a vendor
+              changes their page, this page is updated on the next research-desk cycle — we do
+              not restate old quotes as standing facts.
             </p>
           </article>
           <article>
