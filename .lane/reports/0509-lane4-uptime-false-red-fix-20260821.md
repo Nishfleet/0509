@@ -5,6 +5,7 @@ check flip: the merged v2-promotion changed up" (sealed packet `0509 lane 4`,
 item_id `3fff69493a`).
 
 Branch: `0509-lane4-uptime-false-red-fix-20260821` (off fresh origin/main).
+PR: https://github.com/Nishfleet/0509/pull/844
 
 ## Diagnosis
 
