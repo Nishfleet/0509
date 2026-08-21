@@ -45,7 +45,16 @@ describe("final launch documentation", () => {
     expect(ownerActions).toContain("SCHEDULED PASS / ALERT UNPROVEN");
     expect(backupUptime).toContain(".github/workflows/uptime-health.yml");
     expect(uptimeWorkflow).toContain("https://0509.io/api/health");
-    expect(uptimeWorkflow).toContain('cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"');
+    // Production liveness detection moved off GitHub Actions onto the VPS
+    // systemd timer at ops/liveness/ (the GitHub 5-minute cron never
+    // delivered — median 63 min between scheduled runs over 300 observations,
+    // 2026-07-25..2026-08-11). The workflow is now on-demand only; it still
+    // runs the same probe pair when invoked.
+    expect(uptimeWorkflow).not.toContain(
+      'cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"',
+    );
+    expect(uptimeWorkflow).toContain("0509-liveness");
+    expect(uptimeWorkflow).toContain("on-demand");
     expect(ownerActions).toContain("D1-to-R2 scheduled backup");
     expect(ownerActions).toContain("PROVEN DISPATCH 2026-07-13 / FUTURE OBSERVATION OPEN");
     expect(scorecard).toContain("Restore drill");
