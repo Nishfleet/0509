@@ -237,6 +237,21 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("New this week");
   });
 
+  it("never renders literal U+FFFD in the Longest run cell when the hook truncates on a surrogate", async () => {
+    // A hook longer than the cell limit whose 26th UTF-16 code unit lands
+    // mid-emoji (a surrogate pair). The old code-unit slice left a lone
+    // surrogate that serialized as the literal replacement character.
+    const hook = `${"A".repeat(24)}🏃‍♂️ Finish strong — the streak`;
+    const markup = await render(
+      populated({ teaser: { ...teaser, longestRunningHook: hook } }),
+    );
+
+    expect(markup).not.toContain("\uFFFD");
+    // The cut drops the dangling half of the emoji instead of splitting it;
+    // what remains is the truncated headline with the ellipsis.
+    expect(markup).toContain("AAAAAAAAAAAAAAAAAAAAAAAA…");
+  });
+
   it("hides 'What changed this week' entirely when there are no change events", async () => {
     const markup = await render(populated({ changeEvents: [] }));
 

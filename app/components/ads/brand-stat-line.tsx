@@ -1,3 +1,4 @@
+import { truncateTextSafe } from "~/lib/text-safe";
 import type { BrandPageAggression, BrandIntelTeaser } from "~/lib/brand-page.server";
 import type { AdRecord } from "~/lib/types";
 
@@ -66,7 +67,9 @@ export function BrandStatLine({
       value: String(teaser.longestRunningDays),
       unit: "d",
       caption: "Longest run",
-      context: teaser.longestRunningHook ? truncate(teaser.longestRunningHook, 26) : "proven runner",
+      context: teaser.longestRunningHook
+        ? `${truncateTextSafe(teaser.longestRunningHook, 25).trimEnd()}…`
+        : "proven runner",
     });
   }
 
@@ -127,9 +130,4 @@ export function BrandStatLine({
 function formatPerWeek(value: number): string {
   if (value >= 10) return String(Math.round(value));
   return value.toFixed(1).replace(/\.0$/, "");
-}
-
-function truncate(value: string, max: number): string {
-  if (value.length <= max) return value;
-  return `${value.slice(0, max - 1).trimEnd()}…`;
 }
