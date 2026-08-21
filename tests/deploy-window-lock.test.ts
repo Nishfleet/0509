@@ -204,6 +204,67 @@ async function readPidWhenWritten(marker: string): Promise<number> {
   return pid;
 }
 
+// Cleanup must never signal a process group that is no longer ours. Once the
+// lane-holder reaps the cancelled command its PID is free, and under CI process
+// churn the kernel can reuse that exact PID as the leader of a brand-new group
+// (e.g. the slot-reuse replacement lane) before this finally block runs. A
+// blind kill(-pid, SIGKILL) then kills the wrong process and fails an unrelated
+// spec. Only signal when a live member of the original group still exists.
+function killOwnedProcessGroup(pid: number): void {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return;
+  }
+  // A dead-but-unreaped zombie still holds its PGID; a live descendant (e.g. an
+  // in-flight `sleep` of the stubborn loop) may also remain. Both are still our
+  // group. If no /proc entry claims the PGID, the group is gone: signalling the
+  // now-free PID could hit a reused group, so skip.
+  if (!processGroupHasMember(pid)) {
+    return;
+  }
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // The cancellation path may have reaped the group in between.
+  }
+}
+
+function processGroupHasMember(pid: number): boolean {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const fields = stat.slice(stat.indexOf(")") + 2).split(" ");
+    // Field 5 is the process group id (fields are offset by 3 in this parse).
+    const pgid = Number(fields[5 - 3]);
+    if (!Number.isInteger(pgid) || pgid !== pid) {
+      // The command is no longer (or never was) a group leader.
+      return false;
+    }
+  } catch {
+    return false;
+  }
+  try {
+    for (const entry of readdirSync("/proc")) {
+      if (!/^\d+$/u.test(entry)) {
+        continue;
+      }
+      let stat: string;
+      try {
+        stat = readFileSync(`/proc/${entry}/stat`, "utf8");
+      } catch {
+        continue;
+      }
+      const fields = stat.slice(stat.indexOf(")") + 2).split(" ");
+      if (Number(fields[5 - 3]) === pid) {
+        return true;
+      }
+    }
+  } catch {
+    // If /proc is unreadable, fall back to signalling: the group either exists
+    // (we reap it) or is gone (kill fails harmlessly).
+    return true;
+  }
+  return false;
+}
+
 function probeIsFree(lockFile: string): boolean {
   return (
     spawnSync("flock", ["--exclusive", "--nonblock", lockFile, "true"])
@@ -609,19 +670,15 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
 
     const result = await completed(lane);
     expect(result.code, result.stderr).toBe(0);
-    const childPid = Number(readFileSync(childPidFile, "utf8"));
+    const childPid = await readPidWhenWritten(childPidFile);
     try {
       expect(Number.isInteger(childPid)).toBe(true);
       expect(() => process.kill(childPid, 0)).not.toThrow();
       expect(probeIsFree(lockFile)).toBe(true);
     } finally {
-      if (Number.isInteger(childPid)) {
-        try {
-          process.kill(childPid, "SIGKILL");
-        } catch {
-          // The descendant may have exited after the assertion probe.
-        }
-      }
+      // The lane holder already detached this child; only kill it if it still
+      // claims the PID (PID 0 would target our own process group).
+      killOwnedProcessGroup(childPid);
     }
   });
 
@@ -660,13 +717,10 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       );
       expect(() => process.kill(commandPid, 0)).toThrow();
     } finally {
-      if (Number.isInteger(commandPid) && commandPid > 0) {
-        try {
-          process.kill(-commandPid, "SIGKILL");
-        } catch {
-          // The cancellation path should already have reaped the group.
-        }
-      }
+      // The PID is free for reuse once the lane-holder reaps the cancelled
+      // group; under CI churn the kernel can hand the same PID to a brand-new
+      // group. Guard the cleanup so we never signal someone else's session.
+      killOwnedProcessGroup(commandPid);
     }
   });
 
@@ -726,13 +780,10 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       expect((await completed(replacement)).code).toBe(0);
       expect(readFileSync(nextMarker, "utf8")).toBe("reused");
     } finally {
-      if (commandPid > 0) {
-        try {
-          process.kill(-commandPid, "SIGKILL");
-        } catch {
-          // The bounded cancellation path should have killed the session.
-        }
-      }
+      // The slot-reuse replacement lane is the most likely candidate to
+      // inherit the freed PID; only signal if the original group still owns
+      // it.
+      killOwnedProcessGroup(commandPid);
     }
   });
 
@@ -785,13 +836,9 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       );
       expect(() => process.kill(childPid, 0)).toThrow();
     } finally {
-      if (Number.isInteger(childPid) && childPid > 0) {
-        try {
-          process.kill(-childPid, "SIGKILL");
-        } catch {
-          // The cancellation path should already have reaped the group.
-        }
-      }
+      // Reuse-safe: the lane holder reaps the cancelled group before this
+      // runs, and the freed PGID may already belong to a fresh lane.
+      killOwnedProcessGroup(childPid);
     }
   });
 
