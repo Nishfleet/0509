@@ -1,31 +1,8 @@
 import { readFileSync } from "node:fs";
-import { createElement, type ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createElement } from "react";
+import { describe, expect, it } from "vitest";
 
-type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
-
-async function mockRouter(rootData?: unknown) {
-	vi.doMock("react-router", async () => {
-		const actual = await vi.importActual<typeof import("react-router")>("react-router");
-		const React = await import("react");
-		return {
-			...actual,
-			Link: ({ children, to, ...props }: MockLinkProps) =>
-				React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-			useRouteLoaderData: () => rootData,
-		};
-	});
-}
-
-beforeEach(() => {
-	vi.resetModules();
-});
-
-afterEach(() => {
-	vi.restoreAllMocks();
-	vi.resetModules();
-});
+import { renderWithRouter } from "./test-utils/render-with-router";
 
 const SHARED_LINKS = [
 	{ href: "/search", label: "Search preview" },
@@ -44,9 +21,10 @@ const SHARED_LINKS = [
 
 describe("MarketingNav (shared public nav)", () => {
 	it("renders one identical link set with a single wordmark tagline", async () => {
-		await mockRouter();
-		const { MarketingNav, MARKETING_TAGLINE } = await import("~/components/marketing-nav");
-		const markup = renderToStaticMarkup(createElement(MarketingNav));
+		const { MarketingNav, MARKETING_TAGLINE } = await import(
+			"~/components/marketing-nav"
+		);
+		const markup = await renderWithRouter(createElement(MarketingNav));
 
 		for (const link of SHARED_LINKS) {
 			expect(markup).toContain(`href="${link.href}"`);
@@ -65,12 +43,34 @@ describe("MarketingNav (shared public nav)", () => {
 	});
 
 	it("points Open app straight at /app for signed-in visitors", async () => {
-		await mockRouter({ session: { user: { id: "u1" } } });
 		const { MarketingNav } = await import("~/components/marketing-nav");
-		const markup = renderToStaticMarkup(createElement(MarketingNav));
+		const markup = await renderWithRouter(createElement(MarketingNav), {
+			rootData: { session: { user: { id: "u1" } } },
+		});
 
 		expect(markup).toContain('href="/app"');
 		expect(markup).toContain(">Open app</a>");
+	});
+
+	it("guardrail: renders through a real data router with no react-router mock, so the useRouteLoaderData invariant regression (PR #742) stays caught", async () => {
+		// The 2026-08-17 codex-node-checks failure was exactly this component
+		// rendered outside a data router: `useRouteLoaderData must be used
+		// within a data router` thrown from marketing-nav.tsx. renderWithRouter
+		// mounts a real createMemoryRouter root route (id "root") whose loader
+		// feeds `useRouteLoaderData("root")` — if MarketingNav ever renders
+		// without router context again, this test throws the same invariant
+		// instead of passing.
+		const { MarketingNav } = await import("~/components/marketing-nav");
+		const anonymous = await renderWithRouter(createElement(MarketingNav));
+		const signedIn = await renderWithRouter(createElement(MarketingNav), {
+			rootData: { session: { user: { id: "u1" } } },
+		});
+
+		// Real loader data flows through the real hook: the auth-aware Open
+		// app link flips between the login destination and /app.
+		expect(anonymous).toContain('href="/auth/login?redirectTo=%2Fapp"');
+		expect(signedIn).toContain('href="/app"');
+		expect(signedIn).not.toContain('href="/auth/login?redirectTo=%2Fapp"');
 	});
 
 	it("hides Open app on the compact ≤860px nav so the fold stays clear", () => {
@@ -96,11 +96,10 @@ describe("MarketingNav (shared public nav)", () => {
 		// The legal/doc shell no longer improvises its own chrome: its header IS
 		// MarketingNav, so the tagline and the Pricing/Search/Sign in links are
 		// byte-identical and no public section is stranded.
-		await mockRouter();
 		const { MarketingNav } = await import("~/components/marketing-nav");
 		const { PublicDocHeader } = await import("~/components/public-doc-shell");
-		expect(renderToStaticMarkup(createElement(PublicDocHeader))).toBe(
-			renderToStaticMarkup(createElement(MarketingNav)),
+		expect(await renderWithRouter(createElement(PublicDocHeader))).toBe(
+			await renderWithRouter(createElement(MarketingNav)),
 		);
 	});
 });
