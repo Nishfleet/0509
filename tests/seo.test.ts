@@ -19,12 +19,16 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain("https://0509.io/terms");
     // Funnel entry points (feat/funnel-seo): the public search preview,
     // signup, and both compare pages are deliberately crawlable.
-    expect(sitemap?.body).toContain("<url><loc>https://0509.io/search</loc></url>");
-    expect(sitemap?.body).toContain("<url><loc>https://0509.io/auth/signup</loc></url>");
-    expect(sitemap?.body).toContain("<url><loc>https://0509.io/compare/magicbrief</loc></url>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/search</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/auth/signup</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/magicbrief</loc>");
     expect(sitemap?.body).toContain(
-      "<url><loc>https://0509.io/compare/meta-ad-library</loc></url>",
+      "<loc>https://0509.io/compare/meta-ad-library</loc>",
     );
+    // Metadata: static entries carry changefreq and priority.
+    expect(sitemap?.body).toContain("<changefreq>daily</changefreq>");
+    expect(sitemap?.body).toContain("<priority>1.0</priority>");
+    expect(sitemap?.body).toContain("<changefreq>yearly</changefreq>");
   });
 
 	it("disallows auth-only surfaces in robots.txt but keeps /share crawlable", () => {
