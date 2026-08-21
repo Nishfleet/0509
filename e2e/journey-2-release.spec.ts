@@ -239,7 +239,14 @@ for (const viewport of viewports) {
     await expectVisibleKeyboardFocus(submit);
     await expectPhoneTouchTargets(page);
     await submit.press("Enter");
-    await expect(page).toHaveURL(/\/app\/watchlists\?watchlist=[^&]+/);
+    // Creating the watchlist + first-scan state is a server round trip that
+    // can exceed Playwright's 5s expect default on the shared vps-verify
+    // runner under fleet load (run 32471530295, mobile flake; the same test
+    // passed tablet+desktop seconds earlier). 30s keeps the same URL
+    // assertion while matching the local-release budget philosophy.
+    await expect(page).toHaveURL(/\/app\/watchlists\?watchlist=[^&]+/, {
+      timeout: 30_000,
+    });
     // BL-035 makes `?watchlist=` the entity's own working surface. The
     // activation guarantee is unchanged: the created competitor and target
     // are immediately identifiable, and the first-scan state is attached to
