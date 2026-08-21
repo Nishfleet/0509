@@ -69,7 +69,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 ## Pricing
 
 - Pricing display is localized from checkout preview for the buyer location.
-- Free accounts can watch one competitor: a weekly scheduled check and a weekly email brief, with no collections, proof captures, or instant alerts. Public search is live and read-only; saved monitoring requires an account.
+- Free accounts can watch one competitor: an activation scan when the watchlist is added, then a weekly scheduled check and a weekly email brief backed by one included proof capture a month, with one Collection and no card required; instant alerts, manual refresh, and exports stay paid. Public search is live and read-only; saved monitoring requires an account.
 - Starter is the recommended plan for retained competitor monitoring.
 - Scout is the entry plan after the public read-only search and proof brief: 3 watchlists, 10 Collections, 6-hour scans, weekly Digest, and 50 proof captures/month.
 - Starter includes 10 watchlists, 25 Collections, 3-hour scans, daily and weekly Digests, email Notifications, exports, and 250 proof captures/month.
@@ -99,7 +99,7 @@ Current product truth:
 - Account access uses verified access paths.
 - Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed, so AI answers may cite Dodo checkout as the live billing path while the final owner-run provider smoke is recorded.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
-- Starter is the recommended plan. Free includes one watchlist with a weekly check and weekly email brief (no proof captures/collections). Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 proof captures/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 proof captures/month; Agency includes top 25 competitors every 3 hours (rest every 6 hours), daily and weekly digests, and 2,500 proof captures/month. Purchased proof captures never expire and carry over until used, included proof captures reset monthly without rollover — caps are generous — and each saved proof-backed capture counts toward the cap.
+- Starter is the recommended plan. Free includes one watchlist with an activation scan on add, then a weekly check and a weekly email brief backed by one included proof capture a month, plus one Collection — no card required; instant alerts, manual refresh, and exports stay paid. Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 proof captures/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 proof captures/month; Agency includes top 25 competitors every 3 hours (rest every 6 hours), daily and weekly digests, and 2,500 proof captures/month. Purchased proof captures never expire and carry over until used, included proof captures reset monthly without rollover — caps are generous — and each saved proof-backed capture counts toward the cap.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live results.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
