@@ -849,24 +849,34 @@ describe("captureLandingPageSnapshot", () => {
       vi.fn(async () => new Response("blocked", { status: 500 })) as never,
     );
 
+    type Snapshot = Awaited<ReturnType<typeof captureLandingPageSnapshot>>;
+    let settled: { ok: true; value: Snapshot } | { ok: false } | null = null;
     const snapshotPromise = captureLandingPageSnapshot(
       {},
       "https://example.com/glow",
       { allowRenderedFallback: false },
+    ).then(
+      (value) => {
+        settled = { ok: true, value };
+      },
+      () => {
+        settled = { ok: false };
+      },
     );
-    // Let the initial async work (DNS resolution, telemetry hash, first fetch
-    // attempt) complete by yielding to the real event loop. setImmediate is
-    // not faked by our config, so I/O callbacks and microtasks drain.
-    for (let i = 0; i < 20; i += 1) {
+    // Drain the real event loop and the fake clock together until the capture
+    // settles. A fixed number of yields loses the race under full-suite load
+    // (the retry sleep(250) gets scheduled after the one advanceTimers call
+    // and the fake clock never fires it, hanging the test), so instead keep
+    // alternating real-loop yields with clock advances until the promise
+    // resolves in either scheduling order.
+    for (let i = 0; i < 100 && settled === null; i += 1) {
       await new Promise((resolve) => setImmediate(resolve));
+      await vi.advanceTimersByTimeAsync(1_000);
     }
-    // The transient 500 is retried once (bounded retry); advance the fake
-    // clock through the retry delay so the second attempt can run.
-    await vi.advanceTimersByTimeAsync(1_000);
+    await snapshotPromise;
 
-    const snapshot = await snapshotPromise;
-
-    expect(snapshot).toBeNull();
+    expect(settled, "capture never settled under the drained fake clock").not.toBeNull();
+    expect((settled as { ok: true; value: Snapshot }).value).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
     vi.useRealTimers();
   });
