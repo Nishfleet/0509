@@ -50,7 +50,7 @@ Evidence lanes: fixed-candidate and local verification are historical below; a c
 | Pricing canary | PASS | Live Dodo pricing canary reached IN, US, and GB previews; monthly, annual, and top-ups pass for Scout/Starter annual validation and all public top-up packs; redacted Dodo API product proof confirmed Scout/Starter monthly and annual products are `by_currency` with active USD/GBP localized rules |
 | Billing canary | PASS | Dodo signed-webhook plan/top-up canary passed and cleanup passed |
 | Proof/email canary | PASS | Launch proof canary passed with email delivery |
-| Production canary | PASS | Health on primary domains, fresh-live search, ops readiness, and Meta ads beta passed |
+| Production canary | PASS | Health on primary domains, fresh-live search, ops readiness, and Meta ads passed |
 | Provider bakeoff launch gate | PASS/PARTIAL | Current live provider passed all launch queries; optional alternate providers skipped because their credentials are absent |
 | Full launch readiness script | PASS ON DATED SNAPSHOT | `npm run launch:readiness` passed after the Dodo Scout/Starter monthly and annual by-currency localized pricing repair; not a current candidate result |
 | Presence website canary | PASS | `npm run canary:presence` now follows the current GA rollout and runs without requiring the old internal workspace id |

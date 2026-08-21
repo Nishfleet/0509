@@ -46,7 +46,7 @@ flowchart LR
 | `app/routes/marketing.tsx` | "Early access" announcement | Superseded: the served homepage no longer shows this announcement |
 | `app/routes/marketing.tsx` | Meta ads "marked beta" in honest note | GRADUATED 2026-08-12: canary green on the live worker (Gate C pass 2026-08-09, re-verified 2026-08-11); no beta caveat in served hero copy |
 | `app/lib/plan-entitlements.ts` | `metaSourceStatus: beta_*` | GRADUATED 2026-08-12: renamed to `limited` / `priority`; product truth for Meta source lane |
-| `app/routes/app.sources.tsx` | Meta ads beta readiness | Internal; not public marketing |
+| `app/routes/app.sources.tsx` | Meta ads readiness | Internal; not public marketing |
 | `legacy/` | "Get early access" | Ignored — not in live build |
 | `docs/launch-readiness.md` | "pilot-ready" verdict | Update after ops gates clear |
 | `README.md` | Meta ads beta + old launch framing | GRADUATED 2026-08-12: README states the Meta ads beta caveat is lifted and gated on a green canary |

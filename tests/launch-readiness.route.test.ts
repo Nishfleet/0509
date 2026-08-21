@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 describe("launch readiness route", () => {
-  it("blocks launch readiness when Meta ads beta is below the reliability bar", async () => {
+  it("blocks launch readiness when Meta ads is below the reliability bar", async () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({
         CANARY_BYPASS_TOKEN: "secret-token",
@@ -73,7 +73,7 @@ describe("launch readiness route", () => {
     vi.doMock("~/lib/meta-ads-readiness.server", () => ({
       getMetaAdsBetaReadiness: vi.fn().mockResolvedValue({
         ok: false,
-        label: "Beta: needs validation",
+        label: "Needs validation",
         blockers: ["success_rate_below_95_percent", "recent_live_failures"],
       }),
     }));
@@ -92,8 +92,8 @@ describe("launch readiness route", () => {
     await expect(response.json()).resolves.toMatchObject({
       ok: false,
       blockers: [
-        "meta_ads_beta:success_rate_below_95_percent",
-        "meta_ads_beta:recent_live_failures",
+        "meta_ads:success_rate_below_95_percent",
+        "meta_ads:recent_live_failures",
       ],
       metaAdsBeta: {
         ok: false,

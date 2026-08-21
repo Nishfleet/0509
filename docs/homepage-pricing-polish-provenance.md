@@ -28,7 +28,7 @@
 - `git diff --check HEAD`: passed before commit.
 - `npm run canary:pricing`: passed after deploy for IN, US, and GB across monthly, annual, Agency, and top-ups.
 - `npm run canary:billing`: passed after deploy for plan webhook, proof-credit webhook, and cleanup.
-- `npm run canary:prod -- --query example.com`: passed after deploy for all production health domains, fresh-live bypass, ops readiness, and Meta ads beta.
+- `npm run canary:prod -- --query example.com`: passed after deploy for all production health domains, fresh-live bypass, ops readiness, and Meta ads.
 - `npm run provider:bakeoff:launch`: passed after deploy for current 0509 live Search queries `nykaa`, `boat`, `mamaearth`, `swiggy`, `zomato`, and `meesho`; optional alternate providers were skipped because their tokens are not configured.
 - Rendered browser smoke after deploy: homepage, sample artifact, annual toggle, signed-out plan intent, mobile overflow, `/search`, `/api/health`, and sanitized `/api/pricing-preview` all passed.
 - Autoreview: the first merged app-commit review found a billing fallback issue; PR #296 fixed it, and the follow-up staged diff autoreview exited clean with no accepted/actionable findings.
