@@ -224,7 +224,7 @@ export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "How is this different from ad-spy tools?",
     answer:
-      "Ad-spy tools are built for browsing creatives. Five to Nine is built around what changed: offers, prices, CTAs, and landing-page copy — each confirmed change saved with screenshots, page text, and links, then summarized in a brief. If you mainly want a large creative library, ours is narrower; the change evidence is deeper.",
+      "Ad-spy tools are built for browsing creatives, and some search many platforms’ ad libraries at once. Five to Nine monitors the Meta Ad Library only — other platforms’ ad libraries are out of scope — and is built around what changed: offers, prices, CTAs, and landing-page copy, each confirmed change saved with screenshots, page text, and links, then summarized in a brief. If you mainly want a large multi-platform creative library, ours is narrower; the change evidence is deeper.",
   },
   {
     question: "How fast will I hear about changes?",
