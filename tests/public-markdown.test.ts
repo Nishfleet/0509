@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   isPublicMarkdownPage,
+  LLMS_PAGES,
   LLMS_TEXT,
   PUBLIC_MARKDOWN,
   wantsPublicMarkdown,
 } from "~/lib/public-markdown";
 import { auditedAgentActionGroups } from "~/lib/agent-action-catalog";
-import { AI_TRAINING_CRAWLERS } from "~/lib/seo";
+import { AI_TRAINING_CRAWLERS, SITEMAP_PATHS, canonicalUrl } from "~/lib/seo";
 
 describe("public markdown", () => {
   it("supports same-url markdown negotiation for public pages", () => {
@@ -150,6 +151,30 @@ describe("public markdown", () => {
     AI_TRAINING_CRAWLERS.forEach((agent) => {
       expect(LLMS_TEXT, `${agent} should be named in the llms.txt deny list`).toContain(agent);
     });
+  });
+
+  it("gives llms.txt a real link list on the canonical origin", () => {
+    // The item this pins: llms.txt must not be prose-only — AI answer engines
+    // need URLs they can actually fetch and verify.
+    expect(LLMS_TEXT).toMatch(/\[[^\]]+\]\(https:\/\/0509\.io\//);
+
+    // One entry per canonical public page, derived from the same SITEMAP_PATHS
+    // constant that builds sitemap.xml, so the two surfaces cannot drift.
+    expect(LLMS_PAGES.map((page) => page.path)).toEqual([...SITEMAP_PATHS]);
+    LLMS_PAGES.forEach((page) => {
+      expect(page.url).toBe(canonicalUrl(page.path));
+      expect(LLMS_TEXT).toContain(`[${page.title}](${page.url}): ${page.description}`);
+    });
+
+    // Every markdown link in llms.txt resolves to a sitemap path — no
+    // invented or dead routes can sneak in.
+    const linkedPaths = [...LLMS_TEXT.matchAll(/\]\((https:\/\/0509\.io[^)]*)\)/g)].map(
+      (match) => new URL(match[1]).pathname,
+    );
+    expect(linkedPaths.length).toBe(SITEMAP_PATHS.length);
+    for (const path of linkedPaths) {
+      expect(SITEMAP_PATHS as readonly string[]).toContain(path);
+    }
   });
 
   it("labels configured capability separately from live proof", () => {
