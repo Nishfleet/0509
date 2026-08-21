@@ -86,23 +86,82 @@ jobs:
             exit 1
           fi
 
+      # Docs-only fast path (2026-08-22): with the runner fleet deliberately
+      # reduced to one vps-verify machine, docs-only lane PRs were holding the
+      # sole runner for 40-100 minutes each while the queued production deploy
+      # starved behind them (deploy run 32528443333 queued at 21:25Z was still
+      # waiting at 03:45Z across two such PR jobs). This step classifies the
+      # PR diff; when EVERY changed path is documentation/evidence, the heavy
+      # install/build/test/typecheck steps below are skipped. The job itself
+      # always runs to a real conclusion, so branch protection sees the same
+      # required context - it stays structurally incapable of concluding
+      # SKIPPED, exactly as designed above.
+      # Fail-closed: any detection problem, empty diff, or non-pull_request
+      # event (workflow_dispatch verifies main before a production deploy)
+      # classifies as NOT docs-only and runs the full suite. The deploy gate
+      # re-verifies main in full regardless of what any PR run did.
+      - name: Classify docs-only candidate
+        id: classify
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          docs_only=false
+          changed_count=0
+          if git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            while IFS= read -r path; do
+              [ -n "$path" ] || continue
+              changed_count=$((changed_count + 1))
+              case "$path" in
+                # Conservative allowlist only: prose and lane evidence.
+                # Deliberately NOT included: public/*.txt and robots/SEO
+                # surfaces (checked-in runtime files), brand/* (site logo
+                # assets), workflows/scripts/tests - any of those means a
+                # real product surface changed and must take the full suite.
+                *.md|*.mdx|docs/*|.lane/reports/*|LICENSE*|.gitignore|.gitleaksignore|.coderabbit.yaml|greptile.json) ;;
+                *) changed_count=-1; break ;;
+              esac
+            done < <(git diff --name-only "${BASE_SHA}...HEAD")
+            # changed_count > 0 required: an unreadable or empty diff must
+            # fail closed into the full suite, never fast-path.
+            [ "$changed_count" -gt 0 ] && docs_only=true
+          fi
+          printf 'changed=%s\n' "$changed_count" >> "$GITHUB_OUTPUT"
+          if [ "$docs_only" = true ]; then
+            printf 'Docs-only candidate (%s paths); fast-pathing CI. Heavy verification of main happens at the deploy gate.\n' "$changed_count"
+          fi
+          printf 'docs_only=%s\n' "$docs_only" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
       - name: Install dependencies
+        if: steps.classify.outputs.docs_only != 'true'
         run: |
           if [ -f package-lock.json ]; then
             npm ci --ignore-scripts
           else
             npm install --ignore-scripts
           fi
+      - name: Docs-only proof
+        if: steps.classify.outputs.docs_only == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'Docs-only fast path: %s documentation/evidence path(s) changed; no runtime surface touched.\n' "${{ steps.classify.outputs.changed }}"
+          git diff --name-only "${{ github.event.pull_request.base.sha }}...HEAD"
       - name: Build
+        if: steps.classify.outputs.docs_only != 'true'
         run: npm run build
       - name: Test
+        if: steps.classify.outputs.docs_only != 'true'
         run: npm run test
       - name: Typecheck
+        if: steps.classify.outputs.docs_only != 'true'
         env:
           # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while
           # this project's composite TypeScript build needs more headroom.
