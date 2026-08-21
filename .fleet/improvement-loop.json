@@ -1,0 +1,17 @@
+{
+ "version": 1,
+ "items": {
+  "19ffb75a05": {
+   "status": "resolved",
+   "at": "2026-08-21T09:20:08Z",
+   "receipt": {
+    "note": "already resolved on main by PR #705 (merged 2026-08-18, merge commit 3a553e5; fix commit 8a7b4674 'fix(tests): stop teamsTarget fixture widening validationStatus to string'): PR #705's branch-introduced TS2345 at tests/teams.server.test.ts:306 was fixed on the branch before merge; gh pr checks 705 -> codex-node-checks pass; tests/teams.server.test.ts 11/11 pass at origin/main tip c24e9735. Item premise stale - PR #705 is MERGED (waiting-room merge order satisfied).",
+    "pr": 705,
+    "commit": "3a553e5",
+    "report": ".lane/reports/0509-lane11-slack-teams-webhook-type-drift-already-resolved.md"
+   },
+   "reverify_count": 0,
+   "reverify_history": []
+  }
+ }
+}
