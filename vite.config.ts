@@ -60,6 +60,11 @@ export default defineConfig(({ mode }) => ({
   },
   test: {
     environment: "node",
+    // Vitest only defaults NODE_ENV to "test" when it is unset; an inherited
+    // NODE_ENV=production makes react@19 resolve its production build, whose
+    // `act` export is undefined ("act is not a function"). Pin it so a leaked
+    // NODE_ENV from a caller's shell or CI cannot break the suite.
+    env: { NODE_ENV: "test" },
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     testTimeout: 10_000,
     maxWorkers: isVerificationLane ? 1 : undefined,
