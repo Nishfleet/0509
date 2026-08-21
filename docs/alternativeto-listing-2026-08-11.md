@@ -22,6 +22,27 @@ decisions on a few fields — see [Owner decisions](#owner-decisions).
   AlternativeTo account**, then the prepared suggestion can be submitted
   with the fields below.
 
+## Freshness re-verification (2026-08-21, lane-1 evidence record)
+
+Re-verified independently on 2026-08-21 (camofox browser render — the
+plain VPS IP is blocked by AlternativeTo's Cloudflare Turnstile): every
+fact the listing depends on still holds, no slug drift, no plan drift,
+no product-copy drift. The `five-to-nine` slug is still 404 (name still
+free); all seven primary targets (Facebook Ad Library 15, Kompyte 26,
+Crayon.co 17, SpyFu top-12 paginated, Dozier.io 3, Perch Intel 26,
+Compint 12, Owler 21) are still listed with 200s; MagicBrief is still
+404 on AlternativeTo (the conditional target 0 still resolves to
+"skip"); the FAQ's $5 priority review, geo policy, AI-tools decline
+list, email verification, and sign-in-only submission form are
+unchanged; the 0509.io hero + no-account search preview
+("16 verified ads linked to nykaa.com", captured about 3 hours ago,
+every row linking to `facebook.com/ads/library/`) and the plan facts
+(free/scout/starter/agency watchlists 1/3/10/75 + included evidence
+checks 1/50/250/2500) match `app/lib/plan-entitlements.ts` lines
+126–185 exactly. Evidence record:
+`.lane/reports/0509-lane1-alternativeto-listing-fresh-verification-2026-08-21.md`.
+Owner step unchanged from the 2026-08-11 entry above.
+
 ## Asset & re-verification update (2026-08-12)
 
 - **Assets are now committed to the repo** under
