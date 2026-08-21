@@ -29,6 +29,8 @@ export const meta: MetaFunction = () =>
     pathname: "/help",
   });
 
+const COST_SECTION_ID = "cost";
+
 const PAID_PLANS = ["scout", "starter", "agency"] as const satisfies readonly PaidPlanFamily[];
 
 /**
@@ -55,47 +57,78 @@ interface LocalizedPlanPricing {
   saleOpen: Partial<Record<PaidPlanFamily, boolean>>;
 }
 
-function useLocalizedPlanPricing(): LocalizedPlanPricing {
+function useLocalizedPlanPricing(sectionId: string): LocalizedPlanPricing {
   const [pricing, setPricing] = useState<LocalizedPlanPricing>({ monthly: {}, saleOpen: {} });
 
   useEffect(() => {
     let active = true;
+    let started = false;
+    let observer: IntersectionObserver | undefined;
+    let fallbackTimer = 0;
 
-    void (async () => {
-      try {
-        const response = await fetch("/api/pricing-preview", {
-          headers: { Accept: "application/json" },
-        });
-        if (!response.ok) return;
-        const data = (await response.json()) as PricingPreviewResponse;
-        if (!active || data?.available !== true) return;
+    const startPricingPreview = () => {
+      if (!active || started) return;
+      started = true;
+      window.clearTimeout(fallbackTimer);
+      observer?.disconnect();
+      // Same deferral the pricing section uses: the Dodo-backed preview can
+      // take seconds, and the cost block sits below the fold, so an eager
+      // fetch would only keep the network busy after a doc page has rendered.
+      fetch("/api/pricing-preview")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((value: unknown) => {
+          const preview = value as PricingPreviewResponse | null;
+          if (!active || preview?.available !== true) return;
 
-        const monthly: Partial<Record<PaidPlanFamily, string>> = {};
-        for (const plan of PAID_PLANS) {
-          const display = data.prices?.[plan]?.monthly?.display;
-          if (typeof display === "string" && display.trim()) {
-            monthly[plan] = display.trim();
+          const monthly: Partial<Record<PaidPlanFamily, string>> = {};
+          for (const plan of PAID_PLANS) {
+            const display = preview.prices?.[plan]?.monthly?.display;
+            if (typeof display === "string" && display.trim()) {
+              monthly[plan] = display.trim();
+            }
           }
-        }
 
-        setPricing({
-          monthly,
-          saleOpen: {
-            scout: data.commercialLaunch?.scoutSaleOpen === true,
-            starter: data.commercialLaunch?.starterSaleOpen === true,
-            agency: data.commercialLaunch?.agencySaleOpen === true,
-          },
+          setPricing({
+            monthly,
+            saleOpen: {
+              scout: preview.commercialLaunch?.scoutSaleOpen === true,
+              starter: preview.commercialLaunch?.starterSaleOpen === true,
+              agency: preview.commercialLaunch?.agencySaleOpen === true,
+            },
+          });
+        })
+        .catch(() => {
+          // Keep the fallback sentence: it already tells the buyer where the
+          // real number comes from instead of inventing one.
         });
-      } catch {
-        // Keep the fallback sentence: it already tells the buyer where the
-        // real number comes from instead of inventing one.
-      }
-    })();
+    };
+
+    if (typeof IntersectionObserver === "undefined") {
+      startPricingPreview();
+      return () => {
+        active = false;
+      };
+    }
+
+    observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) startPricingPreview();
+      },
+      { rootMargin: "0px 0px 100% 0px", threshold: 0.01 },
+    );
+    const costSection = document.getElementById(sectionId);
+    if (costSection) observer.observe(costSection);
+
+    // Safety net for visitors who never scroll (print, landmark jumps,
+    // find-in-page): the real price still arrives, long after load settles.
+    fallbackTimer = window.setTimeout(startPricingPreview, 10_000);
 
     return () => {
       active = false;
+      window.clearTimeout(fallbackTimer);
+      observer?.disconnect();
     };
-  }, []);
+  }, [sectionId]);
 
   return pricing;
 }
@@ -132,7 +165,7 @@ function planPriceLabel(plan: PaidPlanFamily, pricing: LocalizedPlanPricing) {
 export default function HelpRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
   const session = rootData?.session;
-  const pricing = useLocalizedPlanPricing();
+  const pricing = useLocalizedPlanPricing(COST_SECTION_ID);
   const freePlan = getPlanEntitlements("free");
 
   return (
@@ -249,7 +282,7 @@ export default function HelpRoute() {
         </p>
       </PublicDocBlock>
 
-      <PublicDocBlock id="cost" title="What does it cost?">
+      <PublicDocBlock id={COST_SECTION_ID} title="What does it cost?">
         <p>
           Free costs nothing and never asks for a card: {freePlan.watchlists} competitor, an instant first
           scan, then {checkCadenceLabel("free")}, a weekly email brief, {freePlan.collections} Collection,
