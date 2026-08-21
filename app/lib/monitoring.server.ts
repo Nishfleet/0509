@@ -2,6 +2,7 @@ import { buildAnalysisFields } from "~/lib/analysis.server";
 import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { type DigestCadence } from "~/lib/change-intelligence";
 import { shouldAttemptCreativeTextCapture } from "~/lib/creative-capture-policy";
+import { isFullSiteWatchEnabled } from "~/lib/env.server";
 import {
   captureCreativeText,
   createMissingCreativeCaptureResult,
@@ -2121,6 +2122,25 @@ export async function runWatchlist(
     const effectLease = options.orchestrationToken
       ? { runId, processingToken: options.orchestrationToken }
       : undefined;
+
+    // Full-Site Watch (feature-flagged): sitemap discovery + bounded crawl +
+    // inventory manifest for competitor websites, using the run's lease.
+    // Errors are recorded as honest failed manifests, never run-fatal.
+    if (isFullSiteWatchEnabled(env)) {
+      try {
+        await runWebsiteSiteScanForWatchlist(env, watchlist, {
+          runId,
+          processingToken: options.orchestrationToken ?? null,
+          pageBudget: DEFAULT_PAGE_BUDGET,
+        });
+      } catch (error) {
+        console.error(
+          `Full-Site Watch scan failed for watchlist ${watchlist.id}; ad scan unaffected.`,
+          error,
+        );
+      }
+    }
+
     await persistCheapScanObservations(env, runId, ads, effectLease);
 
     const [currentObservations, baselineObservations, priorObservations] =
@@ -4289,6 +4309,44 @@ function directWebsiteUrlForWatchlist(watchlist: WatchlistRecord) {
   }
 
   return normalizePublicHttpUrl(watchlist.targetId)?.toString() ?? null;
+}
+
+/**
+ * Full-Site Watch: run sitemap discovery + bounded crawl + inventory writes
+ * for one competitor watchlist under the current run's processing-token
+ * lease. Only advertiser watchlists with a public website URL participate.
+ * The discovery/crawl module owns all durability; failures surface as honest
+ * failed manifests (inventory_complete = false) instead of exceptions.
+ */
+async function runWebsiteSiteScanForWatchlist(
+  env: AppEnv,
+  watchlist: WatchlistRecord,
+  options: {
+    runId: string;
+    processingToken: string | null;
+    pageBudget: number;
+  },
+) {
+  const websiteUrl = directWebsiteUrlForWatchlist(watchlist);
+  if (!websiteUrl) {
+    return null;
+  }
+  if (!options.processingToken) {
+    // The lease-fenced scan layer requires a processing token; without one
+    // (manual refresh) the site scan is skipped rather than written unfenced.
+    return null;
+  }
+
+  const { runWebsiteSiteScan } = await import("~/lib/competitor-site-monitor.server");
+  return runWebsiteSiteScan(env, {
+    lease: {
+      watchlistId: watchlist.id,
+      runId: options.runId,
+      processingToken: options.processingToken,
+    },
+    rootUrl: websiteUrl,
+    pageBudget: options.pageBudget,
+  });
 }
 
 function isWithinDirectWebsiteProofInterval(value: string | null | undefined) {
