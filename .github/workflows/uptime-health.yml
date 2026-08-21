@@ -2,8 +2,14 @@ name: Uptime health check
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
+  # No GitHub schedule: the 5-minute cron interval is the shortest Actions
+  # offers, but in practice this schedule fired about once an hour (median
+  # 63 minutes between runs over 300 observations, 2026-07-25..2026-08-11)
+  # and then queued behind CI on the three-runner FIFO, so it was never a
+  # real liveness detector. Production liveness detection now runs as the
+  # 0509-liveness systemd timer on the VPS (ops/liveness/, installed by
+  # ops/liveness/provision-production-liveness.sh) at a true five-minute
+  # cadence. This workflow remains available for on-demand probes.
 
 permissions:
   contents: read
@@ -81,10 +87,10 @@ jobs:
           retention-days: 2
           compression-level: 0
 
-      # The shallow check above deliberately never touches D1. This external
-      # GitHub-hosted probe detects D1 failures and total Worker-cron outages;
-      # the in-Worker gap check can only detect individual workload cron gaps.
-      # GitHub notification receipt remains owner-unverified.
+      # The shallow check above deliberately never touches D1. The scheduled
+      # deep probe (D1 and scheduled-work) now runs as the 0509-liveness
+      # systemd timer on the VPS; this manual run keeps the same two probes
+      # available on demand.
       - name: Check production deep health endpoint (D1 and scheduled work)
         shell: bash
         env:
