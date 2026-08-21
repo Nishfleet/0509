@@ -10,7 +10,8 @@ import {
 } from "~/lib/competitor-website";
 import type { AppEnv } from "~/lib/env.server";
 import {
-  isSlackDeliveryCustomerFacing,
+  isSlackWebhookDeliveryCustomerFacing,
+  isTeamsWebhookDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
   slackDeliveryUnavailableMessage,
   whatsappDeliveryUnavailableMessage,
@@ -277,10 +278,12 @@ export async function handleWatchlistsAction({ context, request }: ActionFunctio
     }
 
     const whatsappDeliveryEditable = isWhatsAppDeliveryCustomerFacing() && isWhatsAppProviderConfigured(env);
-    const slackDeliveryEditable = isSlackDeliveryCustomerFacing();
+    const slackDeliveryEditable = isSlackWebhookDeliveryCustomerFacing();
+    const teamsDeliveryEditable = isTeamsWebhookDeliveryCustomerFacing();
     const deliveryGate = await requireDeliveryConfigSave(env, workspaceUserId, {
       instantEnabled: formData.has("instantEnabled"),
       slackEnabled: slackDeliveryEditable && formData.has("slackEnabled"),
+      teamsEnabled: teamsDeliveryEditable && formData.has("teamsEnabled"),
       emailEnabled: formData.has("emailEnabled"),
     });
     if (!deliveryGate.ok) {
@@ -292,6 +295,9 @@ export async function handleWatchlistsAction({ context, request }: ActionFunctio
 
     if (!slackDeliveryEditable && formData.has("slackEnabled")) {
       return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
+    if (!teamsDeliveryEditable && formData.has("teamsEnabled")) {
+      return { ok: false, message: "Teams delivery isn’t available. Nothing was saved — use email delivery instead." };
     }
     if (!whatsappDeliveryEditable && formData.has("whatsappEnabled")) {
       return { ok: false, message: whatsappDeliveryUnavailableMessage() };
@@ -322,6 +328,7 @@ export async function handleWatchlistsAction({ context, request }: ActionFunctio
       emailEnabled: formData.has("emailEnabled"),
       whatsappEnabled: whatsappDeliveryEditable ? formData.has("whatsappEnabled") : baseConfig.whatsappEnabled,
       slackEnabled: slackDeliveryEditable ? formData.has("slackEnabled") : baseConfig.slackEnabled,
+      teamsEnabled: teamsDeliveryEditable ? formData.has("teamsEnabled") : baseConfig.teamsEnabled,
       quietHours: parseQuietHours(formData),
       timezone,
     });
@@ -345,8 +352,17 @@ export async function handleWatchlistsAction({ context, request }: ActionFunctio
     }
 
     const requestedChannel = String(formData.get("channel") ?? "");
-    if (requestedChannel === "slack" && !isSlackDeliveryCustomerFacing()) {
-      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    if (requestedChannel === "slack" || requestedChannel === "teams") {
+      // Webhooks connect at workspace scope on the Notifications page (that
+      // flow stores the encrypted webhook and sends the setup test). This
+      // watchlist-scoped path was email-only before GA and stays honest:
+      // accepting a bare slack/teams value here would create a target that
+      // can never deliver.
+      return {
+        ok: false,
+        message:
+          "Connect Slack or Teams delivery from the Notifications page — watchlist-scoped webhook targets aren't supported.",
+      };
     }
 
     const channel = readDeliveryChannel(formData.get("channel"));
@@ -610,8 +626,14 @@ export async function handleWatchlistsAction({ context, request }: ActionFunctio
     }
 
     const requestedChannel = target.channel;
-    if (requestedChannel === "slack" && !isSlackDeliveryCustomerFacing()) {
-      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    if (requestedChannel === "slack" || requestedChannel === "teams") {
+      // See add-delivery-target: watchlist-scoped webhook targets never
+      // existed — a stray pause/resume of one gets the honest answer.
+      return {
+        ok: false,
+        message:
+          "Manage Slack or Teams delivery from the Notifications page — watchlist-scoped webhook targets aren't supported.",
+      };
     }
 
     const channel = target.channel;
@@ -705,7 +727,7 @@ function readOptionalString(value: FormDataEntryValue | null) {
 }
 
 function readDeliveryChannel(value: FormDataEntryValue | null) {
-  if (value === "email" || value === "whatsapp") {
+  if (value === "email" || value === "whatsapp" || value === "slack" || value === "teams") {
     return value;
   }
 

@@ -2,6 +2,7 @@ import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
 import { classifyLanguage } from "~/lib/language-classifier";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
+import { truncateTextSafe } from "~/lib/text-safe";
 import type {
   AdRecord,
   AnalysisFieldInput,
@@ -180,14 +181,17 @@ function clampHook(value: string) {
   if (trimmed.length <= HOOK_MAX_CHARS) {
     return trimmed;
   }
-  return `${trimmed.slice(0, HOOK_MAX_CHARS - 1).trimEnd()}…`;
+  // truncateTextSafe: never split a surrogate pair at the cut, or the hook
+  // stores a lone surrogate that renders as the U+FFFD replacement character.
+  return `${truncateTextSafe(trimmed, HOOK_MAX_CHARS - 1).trimEnd()}…`;
 }
 
 function stripHeavyEmojiRuns(value: string) {
   // Collapse runs of 3+ emoji-ish symbols to two so hooks stay readable.
+  // truncateTextSafe: slicing a run mid-pair would orphan a surrogate half.
   return value.replace(
     /(\p{Extended_Pictographic}\uFE0F?\u200D?){3,}/gu,
-    (match) => match.slice(0, 2),
+    (match) => truncateTextSafe(match, 2),
   );
 }
 

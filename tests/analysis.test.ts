@@ -167,6 +167,29 @@ describe("deriveHook / deriveOffer", () => {
     const hook = deriveHook(long, "fallback");
     expect(hook.length).toBeLessThanOrEqual(120);
   });
+
+  it("never leaves a lone surrogate when the 120-char cap cuts an emoji", () => {
+    // Units 0..118 are "x", unit 119 is the high half of 🌟 (U+1F31F): a plain
+    // slice(0, 119) would orphan it and the hook would render "�" on /search.
+    const body = `${"x".repeat(118)}🌟 more text follows here to push past the cap`;
+    const hook = deriveHook(body, "fallback");
+    expect(hook.endsWith("…")).toBe(true);
+    expect(/[\uD800-\uDFFF]/.test(hook)).toBe(false);
+    expect(hook.includes("\uFFFD")).toBe(false);
+  });
+
+  it("collapses a heavy emoji run without orphaning a surrogate half", () => {
+    // "✨🌟❤" is a run of 3 pictographs; collapsing it to 2 code units must
+    // not slice 🌟's pair in half (old match.slice(0, 2) produced a lone high
+    // surrogate that renders as "�").
+    const body = "✨🌟❤ Get 40% off luxury serums today only while stocks last";
+    const hook = deriveHook(body, "fallback");
+    expect(/[\uD800-\uDFFF]/.test(hook)).toBe(false);
+    expect(hook.includes("\uFFFD")).toBe(false);
+    // The run collapses to well-formed text: the first pictograph survives
+    // whole, and the rest of the sentence is untouched.
+    expect(hook.startsWith("✨ Get 40% off luxury serums")).toBe(true);
+  });
 });
 
 describe("composeResearchSummary", () => {

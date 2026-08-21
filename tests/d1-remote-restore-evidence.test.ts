@@ -411,6 +411,9 @@ describe("D1 remote restore evidence automation", () => {
       run: "./scripts/ci-verify-provider-main-cas.sh",
       env: { GH_TOKEN: "${{ github.token }}" },
     });
+    expect(apply?.steps?.[applyBackupCasIndex]?.env).toMatchObject({
+      TOLERATE_MAIN_DRIFT: "1",
+    });
     expect(apply?.steps?.[applyBackupIndex]).toMatchObject({
       id: "pre_migration_backup",
       run: "node scripts/d1-backup-to-r2.mjs",
@@ -428,6 +431,9 @@ describe("D1 remote restore evidence automation", () => {
       if: "success() && steps.pre_migration_backup.outcome == 'success'",
       run: "./scripts/ci-verify-provider-main-cas.sh",
       env: { GH_TOKEN: "${{ github.token }}" },
+    });
+    expect(apply?.steps?.[applyMigrationCasIndex]?.env).toMatchObject({
+      TOLERATE_MAIN_DRIFT: "1",
     });
     expect(apply?.steps?.[applyMigrationIndex]).toMatchObject({
       if: "success() && steps.pre_migration_backup.outcome == 'success'",
@@ -513,6 +519,15 @@ describe("D1 remote restore evidence automation", () => {
         expect(job?.steps?.[casIndex]).toMatchObject({
           run: "./scripts/ci-verify-provider-main-cas.sh",
           env: { GH_TOKEN: "${{ github.token }}" },
+        });
+        // Post-pin drift tolerance: every reconfirm re-verifies the exact SHA
+        // the authorize step already pinned, so a mid-run move of main must
+        // not abort the unattended nightly drill (same rationale as
+        // deploy-production.yml's post-gate reconfirm, #630). Every other CAS
+        // failure stays fail-closed, and the schedule's empty-expected_sha
+        // contract is unchanged.
+        expect(job?.steps?.[casIndex]?.env).toMatchObject({
+          TOLERATE_MAIN_DRIFT: "1",
         });
       }
       expect(job?.steps?.[consumerIndex]?.run).not.toContain(
@@ -666,8 +681,8 @@ describe("D1 remote restore evidence automation", () => {
       head_branch: "main",
       head_sha: headSha,
       created_at: "2026-07-29T06:00:00.000Z",
-      repository: { full_name: "nish3451/0509" },
-      head_repository: { full_name: "nish3451/0509" },
+      repository: { full_name: "Nishfleet/0509" },
+      head_repository: { full_name: "Nishfleet/0509" },
       workflowFile: "deploy-production.yml",
     };
     const artifact = {
@@ -1325,7 +1340,7 @@ describe("D1 remote restore evidence automation", () => {
     expect(() =>
       assertAutomationContext({
         GITHUB_ACTIONS: "true",
-        GITHUB_REPOSITORY: "nish3451/0509",
+        GITHUB_REPOSITORY: "Nishfleet/0509",
         GITHUB_REF: "refs/heads/main",
         D1_REMOTE_RESTORE_AUTOMATION_APPROVED:
           "0509-remote-restore-evidence",
@@ -1336,7 +1351,7 @@ describe("D1 remote restore evidence automation", () => {
     expect(() =>
       assertAutomationContext({
         GITHUB_ACTIONS: "true",
-        GITHUB_REPOSITORY: "nish3451/0509",
+        GITHUB_REPOSITORY: "Nishfleet/0509",
         GITHUB_REF: "refs/heads/main",
         D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "wrong",
         GITHUB_RUN_ID: "30423695493",

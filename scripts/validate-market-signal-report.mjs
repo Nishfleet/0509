@@ -33,7 +33,7 @@ const FORBIDDEN_PATTERNS = [
   /\b(?:api[_ -]?key|secret|token|password|customer[_ -]?id|user[_ -]?id)\s*[:=]\s*\S{4,}/i,
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i,
   /https?:\/\/(?:localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|[^/]+\.internal)\b/i,
-  /https:\/\/github\.com\/nish3451\/0509(?:\/|\b)/i,
+  /https:\/\/github\.com\/Nishfleet\/0509(?:\/|\b)/i,
 ];
 
 /** @param {string} content @param {string} heading */

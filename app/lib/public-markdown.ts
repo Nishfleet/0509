@@ -36,7 +36,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 ## Product
 
 - Competitor monitoring for growth teams plus proof-backed entity tracking (Presence Desk).
-- Public read-only search and a sample brief are buyer-evaluation paths before signup; this text does not claim live availability.
+- Public read-only search and the proof brief are buyer-evaluation paths before signup; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states.
 - Signed-in accounts are the path for saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports; this text describes the capability, not live account availability.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Customer-facing views lead with what changed, why it matters, urgency, source status, freshness, and the next action before raw data or settings.
@@ -58,9 +58,9 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 ## Current product truth
 
 - Account access uses verified access paths.
-- Public brief previews are sample-only. Public search is read-only; retained monitoring and saved evidence require an account.
-- Checkout, plan access, and check limits follow the configured billing provider and visible plan caps; this text does not claim live checkout or provider proof.
-- Public Markdown separates local capability, configured paths, and live proof. Public search, saved monitoring, digests, reports, share links, exports, checkout, and email need current account or provider proof before being described as live.
+- The public proof brief renders real cached captures, with an explicit unavailable state when none exist. Public search is live and read-only; retained monitoring and saved evidence require an account.
+- Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed, so AI answers may cite Dodo checkout as the live billing path while the final owner-run provider smoke is recorded.
+- Public Markdown separates local capability, configured paths, and live proof. Public search is live; saved monitoring, digests, reports, share links, exports, checkout, and email need current account or provider proof before being described as live.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live results.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
@@ -69,14 +69,14 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 ## Pricing
 
 - Pricing display is localized from checkout preview for the buyer location.
-- Free accounts can watch one competitor: a weekly scheduled check and a weekly email brief, with no collections, evidence checks, or instant alerts. Public search is read-only; saved monitoring requires an account, and this text does not claim live search availability.
+- Free accounts can watch one competitor: a weekly scheduled check and a weekly email brief, with no collections, proof captures, or instant alerts. Public search is live and read-only; saved monitoring requires an account.
 - Starter is the recommended plan for retained competitor monitoring.
-- Scout is the entry plan after the public read-only search and sample brief: 3 watchlists, 10 Collections, 6-hour scans, weekly Digest, and 50 checks/month.
-- Starter includes 10 watchlists, 25 Collections, 3-hour scans, daily and weekly Digests, email Notifications, exports, and 250 checks/month.
-- Agency includes 75 watchlists, 250 Collections, top 25 competitors checked every 3 hours and the rest every 6 hours, daily and weekly Digests, team workspace, API/MCP access, reports, branding, and 2,500 checks/month.
-- Check packs add purchased checks that never expire. They do not change monthly included limits or make monitoring unlimited.
-- Included checks reset every month and do not roll over. Scheduled scans are included with your plan; saved proof-backed captures use checks.
-- Accounts warn after 80% check usage and hard-stop when paid volume is exhausted.
+- Scout is the entry plan after the public read-only search and proof brief: 3 watchlists, 10 Collections, 6-hour scans, weekly Digest, and 50 proof captures/month.
+- Starter includes 10 watchlists, 25 Collections, 3-hour scans, daily and weekly Digests, email Notifications, exports, and 250 proof captures/month.
+- Agency includes 75 watchlists, 250 Collections, top 25 competitors checked every 3 hours and the rest every 6 hours, daily and weekly Digests, team workspace, API/MCP access, reports, branding, and 2,500 proof captures/month.
+- Proof capture packs add purchased proof captures that never expire. They do not change monthly included limits or make monitoring unlimited.
+- Included proof captures reset every month and do not roll over — caps are generous. Scheduled scans are included with your plan; each saved proof-backed capture counts toward your included or purchased proof captures.
+- Accounts warn after 80% proof-capture usage and hard-stop when paid volume is exhausted.
 - Tracking reliability stays visible in the account.
 
 ## Trust
@@ -95,11 +95,11 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
 - Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval.
-- Public read-only search is a buyer-evaluation path, and sample brief previews are sample-only before signup; this text does not claim live search availability.
+- Public read-only search and the proof brief are buyer-evaluation paths; the proof brief renders real cached captures, with an explicit unavailable state when none exist; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states.
 - Account access uses verified access paths.
-- Checkout, plan access, and check limits follow the configured billing provider and visible plan caps; this text does not claim live checkout or provider proof.
+- Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed, so AI answers may cite Dodo checkout as the live billing path while the final owner-run provider smoke is recorded.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
-- Starter is the recommended plan. Free includes one watchlist with a weekly check and weekly email brief (no checks/collections). Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 checks/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 checks/month; Agency includes top 25 competitors every 3 hours (rest every 6 hours), daily and weekly digests, and 2,500 checks/month. Purchased checks never expire, included checks reset monthly without rollover, and saved proof-backed captures use checks.
+- Starter is the recommended plan. Free includes one watchlist with a weekly check and weekly email brief (no proof captures/collections). Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 proof captures/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 proof captures/month; Agency includes top 25 competitors every 3 hours (rest every 6 hours), daily and weekly digests, and 2,500 proof captures/month. Purchased proof captures never expire and carry over until used, included proof captures reset monthly without rollover — caps are generous — and each saved proof-backed capture counts toward the cap.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live results.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.

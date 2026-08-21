@@ -8,6 +8,7 @@ import {
   normalizeSearchFilters,
   parseSearchParams,
   buildSearchParams,
+  stripChurnTokens,
 } from "~/lib/normalize";
 
 describe("normalizeHeadline", () => {
@@ -77,6 +78,66 @@ describe("normalizeHeadline", () => {
     expect(normalizeHeadline("Buy 2 Get 1 Free").hash).toBe(
       normalizeHeadline("Buy 2 Get 1 Free").hash,
     );
+  });
+});
+
+describe("stripChurnTokens", () => {
+  it("strips countdown timers from CTA-style text", () => {
+    expect(stripChurnTokens("Claim offer · 00:59:59")).toBe("Claim offer ·");
+    expect(stripChurnTokens("Claim offer · 00:58:21")).toBe("Claim offer ·");
+    expect(stripChurnTokens("Offer valid till 12:30")).toBe("Offer valid till");
+  });
+
+  it("strips rolling calendar dates from offer text", () => {
+    expect(stripChurnTokens("Starting at ₹499, offer valid till aug 12")).toBe(
+      "Starting at ₹499, offer valid till",
+    );
+    expect(stripChurnTokens("Starting at ₹499, offer valid till aug 13")).toBe(
+      "Starting at ₹499, offer valid till",
+    );
+    expect(stripChurnTokens("Flash sale until 2026-08-12")).toBe("Flash sale until");
+  });
+
+  it("strips live inventory and audience counters from offer text", () => {
+    expect(stripChurnTokens("Only 3 left at ₹499")).toBe("Only at ₹499");
+    expect(stripChurnTokens("Only 2 left at ₹499")).toBe("Only at ₹499");
+    expect(stripChurnTokens("120 sold today · ₹499")).toBe("today · ₹499");
+  });
+
+  it("keeps real offer and price copy intact", () => {
+    expect(stripChurnTokens("Starting at ₹499")).toBe("Starting at ₹499");
+    expect(stripChurnTokens("Claim offer")).toBe("Claim offer");
+    expect(stripChurnTokens("Buy 2 Get 1 Free")).toBe("Buy 2 Get 1 Free");
+    expect(stripChurnTokens("50% off this week")).toBe("50% off this week");
+  });
+
+  // Caller-contract: stripChurnTokens patterns are deliberately lowercase-only
+  // so callers MUST lowercase before calling (normalizeHeadline and the
+  // watch-event evaluator do this). These tests pin the contract.
+  it("strips fully on lowercased inputs from every churn family", () => {
+    // Rolling date (month-name + day, ISO, slashed).
+    expect(stripChurnTokens("offer valid till aug 12")).toBe("offer valid till");
+    expect(stripChurnTokens("flash sale until 2026-08-13")).toBe("flash sale until");
+    expect(stripChurnTokens("diwali deals 10/20/2026")).toBe("diwali deals");
+    // Inventory / urgency counter — strips the whole token when "only N left"
+    // / "N sold" / "N seats" / "N remaining" / "N spots" is the entire input.
+    expect(stripChurnTokens("only 3 left")).toBe("");
+    expect(stripChurnTokens("120 sold today")).toBe("today");
+    expect(stripChurnTokens("5 seats remaining")).toBe("remaining");
+    // Viewer / audience counter.
+    expect(stripChurnTokens("12 people viewing now")).toBe("now");
+    expect(stripChurnTokens("9 people viewing now")).toBe("now");
+    // Countdown / clock timer.
+    expect(stripChurnTokens("deal ends in 00:59:59")).toBe("deal ends in");
+    expect(stripChurnTokens("offer valid till 12:30")).toBe("offer valid till");
+  });
+
+  it("does NOT strip mixed-case inputs (caller must lowercase first)", () => {
+    // The patterns have no /i flags — "Aug 12" / "ONLY 3 LEFT" survive intact.
+    // This documents why every call site lowercases before invoking.
+    expect(stripChurnTokens("Offer valid till Aug 12")).toBe("Offer valid till Aug 12");
+    expect(stripChurnTokens("ONLY 3 LEFT")).toBe("ONLY 3 LEFT");
+    expect(stripChurnTokens("12 People Viewing Now")).toBe("12 People Viewing Now");
   });
 });
 

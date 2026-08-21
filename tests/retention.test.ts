@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -48,6 +49,7 @@ describe("runRetentionSweep", () => {
     });
     expect(tables).toEqual([
       "discovery_fetch_log",
+      "browser_job_telemetry",
       "discovery_cache_entry",
       "better_auth_magic_link_ticket",
       "meta_integration_log",
@@ -104,7 +106,8 @@ describe("runRetentionSweep", () => {
     await runRetentionSweep({ DB: mock.db } as never, { now });
 
     expect(mock.statements[0]?.bindings[0]).toBe("2026-06-15T12:00:00.000Z");
-    expect(mock.statements[1]?.bindings[0]).toBe("2026-07-08T12:00:00.000Z");
+    expect(mock.statements[1]?.bindings[0]).toBe("2026-06-15T12:00:00.000Z");
+    expect(mock.statements[2]?.bindings[0]).toBe("2026-07-08T12:00:00.000Z");
   });
 
   it("continues the sweep when one table's delete fails", async () => {
@@ -133,7 +136,7 @@ describe("runRetentionSweep", () => {
 
     const result = await runRetentionSweep({ DB: db } as never);
 
-    expect(statements.length).toBe(8);
+    expect(statements.length).toBe(9);
     expect(result.deleted.discovery_cache_entry).toBeUndefined();
     expect(result.deleted.delivery_attempt).toBe(1);
     expect(result.failedSteps).toEqual(["discovery_cache_entry"]);
@@ -363,5 +366,78 @@ describe("hot-path index migration", () => {
     expect(migration).toContain("idx_discovery_fetch_log_status_created");
     expect(migration).toContain("idx_user_email_nocase");
     expect(migration).toContain("idx_discovery_cache_expires");
+  });
+});
+
+describe("browser_job_telemetry retention", () => {
+  it("deletes only rows older than 30 days via the indexed created_at path", async () => {
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec(
+      readFileSync("migrations/0076_browser_job_telemetry.sql", "utf8"),
+    );
+    const insert = sqlite.prepare(
+      "INSERT INTO browser_job_telemetry (id, job_id, idempotency_key, job_kind, actual_provider, route_context, plan_tier, source, attempt, started_at, ended_at, duration_ms, browser_ms_used, cache_status, cache_age_ms, outcome, result_count, result_bytes, worker_version, cron_task, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    );
+    const now = new Date("2026-08-13T00:00:00.000Z");
+    const iso = (daysAgo: number) =>
+      new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+    const base: Array<string | number | null> = [
+      "job-0001",
+      "deadbeef".repeat(8),
+      "meta_discovery",
+      "cloudflare_browser_run",
+      "public_search",
+      null,
+      "manual",
+      1,
+      iso(1),
+      iso(1),
+      100,
+      null,
+      null,
+      null,
+      "succeeded",
+      3,
+      null,
+      null,
+      null,
+    ];
+    for (const [id, daysAgo] of [
+      ["id-old-31", 31],
+      ["id-old-40", 40],
+      ["id-new-5", 5],
+    ] as Array<[string, number]>) {
+      insert.run(id, ...base, iso(daysAgo));
+    }
+
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(...bindings: unknown[]) {
+            const bound = bindings;
+            return {
+              async run() {
+                const result = sqlite
+                  .prepare(sql)
+                  .run(...(bound as Array<string | number | null | bigint>));
+                return {
+                  success: true,
+                  meta: { changes: Number(result.changes ?? 0) },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const result = await runRetentionSweep({ DB: db } as never, { now });
+
+    expect(result.deleted.browser_job_telemetry).toBe(2);
+    const remaining = sqlite
+      .prepare("SELECT id FROM browser_job_telemetry ORDER BY id")
+      .all() as Array<{ id: string }>;
+    expect(remaining.map((row) => row.id)).toEqual(["id-new-5"]);
+    sqlite.close();
   });
 });

@@ -254,6 +254,13 @@ describe("upsertAd seen-window ratchet", () => {
       const [hydrated] = await listAdsByIds(env, [`chrome-${chromeCta.length}`]);
       expect(hydrated.cta).toBe("");
     }
+
+    // Exact production value from public search: "Menu" plus newline plus
+    // U+200B. Kept out of the length-keyed loop above because
+    // "Menu\n\u200B".length === 6 collides with " menu ".
+    await upsertAd(env, buildAd({ metaAdId: "chrome-zwsp-menu", cta: "Menu\n\u200B" }));
+    const [zwsp] = await listAdsByIds(env, ["chrome-zwsp-menu"]);
+    expect(zwsp.cta).toBe("");
   });
 
   it("never drops a real advertiser CTA from persisted rows (FIX-14 read side)", async () => {

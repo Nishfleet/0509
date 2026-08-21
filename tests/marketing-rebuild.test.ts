@@ -9,7 +9,7 @@ const appCss = readFileSync("app/app.css", "utf8");
 const rootRoute = readFileSync("app/root.tsx", "utf8");
 const routes = readFileSync("app/routes.ts", "utf8");
 const publicMarkdown = readFileSync("app/lib/public-markdown.ts", "utf8");
-const demoProofSource = readFileSync("app/lib/demo-proof.ts", "utf8");
+const publicProofSource = readFileSync("app/lib/public-proof.server.ts", "utf8");
 const readme = readFileSync("README.md", "utf8");
 const publicHomeSource = [marketingRoute, brandWordmark, appCss, rootRoute, routes, publicMarkdown].join("\n");
 const marketingClasses = Array.from(marketingRoute.matchAll(/className="([^"]+)"/g)).flatMap((match) =>
@@ -67,9 +67,9 @@ describe("marketing rebuild", () => {
       "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com",
     );
     expect(marketingRoute).toContain('id="demo"');
-    expect(marketingRoute).toContain('aria-label="Sample brief before signup"');
-    expect(marketingRoute).toContain("Review sample brief");
-    expect(marketingRoute).toContain("Preview the morning brief before creating an account.");
+    expect(marketingRoute).toContain('aria-label="Proof brief before signup"');
+    expect(marketingRoute).toContain("Review the proof brief");
+    expect(marketingRoute).toContain("See the brief before you sign up");
     expect(marketingRoute).toContain("See plans");
     expect(marketingRoute).not.toContain("buyer moment");
     expect(marketingRoute).not.toContain("not the live search result");
@@ -83,18 +83,19 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain('className="f9-announcement" to="/search"');
   });
 
-  it("leads with the concrete price-change hook and proof-backed sample framing", () => {
-    expect(marketingRoute).toContain("They cut");
-    expect(marketingRoute).toContain("the price <s");
-    expect(marketingRoute).toContain("$159");
-    expect(marketingRoute).toContain("$129");
-    expect(marketingRoute).toContain("last");
-    expect(marketingRoute).toContain("night.");
-    expect(marketingRoute).toContain("Sample proof-backed brief");
-    expect(marketingRoute).toContain("A rival page changed while your team was offline");
+  it("leads with a real-data proof hook and never with a fabricated sample story", () => {
+    expect(marketingRoute).toContain("is the hook on");
+    expect(marketingRoute).toContain("linking to");
+    expect(marketingRoute).toContain("We saved the proof.");
+    expect(marketingRoute).toContain("Proof-backed brief");
+    expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
     expect(marketingRoute).toContain("Your growth team would&rsquo;ve found out from a client.");
-    expect(marketingRoute).toContain("Meta ads and landing pages");
+    expect(marketingRoute).toContain("landing pages for price, offer, and CTA changes");
     expect(marketingRoute).toContain("before your alarm goes off");
+    expect(marketingRoute).not.toContain("Sample proof-backed brief");
+    expect(marketingRoute).not.toContain("$159");
+    expect(marketingRoute).not.toContain("$129");
+    expect(marketingRoute).not.toContain("They cut");
     expect(marketingRoute).not.toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
     expect(marketingRoute).toContain("start from the brands you already track");
     expect(marketingRoute).toContain("scheduled monitoring is included with your plan");
@@ -106,6 +107,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("daily on Starter and Agency, weekly on Scout");
     expect(marketingRoute).not.toMatch(/["'`][^"'`]*price loading/);
     expect(marketingRoute).not.toContain("Diff: −₹401");
+    expect(marketingRoute).not.toContain("birchandstone");
   });
 
   it("keeps README route truth aligned with public read-only search", () => {
@@ -152,8 +154,8 @@ describe("marketing rebuild", () => {
   it("keeps the public homepage focused on the customer pain", () => {
     expect(marketingRoute).toContain("Know when competitors change the offer.");
     expect(marketingRoute).toContain("Stop finding out after the sales call.");
-    expect(marketingNav).toContain("Sample brief");
-    expect(marketingRoute).toContain("Sample morning brief");
+    expect(marketingNav).toContain("Proof brief");
+    expect(marketingRoute).toContain("The morning brief — from a real watch");
     expect(marketingRoute).toContain("Decision summary");
     expect(marketingRoute).toContain("Client-ready view");
     expect(marketingRoute).toContain("What changed");
@@ -161,10 +163,11 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Proof status");
     expect(marketingRoute).toContain("Freshness");
     expect(marketingRoute).toContain("Next action");
-    expect(marketingRoute).toContain("Morning brief — 3 moves to beat");
-    expect(marketingRoute).toContain("Price drop spotted before breakfast");
-    expect(marketingRoute).toContain("New CTA pushing buyers to book");
-    expect(marketingRoute).toContain("Sample evidence — no live captures attached. Next move ready by 05:09.");
+    expect(marketingRoute).toContain("Proof brief — ");
+    expect(marketingRoute).toContain("Real captures from the Meta Ad Library — last checked");
+    expect(marketingRoute).not.toContain("Sample brief");
+    expect(marketingRoute).not.toContain("Sample morning brief");
+    expect(marketingRoute).not.toContain("Sample evidence — no live captures attached");
     expect(marketingRoute).not.toContain("Visible offer text changed");
     expect(marketingRoute).not.toContain("CTA changed on the destination page");
     expect(marketingRoute).not.toContain("Evidence on file. No screenshots, no claim.");
@@ -178,14 +181,14 @@ describe("marketing rebuild", () => {
       "75 competitors — top 25 checked every 3 hours, the rest every 6 hours",
     );
     expect(marketingRoute).toContain("valueMathLabel");
-    expect(marketingRoute).toContain("Check packs");
+    expect(marketingRoute).toContain("Proof capture packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');
     expect(marketingRoute).toContain('className="f9-plan-badge">Recommended</em>');
     expect(marketingRoute).not.toContain("Proof-first monitoring");
     expect(marketingRoute).not.toContain("Start with Scout");
     expect(marketingRoute).not.toContain("Dodo price syncing");
     expect(marketingRoute).not.toContain("Extra check capacity");
-    expect(marketingRoute).not.toContain("No unlimited claims");
+    expect(marketingRoute).not.toContain("unlimited");
     expect(marketingRoute).not.toContain("3 offer changes ready");
     expect(marketingRoute).not.toContain("Nykaa changed onboarding bundle");
     expect(marketingRoute).not.toContain("boAt removed COD offer");
@@ -202,7 +205,7 @@ describe("marketing rebuild", () => {
   });
 
   it("never injects raw digest-markdown syntax into the homepage markup", () => {
-    expect(marketingRoute).toContain("renderDigestMarkdownPreview");
+    expect(marketingRoute).not.toContain("renderDigestMarkdownPreview");
     expect(marketingRoute).not.toContain("*Nykaa changed the routine bundle angle*");
     expect(marketingRoute).not.toContain(
       '<p className="ld-export">{demoProof.exports.digestMarkdown}</p>',
@@ -218,11 +221,11 @@ describe("marketing rebuild", () => {
     }
   });
 
-  it("keeps the rendered sample artifact to supported channel labels", () => {
-    expect(demoProofSource).toContain('channel: "Website page"');
-    expect(demoProofSource).toContain('channel: "Public ad library"');
+  it("keeps the rendered proof artifact to supported channel labels", () => {
+    expect(publicProofSource).toContain('channel: "Meta Ad Library"');
+    expect(publicProofSource).toContain('channel: "Landing pages"');
     for (const unsupported of ["TikTok", "Google / YouTube", "LinkedIn", "Pinterest", "Reddit", "X/Twitter"]) {
-      expect(demoProofSource).not.toContain(unsupported);
+      expect(publicProofSource).not.toContain(unsupported);
     }
   });
 
@@ -238,16 +241,20 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("highest queue priority");
   });
 
-  it("uses customer-facing check language for top-ups and included usage", () => {
-    expect(marketingRoute).toContain("Purchased checks never expire");
-    expect(marketingRoute).toContain("Included checks reset every month");
+  it("uses customer-facing proof capture language for top-ups and included usage", () => {
+    expect(marketingRoute).toContain("Purchased proof captures never expire");
+    expect(marketingRoute).toContain("Included proof captures reset every month");
     expect(marketingRoute).toContain("Scheduled scans are included with your plan");
-    expect(marketingRoute).toContain("proof-backed capture");
-    expect(marketingRoute).toContain("500 extra checks");
+    expect(marketingRoute).toContain("never touch your cap");
+    expect(marketingRoute).toContain("500 extra proof captures");
+    expect(marketingRoute).toContain("What uses proof captures?");
+    expect(marketingRoute).toContain("Do unused proof captures roll over?");
+    expect(marketingRoute).toContain("2,500 proof captures/month");
     expect(marketingRoute).not.toContain("Record packs");
     expect(marketingRoute).not.toContain("record packs");
     expect(marketingRoute).not.toContain("saved change records");
     expect(marketingRoute).not.toContain("per saved record");
+    expect(marketingRoute).not.toMatch(/checks never expire|per check|extra checks|checks\/month/);
   });
 
   it("has incinerated the stale lower-page system", () => {
@@ -266,8 +273,8 @@ describe("marketing rebuild", () => {
     expect(rootRoute).toContain("IBM+Plex+Mono");
     expect(marketingRoute).toContain('className="ld-ticker"');
     expect(marketingRoute).toContain('className="ld-wall"');
-    expect(marketingRoute).toContain("Sample proof-backed brief");
-    expect(marketingRoute).toContain("A rival page changed while your team was offline");
+    expect(marketingRoute).toContain("Proof-backed brief");
+    expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
     expect(marketingRoute).toContain('action="/search"');
     expect(marketingRoute).toContain("Preview available ads");
     expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');
@@ -280,7 +287,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("<MarketingNav />");
     expect(marketingNav).toContain('aria-label="Primary"');
     expect(marketingNav).toContain("Search preview");
-    expect(marketingNav).toContain("Sample brief");
+    expect(marketingNav).toContain("Proof brief");
     expect(marketingNav).toContain("Pricing");
     expect(appCss).not.toContain(".ld-nav-links { display: none; }");
     expect(appCss).toContain("grid-column: 1 / -1");
