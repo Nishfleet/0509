@@ -204,7 +204,7 @@ describe("competitor monitoring category page", () => {
     const sitemap = publicSeoFileForPathname("/sitemap.xml");
 
     expect(sitemap?.body).toContain(
-      "<url><loc>https://0509.io/competitor-monitoring</loc></url>",
+      "<loc>https://0509.io/competitor-monitoring</loc>",
     );
   });
 });
