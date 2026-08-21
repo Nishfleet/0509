@@ -127,7 +127,7 @@ const wedgePoints = [
     step: "01",
     title: "Built around what changed",
     detail:
-      "Offers, prices, CTAs, and landing-page copy. Each confirmed change is saved with screenshots, page text, and links, then summarized in a brief. If you mainly want a large creative library, ours is narrower — the change evidence is deeper.",
+      "Offers, prices, CTAs, and landing-page copy. Each confirmed change is saved with screenshots, page text, and links, then summarized in a brief. If you mainly want a large creative library spanning many platforms, ours is narrower — the change evidence is deeper.",
   },
   {
     step: "02",
@@ -161,7 +161,7 @@ export const categoryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "How is this different from ad-spy tools?",
     answer:
-      "Ad-spy tools are built for browsing creatives. Five to Nine is built around what changed: offers, prices, CTAs, and landing-page copy — each confirmed change saved with screenshots, page text, and links, then summarized in a brief. If you mainly want a large creative library, ours is narrower; the change evidence is deeper.",
+      "Ad-spy tools are built for browsing creatives, and some search many platforms’ ad libraries at once. Five to Nine monitors the Meta Ad Library only — other platforms’ ad libraries are out of scope — and is built around what changed: offers, prices, CTAs, and landing-page copy, each confirmed change saved with screenshots, page text, and links, then summarized in a brief. If you mainly want a large multi-platform creative library, ours is narrower; the change evidence is deeper.",
   },
   {
     question: "How fast will I hear about changes?",
@@ -224,7 +224,8 @@ export default function CompetitorMonitoringCategoryRoute() {
 
         <p className="ld-honest" role="note">
           <strong>No account needed.</strong> The public search preview shows what a monitoring
-          check looks like before you decide. Coverage and freshness are labeled and can vary by
+          check looks like before you decide. Coverage is the Meta Ad Library only — other
+          platforms&rsquo; ad libraries are not included — and freshness is labeled and can vary by
           source.
         </p>
       </section>
