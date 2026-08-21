@@ -151,6 +151,21 @@ export function classifyScheduledTaskResult(
     };
   }
 
+  if (taskName === "brand_page_refresh") {
+    const metrics = {
+      attempted: safeCount(result.attempted),
+      succeeded: safeCount(result.succeeded),
+      failed: safeCount(result.failed),
+      skippedFresh: safeCount(result.skippedFresh),
+      skippedBudget: safeCount(result.skippedBudget),
+      observedIndexable: safeCount(result.observedIndexable),
+    };
+    return {
+      outcome: metrics.failed > 0 ? "degraded" : metrics.attempted > 0 ? "completed" : "no_work",
+      metrics,
+    };
+  }
+
   if (taskName === "monitoring_fanout_reconciliation") {
     const firstScans = objectValue(result.firstScans);
     const metrics = {

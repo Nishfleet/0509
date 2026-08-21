@@ -4,6 +4,7 @@ export const RELEASE_SCHEDULED_TASK_NAMES = Object.freeze([
   "digest_schedule_exhaustion_recovery",
   "digest_schedule_recovery",
   "discovery_warmup",
+  "brand_page_refresh",
   "monitoring_fanout_reconciliation",
   "instant_alert_flush",
   "retention_sweep",
@@ -14,6 +15,7 @@ export const RELEASE_SCHEDULED_TASK_NAMES = Object.freeze([
 
 export const RELEASE_SCHEDULE_CRONS = Object.freeze([
   "17 */6 * * *",
+  "37 */12 * * *",
   "0 */3 * * *",
   "0 4 * * *",
   "0 5 * * MON",
@@ -28,6 +30,9 @@ const WARMUP_TASKS = Object.freeze([
   "instant_alert_flush",
   "retention_sweep",
   "presence_polling_batch",
+]);
+const BRAND_PAGE_REFRESH_TASKS = Object.freeze([
+  "brand_page_refresh",
 ]);
 const MONITORING_TASKS = Object.freeze([
   "billing_lifecycle_email_recovery",
@@ -65,6 +70,7 @@ export function expectedReleaseSchedule(startedAtMs, endedAtMs) {
     const minute = date.getUTCMinutes();
     const hour = date.getUTCHours();
     if (minute === 17 && hour % 6 === 0) add("17 */6 * * *", WARMUP_TASKS, date);
+    if (minute === 37 && hour % 12 === 0) add("37 */12 * * *", BRAND_PAGE_REFRESH_TASKS, date);
     if (minute === 0 && hour % 3 === 0) add("0 */3 * * *", MONITORING_TASKS, date);
     if (minute === 0 && hour === 4) add("0 4 * * *", DAILY_TASKS, date);
     if (minute === 0 && hour === 5 && date.getUTCDay() === 1) add("0 5 * * MON", WEEKLY_TASKS, date);

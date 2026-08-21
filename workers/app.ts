@@ -12,6 +12,7 @@ import {
   sendCustomerAtRiskAlert,
   sendWeeklyBusinessNumbers,
 } from "../app/lib/monitoring.server";
+import { runScheduledPublicBrandPageRefresh } from "../app/lib/brand-page-refresh.server";
 import { sendMonthlyCustomerRecaps } from "../app/lib/monthly-recap.server";
 import {
   isPublicMarkdownPage,
@@ -228,6 +229,35 @@ export default {
           (error) => reportScheduledTaskFailure(env, "monthly_customer_recaps", error),
         ),
       );
+    }
+
+    if (scheduledTask.kind === "brand_page_refresh") {
+      // WP-50: dedicated 12-hourly refresh of the public /ads/:domain
+      // showcase. The six-hourly `discovery_warmup` only refreshes rows
+      // that back ACTIVE WATCHLISTS — brand pages whose domain nobody
+      // watches never get re-warmed, and 6 of 12 sitemap brand pages
+      // visibly drift past the "checked about 1 day ago" mark. This pass
+      // caps at 12 targets per run (the visible-sitemap envelope) and
+      // never issues a render-side request — only the existing scheduled
+      // search path, so the public brand page's zero-cost contract is
+      // preserved.
+      ctx.waitUntil(
+        observe("brand_page_refresh", runScheduledPublicBrandPageRefresh(env, {
+          executionContext: ctx,
+        })).then(
+          (result) => {
+            if (
+              result.attempted > 0 ||
+              result.observedIndexable > 0 ||
+              result.skippedFresh > 0
+            ) {
+              console.log("brand page refresh completed", result);
+            }
+          },
+          (error) => reportScheduledTaskFailure(env, "brand_page_refresh", error),
+        ),
+      );
+      return;
     }
 
     if (scheduledTask.kind === "discovery_warmup") {

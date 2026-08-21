@@ -10,6 +10,7 @@ export const RELEASE_SCHEDULED_TASK_NAMES = RUNTIME_RELEASE_SCHEDULED_TASK_NAMES
   "digest_schedule_exhaustion_recovery",
   "digest_schedule_recovery",
   "discovery_warmup",
+  "brand_page_refresh",
   "monitoring_fanout_reconciliation",
   "instant_alert_flush",
   "retention_sweep",
@@ -20,6 +21,7 @@ export const RELEASE_SCHEDULED_TASK_NAMES = RUNTIME_RELEASE_SCHEDULED_TASK_NAMES
 
 export const RELEASE_SCHEDULE_CRONS = RUNTIME_RELEASE_SCHEDULE_CRONS as readonly [
   "17 */6 * * *",
+  "37 */12 * * *",
   "0 */3 * * *",
   "0 4 * * *",
   "0 5 * * MON",

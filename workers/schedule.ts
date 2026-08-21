@@ -1,4 +1,13 @@
 export const DISCOVERY_WARMUP_CRON = "17 */6 * * *";
+/**
+ * Cron for the dedicated public /ads/:domain refresh — re-issued separately
+ * from the watchlist-based `discovery_warmup` because brand pages whose
+ * domain nobody watches never get re-warmed by the watchlist path. The
+ * implementation lives in `app/lib/brand-page-refresh.server`; the cron
+ * string is duplicated here so `resolveScheduledTask` can dispatch it
+ * without an extra import boundary.
+ */
+export const BRAND_PAGE_REFRESH_CRON = "37 */12 * * *";
 export const REGULAR_MONITORING_CRON = "0 */3 * * *";
 export const DAILY_DIGEST_CRON = "0 4 * * *";
 /** @deprecated The 04:00 cron now sends daily digests only. */
@@ -9,6 +18,9 @@ export { SCHEDULED_OBSERVATION_GAP_CHECK_CRON } from "../app/lib/scheduled-obser
 export type ScheduledTask =
   | {
       kind: "discovery_warmup";
+    }
+  | {
+      kind: "brand_page_refresh";
     }
   | {
       kind: "monitoring";
@@ -22,6 +34,10 @@ export type ScheduledTask =
 export function resolveScheduledTask(cron: string): ScheduledTask {
   if (cron === DISCOVERY_WARMUP_CRON) {
     return { kind: "discovery_warmup" };
+  }
+
+  if (cron === BRAND_PAGE_REFRESH_CRON) {
+    return { kind: "brand_page_refresh" };
   }
 
   if (cron === WEEKLY_DIGEST_CRON) {
