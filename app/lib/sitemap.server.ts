@@ -32,7 +32,7 @@
 import { normalizeBrandPageDomain, BRAND_PAGE_FRESH_FOR_INDEXING_MS } from "~/lib/brand-page.server";
 import { queryAll } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
-import { renderSitemapXml, SITEMAP_PATHS } from "~/lib/seo";
+import { renderSitemapXml, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
 
 /**
  * Hard bound on dynamic brand-page entries per sitemap render. Keeps the
@@ -159,15 +159,19 @@ export function isIndexableBrandPageRow(row: SitemapCacheRow, now: Date): boolea
 
 /**
  * Pure core: reduce cache rows (ordered newest-first) to deduped, bounded
- * /ads/:domain paths that would render indexable. Kept separate from the D1
- * read so the filtering rules are unit-testable without a database.
+ * /ads/:domain sitemap entries that would render indexable. Each entry
+ * carries a `lastmod` derived from the cache row's `fetched_at` (the honest
+ * freshness signal — when we last saw real ads for this brand) plus
+ * `changefreq=weekly` and `priority=0.6` (brand pages are secondary to the
+ * funnel but worth periodic re-crawl). Kept separate from the D1 read so the
+ * filtering rules are unit-testable without a database.
  */
-export function indexableBrandPagePathsFromRows(
+export function indexableBrandPageEntriesFromRows(
   rows: readonly SitemapCacheRow[],
   now: Date = new Date(),
-): string[] {
+): SitemapEntry[] {
   const seen = new Set<string>();
-  const paths: string[] = [];
+  const entries: SitemapEntry[] = [];
   for (const row of rows) {
     if (!isIndexableBrandPageRow(row, now)) {
       continue;
@@ -177,12 +181,18 @@ export function indexableBrandPagePathsFromRows(
       continue;
     }
     seen.add(domain);
-    paths.push(`/ads/${domain}`);
-    if (paths.length >= SITEMAP_BRAND_PATH_LIMIT) {
+    const fetchedDate = row.fetched_at.slice(0, 10);
+    entries.push({
+      path: `/ads/${domain}`,
+      lastmod: fetchedDate,
+      changefreq: "weekly",
+      priority: "0.6",
+    });
+    if (entries.length >= SITEMAP_BRAND_PATH_LIMIT) {
       break;
     }
   }
-  return paths;
+  return entries;
 }
 
 /**
@@ -191,10 +201,10 @@ export function indexableBrandPagePathsFromRows(
  * table on a fresh D1, unparseable rows) degrades to the static sitemap,
  * never a 500.
  */
-export async function loadIndexableBrandPagePaths(
+export async function loadIndexableBrandPageEntries(
   env: AppEnv,
   now: Date = new Date(),
-): Promise<string[]> {
+): Promise<SitemapEntry[]> {
   if (!env.DB) {
     return [];
   }
@@ -226,7 +236,7 @@ export async function loadIndexableBrandPagePaths(
       cutoffIso,
       SITEMAP_BRAND_PATH_LIMIT,
     );
-    return indexableBrandPagePathsFromRows(rows, now);
+    return indexableBrandPageEntriesFromRows(rows, now);
   } catch (error) {
     if (isMissingSitemapTableError(error)) {
       return [];
@@ -245,11 +255,12 @@ function isMissingSitemapTableError(error: unknown): boolean {
 }
 
 /**
- * Full production sitemap body: static funnel paths first (unchanged from the
- * historical sitemap), then the dynamic indexable brand-page entries.
+ * Full production sitemap body: static funnel entries first (with changefreq
+ * and priority), then the dynamic indexable brand-page entries (with lastmod
+ * from their cache fetched_at).
  */
-export function buildSitemapXml(brandPaths: readonly string[]): string {
-  return renderSitemapXml([...SITEMAP_PATHS, ...brandPaths]);
+export function buildSitemapXml(brandEntries: readonly SitemapEntry[]): string {
+  return renderSitemapXml([...SITEMAP_STATIC_ENTRIES, ...brandEntries]);
 }
 
 /** Sitemap file shape consumed by workers/app.ts (publicSeoFileForPathname's). */
@@ -259,7 +270,7 @@ export async function publicSitemapFile(env: AppEnv): Promise<{
   cacheControl: string;
 }> {
   return {
-    body: buildSitemapXml(await loadIndexableBrandPagePaths(env)),
+    body: buildSitemapXml(await loadIndexableBrandPageEntries(env)),
     contentType: "application/xml; charset=utf-8",
     cacheControl: "public, max-age=3600",
   };
