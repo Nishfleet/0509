@@ -29,11 +29,15 @@ describe("uptime health workflow", () => {
     };
   };
 
-  it("checks the public health endpoint on an offset five-minute GitHub schedule", () => {
+  it("keeps on-demand probes and removes the GitHub schedule (systemd timer owns cadence)", () => {
+    // The GitHub Actions 5-minute schedule fired about once an hour in practice
+    // (median 63 minutes between runs over 300 observations, 2026-07-25..2026-08-11),
+    // so production liveness detection now runs as the 0509-liveness systemd
+    // timer on the VPS (ops/liveness/, installed by
+    // ops/liveness/provision-production-liveness.sh). The workflow remains
+    // available for on-demand workflow_dispatch probes only.
     expect(parsed.on.workflow_dispatch).toBeDefined();
-    expect(parsed.on.schedule).toEqual([
-      { cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *" },
-    ]);
+    expect(parsed.on.schedule).toBeUndefined();
     expect(parsed.jobs.health?.["runs-on"]).toEqual([
       "self-hosted",
       "linux",
