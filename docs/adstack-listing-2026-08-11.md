@@ -83,6 +83,18 @@ action.** Recorded 2026-08-11:
   submission for the next quarterly re-test, not a confirmed placement; do
   not record it as "listed" until the venue replies or the re-test publishes.
 
+- **Re-verified 2026-08-21** (lane-3 freshness pass, ten days after the
+  2026-08-11 prep landed on main via PR #628): the venue's submission path
+  (About page + FAQ Q-04), no-pay-to-play rule (About page + FAQ Q-01),
+  quarterly re-test cadence (FAQ Q-03), essay URL, and eight-tool ranking
+  list (Superscale #1 → SpyFu #8, published 2026-07-15) are all unchanged
+  on `https://ad-stack.ai`. Every `0509.io` URL the submission copy cites
+  is still HTTP 200, and the plan facts in the email body still match
+  `app/lib/plan-entitlements.ts` exactly. Evidence record:
+  `.lane/reports/0509-lane3-adstack-listing-fresh-verification-2026-08-21.md`.
+  No corrections needed to the prep; the email below is still paste-ready,
+  the sender is still the unblock owner step.
+
 ## Ready-to-send submission (the whole submission is one email)
 
 To: `hello@ad-stack.ai`
