@@ -173,16 +173,73 @@ export const SITEMAP_PATHS = [
 ] as const;
 
 /**
- * Render a sitemap urlset from an ordered path list. Single builder shared by
+ * A sitemap `<url>` entry with optional metadata. `lastmod` is an ISO 8601
+ * date (YYYY-MM-DD); `changefreq` and `priority` follow the sitemaps.org spec.
+ * Only `lastmod` is actually honored by Google for crawl scheduling — the
+ * other two are hints — but all three are emitted so crawlers that do read
+ * them get an honest freshness and importance signal instead of nothing.
+ */
+export interface SitemapEntry {
+  path: string;
+  lastmod?: string;
+  changefreq?: string;
+  priority?: string;
+}
+
+/**
+ * Static funnel paths with honest changefreq/priority tiers. lastmod is
+ * deliberately omitted on static paths — the build has no per-page content
+ * timestamp, and inventing one would be a false freshness claim. Dynamic
+ * /ads/:domain brand pages carry a real lastmod from their cache fetched_at.
+ */
+const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
+  "/": { changefreq: "daily", priority: "1.0" },
+  "/search": { changefreq: "weekly", priority: "0.9" },
+  "/auth/signup": { changefreq: "weekly", priority: "0.8" },
+  "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
+  "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },
+  "/compare/meta-ad-library": { changefreq: "weekly", priority: "0.7" },
+  "/changelog": { changefreq: "weekly", priority: "0.6" },
+  "/help": { changefreq: "monthly", priority: "0.5" },
+  "/docs": { changefreq: "monthly", priority: "0.5" },
+  "/api/docs": { changefreq: "monthly", priority: "0.5" },
+  "/status": { changefreq: "monthly", priority: "0.5" },
+  "/trust": { changefreq: "yearly", priority: "0.3" },
+  "/privacy": { changefreq: "yearly", priority: "0.3" },
+  "/terms": { changefreq: "yearly", priority: "0.3" },
+};
+
+export const SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] = SITEMAP_PATHS.map(
+  (path) => ({
+    path,
+    ...STATIC_CHANGEFREQ_PRIORITY[path],
+  }),
+);
+
+/**
+ * Render a sitemap urlset from an ordered entry list. Single builder shared by
  * the static fallback (`SITEMAP_XML` below, used when there is no D1 / no
  * dynamic data) and the production sitemap, which appends dynamic /ads/:domain
  * brand-page entries — see `buildSitemapXml` in app/lib/sitemap.server.ts — so
  * the two can never drift.
  */
-export function renderSitemapXml(paths: readonly string[]): string {
+export function renderSitemapXml(entries: readonly SitemapEntry[]): string {
+  const urlBlocks = entries.map((entry) => {
+    const children = [`<loc>${canonicalUrl(entry.path)}</loc>`];
+    if (entry.lastmod) {
+      children.push(`<lastmod>${entry.lastmod}</lastmod>`);
+    }
+    if (entry.changefreq) {
+      children.push(`<changefreq>${entry.changefreq}</changefreq>`);
+    }
+    if (entry.priority) {
+      children.push(`<priority>${entry.priority}</priority>`);
+    }
+    return `  <url>${children.join("")}</url>`;
+  });
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${paths.map((path) => `  <url><loc>${canonicalUrl(path)}</loc></url>`).join("\n")}
+${urlBlocks.join("\n")}
 </urlset>
 `;
 }
@@ -200,7 +257,7 @@ ${paths.map((path) => `  <url><loc>${canonicalUrl(path)}</loc></url>`).join("\n"
 // bounded cache read at sitemap-render time (see app/lib/sitemap.server.ts);
 // sitemap generation never triggers live discovery. This static XML is the
 // no-DB fallback only.
-const SITEMAP_XML = renderSitemapXml(SITEMAP_PATHS);
+const SITEMAP_XML = renderSitemapXml(SITEMAP_STATIC_ENTRIES);
 
 // Keep /share/ CRAWLABLE on purpose: shared reports are de-indexed via the
 // `x-robots-tag: noindex, nofollow` header set in workers/security-headers.ts,
