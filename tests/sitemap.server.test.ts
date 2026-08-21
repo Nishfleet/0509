@@ -6,7 +6,7 @@ import {
 import {
   brandDomainFromSitemapCacheRow,
   buildSitemapXml,
-  indexableBrandPagePathsFromRows,
+  indexableBrandPageEntriesFromRows,
   isIndexableBrandPageRow,
   SITEMAP_BRAND_PATH_LIMIT,
   type SitemapCacheRow,
@@ -161,7 +161,7 @@ describe("isIndexableBrandPageRow", () => {
   });
 });
 
-describe("indexableBrandPagePathsFromRows", () => {
+describe("indexableBrandPageEntriesFromRows", () => {
   it("dedupes domains across countries/cursors and keeps newest-first order", () => {
     const rows = [
       cacheRow({
@@ -180,10 +180,23 @@ describe("indexableBrandPagePathsFromRows", () => {
       }),
     ];
 
-    expect(indexableBrandPagePathsFromRows(rows)).toEqual([
+    const entries = indexableBrandPageEntriesFromRows(rows);
+    expect(entries.map((e) => e.path)).toEqual([
       "/ads/nykaa.com",
       "/ads/meesho.com",
     ]);
+  });
+
+  it("carries lastmod from fetched_at, plus changefreq and priority", () => {
+    const fetchedAt = isoAgo(2 * 60 * 60 * 1000);
+    const rows = [cacheRow({ fetched_at: fetchedAt })];
+
+    const entries = indexableBrandPageEntriesFromRows(rows);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].path).toBe("/ads/nykaa.com");
+    expect(entries[0].lastmod).toBe(fetchedAt.slice(0, 10));
+    expect(entries[0].changefreq).toBe("weekly");
+    expect(entries[0].priority).toBe("0.6");
   });
 
   it("skips rows that would not render an indexable page", () => {
@@ -196,7 +209,8 @@ describe("indexableBrandPagePathsFromRows", () => {
       cacheRow(),
     ];
 
-    expect(indexableBrandPagePathsFromRows(rows)).toEqual(["/ads/nykaa.com"]);
+    const entries = indexableBrandPageEntriesFromRows(rows);
+    expect(entries.map((e) => e.path)).toEqual(["/ads/nykaa.com"]);
   });
 
   it("bounds the sitemap to SITEMAP_BRAND_PATH_LIMIT entries", () => {
@@ -206,25 +220,29 @@ describe("indexableBrandPagePathsFromRows", () => {
       }),
     );
 
-    expect(indexableBrandPagePathsFromRows(rows)).toHaveLength(SITEMAP_BRAND_PATH_LIMIT);
+    expect(indexableBrandPageEntriesFromRows(rows)).toHaveLength(SITEMAP_BRAND_PATH_LIMIT);
   });
 });
 
 describe("buildSitemapXml", () => {
   it("keeps the static funnel paths first, then appends dynamic brand pages", () => {
-    const xml = buildSitemapXml(["/ads/nykaa.com", "/ads/meesho.com"]);
+    const xml = buildSitemapXml([
+      { path: "/ads/nykaa.com", lastmod: "2026-08-21", changefreq: "weekly", priority: "0.6" },
+      { path: "/ads/meesho.com", lastmod: "2026-08-20", changefreq: "weekly", priority: "0.6" },
+    ]);
 
-    expect(xml).toContain("<url><loc>https://0509.io/</loc></url>");
-    expect(xml).toContain("<url><loc>https://0509.io/search</loc></url>");
-    expect(xml).toContain(
-      "<url><loc>https://0509.io/ads/nykaa.com</loc></url>",
-    );
-    expect(xml).toContain(
-      "<url><loc>https://0509.io/ads/meesho.com</loc></url>",
-    );
+    expect(xml).toContain("<loc>https://0509.io/</loc>");
+    expect(xml).toContain("<loc>https://0509.io/search</loc>");
+    expect(xml).toContain("<loc>https://0509.io/ads/nykaa.com</loc>");
+    expect(xml).toContain("<loc>https://0509.io/ads/meesho.com</loc>");
+    // Static entries carry changefreq and priority.
+    expect(xml).toContain("<changefreq>daily</changefreq>");
+    expect(xml).toContain("<priority>1.0</priority>");
+    // Brand entries carry lastmod.
+    expect(xml).toContain("<lastmod>2026-08-21</lastmod>");
     // Static list never carries a hardcoded /ads/ path.
-    expect(xml.indexOf("<url><loc>https://0509.io/ads/")).toBe(
-      xml.indexOf("<url><loc>https://0509.io/ads/nykaa.com</loc></url>"),
+    expect(xml.indexOf("https://0509.io/ads/")).toBe(
+      xml.indexOf("https://0509.io/ads/nykaa.com"),
     );
   });
 
@@ -236,7 +254,7 @@ describe("buildSitemapXml", () => {
   });
 });
 
-describe("loadIndexableBrandPagePaths (D1 read)", () => {
+describe("loadIndexableBrandPageEntries (D1 read)", () => {
   let queryAll: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -252,8 +270,8 @@ describe("loadIndexableBrandPagePaths (D1 read)", () => {
   });
 
   async function runLoader(env: Record<string, unknown>) {
-    const { loadIndexableBrandPagePaths } = await import("~/lib/sitemap.server");
-    return loadIndexableBrandPagePaths(env as never);
+    const { loadIndexableBrandPageEntries } = await import("~/lib/sitemap.server");
+    return loadIndexableBrandPageEntries(env as never);
   }
 
   it("returns the static-only set when D1 is absent", async () => {
@@ -274,7 +292,7 @@ describe("loadIndexableBrandPagePaths (D1 read)", () => {
     expect(queryAll).not.toHaveBeenCalled();
   });
 
-  it("queries only indexable public_search rows and maps them to /ads paths", async () => {
+  it("queries only indexable public_search rows and maps them to /ads entries", async () => {
     queryAll.mockResolvedValue([
       cacheRow(),
       cacheRow({
@@ -284,7 +302,7 @@ describe("loadIndexableBrandPagePaths (D1 read)", () => {
       cacheRow({ route_context: "watchlist_scan" }),
     ]);
 
-    const paths = await runLoader({ DB: {}, BROWSER: {} });
+    const entries = await runLoader({ DB: {}, BROWSER: {} });
 
     expect(queryAll).toHaveBeenCalledTimes(1);
     const [, sql, cutoffIso, limit] = queryAll.mock.calls[0] as [unknown, string, string, number];
@@ -296,7 +314,13 @@ describe("loadIndexableBrandPagePaths (D1 read)", () => {
       -3,
     );
     expect(limit).toBe(SITEMAP_BRAND_PATH_LIMIT);
-    expect(paths).toEqual(["/ads/nykaa.com", "/ads/meesho.com"]);
+    expect(entries.map((e: { path: string }) => e.path)).toEqual(["/ads/nykaa.com", "/ads/meesho.com"]);
+    // Entries carry lastmod from fetched_at.
+    for (const entry of entries) {
+      expect(entry.lastmod).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(entry.changefreq).toBe("weekly");
+      expect(entry.priority).toBe("0.6");
+    }
   });
 
   it("degrades to the static-only set when the discovery cache table is missing", async () => {
