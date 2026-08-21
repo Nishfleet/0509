@@ -445,7 +445,7 @@ export default function CompetitorMonitoringCategoryRoute() {
               Scheduled cadence, quiet-period behavior, and public-surfaces-only sourcing trace
               to the live <Link to="/">homepage FAQ</Link> and the{" "}
               <Link to="/docs">docs</Link>. Plans and pricing are on the{" "}
-              <Link to="/#pricing">pricing section</Link> — prices load in your local currency
+              <Link to="/pricing">pricing page</Link> — prices load in your local currency
               and are never hardcoded here.
             </p>
           </article>

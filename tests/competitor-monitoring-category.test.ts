@@ -138,7 +138,7 @@ describe("competitor monitoring category page", () => {
     expect(source).toContain('action="/search"');
     expect(source).toContain('<Link to="/search">');
     expect(source).toContain('<Link to="/docs">');
-    expect(source).toContain('<Link to="/#pricing">');
+    expect(source).toContain('<Link to="/pricing">');
     expect(source).toContain('<Link to="/">homepage FAQ</Link>');
   });
 

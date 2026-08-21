@@ -124,7 +124,7 @@ export function isSettingsNavPath(pathname: string) {
 export const PUBLIC_SEARCH_NAV: DashboardNavItem[] = [
   { label: "Home", to: "/" },
   { label: "Search", to: "/search", end: true },
-  { label: "Pricing", to: "/#pricing" },
+  { label: "Pricing", to: "/pricing" },
   { label: "Help", to: "/help" },
 ];
 

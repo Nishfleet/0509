@@ -2790,7 +2790,7 @@ function renderDigestEmail(
     supportMailto: SUPPORT_MAILTO,
     unsubscribeUrl: input.unsubscribeUrl,
     upgradeNote: input.upgradeNote ?? null,
-    upgradeUrl: input.upgradeNote ? `${baseUrl}/#pricing` : null,
+    upgradeUrl: input.upgradeNote ? `${baseUrl}/pricing` : null,
     previousBriefItemCount: input.previousBriefItemCount ?? null,
     hasPreviousBrief: input.hasPreviousBrief ?? null,
     nextScanAt: input.nextScanAt ?? null,

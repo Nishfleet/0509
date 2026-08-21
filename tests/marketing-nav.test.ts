@@ -30,7 +30,10 @@ afterEach(() => {
 const SHARED_LINKS = [
 	{ href: "/search", label: "Search preview" },
 	{ href: "/#demo", label: "Proof brief" },
-	{ href: "/#pricing", label: "Pricing" },
+	// Pricing points at the canonical /pricing route (the homepage also has
+	// the same plan cards at /#pricing, but the nav must link to the
+	// indexable URL so search engines and crawlers land on it).
+	{ href: "/pricing", label: "Pricing" },
 	{ href: "/help", label: "Help" },
 	{ href: "/docs", label: "Docs" },
 	{ href: "/status", label: "Status" },

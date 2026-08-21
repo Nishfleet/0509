@@ -1,17 +1,12 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { HeadersArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { PricingSection } from "~/components/pricing-section";
 import { SubmitButton } from "~/components/submit-button";
-import {
-  DODO_ANNUAL_SAVINGS_LABEL,
-  dodoAnnualSavingsIsValid,
-  dodoAnnualUnavailableCopy,
-} from "~/lib/dodo-pricing-display";
-import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
-import { EVIDENCE_USAGE_CUSTOMER_COPY } from "~/lib/pricing";
+import { NO_PRICING_PREVIEW, type LocalPricingPreview } from "~/lib/pricing-preview";
 import {
   canonicalLinks,
   faqPageJsonLd,
@@ -57,8 +52,6 @@ export const meta: MetaFunction = () =>
     pathname: "/",
   });
 
-const noPricingPreview = { available: false } as const;
-
 // Published prices: the marketing page renders real per-plan Dodo prices in
 // the server-rendered HTML instead of waiting for a client-side fetch. The
 // Dodo checkout preview can take a second or two on a cold cache, so the
@@ -73,7 +66,7 @@ async function pricingPreviewWithinBound({
 }: {
   env: AppEnv;
   request: Request;
-}): Promise<LocalPricingPreview | typeof noPricingPreview> {
+}): Promise<LocalPricingPreview | typeof NO_PRICING_PREVIEW> {
   const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -86,9 +79,9 @@ async function pricingPreviewWithinBound({
         );
       }),
     ]);
-    return preview.available ? preview : noPricingPreview;
+    return preview.available ? preview : NO_PRICING_PREVIEW;
   } catch {
-    return noPricingPreview;
+    return NO_PRICING_PREVIEW;
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
@@ -126,7 +119,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     );
   }
 
-  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief };
+  return { pricingPreview: NO_PRICING_PREVIEW, commercialLaunch, proofBrief };
 }
 
 /**
@@ -229,7 +222,8 @@ export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
 ];
 
 // Plain-text mirror of the rendered billing FAQ block for FAQPage JSON-LD.
-// Keep in sync with the "Common billing questions" markup below.
+// Keep in sync with the "Common billing questions" markup in the shared
+// pricing-section component.
 export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry[] {
   return [
     {
@@ -262,161 +256,6 @@ export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry
         "Display prices load from Dodo Payments in your local currency at preview time. We never hardcode checkout amounts in the app.",
     },
   ];
-}
-
-type LocalDisplayPrice = {
-  amount?: number | null;
-  currency?: string | null;
-  display?: string | null;
-  validationAmount?: number | null;
-};
-
-type LocalAnnualValidation = {
-  annualAmount?: number | null;
-  billingCountry?: string | null;
-  currency?: string | null;
-  expectedAnnualAmount?: number | null;
-  monthlyAmount?: number | null;
-  planId?: PricingPlanSlug | null;
-  reason?: string | null;
-  valid?: boolean | null;
-};
-
-export interface LocalPricingPreview {
-  available?: boolean;
-  prices?: Partial<
-    Record<
-      PricingPlanSlug,
-      Partial<Record<PricingBillingCycle, LocalDisplayPrice>>
-    >
-  >;
-  annualValidation?: Partial<Record<PricingPlanSlug, LocalAnnualValidation>>;
-  usageBundles?: Partial<Record<UsageBundleSlug, LocalDisplayPrice>>;
-}
-
-function priceLabel(
-  preview: LocalPricingPreview | null,
-  planId: PricingPlanSlug,
-  cycle: PricingBillingCycle,
-  fallback: string,
-) {
-  return preview?.prices?.[planId]?.[cycle]?.display || fallback;
-}
-
-function hasPrice(
-  preview: LocalPricingPreview | null,
-  planId: PricingPlanSlug,
-  cycle: PricingBillingCycle,
-) {
-  return Boolean(preview?.prices?.[planId]?.[cycle]?.display);
-}
-
-function bundlePriceLabel(
-  preview: LocalPricingPreview | null,
-  bundleId: UsageBundleSlug,
-  fallback: string,
-) {
-  return preview?.usageBundles?.[bundleId]?.display || fallback;
-}
-
-function formatMinorCurrency(
-  amount: number | null | undefined,
-  currency: string | null | undefined,
-  options: { roundWhole?: boolean } = {},
-) {
-  if (!Number.isFinite(amount) || !currency) return "";
-  try {
-    const decimals =
-      new Intl.NumberFormat("en", {
-        style: "currency",
-        currency,
-      }).resolvedOptions().maximumFractionDigits ?? 2;
-    const majorAmount = Number(amount) / 10 ** decimals;
-    const displayAmount = options.roundWhole === false ? majorAmount : Math.ceil(majorAmount);
-    const fractionDigits = options.roundWhole === false && Math.abs(displayAmount) < 10 ? 2 : 0;
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      currencyDisplay: "narrowSymbol",
-      maximumFractionDigits: fractionDigits,
-      minimumFractionDigits: 0,
-    }).format(displayAmount);
-  } catch {
-    return `${currency} ${Math.ceil(Number(amount) / 100)}`;
-  }
-}
-
-export function valueMathLabel(
-  preview: LocalPricingPreview | null,
-  planId: PricingPlanSlug,
-  cycle: PricingBillingCycle,
-  annualIsValid: boolean,
-) {
-  const monthlyPrice = preview?.prices?.[planId]?.monthly;
-  if (cycle === "yearly" && annualIsValid) {
-    const yearlyPrice = preview?.prices?.[planId]?.yearly;
-    const monthlyAmount = monthlyPrice?.amount;
-    const annualAmount = yearlyPrice?.amount;
-    const monthlyCurrency = monthlyPrice?.currency;
-    const annualCurrency = yearlyPrice?.currency;
-    const savingsAmount =
-      Number.isFinite(monthlyAmount) &&
-      Number.isFinite(annualAmount) &&
-      monthlyCurrency &&
-      annualCurrency &&
-      monthlyCurrency === annualCurrency
-        ? Number(monthlyAmount) * 12 - Number(annualAmount)
-        : null;
-    const savings = savingsAmount && savingsAmount > 0
-      ? formatMinorCurrency(savingsAmount, monthlyCurrency)
-      : "";
-    return savings ? `Save ${savings} vs monthly` : DODO_ANNUAL_SAVINGS_LABEL;
-  }
-
-  const perDay = formatMinorCurrency(
-    Number.isFinite(monthlyPrice?.amount) ? Number(monthlyPrice?.amount) / 30 : null,
-    monthlyPrice?.currency,
-  );
-  return perDay ? `About ${perDay}/day` : "Simple monthly start";
-}
-
-function planValueSummary(planId: PricingPlanSlug) {
-  if (planId === "scout") return "3 competitors checked every 6 hours";
-  if (planId === "starter") return "10 competitors checked every 3 hours";
-  if (planId === "agency")
-    return "75 competitors — top 25 checked every 3 hours, the rest every 6 hours";
-  return "Scheduled competitor monitoring";
-}
-
-function bundleValueLabel(
-  preview: LocalPricingPreview | null,
-  bundleId: UsageBundleSlug,
-  creditQuantity: number | null | undefined,
-) {
-  const price = preview?.usageBundles?.[bundleId];
-  if (!Number.isFinite(price?.amount) || !Number.isFinite(creditQuantity) || Number(creditQuantity) <= 0) {
-    return "Purchased proof captures never expire";
-  }
-  const unit = formatMinorCurrency(
-    Number(price?.amount) / Number(creditQuantity),
-    price?.currency,
-    { roundWhole: false },
-  );
-  return unit ? `${unit} per proof capture` : "Purchased proof captures never expire";
-}
-
-function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBundleSlug) {
-  return Boolean(preview?.usageBundles?.[bundleId]?.display);
-}
-
-export function planIntentPath(
-  signedIn: boolean,
-  plan: PricingPlanSlug,
-  cycle: PricingBillingCycle,
-) {
-  const billingPath = `/app/billing?plan=${plan}&cycle=${cycle}&source=pricing#plans`;
-  if (signedIn) return billingPath;
-  return `/auth/signup?redirectTo=${encodeURIComponent(billingPath)}`;
 }
 
 /** "03:47 AM" style clock for a real capture timestamp. */
@@ -458,33 +297,6 @@ export default function MarketingRoute() {
   const proofBrief = routeData.proofBrief ?? null;
   const primaryCta = rootData.session ? "/app" : "/auth/signup";
   const primaryLabel = rootData.session ? "Open app" : "Create account";
-  const [localPricing, setLocalPricing] = useState<LocalPricingPreview | null>(
-    routeData.pricingPreview?.available ? routeData.pricingPreview : null,
-  );
-  const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>("monthly");
-  const isPlanSaleOpen = (plan: PricingPlanSlug) =>
-    plan === "scout"
-      ? commercialLaunch.scoutSaleOpen
-      : plan === "starter"
-        ? commercialLaunch.starterSaleOpen
-        : commercialLaunch.agencySaleOpen;
-  const saleOpenPricingPlans = rootData.pricingPlans.filter((plan) => isPlanSaleOpen(plan.slug));
-  const annualCycleAvailable =
-    saleOpenPricingPlans.length > 0 &&
-    saleOpenPricingPlans.some((plan) =>
-      dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan.slug]),
-    );
-  const annualSavingsValidated =
-    saleOpenPricingPlans.length > 0 &&
-    saleOpenPricingPlans.every((plan) =>
-      dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan.slug]),
-    );
-
-  useEffect(() => {
-    if (billingCycle === "yearly" && !annualCycleAvailable) {
-      setBillingCycle("monthly");
-    }
-  }, [annualCycleAvailable, billingCycle]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -554,58 +366,6 @@ export default function MarketingRoute() {
       root.classList.remove("ld-motion");
     };
   }, []);
-
-  useEffect(() => {
-    if (localPricing?.available) return undefined;
-
-    let active = true;
-    let started = false;
-    let observer: IntersectionObserver | undefined;
-    let fallbackTimer = 0;
-
-    const startPricingPreview = () => {
-      if (!active || started) return;
-      started = true;
-      window.clearTimeout(fallbackTimer);
-      observer?.disconnect();
-      // The pricing section sits far below the fold, and the preview can take
-      // seconds (Dodo checkout-preview latency). Fetching it eagerly on mount
-      // kept the page's network busy after render (dogfood c99ff5d9b87b:
-      // rendered audit reached network idle in 5136ms). Fetch only when the
-      // visitor is close to the section, so the document load settles fast
-      // while prices still arrive before the section becomes visible.
-      fetch("/api/pricing-preview")
-        .then((response) => (response.ok ? response.json() : null))
-        .then((value: unknown) => {
-          const preview = value as LocalPricingPreview | null;
-          if (active && preview?.available) setLocalPricing(preview);
-        })
-        .catch(() => {
-          // Keep honest checkout-localized fallbacks on fetch failure.
-          if (active) setLocalPricing(null);
-        });
-    };
-
-    observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) startPricingPreview();
-      },
-      { rootMargin: "0px 0px 100% 0px", threshold: 0.01 },
-    );
-    const pricingSection = document.getElementById("pricing");
-    if (pricingSection) observer.observe(pricingSection);
-
-    // Safety net for viewers who never scroll (print, landmark-jumping screen
-    // readers, find-in-page jumps): prices still arrive eventually. Fires long
-    // after the document has settled, so it never delays the initial load.
-    fallbackTimer = window.setTimeout(startPricingPreview, 10_000);
-
-    return () => {
-      active = false;
-      window.clearTimeout(fallbackTimer);
-      observer?.disconnect();
-    };
-  }, [localPricing?.available]);
 
   const tickerEvents = buildTickerEvents(proofBrief);
 
@@ -899,82 +659,90 @@ export default function MarketingRoute() {
                 saved watches attach screenshots, page text, and original links.
               </p>
             </article>
-
-            <article className="ld-case-card">
-              <span className="ld-kicker">Client-ready view</span>
-              <h4>Report preview</h4>
-              <ul className="ld-trail">
-                {proofBrief.reportRows.map((row) => (
-                  <li key={row}>{row}</li>
-                ))}
-              </ul>
-            </article>
-
-            <div className="ld-intel" aria-label="Insight depth from real captures">
-              <article>
-                <span className="ld-kicker">Top hooks</span>
-                <ul>
-                  {proofBrief.insights.topHooks.map((hook) => (
-                    <li key={hook}>{hook}</li>
-                  ))}
-                </ul>
-              </article>
-              <article>
-                <span className="ld-kicker">Media mix</span>
-                <ul>
-                  {proofBrief.insights.mediaMix.map((item) => (
-                    <li key={item.channel}>
-                      <strong>{item.channel}</strong>
-                      <em>{item.count}</em>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-              <article>
-                <span className="ld-kicker">Timeline</span>
-                <ul>
-                  {proofBrief.insights.timeline.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-              <article>
-                <span className="ld-kicker">Brief export</span>
-                <p className="ld-export">
-                  {proofBrief.decision.subject}
-                  {"\n"}Priority: {proofBrief.decision.priority}
-                  {"\n"}Proof: {proofBrief.adCount} real captures — {proofBrief.fetchedAt}
-                </p>
-              </article>
-            </div>
           </div>
         ) : (
-          <div className="ld-caseboard ld-reveal" aria-label="No live proof yet">
-            <article className="ld-case-card ld-case-empty">
-              <span className="ld-kicker">No live proof right now</span>
-              <h4>We haven’t captured this competitor recently.</h4>
+          <div className="ld-caseboard ld-reveal" aria-label="Proof brief preview">
+            <article className="ld-case-lead">
+              <span className="ld-kicker">Meta Ad Library</span>
+              <h3>One competitor, one brief, every change.</h3>
               <p>
-                The proof brief renders real captures from the public Meta Ad Library. Run the
-                search preview to see current ads and sources, or create an account to start a
-                scheduled watch.
+                A real watch groups one competitor's actual captured changes — hooks, offers, CTAs,
+                sources, and freshness — into one decision. The preview below shows the shape of
+                the brief; the data lands after the first scan of a competitor.
               </p>
-              <div className="ld-proof-actions">
-                <Link to={publicSearchTrialPath}>Run the search preview</Link>
-                <Link to="/auth/signup">Create an account</Link>
-              </div>
+            </article>
+
+            <article className="ld-case-card">
+              <span className="ld-kicker">Decision summary</span>
+              <h4>What changed, why it matters, what to do next</h4>
+              <dl>
+                <div>
+                  <dt>What changed</dt>
+                  <dd>Confirmed changes come with screenshots, page text, and the original link.</dd>
+                </div>
+                <div>
+                  <dt>Why it matters</dt>
+                  <dd>Each change is filed against the next review your team needs to make.</dd>
+                </div>
+                <div>
+                  <dt>Urgency</dt>
+                  <dd>Each capture is labelled fresh, recent, or sample — never implied.</dd>
+                </div>
+                <div>
+                  <dt>Proof status</dt>
+                  <dd>Saved screenshots and source links so the claim survives the closed tab.</dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd>Public Meta Ad Library and the landing pages those ads link to.</dd>
+                </div>
+                <div>
+                  <dt>Freshness</dt>
+                  <dd>Captured clocks are visible on every row.</dd>
+                </div>
+                <div>
+                  <dt>Next action</dt>
+                  <dd>Open the same public page and confirm in your own browser.</dd>
+                </div>
+              </dl>
+            </article>
+
+            <article className="ld-case-card">
+              <span className="ld-kicker">Source trail</span>
+              <ul className="ld-trail">
+                {[
+                  { id: "preview-hook", signal: "Hook captured", evidence: "Sample hook text — placeholder until the first scan.", source: "Meta Ad Library" },
+                  { id: "preview-offer", signal: "Offer captured", evidence: "Sample offer detail — placeholder until the first scan.", source: "Landing page" },
+                  { id: "preview-cta", signal: "CTA captured", evidence: "Sample CTA — placeholder until the first scan.", source: "Landing page" },
+                ].map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.signal}</strong>
+                    <p>{item.evidence}</p>
+                    <em>{item.source}</em>
+                    <small>Preview — captured once a real watch runs.</small>
+                  </li>
+                ))}
+              </ul>
+              <p className="ld-trail-note" role="note">
+                Paste a competitor website into the search preview to see real data. The brief
+                stays honest about freshness and source.
+              </p>
             </article>
           </div>
         )}
       </section>
 
       <section className="ld-how" id="platform">
-        <h2>Know when competitors change the offer.</h2>
-        <div className="ld-how-grid ld-reveal">
-          {howSteps.map((item) => (
-            <article key={item.step}>
-              <span className="ld-step">{item.step}</span>
-              <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+        <div className="ld-section-head">
+          <span className="ld-kicker">How it works</span>
+          <h2>Three steps. The check keeps running.</h2>
+        </div>
+        <div className="ld-how-grid">
+          {howSteps.map((step) => (
+            <article key={step.step}>
+              <span className="ld-step">{step.step}</span>
+              <h3>{step.title}</h3>
+              <p>{step.detail}</p>
             </article>
           ))}
         </div>
@@ -982,18 +750,14 @@ export default function MarketingRoute() {
 
       <section className="ld-quiet" id="signal">
         <div className="ld-section-head">
-          <span className="ld-kicker">Zero-noise monitoring</span>
-          <h2>Signal, not noise.</h2>
-          <p>
-            Ad-spy tools drown teams in &ldquo;new ad&rdquo; pings. Five to Nine alerts you when
-            something actually moved — and tells you what it checked when nothing did.
-          </p>
+          <span className="ld-kicker">Quiet by design</span>
+          <h2>The signals you can trust.</h2>
         </div>
-        <div className="ld-quiet-grid ld-reveal" aria-label="Zero-noise monitoring points">
-          {quietSignals.map((item) => (
-            <article key={item.title}>
-              <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+        <div className="ld-quiet-grid">
+          {quietSignals.map((signal) => (
+            <article key={signal.title}>
+              <h3>{signal.title}</h3>
+              <p>{signal.detail}</p>
             </article>
           ))}
         </div>
@@ -1012,259 +776,14 @@ export default function MarketingRoute() {
         </div>
       </section>
 
-      <section className="f9-growth-pricing" id="pricing">
-        <div className="ld-section-head">
-          <span className="ld-kicker">Plans</span>
-          <h2>Choose the monitoring rhythm your team needs.</h2>
-          <div className="ld-plan-summary" aria-label="Pricing summary">
-            <span>Recommended launch plan</span>
-            <strong>Start with Starter</strong>
-            <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
-          </div>
-          <p className="ld-pricing-note">
-            Free: watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1
-            Collection. No card required. Paid plans add 3–6 hour checks, evidence,
-            more competitors, Collections, daily briefs, and clear check caps. Save
-            winning ads to collections — and see how long each ad has been running when the Ad Library
-            shares dates.
-          </p>
-          <div className="f9-cycle-toggle" role="group" aria-label="Billing cycle">
-            <button
-              aria-pressed={billingCycle === "monthly"}
-              className={billingCycle === "monthly" ? "is-active" : ""}
-              onClick={() => setBillingCycle("monthly")}
-              type="button"
-            >
-              Monthly
-            </button>
-            <button
-              aria-pressed={billingCycle === "yearly"}
-              aria-disabled={!annualCycleAvailable}
-              className={billingCycle === "yearly" ? "is-active" : ""}
-              disabled={!annualCycleAvailable}
-              onClick={() => {
-                if (annualCycleAvailable) setBillingCycle("yearly");
-              }}
-              type="button"
-            >
-              <span>Annual</span>
-              {annualSavingsValidated ? (
-                <span className="f9-toggle-savings">{DODO_ANNUAL_SAVINGS_LABEL}</span>
-              ) : null}
-            </button>
-          </div>
-        </div>
-
-        <div className="f9-commerce-grid ld-reveal">
-          {rootData.pricingPlans.map((plan) => {
-            const yearlyReady = hasPrice(localPricing, plan.slug, "yearly");
-            const selectedReady = hasPrice(localPricing, plan.slug, billingCycle);
-            const annualIsValid = dodoAnnualSavingsIsValid(
-              localPricing?.annualValidation?.[plan.slug],
-            );
-            const planSaleOpen = isPlanSaleOpen(plan.slug);
-            const selectedAnnualBlocked =
-              billingCycle === "yearly" && planSaleOpen && yearlyReady && !annualIsValid;
-            const valueLabel = valueMathLabel(
-              localPricing,
-              plan.slug,
-              billingCycle,
-              annualIsValid,
-            );
-            const annualStatusCopy = !planSaleOpen
-              ? "Checkout temporarily unavailable"
-              : annualIsValid
-                ? null
-                : yearlyReady
-                  ? "Annual checkout unavailable. Monthly still works."
-                  : "Prices load in your local currency at checkout";
-
-            return (
-              <article
-                className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}
-                key={plan.name}
-              >
-                <span>{plan.name}</span>
-                {plan.slug === "starter" ? <em className="f9-plan-badge">Recommended</em> : null}
-                {plan.slug === "agency" && !planSaleOpen ? (
-                  <em className="f9-plan-note">Account review</em>
-                ) : null}
-                <h3 className={selectedReady ? undefined : "is-loading-price"}>
-                  {priceLabel(
-                    localPricing,
-                    plan.slug,
-                    billingCycle,
-                    billingCycle === "yearly" ? plan.yearlyLabel : plan.monthlyLabel,
-                  )}
-                </h3>
-                <small>
-                  {billingCycle === "yearly"
-                    ? annualIsValid && planSaleOpen
-                      ? (
-                        <span className="f9-annual-status">
-                          <span>Annual billing</span>
-                          <strong>{DODO_ANNUAL_SAVINGS_LABEL}</strong>
-                        </span>
-                      )
-                      : annualStatusCopy
-                      // Monthly is selected: mention the annual cadence only
-                      // when annual checkout is actually available for this
-                      // plan. Otherwise the note stays on the monthly cadence
-                      // and never claims the annual savings offer.
-                      : annualIsValid && planSaleOpen && hasPrice(localPricing, plan.slug, "yearly")
-                        ? `${priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)} annual`
-                        : "Billed monthly"}
-                </small>
-                <div className="f9-plan-value" aria-label={`${plan.name} value summary`}>
-                  <strong>{planValueSummary(plan.slug)}</strong>
-                  <span>{valueLabel}</span>
-                </div>
-                <p>{plan.detail}</p>
-                <ul className="f9-plan-feature-list">
-                  {plan.features?.map((feature) => (
-                    <li key={feature}>{feature}</li>
-                  ))}
-                </ul>
-                {rootData.session ? (
-                  planSaleOpen && selectedReady && !selectedAnnualBlocked ? (
-                    <div className="f9-plan-actions">
-                      <Link to={planIntentPath(true, plan.slug, billingCycle)}>
-                        Choose {billingCycle === "yearly" ? "annual" : "monthly"}
-                      </Link>
-                    </div>
-                  ) : plan.slug === "agency" && !planSaleOpen ? (
-                    <p className="f9-price-sync">
-                      Agency is available by account review. Email{" "}
-                      <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we will confirm fit directly.
-                    </p>
-                  ) : selectedAnnualBlocked && yearlyReady ? (
-                    <span className="f9-price-sync">
-                      {dodoAnnualUnavailableCopy(localPricing?.annualValidation?.[plan.slug])}
-                    </span>
-                  ) : (
-                    <span className="f9-price-sync">Prices loading</span>
-                  )
-                ) : (
-                  plan.slug === "agency" && !planSaleOpen ? (
-                    <p className="f9-price-sync">
-                      Agency is available by account review. Email{" "}
-                      <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
-                    </p>
-                  ) : (
-                    <Link to={planSaleOpen && selectedReady && !selectedAnnualBlocked
-                      ? planIntentPath(false, plan.slug, billingCycle)
-                      : primaryCta}
-                    >
-                      {planSaleOpen && selectedReady && !selectedAnnualBlocked
-                        ? `Choose ${billingCycle === "yearly" ? "annual" : "monthly"}`
-                        : primaryLabel}
-                    </Link>
-                  )
-                )}
-              </article>
-            );
-          })}
-        </div>
-
-        <p className="ld-pricing-note">
-          {EVIDENCE_USAGE_CUSTOMER_COPY}
-        </p>
-
-        <p className="ld-pricing-note">
-          Coming from MagicBrief or another tool that&rsquo;s winding down? Your competitor list
-          imports as watchlists — see the{" "}
-          <Link to="/compare/magicbrief">migration guide</Link>. Collections, boards, analytics
-          history, and past evidence are not migrated by Five to Nine — you recreate them with our
-          help. Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll set up your
-          watchlists with you, person to person.
-        </p>
-
-        <div className="ld-bundles" aria-label="Proof capture packs">
-          <div className="ld-bundles-head">
-            <span className="ld-kicker">Proof capture packs</span>
-            <h3>Extra proof captures when campaigns move fast.</h3>
-            <p>
-              Add purchased proof captures for busy weeks or big campaigns without changing the
-              team&rsquo;s plan. Purchased proof captures never expire and carry over until you
-              use them.
-            </p>
-            <p className="ld-check-pack-note">
-              Packs: 500 extra proof captures, 2,000 extra proof captures, or 7,500 extra proof
-              captures.
-            </p>
-          </div>
-          <div className="ld-bundle-grid ld-reveal">
-            {(rootData.usageBundles ?? []).map((bundle) => (
-              <article className="ld-bundle-card" key={bundle.slug}>
-                <span className="ld-kicker">{bundle.creditLabel}</span>
-                <h3>{bundle.name}</h3>
-                <strong>{bundlePriceLabel(localPricing, bundle.slug, bundle.priceLabel)}</strong>
-                <span className="ld-bundle-value">
-                  {bundleValueLabel(localPricing, bundle.slug, bundle.creditQuantity)}
-                </span>
-                <p>{bundle.detail}</p>
-                {rootData.session && hasBundlePrice(localPricing, bundle.slug) ? (
-                  <Link to="/app/billing?source=top-up#top-ups">Manage packs</Link>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="ld-pricing-faq ld-reveal" aria-label="Pricing FAQ">
-          <span className="ld-kicker">FAQ</span>
-          <h3>Common billing questions</h3>
-          <dl className="proof-trail-list">
-            <div>
-              <dt>What uses proof captures?</dt>
-              <dd>
-                Scheduled scans are included with your plan and never touch your cap. A proof
-                capture is used when Five to Nine saves a confirmed change with screenshots,
-                page text, and the original link.
-              </dd>
-            </div>
-            <div>
-              <dt>Do unused proof captures roll over?</dt>
-              <dd>
-                Included proof captures reset every month and do not roll over — the caps are
-                generous. Purchased proof captures never expire and carry over until you use
-                them.
-              </dd>
-            </div>
-            <div>
-              <dt>What changes on Agency?</dt>
-              <dd>
-                Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team
-                seats, API/MCP access, client reports, and shared report branding.
-              </dd>
-            </div>
-            <div>
-              <dt>{commercialLaunch.agencySaleOpen ? "How does Agency checkout work?" : "Why is Agency held?"}</dt>
-              <dd>
-                {commercialLaunch.agencySaleOpen ? (
-                  <>
-                    Agency checkout is available when pricing loads in your region. Email{" "}
-                    <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you want an account review before
-                    buying.
-                  </>
-                ) : (
-                  <>
-                    Agency is available by account review. Email{" "}
-                    <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we will confirm fit directly.
-                  </>
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Where do prices come from?</dt>
-              <dd>
-                Display prices load from Dodo Payments in your local currency at preview time. We
-                never hardcode checkout amounts in the app.
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </section>
+      <PricingSection
+        rootData={rootData}
+        pricingPreview={routeData.pricingPreview?.available ? routeData.pricingPreview : null}
+        agencySaleOpen={commercialLaunch.agencySaleOpen}
+        variant="full"
+        primaryCta={primaryCta}
+        primaryLabel={primaryLabel}
+      />
 
       <section className="ld-quiet" id="faq">
         <div className="ld-pricing-faq ld-reveal" aria-label="Product FAQ">
