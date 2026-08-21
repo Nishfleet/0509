@@ -5,7 +5,9 @@ import {
 } from "~/lib/agent-action-catalog";
 // Shared with the robots.txt deny list in app/lib/seo.ts (docs/ai-crawler-policy.md)
 // so robots.txt and llms.txt always name the same denied training crawlers.
-import { AI_TRAINING_CRAWLERS } from "~/lib/seo";
+// SITEMAP_PATHS + canonicalUrl keep the llms.txt link list on the same
+// canonical origin and route set as sitemap.xml.
+import { AI_TRAINING_CRAWLERS, SITEMAP_PATHS, canonicalUrl } from "~/lib/seo";
 
 const AUDITED_AGENT_ACTION_GROUPS = auditedAgentActionGroups();
 const AUDITED_AGENT_ACTION_GROUP_SUMMARY = AUDITED_AGENT_ACTION_GROUPS.map((group) => group.label).join(", ");
@@ -24,6 +26,93 @@ export const PUBLIC_MARKDOWN_PATHS = [
 
 const PUBLIC_MARKDOWN_PATH_SET = new Set<string>(PUBLIC_MARKDOWN_PATHS);
 
+// llms.txt page index: one titled, described link per canonical public page so
+// AI answer engines get a verifiable link list instead of prose-only claims.
+// Entries derive from the shared SITEMAP_PATHS constant (same source as
+// sitemap.xml): adding a path there without describing it here is a type
+// error, so the two surfaces can never drift.
+const LLMS_PAGE_DETAILS: Record<
+  (typeof SITEMAP_PATHS)[number],
+  { title: string; description: string }
+> = {
+  "/": {
+    title: "Five to Nine",
+    description:
+      "Source-backed competitor ad and landing-page change monitoring for growth teams.",
+  },
+  "/search": {
+    title: "Public competitor ad search",
+    description:
+      "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+  },
+  "/auth/signup": {
+    title: "Sign up",
+    description:
+      "Create an account to save competitors and run retained monitoring.",
+  },
+  "/compare/magicbrief": {
+    title: "Five to Nine vs MagicBrief",
+    description: "How Five to Nine compares with MagicBrief.",
+  },
+  "/compare/meta-ad-library": {
+    title: "Five to Nine vs Meta Ad Library",
+    description:
+      "How Five to Nine extends Meta Ad Library results with monitoring and proof.",
+  },
+  "/competitor-monitoring": {
+    title: "Competitor monitoring",
+    description:
+      "Product overview: scans, digests, alerts, and proof captures.",
+  },
+  "/help": {
+    title: "Help center",
+    description: "Customer help center.",
+  },
+  "/docs": {
+    title: "Docs",
+    description: "Product documentation.",
+  },
+  "/api/docs": {
+    title: "API docs",
+    description:
+      "Customer API documentation for key-based exports and approved workspace actions.",
+  },
+  "/status": {
+    title: "Status",
+    description:
+      "Public status page summarizing customer-facing surfaces without exposing private account activity.",
+  },
+  "/changelog": {
+    title: "Changelog",
+    description: "Shipped product changes.",
+  },
+  "/trust": {
+    title: "Trust",
+    description: "Trust, security, and data-handling practices.",
+  },
+  "/privacy": {
+    title: "Privacy policy",
+    description: "Privacy policy.",
+  },
+  "/terms": {
+    title: "Terms of service",
+    description: "Terms of service.",
+  },
+};
+
+export const LLMS_PAGES = SITEMAP_PATHS.map((path) => ({
+  path,
+  url: canonicalUrl(path),
+  ...LLMS_PAGE_DETAILS[path],
+}));
+
+const LLMS_PAGES_SECTION = [
+  "Pages:",
+  ...LLMS_PAGES.map(
+    (page) => `- [${page.title}](${page.url}): ${page.description}`,
+  ),
+].join("\n");
+
 export const PUBLIC_MARKDOWN = `---
 title: Five to Nine
 description: Market intelligence for revenue teams.
@@ -37,6 +126,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 
 - Competitor monitoring for growth teams plus proof-backed entity tracking (Presence Desk).
 - Public read-only search and the proof brief are buyer-evaluation paths before signup; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states.
+- Ad monitoring covers the Meta Ad Library only; other platforms’ ad libraries are not aggregated. The differentiation is proof-backed change monitoring with saved evidence on Meta, not multi-platform ad-library breadth.
 - Signed-in accounts are the path for saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports; this text describes the capability, not live account availability.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Customer-facing views lead with what changed, why it matters, urgency, source status, freshness, and the next action before raw data or settings.
@@ -92,10 +182,13 @@ export const LLMS_TEXT = `# Five to Nine
 
 Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence. Presence Desk tracks your brand and competitors across declared sources with proof-backed briefs.
 
+${LLMS_PAGES_SECTION}
+
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
 - Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval.
 - Public read-only search and the proof brief are buyer-evaluation paths; the proof brief renders real cached captures, with an explicit unavailable state when none exist; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states.
+- Ad monitoring reads the Meta Ad Library only. Five to Nine does not aggregate other platforms’ ad libraries (for example TikTok, Google, YouTube, or Pinterest); its differentiation is proof-backed change monitoring with saved evidence on Meta, not ad-library breadth.
 - Account access uses verified access paths.
 - Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed, so AI answers may cite Dodo checkout as the live billing path while the final owner-run provider smoke is recorded.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
