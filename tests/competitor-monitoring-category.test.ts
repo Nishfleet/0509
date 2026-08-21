@@ -73,7 +73,7 @@ describe("competitor monitoring category page", () => {
           description:
             "Competitor monitoring software that watches Meta ads and landing pages, then sends screenshot evidence when something changes. Free preview, no account.",
           pathname: "/competitor-monitoring",
-          dateModified: "2026-08-08",
+          dateModified: "2026-08-21",
         }),
       ),
     );
@@ -85,11 +85,11 @@ describe("competitor monitoring category page", () => {
     const source = readFileSync(routePath, "utf8");
     expect(source).toContain("jsonLdScriptProps(");
     expect(source).toContain("webPageJsonLd({");
-    expect(source).toContain('dateModified: "2026-08-08"');
+    expect(source).toContain('dateModified: "2026-08-21"');
 
-    // The date the page visibly stamps (Category evidence checked 2026-08-08)
-    // matches the dateModified emitted in structured data.
-    expect(source).toContain("Category evidence checked 2026-08-08");
+    // The date the page visibly stamps (Category evidence checked 2026-08-08
+    // and 2026-08-21) matches the dateModified emitted in structured data.
+    expect(source).toContain("Category evidence checked 2026-08-08 and 2026-08-21");
     expect(jsonLdScriptProps(webPage).dangerouslySetInnerHTML.__html).not.toContain("</script>");
   });
 
@@ -156,11 +156,39 @@ describe("competitor monitoring category page", () => {
     expect(source).toContain("https://pagecrawl.io/blog/competitor-comparison-alternatives-page-monitoring");
     expect(source).toContain("https://octolens.com/blog/best-competitor-monitoring-tools");
 
+    // The 2026-08-21 research cycle added the new noise-triage entrants, each
+    // with its own check date and source URL.
+    expect(source).toContain("adversa.io — checked 2026-08-21");
+    expect(source).toContain("whatchanged.co.uk — checked 2026-08-21");
+    expect(source).toContain("https://adversa.io/");
+    expect(source).toContain("https://whatchanged.co.uk/");
+
     // The limits are stated plainly, not buried: vendor pages change and
     // product claims are scoped to the live homepage/docs.
     expect(source).toContain("vendor pages change");
     expect(source).toContain("scoped to the live homepage and docs");
     expect(source).toContain("Source and freshness");
+  });
+
+  it("renders the new noise-triage entrants as sourced promise cards", async () => {
+    const { default: CompetitorMonitoringCategoryRoute } = await import(
+      "~/routes/competitor-monitoring"
+    );
+    const markup = renderToStaticMarkup(createElement(CompetitorMonitoringCategoryRoute));
+
+    // Adversa's own positioning: noise filtering plus AI significance scoring.
+    expect(markup).toContain("adversa.io — checked 2026-08-21");
+    expect(markup).toContain("AI that triages the noise and scores each change");
+    expect(markup).toContain("how significant it was");
+    // WhatChanged's own positioning: a real-time diff feed of every change.
+    expect(markup).toContain("whatchanged.co.uk — checked 2026-08-21");
+    expect(markup).toContain("A real-time feed of every competitor site change");
+
+    // The entrants are described by their own claims, never priced and never
+    // ranked against — the page's standing honesty rules hold for them too.
+    expect(markup).toMatch(/https:\/\/adversa\.io\//);
+    expect(markup).toMatch(/https:\/\/whatchanged\.co\.uk\//);
+    expect(markup).not.toMatch(/\$\s?\d/);
   });
 
   it("renders real proof, never a sample or illustrative fixture", async () => {
