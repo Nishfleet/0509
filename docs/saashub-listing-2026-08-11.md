@@ -73,6 +73,22 @@ fields below.
   and the live homepage copy in `app/routes/marketing.tsx` (lines 32, 78,
   102, 140, 297–300); no corrections needed. Nothing submitted — the same
   owner decisions below still stand.
+- **Re-verified 2026-08-21.** Lane-2 freshness re-check (this run, evidence
+  record: `.lane/reports/0509-lane2-saashub-listing-2026-08-21-reverify.md`):
+  submission URL, all five category pages, the Ad Spy substitute, all 27
+  competitor slugs, the India startup page, and the product pages
+  (`0509.io/`, `/search`, `/auth/signup`, `/compare/magicbrief`) re-checked
+  live — 35/35 HTTP 200, no slug drift since the 2026-08-15 opus review.
+  Plan facts in the listing (Free 1 watchlist + weekly brief; Scout
+  3 / every_6h; Starter 10 / every_3h + daily_and_weekly; Agency 75)
+  re-checked against `app/lib/plan-entitlements.ts` (lines 126–185) and
+  `app/lib/plan.server.ts` re-export — still an exact match; the listing
+  copy's "checks every 3–6 hours", "quiet heartbeat", and
+  "screenshot evidence and change alerts" lines still appear in
+  `app/routes/marketing.tsx` (lines 38, 227, 731, 1303). `support@0509.io`
+  is still the support mailbox (`app/lib/support.ts:13`). No corrections
+  needed; the same owner decisions below still stand between this document
+  and the submission.
 
 ## Eligibility check against SaaSHub submission guidelines
 
