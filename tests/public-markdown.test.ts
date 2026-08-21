@@ -79,6 +79,17 @@ describe("public markdown", () => {
       "top 25 competitors checked every 3 hours and the rest every 6 hours",
     );
     expect(LLMS_TEXT).toContain("top 25 competitors every 3 hours (rest every 6 hours)");
+    // Free-plan sentence must match the entitlement catalog in
+    // app/lib/plan-entitlements.ts (1 watchlist, 1 Collection, 1 included
+    // proof capture/month backing the weekly brief). The earlier
+    // "(no proof captures/collections)" parenthetical denied what the same
+    // sentence granted and contradicted shipped free-plan behavior.
+    expect(LLMS_TEXT).toContain("one watchlist with an activation scan on add");
+    expect(LLMS_TEXT).toContain("weekly email brief backed by one included proof capture a month");
+    expect(LLMS_TEXT).toContain("plus one Collection");
+    expect(LLMS_TEXT).not.toContain("(no proof captures/collections)");
+    expect(PUBLIC_MARKDOWN).toContain("one included proof capture a month, with one Collection");
+    expect(PUBLIC_MARKDOWN).not.toContain("no collections, proof captures");
     expect(PUBLIC_MARKDOWN).toContain("Proof capture packs add purchased proof captures that never expire");
     expect(PUBLIC_MARKDOWN).toContain("Included proof captures reset every month and do not roll over");
     expect(PUBLIC_MARKDOWN).toContain("Scheduled scans are included with your plan");
