@@ -856,13 +856,20 @@ describe("captureLandingPageSnapshot", () => {
     );
     // Let the initial async work (DNS resolution, telemetry hash, first fetch
     // attempt) complete by yielding to the real event loop. setImmediate is
-    // not faked by our config, so I/O callbacks and microtasks drain.
-    for (let i = 0; i < 20; i += 1) {
-      await new Promise((resolve) => setImmediate(resolve));
+    // not faked by our config, so I/O callbacks and microtasks drain. Step the
+    // fake clock in small increments so the retry's sleep(250) is always
+    // advanced regardless of how many event-loop turns the first attempt
+    // needed to arm it, then drain again for the second attempt's microtasks.
+    let settled = false;
+    snapshotPromise.finally(() => {
+      settled = true;
+    });
+    for (let i = 0; i < 200 && !settled; i += 1) {
+      for (let yieldCount = 0; yieldCount < 20; yieldCount += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      await vi.advanceTimersByTimeAsync(100);
     }
-    // The transient 500 is retried once (bounded retry); advance the fake
-    // clock through the retry delay so the second attempt can run.
-    await vi.advanceTimersByTimeAsync(1_000);
 
     const snapshot = await snapshotPromise;
 

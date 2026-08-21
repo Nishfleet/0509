@@ -22,7 +22,7 @@
 | `npm run canary:pricing` | Passed for IN, US, GB |
 | `npm run canary:billing` | Passed against internal canary path |
 | `npm run canary:proof` | Failed before harness work with `no_digest_delivery_sent` after one email delivery attempt |
-| `npm run canary:prod` | Passed health, bypass, ops readiness, and Meta ads beta |
+| `npm run canary:prod` | Passed health, bypass, ops readiness, and Meta ads |
 | `npm run canary:presence` | Historical baseline: stopped locally before GA-aware canary fallback existed |
 | Search V2 dogfood tests | Passed, 3 files and 28 tests |
 
@@ -110,7 +110,7 @@ The validator rejects missing, stale, malformed, non-0509, account-hash-mismatch
 | `npm run canary:pricing` | Passed for IN, US, GB |
 | `npm run canary:billing` | Passed |
 | `npm run canary:proof` | Passed on rerun; baseline `no_digest_delivery_sent` did not reproduce |
-| `npm run canary:prod` | Passed health, bypass, ops readiness, and Meta ads beta |
+| `npm run canary:prod` | Passed health, bypass, ops readiness, and Meta ads |
 | `npm run canary:presence` | Passed under GA rollout without requiring the old internal workspace id |
 | `autoreview --mode local --base origin/main` | Passed clean after accepted findings were fixed |
 | In-app Codex Browser | Passed local rendered smoke for title, headline, and sign-in surface |

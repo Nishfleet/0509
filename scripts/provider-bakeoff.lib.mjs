@@ -221,7 +221,7 @@ export function analyzeMetaLibraryHtml(html) {
   const mentionsFacebook = text.includes("facebook") || text.includes("meta ad library");
   const renderedText = stripHtml(html);
   const sourceMatch = renderedText.match(
-    /(?:source:\s*|tracking path:\s*|meta ads beta\s*[·-]\s*|results:\s*)(recent results|fresh results delayed|fresh results|sample results|cached live results|live ad library capture|customer api fallback|workspace meta access|api fallback|demo dataset)/i,
+    /(?:source:\s*|tracking path:\s*|meta ads(?: beta)?\s*[·-]\s*|results:\s*)(recent results|fresh results delayed|fresh results|sample results|cached live results|live ad library capture|customer api fallback|workspace meta access|api fallback|demo dataset)/i,
   );
   const sourceMarkerMatch = html.match(
     /\bdata-f9-result-source=(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i,

@@ -40,7 +40,7 @@ The first-session outcome is: within five minutes, a paying customer has a usefu
 | `npm run canary:pricing` | Passed | IN, US, GB pricing previews |
 | `npm run canary:billing` | Passed | Internal canary route, plan/top-up cleanup OK |
 | `npm run canary:proof` | Passed | Internal canary proof path, one email attempt |
-| `npm run canary:prod` | Passed | `0509.io`, `www.0509.io`, `api.0509.io`, fresh-live bypass, ops readiness, Meta ads beta |
+| `npm run canary:prod` | Passed | `0509.io`, `www.0509.io`, `api.0509.io`, fresh-live bypass, ops readiness, Meta ads |
 | Search V2 dogfood tests | Passed | `tests/search-v2.test.ts`, `tests/search-domain-match.test.ts` |
 | `npm run canary:presence` | Blocked | Missing `PRESENCE_INTERNAL_WORKSPACE_ID`; owner-action config, not product failure |
 

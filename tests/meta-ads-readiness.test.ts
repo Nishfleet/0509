@@ -62,7 +62,7 @@ describe("getMetaAdsBetaReadiness", () => {
     );
 
     expect(readiness.ok).toBe(false);
-    expect(readiness.label).toBe("Beta: needs validation");
+    expect(readiness.label).toBe("Needs validation");
     expect(readiness.blockers).toEqual(
       expect.arrayContaining([
         "not_enough_live_samples",

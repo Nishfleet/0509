@@ -368,7 +368,7 @@ describe("production canary", () => {
     ).not.toContain("SECRET");
   });
 
-  it("classifies current 0509 search failures as Meta ads beta needing proof", async () => {
+  it("classifies current 0509 search failures as Meta ads needing proof", async () => {
     const fetchImpl = createHealthyCanaryFetchImpl();
     const benchmarkImpl = vi
       .fn()
@@ -396,7 +396,7 @@ describe("production canary", () => {
       status: "needs_proof",
     });
     expect(formatProductionCanaryReport(report)).toContain(
-      "meta ads beta: needs proof",
+      "meta ads: needs proof",
     );
     expect(formatProductionCanaryReport(report)).toContain(
       "fresh-live bypass: failed (Private current_0509 fresh-live probe did not return live ad proof.)",
@@ -492,13 +492,13 @@ describe("production canary", () => {
     });
 
     expect(report.passed).toBe(true);
-    expect(formatProductionCanaryReport(report)).toContain("meta ads beta: ok");
+    expect(formatProductionCanaryReport(report)).toContain("meta ads: ok");
     expect(formatProductionCanaryReport(report)).toContain(
       "fresh-live bypass: ok",
     );
   });
 
-  it("fails when the readiness endpoint says Meta ads beta is below the bar", async () => {
+  it("fails when the readiness endpoint says Meta ads is below the bar", async () => {
     const fetchImpl = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
       const url = String(input);
       if (url.includes("/api/launch-readiness")) {
@@ -535,7 +535,7 @@ describe("production canary", () => {
     expect(report.metaAdsBeta?.status).toBe("needs_proof");
     const formatted = formatProductionCanaryReport(report);
     expect(formatted).toContain(
-      "meta ads beta: needs proof (633/20 samples, 94% success)",
+      "meta ads: needs proof (633/20 samples, 94% success)",
     );
     expect(formatted).not.toContain("meta ads probe:");
   });
@@ -660,7 +660,7 @@ describe("production canary", () => {
     );
   });
 
-  it("marks cached or degraded rendered evidence as Meta ads beta needing proof", async () => {
+  it("marks cached or degraded rendered evidence as Meta ads needing proof", async () => {
     const fetchImpl = createHealthyCanaryFetchImpl();
     const benchmarkImpl = vi.fn().mockResolvedValue([
       current0509Result("ok", {
