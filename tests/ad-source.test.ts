@@ -347,17 +347,12 @@ describe("resolveCommercialAdSourceStatus", () => {
     expect(status.summary).not.toContain("ready for live searches");
   });
 
-  it("reports explicit demo mode when no live commercial source is configured", async () => {
+  it("throws when no commercial discovery provider is configured", async () => {
     const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
 
-    const status = await resolveCommercialAdSourceStatus({} as never);
-
-    expect(status).toMatchObject({
-      status: "demo",
-      provider: "demo",
-      mode: "demo",
-    });
-    expect(status.summary).toContain("explicit demo mode");
+    await expect(resolveCommercialAdSourceStatus({} as never)).rejects.toThrow(
+      "No commercial discovery provider is configured",
+    );
   });
 
   it("surfaces provider-state error messages for operator status", async () => {
@@ -429,22 +424,16 @@ describe("resolveCommercialAdSourceStatus", () => {
     });
   });
 
-  it("does not rehydrate provider bindings for deterministic local release proof", async () => {
+  it("does not rehydrate provider bindings when E2E_PROVIDER_NETWORK_DENY is set", async () => {
     (globalThis as { __APP_REQUEST_ENV__?: unknown }).__APP_REQUEST_ENV__ = {
       BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
       BROWSER_RUN_API_TOKEN: "live-token-that-must-not-be-used",
     };
 
     const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
-    const status = await resolveCommercialAdSourceStatus({
+    await expect(resolveCommercialAdSourceStatus({
       E2E_PROVIDER_NETWORK_DENY: "1",
-    } as never);
-
-    expect(status).toMatchObject({
-      status: "demo",
-      provider: "demo",
-      mode: "demo",
-    });
+    } as never)).rejects.toThrow("No commercial discovery provider is configured");
   });
 
   it("treats Quick Actions config as a live Browser Run provider even without the browser binding", async () => {
@@ -494,7 +483,7 @@ describe("resolveCommercialAdSourceStatus", () => {
 });
 
 describe("searchAdsViaSourceResolver", () => {
-  it("serves an explicitly marked local fixture cache without touching browser, API, or demo providers", async () => {
+  it("serves an explicitly marked local fixture cache without touching browser or API providers", async () => {
     const browserSearch = vi.fn();
     const metaApiSearch = vi.fn();
     const demoSearch = vi.fn();
@@ -561,55 +550,11 @@ describe("searchAdsViaSourceResolver", () => {
     });
     expect(browserSearch).not.toHaveBeenCalled();
     expect(metaApiSearch).not.toHaveBeenCalled();
-    expect(demoSearch).not.toHaveBeenCalled();
-  });
-
-  it("does not treat a mislabeled fixture cache row as a warm selection cache", async () => {
-    const db = {
-      prepare: vi.fn(() => ({
-        bind: vi.fn(() => ({
-          first: vi.fn().mockResolvedValue({
-            provider: "meta_library_browser",
-            payload_json: JSON.stringify({
-              ads: [{ metaAdId: "wrong-source" }],
-              source: "demo",
-              provider: "demo",
-              cacheStatus: "hit",
-            }),
-            expires_at: new Date(Date.now() + 60_000).toISOString(),
-          }),
-        })),
-      })),
-    } as never;
-
-    const { hasFreshDiscoveryCacheEntry } = await import("~/lib/ad-source.server");
-    await expect(hasFreshDiscoveryCacheEntry(
-      {
-        DB: db,
-        E2E_PROVIDER_NETWORK_DENY: "1",
-        E2E_FIXTURE_PROVIDER: "meta_library_browser",
-      } as never,
-      {
-        mode: "advertiser",
-        filters: {
-          query: "nykaa",
-          country: "India",
-          platform: "all",
-          creativeType: "all",
-          status: "all",
-          firstSeenFrom: "",
-          lastSeenFrom: "",
-        },
-      },
-      null,
-      { cacheKeyOverride: "e2e-cache-key" },
-    )).resolves.toBe(false);
   });
 
   it("fails closed on a missing marked fixture cache row without falling through to a provider", async () => {
     const browserSearch = vi.fn();
     const metaApiSearch = vi.fn();
-    const demoSearch = vi.fn();
     const db = {
       prepare: vi.fn(() => ({
         bind: vi.fn(() => ({ first: vi.fn().mockResolvedValue(null) })),
@@ -623,7 +568,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch,
       MetaApiError: class MetaApiError extends Error {},
     }));
 
@@ -660,23 +604,36 @@ describe("searchAdsViaSourceResolver", () => {
     });
     expect(browserSearch).not.toHaveBeenCalled();
     expect(metaApiSearch).not.toHaveBeenCalled();
-    expect(demoSearch).not.toHaveBeenCalled();
   });
 
-  it("does not use the platform Meta token for customer-facing discovery by default", async () => {
+  it("uses the platform Meta token when no customer token is provided", async () => {
     const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
-      ads: [],
+      ads: [
+        {
+          metaAdId: "platform-token-result-1",
+          advertiser: "Nykaa",
+          body: "Sale",
+          previewHeadline: "Sale",
+          previewSubhead: "Sale",
+          hook: "Sale",
+          offer: "Sale",
+          cta: "Shop",
+          format: "image",
+          languageLabel: "English",
+          destinationType: "website",
+          landingPageUrl: "https://www.nykaa.com/sale",
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=platform-token-result-1",
+          countries: ["India"],
+          platforms: ["Instagram"],
+          firstLevel: "Sale",
+          searchable: "Nykaa Sale nykaa.com",
+          source: "meta_api",
+        },
+      ],
       nextCursor: null,
       source: "meta_api",
       provider: "meta_api",
       cacheStatus: "miss",
-    });
-    const demoSearch = vi.fn().mockReturnValue({
-      ads: [],
-      nextCursor: null,
-      source: "demo",
-      provider: "demo",
-      cacheStatus: "none",
     });
 
     vi.doMock(
@@ -688,7 +645,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch,
     }));
 
     const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
@@ -713,10 +669,10 @@ describe("searchAdsViaSourceResolver", () => {
       },
     );
 
-    expect(metaApiSearch).not.toHaveBeenCalled();
-    expect(demoSearch).toHaveBeenCalledTimes(1);
-    expect(result.provider).toBe("demo");
-    expect(result.source).toBe("demo");
+    expect(metaApiSearch).toHaveBeenCalledTimes(1);
+    expect(result.provider).toBe("meta_api");
+    expect(result.source).toBe("meta_api");
+    expect(result.ads[0].metaAdId).toBe("platform-token-result-1");
   });
 
   it("uses a customer-owned Meta token when the caller provides one", async () => {

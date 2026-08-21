@@ -124,15 +124,13 @@ describe("filterAdsBySearchFilters — advertiser (domain) matching contract", (
 });
 
 describe("searchAds", () => {
-  it("uses demo data when no Meta token is configured", async () => {
-    const result = await searchAds({} as never, query, null, {
-      allowDemoFallback: false,
-    });
-
-    expect(result.source).toBe("demo");
+  it("throws a provider error when no Meta token is configured", async () => {
+    await expect(
+      searchAds({} as never, query, null),
+    ).rejects.toBeInstanceOf(MetaApiError);
   });
 
-  it("defaults allowDemoFallback to false and throws on live Meta errors", async () => {
+  it("throws on live Meta errors", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -150,63 +148,9 @@ describe("searchAds", () => {
       ),
     );
 
-    // No options argument — default must not silently fall back to demo.
     await expect(
       searchAds({ META_AD_LIBRARY_TOKEN: "token" } as never, query, null),
     ).rejects.toBeInstanceOf(MetaApiError);
-  });
-
-  it("throws the live Meta error when fallback is disabled", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          error: {
-            code: 190,
-            message: "Bad token",
-          },
-        }),
-        {
-          status: 401,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      ),
-    );
-
-    await expect(
-      searchAds({ META_AD_LIBRARY_TOKEN: "token" } as never, query, null, {
-        allowDemoFallback: false,
-      }),
-    ).rejects.toBeInstanceOf(MetaApiError);
-  });
-
-  it("falls back to demo data for public search when fallback is enabled", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          error: {
-            code: 613,
-            message: "Rate limited",
-          },
-        }),
-        {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      ),
-    );
-
-    const result = await searchAds(
-      { META_AD_LIBRARY_TOKEN: "token" } as never,
-      query,
-      null,
-      { allowDemoFallback: true },
-    );
-
-    expect(result.source).toBe("demo");
   });
 
   it("uses ad_reached_countries for live Meta queries", async () => {
@@ -224,9 +168,7 @@ describe("searchAds", () => {
       ),
     );
 
-    await searchAds({ META_AD_LIBRARY_TOKEN: "token" } as never, query, null, {
-      allowDemoFallback: false,
-    });
+    await searchAds({ META_AD_LIBRARY_TOKEN: "token" } as never, query, null);
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const requestUrl = new URL(String(fetchSpy.mock.calls[0]?.[0]));
@@ -245,9 +187,7 @@ describe("searchAds", () => {
     );
 
     await expect(
-      searchAds({ META_AD_LIBRARY_TOKEN: "token" } as never, query, null, {
-        allowDemoFallback: false,
-      }),
+      searchAds({ META_AD_LIBRARY_TOKEN: "token" } as never, query, null),
     ).rejects.toBeInstanceOf(MetaApiError);
   });
 
@@ -289,7 +229,6 @@ describe("searchAds", () => {
       { META_AD_LIBRARY_TOKEN: "token" } as never,
       query,
       null,
-      { allowDemoFallback: false },
     );
 
     expect(result.ads).toHaveLength(1);

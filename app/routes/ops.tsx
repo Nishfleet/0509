@@ -963,9 +963,6 @@ function formatDiscoveryProvider(provider: string) {
   if (provider === "meta_api") {
     return "Meta API";
   }
-  if (provider === "demo") {
-    return "Demo";
-  }
   return provider;
 }
 

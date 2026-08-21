@@ -236,7 +236,7 @@ describe("search loader", () => {
       result: {
         ads: [],
         nextCursor: null,
-        source: "demo",
+        source: "meta_api",
         cacheStatus: "none",
         discoveryStatus: "disabled",
       },
@@ -1710,16 +1710,14 @@ describe("search loader", () => {
     })).toBe("1 ad found in United States");
   });
 
-  it("keeps demo results panel titles unscoped even when a country filter is set", async () => {
-    // Demo/sample matches deliberately ignore the country filter (the
-    // resolver matches every demo ad against every market), so labelling
-    // a demo verdict "in United States" for India-authored samples would
-    // falsely imply country-specific evidence.
-    const demoResult: SearchResponse = {
+  it("scopes verified results panel titles to the searched country", async () => {
+    // The demo/sample source is gone, so every result is filtered by the
+    // searched country and the panel title may safely name the market.
+    const capturedResult: SearchResponse = {
       ads: [baseAd],
       nextCursor: null,
-      source: "demo",
-      provider: "demo",
+      source: "meta_api",
+      provider: "meta_api",
       cacheStatus: "miss",
       discoveryStatus: "healthy",
       discoverySummary: null,
@@ -1728,13 +1726,13 @@ describe("search loader", () => {
 
     const { formatResultsPanelTitle } = await import("~/routes/search");
 
-    expect(formatResultsPanelTitle(demoResult, {
+    expect(formatResultsPanelTitle(capturedResult, {
       displayDomain: "nykaa.com",
       isDomainSearch: true,
       isBroaderScope: false,
       relevanceApplied: true,
       country: "United States",
-    })).toBe("1 verified ad linked to nykaa.com");
+    })).toBe("1 verified ad linked to nykaa.com in United States");
   });
 
   it("allows only tokened canary probes to force fresh live discovery", async () => {

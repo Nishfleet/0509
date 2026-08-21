@@ -77,14 +77,14 @@ export async function getMetaIntegrationStatus(env: AppEnv) {
   );
 
   return {
-    status: row?.status ?? (env.META_AD_LIBRARY_TOKEN ? "degraded" : "demo"),
-    provider: env.META_AD_LIBRARY_TOKEN ? "meta_api" : "demo",
-    mode: env.META_AD_LIBRARY_TOKEN ? "diagnostic" : "demo",
+    status: row?.status ?? (env.META_AD_LIBRARY_TOKEN ? "degraded" : "disabled"),
+    provider: env.META_AD_LIBRARY_TOKEN ? "meta_api" : "meta_api",
+    mode: env.META_AD_LIBRARY_TOKEN ? "diagnostic" : "diagnostic",
     summary:
       row?.summary ??
       (env.META_AD_LIBRARY_TOKEN
         ? "Official Meta API is configured for limited diagnostic use."
-        : "No live commercial discovery provider is configured. The app is running in explicit demo mode."),
+        : "No live commercial discovery provider is configured. The app is running without a Meta Ad Library connection."),
     lastCheckedAt: row?.created_at ?? null,
     lastErrorCode: row?.error_code ?? null,
     lastErrorMessage: row?.error_message ?? null,

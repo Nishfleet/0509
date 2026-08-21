@@ -28,7 +28,7 @@ export function buildIdleSearchResult(): SearchResponse {
   return {
     ads: [],
     nextCursor: null,
-    source: "demo",
+    source: "meta_api",
     cacheStatus: "none",
     discoveryStatus: "disabled",
     discoverySummary: null,
@@ -149,16 +149,13 @@ export function formatSearchSourceLabel(result: SearchResponse) {
   if (result.provider === "meta_api" || result.source === "meta_api") {
     return "Source: Meta Ad Library API";
   }
-  if (result.source === "demo") {
-    return "Source: sample data";
-  }
   return "Source: search result";
 }
 
 /**
  * True only when a result was produced by a genuinely LIVE Ad Library capture
  * in this request: a cache miss served straight from a real Meta provider in a
- * healthy, non-delayed check. Never true for demo sample data, a cached copy,
+ * healthy, non-delayed check. Never true for a cached copy,
  * a stale/expired entry, a delayed/degraded check, or a partial capture.
  *
  * This is the single gate behind which the public search page may make a
@@ -166,7 +163,6 @@ export function formatSearchSourceLabel(result: SearchResponse) {
  * honestly what it is: cached, older, delayed, or partial.
  */
 export function isProvenFreshLiveCapture(result: SearchResponse): boolean {
-  if (result.source === "demo" || result.provider === "demo") return false;
   if (result.discoveryPartial) return false;
   if (isDelayedDiscoveryStatus(result.discoveryStatus)) return false;
   // Fail closed: only an explicitly healthy, undelayed check may be proven
@@ -175,23 +171,12 @@ export function isProvenFreshLiveCapture(result: SearchResponse): boolean {
   return result.cacheStatus === "miss";
 }
 
-/**
- * True when the result was produced from the demo/sample dataset rather than
- * a live Ad Library lookup. Demo matches deliberately ignore the country
- * filter (every demo ad matches every market), so a verdict title naming
- * the searched country for a demo result would falsely imply
- * country-specific evidence. Used to keep demo verdict copy unscoped.
- */
-function isDemoSourceResult(result: SearchResponse): boolean {
-  return result.source === "demo" || result.provider === "demo";
-}
-
 export function formatSearchFreshnessLabel(result: SearchResponse) {
   if (result.discoveryPartial) return "Fresh partial result";
   if (isDelayedDiscoveryStatus(result.discoveryStatus))
     return "Fresh check delayed";
   // The only state that may claim fresh/live: this request actually ran a live
-  // Ad Library capture (cache miss on a healthy, non-demo provider). Cached
+  // Ad Library capture (cache miss on a healthy provider). Cached
   // hits and stale entries are labeled as the cache they are instead.
   if (isProvenFreshLiveCapture(result)) return "Fresh live result";
   if (result.cacheStatus === "hit") return "Recent cached result";
@@ -553,13 +538,6 @@ export function formatEmptyResultHeadline(
     return "Search preview is temporarily unavailable";
   }
 
-  // Demo/sample results are not actually filtered by the searched country,
-  // so the verdict title must not name a market — otherwise a demo
-  // verdict for India-authored samples served under a United States
-  // filter would falsely imply country-specific evidence.
-  const isDemoSource = isDemoSourceResult(result);
-  const marketScopeOptions = { isDemoSource };
-
   if (
     context.relevanceApplied &&
     context.isDomainSearch &&
@@ -569,14 +547,12 @@ export function formatEmptyResultHeadline(
     return withMarketScope(
       `No verified ads found for ${context.displayDomain}`,
       context.country,
-      marketScopeOptions,
     );
   }
 
   return withMarketScope(
     "No ads found for this competitor",
     context.country,
-    marketScopeOptions,
   );
 }
 
@@ -596,12 +572,8 @@ export function formatResultsPanelTitle(
     country?: string | null;
   } = {},
 ) {
-  // Demo/sample results are not actually filtered by the searched country,
-  // so the verdict title must not name a market — otherwise a demo
-  // verdict for India-authored samples served under a United States
-  // filter would falsely imply country-specific evidence.
-  const isDemoSource = isDemoSourceResult(result);
-  const marketScopeOptions = { isDemoSource };
+  // Results are filtered by the searched country, so the verdict title
+  // can safely name the market.
   if (result.ads.length > 0) {
     if (
       context.relevanceApplied &&
@@ -613,7 +585,6 @@ export function formatResultsPanelTitle(
       return withMarketScope(
         `${result.ads.length} verified ${verifiedNoun} linked to ${context.displayDomain}`,
         context.country,
-        marketScopeOptions,
       );
     }
 
@@ -626,19 +597,16 @@ export function formatResultsPanelTitle(
         ? withMarketScope(
             `${verifiedCount} verified and ${relatedCount} related ${relatedNoun} for ${context.displayDomain}`,
             context.country,
-            marketScopeOptions,
           )
         : withMarketScope(
             `${result.ads.length} broader ${broaderNoun} for ${context.displayDomain}`,
             context.country,
-            marketScopeOptions,
           );
     }
 
     return withMarketScope(
       formatAdsFoundLabel(result.ads.length),
       context.country,
-      marketScopeOptions,
     );
   }
 
@@ -657,14 +625,12 @@ export function formatResultsPanelTitle(
     return withMarketScope(
       `No verified ads for ${context.displayDomain}`,
       context.country,
-      marketScopeOptions,
     );
   }
 
   return withMarketScope(
     formatAdsFoundLabel(0),
     context.country,
-    marketScopeOptions,
   );
 }
 
@@ -705,17 +671,7 @@ export function formatSearchMarketScope(
 function withMarketScope(
   title: string,
   country: string | null | undefined,
-  options: { isDemoSource?: boolean } = {},
 ): string {
-  // Demo/sample data is not actually filtered by the searched country — the
-  // resolver deliberately matches every demo ad against every country, so
-  // labelling a demo verdict "in United States" for a result that returns
-  // India-authored samples would falsely imply country-specific evidence.
-  // Skip the market scope for demo sources so the copy stays unscoped, the
-  // same shape legacy callers (no country passed) already used.
-  if (options.isDemoSource) {
-    return title;
-  }
   const scope = formatSearchMarketScope(country);
   return scope ? `${title} ${scope}` : title;
 }

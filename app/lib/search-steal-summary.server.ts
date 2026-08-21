@@ -83,7 +83,7 @@ export function shouldGenerateStealSummary(input: {
     input.isSignedIn &&
     input.result.ads.length >= MIN_STEAL_SUMMARY_ADS &&
     input.result.cacheStatus === "miss" &&
-    input.result.source !== "demo"
+    input.result.source !== "external"
   );
 }
 

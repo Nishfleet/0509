@@ -124,7 +124,9 @@ export function buildPublicProofBrief(
     now?: Date;
   },
 ): PublicProofBrief | null {
-  const realAds = ads.filter((ad) => ad && ad.source !== "demo").slice(0, PUBLIC_PROOF_MAX_ADS);
+  const realAds = ads
+    .filter((ad) => ad && (ad as { source?: string }).source !== "demo")
+    .slice(0, PUBLIC_PROOF_MAX_ADS);
   if (realAds.length === 0) {
     return null;
   }

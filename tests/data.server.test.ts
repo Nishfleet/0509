@@ -2705,7 +2705,7 @@ describe("upsertAd", () => {
         lastSeenAt: null,
         active: true,
         researchSummary: "Summary",
-        source: "demo",
+        source: "meta_api",
         analysisFields: [],
         creativeText: "60 Hours Playback\nOnly ₹999",
         creativeTextCaptureMethod: "ad_snapshot_fetch",
@@ -2761,7 +2761,7 @@ describe("listAdsByIds", () => {
       lastSeenAt: null,
       active: true,
       researchSummary: "Summary",
-      source: "demo",
+      source: "meta_api",
       analysisFields: [],
     };
 

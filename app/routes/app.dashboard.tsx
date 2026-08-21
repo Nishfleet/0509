@@ -1123,8 +1123,6 @@ function formatCommercialSourceStatus(status: string) {
       return "Live source ready";
     case "cache_only":
       return "Using recent source results";
-    case "demo":
-      return "Source setup needed";
     case "disabled":
       return "Source unavailable";
     case "degraded":
@@ -1144,9 +1142,6 @@ function commercialSourceSummary(
 ) {
   if (!status) return null;
   if (status.status === "healthy") return "Live ad checks are ready.";
-  if (status.status === "demo") {
-    return "Live ad checks aren't configured yet, so searches show labeled sample data.";
-  }
   if (status.status === "disabled") {
     return "Live ad checks are unavailable right now. Review source access before relying on fresh results.";
   }

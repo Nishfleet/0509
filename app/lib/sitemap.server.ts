@@ -132,16 +132,16 @@ export function isIndexableBrandPageRow(row: SitemapCacheRow, now: Date): boolea
   if (row.route_context !== "public_search") {
     return false;
   }
-  if (row.provider === "demo") {
-    return false;
-  }
-
   const payload = parseSitemapCachePayload(row.payload_json);
   if (!payload) {
     return false;
   }
-  // Never present demo/sample data as a brand's real ads on a public page.
-  if (payload.source === "demo" || payload.provider === "demo") {
+  // Never present sample data as a brand's real ads on a public page.
+  // Legacy rows may still carry a demo source even though new captures cannot.
+  if (
+    payload.source === "demo" ||
+    payload.provider === "demo"
+  ) {
     return false;
   }
   const ads = payload.ads.filter((ad) => ad && (ad as { source?: unknown }).source !== "demo");
@@ -209,12 +209,6 @@ export async function loadIndexableBrandPageEntries(
     return [];
   }
 
-  // Mirror the loader's first gate: in demo-provider environments the brand
-  // page renders the shell (noindex) regardless of any leftover rows.
-  const { resolveCommercialDiscoveryProvider } = await import("~/lib/ad-source.server");
-  if (resolveCommercialDiscoveryProvider(env) === "demo") {
-    return [];
-  }
   // Emergency brake: every /ads/* page serves noindex — never sitemap it.
   if (env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0") {
     return [];
@@ -228,7 +222,6 @@ export async function loadIndexableBrandPageEntries(
         SELECT cache_key, provider, route_context, payload_json, fetched_at
         FROM discovery_cache_entry
         WHERE route_context = 'public_search'
-          AND provider != 'demo'
           AND fetched_at >= ?
         ORDER BY fetched_at DESC
         LIMIT ?

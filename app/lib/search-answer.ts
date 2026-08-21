@@ -115,7 +115,6 @@ export function buildSearchAnswer(input: {
     domain,
     verifiedCount,
     country: input.country,
-    isDemoSource: result.source === "demo" || result.provider === "demo",
   });
   return {
     ...qualified,
@@ -134,18 +133,16 @@ function qualifyPartialSearchAnswer(
     domain: string | null;
     verifiedCount: number;
     country?: string | null;
-    isDemoSource?: boolean;
   },
 ): SearchAnswer {
   const relatedOnlyCount = Math.max(0, input.adCount - input.verifiedCount);
-  const marketScopeOptions = { isDemoSource: input.isDemoSource };
 
   if (answer.state === "broader" && input.domain) {
     return {
       ...answer,
       title: input.verifiedCount > 0
-        ? withMarketScope(`${input.verifiedCount} verified and ${relatedOnlyCount} related match${relatedOnlyCount === 1 ? "" : "es"} loaded so far for ${input.domain}`, input.country, marketScopeOptions)
-        : withMarketScope(`${input.adCount} broader match${input.adCount === 1 ? "" : "es"} loaded so far for ${input.domain}`, input.country, marketScopeOptions),
+        ? withMarketScope(`${input.verifiedCount} verified and ${relatedOnlyCount} related match${relatedOnlyCount === 1 ? "" : "es"} loaded so far for ${input.domain}`, input.country)
+        : withMarketScope(`${input.adCount} broader match${input.adCount === 1 ? "" : "es"} loaded so far for ${input.domain}`, input.country),
       facts: answer.facts.map((fact) => {
         if (fact.label === "Verified matches") {
           return {
@@ -170,8 +167,8 @@ function qualifyPartialSearchAnswer(
     return {
       ...answer,
       title: input.domain
-        ? withMarketScope(`${input.verifiedCount} verified ad${input.verifiedCount === 1 ? "" : "s"} loaded so far for ${input.domain}`, input.country, marketScopeOptions)
-        : withMarketScope(`${input.adCount} ad${input.adCount === 1 ? "" : "s"} loaded so far`, input.country, marketScopeOptions),
+        ? withMarketScope(`${input.verifiedCount} verified ad${input.verifiedCount === 1 ? "" : "s"} loaded so far for ${input.domain}`, input.country)
+        : withMarketScope(`${input.adCount} ad${input.adCount === 1 ? "" : "s"} loaded so far`, input.country),
       facts: answer.facts.map((fact) => {
         if (fact.label === "Verified ads") {
           return {
@@ -195,7 +192,7 @@ function qualifyPartialSearchAnswer(
   if (answer.state === "no_verified" && input.domain) {
     return {
       ...answer,
-      title: withMarketScope(`No verified ads in the results loaded so far for ${input.domain}`, input.country, marketScopeOptions),
+      title: withMarketScope(`No verified ads in the results loaded so far for ${input.domain}`, input.country),
       facts: answer.facts.map((fact) => {
         if (fact.label === "Verified ads") {
           return {
@@ -240,13 +237,6 @@ function buildCompleteSearchAnswer(input: {
   const landingFact = input.landingFact;
   const sourceLabel = input.sourceLabel;
   const landingPageCount = input.landingPageCount;
-  // Demo/sample matches deliberately ignore the country filter, so the
-  // verdict title must not name a market — a demo verdict for
-  // India-authored samples served under a United States filter would
-  // falsely imply country-specific evidence. Skip the market scope for
-  // demo sources so the copy stays unscoped.
-  const isDemoSource = result.source === "demo" || result.provider === "demo";
-  const marketScopeOptions = { isDemoSource };
 
   if (isDelayedSearchStatus(result.discoveryStatus) && adCount === 0) {
     return {
@@ -266,7 +256,7 @@ function buildCompleteSearchAnswer(input: {
   if (adCount === 0 && input.isDomainSearch && domain && !input.isBroaderScope) {
     return {
       state: "no_verified",
-      title: withMarketScope(`No verified ads found for ${domain}`, input.country, marketScopeOptions),
+      title: withMarketScope(`No verified ads found for ${domain}`, input.country),
       summary: "We could not confirm ads whose advertiser or landing page is connected to this website.",
       facts: [
         { label: "Verified ads", value: "0", detail: "Exact website match only" },
@@ -275,9 +265,7 @@ function buildCompleteSearchAnswer(input: {
           value: String(broaderCount),
           detail: broaderCount > 0
             ? "Available to review separately without a verified website claim"
-            : result.source === "demo"
-              ? "The sample source has no related candidates"
-              : "The Meta source returned no related candidates",
+            : "The Meta source returned no related candidates",
         },
         { label: "Source", value: sourceLabel, detail: formatCacheDetail(result.cacheStatus) },
       ],
@@ -290,7 +278,7 @@ function buildCompleteSearchAnswer(input: {
       state: result.discoveryStatus === "disabled" ? "idle" : "empty",
       title: result.discoveryStatus === "disabled"
         ? "Enter a competitor website"
-        : withMarketScope("No ads found for this competitor", input.country, marketScopeOptions),
+        : withMarketScope("No ads found for this competitor", input.country),
       summary: result.discoveryStatus === "disabled"
         ? "Paste one competitor site to see whether Five to Nine can verify currently available ads."
         : "The search completed without returning visible ads.",
@@ -306,8 +294,8 @@ function buildCompleteSearchAnswer(input: {
     return {
       state: "broader",
       title: verifiedCount > 0
-        ? withMarketScope(`${verifiedCount} verified and ${relatedOnlyCount} related match${relatedOnlyCount === 1 ? "" : "es"} for ${domain}`, input.country, marketScopeOptions)
-        : withMarketScope(`${adCount} broader match${adCount === 1 ? "" : "es"} for ${domain}`, input.country, marketScopeOptions),
+        ? withMarketScope(`${verifiedCount} verified and ${relatedOnlyCount} related match${relatedOnlyCount === 1 ? "" : "es"} for ${domain}`, input.country)
+        : withMarketScope(`${adCount} broader match${adCount === 1 ? "" : "es"} for ${domain}`, input.country),
       summary: verifiedCount > 0
         ? "Verified matches are connected to the website; related matches remain leads until their source can be confirmed."
         : "These are related ad results, not verified website matches. Use them for leads, not confirmed evidence.",
@@ -324,7 +312,7 @@ function buildCompleteSearchAnswer(input: {
   if (input.isDomainSearch && domain && verifiedCount === 0) {
     return {
       state: "no_verified",
-      title: withMarketScope(`No verified ads found for ${domain}`, input.country, marketScopeOptions),
+      title: withMarketScope(`No verified ads found for ${domain}`, input.country),
       summary: "Returned ads were not connected to this website through advertiser or landing-page evidence.",
       facts: [
         { label: "Verified ads", value: "0", detail: "Exact website match only" },
@@ -338,7 +326,7 @@ function buildCompleteSearchAnswer(input: {
   if (input.isDomainSearch && domain) {
     return {
       state: "verified",
-      title: withMarketScope(`${verifiedCount} verified ad${verifiedCount === 1 ? "" : "s"} linked to ${domain}`, input.country, marketScopeOptions),
+      title: withMarketScope(`${verifiedCount} verified ad${verifiedCount === 1 ? "" : "s"} linked to ${domain}`, input.country),
       summary: "These ads are connected to the competitor website through advertiser or landing-page evidence.",
       facts: [
         { label: "Verified ads", value: String(verifiedCount), detail: "Connected to this domain" },
@@ -351,7 +339,7 @@ function buildCompleteSearchAnswer(input: {
 
   return {
     state: "verified",
-    title: withMarketScope(`${adCount} ad${adCount === 1 ? "" : "s"} found`, input.country, marketScopeOptions),
+    title: withMarketScope(`${adCount} ad${adCount === 1 ? "" : "s"} found`, input.country),
     summary: "Review the ad cards and selected ad detail to decide what is worth saving or tracking.",
     facts: [
       { label: "Ads found", value: String(adCount), detail: sourceLabel },
@@ -387,9 +375,6 @@ function formatSearchSource(result: SearchResponse) {
   if (result.provider === "meta_api" || result.source === "meta_api") {
     return "Alternate Meta check";
   }
-  if (result.source === "demo") {
-    return "Sample data";
-  }
   return "Search result";
 }
 
@@ -414,20 +399,11 @@ function formatCacheDetail(cacheStatus: SearchResponse["cacheStatus"]) {
  * Append the searched market scope to a verdict title ("… in India" /
  * "… across all countries") when the caller supplied the country filter.
  * Omitted country keeps the legacy unscoped copy.
- *
- * Demo/sample sources skip the scope: the resolver deliberately matches
- * every demo ad against every country, so a verdict naming the searched
- * market would falsely imply country-specific evidence. The unscoped copy
- * is the same shape callers without a country get.
  */
 function withMarketScope(
   title: string,
   country: string | null | undefined,
-  options: { isDemoSource?: boolean } = {},
 ): string {
-  if (options.isDemoSource) {
-    return title;
-  }
   const scope = formatSearchMarketScope(country);
   return scope ? `${title} ${scope}` : title;
 }

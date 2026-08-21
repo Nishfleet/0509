@@ -84,13 +84,6 @@ describe("BL-031 — the search result row", () => {
     expect(markup).not.toContain("f9-ad-thumb");
   });
 
-  it("says Sample on a demo-sourced result and refuses to quick-save it", () => {
-    const markup = renderRow(baseAd({ source: "demo" }));
-    expect(markup).toContain("Sample");
-    // Nothing fabricated can be saved into a workspace as evidence.
-    expect(markup).not.toContain("data-quick-save-ad");
-  });
-
   it("keeps quick-save on a live result, as a text action with its shortcut hook", () => {
     const markup = renderRow(baseAd());
     expect(markup).toContain('data-quick-save-ad="ad-1"');

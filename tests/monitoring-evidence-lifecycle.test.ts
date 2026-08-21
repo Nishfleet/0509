@@ -257,7 +257,7 @@ const manualAd: AdRecord = {
   lastSeenAt: null,
   active: true,
   researchSummary: "Summary",
-  source: "demo",
+  source: "meta_api",
   analysisFields: [],
 };
 
@@ -400,7 +400,7 @@ async function installManualRunMocks(input: {
   const searchAdsViaSourceResolver = vi.fn().mockResolvedValue({
     ads: [manualAd],
     nextCursor: null,
-    source: "demo",
+    source: "meta_api",
   });
   vi.doMock("~/lib/ad-source.server", async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),

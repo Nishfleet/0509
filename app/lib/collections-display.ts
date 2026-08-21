@@ -105,22 +105,20 @@ export function latestSavedAt(items: readonly CollectionItemRecord[]): string | 
 
 /**
  * How this evidence reached the collection. Everything the plate claims about
- * time is decided from this, because the three kinds hold genuinely different
+ * time is decided from this, because the two kinds hold genuinely different
  * facts (brief §8.1, §8.3):
  *
  * - `captured` — we took the capture ourselves, so we hold a capture TIME.
  * - `filed`    — someone on the team pasted a link and typed the date they saw
  *                it. We hold an observation DATE and nothing else: no capture
  *                of our own, and no run we ever watched.
- * - `sample`   — demo material, labelled as such.
  */
-export type SavedItemSourceKind = "captured" | "filed" | "sample";
+export type SavedItemSourceKind = "captured" | "filed";
 
 export function resolveSavedItemSourceKind(
   source: AdRecord["source"] | undefined,
 ): SavedItemSourceKind {
   if (source === "external") return "filed";
-  if (source === "demo") return "sample";
   return "captured";
 }
 
@@ -129,16 +127,13 @@ export function resolveSavedItemStatus(source: AdRecord["source"] | undefined): 
   switch (resolveSavedItemSourceKind(source)) {
     case "filed":
       return "Filed";
-    case "sample":
-      return "Sample";
     default:
       return "Captured";
   }
 }
 
-/** Brief §8.3: demo and external material is labelled inline, in mono. */
+/** Brief §8.3: external material is labelled inline, in mono. */
 export function resolveSavedItemVerification(source: AdRecord["source"] | undefined): string {
-  if (source === "demo") return "DEMO DATA — SAMPLE RESULTS";
   if (source === "external") return "EXTERNAL EVIDENCE";
   return "STORED CAPTURE";
 }
@@ -292,8 +287,6 @@ export function savedItemFootnote(item: CollectionItemRecord): string {
   switch (resolveSavedItemSourceKind(item.ad.source)) {
     case "filed":
       return "Filed by your team from a link they saw. We did not capture this page ourselves.";
-    case "sample":
-      return "Sample data — not a real capture.";
     default:
       return `Captured from the ad library. ${COLLECTION_CAPTURE_NOTE}`;
   }

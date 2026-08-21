@@ -31,7 +31,7 @@ import {
   CommercialDiscoveryError,
   getInteractiveMetaApiExtraPages,
 } from "~/lib/meta-library-browser.server";
-import { demoSearch, MetaApiError, filterAdsBySearchFilters, searchAds as searchMetaApiAds } from "~/lib/meta-api.server";
+import { MetaApiError, filterAdsBySearchFilters, searchAds as searchMetaApiAds } from "~/lib/meta-api.server";
 import { fingerprintSavedQuery, hashString } from "~/lib/normalize";
 import type {
   AdDiscoveryProvider,
@@ -80,11 +80,9 @@ export async function searchMetaApiAdsWithInteractiveDepth(
   env: AppEnv,
   query: NormalizedSavedQuery,
   cursor: string | null | undefined,
-  options: { allowDemoFallback?: boolean; interactive?: boolean },
+  options: { interactive?: boolean },
 ): Promise<SearchResponse> {
-  const first = await searchMetaApiAds(env, query, cursor, {
-    allowDemoFallback: options.allowDemoFallback,
-  });
+  const first = await searchMetaApiAds(env, query, cursor);
 
   if (!options.interactive || cursor) {
     return first;
@@ -97,9 +95,7 @@ export async function searchMetaApiAdsWithInteractiveDepth(
 
   for (let page = 0; page < extraPages && nextCursor; page += 1) {
     try {
-      const more = await searchMetaApiAds(env, query, nextCursor, {
-        allowDemoFallback: options.allowDemoFallback,
-      });
+      const more = await searchMetaApiAds(env, query, nextCursor);
       for (const ad of more.ads) {
         if (seen.has(ad.metaAdId)) {
           continue;
@@ -189,15 +185,6 @@ function normalizeSearchResponse(
     };
   }
 
-  if (provider === "demo" || result.source === "demo") {
-    return {
-      ...result,
-      source: "demo",
-      provider: "demo",
-      cacheStatus: "none",
-    };
-  }
-
   return {
     ...result,
     provider,
@@ -242,7 +229,9 @@ export function resolveCommercialDiscoveryProvider(
     return "meta_api";
   }
 
-  return "demo";
+  throw new Error(
+    "No commercial discovery provider is configured. Set BROWSER/BROWSERLESS_TOKEN for meta_library_browser, or provide a customer Meta Ad Library token for meta_api.",
+  );
 }
 
 function hasBrowserBinding(binding: AppEnv["BROWSER"] | undefined): binding is BrowserBinding {
@@ -345,30 +334,24 @@ export async function resolveCommercialAdSourceStatus(
   const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
   const provider = resolveCommercialDiscoveryProvider(effectiveEnv);
   const providerState =
-    provider !== "demo" && effectiveEnv.DB
+    effectiveEnv.DB
       ? await getDiscoveryProviderState(effectiveEnv, provider)
       : null;
-  const diagnosticMetaProviderState =
-    provider === "demo" && effectiveEnv.META_AD_LIBRARY_TOKEN?.trim() && effectiveEnv.DB
-      ? await getDiscoveryProviderState(effectiveEnv, "meta_api")
-      : null;
 
-  if (providerState || diagnosticMetaProviderState) {
-    const state = providerState ?? diagnosticMetaProviderState!;
-    const stateProvider = providerState ? provider : "meta_api";
+  if (providerState) {
     return {
-      status: state.status,
-      provider: stateProvider,
+      status: providerState.status,
+      provider,
       mode:
-        state.status === "cache_only"
+        providerState.status === "cache_only"
           ? "cache"
-          : stateProvider === "meta_api"
+          : provider === "meta_api"
             ? "diagnostic"
             : "live",
-      summary: state.summary,
-      lastCheckedAt: state.updatedAt,
-      lastErrorCode: state.failureClass,
-      lastErrorMessage: extractProviderStateErrorMessage(state.metadata),
+      summary: providerState.summary,
+      lastCheckedAt: providerState.updatedAt,
+      lastErrorCode: providerState.failureClass,
+      lastErrorMessage: extractProviderStateErrorMessage(providerState.metadata),
     };
   }
 
@@ -399,11 +382,11 @@ export async function resolveCommercialAdSourceStatus(
   }
 
   return {
-    status: "demo",
-    provider: "demo",
-    mode: "demo",
+    status: "degraded",
+    provider: "meta_api",
+    mode: "diagnostic",
     summary:
-      "No live commercial discovery provider is configured. The app is running in explicit demo mode.",
+      "No live commercial discovery provider is configured. The app is running without a Meta Ad Library connection.",
     lastCheckedAt: null,
     lastErrorCode: null,
     lastErrorMessage: null,
@@ -427,7 +410,7 @@ export async function hasFreshDiscoveryCacheEntry(
   const provider = resolveCommercialDiscoveryProvider(effectiveEnv, {
     customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
   });
-  if (provider === "demo" || !effectiveEnv.DB) {
+  if (!effectiveEnv.DB) {
     return false;
   }
 
@@ -480,7 +463,7 @@ export async function searchAdsViaSourceResolver(
     customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
   });
   const routeContext = options.purpose ?? "public_search";
-  const forceLive = options.forceLive === true && provider !== "demo";
+  const forceLive = options.forceLive === true;
   const acceptCacheYoungerThanMs =
     typeof options.acceptCacheYoungerThanMs === "number" &&
     Number.isFinite(options.acceptCacheYoungerThanMs) &&
@@ -490,20 +473,10 @@ export async function searchAdsViaSourceResolver(
   const fixtureProvider = resolveE2EFixtureProviderFromEnv(effectiveEnv);
   const providerState =
     !fixtureProvider &&
-    provider !== "demo" &&
     effectiveEnv.DB &&
     !(provider === "meta_api" && hasCustomerMetaToken)
       ? await getDiscoveryProviderState(effectiveEnv, provider)
       : null;
-
-  if (provider === "demo") {
-    return {
-      ...normalizeSearchResponse(demoSearch(query, cursor), "demo"),
-      discoveryStatus: "demo",
-      discoverySummary: null,
-      discoveryFailureClass: null,
-    };
-  }
 
   const baseCacheKey =
     options.cacheKeyOverride ??
@@ -897,7 +870,6 @@ export async function searchAdsViaSourceResolver(
               query,
               cursor,
               {
-                allowDemoFallback: false,
                 interactive: routeContext === "public_search" && !cursor,
               },
             ),
@@ -1296,9 +1268,7 @@ async function tryMetaApiFallback(
 
   try {
     const apiResult = normalizeSearchResponse(
-      await searchMetaApiAds(metaApiEnv, query, cursor, {
-        allowDemoFallback: false,
-      }),
+      await searchMetaApiAds(metaApiEnv, query, cursor),
       "meta_api",
     );
     const timestamp = new Date().toISOString();

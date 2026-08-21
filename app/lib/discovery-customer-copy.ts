@@ -52,9 +52,6 @@ function safeDiscoverySummary(
   if (status === "healthy") {
     return "Live ad checks are ready.";
   }
-  if (status === "demo") {
-    return "Live ad checks aren't configured yet, so searches show labeled sample data.";
-  }
   if (/warming this query/i.test(rawSummary)) {
     return "We're checking this competitor now. Results should appear shortly.";
   }
@@ -105,7 +102,7 @@ export function toCustomerDiscoveryStatus(
     summary,
     lastCheckedAt: status.lastCheckedAt ?? null,
     recovery:
-      normalizedStatus === "healthy" || normalizedStatus === "demo"
+      normalizedStatus === "healthy"
         ? null
         : "Check source access, then retry once it's ready.",
   };

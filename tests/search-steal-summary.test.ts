@@ -204,7 +204,7 @@ describe("shouldGenerateStealSummary", () => {
     ).toBe(false);
   });
 
-  it("skips cache-served and demo results", () => {
+  it("skips cache-served and external results", () => {
     expect(
       shouldGenerateStealSummary({
         isSignedIn: true,
@@ -220,7 +220,7 @@ describe("shouldGenerateStealSummary", () => {
     expect(
       shouldGenerateStealSummary({
         isSignedIn: true,
-        result: { ...freshResult, source: "demo" },
+        result: { ...freshResult, source: "external" },
       }),
     ).toBe(false);
   });

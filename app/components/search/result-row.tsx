@@ -19,10 +19,6 @@ type ResultQuickSaveProps = ComponentProps<typeof ResultQuickSave>;
  * one chevron. The creative, the angle, the offer, the destination and the
  * language all still exist; they moved into the detail pane, where the
  * creative is finally big enough to read.
- *
- * Demo-mode honesty is unchanged and is now stated in the row's own status
- * column: a demo-sourced result says the word "Sample" where a live result
- * says "Active". It was a boxed pill; a state is a word.
  */
 export function SearchResultRow({
   ad,
@@ -41,7 +37,6 @@ export function SearchResultRow({
   collections: ResultQuickSaveProps["collections"];
   plan: ResultQuickSaveProps["plan"];
 }) {
-  const isDemo = ad.source === "demo";
   const running = ad.activeStatusObserved !== false && ad.active;
   const advertiser = formatAdvertiserLabel(ad.advertiser);
   const summary = formatResultCardSummary(ad);
@@ -54,12 +49,12 @@ export function SearchResultRow({
       name={advertiser}
       say={summary}
       selected={isActive}
-      status={isDemo ? "Sample" : formatAdActiveStatus(ad)}
-      statusTone={isDemo ? "quiet" : running ? "on" : "quiet"}
+      status={formatAdActiveStatus(ad)}
+      statusTone={running ? "on" : "quiet"}
       time={formatAdLongevityLabel(ad) ?? "—"}
       to={href}
       trail={
-        canQuickSave && !isDemo ? (
+        canQuickSave ? (
           <ResultQuickSave
             adId={ad.metaAdId}
             advertiser={ad.advertiser}

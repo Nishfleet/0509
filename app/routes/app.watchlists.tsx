@@ -320,7 +320,7 @@ export default function WatchlistsRoute() {
     data.runs,
     data.proofSummary,
   );
-  const sourceCanSchedule = discoveryStatus.status !== "demo" && discoveryStatus.status !== "disabled";
+  const sourceCanSchedule = discoveryStatus.status !== "disabled";
   const pendingWatchlistId =
     navigation.location?.pathname === "/app/watchlists"
       ? new URLSearchParams(navigation.location.search).get("watchlist")

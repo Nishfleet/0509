@@ -72,7 +72,6 @@ function isAdDiscoverySource(value: unknown): value is SearchResponse["source"] 
     value === "meta" ||
     value === "meta_api" ||
     value === "meta_library_browser" ||
-    value === "demo" ||
     value === "external"
   );
 }

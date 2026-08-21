@@ -37,7 +37,7 @@ const baseAd: AdRecord = {
   lastSeenAt: null,
   active: true,
   researchSummary: "Summary",
-  source: "demo",
+  source: "meta_api",
   analysisFields: [],
 };
 
@@ -964,7 +964,7 @@ describe("runWatchlistManual cheap scan path", () => {
       searchAds: vi.fn().mockResolvedValue({
         ads: [baseAd],
         nextCursor: null,
-        source: "demo",
+        source: "meta_api",
       }),
     }));
     vi.doMock("~/lib/plan.server", () => ({
@@ -1258,7 +1258,7 @@ describe("runWatchlistManual cheap scan path", () => {
       searchAds: vi.fn().mockResolvedValue({
         ads: [baseAd],
         nextCursor: null,
-        source: "demo",
+        source: "meta_api",
       }),
     }));
     vi.doMock("~/lib/plan.server", () => ({
@@ -2423,7 +2423,7 @@ describe("runWatchlistManual cheap scan path", () => {
       searchAds: vi.fn().mockResolvedValue({
         ads: [baseAd],
         nextCursor: null,
-        source: "demo",
+        source: "meta_api",
       }),
     }));
     vi.doMock("~/lib/plan.server", () => ({

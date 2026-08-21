@@ -152,9 +152,6 @@ function savedItemTime(item: CollectionItemRecord) {
   if (kind === "filed") {
     return formatRecordedObservationDate(item.ad.firstSeenAt) ?? "Date not recorded";
   }
-  if (kind === "sample") {
-    return "Sample";
-  }
   // A captured item with no stored capture time is the most ambiguous case
   // in the list; a bare dash reads as decoration, not as a missing value.
   return "Capture time not recorded";

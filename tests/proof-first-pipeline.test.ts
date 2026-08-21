@@ -37,7 +37,7 @@ const baseAd: AdRecord = {
   lastSeenAt: null,
   active: true,
   researchSummary: "Summary",
-  source: "demo",
+  source: "meta_api",
   analysisFields: [],
 };
 
@@ -194,7 +194,7 @@ function installSharedMocks(input: {
     searchAds: vi.fn().mockResolvedValue({
       ads: [baseAd],
       nextCursor: null,
-      source: "demo",
+      source: "meta_api",
     }),
   }));
   vi.doMock("~/lib/delivery.server", () => ({

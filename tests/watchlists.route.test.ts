@@ -2261,8 +2261,8 @@ describe("watchlists route rendering", () => {
     const { resolveWatchlistTrackingPresentation } = await import("~/routes/app.watchlists");
     const presentation = resolveWatchlistTrackingPresentation(
       {
-        status: "demo",
-        summary: "Live ad checks aren't configured yet, so searches show labeled sample data.",
+        status: "disabled",
+        summary: "Live ad checks are unavailable right now. Review source access before relying on fresh results.",
         lastCheckedAt: null,
         recovery: null,
       },
@@ -2278,9 +2278,9 @@ describe("watchlists route rendering", () => {
     );
 
     expect(presentation).toEqual({
-      headline: "Monitoring history is saved; new checks need source access",
-      summary: "Your last successful evidence remains available. Review source access before relying on new competitor changes.",
-      statusLabel: "Needs source access",
+      headline: "Competitor tracking is unavailable",
+      summary: "Live ad checks are unavailable right now. Review source access before relying on fresh results.",
+      statusLabel: "Unavailable",
       lastCheckedAt: "2026-04-18T10:01:00.000Z",
     });
   });
@@ -2534,9 +2534,9 @@ describe("watchlists route rendering", () => {
       {
         ...selectedPanelLoaderData,
         discoveryStatus: {
-          status: "demo",
+          status: "disabled",
           provider: "meta_library_browser",
-          mode: "demo",
+          mode: "diagnostic",
           summary: "Live source access is unavailable.",
           lastCheckedAt: null,
           lastErrorCode: null,
@@ -2815,9 +2815,9 @@ describe("watchlists route rendering", () => {
       {
         ...selectedPanelLoaderData,
         discoveryStatus: {
-          status: "demo",
+          status: "disabled",
           provider: "meta_library_browser",
-          mode: "demo",
+          mode: "diagnostic",
           summary: "Live source access is unavailable.",
           lastCheckedAt: null,
           lastErrorCode: null,
@@ -2828,12 +2828,12 @@ describe("watchlists route rendering", () => {
     );
 
     expect(markup).toContain('href="/app/source-access"');
-    expect(markup).toContain("Needs source access");
+    expect(markup).toContain("Competitor tracking is unavailable");
     expect(markup).toContain(
       "Automatic checks are waiting for source access. The evidence already on file stays here.",
     );
     expect(markup).not.toContain("Automatic checks are on.");
-    expect(markup.indexOf("Needs source access")).toBeLessThan(
+    expect(markup.indexOf("Unavailable")).toBeLessThan(
       markup.indexOf('aria-label="Competitor sections"'),
     );
   });

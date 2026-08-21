@@ -298,10 +298,8 @@ describe("collections evidence rows and detail (BL-033a)", () => {
 
   it("labels provenance in sentence case while retaining export-facing labels", () => {
     expect(resolveSavedItemStatus("external")).toBe("Filed");
-    expect(resolveSavedItemStatus("demo")).toBe("Sample");
     expect(resolveSavedItemStatus("meta_api")).toBe("Captured");
     expect(resolveSavedItemVerification("external")).toBe("EXTERNAL EVIDENCE");
-    expect(resolveSavedItemVerification("demo")).toBe("DEMO DATA — SAMPLE RESULTS");
     expect(resolveSavedItemVerification("meta_api")).toBe("STORED CAPTURE");
   });
 
@@ -364,7 +362,6 @@ describe("collections evidence rows and detail (BL-033a)", () => {
 describe("saved-item provenance is source-aware (brief §8.1, §13.1)", () => {
   it("sorts each source into what it can actually prove", () => {
     expect(resolveSavedItemSourceKind("external")).toBe("filed");
-    expect(resolveSavedItemSourceKind("demo")).toBe("sample");
     expect(resolveSavedItemSourceKind("meta_library_browser")).toBe("captured");
     expect(resolveSavedItemSourceKind(undefined)).toBe("captured");
   });
@@ -428,9 +425,6 @@ describe("saved-item provenance is source-aware (brief §8.1, §13.1)", () => {
   it("does not call a pasted link a stored capture of ours", () => {
     expect(savedItemFootnote(savedItem({ ad: { source: "external" } as never }))).toBe(
       "Filed by your team from a link they saw. We did not capture this page ourselves.",
-    );
-    expect(savedItemFootnote(savedItem({ ad: { source: "demo" } as never }))).toBe(
-      "Sample data — not a real capture.",
     );
     expect(savedItemFootnote(savedItem())).toContain("This is the stored capture, not a re-render.");
   });

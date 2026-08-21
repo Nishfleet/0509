@@ -35,7 +35,7 @@ const baseAd: AdRecord = {
   lastSeenAt: null,
   active: true,
   researchSummary: "Summary",
-  source: "demo",
+  source: "meta_api",
   analysisFields: [],
   landingPage: {
     rawUrl: "https://boat.example.com/rockerz-neckband",

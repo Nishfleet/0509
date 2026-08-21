@@ -8,11 +8,11 @@
  * serving cached inventory. This file pins the new contract from the packet:
  *
  *   1. The idle/pre-search copy never says or implies "right now".
- *   2. Cached, stale, degraded, delayed, partial, and demo results never use
+ *   2. Cached, stale, degraded, delayed, and partial results never use
  *      fresh/live language and keep an explicit source/freshness label.
  *   3. Fresh/"live" ("right now") wording is allowed ONLY in a result state
  *      backed by a proven fresh-live Ad Library capture — a cache miss on a
- *      healthy, non-partial, non-demo provider.
+ *      healthy, non-partial provider.
  *
  * The unit half asserts the gating predicate and label directly against
  * fixtures; the route half renders the real /search route (same harness as
@@ -76,8 +76,8 @@ function mockRouter() {
 const idleResult: SearchResponse = {
   ads: [],
   nextCursor: null,
-  source: "demo",
-  provider: "demo",
+  source: "meta_api",
+  provider: "meta_api",
   cacheStatus: "none",
   discoveryStatus: "disabled",
   discoverySummary: null,
@@ -152,14 +152,6 @@ const warmingResult = resultFixture({
 const partialResult = resultFixture({
   discoveryPartial: true,
   discoverySummary: "Some additional Meta results could not be loaded.",
-});
-/** Demo sample data. */
-const demoResult = resultFixture({
-  ads: [],
-  cacheStatus: "none",
-  source: "demo",
-  provider: "demo",
-  discoveryStatus: "demo",
 });
 
 const searchedFilters = {
@@ -246,13 +238,12 @@ describe("isProvenFreshLiveCapture", () => {
   it("is true ONLY for a proven fresh-live capture", () => {
     const fixtures: Array<[string, SearchResponse, boolean]> = [
       ["fresh live (miss + healthy + real provider)", freshLiveResult, true],
-      ["idle (disabled/demo)", idleResult, false],
+      ["idle (disabled)", idleResult, false],
       ["fresh cache hit", cachedHitResult, false],
       ["stale cache while cache-only", cachedDegradedResult, false],
       ["degraded with no cached ads", degradedEmptyResult, false],
       ["cold-path warming", warmingResult, false],
       ["partial live capture", partialResult, false],
-      ["demo sample data", demoResult, false],
       ["healthy but cache hit", resultFixture({ discoveryStatus: "healthy", cacheStatus: "hit" }), false],
       ["miss but unknown discovery status", resultFixture({ discoveryStatus: undefined }), false],
     ];
@@ -263,14 +254,13 @@ describe("isProvenFreshLiveCapture", () => {
 });
 
 describe("formatSearchFreshnessLabel", () => {
-  it("labels cached, degraded, partial, and demo results honestly, never fresh-live", () => {
+  it("labels cached, degraded, and partial results honestly, never fresh-live", () => {
     expect(formatSearchFreshnessLabel(idleResult)).toBe("Freshness unavailable");
     expect(formatSearchFreshnessLabel(cachedHitResult)).toBe("Recent cached result");
     expect(formatSearchFreshnessLabel(cachedDegradedResult)).toBe("Fresh check delayed");
     expect(formatSearchFreshnessLabel(degradedEmptyResult)).toBe("Fresh check delayed");
     expect(formatSearchFreshnessLabel(warmingResult)).toBe("Fresh check delayed");
     expect(formatSearchFreshnessLabel(partialResult)).toBe("Fresh partial result");
-    expect(formatSearchFreshnessLabel(demoResult)).toBe("Freshness unavailable");
   });
 
   it("allows fresh/live wording only on the proven fresh-live fixture", () => {
@@ -283,7 +273,6 @@ describe("formatSearchFreshnessLabel", () => {
       degradedEmptyResult,
       warmingResult,
       partialResult,
-      demoResult,
     ];
     for (const other of others) {
       expect(formatSearchFreshnessLabel(other)).not.toBe("Fresh live result");

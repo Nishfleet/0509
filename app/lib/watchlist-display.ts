@@ -180,9 +180,6 @@ export function formatDiscoveryHeadline(status: Pick<MetaIntegrationStatus, "sta
   if (status.status === "cache_only") {
     return "Using recent competitor results";
   }
-  if (status.status === "demo") {
-    return "Add a real competitor to start live tracking";
-  }
   if (status.status === "disabled") {
     return "Competitor tracking is unavailable";
   }
@@ -195,9 +192,6 @@ export function formatDiscoveryStatusLabel(status: MetaIntegrationStatus["status
   }
   if (status === "healthy") {
     return "Ready";
-  }
-  if (status === "demo") {
-    return "Setup needed";
   }
   if (status === "degraded") {
     return "Needs attention";
@@ -219,16 +213,6 @@ export function resolveWatchlistTrackingPresentation(
   }, null);
   const hasStoredEvidence = proofSummary.successfulAttempts > 0 || Boolean(latestSuccessfulRunAt);
   const lastCheckedAt = status.lastCheckedAt ?? latestSuccessfulRunAt ?? proofSummary.lastSuccessfulProofAt;
-
-  if (status.status === "demo" && hasStoredEvidence) {
-    return {
-      headline: "Monitoring history is saved; new checks need source access",
-      summary:
-        "Your last successful evidence remains available. Review source access before relying on new competitor changes.",
-      statusLabel: "Needs source access",
-      lastCheckedAt,
-    };
-  }
 
   return {
     headline: formatDiscoveryHeadline(status),

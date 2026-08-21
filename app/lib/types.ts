@@ -256,12 +256,12 @@ export interface AdRecord {
   };
 }
 
-export type AdDiscoveryProvider = "meta_api" | "meta_library_browser" | "demo";
-export type AdDiscoverySource = "meta" | "meta_api" | "meta_library_browser" | "demo" | "external";
+export type AdDiscoveryProvider = "meta_api" | "meta_library_browser";
+export type AdDiscoverySource = "meta" | "meta_api" | "meta_library_browser" | "external";
 export type DiscoveryCacheStatus = "miss" | "hit" | "stale" | "none";
 export type DiscoveryRouteContext = "public_search" | "watchlist_scan" | "scheduled_warmup";
 export type DiscoveryFetchStatus = "succeeded" | "failed";
-export type CommercialDiscoveryStatus = "healthy" | "demo" | "degraded" | "cache_only" | "disabled";
+export type CommercialDiscoveryStatus = "healthy" | "degraded" | "cache_only" | "disabled";
 export type DiscoveryFailureClass =
   | "provider_unavailable"
   | "browser_unavailable"
@@ -753,7 +753,7 @@ export interface UsageBundle {
 export interface MetaIntegrationStatus {
   status: CommercialDiscoveryStatus;
   provider?: AdDiscoveryProvider;
-  mode?: "live" | "diagnostic" | "demo" | "cache";
+  mode?: "live" | "diagnostic" | "cache";
   summary: string;
   lastCheckedAt: string | null;
   lastErrorCode: string | null;

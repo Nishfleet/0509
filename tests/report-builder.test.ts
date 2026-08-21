@@ -37,7 +37,7 @@ const baseAd: AdRecord = {
   lastSeenAt: "2026-03-31T00:00:00.000Z",
   active: true,
   researchSummary: "Summary",
-  source: "demo",
+  source: "meta_api",
   analysisFields: [
     {
       scopeType: "ad",

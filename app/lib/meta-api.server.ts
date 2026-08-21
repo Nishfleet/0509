@@ -1,4 +1,3 @@
-import { demoAds } from "~/lib/demo-data";
 import {
   composeResearchSummary,
   inferDestinationType,
@@ -56,10 +55,6 @@ interface MetaApiResponse {
   };
 }
 
-interface SearchAdsOptions {
-  allowDemoFallback?: boolean;
-}
-
 export class MetaApiError extends Error {
   constructor(
     message: string,
@@ -76,46 +71,17 @@ export async function searchAds(
   env: AppEnv,
   query: NormalizedSavedQuery,
   cursor?: string | null,
-  options: SearchAdsOptions = {},
 ): Promise<SearchResponse> {
   if (!env.META_AD_LIBRARY_TOKEN) {
-    return demoSearch(query, cursor);
+    throw new MetaApiError(
+      "Meta Ad Library token is not configured. Set META_AD_LIBRARY_TOKEN in the environment.",
+      0,
+      false,
+      false,
+    );
   }
 
-  try {
-    return await liveSearch(env, query, cursor);
-  } catch (error) {
-    // Default is false: live failures must not silently degrade into demo.
-    // Callers that intentionally want demo on failure pass allowDemoFallback: true.
-    if (options.allowDemoFallback !== true) {
-      throw error;
-    }
-    return demoSearch(query, cursor);
-  }
-}
-
-export function demoSearch(
-  query: NormalizedSavedQuery,
-  cursor?: string | null,
-): SearchResponse {
-  const matchingAds = demoAds.filter((ad) =>
-    matchesAd(ad, query.mode, query.filters),
-  );
-  const startIndex = cursor ? Number.parseInt(cursor, 10) : 0;
-  const nextSlice = matchingAds.slice(
-    startIndex,
-    startIndex + DEFAULT_PAGE_LIMIT,
-  );
-  const nextCursor =
-    startIndex + DEFAULT_PAGE_LIMIT < matchingAds.length
-      ? String(startIndex + DEFAULT_PAGE_LIMIT)
-      : null;
-
-  return {
-    ads: nextSlice.map((ad) => withStructuredAnalysis(ad)),
-    nextCursor,
-    source: "demo",
-  };
+  return await liveSearch(env, query, cursor);
 }
 
 async function liveSearch(
@@ -404,11 +370,8 @@ function matchesAd(
       ? advertiserQueryMatches(ad, filters)
       : searchable.includes(query);
 
-  // Demo ads are sample data — they should demo for every visitor country,
-  // not only the market they were authored in.
   const countryMatch =
     filters.country === "all" ||
-    ad.source === "demo" ||
     ad.countries.includes(filters.country);
   const platformMatch =
     filters.platform === "all" || ad.platforms.includes(filters.platform);

@@ -84,6 +84,7 @@ interface MockOptions {
   env?: Record<string, unknown>;
   entry?: ReturnType<typeof cacheEntry> | null;
   provider?: string;
+  unconfiguredProvider?: boolean;
   rateLimitResponse?: Response | null;
   onCacheRead?: () => void;
 }
@@ -109,7 +110,14 @@ function installBrandPageMocks(options: MockOptions = {}) {
     getDiscoveryCacheEntry,
   }));
   vi.doMock("~/lib/ad-source.server", () => ({
-    resolveCommercialDiscoveryProvider: vi.fn(() => options.provider ?? "meta_library_browser"),
+    resolveCommercialDiscoveryProvider: vi.fn(() => {
+      if (options.unconfiguredProvider) {
+        throw new Error(
+          "No commercial discovery provider is configured. Set BROWSER/BROWSERLESS_TOKEN for meta_library_browser, or provide a customer Meta Ad Library token for meta_api.",
+        );
+      }
+      return options.provider ?? "meta_library_browser";
+    }),
     searchAdsViaSourceResolver,
     hasFreshDiscoveryCacheEntry,
   }));
@@ -454,8 +462,12 @@ describe("/ads/:domain loader", () => {
     expect(result.noindex).toBe(true);
   });
 
-  it("renders the honest shell when only demo discovery is configured", async () => {
-    const mocks = installBrandPageMocks({ entry: cacheEntry(), provider: "demo" });
+  it("renders the honest shell when no discovery provider is configured", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry(),
+      provider: undefined,
+      unconfiguredProvider: true,
+    });
 
     const result = await runLoader("nykaa.com", mocks.env);
 

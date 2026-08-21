@@ -265,9 +265,6 @@ function formatDiscoveryStatus(status: string): {
   if (status === "healthy") {
     return { label: "Live tracking ready", tone: "quiet" };
   }
-  if (status === "demo") {
-    return { label: "Needs setup", tone: "bad" };
-  }
   if (status === "degraded") {
     return { label: "Needs attention", tone: "bad" };
   }

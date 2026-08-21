@@ -141,7 +141,7 @@ export async function applySearchV2PostFilter(
     includeUnverified,
   });
   const matchedIds = new Set(scopedMatches.map((entry) => entry.ad.metaAdId));
-  const providerLabel = result.source === "demo" ? "sample source" : "Meta source";
+  const providerLabel = "Meta source";
   const providerCandidates: DomainMatchedAd[] = includeUnverified
     ? result.ads
         .filter((ad) => !matchedIds.has(ad.metaAdId))

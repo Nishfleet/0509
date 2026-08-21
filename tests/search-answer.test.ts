@@ -635,17 +635,15 @@ describe("buildSearchAnswer market scope", () => {
     );
   });
 
-  it("keeps demo verdicts unscoped even when a country filter is set", () => {
-    // Demo/sample matches deliberately ignore the country filter (the
-    // resolver matches every demo ad against every market), so labelling
-    // a demo verdict "in United States" for India-authored samples would
-    // falsely imply country-specific evidence.
+  it("scopes verdict titles to the searched country", () => {
+    // The demo/sample source is gone, so every result is filtered by the
+    // searched country and the verdict title may safely name the market.
     const answer = buildSearchAnswer({
       result: response({
         ads: [ad()],
         verifiedCount: 1,
-        source: "demo",
-        provider: "demo",
+        source: "meta_api",
+        provider: "meta_api",
       }),
       displayDomain: "boat-lifestyle.com",
       isDomainSearch: true,
@@ -653,6 +651,6 @@ describe("buildSearchAnswer market scope", () => {
       country: "United States",
     });
 
-    expect(answer.title).toBe("1 verified ad linked to boat-lifestyle.com");
+    expect(answer.title).toBe("1 verified ad linked to boat-lifestyle.com in United States");
   });
 });

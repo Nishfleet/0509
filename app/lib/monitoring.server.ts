@@ -2307,9 +2307,17 @@ export async function runWatchlist(
     if (!options.orchestrationToken && !alertDeliveryFailed) {
       await touchWatchlistScanned(env, watchlist.id);
     }
-    const commercialProvider = resolveCommercialDiscoveryProvider(env, {
-      customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
-    });
+    const commercialProvider = (() => {
+      try {
+        return resolveCommercialDiscoveryProvider(env, {
+          customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+        });
+      } catch {
+        // Status logging is telemetry after a completed scan; an unconfigured
+        // provider must not turn an otherwise-successful scan into an error.
+        return "meta_api";
+      }
+    })();
     await logMetaIntegrationStatus(env, {
       status:
         alertDeliveryFailed
@@ -2317,8 +2325,8 @@ export async function runWatchlist(
           : commercialProvider === "meta_library_browser"
           ? "healthy"
           : commercialProvider === "meta_api"
-            ? "degraded"
-            : "demo",
+          ? "degraded"
+          : "disabled",
       summary:
         alertDeliveryFailed
           ? "Watchlist evidence completed, but customer alert delivery did not reach a confirmed successful outcome."
@@ -2326,7 +2334,7 @@ export async function runWatchlist(
           ? "Scheduled watchlist scan completed through the commercial discovery resolver."
           : commercialProvider === "meta_api"
             ? "Scheduled watchlist scan completed with the diagnostic Meta API path."
-            : "Watchlist scan completed in explicit demo mode because no live commercial provider is configured.",
+            : "Watchlist scan completed without a live commercial provider configured.",
       metadata: {
         watchlistId: watchlist.id,
         runId,

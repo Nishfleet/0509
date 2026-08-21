@@ -179,7 +179,7 @@ export function normalizeBrandPageDomain(param: string | undefined): BrandPageDo
  * country first, then "all", then "United States" — and return the first
  * usable public snapshot. Cache-only: zero provider calls, ≤ 4 D1 reads.
  *
- * Honesty rules: demo-sourced entries are never returned (a public page must
+ * Honesty rules: sample-sourced entries are never returned (a public page must
  * not present sample data as a brand's real ads), scheduled-scan entries are
  * skipped (interactive public_search cache only), and entries older than 30
  * days are treated as "not checked recently".
@@ -189,8 +189,8 @@ export async function loadBrandPageCacheSnapshot(
   input: { domain: string; visitorCountry: string; now?: Date },
 ): Promise<BrandPageCacheSnapshot | null> {
   const provider = resolveCommercialDiscoveryProvider(env);
-  if (provider === "demo" || !env.DB) {
-    // Unconfigured/demo environments have no real public cache to show.
+  if (!env.DB) {
+    // Unconfigured environments have no real public cache to show.
     return null;
   }
 
@@ -697,11 +697,17 @@ function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot 
 
   const payload = entry.payload;
   // Never present demo/sample data as a brand's real ads on a public page.
-  if (payload.source === "demo" || payload.provider === "demo") {
+  // Legacy rows may still carry a demo source even though new captures cannot.
+  if (
+    (payload.source as string) === "demo" ||
+    (payload.provider as string) === "demo"
+  ) {
     return null;
   }
   const ads = Array.isArray(payload.ads)
-    ? payload.ads.filter((ad) => ad && ad.source !== "demo")
+    ? payload.ads.filter(
+        (ad) => ad && (ad as { source?: string }).source !== "demo",
+      )
     : [];
   if (ads.length === 0) {
     return null;

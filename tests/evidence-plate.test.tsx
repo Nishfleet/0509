@@ -68,19 +68,19 @@ describe("EvidencePlate", () => {
     expect(markup).toContain("is-missing");
   });
 
-  it("labels sample data inline, adjacent to the plate itself (brief §8.3)", () => {
+  it("labels externally-filed evidence inline, adjacent to the plate itself (brief §8.3)", () => {
     const markup = renderToStaticMarkup(
       <EvidencePlate
         number={1}
         title="OFFER PAGE"
-        verification="DEMO DATA — SAMPLE RESULTS"
+        verification="EXTERNAL EVIDENCE"
         capturedAt="2026-07-27T06:05:00.000Z"
-        captureLines={["Sample offer"]}
-        facts={[{ key: "Source", value: "Sample" }]}
+        captureLines={["Filed offer"]}
+        facts={[{ key: "Source", value: "Filed" }]}
       />,
     );
 
-    expect(markup).toContain("DEMO DATA — SAMPLE RESULTS");
+    expect(markup).toContain("EXTERNAL EVIDENCE");
   });
 
   /**
