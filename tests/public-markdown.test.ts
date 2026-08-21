@@ -67,6 +67,14 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Email delivery is in product scope for eligible accounts");
     expect(PUBLIC_MARKDOWN).toContain("Public Markdown separates local capability, configured paths, and live proof");
     expect(PUBLIC_MARKDOWN).toContain("public search is live at /search with real Meta Ad Library checks");
+    // Cross-platform ad-library aggregators exist (adlibrary.com and similar);
+    // both public markdown surfaces must state the Meta-only ad scope plainly
+    // so no buyer or AI answer can over-claim multi-platform coverage.
+    expect(PUBLIC_MARKDOWN).toContain("Ad monitoring covers the Meta Ad Library only");
+    expect(PUBLIC_MARKDOWN).toContain("other platforms’ ad libraries are not aggregated");
+    expect(LLMS_TEXT).toContain("Ad monitoring reads the Meta Ad Library only");
+    expect(LLMS_TEXT).toContain("does not aggregate other platforms’ ad libraries");
+    expect(LLMS_TEXT).toContain("not ad-library breadth");
     expect(PUBLIC_MARKDOWN).not.toMatch(/Email delivery is available/i);
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric evidence, creative timeline, and landing-page history");
     expect(PUBLIC_MARKDOWN).toContain("Manual external evidence links can store user-supplied visible spend, impression, and reach values");

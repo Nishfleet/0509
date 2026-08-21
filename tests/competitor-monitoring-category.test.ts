@@ -199,6 +199,34 @@ describe("competitor monitoring category page", () => {
     expect(source).not.toMatch(/unbeatable/i);
   });
 
+  it("positions the Meta-only ad scope against multi-platform ad-library aggregators", async () => {
+    const { categoryFaqEntries } = await import("~/routes/competitor-monitoring");
+    const { default: CompetitorMonitoringCategoryRoute } = await import(
+      "~/routes/competitor-monitoring"
+    );
+    const source = readFileSync(routePath, "utf8");
+    const markup = renderToStaticMarkup(createElement(CompetitorMonitoringCategoryRoute));
+
+    // Cross-platform aggregators (adlibrary.com and similar) search many
+    // platforms' ad libraries at once; this page must state the Meta-only
+    // scope plainly instead of leaving buyers to assume broad coverage.
+    expect(source).toContain("Coverage is the Meta Ad Library only");
+    expect(source).toContain("platforms&rsquo; ad libraries are not included");
+
+    // The ad-spy FAQ answer names the multi-platform category explicitly.
+    const spyAnswer = categoryFaqEntries.find(
+      (entry) => entry.question === "How is this different from ad-spy tools?",
+    )!.answer;
+    expect(spyAnswer).toContain("many platforms’ ad libraries at once");
+    expect(spyAnswer).toContain("Meta Ad Library only");
+    expect(markup).toContain("Meta Ad Library only");
+
+    // Honest scoping, not superiority: no named-vendor attacks or unsupported
+    // breadth claims, and no promise of other platforms coming.
+    expect(source).not.toMatch(/better than|unbeatable|coming soon/i);
+    expect(source).not.toContain("adlibrary.com");
+  });
+
   it("is included in the public sitemap", async () => {
     const { publicSeoFileForPathname } = await import("~/lib/seo");
     const sitemap = publicSeoFileForPathname("/sitemap.xml");

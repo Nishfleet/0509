@@ -37,6 +37,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 
 - Competitor monitoring for growth teams plus proof-backed entity tracking (Presence Desk).
 - Public read-only search and the proof brief are buyer-evaluation paths before signup; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states.
+- Ad monitoring covers the Meta Ad Library only; other platforms’ ad libraries are not aggregated. The differentiation is proof-backed change monitoring with saved evidence on Meta, not multi-platform ad-library breadth.
 - Signed-in accounts are the path for saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports; this text describes the capability, not live account availability.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Customer-facing views lead with what changed, why it matters, urgency, source status, freshness, and the next action before raw data or settings.
@@ -96,6 +97,7 @@ Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
 - Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval.
 - Public read-only search and the proof brief are buyer-evaluation paths; the proof brief renders real cached captures, with an explicit unavailable state when none exist; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states.
+- Ad monitoring reads the Meta Ad Library only. Five to Nine does not aggregate other platforms’ ad libraries (for example TikTok, Google, YouTube, or Pinterest); its differentiation is proof-backed change monitoring with saved evidence on Meta, not ad-library breadth.
 - Account access uses verified access paths.
 - Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed, so AI answers may cite Dodo checkout as the live billing path while the final owner-run provider smoke is recorded.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
