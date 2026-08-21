@@ -46,7 +46,10 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("verified access paths");
     expect(PUBLIC_MARKDOWN).toContain("visible plan caps");
     expect(PUBLIC_MARKDOWN).toContain("Public read-only search and the proof brief are buyer-evaluation paths before signup");
+    expect(PUBLIC_MARKDOWN).toContain("public search is live at /search");
     expect(PUBLIC_MARKDOWN).toContain("The public proof brief renders real cached captures");
+    expect(PUBLIC_MARKDOWN).toContain("Dodo checkout routes are deployed");
+    expect(PUBLIC_MARKDOWN).toContain("live pricing canary passed");
     expect(PUBLIC_MARKDOWN).toContain("exports support CSV and JSON export");
     expect(PUBLIC_MARKDOWN).toContain("Customer-facing views lead with what changed");
     expect(PUBLIC_MARKDOWN).toContain("Watchlist and digest CSV exports include decision fields");
@@ -63,8 +66,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("summarizes customer-facing surfaces without exposing private account activity");
     expect(PUBLIC_MARKDOWN).toContain("Email delivery is in product scope for eligible accounts");
     expect(PUBLIC_MARKDOWN).toContain("Public Markdown separates local capability, configured paths, and live proof");
-    expect(PUBLIC_MARKDOWN).not.toMatch(/Public read-only search[^.\n]*(?:is|are) available/i);
-    expect(PUBLIC_MARKDOWN).not.toContain("Public live search");
+    expect(PUBLIC_MARKDOWN).toContain("public search is live at /search with real Meta Ad Library checks");
     expect(PUBLIC_MARKDOWN).not.toMatch(/Email delivery is available/i);
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric evidence, creative timeline, and landing-page history");
     expect(PUBLIC_MARKDOWN).toContain("Manual external evidence links can store user-supplied visible spend, impression, and reach values");
@@ -95,6 +97,9 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("Watchlist and digest CSV exports include priority");
     expect(LLMS_TEXT).toContain("Public read-only search and the proof brief are buyer-evaluation paths");
     expect(LLMS_TEXT).toContain("the proof brief renders real cached captures");
+    expect(LLMS_TEXT).toContain("public search is live at /search");
+    expect(LLMS_TEXT).toContain("Dodo checkout routes are deployed");
+    expect(LLMS_TEXT).toContain("live pricing canary passed");
     expect(LLMS_TEXT).toContain("Public read-only analysis preview");
     expect(LLMS_TEXT).toContain("Signed-in saved analysis");
     expect(LLMS_TEXT).toContain("user-supplied metric context");
@@ -115,7 +120,6 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).not.toContain("Slack delivery can be connected from Integrations");
     expect(LLMS_TEXT).toContain("summarizes customer-facing surfaces without exposing private account activity");
     expect(LLMS_TEXT).toContain("Email delivery is in product scope for eligible accounts");
-    expect(LLMS_TEXT).not.toMatch(/Public read-only search[^.\n]*(?:is|are) available/i);
     expect(LLMS_TEXT).not.toMatch(/Email delivery is available/i);
     expect(LLMS_TEXT).not.toContain("WhatsApp delivery is not launch-scoped yet");
     expect(LLMS_TEXT).not.toContain("/api/mcp");
@@ -143,9 +147,14 @@ describe("public markdown", () => {
   it("labels configured capability separately from live proof", () => {
     const markdown = `${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`;
 
-    expect(markdown).toContain("this text does not claim live checkout or provider proof");
+    // Dodo checkout is the configured live billing path (deployed routes +
+    // passed pricing canary) with the final owner-run provider smoke still
+    // recorded, so it is citable as live without claiming a frozen closeout.
+    expect(markdown).toContain("Dodo checkout routes are deployed");
+    expect(markdown).toContain("live pricing canary passed");
+    expect(markdown).toContain("final owner-run provider smoke is recorded");
     expect(markdown).toContain("this text does not claim live export success");
-    expect(markdown).not.toMatch(/\b(?:saved watchlists?|digests?|reports?|share links?|exports?|checkout)\b[^.\n]{0,70}\b(?:is|are)\s+(?:live|available)\b/i);
+    expect(markdown).not.toMatch(/\b(?:saved watchlists?|digests?|reports?|share links?|exports?)\b[^.\n]{0,70}\b(?:is|are)\s+(?:live|available)\b/i);
     expect(markdown).not.toMatch(/\bemail delivery\b[^.\n]{0,50}\b(?:is|are)\s+(?:live|available)\b/i);
   });
 });
