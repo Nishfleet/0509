@@ -837,38 +837,57 @@ describe("captureLandingPageSnapshot", () => {
 
     expect(snapshot).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
   });
 
   it("releases fetch timeout timers on non-OK fetch responses without rendered fallback", async () => {
-    // Only fake setTimeout/clearTimeout so crypto.subtle.digest (used by the
-    // telemetry idempotency hash) and Response body readers can still resolve
-    // via the real event loop. The bounded retry's sleep(250) uses setTimeout,
-    // which is the only timer we need to control here.
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // Verify timer hygiene without fake timers. Faking only setTimeout/
+    // clearTimeout creates a race between real async work (DNS resolution,
+    // crypto.subtle.digest, mock fetch) and the fake clock's retry sleep:
+    // under CI load the sleep(250) timer can be scheduled after a one-shot
+    // clock advance has already passed, so it never fires and the test hangs.
+    // Instead, spy on setTimeout/clearTimeout to track outstanding timers and
+    // assert they are all released after the capture completes. The retry
+    // sleep (250ms) runs on the real clock, so the test is fully deterministic.
+    // vi.useRealTimers() is a defensive reset — the preceding redirect-timer
+    // test now cleans up its own fake timers, but afterEach's
+    // vi.restoreAllMocks() does not undo vi.useFakeTimers(), so be explicit.
+    vi.useRealTimers();
+    const pendingTimers = new Set<unknown>();
+    const originalSetTimeout = globalThis.setTimeout.bind(globalThis) as typeof setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout.bind(globalThis) as typeof clearTimeout;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(
+      ((handler: TimerHandler, timeout?: number, ...rest: unknown[]) => {
+        let id: unknown;
+        const wrapped: TimerHandler = () => {
+          pendingTimers.delete(id);
+          if (typeof handler === "function") (handler as () => void)();
+        };
+        id = originalSetTimeout(wrapped, timeout, ...rest);
+        pendingTimers.add(id);
+        return id;
+      }) as unknown as typeof setTimeout,
+    );
+    vi.spyOn(globalThis, "clearTimeout").mockImplementation(
+      ((id?: unknown) => {
+        if (id !== undefined) pendingTimers.delete(id);
+        originalClearTimeout(id as ReturnType<typeof setTimeout>);
+      }) as unknown as typeof clearTimeout,
+    );
+
     mockFetchWithDns(
       vi.fn(async () => new Response("blocked", { status: 500 })) as never,
     );
 
-    const snapshotPromise = captureLandingPageSnapshot(
+    const snapshot = await captureLandingPageSnapshot(
       {},
       "https://example.com/glow",
       { allowRenderedFallback: false },
     );
-    // Let the initial async work (DNS resolution, telemetry hash, first fetch
-    // attempt) complete by yielding to the real event loop. setImmediate is
-    // not faked by our config, so I/O callbacks and microtasks drain.
-    for (let i = 0; i < 20; i += 1) {
-      await new Promise((resolve) => setImmediate(resolve));
-    }
-    // The transient 500 is retried once (bounded retry); advance the fake
-    // clock through the retry delay so the second attempt can run.
-    await vi.advanceTimersByTimeAsync(1_000);
-
-    const snapshot = await snapshotPromise;
 
     expect(snapshot).toBeNull();
-    expect(vi.getTimerCount()).toBe(0);
-    vi.useRealTimers();
+    // All fetch-timeout and retry-sleep timers must be released or fired.
+    expect(pendingTimers.size).toBe(0);
   });
 
   it("reports a stable reason code when a blocked landing page cannot be captured", async () => {
