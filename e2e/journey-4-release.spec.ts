@@ -159,7 +159,13 @@ async function expectLiveRegion(page: Page, message: string) {
         .filter({ hasText: message }),
     )
     .first();
-  await expect(region).toBeVisible({ timeout: 15_000 });
+  // The share/report intents round-trip through a server action before the
+  // feedback region renders; on the shared vps-verify runner that can exceed
+  // 15s under fleet load (run 32471530295, 768px share flake) even though the
+  // region persists once rendered. 30s matches the local-release per-test
+  // budget philosophy in playwright.config.ts; the assertion itself is
+  // unchanged and retries stay 0.
+  await expect(region).toBeVisible({ timeout: 30_000 });
   await expect(region).toHaveAttribute("aria-live", /^(polite|assertive)$/);
 }
 
