@@ -64,6 +64,10 @@ export interface AppEnv {
   DODO_PAYMENTS_API_KEY?: string;
   EMAIL?: EmailSendingBinding;
   EMAIL_FROM_EMAIL?: string;
+  /** Full-Site Watch: sitemap discovery + bounded crawl + per-class cadence
+   * for competitor websites. Off by default; when off, zero behavior change,
+   * zero site-scan writes, zero events. */
+  FULLSITE_WATCH_ENABLED?: string;
   /** Local release-proof guard. Never configure this in preview or production. */
   E2E_PROVIDER_NETWORK_DENY?: string;
   E2E_TEST_MODE?: string;
@@ -170,6 +174,11 @@ function parseEnvFlag(value: string | undefined) {
   }
 
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+/** Full-Site Watch gate. When false, no site scans run and nothing writes. */
+export function isFullSiteWatchEnabled(env: AppEnv) {
+  return parseEnvFlag(env.FULLSITE_WATCH_ENABLED);
 }
 
 export function emailFromAddress(env: AppEnv) {
