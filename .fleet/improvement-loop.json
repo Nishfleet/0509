@@ -1,0 +1,17 @@
+{
+  "items": {
+    "5addbd07cc": {
+      "at": "2026-08-21T09:14:36.581Z",
+      "receipt": {
+        "commit": "e36c32b7",
+        "note": "already resolved on main by PR #844 (commit e36c32b7): the GitHub Actions uptime cron was deliberately replaced by the VPS 0509-liveness systemd timer (true 5-minute cadence, active and green live); scheduled Actions runs are intentionally NOT restored because the queue itself was the liveness blind spot",
+        "pr": 844,
+        "report": ".lane/reports/0509-lane9-uptime-schedule-restore-20260821.md"
+      },
+      "reverify_count": 0,
+      "reverify_history": [],
+      "status": "resolved"
+    }
+  },
+  "version": 1
+}
