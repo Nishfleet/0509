@@ -22,6 +22,21 @@ export default function ChangelogRoute() {
       title="What changed in Five to Nine."
       intro="A short record of customer-visible changes. We keep planned work and unverified provider actions out until they are proven."
     >
+      <PublicDocBlock title="2026-08-22">
+        <ul className="f9-doc-list">
+          <li>Full-site watch discovery now finds and classifies pages across a competitor&apos;s whole site — not just the landing page — with a bounded crawl and per-page-type cadence, so you see changes on pricing pages, product pages, and blog posts alongside the ads you already tracked.</li>
+          <li>Landing-page change detection now recognises Google Ad Manager ad-slot markers, so ad placements on publisher sites are caught as real changes instead of ignored.</li>
+          <li>Watchlist monitoring now fires on real CTA and price copy changes even when the surrounding HTML churns, so pure template swaps no longer drown the signal.</li>
+          <li>Ad Library captures that carry only a calendar date now render as that date — never as a midnight 12:00 AM timestamp — on brand pages, in the overview, and in digests.</li>
+          <li>The homepage hero fits the first viewport without scrolling, and the proof brief loads with the real capture count visible immediately.</li>
+          <li>Public search selections on the landing page now capture landing evidence anonymously, so the proof brief reflects what visitors actually looked at.</li>
+          <li>Brief emails now include a retention frame on all-quiet and triage digests, and terminal first-scan runs are labelled honestly instead of headlined as &quot;queued.&quot;</li>
+          <li>The sitemap now carries lastmod, changefreq, and priority on every entry, and dynamic brand-page entries carry a real lastmod from their last capture — so crawlers get an honest freshness signal instead of nothing.</li>
+          <li>The llms.txt file now cites live public search and live Dodo checkout with a page link index, so AI answer engines get citable URLs instead of prose-only claims.</li>
+          <li>Public copy now states the Meta-only ad scope plainly alongside multi-platform ad-library aggregators, so the honest coverage boundary is visible before signup.</li>
+        </ul>
+      </PublicDocBlock>
+
       <PublicDocBlock title="2026-08-10">
         <ul className="f9-doc-list">
           <li>The signed-in workspace was rebuilt in the landing page&apos;s visual language, with calmer layouts and one consistent style across Competitors, Overview, Search, Collections, Reports, Briefs, Presence, notifications, shares, and account settings.</li>
