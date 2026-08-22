@@ -33,7 +33,12 @@ env:
 
 jobs:
   classify:
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    # 2026-08-22 (Nish): GitHub-hosted. This job only classifies a PR and
+    # labels it - its only secret is the automatic per-run GITHUB_TOKEN, which
+    # is identical on a hosted runner. It is NOT a required context. Measured
+    # the same day it held a VPS runner for 7m33s on every PR, which was a real
+    # contributor to 0509 CI jobs queueing a median of 103 minutes.
+    runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
     steps:
       - name: Decide whether this PR earns a review
