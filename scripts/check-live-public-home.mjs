@@ -72,6 +72,11 @@ const staleSignals = [
   "decision scan",
   "Start with Scout",
   "Proof-first monitoring",
+  // The 2026-08-20 live defect class: the public proof brief glued the
+  // website to the library phrase ("12 public Meta ads link to nykaa.comin
+  // the Meta Ad Library."). The fix is in main (PR #806) but the canary
+  // must fail any deploy that would serve the glued-domain string again.
+  "nykaa.comin",
 ];
 const requiredSignals = [
   "Know when competitors change the offer.",

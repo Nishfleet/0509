@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -130,5 +131,36 @@ describe("market signal snapshot", () => {
   it("classifies an already-classified message unchanged", () => {
     const classified = marketSignalFailureMessage("market_signal_auth_required: already explained");
     expect(classified).toBe("market_signal_auth_required: already explained");
+  });
+
+  it("does not classify a CLOUDFLARE_API_TOKEN mention in wrangler 9106 as missing-token", () => {
+    const message = marketSignalFailureMessage(
+      "Failed to automatically retrieve account IDs for the logged in user.\n" +
+        "You may have incorrect permissions on your API token, or an environment variable such as CLOUDFLARE_API_TOKEN, CLOUDFLARE_API_KEY, or CLOUDFLARE_EMAIL may be set to an invalid value.",
+    );
+    expect(message).toMatch(/^market_signal_snapshot_failed:/);
+    expect(message).toContain("incorrect permissions");
+    expect(message).not.toContain("market_signal_auth_required");
+  });
+
+  it("does not classify missing-account-id non-interactive text as missing-token", () => {
+    const message = marketSignalFailureMessage(
+      "In a non-interactive environment, it is mandatory to specify an account ID, either by assigning its value to CLOUDFLARE_ACCOUNT_ID, or as `account_id` in your wrangler.jsonc file.",
+    );
+    expect(message).toMatch(/^market_signal_snapshot_failed:/);
+    expect(message).not.toContain("market_signal_auth_required");
+  });
+
+  it("classifies wrangler no-credentials-non-interactive body as auth-required", () => {
+    const message = marketSignalFailureMessage(
+      "Could not authenticate because no credentials were found and the environment is non-interactive. Set a CLOUDFLARE_API_TOKEN environment variable or run `wrangler login` in an interactive terminal first.",
+    );
+    expect(message).toContain("market_signal_auth_required");
+  });
+
+  it("prints raw command output before classifying a wrangler failure", () => {
+    const source = readFileSync("scripts/market-signal-snapshot.mjs", "utf8");
+    expect(source).toContain("market_signal_command_raw:");
+    expect(source).toContain("failure.stderr");
   });
 });
