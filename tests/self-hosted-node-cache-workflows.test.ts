@@ -92,16 +92,14 @@ describe("runner-routed setup-node cache workflows", () => {
     );
     expect(setupNodeSteps).toHaveLength(8);
     for (const { workflowPath, jobName, step } of setupNodeSteps) {
-      const preservesNoLockfileFallback =
-        workflowPath === ".github/workflows/ci.yml" &&
-        jobName === "codex-node-checks";
+      // The no-lockfile fallback variant belonged to ci.yml, which is now in
+      // hostedRoutedWorkflows - so every workflow left in THIS list uses the
+      // plain expressions. (Keeping the old ternary here would be dead code:
+      // tsc narrows workflowPath to the remaining literals and rejects the
+      // comparison outright with TS2367.)
       expect(step.with, `${workflowPath}:${jobName}`).toMatchObject({
-        cache: preservesNoLockfileFallback
-          ? hostedNpmCacheWithLockfile
-          : hostedNpmCache,
-        "package-manager-cache": preservesNoLockfileFallback
-          ? hostedPackageManagerCacheWithLockfile
-          : hostedPackageManagerCache,
+        cache: hostedNpmCache,
+        "package-manager-cache": hostedPackageManagerCache,
       });
     }
   });
@@ -124,10 +122,15 @@ describe("runner-routed setup-node cache workflows", () => {
         );
         expect(setupNode, `${workflowPath}:${jobName}`).toHaveLength(1);
         // On a hosted runner these expressions evaluate TRUE, which is the
-        // whole point: the Actions cache switches on by itself.
-        expect(setupNode[0]?.with?.cache, `${workflowPath}:${jobName}`).toMatch(
-          /runner\.environment == 'github-hosted'/,
-        );
+        // whole point: the Actions cache switches on by itself. ci.yml keeps
+        // its stricter no-lockfile-fallback variant.
+        const withLockfile = workflowPath === ".github/workflows/ci.yml";
+        expect(setupNode[0]?.with, `${workflowPath}:${jobName}`).toMatchObject({
+          cache: withLockfile ? hostedNpmCacheWithLockfile : hostedNpmCache,
+          "package-manager-cache": withLockfile
+            ? hostedPackageManagerCacheWithLockfile
+            : hostedPackageManagerCache,
+        });
       }
     }
   });
