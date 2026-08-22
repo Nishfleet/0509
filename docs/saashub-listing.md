@@ -1,22 +1,16 @@
 # SaaSHub listing — Five to Nine (manual submission prep)
 
-**Status:** PREPARED — copy and submission facts are ready; the actual SaaSHub
-submission is an owner action (requires a SaaSHub account and a
-`@0509.io` mailbox to verify the product). Prepared 2026-08-10 from lane 1
-scout item `[traction]` (risk: green, unreviewed-by-grok).
+**Status:** LIVE — product page approved at `https://www.saashub.com/five-to-nine` (confirmed 2026-08-22). This pointer document remains superseded by `docs/saashub-listing-2026-08-11.md`.
 
 **Target:** https://www.saashub.com — submit at https://www.saashub.com/services/submit
 
 ## Submission status (recorded 2026-08-11)
 
-**NEEDS_NISH_STEP — not submitted.** Recorded 2026-08-11. This document is
+**LIVE — submitted and approved.** Recorded 2026-08-11; confirmed live on
+2026-08-22 at `https://www.saashub.com/five-to-nine`. This document remains
 superseded by the canonical `docs/saashub-listing-2026-08-11.md` (see its
 [Submission status section](saashub-listing-2026-08-11.md) for the full
-receipt); in brief: the `support@0509.io` verification mailbox was proven
-working on 2026-08-11 (live Gmail → Agentic Inbox delivery test), and the
-SaaSHub submission page is open in Nish's logged-in browser with
-`https://0509.io` filled — nothing has been submitted. Exact next step:
-Nish confirms the venue terms, then the browser run can continue.
+receipt and live-page capture).
 
 ---
 
