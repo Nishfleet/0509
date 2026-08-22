@@ -229,3 +229,155 @@ describe("selection-enrichment plan-tier propagation", () => {
     );
   });
 });
+
+describe("anonymous selection landing capture", () => {
+  const liveAd: AdRecord = {
+    ...baseAd,
+    landingPageUrl: "https://example.com/offer",
+    landingPage: null,
+    source: "meta",
+  };
+  const capturedSnapshot = {
+    rawHeadline: "Offer headline",
+    ctaText: "Buy now",
+    priceText: "$9",
+    formPresent: false,
+    captureMethod: "landing_page_fetch" as const,
+    capturedAt: "2026-08-22T00:00:00.000Z",
+  };
+
+  it("runs fetch-only landing capture without upserting or OCR", async () => {
+    const captureCreativeText = vi.fn();
+    const captureLandingPageSnapshot = vi.fn().mockResolvedValue(capturedSnapshot);
+    const upsertAd = vi.fn();
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildLandingPageAnalysisFields: vi.fn(() => []),
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({ captureCreativeText }));
+    vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: AdRecord[]) => ads),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      upsertAd,
+    }));
+
+    const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+    const result = await prepareSearchResultSelection(
+      { DB: {} } as never,
+      {
+        ads: [liveAd],
+        nextCursor: null,
+        source: "meta",
+      },
+      "meta-boat-1",
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
+    );
+
+    expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://example.com/offer",
+      {
+        persistArtifacts: false,
+        routeContext: "selection_enrichment",
+        planTier: null,
+        allowRenderedFallback: false,
+      },
+    );
+    expect(upsertAd).not.toHaveBeenCalled();
+    expect(captureCreativeText).not.toHaveBeenCalled();
+    expect(result.selectedAd?.landingPage).toEqual(capturedSnapshot);
+  });
+
+  it("does not fetch demo landing URLs", async () => {
+    const captureLandingPageSnapshot = vi.fn();
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildLandingPageAnalysisFields: vi.fn(() => []),
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn(),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
+
+    const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+    await prepareSearchResultSelection(
+      { DB: {} } as never,
+      {
+        ads: [{ ...liveAd, source: "demo" }],
+        nextCursor: null,
+        source: "demo",
+      },
+      "meta-boat-1",
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
+    );
+
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("does not capture when the live ad has no landing-page URL", async () => {
+    const captureLandingPageSnapshot = vi.fn();
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildLandingPageAnalysisFields: vi.fn(() => []),
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn(),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
+
+    const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+    await prepareSearchResultSelection(
+      { DB: {} } as never,
+      {
+        ads: [{ ...liveAd, landingPageUrl: null }],
+        nextCursor: null,
+        source: "meta",
+      },
+      "meta-boat-1",
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
+    );
+
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("still runs creative OCR and omits rendered-fallback:false when hydratePersisted is omitted", async () => {
+    const captureCreativeText = vi.fn().mockResolvedValue({
+      text: "Fresh OCR",
+      captureMethod: "ad_snapshot_fetch",
+      metadata: { source: "fresh" },
+    });
+    const captureLandingPageSnapshot = vi.fn().mockResolvedValue(null);
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildLandingPageAnalysisFields: vi.fn(() => []),
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({ captureCreativeText }));
+    vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
+
+    const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+    await prepareSearchResultSelection(
+      {} as never,
+      {
+        ads: [liveAd],
+        nextCursor: null,
+        source: "meta",
+      },
+      "meta-boat-1",
+    );
+
+    expect(captureCreativeText).toHaveBeenCalled();
+    expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://example.com/offer",
+      {
+        persistArtifacts: false,
+        routeContext: "selection_enrichment",
+        planTier: null,
+      },
+    );
+    expect(captureLandingPageSnapshot.mock.calls[0]?.[2]).not.toHaveProperty(
+      "allowRenderedFallback",
+    );
+  });
+});
