@@ -635,6 +635,25 @@ describe("public search submission settle", () => {
     });
     expect(revalidatorRef.revalidate).toHaveBeenCalledTimes(1);
   });
+
+  it("shows honest capture-gap copy when a selected live ad has a URL but no snapshot", async () => {
+    loaderData = {
+      ...resultsLoaderData,
+      selectedAd: resultAd,
+      selectionEnrichmentPending: false,
+    };
+    locationObj = { pathname: "/search", search: TARGET_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+
+    const markup = await renderMarkup();
+    const text = markup.replace(/&#x27;/g, "'");
+
+    expect(text).toContain("Couldn't capture this page");
+    expect(text).toContain("Couldn't check this page");
+    expect(text).toContain("Unavailable");
+    expect(text).not.toContain("Headline not captured yet");
+    expect(text).not.toContain("Not checked yet");
+  });
 });
 
 describe("refine disclosure state (BL-031 round 3)", () => {

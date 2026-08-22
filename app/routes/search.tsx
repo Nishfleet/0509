@@ -63,7 +63,10 @@ import {
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
 import { scrubBrokenUnicode } from "~/lib/text-safe";
-import { PUBLIC_SEARCH_RATE_LIMIT_MESSAGE } from "~/lib/customer-route-error";
+import {
+  PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+  PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE,
+} from "~/lib/customer-route-error";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
@@ -102,6 +105,8 @@ import {
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
   formatSearchSourceLabel,
+  formatSelectedLandingFactValue,
+  formatSelectedLandingHeadline,
   hasRecentSearchDelay,
   isDelayedDiscoveryStatus,
   mergeSearchAccumulationState,
@@ -321,10 +326,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // Selecting an ad from already-rendered results reruns this loader with the
   // same query; when the discovery cache can serve that query, the click must
   // not consume the fresh-search rate limit. Fresh searches always charge.
-  // Anonymous selections skip entirely (enrichSelected stays false below, so
-  // there is no provider spend); signed-in selections still run usage-billed
-  // landing-page enrichment, so they consume a dedicated, more generous
-  // search-selection bucket instead of going unmetered.
+  // Anonymous explicit selections run fetch-only landing capture and consume
+  // public-search-selection; signed-in warm selections still use search-selection.
   const selectionServedFromCache =
     Boolean(url.searchParams.get("selected")) &&
     Boolean(parsed.filters.query) &&
@@ -368,6 +371,33 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         JSON.stringify({
           error: "rate_limited",
           message: PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+        }),
+        {
+          status: 429,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "no-store",
+            ...(retryAfterSeconds ? { "retry-after": retryAfterSeconds } : {}),
+          },
+        },
+      );
+    }
+  }
+
+  if (!session && selectionServedFromCache) {
+    const { enforcePublicSearchSelectionRateLimit } =
+      await import("~/lib/rate-limit.server");
+    const selectionLimit = await enforcePublicSearchSelectionRateLimit(
+      request,
+      env,
+      cloudflare?.ctx,
+    );
+    if (selectionLimit) {
+      const retryAfterSeconds = selectionLimit.headers.get("retry-after");
+      throw new Response(
+        JSON.stringify({
+          error: "rate_limited",
+          message: PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE,
         }),
         {
           status: 429,
@@ -563,6 +593,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
 
   const waitUntil = cloudflare?.ctx?.waitUntil?.bind(cloudflare?.ctx);
+  const hasExplicitSelection = Boolean(url.searchParams.get("selected"));
+  const enrichSelected =
+    !providerDeny.enabled && (Boolean(session) || hasExplicitSelection);
   const {
     result: hydratedResult,
     selectedAd,
@@ -572,11 +605,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     searchExecution.result,
     url.searchParams.get("selected"),
     {
-      enrichSelected: Boolean(session) && !providerDeny.enabled,
+      enrichSelected,
       hydratePersisted: Boolean(session),
-      // Optional attribution: omit when no plan tier was resolved.
+      ...(session || !enrichSelected ? {} : { allowRenderedFallback: false }),
       ...(plan ? { planTier: plan } : {}),
-      // WP-11: paint base ad immediately; OCR/landing/translation finish via waitUntil.
       ...(typeof waitUntil === "function" ? { waitUntil } : {}),
     },
   );
@@ -2170,36 +2202,59 @@ export default function SearchRoute() {
 
                 <DetailBlock kicker="Landing page">
                   <h4 className="f9-wk-blk-head">
-                    {selectedAd.landingPage?.rawHeadline ??
-                      (selectionEnrichmentUiPending
-                        ? "Analyzing creative…"
-                        : "Headline not captured yet")}
+                    {formatSelectedLandingHeadline({
+                      rawHeadline: selectedAd.landingPage?.rawHeadline,
+                      landingPageUrl: selectedAd.landingPageUrl,
+                      hasLandingPage: Boolean(selectedAd.landingPage),
+                      pending: selectionEnrichmentUiPending,
+                    })}
                   </h4>
                   <DetailFacts
                     rows={[
                       {
                         key: "Primary CTA",
-                        value: formatLandingPageSignalValue(
-                          selectedAd.landingPage?.ctaText,
-                        ),
+                        value: formatSelectedLandingFactValue({
+                          capturedLabel: formatLandingPageSignalValue(
+                            selectedAd.landingPage?.ctaText,
+                          ),
+                          landingPageUrl: selectedAd.landingPageUrl,
+                          hasLandingPage: Boolean(selectedAd.landingPage),
+                          pending: selectionEnrichmentUiPending,
+                        }),
                       },
                       {
                         key: "Visible price/offer",
-                        value: formatLandingPageSignalValue(
-                          selectedAd.landingPage?.priceText,
-                        ),
+                        value: formatSelectedLandingFactValue({
+                          capturedLabel: formatLandingPageSignalValue(
+                            selectedAd.landingPage?.priceText,
+                          ),
+                          landingPageUrl: selectedAd.landingPageUrl,
+                          hasLandingPage: Boolean(selectedAd.landingPage),
+                          pending: selectionEnrichmentUiPending,
+                        }),
                       },
                       {
                         key: "Form present",
-                        value: formatLandingPageFormValue(
-                          selectedAd.landingPage?.formPresent,
-                        ),
+                        value: formatSelectedLandingFactValue({
+                          capturedLabel: formatLandingPageFormValue(
+                            selectedAd.landingPage?.formPresent,
+                          ),
+                          landingPageUrl: selectedAd.landingPageUrl,
+                          hasLandingPage: Boolean(selectedAd.landingPage),
+                          pending: selectionEnrichmentUiPending,
+                        }),
                       },
                       {
                         key: "Page check",
-                        value: formatCaptureMethodLabel(
-                          selectedAd.landingPage?.captureMethod,
-                        ),
+                        value: formatSelectedLandingFactValue({
+                          capturedLabel: formatCaptureMethodLabel(
+                            selectedAd.landingPage?.captureMethod,
+                          ),
+                          landingPageUrl: selectedAd.landingPageUrl,
+                          hasLandingPage: Boolean(selectedAd.landingPage),
+                          pending: selectionEnrichmentUiPending,
+                          failedPageCheck: true,
+                        }),
                       },
                     ]}
                   />
