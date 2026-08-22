@@ -3,18 +3,11 @@
 **Item:** Prepare a manual SaaSHub listing for Five to Nine
 [scout 2026-08-09, risk: green] [traction] [unreviewed-by-grok]
 
-**Status:** PREPARED, NOT SUBMITTED. This document contains every field the
-SaaSHub product submission needs, grounded in the official SaaSHub submission
-guidelines (`https://www.saashub.com/services/submit`, checked 2026-08-11) and
-the repo's canonical product copy. The base listing is **free**; submission
-requires a SaaSHub account, an inbox on the `0509.io` domain for ownership
-verification, and owner approval of a few personal fields plus tagline and
-description — see [Owner decisions](#owner-decisions). The optional paid
-`$99/month` featured listing is a separate decision and is NOT required.
+**Status:** APPROVED — live on SaaSHub at `https://www.saashub.com/five-to-nine` (confirmed 2026-08-22). This document contains the canonical fields for the live product listing, grounded in the official SaaSHub submission guidelines and the repo's canonical product copy. The base listing is **free**; the optional paid `$99/month` featured listing is a separate owner decision and is NOT required.
 
 ## Submission status (recorded 2026-08-11)
 
-**NEEDS_NISH_STEP — not submitted.** Recorded 2026-08-11:
+**SUBMITTED AND APPROVED — live page at `https://www.saashub.com/five-to-nine`.** Recorded 2026-08-11; status updated 2026-08-22:
 
 - **Mailbox prerequisite cleared.** A live Gmail → Agentic Inbox delivery
   test to `support@0509.io` succeeded on 2026-08-11, so the SaaSHub
@@ -61,6 +54,21 @@ description — see [Owner decisions](#owner-decisions). The optional paid
   is still the support mailbox (`app/lib/support.ts:13`). No corrections
   needed; the same owner decisions below still stand between this document
   and the submission.
+- **Live 2026-08-22.** `https://www.saashub.com/five-to-nine` returned HTTP 200 and is approved and live. Captured fields are in the [Live page receipt (2026-08-22)](#live-page-receipt-2026-08-22) section.
+
+## Live page receipt (2026-08-22)
+
+| Field | Live value |
+|---|---|
+| Product name | Five to Nine |
+| Website URL | `https://0509.io` |
+| Tagline | Competitor ad and landing-page monitoring with screenshot evidence. |
+| Description | Matches the canonical recommended description in this document. |
+| Pricing | Freemium |
+| Categories (hashtags) | Competitive Intelligence, Website Monitoring, Advertising, Competitor Research, plus SaaSHub auto-tags: Market Research, Competitor Analysis, Business Intelligence, Marketing Platform. |
+| Founder | Nishant Arora |
+| Country | India |
+| HQ city | not named on the live page |
 
 ## Eligibility check against SaaSHub submission guidelines
 
@@ -213,9 +221,9 @@ required.
 
 - Country: India (product is India-first; SaaSHub's Startups directory has a
   country page for India with 4,048 startups — `https://www.saashub.com/startups/india`).
-- Founder name and HQ city: **OWNER TO CONFIRM** (SaaSHub's Startup Hub says
-  founders add their startup "by submitting it on SaaSHub and filling in the
-  'Startup Details' section").
+- Founder name: Nishant Arora (recorded from the live page as owner-confirmed
+  during submission).
+- HQ city: not named on the live page; do not invent a city.
 
 ### Screenshots / images
 
