@@ -100,6 +100,16 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(contract).toContain(`ops/market-signal/0509-market-signal.json`);
   });
 
+  it("passes GH_TOKEN to every gh step so the self-hosted CLI can authenticate", () => {
+    const ghSteps = job.steps?.filter(
+      (step) => typeof step.run === "string" && /\bgh\b/u.test(step.run),
+    ) ?? [];
+    expect(ghSteps.length).toBeGreaterThan(0);
+    for (const step of ghSteps) {
+      expect(step.env?.GH_TOKEN, step.name).toBe("${{ github.token }}");
+    }
+  });
+
   it("lands the snapshot on protected main through a PR squash merge", () => {
     // main has strict required status checks and enforce_admins, so the direct
     // push the old workflow used was rejected with GH006 (seen on every run,
@@ -107,6 +117,7 @@ describe("daily market-signal D1 snapshot workflow", () => {
     const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
     expect(commit).not.toContain("git push origin HEAD:main");
     expect(commit).toContain("gh pr create");
+    expect(commit).not.toContain("gh pr create --json");
     expect(commit).toContain("gh pr merge");
     expect(commit).toContain("--squash");
     expect(commit).toContain("--delete-branch");
