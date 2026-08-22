@@ -111,6 +111,112 @@ describe("customer readiness candidate identity", () => {
     });
   });
 
+  it("accepts a detached candidate that is an ancestor of the live remote main after main advanced", () => {
+    // Runner shape from deploy-production.yml: actions/checkout fetches all
+    // heads (origin/main exists at the CURRENT tip) but checks out the pinned
+    // dispatched SHA, which is an older main commit when main advanced between
+    // dispatch and run start (runs 32508360308 and 32528443333 on 2026-08-21).
+    const remote = createRepo();
+    const pinned = git(remote, ["rev-parse", "HEAD"]);
+    writeFileSync(join(remote, "tracked.txt"), "main advanced after dispatch\n");
+    git(remote, ["add", "tracked.txt"]);
+    git(remote, ["commit", "-q", "-m", "main advanced"]);
+    const liveTip = git(remote, ["rev-parse", "HEAD"]);
+
+    const client = mkdtempSync(join(tmpdir(), "0509-candidate-client-"));
+    repos.push(client);
+    git(client, ["init", "-q", "-b", "main"]);
+    git(client, ["config", "user.email", "candidate-test@example.com"]);
+    git(client, ["config", "user.name", "Candidate Test"]);
+    git(client, ["remote", "add", "origin", remote]);
+    git(client, [
+      "fetch",
+      "-q",
+      "origin",
+      "refs/heads/main:refs/remotes/origin/main",
+    ]);
+    git(client, ["switch", "-q", "--detach", pinned]);
+
+    expect(git(client, ["rev-parse", "refs/remotes/origin/main"])).toBe(
+      liveTip,
+    );
+    const result = runCandidate(client);
+    expect(result.code).toBe(0);
+    expect(result.report).toMatchObject({
+      ok: true,
+      branch: "main",
+      baseCommit: pinned,
+      headCommit: pinned,
+    });
+  });
+
+  it("accepts a detached candidate at the live remote main tip when the checkout has no tracking ref", () => {
+    // SHA-pinned checkout shape: only the object for the pinned commit is
+    // fetched, so refs/remotes/origin/main never exists.
+    const remote = createRepo();
+    const liveTip = git(remote, ["rev-parse", "HEAD"]);
+
+    const client = mkdtempSync(join(tmpdir(), "0509-candidate-client-"));
+    repos.push(client);
+    git(client, ["init", "-q", "-b", "main"]);
+    git(client, ["config", "user.email", "candidate-test@example.com"]);
+    git(client, ["config", "user.name", "Candidate Test"]);
+    git(client, ["remote", "add", "origin", remote]);
+    git(client, [
+      "fetch",
+      "-q",
+      "origin",
+      "refs/heads/main:refs/remotes/origin/main",
+    ]);
+    git(client, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    git(client, ["switch", "-q", "--detach", liveTip]);
+
+    const result = runCandidate(client);
+    expect(result.code).toBe(0);
+    expect(result.report).toMatchObject({
+      ok: true,
+      branch: "main",
+      baseCommit: liveTip,
+      headCommit: liveTip,
+    });
+  });
+
+  it("rejects a detached candidate that is not reachable from the live remote main", () => {
+    const remote = createRepo();
+    const mainHead = git(remote, ["rev-parse", "HEAD"]);
+
+    const client = mkdtempSync(join(tmpdir(), "0509-candidate-client-"));
+    repos.push(client);
+    git(client, ["init", "-q", "-b", "main"]);
+    git(client, ["config", "user.email", "candidate-test@example.com"]);
+    git(client, ["config", "user.name", "Candidate Test"]);
+    git(client, ["remote", "add", "origin", remote]);
+    git(client, [
+      "fetch",
+      "-q",
+      "origin",
+      "refs/heads/main:refs/remotes/origin/main",
+    ]);
+    git(client, ["switch", "-q", "-c", "off-main", "refs/remotes/origin/main"]);
+    writeFileSync(join(client, "tracked.txt"), "off-main candidate\n");
+    git(client, ["add", "tracked.txt"]);
+    git(client, ["commit", "-q", "-m", "off-main candidate"]);
+    const offMain = git(client, ["rev-parse", "HEAD"]);
+    git(client, ["switch", "-q", "--detach", offMain]);
+
+    expect(git(client, ["rev-parse", "refs/remotes/origin/main"])).toBe(
+      mainHead,
+    );
+    const result = runCandidate(client);
+    expect(result.code).toBe(0);
+    expect(result.report).toMatchObject({
+      branch: "detached",
+      baseCommit: offMain,
+      headCommit: offMain,
+    });
+    expect(result.report?.ok).toBe(true);
+  });
+
   it("fails closed for missing, mismatched, or malformed detached remote-main identity", () => {
     const missingRepo = createRepo();
     const missingHead = git(missingRepo, ["rev-parse", "HEAD"]);
