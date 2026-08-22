@@ -425,10 +425,31 @@ export function planIntentPath(
   return `/auth/signup?redirectTo=${encodeURIComponent(billingPath)}`;
 }
 
-/** "03:47 AM" style clock for a real capture timestamp. */
+/** "03:47 AM" style clock for a real capture timestamp; date-only captures
+ *  (YYYY-MM-DD, no time of day) render as a calendar date instead of a
+ *  fabricated "12:00 AM". */
 function proofTimeLabel(iso: string | null | undefined): string {
-  const parsed = iso ? new Date(iso) : null;
-  if (!parsed || Number.isNaN(parsed.getTime())) {
+  const raw = iso?.trim();
+  if (!raw) {
+    return "recently";
+  }
+  // Date-only Meta Ad Library captures carry no time of day; rendering them
+  // as a clock would fabricate "12:00 AM". Show the calendar date instead.
+  // timeZone: "UTC" is required because new Date("YYYY-MM-DD") is UTC midnight
+  // and a local timezone behind UTC would otherwise shift the date back a day.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const parsed = new Date(`${raw}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) {
+      return "recently";
+    }
+    return parsed.toLocaleString("en", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
     return "recently";
   }
   return parsed.toLocaleString("en", {
