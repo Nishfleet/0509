@@ -33,6 +33,11 @@ const BASE_IMPORTANCE_BY_EVENT: Record<WatchEventType, number> = {
   landing_page_offer_changed: 80,
   landing_page_cta_changed: 72,
   landing_page_form_changed: 70,
+  // Competitor-site page events cannot be produced until the crawler packet
+  // ships; zero keeps them inert for delivery until real semantics land.
+  website_page_added: 0,
+  website_page_removed: 0,
+  website_page_changed: 0,
 };
 
 type ComparableProofFields = {

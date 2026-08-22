@@ -19,9 +19,12 @@ capture funnel and record where the displaced buyers are.
   `?source=magicbrief-migration` see the migration path in the same screen
   (competitor list → setup checklist import → watchlists), inside the same
   honest boundary. The message never promises full transfer.
-- **Capture measurement** — the `source=magicbrief-migration` marker rides the
-  signup URL, so wind-down capture is attributable in analytics and
-  referral/signup logs.
+- **Capture measurement** — the anonymous funnel events
+  (`funnel_migration_view` on this page, `funnel_signup_start_magicbrief` when a
+  signup starts from the `source=magicbrief-migration` CTA) measure wind-down reach
+  and capture week over week under the first-party measurement spec
+  (`docs/funnel-measurement-spec.md`). Same posture as the rest of the funnel:
+  default-off until the spec's gates pass, GPC-suppressed, coarse fields only.
 
 ## Venues and owner actions
 
