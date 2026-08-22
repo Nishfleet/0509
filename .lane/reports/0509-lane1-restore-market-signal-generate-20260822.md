@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Generate-unblock PR opened. Item `46084cb6ec` is **not** retired. `ops/market-signal/0509-market-signal.json` is **not** in this diff and is still absent on `origin/main`.
+Generate-unblock PR: https://github.com/Nishfleet/0509/pull/883 (title `fix(automation): preserve wrangler stderr on market-signal generate`). Item `46084cb6ec` is **not** retired. `ops/market-signal/0509-market-signal.json` is **not** in this diff and is still absent on `origin/main`.
 
 ## What changed
 
