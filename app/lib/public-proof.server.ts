@@ -336,6 +336,21 @@ function uniqueTexts(values: string[]): string[] {
 }
 
 function formatCapturedAt(iso: string): string {
+  // Date-only Meta Ad Library captures (YYYY-MM-DD) carry no time of day;
+  // rendering them with a clock would fabricate "12:00 AM". Show the date
+  // only. timeZone: "UTC" keeps the calendar date stable across runtimes
+  // because new Date("YYYY-MM-DD") is UTC midnight.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const parsed = new Date(`${iso}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) {
+      return "a recent check";
+    }
+    return parsed.toLocaleString("en", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  }
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) {
     return "a recent check";
