@@ -2,6 +2,7 @@
 
 Item: `4ba6d4ebd5`
 Branch: `fix-search-anonymous-landing-evidence`
+PR: https://github.com/Nishfleet/0509/pull/888
 Worktree: `/home/nish/workspaces/agent-worktrees/0509-lane1-20260822-221033`
 
 ## Goal
@@ -24,6 +25,25 @@ so anonymous select never ran capture. Live ads arrive with `landingPage: null`.
 - Fetch-only landing capture; no OCR, translation, `upsertAd`, or R2 artifacts.
 - Metered by `public-search-selection` (30 / 10 min / IP / fail-open).
 - Display helpers distinguish pending vs capture-gap vs completed empty check.
+
+## Proof
+
+```text
+npx vitest run --configLoader runner \
+  tests/search.route.test.ts \
+  tests/search-selection.no-db.test.ts \
+  tests/search-selection.paint-fast.test.ts \
+  tests/search-display.test.ts \
+  tests/rate-limit.server.test.ts \
+  tests/search-execution.test.ts \
+  tests/search-submission-settle.test.tsx \
+  tests/landing-page-display.test.ts
+# Test Files  8 passed (8)
+# Tests  137 passed (137)
+# exit 0
+```
+
+Commits: `122c1a11`, `f754b3da`.
 
 ## Files
 
