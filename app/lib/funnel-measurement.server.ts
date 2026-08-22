@@ -24,9 +24,24 @@ export type FunnelEventKind =
   | "search_preview_submit"
   | "search_preview_result"
   | "search_preview_error"
-  | "signup_start";
+  | "migration_view"
+  | "signup_start"
+  | "signup_start_magicbrief";
 
-export type FunnelRoute = "home" | "search_preview" | "signup" | "activation";
+export type FunnelRoute =
+  | "home"
+  | "search_preview"
+  | "magicbrief_migration"
+  | "signup"
+  | "activation";
+
+/**
+ * The exact signup-URL marker the migration page's CTA appends. Recognition
+ * happens by comparing against this constant server-side; the marker itself is
+ * never stored in a record — it only selects which allowlisted event kind is
+ * emitted (`signup_start_magicbrief` instead of `signup_start`).
+ */
+export const MAGICBRIEF_MIGRATION_SOURCE = "magicbrief-migration";
 
 export type FunnelResultBucket = "0" | "1-10" | "11-50" | "51+";
 
@@ -41,7 +56,9 @@ const FUNNEL_ROUTES: Record<FunnelEventKind, FunnelRoute> = {
   search_preview_submit: "search_preview",
   search_preview_result: "search_preview",
   search_preview_error: "search_preview",
+  migration_view: "magicbrief_migration",
   signup_start: "signup",
+  signup_start_magicbrief: "signup",
 };
 
 const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
@@ -49,7 +66,9 @@ const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
   search_preview_submit: "funnel_search_preview_submit",
   search_preview_result: "funnel_search_preview_result",
   search_preview_error: "funnel_search_preview_error",
+  migration_view: "funnel_migration_view",
   signup_start: "funnel_signup_start",
+  signup_start_magicbrief: "funnel_signup_start_magicbrief",
 };
 
 const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
@@ -57,7 +76,9 @@ const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
   search_preview_submit: "Anonymous search preview submitted",
   search_preview_result: "Anonymous search preview returned results",
   search_preview_error: "Anonymous search preview failed",
+  migration_view: "Anonymous MagicBrief migration page view",
   signup_start: "Anonymous signup started",
+  signup_start_magicbrief: "Anonymous signup started from the MagicBrief migration page",
 };
 
 export function funnelMeasurementEnabled(env: AppEnv): boolean {
@@ -173,4 +194,26 @@ export function emitFunnelSearchError(env: AppEnv, request: Request, errorKind: 
 
 export function emitFunnelSignupStart(env: AppEnv, request: Request) {
   emitFunnelEvent(env, request, "signup_start");
+}
+
+export function emitFunnelMigrationView(env: AppEnv, request: Request) {
+  emitFunnelEvent(env, request, "migration_view");
+}
+
+/**
+ * Signup attribution for the MagicBrief wind-down blitz. The caller resolves
+ * the URL marker to a boolean; the boolean selects the allowlisted event kind.
+ * The raw query value never enters this module, so it can never reach a record
+ * field (same invariant as every other coarse input).
+ */
+export function emitFunnelSignupStartFromMigrationReferrer(
+  env: AppEnv,
+  request: Request,
+  fromMigrationReferrer: boolean,
+) {
+  emitFunnelEvent(
+    env,
+    request,
+    fromMigrationReferrer ? "signup_start_magicbrief" : "signup_start",
+  );
 }
