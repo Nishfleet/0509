@@ -1,8 +1,12 @@
 # fix/market-signal-auth-diagnosis — lane 1 evidence
 
+Evidence path is flattened to `.lane/reports/fix-market-signal-auth-diagnosis.md`
+because `tests/lane-evidence-collision.test.ts` forbids nested directories under
+`.lane/reports/` (branch names with `/` would otherwise fail CI).
+
 ## Failed dispatch
 
-- **Run ID:** `32591392617` (workflow_dispatch on main, 2026-08-22)
+- **Run ID:** `32591392617` (workflow_dispatch on main @ `06eb090c`, 2026-08-22T18:39:45Z)
 - **Conclusion:** failure in `Commit snapshot to main` (D1 generate succeeded)
 
 ## Classification (spec §3-A)
@@ -35,11 +39,11 @@ Usage:  gh pr create [flags]
 ## Diff rationale
 
 1. **`.github/workflows/market-signal-snapshot.yml`**
-   - Add `GH_TOKEN: ${{ github.token }}` to `Commit snapshot to main` (self-hosted `gh` requires it; generate step already had it).
-   - Drop `gh pr create --json url --jq .url` — runner `gh` does not support `--json` on `pr create`; use stdout URL instead.
+   - Add `GH_TOKEN: ${{ github.token }}` to `Commit snapshot to main` (self-hosted `gh` requires it; generate step already had it; origin/main omitted it, which is why `gh pr list` printed the GH_TOKEN error).
+   - Drop `gh pr create --json url --jq .url` — runner `gh` does not support `--json` on `pr create`; use stdout URL instead. Per-day branch reuse, `--force-if-includes`, auto-merge, and the required-checks watch stay as-is.
 
 2. **`scripts/market-signal-snapshot.mjs`**
-   - Raise `runJson` `maxBuffer` from 4 MiB to 32 MiB to avoid `ENOBUFS` on large paginated `gh api` issue lists.
+   - Raise `runJson` `maxBuffer` from 4 MiB to 32 MiB to avoid `ENOBUFS` on large paginated `gh api` issue lists.
 
 3. **`tests/market-signal-workflow.test.ts`**
    - Assert every workflow step invoking `gh` sets `GH_TOKEN`.
@@ -47,12 +51,13 @@ Usage:  gh pr create [flags]
 
 ## Local test output (tail)
 
+Targeted suite (the files this change owns):
+
 ```
  Test Files  3 passed (3)
       Tests  30 passed (30)
-   Duration  419ms
 ```
 
-(files: `market-signal-workflow.test.ts`, `market-signal-snapshot.test.ts`, `lane-evidence-collision.test.ts`)
+(files: `tests/market-signal-workflow.test.ts`, `tests/market-signal-snapshot.test.ts`, `tests/lane-evidence-collision.test.ts`)
 
 PACKET COMPLETE
