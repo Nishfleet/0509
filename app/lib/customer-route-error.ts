@@ -17,6 +17,9 @@ export interface CustomerRouteError {
 export const PUBLIC_SEARCH_RATE_LIMIT_MESSAGE =
   "You've hit the anonymous search limit. Free search allows 20 searches per 10 minutes — wait a few minutes and try again.";
 
+export const PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE =
+  "You've hit the anonymous ad-check limit. Free search allows 30 ad checks per 10 minutes — wait a few minutes and try again.";
+
 const INTERNAL_INFRA_PATTERN =
   /\b(d1|sql|sqlite|workflow|binding|wrangler|cloudflare|oauth|token|secret|stack trace)\b/i;
 const INTERNAL_ROLLOUT_PATTERN = /\binternal\b.*\b(workspace|pilot|rollout)\b/i;
