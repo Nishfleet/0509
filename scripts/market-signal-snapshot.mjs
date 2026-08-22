@@ -51,7 +51,7 @@ SELECT
  * text form it prints otherwise, both when the host's OAuth session expired
  * (as it did 2026-08-04) and no CLOUDFLARE_API_TOKEN is available.
  */
-const AUTH_FAILURE_RE = /(CLOUDFLARE_API_TOKEN|non-interactive|Not logged in|auth token has expired)/i;
+const AUTH_FAILURE_RE = /In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN|Not logged in\. Your auth token has expired and could not be refreshed|Could not authenticate because no credentials were found and the environment is non-interactive/i;
 
 /**
  * Build a single-line, machine-greppable failure message for the market
@@ -102,6 +102,7 @@ function runJson(command, args) {
     ]
       .filter((part) => String(part).trim())
       .join("\n");
+    process.stderr.write(`market_signal_command_raw:\n${detail}\n`);
     throw new Error(marketSignalFailureMessage(detail.trim()));
   }
   return JSON.parse(output);
