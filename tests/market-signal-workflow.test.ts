@@ -63,7 +63,31 @@ describe("daily market-signal D1 snapshot workflow", () => {
       CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
       CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
       GH_TOKEN: "${{ github.token }}",
+      XDG_CONFIG_HOME: "${{ runner.temp }}/market-signal-wrangler-config",
     });
+  });
+
+  it("refuses empty Cloudflare secrets before generate", () => {
+    const refuse = job.steps?.find((step) => step.name === "Refuse empty Cloudflare secrets");
+    expect(refuse).toBeDefined();
+    expect(refuse?.run).toContain("market_signal_missing_cloudflare_secret");
+    expect(refuse?.run).toContain("market_signal_cloudflare_secrets_present");
+    expect(refuse?.run).not.toContain('echo "$CLOUDFLARE_API_TOKEN"');
+  });
+
+  it("isolates wrangler user config and unsets shadowing Cloudflare env vars", () => {
+    const generate = job.steps?.find((step) => step.name === "Generate market-signal D1 snapshot");
+    expect(generate?.run).toContain("unset CF_API_TOKEN");
+    expect(generate?.env?.XDG_CONFIG_HOME).toBe("${{ runner.temp }}/market-signal-wrangler-config");
+    expect(generate?.run).toContain("./scripts/deploy-window-lock.sh run -- npm run signal:market");
+  });
+
+  it("does not take PR 813 per-day landing in this generate-unblock", () => {
+    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
+    expect(commit).toContain("+%Y%m%dT%H%M%SZ");
+    expect(commit).toContain("--force-with-lease");
+    expect(commit).not.toContain("market_signal_snapshot_existing_pr");
+    expect(commit).not.toContain("--force-if-includes");
   });
 
   it("keeps heavyweight commands inside the shared runner lane", () => {
@@ -114,6 +138,31 @@ describe("daily market-signal D1 snapshot workflow", () => {
     // The watch is bounded so a stuck check fails loudly instead of burning
     // the whole 30-minute job cap.
     expect(commit).toContain("timeout");
+  });
+
+  it("reuses a per-day automation branch so retries merge a single PR", () => {
+    // The previous shape used a per-second branch suffix, so each rerun opened
+    // a new PR with its own race and never resolved the stuck auto-merge. One
+    // PR per day lets every retry on the same day land on the same head so
+    // arm-auto-merge keeps firing on the same required checks rather than
+    // racing 30+ stale PRs in parallel.
+    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
+    expect(commit).toContain("automation/market-signal-snapshot-$(date -u +%Y%m%d)");
+    expect(commit).not.toContain("+%H%M%S");
+    expect(commit).toContain("gh pr list");
+    expect(commit).toContain("market_signal_snapshot_existing_pr");
+  });
+
+  it("uses --force-if-includes so a fresh automation branch lands its first push", () => {
+    // --force-with-lease fails on a brand-new branch (no upstream to lease
+    // against), which is the failure mode that left the snapshot file off
+    // main for every restored run. --force-if-includes is the documented
+    // safe alternative for first push; the explicit --force fallback is the
+    // last-resort path so the workflow degrades loudly instead of silently
+    // never landing.
+    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
+    expect(commit).toContain("--force-if-includes");
+    expect(commit).toContain("git push --force origin");
   });
 
   it("rejects stale snapshots before committing them", () => {
