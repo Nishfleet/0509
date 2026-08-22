@@ -195,11 +195,92 @@ describe("buildMarketDeskBrief", () => {
       ],
     }));
 
-    expect(brief.title).toBe("First sweep is queued");
+    expect(brief.title).toBe("First sweep couldn't finish");
     expect(brief.summary).not.toContain("land here automatically");
     expect(brief.items[0]).toMatchObject({
       detail: "First scan couldn't finish — open for next steps",
     });
+  });
+
+  it("heads a failed first scan as couldn't finish, never as queued", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [watchlist({ id: "watch-1", targetLabel: "Boat Lifestyle" })],
+      nextScanLabel: "tonight",
+      firstScanStates: [
+        { watchlistId: "watch-1", status: "failed", errorCode: "provider_unavailable" },
+      ],
+    }));
+
+    expect(brief.title).toBe("First sweep couldn't finish");
+    expect(brief.summary).toContain("couldn't finish, so there are no results yet");
+    expect(brief.summary).toContain("Open Competitors");
+    expect(brief.summary).not.toContain("land here automatically");
+    expect(brief.action).toEqual({ href: "/app/watchlists", label: "Open Competitors" });
+    expect(brief.items[0]).toMatchObject({
+      label: "Scan issue",
+      title: "Boat Lifestyle",
+      detail: "First scan couldn't finish — open for next steps",
+    });
+  });
+
+  it("heads a free failed activation scan as couldn't finish with the weekly reset", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      plan: "free",
+      watchlists: [watchlist({ id: "watch-1", targetLabel: "Boat Lifestyle" })],
+      nextScanLabel: "Mon 15 Jun, 3:00 am UTC",
+      firstScanStates: [
+        { watchlistId: "watch-1", status: "failed", errorCode: "rate_limited" },
+      ],
+    }));
+
+    expect(brief.title).toBe("Activation scan couldn't finish");
+    expect(brief.summary).toContain("free checks weekly once the first scan lands");
+    expect(brief.summary).not.toContain("land here automatically");
+  });
+
+  it("heads a skipped first scan as hasn't started instead of claiming queued", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [watchlist({ id: "watch-1", targetLabel: "Boat Lifestyle" })],
+      nextScanLabel: "tonight",
+      firstScanStates: [
+        { watchlistId: "watch-1", status: "skipped", errorCode: "capacity_budget" },
+      ],
+    }));
+
+    expect(brief.title).toBe("First sweep hasn't started");
+    expect(brief.summary).toContain("hasn't started yet, so there are no results to show");
+    expect(brief.summary).toContain("Open Competitors for details");
+    expect(brief.items[0]).toMatchObject({
+      label: "Not started",
+      detail: "First scan paused before results — open for details",
+    });
+  });
+
+  it("heads the brief as couldn't finish when any of several scans failed", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [
+        watchlist({ id: "watch-1", targetLabel: "Boat Lifestyle" }),
+        watchlist({ id: "watch-2", targetLabel: "Noise" }),
+      ],
+      nextScanLabel: "tonight",
+      firstScanStates: [
+        { watchlistId: "watch-1", status: "failed", errorCode: "provider_unavailable" },
+        { watchlistId: "watch-2", status: "skipped", errorCode: "capacity_budget" },
+      ],
+    }));
+
+    expect(brief.title).toBe("First sweep couldn't finish");
+    expect(brief.items.map((item) => item.label)).toEqual(["Scan issue", "Scan issue"]);
+  });
+
+  it("keeps the static queued copy when no first-scan run state is known", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [watchlist({ id: "watch-1", targetLabel: "Boat Lifestyle" })],
+      nextScanLabel: "tonight",
+      firstScanStates: null,
+    }));
+
+    expect(brief.title).toBe("First sweep is queued");
   });
 
   it("summarizes quiet overnight checks without inventing a move", () => {
