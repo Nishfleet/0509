@@ -317,6 +317,8 @@ function resolveCandidateBranch(cwd, head) {
   );
   if (symbolicBranch !== null) return symbolicBranch;
 
+  // Exact local remote-tracking main tip. Present on a default/full-depth
+  // checkout of a branch; absent on a SHA-pinned checkout.
   const remoteMain = optionalGitText(
     cwd,
     [
@@ -327,7 +329,40 @@ function resolveCandidateBranch(cwd, head) {
     ],
     null,
   );
-  return remoteMain === head ? "main" : "detached";
+  if (remoteMain === head) return "main";
+
+  // Live remote main tip, resolved from the configured origin itself. The
+  // deploy pipeline pins an exact dispatched candidate that is frequently an
+  // ancestor of main's tip (main advances between dispatch and run start), so
+  // an equality-only comparison against the local tracking ref misclassifies
+  // a genuine protected-main checkout as off-main. The tip is read straight
+  // from the remote - never from an environment variable a fork could set -
+  // and HEAD is still required to be reachable from it.
+  const liveMain = optionalGitText(
+    cwd,
+    ["ls-remote", "--exit-code", "origin", "refs/heads/main"],
+    null,
+  );
+  const liveMainTip =
+    liveMain === null ? null : liveMain.trim().split(/\s+/u)[0] || null;
+  if (liveMainTip === null) return "detached";
+  if (liveMainTip === head) return "main";
+  if (!/^[a-f0-9]{40}$/u.test(liveMainTip)) return "detached";
+
+  // Materialize the live tip's objects (a no-op when the checkout fetch
+  // already has full history) so the ancestry proof can run against the exact
+  // commit the remote advertises. Any unresolvable step fails closed.
+  optionalGitText(cwd, ["fetch", "origin", "refs/heads/main"], null);
+  return isAncestorOf(cwd, head, liveMainTip) ? "main" : "detached";
+}
+
+function isAncestorOf(cwd, ancestor, descendant) {
+  try {
+    git(cwd, ["merge-base", "--is-ancestor", ancestor, descendant]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function createReport(cwd, args) {
