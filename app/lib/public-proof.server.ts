@@ -16,6 +16,7 @@
  *   callers render an explicit "no live proof yet" state — never a fixture.
  */
 
+import { isDateOnlyIsoDate, formatShortUtcDate } from "~/lib/capture-date-label";
 import { formatBrandPageCheckedAgo, loadBrandPageCacheSnapshot } from "~/lib/brand-page.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { AdRecord } from "~/lib/types";
@@ -339,6 +340,12 @@ function formatCapturedAt(iso: string): string {
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) {
     return "a recent check";
+  }
+  // Ad Library captures often carry only a calendar date (YYYY-MM-DD).
+  // Rendering that through a time formatter would print the fake precision
+  // "12:00 AM" — show the date alone instead.
+  if (isDateOnlyIsoDate(iso)) {
+    return formatShortUtcDate(parsed);
   }
   return parsed.toLocaleString("en", {
     month: "short",
