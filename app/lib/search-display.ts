@@ -675,8 +675,9 @@ export function formatResultsPanelTitle(
  * search actually ran in: the same competitor can legitimately show ads in
  * one market and none in another, and unqualified copy ("No verified ads
  * found for X") would contradict the country-filtered answer for the same
- * competitor. "all" (the all-countries view) is spelled "across all
- * countries" so the copy never implies a single market.
+ * competitor. The "all" view returns null to keep the verdict unscoped,
+ * because `country=ALL` is a single Meta Ad Library query, not a union of
+ * every country.
  *
  * The raw URL input is canonicalized through the country catalog so a
  * visitor who deep-links with `country=IN` or `country=usa` reads as
@@ -695,7 +696,7 @@ export function formatSearchMarketScope(
     return null;
   }
   if (trimmed.toLowerCase() === ALL_COUNTRIES_VALUE) {
-    return "across all countries";
+    return null;
   }
   const canonical =
     countryNameFromIso(isoFromCountryName(trimmed)) ?? trimmed;
