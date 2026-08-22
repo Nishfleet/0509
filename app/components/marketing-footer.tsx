@@ -39,6 +39,10 @@ export function MarketingFooter() {
         <span className="ld-footer-group-label">Compare</span>
         <Link to="/compare/meta-ad-library">vs checking the Meta Ad Library by hand</Link>
         <Link to="/compare/magicbrief">vs MagicBrief</Link>
+        <Link to="/compare/visualping">vs Visualping</Link>
+        <Link to="/compare/spyland">vs SpyLand</Link>
+        <Link to="/compare/pulzifi">vs Pulzifi</Link>
+        <Link to="/compare/foreplay">vs Foreplay</Link>
       </nav>
     </footer>
   );
