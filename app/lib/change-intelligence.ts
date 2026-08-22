@@ -576,12 +576,17 @@ export function digestMetadataForEvent(
   timeZone?: string | null,
   ad?: DigestAdEnrichment | null,
 ) {
+  const kind = stringOr(event.metadata?.kind, null);
   return {
     ...buildChangeIntelligenceSummary(event, timeZone),
     ...digestSourceMetadata(event.metadata),
     ...digestDiffMetadata(event.metadata),
     ...digestCreativeMetadata(event.metadata, ad),
     ...digestMetricMetadata(event.metadata, ad),
+    // Materiality marker: first-scan baselines ride CHECK-constrained event
+    // types (ad_new), so the digest vocabulary needs metadata.kind to keep
+    // classifying them as starting snapshots instead of campaign movement.
+    ...(kind ? { kind } : {}),
     proofCaptureId: event.proofCaptureId,
     confirmedAt: event.confirmedAt,
     createdAt: event.createdAt,
