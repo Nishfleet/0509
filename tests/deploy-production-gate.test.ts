@@ -1708,8 +1708,13 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "runs-on: [self-hosted, linux, x64, vps-verify]",
     );
     expect(workflow).not.toContain("runs-on: ubuntu-latest");
+    // 2026-08-22 (Nish): ci.yml runs on a GitHub-hosted runner now. 0509 is
+    // PUBLIC, so hosted runners are free and cannot hit the 2026-08-10 billing
+    // outage that moved everything to the VPS. Measured: ~2.5 min hosted vs a
+    // ~20.5 min median on the shared pool. The credential-bearing workflows
+    // asserted around this line deliberately stay on the VPS.
     expect(readFileSync(resolve(".github/workflows/ci.yml"), "utf8")).toContain(
-      "runs-on: [self-hosted, linux, x64, vps-verify]",
+      "runs-on: ubuntu-latest",
     );
     expect(
       readFileSync(resolve(".github/workflows/d1-backup-validate.yml"), "utf8"),

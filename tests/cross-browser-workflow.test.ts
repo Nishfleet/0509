@@ -23,13 +23,17 @@ describe("cross-browser workflow", () => {
     };
   };
 
-  it("routes only to a hardened verification runner", () => {
-    expect(parsed.jobs.matrix["runs-on"]).toEqual([
-      "self-hosted",
-      "linux",
-      "x64",
-      "vps-verify",
-    ]);
+  it("routes to a GitHub-hosted runner", () => {
+  // 2026-08-22 (Nish): 0509 is a PUBLIC repo, so standard GitHub-hosted
+  // runners are free and cannot hit the 2026-08-10 billing outage that pushed
+  // everything onto the VPS pool. Measured the same day: this CI completes in
+  // ~2.5 min hosted against a ~20.5 min median on the shared VPS pool, because
+  // every heavy step there serialises behind scripts/deploy-window-lock.sh.
+  // Everything credential-bearing stays on the VPS - deploy-production,
+  // d1-backup-validate and secret-scan are still asserted below.
+    // The engine matrix is a nightly DIAGNOSTIC, not a release gate, and it
+    // carries no credentials - so it has no reason to occupy the VPS pool.
+    expect(parsed.jobs.matrix["runs-on"]).toEqual("ubuntu-latest");
   });
 
   it("runs browser installation and proof inside a verification lane", () => {
