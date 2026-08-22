@@ -109,8 +109,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return signupActionError("send_failed", { email, name, redirectTo });
   }
 
-  const { emitFunnelSignupStart } = await import("~/lib/funnel-measurement.server");
-  emitFunnelSignupStart(env, request);
+  // The migration page's CTA links here with ?source=magicbrief-migration, and
+  // the page's form posts back to the same URL — so the marker rides the
+  // action request too. It resolves to a typed boolean here and selects which
+  // allowlisted funnel event fires; the raw value itself is never recorded.
+  const { emitFunnelSignupStartFromMigrationReferrer, MAGICBRIEF_MIGRATION_SOURCE } =
+    await import("~/lib/funnel-measurement.server");
+  const fromMigrationReferrer =
+    new URL(request.url).searchParams.get("source") === MAGICBRIEF_MIGRATION_SOURCE;
+  emitFunnelSignupStartFromMigrationReferrer(env, request, fromMigrationReferrer);
 
   const next = new URL("/auth/signup", request.url);
   next.searchParams.set("sent", "1");
