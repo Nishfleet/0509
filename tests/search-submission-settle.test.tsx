@@ -646,12 +646,13 @@ describe("public search submission settle", () => {
     navigationState = { state: "idle", location: null };
 
     const markup = await renderMarkup();
+    const text = markup.replace(/&#x27;/g, "'");
 
-    expect(markup).toContain("Couldn't capture this page");
-    expect(markup).toContain("Couldn't check this page");
-    expect(markup).toContain("Unavailable");
-    expect(markup).not.toContain("Headline not captured yet");
-    expect(markup).not.toContain("Not checked yet");
+    expect(text).toContain("Couldn't capture this page");
+    expect(text).toContain("Couldn't check this page");
+    expect(text).toContain("Unavailable");
+    expect(text).not.toContain("Headline not captured yet");
+    expect(text).not.toContain("Not checked yet");
   });
 });
 
