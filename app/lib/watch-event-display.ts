@@ -12,6 +12,9 @@ const WATCH_EVENT_TYPE_LABELS: Record<WatchEventType, string> = {
 	landing_page_offer_changed: "Offer changed",
 	landing_page_cta_changed: "CTA changed",
 	landing_page_form_changed: "Form changed",
+	website_page_added: "Page added",
+	website_page_removed: "Page removed",
+	website_page_changed: "Page changed",
 };
 
 export function formatWatchEventTypeLabel(eventType: string): string {
