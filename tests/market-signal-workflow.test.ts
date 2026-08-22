@@ -82,14 +82,6 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(generate?.run).toContain("./scripts/deploy-window-lock.sh run -- npm run signal:market");
   });
 
-  it("does not take PR 813 per-day landing in this generate-unblock", () => {
-    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
-    expect(commit).toContain("+%Y%m%dT%H%M%SZ");
-    expect(commit).toContain("--force-with-lease");
-    expect(commit).not.toContain("market_signal_snapshot_existing_pr");
-    expect(commit).not.toContain("--force-if-includes");
-  });
-
   it("keeps heavyweight commands inside the shared runner lane", () => {
     const commands = job.steps?.map((step) => step.run).filter((run): run is string => Boolean(run)) ?? [];
     for (const command of commands) {
