@@ -47,6 +47,18 @@ const SHELL_PLACEHOLDER_PATTERN =
 // between "Buy now · $19.99" and "Claim deal · $9.99" must never become
 // customer-visible offer/CTA/form events, so ad containers are stripped from
 // signal extraction the same way script/style content already is.
+//
+// Two recognition paths run together:
+//   1. id/class token match against AD_SLOT_MARKER_TOKENS — covers the common
+//      "ad", "adsbygoogle", "taboola", "dfp" ids and the vendor class names
+//   2. AD_SLOT_DATA_ATTRIBUTE_NAMES — Google Ad Manager signatures that
+//      appear with no id/class at all (a `<div data-ad-slot="1234567">`
+//      houses exactly the same rotating creatives as a labelled banner)
+//
+// Both paths are deliberately tolerant: a false negative leaks ad copy into
+// the diff (a churn event), a false positive strips real product copy (a
+// missed event). The cost balance favours noise suppression — the existing
+// fail-safe bound keeps anything we cannot confidently close intact.
 const AD_SLOT_MARKER_TOKENS = new Set([
   "ad",
   "ads",
@@ -85,6 +97,18 @@ const AD_SLOT_MARKER_TOKENS = new Set([
   "popunder",
   "interstitial",
   "affiliate",
+]);
+// Google Ad Manager attributes: every one of these is the GAM signature on a
+// rotating ad slot. The values are slot IDs / client codes / format hints, not
+// human copy — we never read them, only check for the attribute name.
+const AD_SLOT_DATA_ATTRIBUTE_NAMES = new Set([
+  "data-ad-slot",
+  "data-ad-unit",
+  "data-ad-client",
+  "data-ad-format",
+  "data-ad-layout",
+  "data-ad-layout-key",
+  "data-ad-test",
 ]);
 // Elements that are structurally ad frames: no page-owned copy lives inside
 // them, and cross-origin ad iframes rotate content beyond our visibility.
@@ -341,6 +365,9 @@ function isAdSlotContainerTag(name: string, tagText: string) {
 }
 
 function tagCarriesAdSlotMarker(tagText: string) {
+  if (tagCarriesAdSlotDataAttribute(tagText)) {
+    return true;
+  }
   const id = readAttributeValue(tagText, "id") ?? "";
   const className = readAttributeValue(tagText, "class") ?? "";
   const tokens = `${id} ${className}`
@@ -348,6 +375,22 @@ function tagCarriesAdSlotMarker(tagText: string) {
     .split(/[^a-z0-9]+/)
     .filter(Boolean);
   return tokens.some((token) => AD_SLOT_MARKER_TOKENS.has(token));
+}
+
+// Google Ad Manager emits ad slots as bare `<div>` (or `<amp-ad>`) elements
+// with attribute names like `data-ad-slot` and no id/class. The id/class
+// token check above never sees them, so this path reads the tag's attribute
+// NAMES only — the values are numeric slot IDs / client codes, never copy.
+// Only the attribute names in AD_SLOT_DATA_ATTRIBUTE_NAMES matter; an empty
+// attribute (e.g. `data-ad-slot`) keeps the marker because the page itself
+// declared the slot.
+function tagCarriesAdSlotDataAttribute(tagText: string) {
+  for (const attribute of AD_SLOT_DATA_ATTRIBUTE_NAMES) {
+    if (hasAttributeName(tagText, attribute)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Return the index just past the closing tag, or null when never closed. */
@@ -437,6 +480,49 @@ function readAttributeValue(tagText: string, attribute: string) {
   const match = tagText.match(pattern);
   if (!match) return null;
   return match[1] ?? match[2] ?? match[3] ?? "";
+}
+
+// Presence-only attribute check (no value required). Walks the tag text
+// outside quoted regions so an attribute name that appears inside a class
+// value (`class="data-ad-slot is hidden"`) never falsely matches. Boolean
+// attributes (`<div data-ad-slot>`) are recognised because we only check
+// the name — the value is meaningless for ad-slot identification.
+function hasAttributeName(tagText: string, name: string) {
+  const lower = name.toLowerCase();
+  let cursor = 0;
+  if (tagText[cursor] === "<") cursor += 1;
+  while (cursor < tagText.length && /[a-z0-9:_-]/i.test(tagText[cursor] ?? "")) {
+    cursor += 1;
+  }
+  while (cursor < tagText.length) {
+    const ch = tagText[cursor];
+    if (ch === '"' || ch === "'") {
+      const end = tagText.indexOf(ch, cursor + 1);
+      if (end < 0) return false;
+      cursor = end + 1;
+      continue;
+    }
+    if (ch === ">") return false;
+    if (/\s/.test(ch ?? "")) {
+      cursor += 1;
+      continue;
+    }
+    const start = cursor;
+    while (cursor < tagText.length && /[a-z0-9:_-]/i.test(tagText[cursor] ?? "")) {
+      cursor += 1;
+    }
+    if (tagText.slice(start, cursor).toLowerCase() === lower) {
+      return true;
+    }
+    while (cursor < tagText.length) {
+      const next = tagText[cursor];
+      if (next === '"' || next === "'" || /\s/.test(next ?? "") || next === ">") {
+        break;
+      }
+      cursor += 1;
+    }
+  }
+  return false;
 }
 
 function extractButtonText(html: string) {
