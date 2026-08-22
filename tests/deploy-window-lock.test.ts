@@ -715,7 +715,6 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
         () =>
           probeIsFree(lockFile) && slotIsFree(lockFile, 1) && !pidAlive(commandPid),
       );
-      expect(() => process.kill(commandPid, 0)).toThrow();
     } finally {
       // The PID is free for reuse once the lane-holder reaps the cancelled
       // group; under CI churn the kernel can hand the same PID to a brand-new
@@ -765,7 +764,6 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
           slotIsFree(lockFile, 1) &&
           !pidAlive(commandPid),
       );
-      expect(() => process.kill(commandPid, 0)).toThrow();
 
       const replacement = spawnScript(
         lockFile,
