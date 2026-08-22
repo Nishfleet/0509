@@ -938,6 +938,15 @@ async function retryFailedDigests(
         ...buildPersistedDigestDeliverySnapshot(deliveryDigest),
         cadence,
         lane: "customer",
+        // Brief-as-retention-loop (lane 1): retries carry the same retention
+        // inputs as first sends. Without them a retried brief renders the
+        // false "first brief on file" baseline and the explicit-unavailable
+        // expiry even though the workspace has both on file.
+        ...(await loadRetentionInputsForDigest(env, {
+          userId: candidate.userId,
+          plan,
+          periodEnd: candidate.periodEnd,
+        })),
       });
       result.sent += countAcceptedDigestDelivery(delivery);
     } catch (error) {
