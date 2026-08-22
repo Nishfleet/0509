@@ -62,6 +62,74 @@ describe("competitor monitoring category page", () => {
     expect(source).not.toMatch(/trusted by|#1|best competitor monitoring software/i);
   });
 
+  it("renders date-only Ad Library captures as calendar dates, never a midnight clock", () => {
+    const source = readFileSync(routePath, "utf8");
+
+    expect(source).toContain('from "~/lib/capture-date-label"');
+    expect(source).toContain("formatCaptureStampLabel");
+    expect(source).toContain("formatCaptureStampLabel(iso) ?? \"recently\"");
+    expect(source).not.toMatch(/hour:\s*"numeric"/);
+    expect(source).not.toMatch(/minute:\s*"2-digit"/);
+  });
+
+  it("prints Captured Aug 1 for a YYYY-MM-DD trail stamp and never 12:00 AM", async () => {
+    vi.resetModules();
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+      return {
+        ...actual,
+        useRouteLoaderData: () => undefined,
+        useLoaderData: () => ({
+          proofBrief: {
+            competitorName: "Nykaa",
+            website: "nykaa.com",
+            adLibraryCountry: "India",
+            fetchedAt: "2026-08-11T22:17:00.000Z",
+            checkedAgoLabel: "about 4 hours ago",
+            freshForLiveClaim: false,
+            adCount: 1,
+            activeAdCount: 1,
+            summary: "1 public Meta ad.",
+            decision: {
+              subject: "1 of 1 cached ads are active on record",
+              whatChanged: "Hook.",
+              whyItMatters: "Matters.",
+              priority: "Review",
+              proofStatus: "Captured",
+              source: "Meta Ad Library",
+              freshness: "Last checked about 4 hours ago",
+              nextAction: "Open the same ad",
+            },
+            proofTrail: [
+              {
+                id: "ad-1:Ad hook",
+                signal: "Ad hook",
+                evidence: "Routine-first bundle",
+                source: "Meta Ad Library — Nykaa Beauty",
+                sourceUrl: "https://www.facebook.com/ads/library/?id=111",
+                capturedAt: "2026-08-01",
+              },
+            ],
+            insights: { topHooks: [], mediaMix: [], timeline: [] },
+            reportRows: ["row"],
+          },
+        }),
+        Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
+          React.createElement("form", props, children),
+      };
+    });
+    const { default: CompetitorMonitoringCategoryRoute } = await import(
+      "~/routes/competitor-monitoring"
+    );
+    const markup = renderToStaticMarkup(createElement(CompetitorMonitoringCategoryRoute));
+    expect(markup).toContain("Captured Aug 1");
+    expect(markup).not.toMatch(/12:00\s*AM/i);
+    expect(markup).not.toMatch(/\b12:00\b/);
+  });
+
   it("emits WebPage JSON-LD matching the visible title and description", async () => {
     const { webPageJsonLd } = await import("~/lib/seo");
     const { jsonLdScriptProps } = await import("~/lib/seo");

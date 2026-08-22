@@ -219,4 +219,20 @@ describe("anonymous homepage proof brief (real proof)", () => {
     expect(markup).toContain("Routine-first bundle");
     expect(markup).toContain("was the hook on 6 Meta ads");
   });
+
+  it("renders date-only Ad Library captures as calendar dates, never 12:00 AM", async () => {
+    mockReactRouter({
+      ...realProofBrief,
+      proofTrail: realProofBrief.proofTrail.map((item) => ({
+        ...item,
+        capturedAt: "2026-08-01",
+      })),
+    });
+    const markup = await renderMarketing();
+
+    expect(markup).toContain("Captured Aug 1");
+    expect(markup).not.toMatch(/12:00\s*AM/i);
+    expect(markup).not.toMatch(/\b12:00\b/);
+  });
 });
+
