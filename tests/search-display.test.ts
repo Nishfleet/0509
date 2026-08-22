@@ -5,6 +5,8 @@ import {
   formatProofCaptureLabel,
   formatResultCardSummary,
   formatSearchCaptureAgeLabel,
+  formatSelectedLandingFactValue,
+  formatSelectedLandingHeadline,
 } from "~/lib/search-display";
 import type { AdRecord } from "~/lib/types";
 
@@ -65,6 +67,99 @@ describe("formatProofCaptureLabel", () => {
     expect(formatProofCaptureLabel({ landingPageUrl: null } as AdRecord)).toBe(
       "No landing-page destination available",
     );
+  });
+});
+
+describe("formatSelectedLandingHeadline", () => {
+  it("returns the captured headline when present", () => {
+    expect(
+      formatSelectedLandingHeadline({
+        rawHeadline: "  Festive glow  ",
+        landingPageUrl: "https://example.com",
+        hasLandingPage: true,
+        pending: false,
+      }),
+    ).toBe("Festive glow");
+  });
+
+  it("returns Analyzing creative… while enrichment is in flight", () => {
+    expect(
+      formatSelectedLandingHeadline({
+        rawHeadline: null,
+        landingPageUrl: "https://example.com",
+        hasLandingPage: false,
+        pending: true,
+      }),
+    ).toBe("Analyzing creative…");
+  });
+
+  it("returns Couldn't capture this page when a URL exists without a snapshot", () => {
+    expect(
+      formatSelectedLandingHeadline({
+        rawHeadline: null,
+        landingPageUrl: "https://example.com",
+        hasLandingPage: false,
+        pending: false,
+      }),
+    ).toBe("Couldn't capture this page");
+  });
+
+  it("returns Headline not captured yet when there is no landing-page URL", () => {
+    expect(
+      formatSelectedLandingHeadline({
+        rawHeadline: null,
+        landingPageUrl: null,
+        hasLandingPage: false,
+        pending: false,
+      }),
+    ).toBe("Headline not captured yet");
+  });
+});
+
+describe("formatSelectedLandingFactValue", () => {
+  it("returns the captured label when a landing page exists", () => {
+    expect(
+      formatSelectedLandingFactValue({
+        capturedLabel: "Shop now",
+        landingPageUrl: "https://example.com",
+        hasLandingPage: true,
+        pending: false,
+      }),
+    ).toBe("Shop now");
+  });
+
+  it("returns Analyzing creative… while enrichment is in flight", () => {
+    expect(
+      formatSelectedLandingFactValue({
+        capturedLabel: "Not detected",
+        landingPageUrl: "https://example.com",
+        hasLandingPage: false,
+        pending: true,
+      }),
+    ).toBe("Analyzing creative…");
+  });
+
+  it("returns Unavailable when a URL exists without a snapshot", () => {
+    expect(
+      formatSelectedLandingFactValue({
+        capturedLabel: "Not detected",
+        landingPageUrl: "https://example.com",
+        hasLandingPage: false,
+        pending: false,
+      }),
+    ).toBe("Unavailable");
+  });
+
+  it("returns Couldn't check this page for a failed page check", () => {
+    expect(
+      formatSelectedLandingFactValue({
+        capturedLabel: "Not checked yet",
+        landingPageUrl: "https://example.com",
+        hasLandingPage: false,
+        pending: false,
+        failedPageCheck: true,
+      }),
+    ).toBe("Couldn't check this page");
   });
 });
 
