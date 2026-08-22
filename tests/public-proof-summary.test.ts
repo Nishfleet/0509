@@ -83,3 +83,62 @@ describe("public proof brief summary", () => {
     }
   });
 });
+
+/**
+ * Ad Library captures carry date-only clocks (`YYYY-MM-DD`); parsing those
+ * through a time formatter printed the fake precision "12:00 AM" on the
+ * homepage evidence surface. Every text field the brief emits must render
+ * the calendar date alone.
+ */
+describe("public proof brief date-only capture stamps", () => {
+  const dateOnlyBrief = buildPublicProofBrief(
+    [makeAd({ firstSeenAt: "2026-08-01", lastSeenAt: "2026-08-19" })],
+    {
+      fetchedAt: FETCHED_AT,
+      country: "all",
+      freshForLiveClaim: false,
+      checkedAgoLabel: "about 3 hours ago",
+      website: "nykaa.com",
+      now: NOW,
+    },
+  );
+
+  it("renders the timeline start date without a midnight clock", () => {
+    expect(dateOnlyBrief?.insights.timeline[0]).toBe("Creative started running Aug 1");
+    expect(dateOnlyBrief?.insights.timeline.join("\n")).not.toMatch(/12:\d\d/);
+  });
+
+  it("keeps the trail capture clock on the date-only source value", () => {
+    expect(dateOnlyBrief?.proofTrail[0]?.capturedAt).toBe("2026-08-19");
+  });
+
+  it("never emits a 12:00 AM artifact in any brief text field", () => {
+    const brief = dateOnlyBrief;
+    expect(brief).not.toBeNull();
+    const allText = [
+      brief!.summary,
+      brief!.decision.freshness,
+      brief!.decision.proofStatus,
+      brief!.insights.timeline.join("\n"),
+    ].join("\n");
+    expect(allText).not.toMatch(/12:00/);
+  });
+
+  it("still renders full timestamps with their capture time", () => {
+    const brief = buildPublicProofBrief(
+      [makeAd({ firstSeenAt: "2026-08-01T09:15:00.000Z" })],
+      {
+        fetchedAt: FETCHED_AT,
+        country: "all",
+        freshForLiveClaim: false,
+        checkedAgoLabel: "about 3 hours ago",
+        website: "nykaa.com",
+        now: NOW,
+      },
+    );
+    expect(brief?.insights.timeline[0]).toMatch(
+      /^Creative started running [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2}/,
+    );
+  });
+});
+
