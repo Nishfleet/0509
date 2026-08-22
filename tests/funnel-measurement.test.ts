@@ -68,6 +68,28 @@ describe("funnel measurement gate", () => {
     expect(funnelMeasurementEnabled({ FUNNEL_MEASUREMENT_ENABLED: "TRUE" })).toBe(true);
     expect(funnelMeasurementEnabled({ FUNNEL_MEASUREMENT_ENABLED: " 1 " })).toBe(true);
   });
+
+  it("is enabled in the committed production wrangler.jsonc vars", async () => {
+    // Guards against the var being accidentally removed from the deployed
+    // config: without it, production records ZERO funnel events and every
+    // traction/activation/conversion decision stays unmeasurable. Same
+    // committed-config guard pattern as tests/search-rollout-config.test.ts.
+    const { readFileSync } = await import("node:fs");
+    const raw = readFileSync("wrangler.jsonc", "utf8");
+    const withoutComments = raw
+      .split("\n")
+      .map((line) => {
+        const commentIndex = line.indexOf("//");
+        if (commentIndex === -1) return line;
+        const before = line.slice(0, commentIndex);
+        const quoteCount = (before.match(/"/g) ?? []).length;
+        return quoteCount % 2 === 0 ? before : line;
+      })
+      .join("\n");
+    const parsed = JSON.parse(withoutComments) as { vars?: Record<string, unknown> };
+    const vars = parsed.vars ?? {};
+    expect(vars.FUNNEL_MEASUREMENT_ENABLED).toBe("1");
+  });
 });
 
 describe("funnel measurement GPC opt-out", () => {
