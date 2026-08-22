@@ -417,6 +417,20 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     ? `<p style="margin: 0 0 16px; color: #475467;">${renderTriageRecordText(triage, input.timeZone)}</p>`
     : "";
   const recordText = triage ? renderTriageRecordText(triage, input.timeZone) : null;
+  // Brief-as-retention-loop (lane 1, 2026-08-20): the all-quiet heartbeat is
+  // a brief like any other — it still carries the four retention fields so
+  // the customer can tell "checked and nothing moved" from "nothing ran".
+  const retention = deriveBriefRetentionFields({
+    items: input.items,
+    previousBriefItemCount: input.hasPreviousBrief
+      ? input.previousBriefItemCount ?? 0
+      : null,
+    ownerName: input.name,
+    nextScanAt: input.nextScanAt ?? null,
+    nextScanLabel: input.nextScanLabel ?? null,
+  });
+  const retentionHtml = renderEmailRetentionBlock(retention);
+  const retentionTextLines = renderEmailRetentionText(retention);
   // E2 (2026-08-08): the all-quiet period still names why it is quiet, who
   // reviews it, and what happens next — or the failure state when no period
   // truth exists to state. E3 (2026-08-11): confidence and freshness ride
@@ -444,6 +458,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
         and reviewed ${heartbeat.adsSeen} ad${heartbeat.adsSeen === 1 ? "" : "s"}. Completed checks found no action-worthy movement across the sources that ran.
       </p>
       ${recordHtml}
+      ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
@@ -461,6 +476,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors reviewed ${heartbeat.adsSeen} ads. Completed checks found no action-worthy movement across the sources that ran.`,
     ...(recordText ? ["", recordText] : []),
+    ...retentionTextLines,
     ...renderEmailAccountabilityText(accountability),
     "",
     `Review digest history: ${input.fullDigestUrl}`,
@@ -527,6 +543,20 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ? `<p style="margin: 0 0 16px; color: #475467;">Held back: ${escapeHtml(triage.suppressionReasons.join("; "))}.</p>`
       : "";
   const recordText = renderTriageRecordText(triage, input.timeZone);
+  // Brief-as-retention-loop (lane 1, 2026-08-20): a failed or incomplete
+  // period is a brief too — it carries the same four retention fields so the
+  // failure state is never mistaken for a quiet week.
+  const retention = deriveBriefRetentionFields({
+    items: input.items,
+    previousBriefItemCount: input.hasPreviousBrief
+      ? input.previousBriefItemCount ?? 0
+      : null,
+    ownerName: input.name,
+    nextScanAt: input.nextScanAt ?? null,
+    nextScanLabel: input.nextScanLabel ?? null,
+  });
+  const retentionHtml = renderEmailRetentionBlock(retention);
+  const retentionTextLines = renderEmailRetentionText(retention);
   // E2 (2026-08-08): the shared triage vocabulary is the materiality reason
   // and next action; the recipient identity is the accountable reviewer.
   // E3 (2026-08-11): confidence comes from the same triage record, and the
@@ -552,6 +582,7 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(checksLine)}</p>
       ${suppressionHtml}
       <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(recordText)}</p>
+      ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View the full brief</a>
@@ -572,6 +603,7 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ? [`Held back: ${triage.suppressionReasons.join("; ")}.`]
       : []),
     recordText,
+    ...retentionTextLines,
     ...renderEmailAccountabilityText(accountability),
     "",
     `View the full brief: ${input.fullDigestUrl}`,
