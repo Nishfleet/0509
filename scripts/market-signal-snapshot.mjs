@@ -89,7 +89,7 @@ function runJson(command, args) {
     output = execFileSync(command, args, {
       encoding: "utf8",
       env: process.env,
-      maxBuffer: 4 * 1024 * 1024,
+      maxBuffer: 32 * 1024 * 1024,
       timeout: 30_000,
       stdio: ["ignore", "pipe", "pipe"],
     });
