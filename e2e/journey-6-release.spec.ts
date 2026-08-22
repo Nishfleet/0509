@@ -35,6 +35,43 @@ function viewportKey(viewport: Viewport) {
   return `${viewport.width}x${viewport.height}`;
 }
 
+function isTransportError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("socket hang up") ||
+    message.includes("econnreset") ||
+    message.includes("econnrefused") ||
+    message.includes("etimedout") ||
+    message.includes("apirequestcontext") && message.includes("post") ||
+    message.includes("apirequestcontext") && message.includes("get") ||
+    message.includes("net::err_connection_reset") ||
+    message.includes("net::err_connection_refused") ||
+    message.includes("net::err_connection_aborted")
+  );
+}
+
+async function withTransportRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries = 2,
+  delayMs = 500,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries && isTransportError(error)) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
 async function signInAs(context: BrowserContext, baseURL: string, userId: string) {
   await context.setExtraHTTPHeaders({ [fixtureModeHeader]: "1" });
   await context.addCookies([
@@ -76,19 +113,21 @@ async function replay(
   runId: string,
   scenario: "j6",
 ) {
-  const response = await page.request.post(path, {
-    headers: {
-      [fixtureModeHeader]: "1",
-      "content-type": "application/json",
-    },
-    data: {
-      userId,
-      runId,
-      idempotencyKey,
-      scenario,
-      clock: new Date().toISOString(),
-    },
-  });
+  const response = await withTransportRetry(() =>
+    page.request.post(path, {
+      headers: {
+        [fixtureModeHeader]: "1",
+        "content-type": "application/json",
+      },
+      data: {
+        userId,
+        runId,
+        idempotencyKey,
+        scenario,
+        clock: new Date().toISOString(),
+      },
+    }),
+  );
   expect(response.status(), `${path} replay must complete`).toBe(200);
   const body = await response.json() as Record<string, unknown>;
   expect(body.ok, `${path} replay must be acknowledged`).toBe(true);
@@ -97,9 +136,11 @@ async function replay(
 }
 
 async function readState(page: Page, path: string, idempotencyKey: string, runId: string) {
-  const response = await page.request.get(
-    `${path}?idempotencyKey=${encodeURIComponent(idempotencyKey)}&runId=${encodeURIComponent(runId)}`,
-    { headers: { [fixtureModeHeader]: "1" } },
+  const response = await withTransportRetry(() =>
+    page.request.get(
+      `${path}?idempotencyKey=${encodeURIComponent(idempotencyKey)}&runId=${encodeURIComponent(runId)}`,
+      { headers: { [fixtureModeHeader]: "1" } },
+    ),
   );
   expect(response.status(), `${path} state must be readable`).toBe(200);
   const body = await response.json() as Record<string, unknown>;
