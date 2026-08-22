@@ -375,6 +375,46 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       if (state?.status === "skipped") return "First scan paused before results — open for details";
       return "First scan pending";
     };
+    // Every first-scan attempt ended without results (failed or skipped) and
+    // nothing is queued to retry right now. A "queued" headline would be a
+    // false promise in the same-session moment, so the brief names the
+    // terminal state and points at the watchlist trail instead.
+    const anyKnownState = activeWatchlists.some((watchlist) =>
+      stateByWatchlistId.has(watchlist.id),
+    );
+    const allTerminal = activeWatchlists.every((watchlist) => {
+      const state = stateByWatchlistId.get(watchlist.id);
+      return state?.status === "failed" || state?.status === "skipped";
+    });
+    const anyFailed = activeWatchlists.some(
+      (watchlist) => stateByWatchlistId.get(watchlist.id)?.status === "failed",
+    );
+    if (anyKnownState && allTerminal) {
+      return {
+        state: "queued",
+        kicker: "Brief",
+        title: anyFailed
+          ? (isFreePlan ? "Activation scan couldn't finish" : "First sweep couldn't finish")
+          : (isFreePlan ? "Activation scan hasn't started" : "First sweep hasn't started"),
+        summary: anyFailed
+          ? (isFreePlan
+              ? `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} waiting — the first scan couldn't finish, so there are no results yet. Open Competitors for the next step; free checks weekly once the first scan lands, and paid plans check every 3–6 hours.`
+              : `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} waiting — the first scan couldn't finish, so there are no results yet. Open Competitors for the next step; checks resume on the ${input.nextScanLabel} schedule.`)
+          : (isFreePlan
+              ? `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} waiting — the first scan hasn't started yet, so there are no results to show. Open Competitors for details; free checks weekly once the first scan lands, and paid plans check every 3–6 hours.`
+              : `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} waiting — the first scan hasn't started yet, so there are no results to show. Open Competitors for details; checks resume on the ${input.nextScanLabel} schedule.`),
+        action: { href: "/app/watchlists", label: "Open Competitors" },
+        metrics,
+        items: activeWatchlists.slice(0, 3).map((watchlist) => ({
+          label: anyFailed ? "Scan issue" : "Not started",
+          title: watchlist.targetLabel,
+          detail: itemDetail(watchlist),
+        })),
+        hasMetrics,
+        retention,
+      };
+    }
+
     if (pendingOrRunning) {
       return {
         state: "queued",
