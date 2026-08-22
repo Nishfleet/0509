@@ -7,6 +7,7 @@ import {
 export default [
   index("routes/marketing.tsx"),
   route("search", "routes/search.tsx"),
+  route("pricing", "routes/pricing.tsx"),
   route("help", "routes/help.tsx"),
   route("docs", "routes/docs.tsx"),
   route("api/docs", "routes/api.docs.tsx"),

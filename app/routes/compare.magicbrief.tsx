@@ -225,7 +225,7 @@ export default function CompareMagicBriefRoute() {
           a list of brands you tracked) and we&rsquo;ll set up your watchlists with you, person to
           person. Collections, boards, analytics history, and past evidence are not migrated by
           Five to Nine — you recreate them with our help. Plans from the{" "}
-          <Link to="/#pricing">pricing page</Link> — the public search preview stays free either
+          <Link to="/pricing">pricing page</Link> — the public search preview stays free either
           way.
         </p>
       </section>

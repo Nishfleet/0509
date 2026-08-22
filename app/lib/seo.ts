@@ -158,6 +158,7 @@ export function jsonLdScriptProps(data: unknown) {
 export const SITEMAP_PATHS = [
   "/",
   "/search",
+  "/pricing",
   "/auth/signup",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
