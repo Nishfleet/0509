@@ -65,6 +65,7 @@ export const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=300";
 
 const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/",
+  "/pricing",
   "/help",
   "/docs",
   "/terms",
