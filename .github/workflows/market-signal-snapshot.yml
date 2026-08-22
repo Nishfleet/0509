@@ -74,12 +74,29 @@ jobs:
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
       - name: Install pinned dependencies
         run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+      - name: Refuse empty Cloudflare secrets
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || missing+=(CLOUDFLARE_API_TOKEN)
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || missing+=(CLOUDFLARE_ACCOUNT_ID)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "market_signal_missing_cloudflare_secret: ${missing[*]}" >&2
+            exit 1
+          fi
+          echo "market_signal_cloudflare_secrets_present"
       - name: Generate market-signal D1 snapshot
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/deploy-window-lock.sh run -- npm run signal:market -- --output "$SNAPSHOT_PATH"
+          XDG_CONFIG_HOME: ${{ runner.temp }}/market-signal-wrangler-config
+        run: |
+          unset CF_API_TOKEN CF_API_KEY CF_EMAIL CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL
+          ./scripts/deploy-window-lock.sh run -- npm run signal:market -- --output "$SNAPSHOT_PATH"
       - name: Verify snapshot freshness
         run: |
           node -e "

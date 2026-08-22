@@ -63,7 +63,31 @@ describe("daily market-signal D1 snapshot workflow", () => {
       CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
       CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
       GH_TOKEN: "${{ github.token }}",
+      XDG_CONFIG_HOME: "${{ runner.temp }}/market-signal-wrangler-config",
     });
+  });
+
+  it("refuses empty Cloudflare secrets before generate", () => {
+    const refuse = job.steps?.find((step) => step.name === "Refuse empty Cloudflare secrets");
+    expect(refuse).toBeDefined();
+    expect(refuse?.run).toContain("market_signal_missing_cloudflare_secret");
+    expect(refuse?.run).toContain("market_signal_cloudflare_secrets_present");
+    expect(refuse?.run).not.toContain('echo "$CLOUDFLARE_API_TOKEN"');
+  });
+
+  it("isolates wrangler user config and unsets shadowing Cloudflare env vars", () => {
+    const generate = job.steps?.find((step) => step.name === "Generate market-signal D1 snapshot");
+    expect(generate?.run).toContain("unset CF_API_TOKEN");
+    expect(generate?.env?.XDG_CONFIG_HOME).toBe("${{ runner.temp }}/market-signal-wrangler-config");
+    expect(generate?.run).toContain("./scripts/deploy-window-lock.sh run -- npm run signal:market");
+  });
+
+  it("does not take PR 813 per-day landing in this generate-unblock", () => {
+    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
+    expect(commit).toContain("+%Y%m%dT%H%M%SZ");
+    expect(commit).toContain("--force-with-lease");
+    expect(commit).not.toContain("market_signal_snapshot_existing_pr");
+    expect(commit).not.toContain("--force-if-includes");
   });
 
   it("keeps heavyweight commands inside the shared runner lane", () => {
