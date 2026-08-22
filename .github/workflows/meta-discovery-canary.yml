@@ -21,7 +21,17 @@ jobs:
     # D1 aggregate over discovery_fetch_log; it never mutates monitoring,
     # proof, or delivery state (unlike the proof canary at
     # /api/launch-readiness/canary, which is deliberately not scheduled).
+    #
+    # CANARY_BYPASS_TOKEN lives in the `production` environment (the same
+    # secret deploy-production.yml reads), so this job must declare
+    # `environment: production`. Without it the secret resolves to an empty
+    # string and the check silently degrades. A canary that cannot prove
+    # anything must fail LOUD, never exit 0: between 2026-08-18 and
+    # 2026-08-22 every scheduled run skipped on the missing token and still
+    # showed a green check, which read as a published green state that
+    # never existed.
     runs-on: [self-hosted, linux, x64, vps-verify]
+    environment: production
     timeout-minutes: 5
     steps:
       - name: Check production Meta readiness
@@ -33,9 +43,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${CANARY_BYPASS_TOKEN:-}" ]; then
-            echo "meta canary: skipped (missing CANARY_BYPASS_TOKEN)" >&2
+            echo "meta canary: red (missing CANARY_BYPASS_TOKEN; a canary that cannot check must fail, not skip as success)" >&2
             echo "state=missing-token" >> "$GITHUB_OUTPUT"
-            exit 0
+            exit 1
           fi
           response="$(curl --fail --silent --show-error --max-time 20 --retry 2 --retry-delay 5 \
             -H "x-0509-canary-token: ${CANARY_BYPASS_TOKEN}" \
@@ -62,9 +72,14 @@ jobs:
           echo "state=green" >> "$GITHUB_OUTPUT"
 
       - name: Persist canary state evidence
+        if: ${{ always() }}
         shell: bash
         env:
-          STATE: ${{ steps.readiness.outputs.state }}
+          # The readiness step only names its state when it reaches a verdict
+          # (green / missing-token). Any other failure path (endpoint
+          # unreachable, readiness blockers) exits before writing state, and
+          # the honest published state for that run is red.
+          STATE: ${{ steps.readiness.outputs.state || 'red' }}
           RUN_ID: ${{ github.run_id }}
         run: |
           python3 - <<'PY'
@@ -83,6 +98,7 @@ jobs:
           PY
 
       - name: Upload canary state evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: meta-discovery-canary-state

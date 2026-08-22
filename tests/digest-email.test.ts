@@ -8,9 +8,11 @@ import {
   digestConfidenceLevel,
   digestFreshUntilLabel,
   digestMaterialityReason,
+  digestMetadataForEvent,
   digestNextAction,
   digestReviewerLabel,
 } from "~/lib/change-intelligence";
+import type { WatchEventRecord } from "~/lib/types";
 import {
   buildDigestEmail,
   buildScanTroubleEmail,
@@ -1266,6 +1268,42 @@ describe("named owner, materiality reason, and next action (E2 2026-08-08)", () 
 		// Classified cosmetic at the vocabulary level: never "ads started or
 		// stopped" for a first-scan baseline.
 		expect(digestMaterialityReason({ items: [baselineEvent] })).toBe(
+			"Cosmetic-only changes this period (1 headline, form, or creative update) — no pricing or CTA movement, so there is nothing new to weigh for positioning.",
+		);
+	});
+
+	it("preserves metadata.kind through digestMetadataForEvent so stored digest items keep baselines cosmetic", () => {
+		const baselineEvent = {
+			id: "evt-baseline",
+			watchlistId: "wl-1",
+			runId: "run-1",
+			eventType: "ad_new",
+			status: "confirmed",
+			importanceScore: 40,
+			adId: null,
+			baselineFromRunId: null,
+			candidateId: null,
+			proofCaptureId: null,
+			title: "Baseline captured",
+			summary: "Starting snapshot for the watchlist.",
+			metadata: { kind: "baseline" },
+			confirmedAt: "2026-08-20T03:00:00.000Z",
+			suppressedAt: null,
+			invalidatedAt: null,
+			lastEvaluatedAt: null,
+			createdAt: "2026-08-20T03:00:00.000Z",
+		} as WatchEventRecord;
+
+		const persisted = digestMetadataForEvent(baselineEvent);
+		expect(persisted.kind).toBe("baseline");
+
+		// The persisted metadata is what materiality reads back on later
+		// renders: without kind it would degrade to "ads started or stopped".
+		expect(
+			digestMaterialityReason({
+				items: [{ eventType: baselineEvent.eventType, metadata: persisted }],
+			}),
+		).toBe(
 			"Cosmetic-only changes this period (1 headline, form, or creative update) — no pricing or CTA movement, so there is nothing new to weigh for positioning.",
 		);
 	});
