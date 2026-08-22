@@ -25,6 +25,10 @@ import {
   listWatchEventsBetween,
   listWatchlists,
 } from "~/lib/data.server";
+// Type-only: the runtime lookup stays behind the dynamic import in
+// `loadDigestScreenshotPairs`, so strict-mock test adapters without this
+// helper keep degrading to an empty pair map instead of failing the module.
+import type { listProofCapturePairsForEventIds } from "~/lib/data.server";
 import { reportScheduledTaskFailure } from "~/lib/cron-failure-alert.server";
 import { isCustomerDigestEligibleEvent } from "~/lib/delivery-policy.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
