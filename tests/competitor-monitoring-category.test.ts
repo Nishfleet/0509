@@ -62,6 +62,18 @@ describe("competitor monitoring category page", () => {
     expect(source).not.toMatch(/trusted by|#1|best competitor monitoring software/i);
   });
 
+  it("renders date-only Ad Library captures as calendar dates, never a midnight clock", () => {
+    const source = readFileSync(routePath, "utf8");
+
+    expect(source).toContain('from "~/lib/capture-date-label"');
+    expect(source).toContain("formatCaptureStampLabel");
+    expect(source).toContain("formatCaptureStampLabel(iso) ?? \"recently\"");
+    // The previous clock formatter invented "12:00 AM" for YYYY-MM-DD
+    // captures. Keep that path gone so homepage and this page cannot drift.
+    expect(source).not.toMatch(/hour:\s*"numeric"/);
+    expect(source).not.toMatch(/minute:\s*"2-digit"/);
+  });
+
   it("emits WebPage JSON-LD matching the visible title and description", async () => {
     const { webPageJsonLd } = await import("~/lib/seo");
     const { jsonLdScriptProps } = await import("~/lib/seo");

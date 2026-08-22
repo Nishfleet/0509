@@ -22,6 +22,7 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { formatCaptureStampLabel } from "~/lib/capture-date-label";
 import type { AppEnv } from "~/lib/env.server";
 import type { RootLoaderData } from "~/root";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
@@ -421,16 +422,14 @@ export function planIntentPath(
   return `/auth/signup?redirectTo=${encodeURIComponent(billingPath)}`;
 }
 
-/** "03:47 AM" style clock for a real capture timestamp. */
+/**
+ * Stamp for a real capture clock. Full timestamps render the capture time
+ * ("3:47 PM"); date-only Ad Library captures render their calendar date
+ * ("Aug 1") — never a midnight "12:00 AM" clock invented by parsing the
+ * bare date.
+ */
 function proofTimeLabel(iso: string | null | undefined): string {
-  const parsed = iso ? new Date(iso) : null;
-  if (!parsed || Number.isNaN(parsed.getTime())) {
-    return "recently";
-  }
-  return parsed.toLocaleString("en", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatCaptureStampLabel(iso) ?? "recently";
 }
 
 function truncateHook(value: string, maxLength = 26) {

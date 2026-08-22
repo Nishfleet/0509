@@ -3,6 +3,7 @@ import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-rout
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { formatCaptureStampLabel } from "~/lib/capture-date-label";
 import type { AppEnv } from "~/lib/env.server";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
 import {
@@ -43,15 +44,15 @@ export async function loader({ context }: LoaderFunctionArgs) {
   return { proofBrief };
 }
 
+/**
+ * Stamp for a real capture clock. Full timestamps render the capture time
+ * ("3:47 PM"); date-only Ad Library captures render their calendar date
+ * ("Aug 1") — never a midnight "12:00 AM" clock invented by parsing the
+ * bare date. Same helper as the homepage so the two public proof surfaces
+ * cannot disagree.
+ */
 function proofTimeLabel(iso: string | null | undefined): string {
-  const parsed = iso ? new Date(iso) : null;
-  if (!parsed || Number.isNaN(parsed.getTime())) {
-    return "recently";
-  }
-  return parsed.toLocaleString("en", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatCaptureStampLabel(iso) ?? "recently";
 }
 
 // Kept under ~155 characters so search results show the whole line instead of
