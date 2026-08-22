@@ -157,3 +157,33 @@ image.
 - PR: #810 open
 - Tests: green (one pre-existing flaky timeout, unrelated)
 - Typecheck: green
+
+## CI repair (2026-08-22, lane 1 re-run)
+
+The first CI leg failed: `codex-node-checks` → `tsc -b` with
+`app/lib/digest-orchestration.server.ts(150,39): TS2304: Cannot find name
+'listProofCapturePairsForEventIds'`. The pair loader resolves the helper at
+runtime through a dynamic import (strict-mock adapters may not provide it)
+but typed its rows with a bare `typeof` reference that was never imported.
+
+Fix (`37949041`): a **type-only** import of
+`listProofCapturePairsForEventIds` from `~/lib/data.server`, placed beside
+the existing data.server import block. Types are erased at compile time, so
+the runtime lookup stays exactly as fail-open as designed — an adapter
+without the helper still degrades to an empty pair map and text-only alerts.
+
+Verification before push (local, this worktree):
+
+- `npx tsc -b` → exit 0 (was TS2304)
+- `npm run test` → 455 files / 5384 tests, all passing
+  (includes the PR's own tests/visual-diff-alert-payloads.test.ts,
+  delivery.server.test.ts, proof-screenshot.server.test.ts)
+- Pushed to `0509-lane1-visual-diff-alert-payloads-2026-08-21`; PR #810
+  re-runs CI from `37949041`.
+
+Item coverage recap for "Before/after VISUAL diffs on change events":
+
+- Watchlist events side-by-side screenshots — merged on main via #715
+  (commit `feb1d460`).
+- Alert payloads (digest + instant alert email) — THIS PR (#810), now
+  typecheck-clean and awaiting green CI + review.
