@@ -44,6 +44,21 @@ type ComparableProofFields = {
   formPresent: boolean | null;
 };
 
+/** DOM-fidelity mode of the capture that produced a proof's fields. */
+type ProofCaptureMode = "landing_page_fetch" | "browser_render";
+
+/**
+ * Capture modes as persisted in `proof_capture.capture_metadata.captureMethod`
+ * by the landing pipeline ("landing_page_fetch" for plain HTTP, "browser_render"
+ * for rendered DOM). Anything else (including legacy rows with no metadata)
+ * reads as unknown so the churn guard below stays inactive for old data.
+ */
+function readProofCaptureMode(value: unknown): ProofCaptureMode | null {
+  return value === "landing_page_fetch" || value === "browser_render"
+    ? value
+    : null;
+}
+
 export interface EvaluatedWatchEventDraft {
   eventType: WatchEventType;
   status: Extract<WatchEventStatus, "confirmed" | "suppressed">;
@@ -69,6 +84,8 @@ export function evaluateProofBackedEvents(input: {
   proofTargetIdentity: string;
   currentProof: ComparableProofFields & {
     extractorVersion?: string | null;
+    /** `capture_metadata.captureMethod` of the current capture (optional). */
+    captureMethod?: string | null;
   };
   lastSuccessfulProof: ProofCaptureRecord | null;
   recentWatchEvents: WatchEventRecord[];
@@ -81,6 +98,33 @@ export function evaluateProofBackedEvents(input: {
   if (!lastSuccessfulProof) {
     return {
       status: "baseline_established",
+      events: [],
+    };
+  }
+
+  // Capture-mode churn guard (noise filter, 2026-08-22): the same proof
+  // target is captured plain-http when the fetch succeeds and browser-rendered
+  // whenever that fetch transiently fails or returns an empty shell. The two
+  // modes see different DOMs — rendered pages expose JS-injected CTAs, forms,
+  // and client-rendered headlines that raw HTML never had. A mode switch
+  // therefore shifts the extracted fields even when the page itself never
+  // moved, so any field diff measured across a switch is pipeline churn
+  // (script/ad-slot noise), not a competitor move. Suppress all field events
+  // for that one evaluation; the caller already persists the fresh capture as
+  // the new baseline, so the next scan diffs like-for-like again. Inactive
+  // when either side's mode is unknown (legacy rows) — no behavior change
+  // for existing data.
+  const previousCaptureMethod = readProofCaptureMode(
+    lastSuccessfulProof.captureMetadata?.captureMethod,
+  );
+  const currentCaptureMethod = readProofCaptureMode(input.currentProof.captureMethod);
+  if (
+    previousCaptureMethod !== null &&
+    currentCaptureMethod !== null &&
+    previousCaptureMethod !== currentCaptureMethod
+  ) {
+    return {
+      status: "invalidated",
       events: [],
     };
   }

@@ -214,6 +214,110 @@ describe("watch event evaluator", () => {
     expect(result.events).toEqual([]);
   });
 
+  it("does not emit field changes when the capture mode switches from plain HTTP to rendered", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Weekend Sale",
+        normalizedHeadline: "glow serum weekend sale",
+        normalizedHeadlineHash: "hash-b",
+        ctaText: "Get started",
+        priceText: "Starting at ₹799",
+        formPresent: false,
+        captureMethod: "browser_render",
+      },
+      lastSuccessfulProof: proofCapture({
+        captureMetadata: { captureMethod: "landing_page_fetch" },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("does not emit field changes when the capture mode switches from rendered to plain HTTP", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: null,
+        priceText: null,
+        formPresent: false,
+        captureMethod: "landing_page_fetch",
+      },
+      lastSuccessfulProof: proofCapture({
+        captureMetadata: { captureMethod: "browser_render" },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("still emits field changes when both captures used the same capture mode", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Weekend Sale",
+        normalizedHeadline: "glow serum weekend sale",
+        normalizedHeadlineHash: "hash-b",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        captureMethod: "browser_render",
+      },
+      lastSuccessfulProof: proofCapture({
+        captureMetadata: { captureMethod: "browser_render" },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("confirmed");
+    expect(result.events).toEqual([
+      expect.objectContaining({ eventType: "landing_page_headline_changed" }),
+    ]);
+  });
+
+  it("keeps comparing fields when either side has no recorded capture mode (legacy rows)", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Weekend Sale",
+        normalizedHeadline: "glow serum weekend sale",
+        normalizedHeadlineHash: "hash-b",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        captureMethod: "browser_render",
+      },
+      lastSuccessfulProof: proofCapture({
+        captureMetadata: {},
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("confirmed");
+    expect(result.events).toEqual([
+      expect.objectContaining({ eventType: "landing_page_headline_changed" }),
+    ]);
+  });
+
   it("invalidates low-confidence headline noise when the normalized proof is unchanged", () => {
     const result = evaluateProofBackedEvents({
       proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
