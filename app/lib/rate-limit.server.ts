@@ -66,6 +66,25 @@ export async function enforcePublicSearchRateLimit(
   );
 }
 
+export async function enforcePublicSearchSelectionRateLimit(
+  request: Request,
+  env: AppEnv,
+  ctx?: ExecutionContext,
+): Promise<Response | null> {
+  return enforceRateLimitPolicy(
+    request,
+    env,
+    {
+      scope: "public-search-selection",
+      limit: 30,
+      windowSeconds: 10 * 60,
+      failClosed: false,
+      keyByIpOnly: true,
+    },
+    ctx,
+  );
+}
+
 // Public /ads/:domain brand pages are cache-read-only (no provider spend), so
 // the bucket is more generous than public search, but still bounded: each
 // request costs bounded D1 reads and this is a crawl/abuse-facing surface.
