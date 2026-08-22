@@ -22,6 +22,11 @@ export type PrepareSearchResultSelectionOptions = {
   enrichSelected?: boolean;
   hydratePersisted?: boolean;
   /**
+   * When false, landing capture stays fetch-only. Omitted / undefined keeps
+   * today's default: rendered fallback on (`allowRenderedFallback !== false`).
+   */
+  allowRenderedFallback?: boolean;
+  /**
    * WP-11: when set, expensive OCR / landing / translation run in the
    * background via waitUntil and the loader returns the base ad immediately.
    * Tests and non-Worker callers omit this and keep the synchronous path.
@@ -32,6 +37,13 @@ export type PrepareSearchResultSelectionOptions = {
    * selection-enrichment landing telemetry rows. Anonymous visitors omit it.
    */
   planTier?: BrowserJobPlanTier | null;
+};
+
+type EnrichAndPersistSelectedAdOptions = {
+  planTier: BrowserJobPlanTier | null;
+  allowRenderedFallback: boolean;
+  persistSelected: boolean;
+  captureCreativeAndTranslation: boolean;
 };
 
 /** FIX-13: prevent a revalidation from scheduling a second enrichment while one runs. */
@@ -96,7 +108,18 @@ export async function prepareSearchResultSelection(
   const providerResultIsFresh = result.cacheStatus === "miss";
 
   if (selectedAdBase && options.enrichSelected !== false) {
-    const needsWork = selectionNeedsEnrichment(selectedAdBase);
+    const anonymousLandingOnly = options.hydratePersisted === false;
+    const needsWork = anonymousLandingOnly
+      ? Boolean(selectedAdBase.landingPageUrl?.trim()) &&
+        !selectedAdBase.landingPage &&
+        selectedAdBase.source !== "demo"
+      : selectionNeedsEnrichment(selectedAdBase);
+    const enrichOptions: EnrichAndPersistSelectedAdOptions = {
+      planTier: options.planTier ?? null,
+      allowRenderedFallback: options.allowRenderedFallback !== false,
+      persistSelected: Boolean(env.DB) && options.hydratePersisted !== false,
+      captureCreativeAndTranslation: options.hydratePersisted !== false,
+    };
     if (needsWork && options.waitUntil) {
       // WP-11 paint-fast path: return base ad now; finish enrichment async.
       // FIX-13: revalidations must not schedule a second enrichment while one
@@ -105,7 +128,7 @@ export async function prepareSearchResultSelection(
       selectionEnrichmentPending = true;
       if (claimed) {
         options.waitUntil(
-          enrichAndPersistSelectedAd(env, selectedAdBase, providerResultIsFresh, options.planTier ?? null)
+          enrichAndPersistSelectedAd(env, selectedAdBase, providerResultIsFresh, enrichOptions)
             .catch((error) => {
               // Background enrichment must never throw into the Worker isolate.
               console.warn(
@@ -126,7 +149,7 @@ export async function prepareSearchResultSelection(
         env,
         selectedAdBase,
         providerResultIsFresh,
-        options.planTier ?? null,
+        enrichOptions,
       );
     }
     // When needsWork is false, hydrated/persisted evidence already filled the
@@ -147,13 +170,19 @@ async function enrichAndPersistSelectedAd(
   env: AppEnv,
   selectedAdBase: AdRecord,
   providerResultIsFresh: boolean,
-  planTier: BrowserJobPlanTier | null = null,
+  {
+    planTier,
+    allowRenderedFallback,
+    persistSelected,
+    captureCreativeAndTranslation,
+  }: EnrichAndPersistSelectedAdOptions,
 ): Promise<AdRecord> {
   const creativeSourceUrl =
     selectedAdBase.adSnapshotUrl?.trim() ||
     selectedAdBase.creativeImageUrl?.trim() ||
     null;
   const creativeCapturePromise =
+    captureCreativeAndTranslation &&
     creativeSourceUrl &&
     shouldAttemptCreativeTextCapture(selectedAdBase)
       ? captureCreativeText(
@@ -171,9 +200,10 @@ async function enrichAndPersistSelectedAd(
   const [snapshot, creativeCapture] = await Promise.all([
     selectedAdBase.landingPageUrl && !selectedAdBase.landingPage
       ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl, {
-          persistArtifacts: Boolean(env.DB),
+          persistArtifacts: persistSelected,
           routeContext: "selection_enrichment",
           planTier,
+          ...(allowRenderedFallback ? {} : { allowRenderedFallback: false }),
         })
       : Promise.resolve(selectedAdBase.landingPage ?? null),
     creativeCapturePromise,
@@ -206,20 +236,22 @@ async function enrichAndPersistSelectedAd(
     ],
   };
 
-  const translationResult = await translateAdText(env, selectedAd);
-  if (translationResult) {
-    const translatedField = buildTranslatedAnalysisField(translationResult);
-    selectedAd = {
-      ...selectedAd,
-      analysisFields: withTranslatedAnalysisField(selectedAd.analysisFields, translatedField),
-    };
+  if (captureCreativeAndTranslation) {
+    const translationResult = await translateAdText(env, selectedAd);
+    if (translationResult) {
+      const translatedField = buildTranslatedAnalysisField(translationResult);
+      selectedAd = {
+        ...selectedAd,
+        analysisFields: withTranslatedAnalysisField(selectedAd.analysisFields, translatedField),
+      };
+    }
   }
 
   // The collection action accepts only this server-persisted canonical ad
   // id. Query-scoped matching metadata must never become shared canonical
   // state, and a cached/capture-failed selection must not erase richer
   // evidence written by an earlier selection.
-  if (env.DB) {
+  if (persistSelected) {
     const selectedForPersistence = creativeCapturedAt
       ? withCreativeCaptureTimestamp(selectedAd, creativeCapturedAt)
       : selectedAd;
