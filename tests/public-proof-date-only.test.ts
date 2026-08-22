@@ -73,7 +73,12 @@ describe("public proof brief — date-only captures", () => {
 
     // "Mar 1" is the en-locale short-month + numeric-day rendering of
     // 2026-03-01 at UTC (pinned by timeZone: "UTC").
-    expect(brief.decision.proofStatus).toContain("Mar 1");
+    // formatCapturedAt(firstSeenAt) is applied in the insight timeline
+    // ("Creative started running …"), not decision.proofStatus — that
+    // string is formatCapturedAt(fetchedAt), the cache clock.
+    expect(
+      brief.insights.timeline.some((entry) => entry.includes("Mar 1")),
+    ).toBe(true);
   });
 
   it("passes the raw date-only string through as the trail capturedAt", () => {
@@ -102,8 +107,13 @@ describe("public proof brief — date-only captures", () => {
     if (!brief) return;
 
     // Full-ISO captures keep the clock — the date-only guard must not suppress
-    // the time for real timestamps that actually have one.
-    expect(brief.decision.proofStatus).toMatch(/\d/);
-    expect(brief.decision.proofStatus).toContain("Mar 1");
+    // the time for real timestamps that actually have one. firstSeenAt lands
+    // in the insight timeline via formatCapturedAt, not in proofStatus.
+    const started = brief.insights.timeline.find((entry) =>
+      entry.startsWith("Creative started running"),
+    );
+    expect(started).toBeDefined();
+    expect(started).toContain("Mar 1");
+    expect(started).toMatch(/\d{1,2}:\d{2}/);
   });
 });
