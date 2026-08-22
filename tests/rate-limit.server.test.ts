@@ -4,6 +4,7 @@ import {
   enforceAuthenticatedSearchRateLimit,
   enforceBillingProviderRateLimit,
   enforcePublicSearchRateLimit,
+  enforcePublicSearchSelectionRateLimit,
   enforceRequestRateLimit,
   enforceSearchSelectionRateLimit,
   rateLimitPolicyFor,
@@ -216,6 +217,60 @@ describe("enforceRequestRateLimit", () => {
       env,
     );
     expect(blocked?.status).toBe(429);
+  });
+});
+
+describe("enforcePublicSearchSelectionRateLimit", () => {
+  it("admits 30 anonymous ad checks then returns 429", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const request = new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
+      headers: {
+        "cf-connecting-ip": "203.0.113.21",
+        "user-agent": "vitest",
+      },
+    });
+
+    for (let index = 0; index < 30; index += 1) {
+      await expect(enforcePublicSearchSelectionRateLimit(request, env)).resolves.toBeNull();
+    }
+
+    const blocked = await enforcePublicSearchSelectionRateLimit(request, env);
+    expect(blocked?.status).toBe(429);
+  });
+
+  it("does not let rotating user-agent reset the same IP bucket", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+
+    for (let index = 0; index < 30; index += 1) {
+      const request = new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
+        headers: {
+          "cf-connecting-ip": "203.0.113.22",
+          "user-agent": `rotating-agent-${index}`,
+        },
+      });
+      await expect(enforcePublicSearchSelectionRateLimit(request, env)).resolves.toBeNull();
+    }
+
+    const blocked = await enforcePublicSearchSelectionRateLimit(
+      new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
+        headers: {
+          "cf-connecting-ip": "203.0.113.22",
+          "user-agent": "brand-new-agent",
+        },
+      }),
+      env,
+    );
+    expect(blocked?.status).toBe(429);
+  });
+
+  it("returns null when env.DB is missing (fail-open)", async () => {
+    const request = new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
+      headers: {
+        "cf-connecting-ip": "203.0.113.23",
+        "user-agent": "vitest",
+      },
+    });
+    await expect(enforcePublicSearchSelectionRateLimit(request, {} as AppEnv)).resolves.toBeNull();
   });
 });
 

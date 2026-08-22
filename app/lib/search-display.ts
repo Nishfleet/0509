@@ -261,6 +261,36 @@ export function formatProofCaptureLabel(ad: AdRecord) {
     : "No landing-page destination available";
 }
 
+export function formatSelectedLandingHeadline(input: {
+  rawHeadline: string | null | undefined;
+  landingPageUrl: string | null | undefined;
+  hasLandingPage: boolean;
+  pending: boolean;
+}): string {
+  const headline = input.rawHeadline?.trim();
+  if (headline) return headline;
+  if (input.pending) return "Analyzing creative…";
+  if (input.landingPageUrl?.trim() && !input.hasLandingPage) {
+    return "Couldn't capture this page";
+  }
+  return "Headline not captured yet";
+}
+
+export function formatSelectedLandingFactValue(input: {
+  capturedLabel: string;
+  landingPageUrl: string | null | undefined;
+  hasLandingPage: boolean;
+  pending: boolean;
+  failedPageCheck?: boolean;
+}): string {
+  if (input.hasLandingPage) return input.capturedLabel;
+  if (input.pending) return "Analyzing creative…";
+  if (input.landingPageUrl?.trim() && !input.hasLandingPage) {
+    return input.failedPageCheck ? "Couldn't check this page" : "Unavailable";
+  }
+  return input.capturedLabel;
+}
+
 export function formatHookLabel(hook: string) {
   return scrubBrokenUnicode(hook).trim() || "Hook not detected.";
 }
