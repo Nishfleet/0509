@@ -56,6 +56,7 @@ Targeted suite (the files this change owns):
 ```
  Test Files  3 passed (3)
       Tests  30 passed (30)
+   Duration  1.96s
 ```
 
 (files: `tests/market-signal-workflow.test.ts`, `tests/market-signal-snapshot.test.ts`, `tests/lane-evidence-collision.test.ts`)
