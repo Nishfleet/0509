@@ -47,9 +47,16 @@ describe("workflow routing hardening", () => {
     // bought real isolation: this VPS already deploys production directly
     // (fleet-auto-deploy) and holds full credential parity by Nish's standing
     // order, so "hosted = trusted" was a boundary in prose only.
+
+// 2026-08-22 (Nish): ci.yml and cross-browser-matrix.yml moved BACK to
+// GitHub-hosted. The 2026-08-10 reason above was a billing outage that killed
+// hosted jobs at start -- but 0509 is a PUBLIC repo now, so standard hosted
+// runners carry no billing at all and cannot fail that way. Measured the same
+// day: the CI workflow completes in ~2.6 min hosted against a ~20.5 min median
+// on the shared VPS pool, because every heavy step there serialises behind
+// scripts/deploy-window-lock.sh. Everything credential-bearing (deploy, D1
+// backup/restore, soak, uptime, secret-scan) deliberately STAYS on the VPS.
     for (const [file, id] of [
-      ["ci.yml", "codex-node-checks"],
-      ["cross-browser-matrix.yml", "matrix"],
       ["d1-backup-validate.yml", "validate"],
       ["deploy-production.yml", "prepare_remote_restore_evidence"],
       ["secret-scan.yml", "gitleaks"],
@@ -62,6 +69,14 @@ describe("workflow routing hardening", () => {
       ["uptime-health.yml", "health"],
     ] as const) {
       expect(job(file, id)["runs-on"]).toEqual(verificationRunner);
+    }
+
+    // The two workflows that are deliberately GitHub-hosted (see note above).
+    for (const [file, id] of [
+      ["ci.yml", "codex-node-checks"],
+      ["cross-browser-matrix.yml", "matrix"],
+    ] as const) {
+      expect(job(file, id)["runs-on"]).toEqual("ubuntu-latest");
     }
   });
 
