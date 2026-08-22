@@ -1,5 +1,5 @@
 import { Form, Link } from "react-router";
-import type { LinksFunction, MetaFunction } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
@@ -16,6 +16,18 @@ const pageDescription =
   "MagicBrief alternative: your competitor list imports as watchlists; collections, boards, and analytics history do not transfer. See what moves.";
 
 export const links: LinksFunction = () => canonicalLinks("/compare/magicbrief");
+
+// Wind-down traffic to this page is the blitz's headline capture signal
+// (docs/magicbrief-blitz-capture.md). The anonymous funnel event is the only
+// thing the loader does — default-off, GPC-suppressed, and coarse per the
+// measurement spec.
+export async function loader({ context, request }: LoaderFunctionArgs) {
+  const { getEnv } = await import("~/lib/context.server");
+  const { emitFunnelMigrationView } = await import("~/lib/funnel-measurement.server");
+  const env = getEnv(context);
+  emitFunnelMigrationView(env, request);
+  return null;
+}
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
