@@ -430,6 +430,7 @@ function proofTimeLabel(iso: string | null | undefined): string {
   return parsed.toLocaleString("en", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "UTC",
   });
 }
 
