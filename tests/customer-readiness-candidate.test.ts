@@ -1,5 +1,7 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -109,6 +111,112 @@ describe("customer readiness candidate identity", () => {
       baseCommit: head,
       headCommit: head,
     });
+  });
+
+  it("accepts a detached candidate that is an ancestor of the live remote main after main advanced", () => {
+    // Runner shape from deploy-production.yml: actions/checkout fetches all
+    // heads (origin/main exists at the CURRENT tip) but checks out the pinned
+    // dispatched SHA, which is an older main commit when main advanced between
+    // dispatch and run start (runs 32508360308 and 32528443333 on 2026-08-21).
+    const remote = createRepo();
+    const pinned = git(remote, ["rev-parse", "HEAD"]);
+    writeFileSync(join(remote, "tracked.txt"), "main advanced after dispatch\n");
+    git(remote, ["add", "tracked.txt"]);
+    git(remote, ["commit", "-q", "-m", "main advanced"]);
+    const liveTip = git(remote, ["rev-parse", "HEAD"]);
+
+    const client = mkdtempSync(join(tmpdir(), "0509-candidate-client-"));
+    repos.push(client);
+    git(client, ["init", "-q", "-b", "main"]);
+    git(client, ["config", "user.email", "candidate-test@example.com"]);
+    git(client, ["config", "user.name", "Candidate Test"]);
+    git(client, ["remote", "add", "origin", remote]);
+    git(client, [
+      "fetch",
+      "-q",
+      "origin",
+      "refs/heads/main:refs/remotes/origin/main",
+    ]);
+    git(client, ["switch", "-q", "--detach", pinned]);
+
+    expect(git(client, ["rev-parse", "refs/remotes/origin/main"])).toBe(
+      liveTip,
+    );
+    const result = runCandidate(client);
+    expect(result.code).toBe(0);
+    expect(result.report).toMatchObject({
+      ok: true,
+      branch: "main",
+      baseCommit: pinned,
+      headCommit: pinned,
+    });
+  });
+
+  it("accepts a detached candidate at the live remote main tip when the checkout has no tracking ref", () => {
+    // SHA-pinned checkout shape: only the object for the pinned commit is
+    // fetched, so refs/remotes/origin/main never exists.
+    const remote = createRepo();
+    const liveTip = git(remote, ["rev-parse", "HEAD"]);
+
+    const client = mkdtempSync(join(tmpdir(), "0509-candidate-client-"));
+    repos.push(client);
+    git(client, ["init", "-q", "-b", "main"]);
+    git(client, ["config", "user.email", "candidate-test@example.com"]);
+    git(client, ["config", "user.name", "Candidate Test"]);
+    git(client, ["remote", "add", "origin", remote]);
+    git(client, [
+      "fetch",
+      "-q",
+      "origin",
+      "refs/heads/main:refs/remotes/origin/main",
+    ]);
+    git(client, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    git(client, ["switch", "-q", "--detach", liveTip]);
+
+    const result = runCandidate(client);
+    expect(result.code).toBe(0);
+    expect(result.report).toMatchObject({
+      ok: true,
+      branch: "main",
+      baseCommit: liveTip,
+      headCommit: liveTip,
+    });
+  });
+
+  it("rejects a detached candidate that is not reachable from the live remote main", () => {
+    const remote = createRepo();
+    const mainHead = git(remote, ["rev-parse", "HEAD"]);
+
+    const client = mkdtempSync(join(tmpdir(), "0509-candidate-client-"));
+    repos.push(client);
+    git(client, ["init", "-q", "-b", "main"]);
+    git(client, ["config", "user.email", "candidate-test@example.com"]);
+    git(client, ["config", "user.name", "Candidate Test"]);
+    git(client, ["remote", "add", "origin", remote]);
+    git(client, [
+      "fetch",
+      "-q",
+      "origin",
+      "refs/heads/main:refs/remotes/origin/main",
+    ]);
+    git(client, ["switch", "-q", "-c", "off-main", "refs/remotes/origin/main"]);
+    writeFileSync(join(client, "tracked.txt"), "off-main candidate\n");
+    git(client, ["add", "tracked.txt"]);
+    git(client, ["commit", "-q", "-m", "off-main candidate"]);
+    const offMain = git(client, ["rev-parse", "HEAD"]);
+    git(client, ["switch", "-q", "--detach", offMain]);
+
+    expect(git(client, ["rev-parse", "refs/remotes/origin/main"])).toBe(
+      mainHead,
+    );
+    const result = runCandidate(client);
+    expect(result.code).toBe(0);
+    expect(result.report).toMatchObject({
+      branch: "detached",
+      baseCommit: offMain,
+      headCommit: offMain,
+    });
+    expect(result.report?.ok).toBe(true);
   });
 
   it("fails closed for missing, mismatched, or malformed detached remote-main identity", () => {
@@ -304,5 +412,141 @@ describe("customer readiness candidate identity", () => {
       configFingerprint: "0".repeat(64),
     });
     expect(explicit.output).not.toContain("release-2026-07-15");
+  });
+});
+
+describe("runner-shaped detached candidate identity", () => {
+  // Reproduces the deploy-production runner state from run 32528443333:
+  // actions/checkout finds the pinned SHA already present, skips fetching,
+  // and detaches HEAD exactly at the pinned (merged) candidate, while
+  // refs/remotes/origin/main still points at a NEWER tip last fetched by an
+  // unrelated workflow sharing the workspace.
+  function createRunnerShapedRepo() {
+    const repo = createRepo();
+    const pinned = git(repo, ["rev-parse", "HEAD"]);
+    writeFileSync(join(repo, "tracked.txt"), "newer main tip\n");
+    git(repo, ["add", "tracked.txt"]);
+    git(repo, ["commit", "-q", "-m", "newer main tip"]);
+    git(repo, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(repo, ["remote", "add", "origin", "https://github.com/Nishfleet/0509.git"]);
+    git(repo, ["switch", "--detach", "-q", pinned]);
+    return { repo, pinned };
+  }
+
+  async function withCompareApi(
+    handler: (req: IncomingMessage, res: ServerResponse) => void,
+    run: (apiUrl: string) => Promise<void> | void,
+  ) {
+    const server: Server = createServer(handler);
+    await new Promise<void>((resolveListen) => {
+      server.listen(0, "127.0.0.1", resolveListen);
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("compare_api_address_unavailable");
+    try {
+      await run(`http://127.0.0.1:${address.port}`);
+    } finally {
+      await new Promise<void>((resolveClose) => {
+        server.close(() => resolveClose());
+      });
+    }
+  }
+
+  // Async twin of runCandidate: spawnSync would block this test process's
+  // event loop, so the in-process compare-API stub could never accept the
+  // spawned candidate's connection.
+  function runCandidateAsync(
+    repo: string,
+    args: string[] = ["--base", "HEAD"],
+    extraEnv: Record<string, string | undefined> = {},
+  ): Promise<{ code: number | null; output: string; report: Record<string, any> | null }> {
+    return new Promise((resolveRun, rejectRun) => {
+      const child = spawn(process.execPath, [SCRIPT, ...args], {
+        cwd: repo,
+        env: isolatedGitEnv({ ...process.env, ...extraEnv }),
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let stdout = "";
+      child.stdout.on("data", (chunk) => {
+        stdout += String(chunk);
+      });
+      child.on("close", (code) => {
+        const output = stdout.trim();
+        resolveRun({ code, output, report: output ? (JSON.parse(output) as Record<string, any>) : null });
+      });
+      child.on("error", rejectRun);
+    });
+  }
+
+  it("accepts a detached pinned candidate contained in protected main via a provider containment proof", async () => {
+    const { repo, pinned } = createRunnerShapedRepo();
+    let requestedPath = "";
+
+    await withCompareApi(
+      (req, res) => {
+        requestedPath = req.url ?? "";
+        expect(requestedPath).toMatch(/^\/repos\/Nishfleet\/0509\/compare\/[0-9a-f]{40}\.\.\.main$/u);
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ status: "ahead", ahead_by: 15, behind_by: 0, base_commit: { sha: pinned } }));
+      },
+      async (apiUrl) => {
+        const result = await runCandidateAsync(repo, ["--base", "HEAD"], { GITHUB_API_URL: apiUrl });
+
+        expect(result.code).toBe(0);
+        expect(result.report).toMatchObject({ ok: true, branch: "main", headCommit: pinned });
+        expect(result.report?.branchProof).toMatchObject({
+          proved: true,
+          source: "provider_compare",
+          repository: "Nishfleet/0509",
+          status: "ahead",
+        });
+        expect(requestedPath).toContain(`/${pinned}...main`);
+      },
+    );
+  });
+
+  it("still rejects a genuinely off-main detached candidate even when the local ref exists", async () => {
+    const { repo } = createRunnerShapedRepo();
+    writeFileSync(join(repo, "tracked.txt"), "off-main candidate\n");
+    git(repo, ["commit", "-qam", "off-main candidate"]);
+    const offMain = git(repo, ["rev-parse", "HEAD"]);
+
+    await withCompareApi(
+      (_req, res) => {
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ status: "diverged", ahead_by: 1, behind_by: 2 }));
+      },
+      async (apiUrl) => {
+        const result = await runCandidateAsync(repo, ["--base", "HEAD"], { GITHUB_API_URL: apiUrl });
+
+        expect(result.report).toMatchObject({
+          branch: "detached",
+          headCommit: offMain,
+        });
+        expect(result.report?.branchProof).toMatchObject({ proved: false, status: "diverged" });
+      },
+    );
+  });
+
+  it("fails closed for a detached candidate when the provider containment proof is unavailable", async () => {
+    const { repo } = createRunnerShapedRepo();
+
+    await withCompareApi(
+      (_req, res) => {
+        res.statusCode = 500;
+        res.end("{}");
+      },
+      async (apiUrl) => {
+        const result = await runCandidateAsync(repo, ["--base", "HEAD"], { GITHUB_API_URL: apiUrl });
+        expect(result.report).toMatchObject({ branch: "detached" });
+        expect(result.report?.branchProof).toMatchObject({ proved: false, reason: "provider_compare_http_500" });
+      },
+    );
+
+    const unreachable = await runCandidateAsync(repo, ["--base", "HEAD"], {
+      GITHUB_API_URL: "http://127.0.0.1:9",
+    });
+    expect(unreachable.report).toMatchObject({ branch: "detached" });
+    expect(unreachable.report?.branchProof).toMatchObject({ proved: false, reason: "provider_compare_unavailable" });
   });
 });

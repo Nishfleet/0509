@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mapCustomerRouteError,
   PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+  PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE,
 } from "~/lib/customer-route-error";
 import type { AdRecord, SearchResponse } from "~/lib/types";
 
@@ -1262,6 +1263,7 @@ describe("search loader", () => {
       discoveryFailureClass: null,
     };
     const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const enforcePublicSearchSelectionRateLimit = vi.fn().mockResolvedValue(null);
     const enforceSearchSelectionRateLimit = vi.fn().mockResolvedValue(null);
     const hasWarmSearchCacheEntry = vi.fn().mockResolvedValue(true);
     const prepareSearchResultSelection = vi.fn().mockResolvedValue({
@@ -1287,6 +1289,7 @@ describe("search loader", () => {
     }));
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
+      enforcePublicSearchSelectionRateLimit,
       enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
       enforceSearchSelectionRateLimit,
     }));
@@ -1308,16 +1311,100 @@ describe("search loader", () => {
     } as never);
 
     expect(hasWarmSearchCacheEntry).toHaveBeenCalledTimes(1);
+    expect(enforcePublicSearchSelectionRateLimit).toHaveBeenCalledTimes(1);
+    expect(enforcePublicSearchSelectionRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      env,
+      undefined,
+    );
     expect(enforcePublicSearchRateLimit).not.toHaveBeenCalled();
-    // Anonymous selections stay unmetered because they carry no provider
-    // spend: enrichment is disabled without a session.
     expect(enforceSearchSelectionRateLimit).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).toHaveBeenCalledWith(
       env,
       sourceResult,
       "meta-boat-1",
-      { enrichSelected: false, hydratePersisted: false },
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
     );
+  });
+
+  it("stops anonymous cached selections with a labeled 429 that keeps Retry-After", async () => {
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "hit",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const rateLimitedResponse = new Response(
+      JSON.stringify({
+        error: "rate_limited",
+        message: "Too many requests. Please try again shortly.",
+      }),
+      {
+        status: 429,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "retry-after": "600",
+        },
+      },
+    );
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const enforcePublicSearchSelectionRateLimit = vi.fn().mockResolvedValue(rateLimitedResponse);
+    const enforceSearchSelectionRateLimit = vi.fn().mockResolvedValue(null);
+    const hasWarmSearchCacheEntry = vi.fn().mockResolvedValue(true);
+    const prepareSearchResultSelection = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforcePublicSearchSelectionRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
+    }));
+    vi.doMock("~/lib/search-execution.server", () => ({
+      executeSearchWithRelevance: vi.fn(),
+      hasWarmSearchCacheEntry,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const blocked = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa&selected=meta-boat-1"),
+    } as never).catch((error: unknown) => error);
+
+    expect(blocked).toBeInstanceOf(Response);
+    expect((blocked as Response).status).toBe(429);
+    expect((blocked as Response).headers.get("retry-after")).toBe("600");
+    await expect((blocked as Response).json()).resolves.toMatchObject({
+      error: "rate_limited",
+      message: PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE,
+    });
+    expect(prepareSearchResultSelection).not.toHaveBeenCalled();
   });
 
   it("stops anonymous public searches with a labeled 429 that keeps Retry-After and shows a truthful recovery message", async () => {
