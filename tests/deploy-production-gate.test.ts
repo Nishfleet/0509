@@ -1494,7 +1494,6 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const checkoutIndex = workflow.indexOf(
       "- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     );
-    const acquireIndex = workflow.indexOf("- name: Acquire deploy window");
     const verifySecretsIndex = workflow.indexOf(
       "- name: Verify Cloudflare deploy secrets",
     );
@@ -1509,7 +1508,6 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const verifyEvidenceIndex = workflow.indexOf(
       "- name: Verify complete release evidence set",
     );
-    const releaseIndex = workflow.indexOf("- name: Release deploy window");
     const verifySecretsStep = workflow.slice(
       verifySecretsIndex,
       workflow.indexOf("- uses: actions/setup-node@", verifySecretsIndex),
@@ -1523,43 +1521,15 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       run?: string;
       if?: string;
     }>;
-    const acquireCommandSteps = deploySteps.filter(
-      (step) => step.run === "./scripts/deploy-window-lock.sh acquire",
-    );
-    const releaseCommandSteps = deploySteps.filter(
-      (step) => step.run === "./scripts/deploy-window-lock.sh release",
-    );
-    const nonExactLockSteps = (parse(`steps:
-  - run: |
-      ./scripts/deploy-window-lock.sh acquire
-  - run: "./scripts/deploy-window-lock.sh release\\n"
-`) as any).steps as Array<{ run?: string }>;
-    const capabilityCleanupSteps = deploySteps.filter(
-      (step) => step.name === "Remove deploy-window capability file",
-    );
 
     expect(checkoutIndex).toBeGreaterThanOrEqual(0);
-    expect(acquireIndex).toBeGreaterThan(checkoutIndex);
-    expect(verifySecretsIndex).toBeGreaterThan(acquireIndex);
+    expect(verifySecretsIndex).toBeGreaterThan(checkoutIndex);
     expect(testIndex).toBeGreaterThan(verifySecretsIndex);
     expect(materializeIndex).toBeGreaterThan(testIndex);
     expect(synchronizeCanaryIndex).toBeGreaterThan(materializeIndex);
     expect(deployIndex).toBeGreaterThan(synchronizeCanaryIndex);
     expect(verifyEvidenceIndex).toBeGreaterThan(deployIndex);
-    expect(releaseIndex).toBeGreaterThan(verifyEvidenceIndex);
     expect(workflow).toContain("timeout-minutes: 270");
-    expect(acquireCommandSteps).toHaveLength(1);
-    expect(acquireCommandSteps[0]?.name).toBe("Acquire deploy window");
-    expect(
-      nonExactLockSteps.filter(
-        (step) => step.run === "./scripts/deploy-window-lock.sh acquire",
-      ),
-    ).toHaveLength(0);
-    expect(
-      nonExactLockSteps.filter(
-        (step) => step.run === "./scripts/deploy-window-lock.sh release",
-      ),
-    ).toHaveLength(0);
     expect(verifySecretsStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
@@ -1603,14 +1573,6 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}",
     );
     expect(deployStep).toContain("GITHUB_TOKEN: ${{ github.token }}");
-    expect(releaseCommandSteps).toHaveLength(1);
-    expect(releaseCommandSteps[0]?.name).toBe("Release deploy window");
-    expect(releaseCommandSteps[0]?.if).toBe("always()");
-    expect(capabilityCleanupSteps).toHaveLength(1);
-    expect(capabilityCleanupSteps[0]?.if).toBe("always()");
-    expect(capabilityCleanupSteps[0]?.run).toBe(
-      'umask 077\nrm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"\n',
-    );
     expect(workflow).toContain("actions: read");
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain(
@@ -1704,22 +1666,6 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       'D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"',
     );
     expect(workflow).not.toContain("gh secret set");
-    expect(workflow).toContain(
-      "runs-on: [self-hosted, linux, x64, vps-verify]",
-    );
-    expect(workflow).not.toContain("runs-on: ubuntu-latest");
-    // 2026-08-23: ci.yml runs hosted now (public repo, free + unmetered,
-    // and GitHub says self-hosted is for private repos only). The deploy
-    // chain itself stays on the VPS labels - that is what this gate protects.
-    expect(readFileSync(resolve(".github/workflows/ci.yml"), "utf8")).toContain(
-      "runs-on: ubuntu-latest",
-    );
-    expect(
-      readFileSync(resolve(".github/workflows/d1-backup-validate.yml"), "utf8"),
-    ).toContain("runs-on: [self-hosted, linux, x64, vps-verify]");
-    expect(
-      readFileSync(resolve(".github/workflows/secret-scan.yml"), "utf8"),
-    ).toContain("runs-on: ubuntu-latest");
     expect(workflow).not.toContain("- name: Production public smoke");
   });
 
@@ -1732,7 +1678,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const prepare = workflow.jobs.prepare_remote_restore_evidence;
     const candidateVerifierStep = prepare.steps.find(
       (step: any) =>
-        step.name === "Verify pinned candidate before self-hosted work",
+        step.name === "Verify pinned candidate before deploy work",
     );
     const bindArchiveStep = prepare.steps.find(
       (step: any) => step.name === "Bind restore evidence archive path",
@@ -1757,7 +1703,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       'archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"',
     );
     expect(candidateVerifierStep.run).toBe(
-      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh",
+      "./scripts/ci-verify-production-candidate.sh",
     );
     // Post-pin drift tolerance: this step re-verifies the exact SHA
     // pin_candidate already pinned, so a mid-run move of main must not fail
@@ -1772,10 +1718,10 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(uploadStep.with.path).toBe("${{ env.RESTORE_EVIDENCE_ARCHIVE }}");
     expect(cleanupStep.run).toBe('rm -f -- "$RESTORE_EVIDENCE_ARCHIVE"');
     expect(verifyStep.run).toBe(
-      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-prepare-remote-restore-evidence.sh",
+      "./scripts/ci-prepare-remote-restore-evidence.sh",
     );
     expect(bindManifestStep.run).toBe(
-      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-bind-remote-restore-candidate.sh",
+      "./scripts/ci-bind-remote-restore-candidate.sh",
     );
     expect(workflowText).not.toContain("<<'VERIFY_LANE'");
     expect(workflowText).not.toContain("/run/lock/0509/d1-remote-restore-evidence");

@@ -23,7 +23,7 @@ jobs:
     # Monitoring is trusted operational work. Keep it off repository-level
     # self-hosted runners because PR-controlled workflow YAML can retarget any
     # runner registered directly to a user-owned repository.
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     # Two probe steps, each worst-case ~70s (3 curl attempts x 20s + delays).
     timeout-minutes: 4
     steps:

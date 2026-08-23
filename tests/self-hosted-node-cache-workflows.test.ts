@@ -9,7 +9,7 @@ const hostedNpmCacheWithLockfile =
   "${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}";
 const hostedPackageManagerCacheWithLockfile =
   "${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}";
-const verificationRunner = ["self-hosted", "linux", "x64", "vps-verify"];
+const hostedRunner = "ubuntu-latest";
 
 // 2026-08-23: ci.yml and secret-scan.yml moved to GitHub-hosted runners.
 // 0509 is a PUBLIC repo, so hosted runners are free and unmetered, and
@@ -73,7 +73,7 @@ describe("runner-routed setup-node cache workflows", () => {
       // runner.environment cache expressions below stay: they are what keeps
       // Actions cache scoped to GitHub-hosted if any job ever moves back.
       expect(job?.["runs-on"], `${workflowPath}:${jobName}`).toEqual(
-        verificationRunner,
+        hostedRunner,
       );
     }
 

@@ -5,16 +5,16 @@ name: Daily market-signal D1 snapshot
 # a non-interactive cron (no CLOUDFLARE_API_TOKEN there), which left the
 # snapshot stale for five mornings (scout 2026-08-09; see PR #557 for the
 # self-diagnosing failure classifier). This workflow generates the snapshot on
-# the repository's self-hosted verify runner using the production-environment
+# a GitHub-hosted runner using the production-environment
 # Cloudflare token secrets and commits it to main, so the host Hermes job
 # never needs a Cloudflare credential at all.
 #
-# The runner must be self-hosted like every other workflow in this repository
-# (d1-backup-r2, d1-remote-restore-evidence, uptime-health, ...): GitHub-hosted
-# jobs are intermittently refused with "recent account payments have failed or
-# your spending limit needs to be increased", which is exactly how the snapshot
-# went stale before. The lane-wrapped commands below and the conditional npm
-# cache are the same self-hosted-aware pattern the d1-backup workflows use.
+# History: this job previously required a self-hosted runner because
+# GitHub-hosted jobs were intermittently refused with "recent account payments
+# have failed or your spending limit needs to be increased", which is exactly
+# how the snapshot went stale before. That billing fault is resolved and every
+# workflow in this repository now runs on GitHub-hosted runners (2026-08-23).
+# If hosted jobs start being refused again, this is the first symptom to expect.
 #
 # The commit is a no-op when the snapshot is unchanged, and no workflow in this
 # repository triggers on push to main, so a snapshot commit cannot cascade CI
@@ -33,7 +33,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: 0509-market-signal-snapshot
+  group: 0509-production-provider-mutations
   cancel-in-progress: false
   queue: max
 
@@ -55,7 +55,7 @@ permissions:
 jobs:
   snapshot:
     name: Generate and commit market-signal snapshot
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
     # Scheduled runs execute on the default branch; manual dispatches must also
@@ -73,7 +73,7 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
       - name: Install pinned dependencies
-        run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+        run: npm ci --ignore-scripts
       - name: Refuse empty Cloudflare secrets
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -96,7 +96,7 @@ jobs:
           XDG_CONFIG_HOME: ${{ runner.temp }}/market-signal-wrangler-config
         run: |
           unset CF_API_TOKEN CF_API_KEY CF_EMAIL CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL
-          ./scripts/deploy-window-lock.sh run -- npm run signal:market -- --output "$SNAPSHOT_PATH"
+          npm run signal:market -- --output "$SNAPSHOT_PATH"
       - name: Verify snapshot freshness
         run: |
           node -e "

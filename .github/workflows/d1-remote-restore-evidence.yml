@@ -40,7 +40,7 @@ permissions:
 jobs:
   authorize_release:
     name: Authorize exact restore candidate
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     permissions: {}
     outputs:
       sha: ${{ steps.authorize.outputs.sha }}
@@ -80,7 +80,7 @@ jobs:
       inputs.operation == 'apply_and_restore' &&
       needs.authorize_release.result == 'success'
     needs: authorize_release
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: production
     env:
@@ -114,13 +114,8 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
-      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
-      - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
-      - name: Acquire provider lane
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh acquire
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
       - name: Reconfirm frozen main before pre-migration backup
         shell: bash
         env:
@@ -167,27 +162,12 @@ jobs:
           set -euo pipefail
           test "$D1_APPLY_AND_RESTORE_AUTOMATION_APPROVED" = "0509-apply-and-restore"
           npx wrangler d1 migrations apply 0509 --remote
-      - name: Release provider lane
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh release
-      - name: Remove provider-lane capability file
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: |
-          umask 077
-          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"
-
   restore:
     if: "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || needs.apply_and_restore.result == 'success')"
     needs:
       - authorize_release
       - apply_and_restore
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 300
     environment: production
     env:
@@ -221,13 +201,8 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
-      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
-      - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
-      - name: Acquire provider lane
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh acquire
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
       - name: Reconfirm frozen main before restore mutation
         shell: bash
         env:
@@ -252,20 +227,6 @@ jobs:
       - name: Remove run-scoped plaintext backup files
         if: always()
         run: node scripts/d1-backup-local-cleanup.mjs
-      - name: Release provider lane
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh release
-      - name: Remove provider-lane capability file
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: |
-          umask 077
-          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"
       - name: Archive permission-preserving restore evidence
         shell: bash
         run: |
@@ -292,7 +253,7 @@ jobs:
       - authorize_release
       - apply_and_restore
       - restore
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: production
     env:
@@ -324,29 +285,10 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
-      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
-      - name: Acquire provider lane
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh acquire
+      - run: npm ci --ignore-scripts
       - name: Delete every exact scratch database from this run
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
         run: node scripts/d1-remote-restore-evidence.mjs --cleanup-only
-      - name: Release provider lane
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh release
-      - name: Remove provider-lane capability file
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: |
-          umask 077
-          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"

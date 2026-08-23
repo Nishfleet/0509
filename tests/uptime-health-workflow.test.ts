@@ -38,12 +38,7 @@ describe("uptime health workflow", () => {
     // available for on-demand workflow_dispatch probes only.
     expect(parsed.on.workflow_dispatch).toBeDefined();
     expect(parsed.on.schedule).toBeUndefined();
-    expect(parsed.jobs.health?.["runs-on"]).toEqual([
-      "self-hosted",
-      "linux",
-      "x64",
-      "vps-verify",
-    ]);
+    expect(parsed.jobs.health?.["runs-on"]).toEqual("ubuntu-latest");
     expect(parsed.jobs.health?.["timeout-minutes"]).toBe(4);
 
     const healthStep = parsed.jobs.health?.steps?.find((step) => step.name === "Check production health endpoint");

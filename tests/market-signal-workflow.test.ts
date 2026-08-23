@@ -54,7 +54,7 @@ describe("daily market-signal D1 snapshot workflow", () => {
   });
 
   it("generates the snapshot with Cloudflare token secrets on the self-hosted production-environment job", () => {
-    expect(job["runs-on"]).toEqual(["self-hosted", "linux", "x64", "vps-verify"]);
+    expect(job["runs-on"]).toEqual("ubuntu-latest");
     expect(job.environment).toBe("production");
     expect(job["timeout-minutes"]).toBe(30);
     expect(job.if).toBe("github.ref == 'refs/heads/main'");
@@ -79,18 +79,7 @@ describe("daily market-signal D1 snapshot workflow", () => {
     const generate = job.steps?.find((step) => step.name === "Generate market-signal D1 snapshot");
     expect(generate?.run).toContain("unset CF_API_TOKEN");
     expect(generate?.env?.XDG_CONFIG_HOME).toBe("${{ runner.temp }}/market-signal-wrangler-config");
-    expect(generate?.run).toContain("./scripts/deploy-window-lock.sh run -- npm run signal:market");
-  });
-
-  it("keeps heavyweight commands inside the shared runner lane", () => {
-    const commands = job.steps?.map((step) => step.run).filter((run): run is string => Boolean(run)) ?? [];
-    for (const command of commands) {
-      if (/\bnpm (?:ci|run)\b/u.test(command)) {
-        expect(command, command).toContain("./scripts/deploy-window-lock.sh run --");
-      }
-    }
-    expect(commands.join("\n")).toContain("./scripts/deploy-window-lock.sh run -- npm ci");
-    expect(commands.join("\n")).toContain("./scripts/deploy-window-lock.sh run -- npm run signal:market");
+    expect(generate?.run).toContain("npm run signal:market");
   });
 
   it("writes the snapshot to the exact path the Hermes contract reads", () => {

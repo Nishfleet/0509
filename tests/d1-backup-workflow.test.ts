@@ -137,13 +137,10 @@ describe("manual D1 backup workflow", () => {
     );
     expect(bindingStep?.run).toContain('>> "$GITHUB_ENV"');
     expect(steps).toContainEqual(expect.objectContaining({
-      run: "./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts",
+      run: "npm ci --ignore-scripts",
     }));
     const backupStep = steps.find(
       (step) => step.name === "Run approved D1-to-R2 backup",
-    );
-    const acquireIndex = steps.findIndex(
-      (step) => step.name === "Acquire provider lane",
     );
     const casIndex = steps.findIndex(
       (step) => step.name === "Reconfirm frozen main before backup mutation",
@@ -158,10 +155,10 @@ describe("manual D1 backup workflow", () => {
     );
     expect(providerSecretSteps).toHaveLength(1);
     expect(providerSecretSteps[0]).toBe(backupStep);
-    for (const step of steps.slice(0, acquireIndex)) {
+    for (const step of steps.slice(0, casIndex)) {
       expect(step.run ?? "").not.toMatch(/\bwrangler\b|d1-backup-to-r2\.mjs/);
     }
-    expect(casIndex).toBe(acquireIndex + 1);
+    expect(casIndex).toBeGreaterThanOrEqual(0);
     expect(backupStepIndex).toBe(casIndex + 1);
     expect(steps[casIndex]).toMatchObject({
       run: "./scripts/ci-verify-production-candidate.sh",
@@ -185,7 +182,7 @@ describe("manual D1 backup workflow", () => {
 
     const backupSteps = steps.map((step) => step.run).filter(Boolean);
     const validationCommand =
-      "./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs";
+      "node scripts/validate-d1-backup.mjs";
     expect(backupSteps.indexOf(validationCommand)).toBeGreaterThanOrEqual(0);
     const backupIndex = backupSteps.findIndex((run) =>
       run?.includes("node scripts/d1-backup-to-r2.mjs"),
@@ -198,15 +195,6 @@ describe("manual D1 backup workflow", () => {
     expect(backupIndex).toBeGreaterThan(
       backupSteps.indexOf(validationCommand),
     );
-    expect(
-      steps.find((step) => step.name === "Release provider lane"),
-    ).toMatchObject({
-      if: "always()",
-      run: "./scripts/deploy-window-lock.sh release",
-    });
-    expect(
-      steps.find((step) => step.name === "Remove provider-lane capability file"),
-    ).toMatchObject({ if: "always()" });
     expect(workflow).not.toMatch(/api[_-]?token:\s*['\"]/i);
   });
 
