@@ -111,7 +111,7 @@ describe("website site scan storage", () => {
     applyMigration(harness.sqlite, "migrations/0047_monitoring_fanout_orchestration.sql");
     // Migration 0007 turns foreign keys off; restore them before seeding.
     harness.sqlite.exec("PRAGMA foreign_keys = ON;");
-    applyMigration(harness.sqlite, "migrations/0075_competitor_site_monitoring.sql");
+    applyMigration(harness.sqlite, "migrations/0077_competitor_site_monitoring.sql");
     env = { DB: harness.db } as never;
 
     harness.sqlite

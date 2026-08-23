@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  POST_DEPLOY_CLEANUP_MIGRATIONS,
   PRODUCTION_MIGRATION_LEDGER_BASELINE,
   PRODUCTION_MIGRATION_LEDGER_BASELINE_SHA256,
   RETIRED_PRODUCTION_MIGRATIONS,
@@ -79,11 +80,44 @@ Migrations to be applied:
     );
     const next = "0071_next_migration.sql";
     expect(
-      allowedProductionMigrationLedgers([...repositoryBaseline, next]),
+      allowedProductionMigrationLedgers([...repositoryBaseline, next], new Set()),
     ).toEqual([[...PRODUCTION_MIGRATION_LEDGER_BASELINE, next]]);
     expect(PRODUCTION_MIGRATION_LEDGER_BASELINE_SHA256).toBe(
       migrationLedgerNamesSha256([...PRODUCTION_MIGRATION_LEDGER_BASELINE]),
     );
+  });
+
+  it("allows competitor-site monitoring to trail after teams delivery landed first", () => {
+    const repositoryBaseline = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter(
+      (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
+    );
+    const repositorySuffix = [
+      "0071_release_observation_redispatch_failures.sql",
+      "0072_scheduled_observation_health_state.sql",
+      "0073_cron_failure_alert_attempt_evidence.sql",
+      "0074_provider_neutral_discovery_failures.sql",
+      "0075_teams_delivery.sql",
+      "0076_browser_job_telemetry.sql",
+      "0077_competitor_site_monitoring.sql",
+    ];
+    const repository = [...repositoryBaseline, ...repositorySuffix];
+    const productionLedger = [
+      ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      ...repositorySuffix.slice(0, 6),
+    ];
+    expect(
+      allowedProductionMigrationLedgers(repository, POST_DEPLOY_CLEANUP_MIGRATIONS),
+    ).toEqual(expect.arrayContaining([productionLedger]));
+    const output = `
+Migrations to be applied:
+┌────────────────────────────────────────────────────┐
+│ Name                                               │
+├────────────────────────────────────────────────────┤
+│ 0077_competitor_site_monitoring.sql                │
+└────────────────────────────────────────────────────┘
+`;
+    expect(hasOnlyPostDeployCleanupMigrations(output)).toBe(true);
+    expect(blockingPendingMigrationNames(output)).toEqual([]);
   });
 
   it("fails closed on baseline drift, duplicates, and invalid retired names", () => {
