@@ -59,6 +59,26 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "How Five to Nine extends Meta Ad Library results with monitoring and proof.",
   },
+  "/compare/visualping": {
+    title: "Five to Nine vs Visualping",
+    description:
+      "Visualping is a general website change detector — Five to Nine is built for competitor offer changes: hooks, prices, CTAs, and landing-page copy, each change saved with screenshots, text, and links.",
+  },
+  "/compare/spyland": {
+    title: "Five to Nine vs SpyLand",
+    description:
+      "SpyLand tracks competitor landing-page URLs and uses AI to explain what changed. Five to Nine adds watchlists, saved change evidence, and honest Meta ads coverage — here is how the two compare.",
+  },
+  "/compare/pulzifi": {
+    title: "Five to Nine vs Pulzifi",
+    description:
+      "Pulzifi turns competitor site changes into AI strategic insights delivered to Slack or email. Five to Nine trades AI interpretation for evidence: screenshots, page text, and source links behind every alert.",
+  },
+  "/compare/foreplay": {
+    title: "Five to Nine vs Foreplay",
+    description:
+      "Foreplay is an ad swipe file: save ads from Facebook Ad Library and TikTok Creative Center, organize them into boards, and share with your team. Five to Nine is not a swipe file — it watches competitors for change. Here is the honest difference.",
+  },
   "/competitor-monitoring": {
     title: "Competitor monitoring",
     description:

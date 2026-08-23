@@ -326,7 +326,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
   // sitemap (same claim stays reopened for re-proof; page claims trace to the
   // existing homepage/docs claims, no new claim text invented).
-  sitemapPaths: ["/", "/search", "/auth/signup", "/compare/magicbrief", "/compare/meta-ad-library", "/competitor-monitoring", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  sitemapPaths: ["/", "/search", "/auth/signup", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/competitor-monitoring", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",
