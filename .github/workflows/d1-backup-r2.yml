@@ -32,7 +32,7 @@ permissions: {}
 jobs:
   authorize_release:
     name: Authorize exact backup candidate
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     permissions: {}
     outputs:
       sha: ${{ steps.authorize.outputs.sha }}
@@ -70,7 +70,7 @@ jobs:
   backup:
     if: needs.authorize_release.result == 'success'
     needs: authorize_release
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 300
     environment: production
     permissions:

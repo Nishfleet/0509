@@ -30,7 +30,7 @@ jobs:
     # 2026-08-22 every scheduled run skipped on the missing token and still
     # showed a green check, which read as a published green state that
     # never existed.
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 5
     steps:

@@ -40,7 +40,7 @@ permissions:
 jobs:
   authorize_release:
     name: Authorize exact restore candidate
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     permissions: {}
     outputs:
       sha: ${{ steps.authorize.outputs.sha }}
@@ -80,7 +80,7 @@ jobs:
       inputs.operation == 'apply_and_restore' &&
       needs.authorize_release.result == 'success'
     needs: authorize_release
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: production
     env:
@@ -187,7 +187,7 @@ jobs:
     needs:
       - authorize_release
       - apply_and_restore
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 300
     environment: production
     env:
@@ -292,7 +292,7 @@ jobs:
       - authorize_release
       - apply_and_restore
       - restore
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: production
     env:

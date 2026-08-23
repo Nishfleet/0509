@@ -45,7 +45,7 @@ permissions: {}
 jobs:
   authorize_release:
     name: Authorize exact production candidate
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     permissions: {}
     outputs:
       sha: ${{ steps.authorize.outputs.sha }}
@@ -108,7 +108,7 @@ jobs:
     name: Pin exact production candidate
     if: needs.authorize_release.result == 'success'
     needs: authorize_release
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
@@ -140,7 +140,7 @@ jobs:
     name: Prepare D1 remote restore evidence
     if: needs.pin_candidate.result == 'success'
     needs: pin_candidate
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
@@ -158,7 +158,7 @@ jobs:
           fetch-depth: 0
           clean: true
           persist-credentials: false
-      - name: Verify pinned candidate before self-hosted work
+      - name: Verify pinned candidate before deploy work
         shell: bash
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
@@ -240,7 +240,7 @@ jobs:
     needs:
       - pin_candidate
       - prepare_remote_restore_evidence
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 300
     environment: production
     permissions:
@@ -357,7 +357,7 @@ jobs:
       - pin_candidate
       - prepare_remote_restore_evidence
       - generate_restore_evidence
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: production
     permissions:
@@ -440,7 +440,7 @@ jobs:
       - prepare_remote_restore_evidence
       - generate_restore_evidence
       - cleanup_restore_evidence
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     # Budget: 180m maximum deploy-window wait + 60m conservative pipeline +
     # 30m cancellation/release slack = 270m. With cancel-in-progress: false,
     # a queued deploy cannot drain until the running job (including its lock
