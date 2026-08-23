@@ -1423,13 +1423,13 @@ describe("D1 remote restore evidence automation", () => {
       assertMigrationLedgerMatchesRepository(ledger, [
         "0001_first.sql",
         "0002_second.sql",
-      ], undefined, toyLedgerOptions),
+      ], new Set(), toyLedgerOptions),
     ).toBe(true);
     expect(() =>
       assertMigrationLedgerMatchesRepository(
         [ledger[1]],
         ["0001_first.sql", "0002_second.sql"],
-        undefined,
+        new Set(),
         toyLedgerOptions,
       ),
     ).toThrow("source_backup_migration_ledger_stale");

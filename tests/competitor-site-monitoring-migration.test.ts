@@ -352,7 +352,7 @@ function insertObservation(
 describe("competitor-site monitoring migration", () => {
   it("preserves every prior event type and row in watch_event and event_candidate while extending both vocabularies", () => {
     const db = buildDbWithLegacyEvents();
-    applyMigration(db, "migrations/0075_competitor_site_monitoring.sql");
+    applyMigration(db, "migrations/0077_competitor_site_monitoring.sql");
 
     expect(db.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     // The populated chain must stay referentially clean through the rebuild.
@@ -434,7 +434,7 @@ describe("competitor-site monitoring migration", () => {
 
   it("creates website_site_scan with the manifest shape, per-run uniqueness, bounds, invariants, and foreign keys", () => {
     const db = buildDbForScanLifecycle();
-    applyMigration(db, "migrations/0075_competitor_site_monitoring.sql");
+    applyMigration(db, "migrations/0077_competitor_site_monitoring.sql");
 
     const columns = db
       .prepare("PRAGMA table_info(website_site_scan)")
@@ -611,7 +611,7 @@ describe("competitor-site monitoring migration", () => {
 
   it("creates website_site_scan_page with the exact vocabularies, per-scan URL uniqueness, stable order, and cascade", () => {
     const db = buildDbForScanLifecycle();
-    applyMigration(db, "migrations/0075_competitor_site_monitoring.sql");
+    applyMigration(db, "migrations/0077_competitor_site_monitoring.sql");
     insertRunningScan(db, "scan-1");
 
     const columns = db
@@ -691,7 +691,7 @@ describe("competitor-site monitoring migration", () => {
 
   it("creates website_page_observation with nullable failed-fetch content, bounded signals, and run/URL uniqueness", () => {
     const db = buildDbForScanLifecycle();
-    applyMigration(db, "migrations/0075_competitor_site_monitoring.sql");
+    applyMigration(db, "migrations/0077_competitor_site_monitoring.sql");
     insertRunningScan(db, "scan-1");
 
     const columns = db
