@@ -37,4 +37,4 @@ Wired routes, sitemap/SEO (`SITEMAP_PATHS`, `STATIC_CHANGEFREQ_PRIORITY`), `LLMS
 
 ## PR
 
-See PR link below (opened after this commit).
+https://github.com/Nishfleet/0509/pull/897
