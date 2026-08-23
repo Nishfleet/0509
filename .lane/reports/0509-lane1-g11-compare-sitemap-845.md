@@ -21,3 +21,7 @@ Register the four PR #845 compare routes (`/compare/visualping`, `/compare/spyla
 
 - `npm run typecheck` → exit 0
 - `npx vitest run tests/seo.test.ts tests/customer-claim-surface-registry.test.ts tests/sitemap.server.test.ts tests/public-markdown.test.ts` → `Test Files  4 passed (4)` / `Tests  41 passed (41)`
+
+## PR
+
+https://github.com/Nishfleet/0509/pull/896 (commit `6e1a3c90`)
