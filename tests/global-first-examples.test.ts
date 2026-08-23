@@ -12,6 +12,10 @@ describe("global-first default examples", () => {
 		"app/components/marketing-nav.tsx",
 		"app/routes/compare.magicbrief.tsx",
 		"app/routes/compare.meta-ad-library.tsx",
+		"app/routes/compare.visualping.tsx",
+		"app/routes/compare.spyland.tsx",
+		"app/routes/compare.pulzifi.tsx",
+		"app/routes/compare.foreplay.tsx",
 	])("has no hardcoded India brand placeholder in %s", (path) => {
 		const source = readFileSync(path, "utf8");
 		expect(source.toLowerCase()).not.toContain("nykaa");

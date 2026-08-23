@@ -74,6 +74,10 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/trust",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
+  "/compare/visualping",
+  "/compare/spyland",
+  "/compare/pulzifi",
+  "/compare/foreplay",
 ]);
 const PUBLIC_CACHEABLE_HTML_PREFIXES = ["/ads/"] as const;
 
