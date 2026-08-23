@@ -368,11 +368,11 @@ describe("extractLandingPageSignals", () => {
       extractLandingPageSignals(largeHtml);
     });
     expect(largeDuration / Math.max(smallDuration, 0.5)).toBeLessThan(10);
-  }, 3_000);
+  }, 15_000);
 
   it("does not rescan overlapping windows of repeated malformed tags", () => {
-    const smallHtml = "<input".repeat(1_250);
-    const largeHtml = "<input".repeat(5_000);
+    const smallHtml = "<input".repeat(12_500);
+    const largeHtml = "<input".repeat(50_000);
 
     expect(extractLandingPageSignals(largeHtml)).toMatchObject({
       ctaText: null,
@@ -386,7 +386,7 @@ describe("extractLandingPageSignals", () => {
       extractLandingPageSignals(largeHtml);
     });
     expect(largeDuration / Math.max(smallDuration, 0.5)).toBeLessThan(10);
-  }, 3_000);
+  }, 15_000);
 
   it("recovers a valid submit tag after a malformed quoted tag", () => {
     const html = `
