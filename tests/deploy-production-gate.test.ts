@@ -1708,15 +1708,18 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "runs-on: [self-hosted, linux, x64, vps-verify]",
     );
     expect(workflow).not.toContain("runs-on: ubuntu-latest");
+    // 2026-08-23: ci.yml runs hosted now (public repo, free + unmetered,
+    // and GitHub says self-hosted is for private repos only). The deploy
+    // chain itself stays on the VPS labels - that is what this gate protects.
     expect(readFileSync(resolve(".github/workflows/ci.yml"), "utf8")).toContain(
-      "runs-on: [self-hosted, linux, x64, vps-verify]",
+      "runs-on: ubuntu-latest",
     );
     expect(
       readFileSync(resolve(".github/workflows/d1-backup-validate.yml"), "utf8"),
     ).toContain("runs-on: [self-hosted, linux, x64, vps-verify]");
     expect(
       readFileSync(resolve(".github/workflows/secret-scan.yml"), "utf8"),
-    ).toContain("runs-on: [self-hosted, linux, x64, vps-verify]");
+    ).toContain("runs-on: ubuntu-latest");
     expect(workflow).not.toContain("- name: Production public smoke");
   });
 
