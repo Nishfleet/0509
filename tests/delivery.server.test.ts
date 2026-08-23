@@ -4130,4 +4130,105 @@ describe("alert email content quality", () => {
       "This alert is provisional — the change is not yet confirmed by a fresh proof capture, so verify the source before acting.",
     );
   });
+
+  it("renders the before/after screenshot pair in single-event instant alerts when both screenshots are stored", async () => {
+    const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const event = {
+      id: "event-1",
+      watchlistId: "watch-1",
+      runId: "run-1",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId: null,
+      proofCaptureId: "proof-1",
+      title: "Offer changed",
+      summary: "The offer changed.",
+      metadata: {
+        from: "20% off",
+        to: "40% off",
+        beforeCapturedAt: "2026-04-18T00:00:00.000Z",
+        capturedAt: "2026-04-19T00:00:00.000Z",
+      },
+      confirmedAt: "2026-04-19T00:00:00.000Z",
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+    } as const;
+    const screenshotPairs = new Map([
+      [
+        "event-1",
+        {
+          beforeUrl:
+            "https://0509.io/artifacts/proof/landing-pages%2F2026-04-18%2Fprev.jpeg",
+          afterUrl:
+            "https://0509.io/artifacts/proof/landing-pages%2F2026-04-19%2Fcurr.jpeg",
+        },
+      ],
+    ]);
+    const single = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [event],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+      undefined,
+      null,
+      null,
+      screenshotPairs,
+    );
+    expect(single.html).toContain(
+      'src="https://0509.io/artifacts/proof/landing-pages%2F2026-04-18%2Fprev.jpeg"',
+    );
+    expect(single.html).toContain(
+      'src="https://0509.io/artifacts/proof/landing-pages%2F2026-04-19%2Fcurr.jpeg"',
+    );
+    expect(single.html).toContain("Before");
+    expect(single.html).toContain("Now");
+  });
+
+  it("keeps the alert text-only when no screenshot pair is resolved", async () => {
+    const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const event = {
+      id: "event-1",
+      watchlistId: "watch-1",
+      runId: "run-1",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId: null,
+      proofCaptureId: "proof-1",
+      title: "Offer changed",
+      summary: "The offer changed.",
+      metadata: {
+        from: "20% off",
+        to: "40% off",
+        beforeCapturedAt: "2026-04-18T00:00:00.000Z",
+        capturedAt: "2026-04-19T00:00:00.000Z",
+      },
+      confirmedAt: "2026-04-19T00:00:00.000Z",
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+    } as const;
+    const single = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [event],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+      undefined,
+      null,
+      null,
+      new Map(),
+    );
+    expect(single.html).not.toContain("/artifacts/proof/");
+    // The text-only before/now comparison still renders.
+    expect(single.html).toContain("20% off");
+    expect(single.html).toContain("40% off");
+  });
 });

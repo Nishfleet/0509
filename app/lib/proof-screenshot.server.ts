@@ -1,6 +1,8 @@
+import { appBaseUrl } from "~/lib/delivery-email-core.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
   isValidProofScreenshotKey,
+  proofScreenshotSrc,
   PROOF_SCREENSHOT_SERVED_TYPES,
 } from "~/lib/proof-screenshot";
 
@@ -58,4 +60,27 @@ export async function serveProofScreenshot(
   }
 
   return new Response(object.body, { status: 200, headers });
+}
+
+/**
+ * Absolute HTTPS URL for a stored proof-capture screenshot, suitable for
+ * embedding in alert payloads (digest email, instant alert email). Email
+ * clients refuse app-relative `<img src>` paths, so the call site has to
+ * resolve the artifact path against the app origin. Returns null for a
+ * missing or malformed key so the caller degrades honestly (no broken
+ * image, never a fabricated URL).
+ *
+ * The base URL follows the same resolution as the rest of the email layer
+ * (`appBaseUrl`); the resulting URL still addresses only the same key shape
+ * gated by `serveProofScreenshot` and is served from the same R2 binding.
+ */
+export function proofScreenshotAbsoluteUrl(
+  env: AppEnv,
+  artifactKey: string | null | undefined,
+): string | null {
+  const relative = proofScreenshotSrc(artifactKey);
+  if (!relative) {
+    return null;
+  }
+  return `${appBaseUrl(env)}${relative}`;
 }
