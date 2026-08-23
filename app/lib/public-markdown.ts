@@ -40,6 +40,11 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "Source-backed competitor ad and landing-page change monitoring for growth teams.",
   },
+  "/pricing": {
+    title: "Pricing",
+    description:
+      "Plans, proof capture packs, and billing FAQ; prices load localized from Dodo checkout.",
+  },
   "/search": {
     title: "Public competitor ad search",
     description:
