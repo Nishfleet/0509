@@ -157,6 +157,7 @@ export function jsonLdScriptProps(data: unknown) {
 
 export const SITEMAP_PATHS = [
   "/",
+  "/pricing",
   "/search",
   "/auth/signup",
   "/compare/magicbrief",
@@ -194,6 +195,7 @@ export interface SitemapEntry {
  */
 const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
   "/": { changefreq: "daily", priority: "1.0" },
+  "/pricing": { changefreq: "weekly", priority: "0.8" },
   "/search": { changefreq: "weekly", priority: "0.9" },
   "/auth/signup": { changefreq: "weekly", priority: "0.8" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },

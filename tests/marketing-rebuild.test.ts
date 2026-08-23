@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-const marketingRoute = readFileSync("app/routes/marketing.tsx", "utf8");
+const marketingRoute = [
+  readFileSync("app/routes/marketing.tsx", "utf8"),
+  readFileSync("app/components/pricing-section.tsx", "utf8"),
+].join("\n");
 const marketingNav = readFileSync("app/components/marketing-nav.tsx", "utf8");
 const brandWordmark = readFileSync("app/components/brand-wordmark.tsx", "utf8");
 const appCss = readFileSync("app/app.css", "utf8");
