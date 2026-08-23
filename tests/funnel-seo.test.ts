@@ -168,17 +168,25 @@ describe("shared marketing footer", () => {
       "/terms",
       "/compare/magicbrief",
       "/compare/meta-ad-library",
+      "/compare/visualping",
+      "/compare/spyland",
+      "/compare/pulzifi",
+      "/compare/foreplay",
     ]) {
       expect(markup).toContain(`href="${href}"`);
     }
     expect(markup).toContain("mailto:support@0509.io");
   });
 
-  it("is used by the landing page and both compare pages", () => {
+  it("is used by the landing page and all compare pages", () => {
     for (const path of [
       "app/routes/marketing.tsx",
       "app/routes/compare.magicbrief.tsx",
       "app/routes/compare.meta-ad-library.tsx",
+      "app/routes/compare.visualping.tsx",
+      "app/routes/compare.spyland.tsx",
+      "app/routes/compare.pulzifi.tsx",
+      "app/routes/compare.foreplay.tsx",
     ]) {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("<MarketingFooter />");
