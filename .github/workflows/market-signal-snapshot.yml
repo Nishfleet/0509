@@ -74,12 +74,29 @@ jobs:
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
       - name: Install pinned dependencies
         run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+      - name: Refuse empty Cloudflare secrets
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || missing+=(CLOUDFLARE_API_TOKEN)
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || missing+=(CLOUDFLARE_ACCOUNT_ID)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "market_signal_missing_cloudflare_secret: ${missing[*]}" >&2
+            exit 1
+          fi
+          echo "market_signal_cloudflare_secrets_present"
       - name: Generate market-signal D1 snapshot
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/deploy-window-lock.sh run -- npm run signal:market -- --output "$SNAPSHOT_PATH"
+          XDG_CONFIG_HOME: ${{ runner.temp }}/market-signal-wrangler-config
+        run: |
+          unset CF_API_TOKEN CF_API_KEY CF_EMAIL CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL
+          ./scripts/deploy-window-lock.sh run -- npm run signal:market -- --output "$SNAPSHOT_PATH"
       - name: Verify snapshot freshness
         run: |
           node -e "
@@ -97,6 +114,8 @@ jobs:
             console.log('market_signal_snapshot_fresh ' + snapshot.generatedAt);
           "
       - name: Commit snapshot to main
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -120,19 +139,44 @@ jobs:
           # auto-merge first so the squash merge still lands even if this workflow
           # run dies after this point, then watch the required checks and fail
           # loudly on a check failure or on a stuck wait.
-          SNAPSHOT_BRANCH="automation/market-signal-snapshot-$(date -u +%Y%m%dT%H%M%SZ)"
-          # -C resets an existing branch from a same-second rerun instead of
-          # failing; the branch is automation-owned, so a force push is safe.
-          git switch -C "$SNAPSHOT_BRANCH"
-          git push --force-with-lease origin "HEAD:$SNAPSHOT_BRANCH"
-          PR_URL="$(gh pr create --repo "${GITHUB_REPOSITORY}" --base main --head "$SNAPSHOT_BRANCH" \
-            --title "chore(automation): daily market-signal D1 snapshot $(date -u +%Y-%m-%d)" \
-            --body "Automated daily market-signal D1 snapshot.
+          SNAPSHOT_BRANCH="automation/market-signal-snapshot-$(date -u +%Y%m%d)"
+          # Use a single automation branch per day so concurrent and stuck
+          # runs land on the same PR (the previous timestamped branch per run
+          # produced 30+ stale PRs that the merge step kept racing and never
+          # resolving). A fresh suffix only changes if the previous run's PR
+          # is still open or unmerged - that keeps daily snapshots idempotent.
+          EXISTING_PR="$(gh pr list --repo "${GITHUB_REPOSITORY}" --state open --head "${SNAPSHOT_BRANCH}" --json number --jq '.[0].number' || true)"
+          if [ -n "${EXISTING_PR}" ] && [ "${EXISTING_PR}" != "null" ]; then
+            PR_URL="$(gh pr view "${EXISTING_PR}" --repo "${GITHUB_REPOSITORY}" --json url --jq .url)"
+            echo "market_signal_snapshot_existing_pr ${PR_URL}"
+          else
+            # -C resets an existing branch from a same-day rerun instead of
+            # failing; the branch is automation-owned, so a force push is safe.
+            git switch -C "$SNAPSHOT_BRANCH"
+            # Use --force-if-includes to refuse the push if a remote-only
+            # commit has slipped in (e.g. a manual commit landed after the
+            # last restore). If the branch has no upstream yet, --force
+            # creates it; the automation owns the branch so a force push is
+            # safe and the explicit fallback keeps the workflow from dying
+            # on the very first run of the day.
+            set +e
+            git push --force-if-includes origin "HEAD:$SNAPSHOT_BRANCH"
+            push_status=$?
+            set -e
+            if [ "$push_status" -ne 0 ]; then
+              git push --force origin "HEAD:$SNAPSHOT_BRANCH"
+            fi
+            # Self-hosted runners ship an older gh where `pr create --json` is
+            # unsupported; the command prints the PR URL on stdout instead.
+            PR_URL="$(gh pr create --repo "${GITHUB_REPOSITORY}" --base main --head "$SNAPSHOT_BRANCH" \
+              --title "chore(automation): daily market-signal D1 snapshot $(date -u +%Y-%m-%d)" \
+              --body "Automated daily market-signal D1 snapshot.
 
-            Generated by the scheduled market-signal-snapshot workflow. Main's branch protection
-            rejects direct pushes (strict required status checks), so the snapshot lands through
-            this PR and a squash merge." --json url --jq .url)"
-          echo "market_signal_snapshot_pr $PR_URL"
+              Generated by the scheduled market-signal-snapshot workflow. Main's branch protection
+              rejects direct pushes (strict required status checks), so the snapshot lands through
+              this PR and a squash merge.")"
+            echo "market_signal_snapshot_pr $PR_URL"
+          fi
           gh pr merge "$PR_URL" --repo "${GITHUB_REPOSITORY}" --auto --squash --delete-branch \
             --subject "chore(automation): daily market-signal D1 snapshot $(date -u +%Y-%m-%d)"
           # Watch only the required checks; --watch returns 0 when all of them
