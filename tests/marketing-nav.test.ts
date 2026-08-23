@@ -30,7 +30,7 @@ afterEach(() => {
 const SHARED_LINKS = [
 	{ href: "/search", label: "Search preview" },
 	{ href: "/#demo", label: "Proof brief" },
-	{ href: "/#pricing", label: "Pricing" },
+	{ href: "/pricing", label: "Pricing" },
 	{ href: "/help", label: "Help" },
 	{ href: "/docs", label: "Docs" },
 	{ href: "/status", label: "Status" },

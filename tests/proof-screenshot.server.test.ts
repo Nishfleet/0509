@@ -5,7 +5,10 @@ import {
   parseProofScreenshotPathname,
   proofScreenshotSrc,
 } from "~/lib/proof-screenshot";
-import { serveProofScreenshot } from "~/lib/proof-screenshot.server";
+import {
+  proofScreenshotAbsoluteUrl,
+  serveProofScreenshot,
+} from "~/lib/proof-screenshot.server";
 
 const SAMPLE_KEY = "landing-pages/2026-08-11/3f2a1c0e-9d3b-4f5e-8a7b-6c5d4e3f2a10.jpeg";
 
@@ -137,5 +140,36 @@ describe("serveProofScreenshot", () => {
     );
     expect(response).toBeNull();
     expect(get).not.toHaveBeenCalled();
+  });
+});
+
+describe("proofScreenshotAbsoluteUrl", () => {
+  it("resolves the stored key against the app origin so email clients can embed it", () => {
+    expect(
+      proofScreenshotAbsoluteUrl(
+        {
+          APP_ORIGIN: "https://0509.io",
+        } as never,
+        SAMPLE_KEY,
+      ),
+    ).toBe(`https://0509.io/artifacts/proof/${encodeURIComponent(SAMPLE_KEY)}`);
+  });
+
+  it("honors a custom BETTER_AUTH_URL when APP_ORIGIN is missing", () => {
+    expect(
+      proofScreenshotAbsoluteUrl(
+        {
+          BETTER_AUTH_URL: "https://staging.0509.io/",
+        } as never,
+        SAMPLE_KEY,
+      ),
+    ).toBe(`https://staging.0509.io/artifacts/proof/${encodeURIComponent(SAMPLE_KEY)}`);
+  });
+
+  it("returns null for missing or malformed keys instead of a fabricated URL", () => {
+    expect(proofScreenshotAbsoluteUrl({ APP_ORIGIN: "https://0509.io" } as never, null)).toBeNull();
+    expect(proofScreenshotAbsoluteUrl({ APP_ORIGIN: "https://0509.io" } as never, undefined)).toBeNull();
+    expect(proofScreenshotAbsoluteUrl({ APP_ORIGIN: "https://0509.io" } as never, "../etc/passwd")).toBeNull();
+    expect(proofScreenshotAbsoluteUrl({ APP_ORIGIN: "https://0509.io" } as never, "creatives/x.jpeg")).toBeNull();
   });
 });

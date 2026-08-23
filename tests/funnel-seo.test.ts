@@ -54,7 +54,10 @@ describe("landing page product FAQ", () => {
     expect(spyAnswer).toContain("many platforms’ ad libraries at once");
     expect(spyAnswer).toContain("Meta Ad Library only");
 
-    const marketingSource = readFileSync("app/routes/marketing.tsx", "utf8");
+    const marketingSource = [
+      readFileSync("app/routes/marketing.tsx", "utf8"),
+      readFileSync("app/components/pricing-section.tsx", "utf8"),
+    ].join("\n");
     // Rendered as its own block, not merged into the billing FAQ.
     expect(marketingSource).toContain('aria-label="Product FAQ"');
     expect(marketingSource).toContain('aria-label="Pricing FAQ"');
