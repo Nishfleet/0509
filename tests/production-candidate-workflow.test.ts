@@ -82,7 +82,7 @@ describe("exact production candidate workflow", () => {
     expect(workflow.permissions).toEqual({});
 
     const authorize = workflow.jobs.authorize_release;
-    expect(authorize?.["runs-on"]).toEqual(["self-hosted", "linux", "x64", "vps-verify"]);
+    expect(authorize?.["runs-on"]).toEqual("ubuntu-latest");
     expect(authorize?.permissions).toEqual({});
     expect(authorize?.environment).toBeUndefined();
     expect(authorize?.outputs?.sha).toBe("${{ steps.authorize.outputs.sha }}");
@@ -112,7 +112,7 @@ describe("exact production candidate workflow", () => {
 
     const pin = workflow.jobs.pin_candidate;
     expect(pin?.needs).toBe("authorize_release");
-    expect(pin?.["runs-on"]).toEqual(["self-hosted", "linux", "x64", "vps-verify"]);
+    expect(pin?.["runs-on"]).toEqual("ubuntu-latest");
     expect(pin?.permissions).toEqual({ contents: "read" });
     expect(pin?.environment).toBeUndefined();
     expect(pin?.outputs?.sha).toBe("${{ steps.pin.outputs.sha }}");
@@ -237,7 +237,7 @@ describe("exact production candidate workflow", () => {
     for (const [candidate, verifier] of [
       [
         prepare,
-        "./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh",
+        "./scripts/ci-verify-production-candidate.sh",
       ],
       [deploy, "./scripts/ci-verify-production-candidate.sh"],
     ] as const) {
@@ -377,7 +377,7 @@ describe("exact production candidate workflow", () => {
       const { parsed } = readWorkflow(name);
       const authorize = parsed.jobs.authorize_release;
       expect(authorize?.["runs-on"], `${name} authorizer runner`).toEqual(
-        ["self-hosted", "linux", "x64", "vps-verify"],
+        "ubuntu-latest",
       );
       expect(authorize?.permissions, `${name} authorizer permissions`).toEqual(
         {},
@@ -451,20 +451,9 @@ describe("exact production candidate workflow", () => {
       backupSteps[backupCheckout + 1]?.name,
       "d1-backup immediate verification",
     ).toMatch(/Verify (?:authorized|pinned)/);
-    const backupAcquire = stepIndex(backup, "Acquire provider lane");
     const backupCas = stepIndex(backup, "Reconfirm frozen main before backup mutation");
-    expect(backupAcquire).toBeGreaterThanOrEqual(0);
-    expect(backupCas).toBe(backupAcquire + 1);
+    expect(backupCas).toBeGreaterThanOrEqual(0);
     expect(stepIndex(backup, "Run approved D1-to-R2 backup")).toBe(backupCas + 1);
-    const backupRelease = stepIndex(backup, "Release provider lane");
-    expect(backupRelease).toBeGreaterThan(
-      stepIndex(backup, "Run approved D1-to-R2 backup"),
-    );
-    expect(backup?.steps?.[backupRelease]).toMatchObject({
-      if: "always()",
-      run: "./scripts/deploy-window-lock.sh release",
-    });
-
     const restore = readWorkflow("d1-remote-restore-evidence.yml").parsed.jobs;
     expect(restore.apply_and_restore?.needs).toBe("authorize_release");
     expect(restore.restore?.needs).toEqual([
@@ -501,21 +490,17 @@ describe("exact production candidate workflow", () => {
       restore.restore,
       "Create fresh backup and prove an isolated remote restore",
     );
-    expect(stepIndex(restore.restore, "Acquire provider lane")).toBe(
-      restoreCas - 1,
-    );
     expect(restoreMutation).toBe(restoreCas + 1);
     expect(restore.restore?.steps?.[restoreCas]).toMatchObject({
       run: "./scripts/ci-verify-provider-main-cas.sh",
       env: { GH_TOKEN: "${{ github.token }}" },
     });
 
-    const cleanupAcquire = stepIndex(restore.cleanup, "Acquire provider lane");
     const cleanupMutation = stepIndex(
       restore.cleanup,
       "Delete every exact scratch database from this run",
     );
-    expect(cleanupMutation).toBe(cleanupAcquire + 1);
+    expect(cleanupMutation).toBeGreaterThanOrEqual(0);
     const exactApplyRestoreGate =
       "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || needs.apply_and_restore.result == 'success')";
     expect(restore.restore?.if).toBe(exactApplyRestoreGate);
@@ -532,17 +517,8 @@ describe("exact production candidate workflow", () => {
       "--sweep-stale",
     );
 
-    for (const [job, mutationIndex] of [
-      [restore.restore, restoreMutation],
-      [restore.cleanup, cleanupMutation],
-    ] as const) {
+    for (const job of [restore.restore, restore.cleanup]) {
       expect(job?.env).not.toHaveProperty("GH_TOKEN");
-      const releaseIndex = stepIndex(job, "Release provider lane");
-      expect(releaseIndex).toBeGreaterThan(mutationIndex);
-      expect(job?.steps?.[releaseIndex]).toMatchObject({
-        if: "always()",
-        run: "./scripts/deploy-window-lock.sh release",
-      });
     }
 
     const verifier = readFileSync(

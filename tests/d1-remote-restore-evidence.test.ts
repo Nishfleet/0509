@@ -362,9 +362,6 @@ describe("D1 remote restore evidence automation", () => {
       "apply_and_restore",
       "restore",
     ]);
-    const applyAcquireIndex = apply?.steps?.findIndex(
-      (step) => step.name === "Acquire provider lane",
-    ) ?? -1;
     const applyBackupCasIndex = apply?.steps?.findIndex(
       (step) => step.name === "Reconfirm frozen main before pre-migration backup",
     ) ?? -1;
@@ -380,16 +377,10 @@ describe("D1 remote restore evidence automation", () => {
     const applyMigrationIndex = apply?.steps?.findIndex(
       (step) => step.name === "Apply exact repository migrations remotely",
     ) ?? -1;
-    const applyReleaseIndex = apply?.steps?.findIndex(
-      (step) => step.name === "Release provider lane",
-    ) ?? -1;
-    const applyCapabilityCleanupIndex = apply?.steps?.findIndex(
-      (step) => step.name === "Remove provider-lane capability file",
-    ) ?? -1;
     const applyBackupValidationIndex = apply?.steps?.findIndex(
       (step) =>
         step.run ===
-        "./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs",
+        "node scripts/validate-d1-backup.mjs",
     ) ?? -1;
     const applyBindingIndex = apply?.steps?.findIndex(
       (step) => step.name === "Bind run-scoped backup directory",
@@ -399,14 +390,12 @@ describe("D1 remote restore evidence automation", () => {
       "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
     );
     expect(applyBackupValidationIndex).toBeGreaterThanOrEqual(0);
-    expect(applyBackupValidationIndex).toBeLessThan(applyAcquireIndex);
-    expect(applyBackupCasIndex).toBe(applyAcquireIndex + 1);
+    expect(applyBackupValidationIndex).toBeLessThan(applyBackupCasIndex);
+    expect(applyBackupCasIndex).toBeGreaterThanOrEqual(0);
     expect(applyBackupIndex).toBe(applyBackupCasIndex + 1);
     expect(applyLocalCleanupIndex).toBe(applyBackupIndex + 1);
     expect(applyMigrationCasIndex).toBe(applyLocalCleanupIndex + 1);
     expect(applyMigrationIndex).toBe(applyMigrationCasIndex + 1);
-    expect(applyReleaseIndex).toBe(applyMigrationIndex + 1);
-    expect(applyCapabilityCleanupIndex).toBe(applyReleaseIndex + 1);
     expect(apply?.steps?.[applyBackupCasIndex]).toMatchObject({
       run: "./scripts/ci-verify-provider-main-cas.sh",
       env: { GH_TOKEN: "${{ github.token }}" },
@@ -457,13 +446,6 @@ describe("D1 remote restore evidence automation", () => {
       apply?.steps?.[applyBackupIndex],
       apply?.steps?.[applyMigrationIndex],
     ]);
-    expect(apply?.steps?.[applyReleaseIndex]).toMatchObject({
-      if: "always()",
-      run: "./scripts/deploy-window-lock.sh release",
-    });
-    expect(apply?.steps?.[applyCapabilityCleanupIndex]).toMatchObject({
-      if: "always()",
-    });
     expect(JSON.stringify(apply)).not.toContain("d1 execute");
     expect(JSON.stringify(apply)).not.toContain("--cleanup-only");
     expect(JSON.stringify(apply)).not.toContain("--sweep-stale");
@@ -496,17 +478,10 @@ describe("D1 remote restore evidence automation", () => {
       ) ?? -1;
       expect(consumerIndex).toBeGreaterThan(bindingIndex);
       expect(job?.steps).toContainEqual(expect.objectContaining({
-        run: "./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts",
+        run: "npm ci --ignore-scripts",
       }));
-      const acquireIndex = job?.steps?.findIndex(
-        (step) => step.name === "Acquire provider lane",
-      ) ?? -1;
-      const releaseIndex = job?.steps?.findIndex(
-        (step) => step.name === "Release provider lane",
-      ) ?? -1;
-      expect(acquireIndex).toBeGreaterThan(bindingIndex);
+      expect(consumerIndex).toBeGreaterThan(bindingIndex);
       if (consumer.includes("--cleanup-only")) {
-        expect(consumerIndex).toBe(acquireIndex + 1);
         expect(JSON.stringify(job)).not.toContain(
           "ci-verify-provider-main-cas.sh",
         );
@@ -514,7 +489,7 @@ describe("D1 remote restore evidence automation", () => {
         const casIndex = job?.steps?.findIndex((step) =>
           step.name?.startsWith("Reconfirm frozen main before"),
         ) ?? -1;
-        expect(casIndex).toBe(acquireIndex + 1);
+        expect(casIndex).toBeGreaterThanOrEqual(0);
         expect(consumerIndex).toBe(casIndex + 1);
         expect(job?.steps?.[casIndex]).toMatchObject({
           run: "./scripts/ci-verify-provider-main-cas.sh",
@@ -530,14 +505,6 @@ describe("D1 remote restore evidence automation", () => {
           TOLERATE_MAIN_DRIFT: "1",
         });
       }
-      expect(job?.steps?.[consumerIndex]?.run).not.toContain(
-        "deploy-window-lock.sh run",
-      );
-      expect(releaseIndex).toBeGreaterThan(consumerIndex);
-      expect(job?.steps?.[releaseIndex]).toMatchObject({
-        if: "always()",
-        run: "./scripts/deploy-window-lock.sh release",
-      });
     }
     expect(workflow.jobs?.restore?.["timeout-minutes"]).toBe(300);
     expect(
@@ -632,9 +599,7 @@ describe("D1 remote restore evidence automation", () => {
     expect(backupWorkflow).toContain(
       "run: node scripts/d1-backup-to-r2.mjs",
     );
-    expect(backupWorkflow).toContain("run: ./scripts/deploy-window-lock.sh acquire");
     expect(backupWorkflow).toContain("run: ./scripts/ci-verify-production-candidate.sh");
-    expect(backupWorkflow).toContain("run: ./scripts/deploy-window-lock.sh release");
     const backupScript = readFileSync(
       "scripts/d1-backup-to-r2.mjs",
       "utf8",

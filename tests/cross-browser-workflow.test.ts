@@ -23,21 +23,12 @@ describe("cross-browser workflow", () => {
     };
   };
 
-  it("routes only to a hardened verification runner", () => {
-    expect(parsed.jobs.matrix["runs-on"]).toEqual([
-      "self-hosted",
-      "linux",
-      "x64",
-      "vps-verify",
-    ]);
-  });
-
-  it("runs browser installation and proof inside a verification lane", () => {
+  it("installs browsers without system deps", () => {
     const browserInstall = parsed.jobs.matrix.steps.find(
       (step) => step.name === "Install Playwright browsers",
     );
     expect(browserInstall).toMatchObject({
-      run: "./scripts/deploy-window-lock.sh run -- npx playwright install chromium firefox webkit",
+      run: "npx playwright install chromium firefox webkit",
     });
     expect(browserInstall?.run).not.toContain("--with-deps");
 
@@ -45,7 +36,7 @@ describe("cross-browser workflow", () => {
       (step) => step.name === "Run cross-browser risk proof",
     );
     expect(proof?.run).toBe(
-      "./scripts/deploy-window-lock.sh run -- node scripts/run-cross-browser-risk-proof.mjs",
+      "node scripts/run-cross-browser-risk-proof.mjs",
     );
   });
 

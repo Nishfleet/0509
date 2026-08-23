@@ -33,7 +33,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: 0509-market-signal-snapshot
+  group: 0509-production-provider-mutations
   cancel-in-progress: false
   queue: max
 
@@ -73,7 +73,7 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
       - name: Install pinned dependencies
-        run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+        run: npm ci --ignore-scripts
       - name: Refuse empty Cloudflare secrets
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -96,7 +96,7 @@ jobs:
           XDG_CONFIG_HOME: ${{ runner.temp }}/market-signal-wrangler-config
         run: |
           unset CF_API_TOKEN CF_API_KEY CF_EMAIL CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL
-          ./scripts/deploy-window-lock.sh run -- npm run signal:market -- --output "$SNAPSHOT_PATH"
+          npm run signal:market -- --output "$SNAPSHOT_PATH"
       - name: Verify snapshot freshness
         run: |
           node -e "

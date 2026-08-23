@@ -104,13 +104,8 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
-      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
-      - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
-      - name: Acquire provider lane
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh acquire
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
       - name: Reconfirm frozen main before backup mutation
         shell: bash
         env:
@@ -137,17 +132,3 @@ jobs:
       - name: Remove run-scoped plaintext backup files
         if: always()
         run: node scripts/d1-backup-local-cleanup.mjs
-      - name: Release provider lane
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh release
-      - name: Remove provider-lane capability file
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: |
-          umask 077
-          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"

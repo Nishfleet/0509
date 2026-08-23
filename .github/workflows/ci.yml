@@ -89,18 +89,18 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
-            ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+            npm ci --ignore-scripts
           else
-            ./scripts/deploy-window-lock.sh run -- npm install --ignore-scripts
+            npm install --ignore-scripts
           fi
       - name: Build
-        run: ./scripts/deploy-window-lock.sh run -- npm run build
+        run: npm run build
       - name: Test
-        run: ./scripts/deploy-window-lock.sh run -- npm run test
+        run: npm run test
       - name: Typecheck
         env:
           # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while
           # this project's composite TypeScript build needs more headroom.
           # Keep it below MemoryHigh/MemoryMax so systemd still fails closed.
           NODE_OPTIONS: --max-old-space-size=2048
-        run: ./scripts/deploy-window-lock.sh run -- npm run typecheck
+        run: npm run typecheck

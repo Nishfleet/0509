@@ -40,12 +40,6 @@ jobs:
           ref: main
           persist-credentials: false
 
-      - name: Acquire deploy window
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh acquire
-
       - name: Validate immutable deploy identity
         shell: bash
         env:
@@ -175,19 +169,3 @@ jobs:
             test-results/production-soak-*.json
           if-no-files-found: warn
           retention-days: 90
-
-      - name: Release deploy window
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh release
-
-      - name: Remove deploy-window capability file
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: |
-          umask 077
-          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"
