@@ -117,6 +117,31 @@ ingestion, checks are scheduled not real-time.
   call; this is a submission into the next update cycle, not a confirmed
   placement.
 
+### Re-verified 2026-08-23 — still not listed; send remains blocked on owner decision
+
+Fresh pass recorded 2026-08-23 (evidence:
+`.lane/reports/0509-lane1-segwise-listing-reverify-20260823.md`):
+
+- Roundup `https://segwise.ai/blog/best-ad-spy-competitor-tools` returned
+  HTTP 200 and still does NOT contain Five to Nine or any `0509.io` link;
+  Angad Singh is still the listed author. **Status stays PREPARED — ready
+  to send.**
+- Venue URLs still HTTP 200: the article, author page
+  (`https://segwise.ai/blog/author/angad-singh`), blog
+  (`https://segwise.ai/blog`), Privacy Policy
+  (`https://segwise.ai/privacy-policy`).
+- Product URLs still HTTP 200: `https://0509.io`, `https://0509.io/search`,
+  `https://0509.io/auth/signup`, `https://0509.io/compare/magicbrief`.
+- Pitch facts still match current repo copy: "screenshot evidence and
+  change alerts" (hero, `app/routes/marketing.tsx`) and the every-3–6-hours
+  cadence lines in the same file; `SUPPORT_EMAIL = "support@0509.io"` at
+  `app/lib/support.ts:13`.
+- Nothing changed since 2026-08-21 that affects the pitch. The sole
+  remaining action is unchanged: the owner sends the prepared message via
+  LinkedIn to Angad Singh (recommended) or a verified Segwise
+  vendor-facing inbox once one is confirmed. Success signal stays an
+  article change or an author reply — never a claim of listing.
+
 ## Ready-to-send pitch (the whole submission is one message)
 
 Recommended delivery: LinkedIn message to Angad Singh (article author,
