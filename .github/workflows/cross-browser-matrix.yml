@@ -20,7 +20,7 @@ jobs:
   matrix:
     name: Engine matrix (firefox/webkit/mobile)
     if: github.repository == 'Nishfleet/0509' && github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,16 +32,16 @@ jobs:
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
 
       - name: Install dependencies
-        run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+        run: npm ci --ignore-scripts
 
       - name: Install Playwright browsers
-        run: ./scripts/deploy-window-lock.sh run -- npx playwright install chromium firefox webkit
+        run: npx playwright install chromium firefox webkit
 
       - name: Build
-        run: ./scripts/deploy-window-lock.sh run -- npm run build
+        run: npm run build
 
       - name: Run cross-browser risk proof
-        run: ./scripts/deploy-window-lock.sh run -- node scripts/run-cross-browser-risk-proof.mjs
+        run: node scripts/run-cross-browser-risk-proof.mjs
 
       - name: Upload artifacts on failure
         if: failure()

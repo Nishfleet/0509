@@ -45,7 +45,7 @@ permissions: {}
 jobs:
   authorize_release:
     name: Authorize exact production candidate
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     permissions: {}
     outputs:
       sha: ${{ steps.authorize.outputs.sha }}
@@ -108,7 +108,7 @@ jobs:
     name: Pin exact production candidate
     if: needs.authorize_release.result == 'success'
     needs: authorize_release
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
@@ -140,7 +140,7 @@ jobs:
     name: Prepare D1 remote restore evidence
     if: needs.pin_candidate.result == 'success'
     needs: pin_candidate
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
@@ -158,7 +158,7 @@ jobs:
           fetch-depth: 0
           clean: true
           persist-credentials: false
-      - name: Verify pinned candidate before self-hosted work
+      - name: Verify pinned candidate before deploy work
         shell: bash
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
@@ -168,7 +168,7 @@ jobs:
           # PINNED_SHA, so a mid-run move of main must not fail the run.
           # Every other CAS failure stays fail-closed.
           TOLERATE_MAIN_DRIFT: "1"
-        run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh
+        run: ./scripts/ci-verify-production-candidate.sh
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ".node-version"
@@ -184,14 +184,13 @@ jobs:
           archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
           printf 'RESTORE_EVIDENCE_ARCHIVE=%s\n' "$archive" >> "$GITHUB_ENV"
       - if: env.BACKUP_PROOF_STATUS == 'required'
-        run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+        run: npm ci --ignore-scripts
       - if: env.BACKUP_PROOF_STATUS == 'required'
-        run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
+        run: node scripts/validate-d1-backup.mjs
       - name: Bind a clean exact-main candidate manifest
         if: env.BACKUP_PROOF_STATUS == 'required'
-        # Argv script — never heredoc through deploy-window-lock.sh run
         # (backgrounded lanes redirect stdin to /dev/null).
-        run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-bind-remote-restore-candidate.sh
+        run: ./scripts/ci-bind-remote-restore-candidate.sh
       - name: Verify pre-generated exact R2 restore evidence
         id: verify_evidence
         if: env.BACKUP_PROOF_STATUS == 'required'
@@ -208,7 +207,7 @@ jobs:
           # failed exactly here. With the anchor the step reaches a real
           # verdict, which is the behaviour every non-bootstrap deploy gets.
           BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ${{ inputs.bootstrap_previous_success_sha || '' }}
-        run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-prepare-remote-restore-evidence.sh
+        run: ./scripts/ci-prepare-remote-restore-evidence.sh
       - name: Preserve private restore evidence for this deploy only
         if: env.BACKUP_PROOF_STATUS == 'required' && steps.verify_evidence.outputs.restore_evidence_available == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -240,7 +239,7 @@ jobs:
     needs:
       - pin_candidate
       - prepare_remote_restore_evidence
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 300
     environment: production
     permissions:
@@ -277,13 +276,8 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
-      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
-      - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
-      - name: Acquire provider lane
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh acquire
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
       - name: Reconfirm frozen main before evidence mutation
         shell: bash
         env:
@@ -310,20 +304,6 @@ jobs:
       - name: Remove run-scoped plaintext backup files
         if: always()
         run: node scripts/d1-backup-local-cleanup.mjs
-      - name: Release provider lane
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh release
-      - name: Remove provider-lane capability file
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: |
-          umask 077
-          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"
       - name: Archive permission-preserving restore evidence
         shell: bash
         run: |
@@ -357,7 +337,7 @@ jobs:
       - pin_candidate
       - prepare_remote_restore_evidence
       - generate_restore_evidence
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: production
     permissions:
@@ -394,33 +374,13 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
-      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
-      - name: Acquire provider lane
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh acquire
+      - run: npm ci --ignore-scripts
       - name: Delete every exact scratch database from this run
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
         run: node scripts/d1-remote-restore-evidence.mjs --cleanup-only
-      - name: Release provider lane
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh release
-      - name: Remove provider-lane capability file
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: |
-          umask 077
-          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"
-
   deploy:
     name: Deploy Worker
     if: >-
@@ -440,7 +400,7 @@ jobs:
       - prepare_remote_restore_evidence
       - generate_restore_evidence
       - cleanup_restore_evidence
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     # Budget: 180m maximum deploy-window wait + 60m conservative pipeline +
     # 30m cancellation/release slack = 270m. With cancel-in-progress: false,
     # a queued deploy cannot drain until the running job (including its lock
@@ -475,12 +435,6 @@ jobs:
           # pinned candidate. Every other CAS failure stays fail-closed.
           TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/ci-verify-production-candidate.sh
-
-      - name: Acquire deploy window
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh acquire
 
       - name: Verify Cloudflare deploy secrets
         shell: bash
@@ -699,19 +653,3 @@ jobs:
             test-results/production-soak-*.json
           if-no-files-found: warn
           retention-days: 90
-
-      - name: Release deploy window
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: ./scripts/deploy-window-lock.sh release
-
-      - name: Remove deploy-window capability file
-        if: always()
-        shell: bash
-        env:
-          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
-        run: |
-          umask 077
-          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"
