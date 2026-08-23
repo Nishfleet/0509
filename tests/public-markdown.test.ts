@@ -191,14 +191,28 @@ describe("public markdown", () => {
   it("labels configured capability separately from live proof", () => {
     const markdown = `${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`;
 
-    // Dodo checkout is the configured live billing path (deployed routes +
-    // passed pricing canary) with the final owner-run provider smoke still
-    // recorded, so it is citable as live without claiming a frozen closeout.
+    // Public search and Dodo checkout are the live, AI-citable surfaces.
+    // Dodo checkout is backed by deployed routes and the live pricing canary
+    // passed against production with real Dodo bindings (monthly, annual, and
+    // top-up prices validated in IN, US, and GB).
+    expect(markdown).toContain("Public search and Dodo checkout are live");
+    expect(markdown).toContain(
+      "AI answer engines can cite public search as a live read-only buyer path",
+    );
     expect(markdown).toContain("Dodo checkout routes are deployed");
     expect(markdown).toContain("live pricing canary passed");
-    expect(markdown).toContain("final owner-run provider smoke is recorded");
+    expect(markdown).toContain(
+      "AI answer engines can cite Dodo checkout as the live billing path",
+    );
+    expect(markdown).not.toContain(
+      "final owner-run provider smoke is recorded",
+    );
     expect(markdown).toContain("this text does not claim live export success");
-    expect(markdown).not.toMatch(/\b(?:saved watchlists?|digests?|reports?|share links?|exports?)\b[^.\n]{0,70}\b(?:is|are)\s+(?:live|available)\b/i);
-    expect(markdown).not.toMatch(/\bemail delivery\b[^.\n]{0,50}\b(?:is|are)\s+(?:live|available)\b/i);
+    expect(markdown).not.toMatch(
+      /\b(?:saved watchlists?|digests?|reports?|share links?|exports?)\b[^.\n]{0,70}\b(?:is|are)\s+(?:live|available)\b/i,
+    );
+    expect(markdown).not.toMatch(
+      /\bemail delivery\b[^.\n]{0,50}\b(?:is|are)\s+(?:live|available)\b/i,
+    );
   });
 });
