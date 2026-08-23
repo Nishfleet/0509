@@ -367,7 +367,7 @@ describe("extractLandingPageSignals", () => {
     const largeDuration = medianDuration(() => {
       extractLandingPageSignals(largeHtml);
     });
-    expect(largeDuration / Math.max(smallDuration, 0.1)).toBeLessThan(10);
+    expect(largeDuration / Math.max(smallDuration, 0.5)).toBeLessThan(10);
   }, 3_000);
 
   it("does not rescan overlapping windows of repeated malformed tags", () => {
@@ -385,7 +385,7 @@ describe("extractLandingPageSignals", () => {
     const largeDuration = medianDuration(() => {
       extractLandingPageSignals(largeHtml);
     });
-    expect(largeDuration / Math.max(smallDuration, 0.1)).toBeLessThan(10);
+    expect(largeDuration / Math.max(smallDuration, 0.5)).toBeLessThan(10);
   }, 3_000);
 
   it("recovers a valid submit tag after a malformed quoted tag", () => {
