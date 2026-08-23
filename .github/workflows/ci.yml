@@ -25,7 +25,7 @@ jobs:
     # authorizer is step 1 of THIS job, so a fork PR or unapproved dispatch
     # candidate fails the required check with a real failure - a gate that
     # cannot verify must say no, never render green or skipped.
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     # The 270m job cap bounds setup plus all per-step waits. Each heavy step has

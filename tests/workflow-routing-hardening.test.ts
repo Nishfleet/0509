@@ -42,17 +42,27 @@ describe("workflow routing hardening", () => {
   });
 
   it("uses dedicated immutable runner labels for every job", () => {
-    // 2026-08-10: trusted operations moved off GitHub-hosted runners too. The
-    // account billing outage kills hosted jobs at start, and the split never
-    // bought real isolation: this VPS already deploys production directly
-    // (fleet-auto-deploy) and holds full credential parity by Nish's standing
-    // order, so "hosted = trusted" was a boundary in prose only.
+    // 2026-08-10: trusted operations moved off GitHub-hosted runners because an
+    // account billing outage killed hosted jobs at start.
+    //
+    // 2026-08-23: that reason does not apply to the four verification workflows
+    // below. 0509 is a PUBLIC repo, so GitHub-hosted standard runners are free
+    // and UNMETERED for it - billing cannot kill them. GitHub's own docs also
+    // say "only use self-hosted runners with private repositories", because a
+    // fork PR can execute arbitrary code on a self-hosted box. Those four now
+    // run hosted; everything that touches production, D1, or the deploy chain
+    // stays on the dedicated VPS labels.
     for (const [file, id] of [
       ["ci.yml", "codex-node-checks"],
+      ["secret-scan.yml", "gitleaks"],
+    ] as const) {
+      expect(job(file, id)["runs-on"]).toEqual("ubuntu-latest");
+    }
+
+    for (const [file, id] of [
       ["cross-browser-matrix.yml", "matrix"],
       ["d1-backup-validate.yml", "validate"],
       ["deploy-production.yml", "prepare_remote_restore_evidence"],
-      ["secret-scan.yml", "gitleaks"],
       ["d1-backup-r2.yml", "backup"],
       ["d1-remote-restore-evidence.yml", "apply_and_restore"],
       ["d1-remote-restore-evidence.yml", "restore"],
