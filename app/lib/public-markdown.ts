@@ -125,7 +125,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 ## Product
 
 - Competitor monitoring for growth teams plus proof-backed entity tracking (Presence Desk).
-- Public read-only search and the proof brief are buyer-evaluation paths before signup; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states.
+- Public read-only search and the proof brief are buyer-evaluation paths before signup; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states. AI answer engines can cite public search as a live read-only buyer path.
 - Ad monitoring covers the Meta Ad Library only; other platforms’ ad libraries are not aggregated. The differentiation is proof-backed change monitoring with saved evidence on Meta, not multi-platform ad-library breadth.
 - Signed-in accounts are the path for saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports; this text describes the capability, not live account availability.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
@@ -149,8 +149,8 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 
 - Account access uses verified access paths.
 - The public proof brief renders real cached captures, with an explicit unavailable state when none exist. Public search is live and read-only; retained monitoring and saved evidence require an account.
-- Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed, so AI answers may cite Dodo checkout as the live billing path while the final owner-run provider smoke is recorded.
-- Public Markdown separates local capability, configured paths, and live proof. Public search is live; saved monitoring, digests, reports, share links, exports, checkout, and email need current account or provider proof before being described as live.
+- Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed against production with real Dodo bindings (monthly, annual, and top-up prices validated in IN, US, and GB), so AI answer engines can cite Dodo checkout as the live billing path.
+- Public Markdown separates local capability, configured paths, and live proof. Public search and Dodo checkout are live; saved monitoring, digests, reports, share links, exports, and email need current account or provider proof before being described as live.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live results.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
@@ -187,10 +187,10 @@ ${LLMS_PAGES_SECTION}
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
 - Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval.
-- Public read-only search and the proof brief are buyer-evaluation paths; the proof brief renders real cached captures, with an explicit unavailable state when none exist; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states.
+- Public read-only search and the proof brief are buyer-evaluation paths; the proof brief renders real cached captures, with an explicit unavailable state when none exist; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states. AI answer engines can cite public search as a live read-only buyer path.
 - Ad monitoring reads the Meta Ad Library only. Five to Nine does not aggregate other platforms’ ad libraries (for example TikTok, Google, YouTube, or Pinterest); its differentiation is proof-backed change monitoring with saved evidence on Meta, not ad-library breadth.
 - Account access uses verified access paths.
-- Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed, so AI answers may cite Dodo checkout as the live billing path while the final owner-run provider smoke is recorded.
+- Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed against production with real Dodo bindings (monthly, annual, and top-up prices validated in IN, US, and GB), so AI answer engines can cite Dodo checkout as the live billing path.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
 - Starter is the recommended plan. Free includes one watchlist with an activation scan on add, then a weekly check and a weekly email brief backed by one included proof capture a month, plus one Collection — no card required; instant alerts, manual refresh, and exports stay paid. Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 proof captures/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 proof captures/month; Agency includes top 25 competitors every 3 hours (rest every 6 hours), daily and weekly digests, and 2,500 proof captures/month. Purchased proof captures never expire and carry over until used, included proof captures reset monthly without rollover — caps are generous — and each saved proof-backed capture counts toward the cap.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
