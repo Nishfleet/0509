@@ -479,7 +479,7 @@ describe("FULLSITE_WATCH_ENABLED feature flag", () => {
     applyMigration(harness.sqlite, "migrations/0022_hot_path_indexes.sql");
     applyMigration(harness.sqlite, "migrations/0047_monitoring_fanout_orchestration.sql");
     harness.sqlite.exec("PRAGMA foreign_keys = ON;");
-    applyMigration(harness.sqlite, "migrations/0075_competitor_site_monitoring.sql");
+    applyMigration(harness.sqlite, "migrations/0077_competitor_site_monitoring.sql");
     const env = { DB: harness.db, FULLSITE_WATCH_ENABLED: "0" } as unknown as AppEnv;
     try {
       harness.sqlite
@@ -530,7 +530,7 @@ describe("runWebsiteSiteScan", () => {
     applyMigration(harness.sqlite, "migrations/0022_hot_path_indexes.sql");
     applyMigration(harness.sqlite, "migrations/0047_monitoring_fanout_orchestration.sql");
     harness.sqlite.exec("PRAGMA foreign_keys = ON;");
-    applyMigration(harness.sqlite, "migrations/0075_competitor_site_monitoring.sql");
+    applyMigration(harness.sqlite, "migrations/0077_competitor_site_monitoring.sql");
     env = { DB: harness.db } as AppEnv;
 
     harness.sqlite
@@ -663,7 +663,7 @@ describe("website_page_observation idempotency + noise", () => {
     applyMigration(harness.sqlite, "migrations/0022_hot_path_indexes.sql");
     applyMigration(harness.sqlite, "migrations/0047_monitoring_fanout_orchestration.sql");
     harness.sqlite.exec("PRAGMA foreign_keys = ON;");
-    applyMigration(harness.sqlite, "migrations/0075_competitor_site_monitoring.sql");
+    applyMigration(harness.sqlite, "migrations/0077_competitor_site_monitoring.sql");
     env = { DB: harness.db } as AppEnv;
     harness.sqlite
       .prepare(

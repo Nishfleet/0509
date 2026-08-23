@@ -3,7 +3,11 @@ import { createHash } from "node:crypto";
 // Empty unless a future destructive cleanup must intentionally run after a
 // schema-compatible Worker deploy. Completed cleanups should not remain here.
 /** @type {Set<string>} */
-export const POST_DEPLOY_CLEANUP_MIGRATIONS = new Set();
+export const POST_DEPLOY_CLEANUP_MIGRATIONS = new Set([
+  // 0075_teams_delivery landed on production before this file existed at 0075;
+  // renumbered to 0077 so prod ledger (…teams, browser) matches repo prefix.
+  "0077_competitor_site_monitoring.sql",
+]);
 
 // Captured from the ordered production D1 migration ledger on 2026-07-30 by
 // workflow run 30556997891. D1's ledger is append-only even when a historical
