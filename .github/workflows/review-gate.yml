@@ -33,7 +33,7 @@ env:
 
 jobs:
   classify:
-    runs-on: [self-hosted, linux, x64, vps-verify]
+    runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
     steps:
       - name: Decide whether this PR earns a review
