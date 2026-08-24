@@ -23,7 +23,7 @@ name: Auto revert
 
 on:
   workflow_run:
-    workflows: ["Secret Scan", "backlog-console-refresh test"]
+    workflows: ["Secret Scan", "semgrep-actionlint", "backlog-console-refresh test"]
     types: [completed]
     branches: [main]
 
