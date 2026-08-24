@@ -238,30 +238,33 @@ export function brandPageTitle(data: BrandPageLoaderData): string {
 
 /**
  * Honest Ad Library source phrase for page copy, from the snapshot country:
- * "the India Ad Library" for a named country, "the Meta Ad Library across
- * all countries" for the all-countries view. The Meta Ad Library is
+ * "the India Ad Library" for a named country, "the Meta Ad Library's
+ * all-countries query" for the all-countries view. The Meta Ad Library is
  * country-scoped, so this always names the library the cached creatives
  * actually came from (the loader geo-defaults the lookup — the copy must
- * not). The fallback never renders for a populated page; it exists only to
- * keep the copy grammatical if a snapshot ever lacks a country.
+ * not). The all-countries value is a single `country=ALL` query, not a
+ * union of every market, so the copy names it as one query rather than
+ * implying worldwide coverage. The fallback never renders for a populated
+ * page; it exists only to keep the copy grammatical if a snapshot ever
+ * lacks a country.
  */
-function adLibrarySourcePhrase(adLibraryCountry: string | null): string {
+export function adLibrarySourcePhrase(adLibraryCountry: string | null): string {
   if (adLibraryCountry && adLibraryCountry !== "all countries") {
     return `the ${adLibraryCountry} Ad Library`;
   }
-  return "the Meta Ad Library across all countries";
+  return "the Meta Ad Library's all-countries query";
 }
 
 /**
  * The same source phrase with the "public" qualifier used by the closer
- * honesty line: "the public India Ad Library" / "the public Meta Ad Library
- * across all countries".
+ * honesty line: "the public India Ad Library" / "the public Meta Ad
+ * Library's all-countries query".
  */
-function publicAdLibrarySourcePhrase(adLibraryCountry: string | null): string {
+export function publicAdLibrarySourcePhrase(adLibraryCountry: string | null): string {
   if (adLibraryCountry && adLibraryCountry !== "all countries") {
     return `the public ${adLibraryCountry} Ad Library`;
   }
-  return "the public Meta Ad Library across all countries";
+  return "the public Meta Ad Library's all-countries query";
 }
 
 /**
