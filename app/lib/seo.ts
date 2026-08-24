@@ -48,6 +48,21 @@ export function publicSeoMeta(input: {
   ];
 }
 
+/**
+ * `<meta name="robots" content="noindex">` descriptor for auth/action
+ * surfaces that must never be Google-indexable: signup, login, magic-link
+ * confirm, password-reset, billing portal. Auth surfaces leak the entry
+ * point to scrapers, burn crawl budget, and can outrank `/` or `/auth/signup`
+ * for branded "five to nine sign in" queries — so every rendering auth route
+ * appends this entry to its `meta` array alongside its `publicSeoMeta(...)`
+ * entries. The canonical tag stays (noindex is the correct fix, not removing
+ * canonical); these surfaces also stay out of `SITEMAP_PATHS`. Shared here so
+ * every auth route uses one source of truth instead of re-inlining the tag.
+ */
+export function noindexMetaEntry() {
+  return { name: "robots", content: "noindex" } as const;
+}
+
 export interface FaqJsonLdEntry {
   question: string;
   answer: string;
