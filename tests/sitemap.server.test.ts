@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BRAND_PAGE_FRESH_FOR_INDEXING_MS,
 } from "~/lib/brand-page.server";
+import { SITEMAP_PATHS } from "~/lib/seo";
+import routes from "~/routes";
 import {
   brandDomainFromSitemapCacheRow,
   buildSitemapXml,
@@ -333,5 +335,61 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
     queryAll.mockRejectedValue(new Error("connection lost"));
 
     await expect(runLoader({ DB: {}, BROWSER: {} })).rejects.toThrow("connection lost");
+  });
+});
+
+interface PlainRoute {
+  path?: string;
+  index?: boolean;
+  children?: PlainRoute[];
+}
+
+function patternToRegex(pattern: string): RegExp | null {
+  if (pattern.includes("*")) return null;
+  const escaped = pattern
+    .split("/")
+    .map((segment) =>
+      segment.startsWith(":")
+        ? "[^/]+"
+        : segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    )
+    .join("/");
+  return new RegExp(`^${escaped}$`);
+}
+
+function collectRoutePatterns(routes: PlainRoute[], parent = ""): RegExp[] {
+  const patterns: RegExp[] = [];
+  for (const r of routes) {
+    if (r.index) {
+      const re = patternToRegex(parent);
+      if (re) patterns.push(re);
+      continue;
+    }
+    if (r.path) {
+      const full = parent ? `${parent}/${r.path}` : r.path;
+      if (r.children) {
+        if (r.children.some((child) => child.index)) {
+          const re = patternToRegex(full);
+          if (re) patterns.push(re);
+        }
+        patterns.push(...collectRoutePatterns(r.children, full));
+      } else {
+        const re = patternToRegex(full);
+        if (re) patterns.push(re);
+      }
+    }
+  }
+  return patterns;
+}
+
+describe("SITEMAP_PATHS", () => {
+  it("only includes paths that resolve to a registered non-splat route", () => {
+    const patterns = collectRoutePatterns(routes as unknown as PlainRoute[]);
+
+    for (const sitemapPath of SITEMAP_PATHS) {
+      const pathname = sitemapPath === "/" ? "" : sitemapPath.replace(/^\/+/, "");
+      const matched = patterns.some((pattern) => pattern.test(pathname));
+      expect(matched, `${sitemapPath} has no registered, non-splat route`).toBe(true);
+    }
   });
 });
