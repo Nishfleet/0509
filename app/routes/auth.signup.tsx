@@ -10,12 +10,17 @@ const signupDescription =
 
 export const links: LinksFunction = () => canonicalLinks("/auth/signup");
 
-export const meta: MetaFunction = () =>
-  publicSeoMeta({
+export const meta: MetaFunction = () => [
+  ...publicSeoMeta({
     title: "Create account | Five to Nine",
     description: signupDescription,
     pathname: "/auth/signup",
-  });
+  }),
+  // Auth/action surfaces stay out of the sitemap and carry noindex so Google
+  // never indexes the signup entry (it would leak the auth surface, waste
+  // crawl budget, and compete with the homepage for branded queries).
+  { name: "robots", content: "noindex" },
+];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");

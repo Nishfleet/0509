@@ -45,11 +45,6 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
   },
-  "/auth/signup": {
-    title: "Sign up",
-    description:
-      "Create an account to save competitors and run retained monitoring.",
-  },
   "/compare/magicbrief": {
     title: "Five to Nine vs MagicBrief",
     description: "How Five to Nine compares with MagicBrief.",
