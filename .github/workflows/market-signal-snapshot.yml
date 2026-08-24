@@ -51,6 +51,11 @@ permissions:
   contents: write
   issues: read
   pull-requests: write
+  # actions: read lets the preflight below query the repository's workflow
+  # permissions policy so the workflow can self-diagnose the PR-create block
+  # (see "Refuse if Actions cannot create pull requests") instead of dying
+  # late at the landing step. Read-only; no security downside.
+  actions: read
 
 jobs:
   snapshot:
@@ -88,6 +93,36 @@ jobs:
             exit 1
           fi
           echo "market_signal_cloudflare_secrets_present"
+      - name: Refuse if Actions cannot create pull requests
+        # The snapshot lands on protected main through a PR squash merge (see
+        # "Commit snapshot to main" below). That step calls `gh pr create`,
+        # which dies with "GraphQL: GitHub Actions is not permitted to create
+        # or approve pull requests (createPullRequest)" when the repository or
+        # organization setting "Allow GitHub Actions to create and approve
+        # pull requests" is disabled. This preflight reads the effective
+        # repository policy via the Actions permissions API and fails loud
+        # BEFORE spending a Cloudflare D1 snapshot, so the failure message
+        # names the exact setting to flip instead of a late GraphQL error.
+        # If the GITHUB_TOKEN cannot read the policy (unexpected with
+        # actions: read), the step degrades to a warning and lets the
+        # landing step's existing fail-loud guard handle it -- it never
+        # exits 0 on a blocked policy.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          perm_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/permissions/workflow" 2>/dev/null || true)"
+          if [ -z "${perm_json}" ]; then
+            echo "::warning::Could not read repository Actions permissions policy; the landing step will fail loud if PR creation is blocked."
+            exit 0
+          fi
+          can_create="$(printf '%s' "${perm_json}" | jq -r '.can_approve_pull_request_reviews // empty')"
+          if [ "${can_create}" != "true" ]; then
+            echo "market_signal_pr_create_blocked: repository or organization setting 'Allow GitHub Actions to create and approve pull requests' is disabled (can_approve_pull_request_reviews=${can_create:-null})." >&2
+            echo "Recovery: an org admin enables it under Organization Settings -> Actions -> General -> 'Allow GitHub Actions to create and approve pull requests', or a repo admin enables it under Repository Settings -> Actions -> General -> Workflow permissions." >&2
+            exit 1
+          fi
+          echo "market_signal_pr_create_permitted"
       - name: Generate market-signal D1 snapshot
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

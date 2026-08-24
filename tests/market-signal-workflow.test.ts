@@ -49,8 +49,10 @@ describe("daily market-signal D1 snapshot workflow", () => {
     // contents-only block 403s on the issues API: "Resource not accessible
     // by integration" (first three restored runs, 2026-08-12). pull-requests
     // write is needed because main's branch protection rejects direct pushes,
-    // so the snapshot lands through a PR squash merge.
-    expect(parsed.permissions).toEqual({ contents: "write", issues: "read", "pull-requests": "write" });
+    // so the snapshot lands through a PR squash merge. actions: read lets the
+    // PR-create preflight self-diagnose the org/repo "Actions can create PRs"
+    // setting instead of dying late at the landing step with a GraphQL error.
+    expect(parsed.permissions).toEqual({ contents: "write", issues: "read", "pull-requests": "write", actions: "read" });
   });
 
   it("generates the snapshot with Cloudflare token secrets on the self-hosted production-environment job", () => {
@@ -73,6 +75,26 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(refuse?.run).toContain("market_signal_missing_cloudflare_secret");
     expect(refuse?.run).toContain("market_signal_cloudflare_secrets_present");
     expect(refuse?.run).not.toContain('echo "$CLOUDFLARE_API_TOKEN"');
+  });
+
+  it("fails loud before generate if Actions cannot create pull requests", () => {
+    // The landing step calls `gh pr create`, which dies with a GraphQL error
+    // when the org/repo setting "Allow GitHub Actions to create and approve
+    // pull requests" is disabled. This preflight reads the effective policy
+    // and fails loud with a named setting BEFORE spending a D1 snapshot. It
+    // must never exit 0 on a blocked policy; the only exit 0 path is the
+    // degraded warning when the policy API itself is unreadable.
+    const preflight = job.steps?.find((step) => step.name === "Refuse if Actions cannot create pull requests");
+    expect(preflight).toBeDefined();
+    expect(preflight?.env?.GH_TOKEN).toBe("${{ github.token }}");
+    expect(preflight?.run).toContain("actions/permissions/workflow");
+    expect(preflight?.run).toContain("can_approve_pull_request_reviews");
+    expect(preflight?.run).toContain("market_signal_pr_create_blocked");
+    expect(preflight?.run).toContain("market_signal_pr_create_permitted");
+    // The degraded path (API unreadable) warns and exits 0 so the existing
+    // landing-step fail-loud guard still catches a blocked policy; it must
+    // NOT exit 1 on a mere API read failure, only on a confirmed block.
+    expect(preflight?.run).toContain("::warning::");
   });
 
   it("isolates wrangler user config and unsets shadowing Cloudflare env vars", () => {
