@@ -746,7 +746,7 @@ function isLandingPageEvidenceLine(line: string) {
   );
 }
 
-function inferLandingPageFromTextBlock(block: string[]) {
+export function inferLandingPageFromTextBlock(block: string[]) {
   const domainLine = block.find(isLandingPageEvidenceLine);
   if (!domainLine) {
     return null;
@@ -800,12 +800,44 @@ export function extractExternalLink(html: string) {
   const hrefRegex = /\bhref=(['"])(.*?)\1/gi;
   for (const match of html.matchAll(hrefRegex)) {
     const href = decodeHtmlEntity(match[2] ?? "");
-    if (
-      /^https?:/i.test(href) &&
-      !/facebook\.com/i.test(href) &&
-      !/l\.facebook\.com/i.test(href)
-    ) {
-      return href;
+    if (!/^https?:/i.test(href)) {
+      continue;
+    }
+
+    // Outbound ad destinations are wrapped as l.facebook.com/l.php?u=<target>.
+    // Unwrap to the real landing page, mirroring the DOM-based
+    // resolveExternalLink in meta-library-browser.server.ts. Without this,
+    // every server-side fallback path (parseRenderedMetaLibraryHtml,
+    // extractQuickActionPayloadFromScrape) nulls out landingPageUrl for ad
+    // cards whose only external link is the wrapped redirect — which is the
+    // normal Ad Library shape — and the proof-capture candidate loop skips
+    // every observation with no landing_page_url, so watchlist runs succeed
+    // while zero proof captures are recorded.
+    let parsed: URL;
+    try {
+      parsed = new URL(href);
+    } catch {
+      continue;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (host === "l.facebook.com" || host === "lm.facebook.com") {
+      const target = parsed.searchParams.get("u");
+      if (!target) {
+        continue;
+      }
+      try {
+        const decoded = new URL(target);
+        if (!/(^|\.)facebook\.com$|(^|\.)instagram\.com$|(^|\.)fb\.com$/i.test(decoded.hostname)) {
+          return decoded.toString();
+        }
+      } catch {
+        // skip undecodable redirect targets
+      }
+      continue;
+    }
+
+    if (!/facebook\.com/i.test(host)) {
+      return parsed.toString();
     }
   }
 
