@@ -166,3 +166,20 @@ describe("inferLandingPageFromTextBlock", () => {
     );
   });
 });
+
+// Regression for issue #927 (PR #930): naive regex script/style stripping
+// misses malformed closers (e.g. `</script >`, attribute-bearing closers,
+// nested smuggling). stripHtml and stripHtmlPreservingLines now route through
+// sanitize-text.server's stripScriptAndStyle which uses a parse loop tolerant
+// of malformed markup. These tests pin that contract.
+describe("meta-library rendered card parser stripHtml helpers", () => {
+  it("stripHtml drops malformed script markup before tag stripping", () => {
+    expect(stripHtml("<p>headline</p><script>alert(1)</script foo>")).toBe("headline");
+  });
+
+  it("stripHtmlPreservingLines drops malformed script markup", () => {
+    expect(stripHtmlPreservingLines("<div>line one</div><script>alert(1)</script >")).toBe(
+      "line one",
+    );
+  });
+});
