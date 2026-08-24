@@ -48,6 +48,21 @@ export function publicSeoMeta(input: {
   ];
 }
 
+/**
+ * `<meta name="robots" content="noindex">` descriptor for auth/action
+ * surfaces that must never be Google-indexable: signup, login, magic-link
+ * confirm, password-reset, billing portal. Auth surfaces leak the entry
+ * point to scrapers, burn crawl budget, and can outrank `/` or `/auth/signup`
+ * for branded "five to nine sign in" queries — so every rendering auth route
+ * appends this entry to its `meta` array alongside its `publicSeoMeta(...)`
+ * entries. The canonical tag stays (noindex is the correct fix, not removing
+ * canonical); these surfaces also stay out of `SITEMAP_PATHS`. Shared here so
+ * every auth route uses one source of truth instead of re-inlining the tag.
+ */
+export function noindexMetaEntry() {
+  return { name: "robots", content: "noindex" } as const;
+}
+
 export interface FaqJsonLdEntry {
   question: string;
   answer: string;
@@ -157,15 +172,9 @@ export function jsonLdScriptProps(data: unknown) {
 
 export const SITEMAP_PATHS = [
   "/",
-  "/pricing",
   "/search",
-  "/auth/signup",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
-  "/compare/visualping",
-  "/compare/spyland",
-  "/compare/pulzifi",
-  "/compare/foreplay",
   "/competitor-monitoring",
   "/help",
   "/docs",
@@ -175,6 +184,20 @@ export const SITEMAP_PATHS = [
   "/trust",
   "/privacy",
   "/terms",
+] as const;
+
+/**
+ * Public action surfaces that carry `<meta name="robots" content="noindex">`
+ * and must stay OUT of the sitemap. These are conversion/auth entries (signup,
+ * login, magic-link, password-reset, billing portal), not reading surfaces —
+ * indexing them would leak the auth surface, waste crawl budget, and let the
+ * signup page compete with the homepage `/` for branded "five to nine"
+ * queries. Each route's `meta` carries the noindex tag itself so a future
+ * accidental re-add to the sitemap still produces a noindex page; this set is
+ * the sitemap-side guard that the two never overlap.
+ */
+export const NOINDEX_ACTION_SURFACES = [
+  "/auth/signup",
 ] as const;
 
 /**
@@ -199,16 +222,10 @@ export interface SitemapEntry {
  */
 const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
   "/": { changefreq: "daily", priority: "1.0" },
-  "/pricing": { changefreq: "weekly", priority: "0.8" },
   "/search": { changefreq: "weekly", priority: "0.9" },
-  "/auth/signup": { changefreq: "weekly", priority: "0.8" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
   "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/compare/meta-ad-library": { changefreq: "weekly", priority: "0.7" },
-  "/compare/visualping": { changefreq: "weekly", priority: "0.7" },
-  "/compare/spyland": { changefreq: "weekly", priority: "0.7" },
-  "/compare/pulzifi": { changefreq: "weekly", priority: "0.7" },
-  "/compare/foreplay": { changefreq: "weekly", priority: "0.7" },
   "/changelog": { changefreq: "weekly", priority: "0.6" },
   "/help": { changefreq: "monthly", priority: "0.5" },
   "/docs": { changefreq: "monthly", priority: "0.5" },

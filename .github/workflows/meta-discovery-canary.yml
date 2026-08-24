@@ -111,7 +111,12 @@ jobs:
           # (green / missing-token). Any other failure path (endpoint
           # unreachable, readiness blockers) exits before writing state, and
           # the honest published state for that run is red.
-          STATE: ${{ steps.readiness.outputs.state || 'red' }}
+          # nosemgrep: no-hand-built-state-ledger-tombstone — GitHub Actions
+          # step-output reference (the readiness step's `state` output), not a
+          # hand-rolled state/ledger/tombstone file. The rule matches the
+          # dotted-output substring; the actual artifact is the JSON evidence
+          # file written below, not orchestration state.
+          STATE: ${{ steps.readiness.outputs.state || 'red' }} # nosemgrep: no-hand-built-state-ledger-tombstone
           RUN_ID: ${{ github.run_id }}
         run: |
           python3 - <<'PY'

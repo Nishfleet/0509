@@ -40,20 +40,10 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "Source-backed competitor ad and landing-page change monitoring for growth teams.",
   },
-  "/pricing": {
-    title: "Pricing",
-    description:
-      "Plans, proof capture packs, and billing FAQ; prices load localized from Dodo checkout.",
-  },
   "/search": {
     title: "Public competitor ad search",
     description:
       "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
-  },
-  "/auth/signup": {
-    title: "Sign up",
-    description:
-      "Create an account to save competitors and run retained monitoring.",
   },
   "/compare/magicbrief": {
     title: "Five to Nine vs MagicBrief",
@@ -63,26 +53,6 @@ const LLMS_PAGE_DETAILS: Record<
     title: "Five to Nine vs Meta Ad Library",
     description:
       "How Five to Nine extends Meta Ad Library results with monitoring and proof.",
-  },
-  "/compare/visualping": {
-    title: "Five to Nine vs Visualping",
-    description:
-      "How Five to Nine compares with Visualping for competitor page and offer change monitoring.",
-  },
-  "/compare/spyland": {
-    title: "Five to Nine vs Spyland",
-    description:
-      "How Five to Nine compares with Spyland for competitor landing-page monitoring.",
-  },
-  "/compare/pulzifi": {
-    title: "Five to Nine vs Pulzifi",
-    description:
-      "How Five to Nine compares with Pulzifi for AI-powered competitive and web-page intelligence.",
-  },
-  "/compare/foreplay": {
-    title: "Five to Nine vs Foreplay",
-    description:
-      "How Five to Nine compares with Foreplay for competitor ad and creative research.",
   },
   "/competitor-monitoring": {
     title: "Competitor monitoring",
