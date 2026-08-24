@@ -3,19 +3,25 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 
 import { AuthForm } from "~/components/auth-form";
 import { BrandWordmark } from "~/components/brand-wordmark";
-import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { canonicalLinks, jsonLdScriptProps, noindexMetaEntry, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 
 const loginDescription =
   "Sign in to access saved competitors, alerts, reports, and useful ad examples in Five to Nine.";
 
 export const links: LinksFunction = () => canonicalLinks("/auth/login");
 
-export const meta: MetaFunction = () =>
-  publicSeoMeta({
+export const meta: MetaFunction = () => [
+  ...publicSeoMeta({
     title: "Sign in | Five to Nine",
     description: loginDescription,
     pathname: "/auth/login",
-  });
+  }),
+  // Auth/action surfaces stay out of the sitemap and carry noindex so Google
+  // never indexes the login entry (it would leak the auth surface, waste
+  // crawl budget, and compete with the homepage for branded queries). The
+  // canonical tag stays — noindex is the correct fix, not removing canonical.
+  noindexMetaEntry(),
+];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
