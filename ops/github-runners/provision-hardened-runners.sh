@@ -108,8 +108,6 @@ install_policy_files() {
   install -d -o root -g root -m 0755 "${TOOL_ROOT}/bin"
   install -o root -g root -m 0755 "${SOURCE_DIR}/../../scripts/deploy-window-lock.sh" \
     "${TOOL_ROOT}/bin/deploy-window-lock"
-  install -o root -g root -m 0755 "${SOURCE_DIR}/../../scripts/flock-compat.sh" \
-    "${TOOL_ROOT}/bin/flock"
   install -o root -g root -m 0644 "${SOURCE_DIR}/github-0509.slice" \
     /etc/systemd/system/github-0509.slice
   install -o root -g root -m 0644 "${SOURCE_DIR}/github-0509-verify.slice" \

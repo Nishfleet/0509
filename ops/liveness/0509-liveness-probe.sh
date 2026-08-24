@@ -40,9 +40,14 @@ fail() {
 mkdir -p "${STATE_DIR}"
 umask 022
 
-# Serialize manual and timer runs; a oneshot probe should never overlap itself.
-exec 9>"${STATE_DIR}/.probe.lock"
-flock -n 9 || fail "another probe run is in progress"
+# Single-instance serialization is owned by systemd: this probe runs as
+# 0509-liveness.service (Type=oneshot) triggered by 0509-liveness.timer. A
+# oneshot unit cannot overlap itself — systemd will not start a unit that is
+# already activating, so a timer fire during a still-running probe is a no-op
+# and a manual `systemctl start` waits rather than running a second copy. No
+# shell-level advisory-lock mutex is needed or permitted (the canonical
+# no-hand-built-orchestration gate bans hand-built mutex wrappers; systemd
+# owns single-instance semantics for oneshot units).
 
 readonly TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 shallow_status=0
