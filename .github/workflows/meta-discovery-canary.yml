@@ -47,27 +47,62 @@ jobs:
             echo "state=missing-token" >> "$GITHUB_OUTPUT"
             exit 1
           fi
-          response="$(curl --fail --silent --show-error --max-time 20 --retry 2 --retry-delay 5 \
+          # Capture the HTTP status AND the body for any status. The
+          # launch-readiness endpoint intentionally returns 503 with a JSON
+          # body listing `blockers` when readiness is red; `--fail` would make
+          # curl exit 22 on 503 and the body (with the blocker names) would
+          # never be parsed, so a red canary reported only
+          # "curl: (22) ... error: 503" and could not name what failed
+          # (run 32689088190, 2026-08-24).
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          http_code="$(curl --silent --show-error --max-time 20 --retry 2 --retry-delay 5 \
+            --write-out '%{http_code}' \
+            --output "$response_file" \
             -H "x-0509-canary-token: ${CANARY_BYPASS_TOKEN}" \
             -H "user-agent: 0509-meta-discovery-canary/1.0" \
             "$READINESS_URL")"
+          response="$(cat "$response_file")"
+          rm -f "$response_file"
+          trap - EXIT
+          printf 'http_code=%s\n' "$http_code"
           printf '%s\n' "$response"
-          READINESS_RESPONSE="$response" python3 - <<'PY'
+          READINESS_HTTP_CODE="$http_code" READINESS_RESPONSE="$response" python3 - <<'PY'
           import json
           import os
           import sys
 
-          payload = json.loads(os.environ["READINESS_RESPONSE"])
-          if payload.get("ok") is not True:
-              raise SystemExit("launch readiness ok was not true")
+          code = os.environ["READINESS_HTTP_CODE"]
+          body = os.environ["READINESS_RESPONSE"]
+          # A non-2xx/non-503 status is an unexpected transport/endpoint
+          # failure; fail loud without guessing a verdict.
+          if code not in ("200", "503"):
+              raise SystemExit(f"launch readiness returned unexpected HTTP status {code}")
+          try:
+              payload = json.loads(body)
+          except json.JSONDecodeError as exc:
+              raise SystemExit(f"launch readiness returned unparseable body: {exc}") from exc
           meta = payload.get("metaAdsBeta") or {}
           meta_ok = meta.get("ok") is True
-          print(f"meta canary: {'green' if meta_ok else 'red'}")
+          overall_ok = payload.get("ok") is True
+          # The endpoint's top-level `blockers` array is the authoritative
+          # list of why readiness is red (monitoring, proof, email, whatsapp,
+          # and meta_ads_beta:* entries). Print those so a red canary names
+          # what actually failed, not just "error: 503". samples/target/
+          # success_rate stay meta-specific since this is the meta canary.
+          blockers = payload.get("blockers") or []
+          # Green requires 200, overall ok, and meta ok. Anything else is red
+          # and must fail loud: a 503 is the endpoint's red signal, a 200 with
+          # ok != true is a contract violation, and a missing metaAdsBeta.ok
+          # is red. Never exit 0 on a red canary. The printed verdict is
+          # derived from the same condition so a 503 always reports red.
+          red = code != "200" or not overall_ok or not meta_ok
+          print(f"meta canary: {'red' if red else 'green'}")
           print(f"samples={meta.get('samples')} target={meta.get('sampleTarget')} "
                 f"success_rate={meta.get('successRate')} "
-                f"blockers={','.join(meta.get('blockers') or [])}")
-          if not meta_ok:
-              raise SystemExit(f"meta readiness red: {','.join(meta.get('blockers') or [])}")
+                f"blockers={','.join(blockers)}")
+          if red:
+              raise SystemExit(f"meta readiness red: {','.join(blockers)}")
           PY
           echo "state=green" >> "$GITHUB_OUTPUT"
 
