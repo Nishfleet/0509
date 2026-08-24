@@ -72,4 +72,52 @@ describe("Meta discovery canary workflow", () => {
     expect(persist?.env?.STATE).toBe("${{ steps.readiness.outputs.state || 'red' }}");
     expect(upload?.with?.["if-no-files-found"]).toBe("error");
   });
+
+  // The launch-readiness endpoint returns 503 with a JSON body listing
+  // `blockers` when readiness is red. The canary used to call curl with
+  // `--fail`, which made curl exit 22 on 503 so the python block that prints
+  // the blockers never ran: a red canary reported only
+  // "curl: (22) ... error: 503" and could not name what failed
+  // (run 32689088190, 2026-08-24). These pins assert the observable contract
+  // — the HTTP code and body are both captured for any status, a 503 with a
+  // parseable body prints `meta canary: red` plus the blockers and still
+  // exits non-zero — without coupling to source line positions.
+
+  it("captures the HTTP status and body for any status instead of failing on 503", () => {
+    const job = parsed.jobs["meta-readiness"];
+    const readinessRun = job?.steps?.find((step) => step.id === "readiness")?.run ?? "";
+    // `--fail` is the defect: it makes curl exit 22 on 503 and discard the
+    // body that names the blockers. The curl call must not use it.
+    const curlCall = readinessRun.match(/curl [^\n]*\n(?:[^\n]*\n)*?\s+"\$READINESS_URL"/s);
+    expect(curlCall, "expected a curl invocation against READINESS_URL").toBeTruthy();
+    expect(curlCall![0]).not.toContain("--fail");
+    // The HTTP code must be captured via --write-out and the body via
+    // --output, so a 503 body reaches the python verdict block.
+    expect(readinessRun).toContain("--write-out");
+    expect(readinessRun).toContain("--output");
+    // The retry/timeout budget is part of the contract.
+    expect(readinessRun).toContain("--max-time 20");
+    expect(readinessRun).toContain("--retry 2");
+    expect(readinessRun).toContain("--retry-delay 5");
+  });
+
+  it("prints `meta canary: red` and the blockers on a 503, and still exits non-zero", () => {
+    const job = parsed.jobs["meta-readiness"];
+    const readinessRun = job?.steps?.find((step) => step.id === "readiness")?.run ?? "";
+    // The python verdict block must read both the HTTP code and the body.
+    expect(readinessRun).toContain("READINESS_HTTP_CODE");
+    expect(readinessRun).toContain("READINESS_RESPONSE");
+    // A 503 is an expected status whose body must be parsed, not a transport
+    // failure; the only unexpected statuses are non-2xx/non-503.
+    expect(readinessRun).toMatch(/code not in \(.?"200"?,\s*.?"503"?\)/);
+    // The verdict prints the red/green line and the blockers line for every
+    // parseable body, including a 503.
+    expect(readinessRun).toContain("meta canary:");
+    expect(readinessRun).toContain("blockers=");
+    // A 503 (or any non-green body) must raise SystemExit so the step exits
+    // non-zero and never writes state=green. The green marker is only
+    // reached after the python block completes without raising.
+    expect(readinessRun).toMatch(/raise SystemExit\(/);
+    expect(readinessRun).toMatch(/code != .?"200"?|not overall_ok|not meta_ok/);
+  });
 });
