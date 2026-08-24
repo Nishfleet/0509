@@ -17,7 +17,7 @@ The goal is not broad market coverage. The goal is to verify the full operator l
 - account email: `me@inish.in`
 - channels:
   - email: `me@inish.in`
-  - WhatsApp: `+919873730902`
+  - WhatsApp: `+91XXXXXXXXXX` (redacted: real number lives in the credential store, not the repo)
 
 ## Initial Watchlists
 
