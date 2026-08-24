@@ -37,13 +37,13 @@ after the original fix:
   running instance; nothing has re-wedged or crashed in ~6 days.
 - `uptime` → `10 users` (the incident peak showed `8192 users`).
 - sshd accepts new connections: a fresh ssh connection to the live tailnet
-  bind (`100.108.184.97:22`) reached the publickey challenge stage
+  bind (`100.64.0.0:22`) reached the publickey challenge stage
   (`Permission denied (publickey)`), i.e. the server answered a newly
   initiated session — the pre-fix symptom was every new session being refused
   outright. The session count stayed at 16/10 after the test connection (no
   residual zombie accumulation).
 - The sshd listen sockets are still the hardened tailnet-only binds
-  (`100.108.184.97:22`, `[fd7a:115c:a1e0::d23a:b862]:22`) — no `0.0.0.0:22`
+  (`100.64.0.0:22`, `[fd7a:115c:a1e0::0]:22`) — no `0.0.0.0:22`
   wildcard. (`ssh localhost` is refused because sshd no longer listens on
   loopback — the intended posture, not a session-table refusal.)
 - `cat /proc/sys/kernel/pty/nr` → 4 (no PTY exhaustion); `df /run` → 14% used
@@ -91,13 +91,13 @@ $ systemctl show systemd-logind -p NRestarts,ActiveEnterTimestamp,ExecMainStartT
   ActiveEnterTimestamp=Fri 2026-08-14 08:00:11 IST
 $ uptime                                            → ... 10 users, load average: 1.97, 2.08, 2.46
 $ ss -tlnp | grep ':22 '
-  LISTEN 0 4096 100.108.184.97:22
-  LISTEN 0 4096 [fd7a:115c:a1e0::d23a:b862]:22
+  LISTEN 0 4096 100.64.0.0:22
+  LISTEN 0 4096 [fd7a:115c:a1e0::0]:22
 $ cat /proc/sys/kernel/pty/nr                       → 4
 $ df /run                                           → 14% used
 $ timeout 10 ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
-    -o ConnectTimeout=5 nish@100.108.184.97 true
-  nish@100.108.184.97: Permission denied (publickey).   # server accepted the session
+    -o ConnectTimeout=5 nish@100.64.0.0 true
+  nish@100.64.0.0: Permission denied (publickey).   # server accepted the session
 $ ls /run/systemd/sessions | wc -l                  # after test → 16
 $ loginctl list-sessions --no-legend | wc -l        # after test → 10
 ```
