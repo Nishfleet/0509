@@ -23,7 +23,7 @@ import {
 } from "~/lib/plan-entitlements";
 import { PRESENCE_SOURCE_IDS } from "~/lib/presence-types";
 import { PUBLIC_MARKDOWN_PATHS } from "~/lib/public-markdown";
-import { SITEMAP_PATHS } from "~/lib/seo";
+import { SITEMAP_PATHS, NOINDEX_ACTION_SURFACES } from "~/lib/seo";
 
 type RegistryEntry = {
   claimId: string;
@@ -326,8 +326,11 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
   // sitemap (same claim stays reopened for re-proof; page claims trace to the
   // existing homepage/docs claims, no new claim text invented).
-  // Sitemap entries must be paths the live Worker bundle serves; verify with a Googlebot fetch before re-adding after a deploy.
-  sitemapPaths: ["/", "/search", "/auth/signup", "/compare/magicbrief", "/compare/meta-ad-library", "/competitor-monitoring", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  // Sitemap entries must be paths the live Worker bundle serves; verify with a
+  // Googlebot fetch before re-adding after a deploy.
+  // 2026-08-25: /auth/signup left the sitemap — signup/auth surfaces stay out of
+  // the sitemap and carry noindex (see NOINDEX_ACTION_SURFACES in app/lib/seo.ts).
+  sitemapPaths: ["/", "/search", "/compare/magicbrief", "/compare/meta-ad-library", "/competitor-monitoring", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",
@@ -510,5 +513,26 @@ describe("G11 claim-surface registry", () => {
     }
     expect(JSON.stringify(registry.claims)).not.toContain("fail_not_assessed");
     expect(JSON.stringify(registry.claims)).not.toContain('"status":"pass"');
+  });
+
+  it("keeps noindex action surfaces out of the sitemap and carries the noindex meta", async () => {
+    // Rule: signup/auth/action surfaces stay out of the sitemap and carry
+    // <meta name="robots" content="noindex">. Every path in SITEMAP_PATHS must
+    // be a reading surface (noindex-free) OR a member of the documented
+    // NOINDEX_ACTION_SURFACES set — and the two sets must be disjoint, so the
+    // documented noindex set never leaks an action surface into the sitemap.
+    const sitemapSet = new Set<string>([...SITEMAP_PATHS]);
+    const noindexSet = new Set<string>([...NOINDEX_ACTION_SURFACES]);
+
+    for (const path of noindexSet) {
+      expect(sitemapSet.has(path), `noindex action surface in sitemap: ${path}`).toBe(false);
+    }
+
+    // The signup route is the canonical example: its meta must carry the
+    // noindex tag so a future accidental re-add to the sitemap still renders
+    // a noindex page.
+    const { meta } = await import("~/routes/auth.signup");
+    const tags = (meta as unknown as () => Array<Record<string, string>>)();
+    expect(tags).toContainEqual({ name: "robots", content: "noindex" });
   });
 });
