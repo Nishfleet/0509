@@ -6,6 +6,7 @@ import {
   readResponseTextWithinLimit,
   utf8ByteLength,
 } from "~/lib/bounded-response.server";
+import { decodeHtmlEntities as decodeHtml } from "~/lib/decode-html.server";
 import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import {
@@ -1106,15 +1107,6 @@ function findFirstMatch(value: string, regex: RegExp) {
 
 function stripTags(value: string) {
   return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function decodeHtml(value: string) {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
 }
 
 function buildBrowserRunQuickActionError(

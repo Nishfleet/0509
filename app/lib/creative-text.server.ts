@@ -5,6 +5,7 @@ import {
   readResponseBytesWithinLimit,
   readResponseTextWithinLimit,
 } from "~/lib/bounded-response.server";
+import { decodeHtmlEntities as decodeHtml } from "~/lib/decode-html.server";
 import { creativeCaptureSourceFingerprint } from "~/lib/creative-capture-policy";
 import {
   fetchWithTimeout,
@@ -946,14 +947,4 @@ function stripTags(value: string) {
     .replace(/\n\s+/g, "\n")
     .replace(/\s+\n/g, "\n")
     .trim();
-}
-
-function decodeHtml(value: string) {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ");
 }

@@ -28,6 +28,7 @@ import {
 import { isoFromCountryName } from "~/lib/countries";
 import { fingerprintSavedQuery, normalizeNumericPageId } from "~/lib/normalize";
 import { truncateTextSafe } from "~/lib/text-safe";
+import { decodeHtmlEntities as decodeHtmlEntity } from "~/lib/decode-html.server";
 import {
   findStartedRunningLine,
   parseStartedRunningDate,
@@ -35,7 +36,6 @@ import {
 import {
   absolutizeMetaAdUrl,
   applyRelayPageIdentitiesToCards,
-  decodeHtmlEntity,
   extractAdArchivePageIdentities,
   extractCreativeMediaFromHtml,
   extractAdCopyFromCardText,

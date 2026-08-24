@@ -1,3 +1,4 @@
+import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { sha256Base64Url } from "~/lib/presence-hash";
 
 /**
@@ -400,83 +401,6 @@ function stripUnwantedMarkup(html: string): string {
 		cleaned = cleaned.replace(pattern, "");
 	}
 	return cleaned;
-}
-
-const ENTITY_MAP: Record<string, string> = {
-	amp: "&",
-	lt: "<",
-	gt: ">",
-	quot: '"',
-	apos: "'",
-	nbsp: " ",
-	copy: "©",
-	reg: "®",
-	trade: "™",
-	hellip: "…",
-	mdash: "—",
-	ndash: "–",
-	rsquo: "’",
-	lsquo: "‘",
-	rdquo: "”",
-	ldquo: "“",
-	times: "×",
-	middot: "·",
-	bull: "•",
-	plusmn: "±",
-	deg: "°",
-	cent: "¢",
-	pound: "£",
-	euro: "€",
-	yen: "¥",
-	sect: "§",
-	para: "¶",
-	laquo: "«",
-	raquo: "»",
-	permil: "‰",
-	micro: "µ",
-	sup2: "²",
-	sup3: "³",
-	frac12: "½",
-	frac14: "¼",
-	frac34: "¾",
-	aacute: "á",
-	eacute: "é",
-	iacute: "í",
-	oacute: "ó",
-	uacute: "ú",
-	agrave: "à",
-	egrave: "è",
-	igrave: "ì",
-	ograve: "ò",
-	ugrave: "ù",
-	ntilde: "ñ",
-	ccedil: "ç",
-	szlig: "ß",
-	aring: "å",
-	auml: "ä",
-	euml: "ë",
-	iuml: "ï",
-	ouml: "ö",
-	uuml: "ü",
-	yuml: "ÿ",
-};
-
-function decodeHtmlEntities(value: string): string {
-	return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]+);/gi, (match, body: string) => {
-		const lower = body.toLowerCase();
-		if (lower.startsWith("#x")) {
-			const code = Number.parseInt(lower.slice(2), 16);
-			if (Number.isFinite(code) && code > 0 && code <= 0x10ffff) return String.fromCodePoint(code);
-			return match;
-		}
-		if (lower.startsWith("#")) {
-			const code = Number.parseInt(lower.slice(1), 10);
-			if (Number.isFinite(code) && code > 0 && code <= 0x10ffff) return String.fromCodePoint(code);
-			return match;
-		}
-		const mapped = ENTITY_MAP[lower];
-		return mapped !== undefined ? mapped : match;
-	});
 }
 
 /**
