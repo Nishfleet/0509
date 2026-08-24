@@ -158,7 +158,6 @@ export function jsonLdScriptProps(data: unknown) {
 export const SITEMAP_PATHS = [
   "/",
   "/search",
-  "/auth/signup",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
   "/competitor-monitoring",
@@ -170,6 +169,20 @@ export const SITEMAP_PATHS = [
   "/trust",
   "/privacy",
   "/terms",
+] as const;
+
+/**
+ * Public action surfaces that carry `<meta name="robots" content="noindex">`
+ * and must stay OUT of the sitemap. These are conversion/auth entries (signup,
+ * login, magic-link, password-reset, billing portal), not reading surfaces —
+ * indexing them would leak the auth surface, waste crawl budget, and let the
+ * signup page compete with the homepage `/` for branded "five to nine"
+ * queries. Each route's `meta` carries the noindex tag itself so a future
+ * accidental re-add to the sitemap still produces a noindex page; this set is
+ * the sitemap-side guard that the two never overlap.
+ */
+export const NOINDEX_ACTION_SURFACES = [
+  "/auth/signup",
 ] as const;
 
 /**
@@ -195,7 +208,6 @@ export interface SitemapEntry {
 const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
   "/": { changefreq: "daily", priority: "1.0" },
   "/search": { changefreq: "weekly", priority: "0.9" },
-  "/auth/signup": { changefreq: "weekly", priority: "0.8" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
   "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/compare/meta-ad-library": { changefreq: "weekly", priority: "0.7" },
