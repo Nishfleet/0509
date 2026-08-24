@@ -45,6 +45,7 @@ import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
 import { formatAngleDetail } from "~/lib/angle-display";
 import {
   applyWebsiteSearchFallback,
+  buildSignupTrackingPath,
   competitorTrackingLabel,
   emptyCompetitorWebsite,
   hasInvalidCompetitorWebsite,
@@ -1098,19 +1099,17 @@ export default function SearchRoute() {
   );
   // Route every new signup to the persistent setup card. Carry the website
   // (when present) and selected non-default country so the first action keeps
-  // the visitor's search context.
+  // the visitor's search context. On a keyword `?q=`/`?query=` lookup with no
+  // explicit `?website=`, derive the resolved brand from the top result's
+  // landing page so the new account's first watch is the brand the visitor
+  // just searched for — matching the `?website=` and `/ads/<domain>` paths.
   // rather than re-deriving it from geo. Omit "all", which is onboarding's
   // default and adds no user context.
-  const setupParams = new URLSearchParams();
-  if (competitorWebsite.raw) {
-    setupParams.set("website", competitorWebsite.raw);
-  }
-  if (data.filters.country && data.filters.country !== "all") {
-    setupParams.set("country", data.filters.country);
-  }
-  const setupQuery = setupParams.toString();
-  const postSignupPath = `/app${setupQuery ? `?${setupQuery}` : ""}#setup-checklist`;
-  const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
+  const signupTrackingPath = buildSignupTrackingPath({
+    competitorWebsiteRaw: competitorWebsite.raw,
+    ads: visibleAds,
+    country: data.filters.country,
+  });
   const inferredWatchlistName =
     (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
   // Candidate-3 root-cause fix for the public submit hang: the See ads button
