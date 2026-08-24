@@ -84,16 +84,21 @@ jobs:
               raise SystemExit(f"launch readiness returned unparseable body: {exc}") from exc
           meta = payload.get("metaAdsBeta") or {}
           meta_ok = meta.get("ok") is True
-          overall_ok = payload.get("ok") is True
           print(f"meta canary: {'green' if meta_ok else 'red'}")
           print(f"samples={meta.get('samples')} target={meta.get('sampleTarget')} "
                 f"success_rate={meta.get('successRate')} "
                 f"blockers={','.join(meta.get('blockers') or [])}")
-          # Green requires 200, overall ok, and meta ok. Anything else is red
-          # and must fail loud: a 503 is the endpoint's red signal, a 200 with
-          # ok != true is a contract violation, and a missing metaAdsBeta.ok
-          # is red. Never exit 0 on a red canary.
-          if code != "200" or not overall_ok or not meta_ok:
+          # This canary verifies the META discovery lane only. The overall
+          # launch-readiness endpoint returns 503 whenever ANY blocker exists
+          # (proof capture, email delivery, slack, monitoring) — most are out
+          # of scope for a Meta canary and owned by other workflows (proof
+          # canary, uptime health). Gating on overall ok or code == 200 made
+          # this canary fail every run for days while the Meta lane itself
+          # was green (453 samples, 100% success), firing into the void ~4x/day
+          # (runs 32748308275, 32732710768, 32715196613, 2026-08-24). The Meta
+          # verdict is metaAdsBeta.ok; a 503 with metaAdsBeta.ok true is a
+          # green Meta lane. Never exit 0 on a red Meta lane.
+          if not meta_ok:
               raise SystemExit(f"meta readiness red: {','.join(meta.get('blockers') or [])}")
           PY
           echo "state=green" >> "$GITHUB_OUTPUT"
