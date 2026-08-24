@@ -44,13 +44,14 @@ describe("daily market-signal D1 snapshot workflow", () => {
   });
 
   it("grants the token the scopes the snapshot script needs", () => {
-    // The script reads the issue list (gh api .../issues) and commits the
-    // snapshot, so the token needs issues: read and contents: write. A bare
-    // contents-only block 403s on the issues API: "Resource not accessible
-    // by integration" (first three restored runs, 2026-08-12). pull-requests
-    // write is needed because main's branch protection rejects direct pushes,
-    // so the snapshot lands through a PR squash merge.
-    expect(parsed.permissions).toEqual({ contents: "write", issues: "read", "pull-requests": "write" });
+    // The script reads the issue list (gh api .../issues) and pushes the
+    // snapshot to the data branch, so the token needs issues: read and
+    // contents: write. A bare contents-only block 403s on the issues API:
+    // "Resource not accessible by integration" (first three restored runs,
+    // 2026-08-12). No pull-requests scope is requested: the snapshot no
+    // longer lands through a PR (the Nishfleet org forbids Actions from
+    // creating PRs), so the workflow never creates or merges one.
+    expect(parsed.permissions).toEqual({ contents: "write", issues: "read" });
   });
 
   it("generates the snapshot with Cloudflare token secrets on the self-hosted production-environment job", () => {
@@ -87,74 +88,92 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(source).toContain(`--output "$SNAPSHOT_PATH"`);
     expect(source).toContain(`git add -- "$SNAPSHOT_PATH"`);
     expect(contract).toContain(`ops/market-signal/0509-market-signal.json`);
+    // The snapshot no longer lands on main; Hermes reads it from the
+    // automation-owned data branch, so the contract must point there.
+    expect(contract).toContain(`automation/market-signal-snapshot`);
+    expect(contract).toContain(`git show origin/automation/market-signal-snapshot:ops/market-signal/0509-market-signal.json`);
   });
 
-  it("passes GH_TOKEN to every gh step so the self-hosted CLI can authenticate", () => {
-    const ghSteps = job.steps?.filter(
-      (step) => typeof step.run === "string" && /\bgh\b/u.test(step.run),
-    ) ?? [];
-    expect(ghSteps.length).toBeGreaterThan(0);
-    for (const step of ghSteps) {
-      expect(step.env?.GH_TOKEN, step.name).toBe("${{ github.token }}");
-    }
+  it("passes GH_TOKEN to the generate step so the script can read the issue list", () => {
+    // The snapshot script calls `gh api .../issues` internally (issues: read),
+    // so the generate step must hand it GH_TOKEN. No workflow step invokes the
+    // gh CLI directly anymore -- the snapshot no longer lands through a PR, so
+    // there is no gh pr create / gh pr merge to authenticate.
+    const generate = job.steps?.find((step) => step.name === "Generate market-signal D1 snapshot");
+    expect(generate?.env?.GH_TOKEN).toBe("${{ github.token }}");
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    expect(publish).not.toMatch(/\bgh pr\b/u);
   });
 
-  it("lands the snapshot on protected main through a PR squash merge", () => {
-    // main has strict required status checks and enforce_admins, so the direct
-    // push the old workflow used was rejected with GH006 (seen on every run,
-    // e.g. 2026-08-14T02:36Z). The landing step must open a PR and merge it.
-    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
-    expect(commit).not.toContain("git push origin HEAD:main");
-    expect(commit).toContain("gh pr create");
-    expect(commit).not.toContain("gh pr create --json");
-    expect(commit).toContain("gh pr merge");
-    expect(commit).toContain("--squash");
-    expect(commit).toContain("--delete-branch");
-    expect(commit).toContain("market_signal_snapshot_merged");
+  it("publishes the snapshot to a dedicated data branch without creating a PR", () => {
+    // The Nishfleet org forbids Actions from creating PRs, so the old
+    // PR-squash-merge landing died on every run from 2026-08-21 on. The
+    // snapshot now pushes to a dedicated automation-owned data branch; no PR
+    // is opened, so no org or repo policy is weakened. Hermes reads the
+    // snapshot from this branch (see the contract test above).
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    expect(publish).toContain("automation/market-signal-snapshot");
+    expect(publish).toContain("git push");
+    expect(publish).toContain("market_signal_snapshot_published");
+    // No PR machinery anywhere in the workflow.
+    expect(publish).not.toContain("gh pr create");
+    expect(publish).not.toContain("gh pr merge");
+    expect(publish).not.toContain("gh pr checks");
+    expect(publish).not.toContain("--squash");
+    expect(publish).not.toContain("--auto");
+    expect(source).not.toContain("pull-requests: write");
   });
 
-  it("waits for required checks before merging instead of racing them", () => {
-    // Merging immediately after gh pr create races the required checks
-    // (codex-node-checks ~5-9 min, Gitleaks, required-verifier-integrity) and
-    // fails every run with "required status check is expected", so the
-    // snapshot never lands (all five restored runs died on the push/merge).
-    // The landing step must arm auto-merge, watch the required checks, and
-    // confirm the merge actually happened.
-    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
-    expect(commit).toContain("--auto");
-    expect(commit).toContain("gh pr checks");
-    expect(commit).toContain("--watch");
-    expect(commit).toContain("--required");
-    expect(commit).toContain("market_signal_snapshot_checks_failed");
-    expect(commit).toContain("market_signal_snapshot_merge_timeout");
-    // The watch is bounded so a stuck check fails loudly instead of burning
-    // the whole 30-minute job cap.
-    expect(commit).toContain("timeout");
+  it("fails loud when the snapshot cannot be published", () => {
+    // A snapshot that cannot be produced or pushed must fail the job, never
+    // exit 0. The publish step runs under `set -euo pipefail`, so a push
+    // failure (after the --force-if-includes / --force fallback) exits
+    // non-zero. The only exit 0 path is a genuinely unchanged snapshot.
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    expect(publish).toContain("set -euo pipefail");
+    expect(publish).toContain("market_signal_snapshot_unchanged");
+    expect(publish).toContain("market_signal_snapshot_published");
+    // No silent-success path on a publish failure: no `|| true` swallowing the
+    // final push, no exit 0 after a failed push.
+    expect(publish).not.toContain("gh pr merge");
   });
 
-  it("reuses a per-day automation branch so retries merge a single PR", () => {
-    // The previous shape used a per-second branch suffix, so each rerun opened
-    // a new PR with its own race and never resolved the stuck auto-merge. One
-    // PR per day lets every retry on the same day land on the same head so
-    // arm-auto-merge keeps firing on the same required checks rather than
-    // racing 30+ stale PRs in parallel.
-    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
-    expect(commit).toContain("automation/market-signal-snapshot-$(date -u +%Y%m%d)");
-    expect(commit).not.toContain("+%H%M%S");
-    expect(commit).toContain("gh pr list");
-    expect(commit).toContain("market_signal_snapshot_existing_pr");
+  it("uses a stable automation-owned data branch, not a per-day PR branch", () => {
+    // The previous shape used a per-day branch suffix and opened a PR per day,
+    // which the org policy now blocks. One stable data branch lets every
+    // rerun force-push to the same ref, so Hermes always reads the latest
+    // snapshot from a fixed branch name and no stale PRs accumulate.
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    expect(publish).toContain('SNAPSHOT_BRANCH="automation/market-signal-snapshot"');
+    expect(publish).not.toContain("$(date -u +%Y%m%d)");
+    expect(publish).not.toContain("gh pr list");
+    expect(publish).not.toContain("market_signal_snapshot_existing_pr");
   });
 
-  it("uses --force-if-includes so a fresh automation branch lands its first push", () => {
+  it("uses --force-if-includes so a fresh data branch lands its first push", () => {
     // --force-with-lease fails on a brand-new branch (no upstream to lease
     // against), which is the failure mode that left the snapshot file off
     // main for every restored run. --force-if-includes is the documented
     // safe alternative for first push; the explicit --force fallback is the
     // last-resort path so the workflow degrades loudly instead of silently
     // never landing.
-    const commit = job.steps?.find((step) => step.name === "Commit snapshot to main")?.run ?? "";
-    expect(commit).toContain("--force-if-includes");
-    expect(commit).toContain("git push --force origin");
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    expect(publish).toContain("--force-if-includes");
+    expect(publish).toContain("git push --force origin");
+  });
+
+  it("surfaces the snapshot to a human without Actions opening a PR", () => {
+    // The task requires that review, if it must happen, is surfaced to a human
+    // without Actions opening a PR. The publish step writes a job summary
+    // pointing a human at the data branch and commit so the snapshot diff is
+    // reviewable in the GitHub UI. This is the mechanism that preserves review
+    // now that the PR-squash-merge gate is gone.
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    expect(publish).toContain("$GITHUB_STEP_SUMMARY");
+    expect(publish).toContain("automation/market-signal-snapshot");
+    expect(publish).toContain("BRANCH_URL");
+    expect(publish).toContain("COMMIT_URL");
+    expect(publish).not.toContain("gh pr create");
   });
 
   it("rejects stale snapshots before committing them", () => {
