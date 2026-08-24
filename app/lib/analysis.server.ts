@@ -30,22 +30,39 @@ export function inferLanguageLabel(value: string) {
   }).label;
 }
 
+function isHostOrSubdomain(host: string, base: string): boolean {
+  return host === base || host.endsWith(`.${base}`);
+}
+
 export function inferDestinationType(url: string | null): DestinationType {
   if (!url) {
     return "unknown";
   }
 
-  const normalized = url.toLowerCase();
-  if (normalized.includes("wa.me") || normalized.includes("whatsapp")) {
-    return "whatsapp";
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "unknown";
   }
+
+  const host = parsed.hostname;
   if (
-    normalized.includes("play.google.com") ||
-    normalized.includes("appstore.com")
+    isHostOrSubdomain(host, "play.google.com") ||
+    isHostOrSubdomain(host, "appstore.com")
   ) {
     return "app";
   }
-  if (normalized.includes("lead") || normalized.includes("form")) {
+  if (
+    isHostOrSubdomain(host, "wa.me") ||
+    isHostOrSubdomain(host, "whatsapp.com") ||
+    isHostOrSubdomain(host, "whatsapp")
+  ) {
+    return "whatsapp";
+  }
+
+  const pathAndQuery = (parsed.pathname + parsed.search).toLowerCase();
+  if (pathAndQuery.includes("lead") || pathAndQuery.includes("form")) {
     return "lead_form";
   }
 
