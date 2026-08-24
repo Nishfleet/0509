@@ -2,6 +2,7 @@ import {
   contentLengthExceeds,
   readResponseTextWithinLimit,
 } from "~/lib/bounded-response.server";
+import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
@@ -184,13 +185,4 @@ function extractJsonLdOrganizationName(html: string) {
   }
 
   return null;
-}
-
-function decodeHtmlEntities(value: string) {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
 }

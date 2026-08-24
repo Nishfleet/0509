@@ -1,3 +1,4 @@
+import { decodeHtmlEntities as decodeXml } from "~/lib/decode-html.server";
 import { presenceContentHash } from "~/lib/presence-hash";
 import {
   assertRobotsAllowedForUrls,
@@ -411,13 +412,4 @@ function extractTag(block: string, tag: string) {
 
 function stripHtml(value: string) {
   return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function decodeXml(value: string) {
-  return value
-    .replaceAll("&amp;", "&")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'");
 }

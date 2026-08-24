@@ -1,3 +1,4 @@
+import { decodeHtmlEntities as decodeHtmlEntity } from "~/lib/decode-html.server";
 import { findStartedRunningLine } from "~/lib/meta-ad-dates";
 
 export interface ExtractedAdCard {
@@ -769,7 +770,7 @@ export function stripHtml(value: string) {
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim(),
-  );
+  ).trim();
 }
 
 // Only a standalone status line counts; matching the word inside ad copy is not enough.
@@ -792,17 +793,7 @@ export function stripHtmlPreservingLines(value: string) {
       .map((line) => line.replace(/\s+/g, " ").trim())
       .filter(Boolean)
       .join("\n"),
-  );
-}
-
-export function decodeHtmlEntity(value: string) {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, " ")
-    .trim();
+  ).trim();
 }
 
 export function extractExternalLink(html: string) {
