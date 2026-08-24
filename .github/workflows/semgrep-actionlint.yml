@@ -29,9 +29,10 @@ jobs:
     # reported but does not block.
     #
     # NOTE: as of this PR the gate reports 21 pre-existing ERROR/HIGH
-    # findings in ops/ and scripts/ (flock mutexes, retry counters, liveness
-    # pollers, a state-ledger line). These are pre-existing hand-built
-    # orchestration patterns the gate is designed to catch — they predate
+    # findings in ops/ and scripts/ (advisory-file-lock mutexes, retry
+    # counters, liveness pollers, a state-ledger line). These are
+    # pre-existing hand-built orchestration patterns the gate is designed
+    # to catch — they predate
     # this gate and are follow-up work items, not regressions from this PR.
     # The orchestrator cannot require this context until they are cleared.
     name: semgrep
