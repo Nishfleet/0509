@@ -24,12 +24,12 @@ re-verified the live box on 2026-08-15 and found:
   `ActiveEnterTimestamp` of `Fri 2026-08-14 08:00:08/11 IST` — the restart from
   the fix is the only restart; the wedge has not returned in ~24h.
 - sshd accepts new connections: a fresh ssh connection to the live tailnet bind
-  (`100.108.184.97:22`) reached the publickey challenge stage
+  (`100.64.0.0:22`) reached the publickey challenge stage
   (`Permission denied (publickey)`), which is the server responding to a new
   session — the pre-fix symptom was every new session being refused outright.
   The session count stayed at 0/0 after the test connection.
 - The sshd listen sockets are the hardened tailnet-only binds
-  (`100.108.184.97:22`, `[fd7a:115c:a1e0::d23a:b862]:22`) — no `0.0.0.0:22`
+  (`100.64.0.0:22`, `[fd7a:115c:a1e0::0]:22`) — no `0.0.0.0:22`
   wildcard. (`ssh localhost` is refused because sshd no longer listens on
   loopback, which is the intended pass-5 posture, not a session-table refusal.)
 
@@ -68,11 +68,11 @@ $ systemctl show systemd-logind -p NRestarts,ExecMainStartTimestamp,ActiveEnterT
   ExecMainStartTimestamp=Fri 2026-08-14 08:00:08 IST
   ActiveEnterTimestamp=Fri 2026-08-14 08:00:11 IST
 $ ss -tlnp | grep ':22 '
-  LISTEN 0 4096 100.108.184.97:22
-  LISTEN 0 4096 [fd7a:115c:a1e0::d23a:b862]:22
+  LISTEN 0 4096 100.64.0.0:22
+  LISTEN 0 4096 [fd7a:115c:a1e0::0]:22
 $ timeout 10 ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
-    -o ConnectTimeout=5 nish@100.108.184.97 true
-  nish@100.108.184.97: Permission denied (publickey).   # server accepted the session
+    -o ConnectTimeout=5 nish@100.64.0.0 true
+  nish@100.64.0.0: Permission denied (publickey).   # server accepted the session
 $ ls /run/systemd/sessions | wc -l                      # after test → 0
 ```
 
