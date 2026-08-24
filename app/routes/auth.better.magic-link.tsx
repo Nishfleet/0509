@@ -2,8 +2,15 @@ import { Form, Link, redirect, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { noindexMetaEntry } from "~/lib/seo";
 
-export const meta: MetaFunction = () => [{ title: "Confirm sign-in | Five to Nine" }];
+export const meta: MetaFunction = () => [
+  { title: "Confirm sign-in | Five to Nine" },
+  // The magic-link confirm page is an auth surface that renders (not a pure
+  // redirect): it must carry noindex so Google never indexes the sign-in
+  // confirmation entry. Shares the same helper as /auth/login.
+  noindexMetaEntry(),
+];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
