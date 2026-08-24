@@ -39,13 +39,16 @@ describe("pricing route", () => {
     usageBundles: {},
   };
 
-  it("is registered as a route and published in the sitemap", async () => {
+  it("is registered as a route and omitted from the sitemap until the live Worker serves it", async () => {
     const routes = readFileSync("app/routes.ts", "utf8");
     expect(routes).toContain('route("pricing", "routes/pricing.tsx")');
 
     const { publicSeoFileForPathname } = await import("~/lib/seo");
     const sitemap = publicSeoFileForPathname("/sitemap.xml");
-    expect(sitemap?.body).toContain("<loc>https://0509.io/pricing</loc>");
+    // The /pricing route stays registered for the next deploy, but it is
+    // excluded from the sitemap until a Googlebot fetch against production
+    // returns HTTP 200 (see issue #933).
+    expect(sitemap?.body).not.toContain("<loc>https://0509.io/pricing</loc>");
   });
 
   it("declares the canonical URL and public SEO meta", async () => {
