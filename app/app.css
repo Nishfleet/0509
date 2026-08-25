@@ -11593,7 +11593,7 @@ textarea.f9-wk-in {
   margin-top: 14px;
 }
 
-/* BET 2 (issue #951): progressive streaming progress banner. Sits above the
+/* BET 2 (issue 951): progressive streaming progress banner. Sits above the
    result rows when the first batch has landed but the scroll-and-collect
    passes are still running. Shares the lede/note type roles so it reads as
    the same voice as the honest empty states, separated by a hairline rule so

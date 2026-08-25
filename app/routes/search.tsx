@@ -148,7 +148,7 @@ export {
 };
 export type { SearchAccumulationState };
 
-// BET 2 (issue #951): poll every 2s (was 5s) so a partial cache entry written
+// BET 2 (issue 951): poll every 2s (was 5s) so a partial cache entry written
 // mid-capture paints the first card in seconds, and the final write swaps in
 // the complete set with at most 2s of lag. The 60s budget is preserved by
 // raising the poll cap from 12 to 30.
@@ -1157,7 +1157,7 @@ export default function SearchRoute() {
   // up forever next to a still-warming server state.
   const warmingPollExhausted =
     isSearchWarming && warmingPollCount >= SEARCH_WARMING_POLL_LIMIT;
-  // BET 2 (issue #951): the command stays pending while the search is warming,
+  // BET 2 (issue 951): the command stays pending while the search is warming,
   // EVEN when partial results have already painted (visibleAds.length > 0).
   // The first cards landed but the scroll-and-collect passes are still
   // running, so the submit button keeps saying "Searching…" instead of
@@ -1935,7 +1935,7 @@ export default function SearchRoute() {
                   <p className="f9-wk-note">{discoverySummary}</p>
                 ) : null}
 
-                {/* BET 2 (issue #951): progressive streaming. The first batch
+                {/* BET 2 (issue 951): progressive streaming. The first batch
                     of ads landed from the initial Ad Library surface while the
                     scroll-and-collect passes keep running in the background.
                     Show a REAL progress state — the count so far plus an
