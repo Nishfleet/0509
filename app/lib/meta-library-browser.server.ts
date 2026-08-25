@@ -126,6 +126,18 @@ export interface SearchMetaLibraryByBrowserOptions {
    * race still caps how long discovery may wait on a slow write.
    */
   executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
+  /**
+   * Progressive streaming hook (BET 2, issue #951). When set, the browser
+   * capture fires it once with the FIRST batch of normalized ads — the cards
+   * extracted from the initial Ad Library surface BEFORE the interactive
+   * scroll-and-collect passes run. The caller (ad-source resolver) writes
+   * that batch as a partial discovery cache entry so the search page's poll
+   * can paint the first card in seconds instead of waiting for the whole
+   * scroll to finish. Never fires for `shallow` mode (no scroll to skip) or
+   * when the initial surface yields zero usable ads. Errors thrown by the
+   * callback are swallowed so a slow cache write can never abort the capture.
+   */
+  onPartialResults?: (ads: AdRecord[]) => void | Promise<void>;
 }
 const BROWSERLESS_BQL_MUTATION = `
 mutation MetaLibraryLiveFallback($url: String!, $userAgent: String!) {
@@ -298,7 +310,9 @@ export async function searchMetaLibraryByBrowser(
 
     try {
       return await runLeg("cloudflare_browser_run", new Date().toISOString(), async () => ({
-        result: await searchMetaLibraryViaSessions(env, browserBinding, query, mode),
+        result: await searchMetaLibraryViaSessions(env, browserBinding, query, mode, {
+          onPartialResults: options.onPartialResults,
+        }),
         browserMsUsed: null,
       }));
     } catch (error) {
@@ -355,6 +369,7 @@ async function searchMetaLibraryViaSessions(
   browserBinding: BrowserBinding,
   query: NormalizedSavedQuery,
   mode: MetaLibraryBrowserMode,
+  sessionOptions: { onPartialResults?: (ads: AdRecord[]) => void | Promise<void> } = {},
 ): Promise<SearchResponse> {
   let browser: BrowserInstance | null = null;
   let browserContext: BrowserContext | null = null;
@@ -426,6 +441,34 @@ async function searchMetaLibraryViaSessions(
         "Meta Ad Library returned no extractable ad cards.",
         "empty_result",
       );
+    }
+
+    // Progressive streaming (BET 2, issue #951): emit the FIRST batch of
+    // normalized ads — the cards already on the initial surface — BEFORE the
+    // interactive scroll-and-collect passes. The caller writes this batch as a
+    // partial cache entry so the search page's poll paints the first card in
+    // seconds instead of waiting for the whole scroll to finish. Only fires in
+    // interactive mode (where the scroll is the slow part) and only when the
+    // initial surface yielded usable ads. A callback error is swallowed so a
+    // slow cache write can never abort the capture.
+    if (mode === "interactive" && sessionOptions.onPartialResults) {
+      const initialAds = normalizeAndFilterExtractedCards(
+        dedupeExtractedCardsByLibraryId(extractedCards),
+        query,
+      ).filter(adHasUsableContent);
+      if (initialAds.length > 0) {
+        try {
+          await sessionOptions.onPartialResults(initialAds);
+        } catch (partialError) {
+          console.warn(
+            JSON.stringify({
+              event: "public_search_partial_results_callback_failed",
+              errorName:
+                partialError instanceof Error ? partialError.name : "UnknownError",
+            }),
+          );
+        }
+      }
     }
 
     // Deep scroll only for interactive public search — watchlist/scheduled

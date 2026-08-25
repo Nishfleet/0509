@@ -147,8 +147,12 @@ export {
 };
 export type { SearchAccumulationState };
 
-const SEARCH_WARMING_POLL_MS = 5_000;
-export const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
+// BET 2 (issue #951): poll every 2s (was 5s) so a partial cache entry written
+// mid-capture paints the first card in seconds, and the final write swaps in
+// the complete set with at most 2s of lag. The 60s budget is preserved by
+// raising the poll cap from 12 to 30.
+const SEARCH_WARMING_POLL_MS = 2_000;
+export const SEARCH_WARMING_POLL_LIMIT = 30; // 60s cap
 // Long-horizon escape hatch for the public submit hang: how long an in-flight
 // /search GET may keep the idle pre-search page spinning before the client
 // forces a fresh page load to the exact target URL. Exported so tests can pin
@@ -1154,12 +1158,17 @@ export default function SearchRoute() {
   // up forever next to a still-warming server state.
   const warmingPollExhausted =
     isSearchWarming && warmingPollCount >= SEARCH_WARMING_POLL_LIMIT;
+  // BET 2 (issue #951): the command stays pending while the search is warming,
+  // EVEN when partial results have already painted (visibleAds.length > 0).
+  // The first cards landed but the scroll-and-collect passes are still
+  // running, so the submit button keeps saying "Searching…" instead of
+  // re-enabling and implying the search is finished. The poll-budget cap
+  // still releases it once the 60s budget exhausts.
   const commandNavigationPending =
     searchCommandInFlight ||
     (isSearchWarming &&
       hasSearchQuery &&
       !liveInputError &&
-      visibleAds.length === 0 &&
       warmingPollCount < SEARCH_WARMING_POLL_LIMIT &&
       searchNavigationRecovery === null);
   const displayDomain =
@@ -1919,8 +1928,39 @@ export default function SearchRoute() {
                     and it stays above, where you cannot miss it. */}
                 {discoverySummary &&
                 visibleAds.length > 0 &&
-                visibleResult.discoveryStatus !== "healthy" ? (
+                visibleResult.discoveryStatus !== "healthy" &&
+                // The partial-streaming progress banner below owns the
+                // warming-with-results copy; suppress the generic footnote
+                // here so the visitor sees one progress state, not two.
+                !(isSearchWarming && visibleAds.length > 0) ? (
                   <p className="f9-wk-note">{discoverySummary}</p>
+                ) : null}
+
+                {/* BET 2 (issue #951): progressive streaming. The first batch
+                    of ads landed from the initial Ad Library surface while the
+                    scroll-and-collect passes keep running in the background.
+                    Show a REAL progress state — the count so far plus an
+                    honest "loading more" line — instead of an undifferentiated
+                    spinner, so the visitor sees the first card in seconds and
+                    knows more is coming. The live region announces the count
+                    for screen readers as it grows. */}
+                {isSearchWarming && visibleAds.length > 0 ? (
+                  <div
+                    className="f9-wk-progress"
+                    aria-live="polite"
+                    role="status"
+                  >
+                    <p className="f9-wk-lede">
+                      {warmingPollExhausted
+                        ? `${visibleAds.length} ad${visibleAds.length === 1 ? "" : "s"} so far — the rest is taking longer than a minute`
+                        : `${visibleAds.length} ad${visibleAds.length === 1 ? "" : "s"} so far — loading more…`}
+                    </p>
+                    <p className="f9-wk-note">
+                      {warmingPollExhausted
+                        ? "We stopped auto-refreshing. Retry this search to load the rest."
+                        : "We'll refresh automatically as more ads come in."}
+                    </p>
+                  </div>
                 ) : null}
 
                 {visibleAds.length > 0 ? (
