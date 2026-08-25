@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { reactRouter } from "@react-router/dev/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { resolveLocalReleaseCloudflareInspectorPort } from "./scripts/local-release-server.mjs";
@@ -34,6 +35,13 @@ const e2eBetterAuthSecret =
 // can abort boot on hardened runners with `uv_interface_addresses ... system
 // error 97`). Manual `npm run dev` keeps the default inspector.
 const cloudflareInspectorPort = resolveLocalReleaseCloudflareInspectorPort();
+
+// The D1 migrations are read once at config-evaluation time (in Node) and
+// threaded into the workerd test isolate as a TEST_MIGRATIONS binding, so the
+// `tests/integration/setup-d1.ts` setup file can call `applyD1Migrations()`
+// against the real workerd-backed D1 binding. Reading here keeps the workerd
+// project self-contained: no test file reaches the filesystem for migrations.
+const d1Migrations = await readD1Migrations(path.join(import.meta.dirname, "migrations"));
 
 export default defineConfig(({ mode }) => ({
   plugins:
@@ -71,13 +79,62 @@ export default defineConfig(({ mode }) => ({
     },
   },
   test: {
-    environment: "node",
     // Vitest only defaults NODE_ENV to "test" when it is unset; an inherited
     // NODE_ENV=production makes react@19 resolve its production build, whose
     // `act` export is undefined ("act is not a function"). Pin it so a leaked
     // NODE_ENV from a caller's shell or CI cannot break the suite.
     env: { NODE_ENV: "test" },
-    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     testTimeout: 10_000,
+    projects: [
+      // The existing plain-Vitest suite — node environment, mocks, no workerd.
+      // Behaviour and include set are unchanged from the pre-project config;
+      // this project is what every existing `tests/**/*.test.ts(x)` file runs
+      // under. Splitting it out as its own project is what lets the workerd
+      // integration project run alongside it without imposing the Workers
+      // runtime on suites that import `node:*` built-ins.
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          environment: "node",
+          include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+          exclude: ["tests/integration/**"],
+        },
+      },
+      // Real workerd + real local D1, via @cloudflare/vitest-plugin. Tests in
+      // `tests/integration/` run inside the Workers runtime with the `DB` D1
+      // binding from `wrangler.jsonc`, migrations applied per-test-file by the
+      // shared setup file. This is the surface that turns a schema migration
+      // from an unverifiable change class into a verifiable one (recos §1.5).
+      {
+        extends: true,
+        test: {
+          name: "workerd-d1",
+          // No `environment` here: @cloudflare/vitest-plugin supplies its own
+          // Workers runtime environment and rejects a custom one. Setting one
+          // is a hard error, not a warning.
+          include: ["tests/integration/**/*.test.ts"],
+          setupFiles: ["./tests/integration/setup-d1.ts"],
+          testTimeout: 30_000,
+        },
+        plugins: [
+          cloudflareTest({
+            wrangler: { configPath: "./wrangler.jsonc" },
+            // Local-only: `wrangler.jsonc` carries a real D1 `database_id`,
+            // which the plugin treats as a remote binding and would proxy to
+            // the real Cloudflare account (needing CLOUDFLARE_API_TOKEN). The
+            // integration suite runs entirely against local workerd D1
+            // (Miniflare), seeded by `applyD1Migrations()` in the setup file,
+            // so disable the remote proxy.
+            remoteBindings: false,
+            miniflare: {
+              // Test-only binding carrying the migration blobs read above; the
+              // setup file applies them to `env.DB` via `applyD1Migrations()`.
+              bindings: { TEST_MIGRATIONS: d1Migrations },
+            },
+          }),
+        ],
+      },
+    ],
   },
 }));
