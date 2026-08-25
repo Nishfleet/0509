@@ -3,7 +3,10 @@ import {
   hashString,
   stableStringify,
 } from "~/lib/normalize";
-import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
+import {
+  parseSearchInputFromWebsiteField,
+  registrableDomainFromHostname,
+} from "~/lib/search-query";
 import type { NormalizedSavedQuery, SearchFilters } from "~/lib/types";
 
 export interface CompetitorWebsiteState {
@@ -181,4 +184,79 @@ function titleCase(value: string) {
     .filter(Boolean)
     .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
     .join(" ");
+}
+
+/**
+ * Extract the bare registrable domain (e.g. "nike.com") from a landing-page
+ * URL, dropping `www.` and any path. Returns null when the URL is missing or
+ * not http(s).
+ */
+export function registrableDomainFromLandingPage(
+  value: string | null | undefined,
+): string | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    const host = url.hostname.trim().toLowerCase().replace(/\.$/, "");
+    return registrableDomainFromHostname(host);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve a bare domain to pre-fill the post-signup setup checklist from the
+ * top result's landing page. Returns the first ad's registrable domain in
+ * display order, or null when no ad carries a usable http(s) landing page.
+ */
+export function resolveSignupDomainFromAds(
+  ads: ReadonlyArray<{ landingPageUrl: string | null }>,
+): string | null {
+  for (const ad of ads) {
+    const domain = registrableDomainFromLandingPage(ad.landingPageUrl);
+    if (domain) {
+      return domain;
+    }
+  }
+  return null;
+}
+
+/**
+ * Build the `/auth/signup?redirectTo=...` tracking path that carries the
+ * visitor's search context into the post-signup `/app#setup-checklist`.
+ *
+ * - When the search already has an explicit `?website=` input, that input is
+ *   preserved (matches the existing `?website=` and `/ads/<domain>` paths).
+ * - When the search was a keyword `?q=`/`?query=` lookup, the resolved brand
+ *   is derived from the top result's `landingPageUrl` host so the new
+ *   account's first watch is the brand the visitor just searched for.
+ * - A non-default `country` is propagated alongside either path.
+ * - When no brand resolves (empty results / parser fallback), falls back to
+ *   the generic `/app#setup-checklist` with no pre-fill.
+ */
+export function buildSignupTrackingPath(options: {
+  competitorWebsiteRaw: string;
+  ads: ReadonlyArray<{ landingPageUrl: string | null }>;
+  country: string;
+}): string {
+  const setupParams = new URLSearchParams();
+  if (options.competitorWebsiteRaw) {
+    setupParams.set("website", options.competitorWebsiteRaw);
+  } else {
+    const resolvedDomain = resolveSignupDomainFromAds(options.ads);
+    if (resolvedDomain) {
+      setupParams.set("website", resolvedDomain);
+    }
+  }
+  if (options.country && options.country !== "all") {
+    setupParams.set("country", options.country);
+  }
+  const setupQuery = setupParams.toString();
+  const postSignupPath = `/app${setupQuery ? `?${setupQuery}` : ""}#setup-checklist`;
+  return `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
 }
