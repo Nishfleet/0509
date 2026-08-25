@@ -1256,7 +1256,7 @@ export default function SearchRoute() {
         const escaped =
           typeof CSS !== "undefined" && typeof CSS.escape === "function"
             ? CSS.escape(current.keyFocusedAdId)
-            : current.keyFocusedAdId.replace(/"/g, '\\"');
+            : current.keyFocusedAdId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
         document
           .querySelector<HTMLButtonElement>(`[data-quick-save-ad="${escaped}"]`)
           ?.click();
