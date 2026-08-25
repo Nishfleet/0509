@@ -6,9 +6,11 @@ never self-invented work; every run ends with a PR link or a named blocker.
 ## ACTIVE PROGRAM: design unification (Nish, ratified 2026-08-08)
 
 The tri-audit (Sol + Grok + Fable, 2026-08-07/08) superseded the remaining
-BL phase plan. Canonical program state lives OUTSIDE this repo at
-`/home/nish/workspaces/agent-state/0509-design-unification-ledger.md` —
-that ledger, not this file, is the source of truth for what remains.
+BL phase plan. This section of `docs/BACKLOG.md` is the canonical design-
+unification program state for the repo. The "Next:" line below is the
+sequenced to-do. The `agent-state/0509-design-unification-ledger.md` file
+was once named as the source of truth here but was never created. The
+BACKLOG is the only ledger.
 
 Ratified by Nish, non-negotiable:
 
@@ -33,8 +35,8 @@ dormant/dead surfaces deleted), #535 (the 5-destination IA shell).
 Next: deep destination rebuilds (Today decision queue, Watch merge with
 one history object, Settings consolidation, Deliver merge), the report
 document re-set with frozen proof semantics, `/search` into the one
-shell, the CSS endgame, and the email/copy-catalog pass — sequenced in
-the ledger.
+shell, the CSS endgame, and the email/copy-catalog pass. The order is
+the "Next:" line above. Re-anchor this section after every landed PR.
 
 ## Historical note
 
