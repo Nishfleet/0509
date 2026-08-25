@@ -109,3 +109,5 @@ jobs:
           # Keep it below MemoryHigh/MemoryMax so systemd still fails closed.
           NODE_OPTIONS: --max-old-space-size=2048
         run: npm run typecheck
+
+# P10-B throwaway proof marker — this PR is never merged.
