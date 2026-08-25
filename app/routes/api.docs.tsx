@@ -7,7 +7,12 @@ import {
   auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
 import { appLinkTarget } from "~/lib/app-link";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
 
 const description =
@@ -31,6 +36,15 @@ export default function ApiDocsRoute() {
       title="Use account-owned evidence from your tools."
       intro="The API exports saved Five to Nine data that already belongs to the authenticated account and supports selected approved actions."
     >
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "API docs | Five to Nine",
+            description,
+            pathname: "/api/docs",
+          }),
+        )}
+      />
       <PublicDocBlock title="Authentication">
         <p>
           Developer API and connected-tool access require Agency. Create a customer API key inside{" "}
