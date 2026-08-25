@@ -178,6 +178,8 @@ describe("colour, font and radius rules", () => {
     "raw-hex-color",
     "non-token-font-family",
     "non-token-border-radius",
+    "css-gradient",
+    "css-important",
     "tailwind-arbitrary-value",
   ] as const;
 
@@ -317,6 +319,38 @@ describe("colour, font and radius rules", () => {
     });
   });
 
+  describe("css-gradient", () => {
+    it("counts every gradient function", () => {
+      expect(ruleCount("css-gradient", { "app/app.css": "a { background: linear-gradient(#fff, #000); }" })).toBe(1);
+      expect(ruleCount("css-gradient", { "app/app.css": "a { background: radial-gradient(circle, red, blue); }" })).toBe(1);
+      expect(ruleCount("css-gradient", { "app/app.css": "a { background: conic-gradient(red, blue); }" })).toBe(1);
+      expect(
+        ruleCount("css-gradient", {
+          "app/routes/page.tsx": 'export default () => <div data-bg="linear-gradient(red, blue)" />;',
+        }),
+      ).toBe(1);
+    });
+
+    it("does not fire on a token background", () => {
+      expect(ruleCount("css-gradient", { "app/app.css": "a { background: var(--f9-surface); }" })).toBe(0);
+    });
+  });
+
+  describe("css-important", () => {
+    it("counts every !important", () => {
+      expect(ruleCount("css-important", { "app/app.css": "a { color: red !important; }" })).toBe(1);
+      expect(
+        ruleCount("css-important", {
+          "app/app.css": "a { color: red !important; border: 0 !important; }",
+        }),
+      ).toBe(2);
+    });
+
+    it("does not fire on ordinary declarations", () => {
+      expect(ruleCount("css-important", { "app/app.css": "a { color: var(--f9-ink); }" })).toBe(0);
+    });
+  });
+
   describe("tailwind-arbitrary-value", () => {
     it("counts arbitrary colour and radius utilities", () => {
       expect(
@@ -378,6 +412,15 @@ describe("colour, font and radius rules", () => {
       expect(result.stderr).toContain("non-token-font-family: count 1 !== ceiling 0");
       expect(result.stderr).toContain("non-token-border-radius: count 1 !== ceiling 0");
       expect(result.stderr).toContain("tailwind-arbitrary-value: count 1 !== ceiling 0");
+    });
+
+    it("FAILS on a new gradient and a new !important", () => {
+      const result = runFixture({
+        "app/app.css": "a { background: linear-gradient(red, blue); color: red !important; }\n",
+      });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("css-gradient: count 1 !== ceiling 0");
+      expect(result.stderr).toContain("css-important: count 1 !== ceiling 0");
     });
 
     it("does not reach app/lib — email and PDF templates are outside the design surface", () => {
