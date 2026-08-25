@@ -6,9 +6,14 @@
  * the colour / typography / radius primitives that should come from a design
  * token (BANNED_PATTERNS, scanned over the design surfaces only), and compares
  * both against the frozen ceilings in docs/design-system-ratchet.json. Any
- * INCREASE fails. When a sweep lowers a
- * count, run with --update to tighten the ceiling to the new reality — the
- * ceiling only ever goes down. The program is done when every ceiling is 0,
+ * count that EXCEEDS its ceiling fails — new debt is never allowed. Counts
+ * BELOW their ceiling pass without ceremony: a sweep that removes legacy
+ * debt does not have to edit the shared JSON file in the same PR. The
+ * ceiling only ever goes down, and the tightening happens automatically
+ * after main absorbs a sweep (see .github/workflows/ratchet-auto-tighten.yml),
+ * so two legal PRs that each remove debt no longer collide in the merge
+ * queue over an edit to docs/design-system-ratchet.json that neither one
+ * actually needed to make. The program is done when every ceiling is 0,
  * and after that this gate makes a fourth design era structurally
  * impossible to ship.
  */
@@ -241,19 +246,44 @@ if (invokedDirectly) {
     })();
     const next = {};
     let raised = [];
+    let tightened = [];
     for (const key of RATCHET_KEYS) {
       const prior = previous[key];
+      // First-seen key: seed the ceiling at the current count, never higher.
+      // Without this, a brand-new marker ships with whatever number --update
+      // happened to see, which is fine when counts are non-negative.
       next[key] = prior === undefined ? counts[key] : Math.min(prior, counts[key]);
-      if (prior !== undefined && counts[key] > prior) raised.push(key);
+      if (prior !== undefined && counts[key] > prior) {
+        raised.push(key);
+      } else if (prior !== undefined && next[key] < prior) {
+        tightened.push(`${key} ${prior} -> ${next[key]}`);
+      }
     }
-    writeFileSync(CEILING_PATH, `${JSON.stringify(next, null, 2)}\n`);
+    const serialised = `${JSON.stringify(next, null, 2)}\n`;
+    const before = (() => {
+      try {
+        return readFileSync(CEILING_PATH, "utf8");
+      } catch {
+        return "";
+      }
+    })();
+    if (serialised === before) {
+      console.log(`Ceilings already match reality at ${relative(ROOT, CEILING_PATH)}.`);
+      process.exit(0);
+    }
+    writeFileSync(CEILING_PATH, serialised);
     if (raised.length > 0) {
       console.error(
         `--update tightens; it never raises. Over-ceiling markers kept at their old ceiling: ${raised.join(", ")}`,
       );
       process.exit(2);
     }
-    console.log(`Ceilings written to ${relative(ROOT, CEILING_PATH)}`);
+    if (tightened.length === 0) {
+      console.log(`Ceilings written to ${relative(ROOT, CEILING_PATH)} (no value change).`);
+    } else {
+      console.log(`Ceilings tightened at ${relative(ROOT, CEILING_PATH)}:`);
+      for (const entry of tightened) console.log(`  ${entry}`);
+    }
     process.exit(0);
   }
 
@@ -268,11 +298,14 @@ if (invokedDirectly) {
   }
   for (const marker of RATCHET_KEYS) {
     const ceiling = ceilings[marker] ?? 0;
-    // Exact match: an increase is new debt; a decrease without --update is a
-    // silent slack refill waiting to happen; a hand-raised ceiling fails
-    // because the count no longer equals it.
-    if (counts[marker] !== ceiling) {
-      violations.push(`${marker}: count ${counts[marker]} !== ceiling ${ceiling} (run --update in this PR)`);
+    // Monotonic: a count STRICTLY ABOVE its ceiling is new debt and fails.
+    // A count at or below its ceiling passes — sweeping legacy debt does not
+    // require editing the shared JSON in the same PR, so two PRs that each
+    // remove debt cannot collide in the merge queue over a file neither
+    // needed to touch. Anti-gaming (a raised ceiling, a missing key) is
+    // enforced by gate-integrity.sh on the diff itself.
+    if (counts[marker] > ceiling) {
+      violations.push(`${marker}: count ${counts[marker]} exceeds ceiling ${ceiling}`);
     }
   }
   const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
