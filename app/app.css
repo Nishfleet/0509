@@ -2603,6 +2603,19 @@ one signal-green accent.
   }
 }
 
+/* The `.ld-flag` is `position: absolute` with `right: -0.22em`, but no
+   ancestor along the path is positioned, so it falls back to the viewport's
+   initial containing block. When the row's right edge sits at or near the
+   viewport edge (mobile 390 px, and 1440 px once the hero's content is laid
+   out), the pill punches 2–3 px past `document.documentElement.scrollWidth`
+   and triggers a phantom horizontal-scroll snap. Clip the row so the pill
+   can keep its tucked-corner offset visually without leaking past the page
+   bounds. */
+.ld-wall .ld-row {
+  position: relative;
+  overflow-x: clip;
+}
+
 .ld-case {
   display: flex;
   flex-wrap: wrap;
