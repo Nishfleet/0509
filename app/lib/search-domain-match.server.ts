@@ -1,21 +1,25 @@
+import {
+  isLikelyDomainMatchLevel,
+  isVerifiedDomainMatchLevel,
+  type DomainMatchLevel,
+} from "~/lib/search-domain-match";
 import { comparableHostname, hostnamesMatchDomainIntent, registrableDomainFromHostname } from "~/lib/search-query";
 import type { ParsedSearchQuery } from "~/lib/search-query";
 import type { AdRecord } from "~/lib/types";
 
-export type DomainMatchLevel =
-  | "exact_hostname"
-  | "registrable_domain"
-  | "verified_advertiser_domain"
-  | "verified_alias"
-  | "verified_entity"
-  | "unverified_text_candidate"
-  | "unverified_provider_candidate";
+export {
+  domainMatchTier,
+  isLikelyDomainMatchLevel,
+  isVerifiedDomainMatchLevel,
+  type DomainMatchLevel,
+  type DomainMatchTier,
+} from "~/lib/search-domain-match";
 
 export interface DomainMatchExplanation {
   level: DomainMatchLevel;
   matchedDomain: string | null;
   matchedSignal: string;
-  confidenceCategory: "verified" | "unverified";
+  confidenceCategory: "verified" | "likely" | "unverified";
   providerSource: AdRecord["source"];
   customerReason: string;
 }
@@ -23,18 +27,6 @@ export interface DomainMatchExplanation {
 export interface DomainMatchedAd {
   ad: AdRecord;
   match: DomainMatchExplanation;
-}
-
-const VERIFIED_LEVELS = new Set<DomainMatchLevel>([
-  "exact_hostname",
-  "registrable_domain",
-  "verified_advertiser_domain",
-  "verified_alias",
-  "verified_entity",
-]);
-
-export function isVerifiedDomainMatchLevel(level: DomainMatchLevel) {
-  return VERIFIED_LEVELS.has(level);
 }
 
 export function explainDomainMatch(
@@ -102,6 +94,16 @@ export function explainDomainMatch(
     );
   }
 
+  if (hasBrandNameMatch(ad, intent)) {
+    return buildExplanation(
+      ad,
+      "likely_brand_name",
+      intent.registrableDomain,
+      "advertiser_name",
+      `Advertiser name matches ${displayDomain(intent)} — website link not captured`,
+    );
+  }
+
   if (hasKeywordOnlyMatch(ad, intent)) {
     return buildExplanation(
       ad,
@@ -129,7 +131,11 @@ export function classifyDomainMatches(
       continue;
     }
 
-    if (!options.includeUnverified && explanation.level === "unverified_text_candidate") {
+    if (
+      !options.includeUnverified &&
+      (explanation.level === "unverified_text_candidate" ||
+        explanation.level === "likely_brand_name")
+    ) {
       continue;
     }
 
@@ -202,10 +208,12 @@ function domainMatchLevelRank(level: DomainMatchLevel) {
       return 3;
     case "verified_entity":
       return 4;
-    case "unverified_text_candidate":
+    case "likely_brand_name":
       return 5;
-    case "unverified_provider_candidate":
+    case "unverified_text_candidate":
       return 6;
+    case "unverified_provider_candidate":
+      return 7;
     default:
       return 99;
   }
@@ -222,7 +230,11 @@ function buildExplanation(
     level,
     matchedDomain,
     matchedSignal,
-    confidenceCategory: isVerifiedDomainMatchLevel(level) ? "verified" : "unverified",
+    confidenceCategory: isVerifiedDomainMatchLevel(level)
+      ? "verified"
+      : isLikelyDomainMatchLevel(level)
+        ? "likely"
+        : "unverified",
     providerSource: ad.source,
     customerReason,
   };
@@ -248,6 +260,95 @@ function hasVerifiedEntityLink(ad: AdRecord, intent: ParsedSearchQuery, identity
 
   const advertiser = ad.advertiser.toLowerCase();
   return identityAliases.some((alias) => alias && advertiser.includes(alias.toLowerCase()));
+}
+
+/**
+ * Brand-name match (BET 2 "likely" tier). The advertiser IS the brand — its
+ * name is the brand stem, optionally followed by common corporate/geo
+ * suffixes ("Allbirds", "Allbirds Official", "Notion Inc") — but no landing
+ * page or advertiser-domain link was captured to prove it. This is the tier
+ * that keeps allbirds/notion/oura off the dead-end empty state.
+ *
+ * The check is deliberately NOT a substring test. "ESHAL HOMEOPATHIC CLINIC
+ * OKARA" contains "okara" but is a clinic in the city of Okara, not okara.ai;
+ * its leading token is "eshal", so it falls through to `unverified_text_candidate`
+ * (unmatched), preserving the okara.ai precision fix.
+ */
+function hasBrandNameMatch(ad: AdRecord, intent: ParsedSearchQuery) {
+  const stem = stemFromDomain(intent.registrableDomain ?? "");
+  if (!stem || stem.length < 3) {
+    return false;
+  }
+
+  // A verifiable link already classified this ad upstream; brand-name is a
+  // fallback for ads we could not otherwise connect.
+  if (hostnamesMatchDomainIntent(extractHostname(ad.landingPageUrl), intent)) {
+    return false;
+  }
+  if (hostnamesMatchDomainIntent(inferAdvertiserDomain(ad.advertiser), intent)) {
+    return false;
+  }
+
+  const raw = ad.advertiser.trim().toLowerCase();
+  if (!raw) {
+    return false;
+  }
+
+  const tokens = raw.split(/\s+/);
+  // The brand is the leading token ("allbirds official" → "allbirds"), or the
+  // whole name minus common suffixes equals the stem ("allbirds inc" → "allbirds").
+  if (tokens[0] === stem) {
+    return true;
+  }
+  return stripBrandSuffixes(raw) === stem;
+}
+
+const BRAND_NAME_SUFFIXES = [
+  "official",
+  "official store",
+  "official site",
+  "inc",
+  "inc.",
+  "llc",
+  "ltd",
+  "ltd.",
+  "co",
+  "co.",
+  "corp",
+  "corp.",
+  "corporation",
+  "brand",
+  "store",
+  "shop",
+  "the",
+  "global",
+  "usa",
+  "us",
+  "uk",
+  "eu",
+  "india",
+  "pvt",
+  "pvt.",
+  "private limited",
+  "limited",
+];
+
+function stripBrandSuffixes(advertiser: string) {
+  let value = advertiser.trim();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const suffix of BRAND_NAME_SUFFIXES) {
+      if (value === suffix) {
+        return "";
+      }
+      if (value.endsWith(" " + suffix)) {
+        value = value.slice(0, -suffix.length - 1).trim();
+        changed = true;
+      }
+    }
+  }
+  return value;
 }
 
 function hasKeywordOnlyMatch(ad: AdRecord, intent: ParsedSearchQuery) {

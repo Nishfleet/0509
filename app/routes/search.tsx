@@ -102,6 +102,7 @@ import {
   formatOfferLabel,
   formatProofCaptureLabel,
   formatResultsPanelTitle,
+  formatResultTierConfidence,
   formatSearchCommandTitle,
   formatSearchCaptureAgeLabel,
   formatSearchFreshnessLabel,
@@ -2186,6 +2187,9 @@ export default function SearchRoute() {
                 </p>
                 {selectedAd.domainMatch?.reason ? (
                   <p className="f9-wk-quote">{selectedAd.domainMatch.reason}</p>
+                ) : null}
+                {formatResultTierConfidence(selectedAd) ? (
+                  <p className="f9-wk-note">{formatResultTierConfidence(selectedAd)}</p>
                 ) : null}
 
                 <DetailBlock kicker="What the ad says">

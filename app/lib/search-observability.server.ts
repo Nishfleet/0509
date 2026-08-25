@@ -7,6 +7,8 @@ export interface SearchObservabilityEvent {
   scope: "exact" | "broader";
   domainHash: string | null;
   verifiedCount: number;
+  likelyCount: number;
+  unmatchedCount: number;
   rawCandidateCount: number;
   broaderCandidateCount: number;
   missingVerificationCount: number;
@@ -41,6 +43,8 @@ export function buildSearchObservabilityEvent(input: {
     scope: input.result.searchScope,
     domainHash: domain ? hashString(domain) : null,
     verifiedCount: input.result.verifiedCount,
+    likelyCount: input.result.likelyCount,
+    unmatchedCount: input.result.unmatchedCount,
     rawCandidateCount: input.result.rawCandidateCount,
     broaderCandidateCount: input.result.broaderCandidateCount,
     missingVerificationCount: input.result.missingVerificationCount,

@@ -375,9 +375,65 @@ describe("buildSearchAnswer", () => {
       detail: "Exact website match only",
     });
     expect(answer.facts).toContainEqual({
-      label: "Returned ads",
+      label: "Likely matches",
+      value: "0",
+      detail: "No brand-name matches",
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Unmatched candidates",
       value: "1",
-      detail: "Review as unverified candidates only",
+      detail: "Returned by the source with no brand connection",
+    });
+  });
+
+  it("labels likely brand-name matches in the no-verified verdict (BET 2)", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [
+          ad({
+            metaAdId: "likely-1",
+            advertiser: "Boat",
+            landingPageUrl: null,
+            domainMatch: {
+              level: "likely_brand_name",
+              reason: "Advertiser name matches boat-lifestyle.com",
+              matchedDomain: "boat-lifestyle.com",
+            },
+          }),
+          ad({
+            metaAdId: "unmatched-1",
+            advertiser: "Reseller",
+            landingPageUrl: null,
+            domainMatch: {
+              level: "unverified_provider_candidate",
+              reason: "Returned by the Meta source; website connection not verified",
+              matchedDomain: null,
+            },
+          }),
+        ],
+        verifiedCount: 0,
+        likelyCount: 1,
+        unmatchedCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer).toMatchObject({
+      state: "no_verified",
+      title: "No verified ads found for boat-lifestyle.com",
+      summary: expect.stringContaining("brand-name matches are below"),
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Likely matches",
+      value: "1",
+      detail: "Advertiser name fits this brand; website link not captured",
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Unmatched candidates",
+      value: "1",
+      detail: "Returned by the source with no brand connection",
     });
   });
 

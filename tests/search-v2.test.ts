@@ -118,7 +118,7 @@ describe("search v2 proof policy", () => {
     discoveryStatus: "healthy",
   };
 
-  it("keeps exact results verified while reporting every rejected candidate", async () => {
+  it("keeps every candidate in exact scope, labelled by tier (BET 2 no dead-end)", async () => {
     const result = await applySearchV2PostFilter({}, rawResult, {
       queryIntent: intent,
       scope: "exact",
@@ -126,13 +126,28 @@ describe("search v2 proof policy", () => {
       identityAliases: [],
     });
 
-    expect(result.ads.map((item) => item.metaAdId)).toEqual(["verified"]);
+    // Exact scope no longer drops non-verified candidates to an empty page.
+    // The verified ad leads; the brand-name match is "likely"; the sparse
+    // provider return is "unmatched". All three render as rows.
+    expect(result.ads.map((item) => item.metaAdId)).toEqual([
+      "verified",
+      "keyword",
+      "sparse",
+    ]);
+    expect(result.ads.find((item) => item.metaAdId === "keyword")?.domainMatch).toMatchObject({
+      level: "likely_brand_name",
+    });
+    expect(result.ads.find((item) => item.metaAdId === "sparse")?.domainMatch).toMatchObject({
+      level: "unverified_provider_candidate",
+      reason: expect.stringContaining("website connection not verified"),
+    });
     expect(result).toMatchObject({
       verifiedCount: 1,
+      likelyCount: 1,
+      unmatchedCount: 1,
       rawCandidateCount: 3,
       broaderCandidateCount: 2,
-      missingVerificationCount: 1,
-      rejectedKeywordOnlyCount: 1,
+      rejectedKeywordOnlyCount: 0,
     });
   });
 
@@ -150,7 +165,64 @@ describe("search v2 proof policy", () => {
       reason: expect.stringContaining("website connection not verified"),
     });
     expect(result.verifiedCount).toBe(1);
+    expect(result.likelyCount).toBe(1);
+    expect(result.unmatchedCount).toBe(1);
     expect(result.broaderCandidateCount).toBe(2);
+  });
+});
+
+describe("search v2 okara.ai precision regression (BET 2)", () => {
+  // The okara.ai → "ESHAL HOMEOPATHIC CLINIC OKARA" bug must not regress: a
+  // clinic whose name contains the city "Okara" is NOT the okara.ai brand.
+  // It must classify as unmatched (unverified_text_candidate), never as
+  // verified or likely, so the precision fix survives the three-tier model.
+  const intent = parseSearchInputFromWebsiteField("https://okara.ai");
+
+  it("classifies the Okara clinic as unmatched, not likely or verified", async () => {
+    const clinic = ad({
+      metaAdId: "clinic-okara",
+      advertiser: "ESHAL HOMEOPATHIC CLINIC OKARA",
+      body: "Visit our clinic in Okara, Pakistan",
+      landingPageUrl: "https://eshal-clinic.example.com",
+    });
+    const result = await applySearchV2PostFilter(
+      {},
+      { ads: [clinic], nextCursor: null, source: "meta_library_browser", cacheStatus: "miss" },
+      {
+        queryIntent: intent,
+        scope: "exact",
+        displayDomain: "okara.ai",
+        identityAliases: [],
+      },
+    );
+
+    expect(result.verifiedCount).toBe(0);
+    expect(result.likelyCount).toBe(0);
+    expect(result.unmatchedCount).toBe(1);
+    expect(result.ads[0]?.domainMatch?.level).toBe("unverified_text_candidate");
+  });
+
+  it("classifies a real okara.ai brand-name advertiser as likely", async () => {
+    const brand = ad({
+      metaAdId: "okara-brand",
+      advertiser: "Okara",
+      body: "Okara product launch",
+      landingPageUrl: null,
+    });
+    const result = await applySearchV2PostFilter(
+      {},
+      { ads: [brand], nextCursor: null, source: "meta_library_browser", cacheStatus: "miss" },
+      {
+        queryIntent: intent,
+        scope: "exact",
+        displayDomain: "okara.ai",
+        identityAliases: [],
+      },
+    );
+
+    expect(result.likelyCount).toBe(1);
+    expect(result.verifiedCount).toBe(0);
+    expect(result.ads[0]?.domainMatch?.level).toBe("likely_brand_name");
   });
 });
 

@@ -13,6 +13,7 @@ import {
 } from "~/lib/countries";
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import { normalizeSavedQuery } from "~/lib/normalize";
+import { domainMatchTier } from "~/lib/search-domain-match";
 import { scrubBrokenUnicode } from "~/lib/text-safe";
 import type {
   AdRecord,
@@ -602,6 +603,83 @@ export function hasRecentSearchDelay(raw: string | null, now = Date.now()) {
   }
 }
 
+/**
+ * BET 2 three-tier result model. Resolve the per-tier counts either from the
+ * v2 post-filter's explicit counts or by reading each ad's `domainMatch`
+ * level. Returns zeros when no tier metadata is present (legacy results).
+ */
+export function resolveResultTierCounts(
+  result: SearchResponse,
+): { verified: number; likely: number; unmatched: number } {
+  // The v2 post-filter populates all three tier counts together. Use them
+  // directly when present.
+  if (
+    typeof result.likelyCount === "number" &&
+    typeof result.unmatchedCount === "number"
+  ) {
+    return {
+      verified: Math.max(0, Math.floor(result.verifiedCount ?? 0)),
+      likely: Math.max(0, Math.floor(result.likelyCount ?? 0)),
+      unmatched: Math.max(0, Math.floor(result.unmatchedCount ?? 0)),
+    };
+  }
+  // Count via per-ad domainMatch levels. When a legacy result sets
+  // `verifiedCount` explicitly (without per-ad levels), trust it for the
+  // verified tier and derive likely/unmatched from the remaining ads.
+  const explicitVerified =
+    typeof result.verifiedCount === "number"
+      ? Math.max(0, Math.floor(result.verifiedCount))
+      : null;
+  let verified = 0;
+  let likely = 0;
+  let unmatched = 0;
+  for (const ad of result.ads) {
+    const tier = domainMatchTier(ad.domainMatch?.level);
+    if (tier === "verified") verified += 1;
+    else if (tier === "likely") likely += 1;
+    else unmatched += 1;
+  }
+  if (explicitVerified !== null && verified === 0) {
+    verified = Math.min(explicitVerified, result.ads.length);
+    unmatched = Math.max(0, result.ads.length - verified - likely);
+  }
+  return { verified, likely, unmatched };
+}
+
+/**
+ * The customer-facing tier word for one result row. `null` when the ad carries
+ * no domain-match metadata (legacy/non-v2 results render no tier label).
+ */
+export function formatResultTierLabel(ad: AdRecord): string | null {
+  if (!ad.domainMatch) {
+    return null;
+  }
+  const tier = domainMatchTier(ad.domainMatch.level);
+  if (tier === "verified") {
+    return null;
+  }
+  return tier === "likely" ? "Likely" : "Unmatched";
+}
+
+/**
+ * One-line confidence note for the detail pane, expanding the tier word into
+ * the reason the match is not verified. Returns null for verified rows (the
+ * detail pane already states the landing-page/advertiser proof).
+ */
+export function formatResultTierConfidence(ad: AdRecord): string | null {
+  if (!ad.domainMatch) {
+    return null;
+  }
+  const tier = domainMatchTier(ad.domainMatch.level);
+  if (tier === "verified") {
+    return null;
+  }
+  if (tier === "likely") {
+    return "Likely match — the advertiser name fits this brand, but no website link was captured. Confirm “yes, that's them” before treating it as proof.";
+  }
+  return "Unmatched — returned by the source, but nothing connects this ad to the searched website.";
+}
+
 export function formatEmptyResultHeadline(
   result: SearchResponse,
   context: {
@@ -659,6 +737,30 @@ export function isDelayedDiscoveryStatus(
   return status === "degraded" || status === "cache_only";
 }
 
+/**
+ * BET 2 panel title for an exact-scope domain search with zero verified ads
+ * but non-empty candidate rows. Names the likely and unmatched tiers so the
+ * headline matches the rows below it instead of contradicting them.
+ */
+function formatNoVerifiedTierTitle(
+  displayDomain: string,
+  tiers: { verified: number; likely: number; unmatched: number },
+): string {
+  const parts: string[] = [];
+  if (tiers.likely > 0) {
+    const noun = tiers.likely === 1 ? "likely match" : "likely matches";
+    parts.push(`${tiers.likely} ${noun}`);
+  }
+  if (tiers.unmatched > 0) {
+    const noun = tiers.unmatched === 1 ? "unmatched candidate" : "unmatched candidates";
+    parts.push(`${tiers.unmatched} ${noun}`);
+  }
+  if (parts.length === 0) {
+    return `No verified ads for ${displayDomain}`;
+  }
+  return `No verified ads for ${displayDomain} — ${parts.join(", ")}`;
+}
+
 export function formatResultsPanelTitle(
   result: SearchResponse,
   context: {
@@ -682,9 +784,21 @@ export function formatResultsPanelTitle(
       context.displayDomain &&
       !context.isBroaderScope
     ) {
-      const verifiedNoun = result.ads.length === 1 ? "ad" : "ads";
+      // BET 2: the panel title names the VERIFIED count, not the raw row count,
+      // because exact scope now keeps likely + unmatched candidates on the page
+      // too. A 0-verified / 17-likely result must read "No verified ads for X —
+      // 17 likely matches", never "17 verified ads linked to X".
+      const tiers = resolveResultTierCounts(result);
+      if (tiers.verified > 0) {
+        const verifiedNoun = tiers.verified === 1 ? "ad" : "ads";
+        return withMarketScope(
+          `${tiers.verified} verified ${verifiedNoun} linked to ${context.displayDomain}`,
+          context.country,
+          marketScopeOptions,
+        );
+      }
       return withMarketScope(
-        `${result.ads.length} verified ${verifiedNoun} linked to ${context.displayDomain}`,
+        formatNoVerifiedTierTitle(context.displayDomain, tiers),
         context.country,
         marketScopeOptions,
       );
