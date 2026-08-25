@@ -81,6 +81,72 @@ async function renderWarmingSearch() {
 	return renderToStaticMarkup(createElement(SearchRoute));
 }
 
+// BET 2 (issue #951): loader data for the partial-streaming state — the first
+// batch of ads has landed (discoveryPartial + warming), the scroll is still
+// running. The route must paint the rows AND a real progress banner.
+const partialWarmingLoaderData = {
+	...warmingLoaderData,
+	result: {
+		...warmingLoaderData.result,
+		ads: [
+			{
+				metaAdId: "meta-nykaa-1",
+				advertiser: "Nykaa",
+				body: "Flat 30% off on serums.",
+				previewHeadline: "Glow sale",
+				previewSubhead: "Weekend only",
+				hook: "Glow sale",
+				offer: "Flat 30% off",
+				cta: "Shop now",
+				format: "image",
+				languageLabel: "English",
+				destinationType: "website",
+				landingPageUrl: "https://www.nykaa.com/glow-sale",
+				adSnapshotUrl: "https://www.facebook.com/ads/library/?id=meta-nykaa-1",
+				countries: ["India"],
+				platforms: ["Instagram"],
+				firstSeenAt: null,
+				lastSeenAt: null,
+				active: true,
+				researchSummary: "Live Browser Run fixture",
+				source: "meta_library_browser",
+				analysisFields: [],
+				tags: [],
+			},
+		],
+		discoveryPartial: true,
+		discoverySummary: "Showing the first ads while we load more from the Ad Library.",
+	},
+};
+
+async function renderPartialWarmingSearch() {
+	vi.doMock("react-router", async () => {
+		const actual = await vi.importActual<typeof import("react-router")>("react-router");
+		const React = await import("react");
+
+		return {
+			...actual,
+			Form: ({ children, ...props }: MockFormProps) => React.createElement("form", props, children),
+			Link: ({ children, to, ...props }: MockLinkProps) =>
+				React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+			useActionData: vi.fn().mockReturnValue(undefined),
+			useLoaderData: vi.fn().mockReturnValue(partialWarmingLoaderData),
+			useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: originalSearch, hash: "" }),
+			useNavigate: vi.fn().mockReturnValue(vi.fn()),
+			useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+			useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
+			useRouteLoaderData: vi.fn().mockReturnValue({ session: null }),
+		};
+	});
+
+	vi.doMock("~/components/dashboard-shell", () => ({
+		DashboardShell: ({ children }: { children: ReactNode }) => createElement("main", null, children),
+	}));
+
+	const { default: SearchRoute } = await import("~/routes/search");
+	return renderToStaticMarkup(createElement(SearchRoute));
+}
+
 beforeEach(() => {
 	vi.resetModules();
 });
@@ -118,5 +184,24 @@ describe("public search warming recovery", () => {
 		expect(markup).toContain("broader=1");
 		expect(markup).toContain("after=cursor-2");
 		expect(markup).toContain("selected=ad-9");
+	});
+
+	it("renders a real progress banner with the partial ad count while the scroll finishes (BET 2, #951)", async () => {
+		const markup = await renderPartialWarmingSearch();
+
+		// The first card is painted (the partial ad is in the markup).
+		expect(markup).toContain("meta-nykaa-1");
+		// The progress banner states the count so far and that more is loading.
+		expect(markup).toContain("1 ad so far");
+		expect(markup).toContain("loading more");
+		expect(markup).toContain("We&#x27;ll refresh automatically");
+		// The banner is an accessible live region.
+		expect(markup).toContain('class="f9-wk-progress"');
+		// The submit stays pending — the scroll is still running.
+		expect(markup).toContain("Searching…");
+		expect(markup).toContain('aria-busy="true"');
+		// The empty-state spinner ("Checking the Ad Library now") is NOT shown
+		// — the visitor sees real rows, not a spinner.
+		expect(markup).not.toContain("Checking the Ad Library now");
 	});
 });
