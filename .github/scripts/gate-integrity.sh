@@ -1,0 +1,432 @@
+#!/usr/bin/env bash
+# gate-integrity.sh — deterministic decision logic for the 0509 gate-integrity
+# check (P10-B, "cover all our bases so no agent can run amok and bypass our
+# quality gates", Nish, 2026-08-25).
+#
+# Sibling of required-verifier-integrity.sh, same contract: reads a context
+# bundle JSON on stdin, prints PASS (exit 0) or FAIL (exit 1), performs no
+# network access and no repository mutation, so the deterministic fixture
+# regression (test-gate-integrity.sh) exercises the exact shipped bytes.
+#
+# WHAT THIS CATCHES that required-verifier-integrity.sh does not:
+#   required-verifier-integrity guards a fixed list of verifier DEFINITIONS by
+#   exact filename. It says nothing about the diff's CONTENT, so a PR can still
+#   delete the tests a gate runs, skip them, widen an ignore file, or raise a
+#   design-ratchet ceiling — all without touching a single listed file. GitHub's
+#   own agent-PR review guidance names CI gaming as red flag #1 and lists
+#   exactly these moves (github.blog, 2026-05-07); SpecBench (arXiv:2605.21384)
+#   shows visible-suite saturation is what weak models do at scale. This check
+#   closes that surface.
+#
+# TWO VIOLATION CLASSES, TWO REMEDIES
+# -----------------------------------
+#   test-integrity  — deleted/renamed-away test files, newly skipped tests, a
+#                     net reduction in assertions. Remedy: a
+#                       test-removal-justified: <reason>
+#                     trailer in any commit message of the PR or in the PR body.
+#                     The justification travels with the change and lands in
+#                     `git log`, which is the whole point.
+#
+#   gate-path       — any change to a gate-owned path (`.github/workflows/**`,
+#                     `.github/scripts/**`, CODEOWNERS, gitleaks/semgrep ignore
+#                     files, the design-system ratchet and its ceilings, the CI
+#                     runner scripts), a ratchet ceiling raised or dropped, or a
+#                     CI step softened with `|| true` / `continue-on-error`.
+#                     Remedy: a repository ADMIN posts a pull-request comment
+#                     whose ENTIRE body is exactly
+#
+#                         gate-integrity-attest: <40-hex current head sha>
+#
+# WHY AN ATTESTATION COMMENT AND NOT AN APPROVAL LABEL
+# ---------------------------------------------------
+# The packet spec proposed a label. A label is strictly weaker here: it persists
+# across pushes, so a PR labelled while it was innocuous keeps the label after a
+# later force-push adds the gate edit — the exact stale-approval hole GitHub's
+# own "dismiss stale approvals" setting exists to close. The sha-bound
+# attestation comment is the shape Nish already approved on this repository on
+# 2026-08-20 for required-verifier-integrity, is invalidated automatically by any
+# new commit, and leaves a named, timestamped audit record. Same owner decision,
+# same properties, one fewer concept.
+#
+# HONEST LIMIT (reported to Nish with this check, P10-B item 5): Nishfleet/0509
+# has exactly ONE collaborator, and the fleet's workers hold that identity's
+# token. Every identity-keyed control on this repository — code-owner review,
+# an approval label, this attestation — is therefore an audit trail, not an
+# authorization boundary, until worker credentials are split from the owner's.
+# The controls that bind mechanically regardless of identity are the ones that
+# do not ask "who": enforce_admins, and the deterministic content rules below.
+#
+# Context bundle shape:
+# {
+#   "head_sha": "0123...def",              # PR head sha, 40 lowercase hex
+#   "files": [{"filename": "tests/a.test.ts",
+#              "previous_filename": null,
+#              "status": "removed",
+#              "patch": "+added\n-removed"}],  # context lines pre-stripped
+#   "commit_messages": ["fix: ...\n\ntest-removal-justified: merged into b"],
+#   "pr_body": "...",
+#   "attestations": [{"user": "nish3451", "sha": "0123...def"}],
+#   "permissions": {"nish3451": "admin"},
+#   "gate_globs": [".github/workflows/**", ...]
+# }
+#
+# Rule (fail closed): an unparseable or structurally wrong bundle FAILS. A
+# missing patch never silently excuses a violation — it is recorded and the
+# filename-level rules still apply.
+set -euo pipefail
+
+# The decision logic is written to a temp file rather than fed to python on
+# stdin, because stdin belongs to the context bundle. (required-verifier-
+# integrity.sh passes its bundle through argv instead; that cannot work here —
+# this bundle carries diff patches and would hit the ARG_MAX ceiling on a large
+# PR, which is precisely the PR most worth checking.)
+_gi_py="$(mktemp "${TMPDIR:-/tmp}/gate-integrity.XXXXXX.py")"
+trap 'rm -f "$_gi_py"' EXIT
+cat > "$_gi_py" <<'PY'
+import fnmatch
+import json
+import os
+import re
+import sys
+
+HEX40 = re.compile(r"^[0-9a-f]{40}$")
+
+TEST_PATH = re.compile(
+    r"(?:^|/)(?:tests?|__tests__|e2e)/|"
+    r"[^/]+\.(?:test|spec)\.(?:ts|tsx|js|jsx|mjs|cjs)$"
+)
+
+# A newly skipped or focused test. `.only` is included because it silently
+# disables every OTHER test in the file, which is a larger hole than `.skip`.
+SKIP_MARKERS = re.compile(
+    r"\b(?:it|test|describe)\s*\.\s*(?:skip|only|todo|fixme)\b|"
+    r"\b(?:xit|xdescribe|xtest)\s*\(|"
+    r"\.skipIf\s*\(|"
+    r"\btest\s*\.\s*fails\b"
+)
+
+ASSERTION = re.compile(r"\b(?:it|test)\s*\(|\bexpect\s*\(")
+
+# A CI step softened so it can no longer fail the build.
+CI_SOFTENER = re.compile(r"\|\|\s*true\b|continue-on-error\s*:\s*true\b")
+
+RATCHET_CEILINGS = "docs/design-system-ratchet.json"
+
+TRAILER = re.compile(
+    r"^[ \t]*test-removal-justified:[ \t]*(\S.*?)[ \t]*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+REMEDIES = """
+Remedies (each violation class needs its own; neither one waives the other).
+
+  test-integrity — add a trailer line to any commit message in this PR (or to
+     the PR body):
+
+         test-removal-justified: <why this test may go, in one line>
+
+     Put it in the commit that removes the test so the reason lands in
+     `git log` next to the removal. Amend and force-push, or add an empty
+     commit carrying the trailer.
+
+  gate-path — a repository ADMIN posts a pull-request comment whose ENTIRE
+     body is exactly
+
+         gate-integrity-attest: <40-hex current head sha>
+
+     then re-runs this check. Admin permission is verified through the
+     collaborator-permission API by the base-branch-owned workflow, never from
+     the comment itself. The sha must equal the PR's current head sha, so
+     pushing any new commit invalidates the attestation and a fresh one is
+     required. Taking this path emits a loud warning annotation and a
+     job-summary entry naming the admin and the sha.
+""".rstrip()
+
+
+def announce(title, message):
+    print(f"::warning title={title}::{message}")
+
+
+def summary(entry):
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(entry)
+    except OSError as exc:
+        print(f"::warning::could not write the gate-integrity entry to the job summary: {exc}")
+
+
+def fail(reasons, remedies=False):
+    print("FAIL: this pull request weakens a quality gate without the required justification")
+    for why in reasons:
+        print(f"  - {why}")
+    if remedies:
+        print(REMEDIES)
+    return 1
+
+
+def added_lines(patch):
+    return [ln[1:] for ln in patch.split("\n") if ln.startswith("+") and not ln.startswith("+++")]
+
+
+def removed_lines(patch):
+    return [ln[1:] for ln in patch.split("\n") if ln.startswith("-") and not ln.startswith("---")]
+
+
+def is_test_path(path):
+    return bool(path) and bool(TEST_PATH.search(path))
+
+
+def matches_gate(path, globs):
+    if not path:
+        return False
+    for pattern in globs:
+        if fnmatch.fnmatch(path, pattern):
+            return True
+        # fnmatch's `*` crosses `/`, so `.github/workflows/**` already covers
+        # nested paths; this second form keeps a bare directory prefix working
+        # if one is ever added to the glob list.
+        if pattern.endswith("/**") and path.startswith(pattern[:-2]):
+            return True
+    return False
+
+
+def ratchet_weakened(patch):
+    """Ceilings that went UP (more legacy debt allowed) or vanished entirely.
+
+    The ratchet's contract is that every ceiling only ever falls. A raised
+    ceiling is the cheapest way to land banned markers with a green suite, and
+    it is invisible to the ratchet's own test, which reads whatever number the
+    same PR just wrote.
+    """
+    entry = re.compile(r'"([^"]+)"\s*:\s*(-?\d+)')
+    before = {}
+    after = {}
+    for line in removed_lines(patch):
+        m = entry.search(line)
+        if m:
+            before[m.group(1)] = int(m.group(2))
+    for line in added_lines(patch):
+        m = entry.search(line)
+        if m:
+            after[m.group(1)] = int(m.group(2))
+    findings = []
+    for key, old in sorted(before.items()):
+        if key not in after:
+            findings.append(f"ratchet ceiling {key!r} was deleted (was {old})")
+        elif after[key] > old:
+            findings.append(f"ratchet ceiling {key!r} raised {old} -> {after[key]}")
+    return findings
+
+
+def find_attestation(attestations, permissions, head_sha, notes):
+    if not isinstance(attestations, list):
+        notes.append("context bundle attestations is not an array")
+        return None
+    if not attestations:
+        return None
+    if not head_sha:
+        notes.append("head sha missing or malformed; attestation currency cannot be proven")
+        return None
+    for a in attestations:
+        if not isinstance(a, dict):
+            notes.append("attestation entry is not an object")
+            continue
+        user = a.get("user") or ""
+        if not user:
+            notes.append("attestation comment has no resolvable author")
+            continue
+        raw = a.get("sha")
+        if not isinstance(raw, str):
+            notes.append(f"attestation by {user} carries a non-string sha")
+            continue
+        sha = raw.strip().lower()
+        perm = permissions.get(user)
+        if perm != "admin":
+            notes.append(
+                f"attesting commenter {user} has permission {perm!r}, not admin; "
+                "the gate-path remedy requires repository admin"
+            )
+            continue
+        if not HEX40.match(sha):
+            notes.append(f"attestation by {user} does not carry a 40-hex sha")
+            continue
+        if sha != head_sha:
+            notes.append(
+                f"attestation by {user} names sha {sha}, not the current head sha "
+                f"{head_sha} (stale: a newer commit was pushed after it)"
+            )
+            continue
+        return user, sha
+    return None
+
+
+def find_trailer(commit_messages, pr_body):
+    for i, msg in enumerate(commit_messages):
+        if not isinstance(msg, str):
+            continue
+        m = TRAILER.search(msg)
+        if m:
+            return f"commit message #{i + 1}", m.group(1)
+    if isinstance(pr_body, str):
+        m = TRAILER.search(pr_body)
+        if m:
+            return "pull request body", m.group(1)
+    return None
+
+
+def main():
+    try:
+        bundle = json.load(sys.stdin)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return fail([f"context bundle is not valid JSON: {exc}"])
+
+    if not isinstance(bundle, dict):
+        return fail(["context bundle is not a JSON object"])
+
+    files = bundle.get("files")
+    if not isinstance(files, list):
+        return fail(["context bundle files is not an array"])
+
+    raw_head = bundle.get("head_sha")
+    head_sha = raw_head.strip().lower() if isinstance(raw_head, str) else ""
+    if not HEX40.match(head_sha):
+        head_sha = ""
+
+    commit_messages = bundle.get("commit_messages") or []
+    if not isinstance(commit_messages, list):
+        return fail(["context bundle commit_messages is not an array"])
+    pr_body = bundle.get("pr_body") or ""
+    attestations = bundle.get("attestations") or []
+    permissions = bundle.get("permissions") or {}
+    if not isinstance(permissions, dict):
+        return fail(["context bundle permissions is not an object"])
+    gate_globs = bundle.get("gate_globs") or []
+    if not isinstance(gate_globs, list):
+        return fail(["context bundle gate_globs is not an array"])
+
+    test_violations = []
+    gate_violations = []
+    notes = []
+    assertion_delta = 0
+
+    for f in files:
+        if not isinstance(f, dict):
+            return fail(["context bundle file entry is not an object"])
+        name = f.get("filename") or ""
+        prev = f.get("previous_filename") or ""
+        status = f.get("status") or ""
+        patch = f.get("patch")
+        if patch is not None and not isinstance(patch, str):
+            return fail([f"context bundle patch for {name!r} is not a string"])
+
+        # --- test-integrity, filename level -------------------------------
+        if status == "removed" and is_test_path(name):
+            test_violations.append(f"test file deleted: {name}")
+        if status == "renamed" and is_test_path(prev) and not is_test_path(name):
+            test_violations.append(f"test file renamed out of the suite: {prev} -> {name}")
+
+        # --- gate-path, filename level ------------------------------------
+        if matches_gate(name, gate_globs):
+            gate_violations.append(f"gate-owned path changed ({status or 'changed'}): {name}")
+        if prev and matches_gate(prev, gate_globs):
+            gate_violations.append(f"gate-owned path renamed away: {prev} -> {name}")
+
+        if patch is None:
+            if is_test_path(name) or matches_gate(name, gate_globs):
+                notes.append(
+                    f"no patch available for {name} (binary or oversized diff); "
+                    "content rules could not be applied to it"
+                )
+            continue
+
+        adds = added_lines(patch)
+        dels = removed_lines(patch)
+
+        # --- test-integrity, content level --------------------------------
+        if is_test_path(name):
+            for ln in adds:
+                if SKIP_MARKERS.search(ln):
+                    test_violations.append(f"test disabled in {name}: {ln.strip()[:120]}")
+                    break
+            if status in ("modified", "removed", "changed"):
+                assertion_delta += sum(len(ASSERTION.findall(ln)) for ln in adds)
+                assertion_delta -= sum(len(ASSERTION.findall(ln)) for ln in dels)
+
+        # --- gate-path, content level -------------------------------------
+        if name.endswith(".yml") or name.endswith(".yaml") or name.startswith("scripts/"):
+            for ln in adds:
+                if CI_SOFTENER.search(ln):
+                    gate_violations.append(f"CI step softened in {name}: {ln.strip()[:120]}")
+                    break
+        if name == RATCHET_CEILINGS or prev == RATCHET_CEILINGS:
+            gate_violations.extend(ratchet_weakened(patch))
+
+    if assertion_delta < 0:
+        test_violations.append(
+            f"net assertion count fell by {-assertion_delta} across the changed test files "
+            "(it(/test(/expect( occurrences removed minus added)"
+        )
+
+    test_violations = sorted(set(test_violations))
+    gate_violations = sorted(set(gate_violations))
+
+    for note in notes:
+        print(f"::notice::{note}")
+
+    if not test_violations and not gate_violations:
+        print("PASS: no test-integrity or gate-path violation in this diff")
+        return 0
+
+    reasons = []
+    waived = []
+
+    if test_violations:
+        trailer = find_trailer(commit_messages, pr_body)
+        if trailer is None:
+            reasons.extend(test_violations)
+            reasons.append(
+                "no `test-removal-justified:` trailer in any commit message or in the PR body"
+            )
+        else:
+            where, why = trailer
+            waived.append(("test-integrity", test_violations, f"{where}: {why}"))
+
+    if gate_violations:
+        attested = find_attestation(attestations, permissions, head_sha, notes)
+        if attested is None:
+            reasons.extend(gate_violations)
+            reasons.append(
+                "no current `gate-integrity-attest: <head sha>` comment from a repository admin"
+            )
+            reasons.extend(n for n in notes if "attest" in n)
+        else:
+            user, sha = attested
+            waived.append(("gate-path", gate_violations, f"admin {user} attested {sha}"))
+
+    if reasons:
+        return fail(reasons, remedies=True)
+
+    for cls, violations, how in waived:
+        listed = "; ".join(violations)
+        announce(
+            f"Gate integrity: {cls} waived",
+            f"{cls} violations accepted via {how}. NO independent reviewer saw this. "
+            f"Violations: {listed}",
+        )
+        summary(
+            f"### :warning: gate-integrity: {cls} waived\n\n"
+            f"- **Accepted via:** {how}\n"
+            f"- **Violations waived:** `{listed}`\n"
+            "- **Independent review:** none — Nishfleet/0509 has one collaborator.\n\n"
+        )
+    print("PASS: every gate-integrity violation carries its required justification")
+    return 0
+
+
+sys.exit(main())
+PY
+
+python3 "$_gi_py"
