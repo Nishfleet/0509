@@ -152,11 +152,21 @@ jobs:
                   }' | jq -s .)"
 
           # Commit messages carry the `test-removal-justified:` trailer.
-          # `@json` per line, then `map(fromjson)` after slurping, keeps embedded
-          # newlines intact — the trailer lives on its own line at the end of the
-          # message, so a naive split would destroy exactly what is being read.
+          #
+          # Deliberately NOT the `--jq '.[] | …' | jq -s .` idiom the other
+          # fetches use. That idiom works because they emit OBJECTS, which stay
+          # valid JSON when gh prints them raw. A commit message is a STRING,
+          # and gh's `--jq` prints strings raw (jq -r semantics), so the message
+          # arrives unquoted with its newlines intact and the slurp then chokes
+          # on the first bare word. Caught by running this against real PR data
+          # rather than fixtures — the fixtures could never have seen it.
+          #
+          # Instead: no `--jq` at all, so gh emits one JSON array per page;
+          # `jq -s` slurps the pages into an array of arrays and `.[][]`
+          # flattens them. Embedded newlines survive, which matters because the
+          # trailer lives on its own line at the end of the message.
           commits_json="$(gh api --paginate "repos/$REPO/pulls/$PR/commits?per_page=100" \
-            --jq '.[] | .commit.message | @json' | jq -s 'map(fromjson)')"
+            | jq -s '[.[][] | .commit.message]')"
 
           # Attestation comments: only a body that is EXACTLY
           # `gate-integrity-attest: <40-hex>` (after trimming whitespace and

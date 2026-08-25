@@ -179,6 +179,24 @@ def is_test_path(path):
     return bool(path) and bool(TEST_PATH.search(path))
 
 
+# Prose that merely NAMES a banned construct is not that construct. Without
+# this, documenting the rule trips the rule: the first real run of this check
+# flagged its own workflow header for containing the words "|| true" inside a
+# sentence explaining what `|| true` is. A comment cannot soften a CI step or
+# skip a test, so comment lines are excluded from the content rules. They are
+# excluded from BOTH added and removed lines, so commenting a line out still
+# shows up as the assertion loss it is.
+COMMENT_LINE = re.compile(r"^\s*(?:#|//|\*|/\*|<!--)")
+
+
+def is_comment(line):
+    return bool(COMMENT_LINE.match(line))
+
+
+def code_lines(lines):
+    return [ln for ln in lines if not is_comment(ln)]
+
+
 def matches_gate(path, globs):
     if not path:
         return False
@@ -347,17 +365,17 @@ def main():
 
         # --- test-integrity, content level --------------------------------
         if is_test_path(name):
-            for ln in adds:
+            for ln in code_lines(adds):
                 if SKIP_MARKERS.search(ln):
                     test_violations.append(f"test disabled in {name}: {ln.strip()[:120]}")
                     break
             if status in ("modified", "removed", "changed"):
-                assertion_delta += sum(len(ASSERTION.findall(ln)) for ln in adds)
-                assertion_delta -= sum(len(ASSERTION.findall(ln)) for ln in dels)
+                assertion_delta += sum(len(ASSERTION.findall(ln)) for ln in code_lines(adds))
+                assertion_delta -= sum(len(ASSERTION.findall(ln)) for ln in code_lines(dels))
 
         # --- gate-path, content level -------------------------------------
         if name.endswith(".yml") or name.endswith(".yaml") or name.startswith("scripts/"):
-            for ln in adds:
+            for ln in code_lines(adds):
                 if CI_SOFTENER.search(ln):
                     gate_violations.append(f"CI step softened in {name}: {ln.strip()[:120]}")
                     break
