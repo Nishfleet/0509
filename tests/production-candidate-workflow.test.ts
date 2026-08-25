@@ -510,7 +510,7 @@ describe("exact production candidate workflow", () => {
     );
     expect(cleanupMutation).toBeGreaterThanOrEqual(0);
     const exactApplyRestoreGate =
-      "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || needs.apply_and_restore.result == 'success')";
+      "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'push' || needs.apply_and_restore.result == 'success')";
     expect(restore.restore?.if).toBe(exactApplyRestoreGate);
     expect(restore.cleanup?.if).toBe(
       "always() && needs.authorize_release.result == 'success'",
