@@ -4,31 +4,9 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 const REPOSITORY = "Nishfleet/0509";
-// Every workflow in this set is held to the SAME thresholds the gate applies
-// to any artifact it accepts: exact-commit match (sha embedded in the
-// artifact name) and freshness within `D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS`
-// (12h freshness headroom in the deploy; absolute max 14 days in
-// `validateRemoteRestoreEvidence`). Adding a workflow to this set does NOT
-// relax those thresholds — it only extends the set of producers whose
-// artifacts the gate is allowed to consider.
-//
-//   - deploy-production.yml — the gate's own deploy workflow. Its inline
-//     `generate_restore_evidence` job uploads an artifact with the same
-//     name shape, so the gate can self-verify its own freshly produced
-//     evidence on the fast path.
-//   - d1-remote-restore-evidence.yml — the nightly isolated remote restore
-//     drill (cron "47 20 * * *"). Produces one artifact per run, named for
-//     the run's pinned SHA, used as the primary evidence source.
-//   - d1-restore-proof-auto-refresh.yml — P9-C self-refreshing backup
-//     proof. Fires on every push to main plus a 3-hourly safety-net
-//     schedule, so the gate always has a verified artifact for the exact
-//     deploy SHA without having to fall back to the deploy's own inline
-//     `generate_restore_evidence` job (which has been failing on
-//     production schema drift since auto-deploy-on-green went live).
 const TRUSTED_WORKFLOWS = new Set([
   "deploy-production.yml",
   "d1-remote-restore-evidence.yml",
-  "d1-restore-proof-auto-refresh.yml",
 ]);
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const MAX_ARTIFACT_SIZE_BYTES = 10 * 1024 * 1024;
