@@ -38,11 +38,10 @@ export function buildSearchAnswer(input: {
   isBroaderScope: boolean;
   /**
    * Searched market scope from the route filters ("India", … or "all").
-   * The Meta Ad Library is country-scoped, so every verdict title about the
-   * competitor names the market that actually ran — the same competitor can
-   * legitimately have verified ads in one market and none in another, and
-   * unscoped verdicts ("No verified ads found for X") contradict the
-   * country-filtered answer. Omitted for legacy callers/tests that keep the
+   * The Meta Ad Library is country-scoped, so a specific-country verdict
+   * names the market that actually ran (e.g. "… in India"). The "all" view
+   * is unscoped because `country=ALL` is a single provider query, not a
+   * union of every country. Omitted for legacy callers/tests that keep the
    * unscoped copy.
    */
   country?: string | null;
@@ -411,14 +410,15 @@ function formatCacheDetail(cacheStatus: SearchResponse["cacheStatus"]) {
 }
 
 /**
- * Append the searched market scope to a verdict title ("… in India" /
- * "… across all countries") when the caller supplied the country filter.
- * Omitted country keeps the legacy unscoped copy.
+ * Append the searched market scope to a verdict title ("… in India") when
+ * the caller supplied a specific-country filter. The "all" view is
+ * unscoped and returns the title unchanged. Omitted country keeps the
+ * legacy unscoped copy.
  *
  * Demo/sample sources skip the scope: the resolver deliberately matches
  * every demo ad against every country, so a verdict naming the searched
  * market would falsely imply country-specific evidence. The unscoped copy
- * is the same shape callers without a country get.
+ * is the same shape callers without a country or with "all" get.
  */
 function withMarketScope(
   title: string,
