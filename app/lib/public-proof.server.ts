@@ -145,7 +145,7 @@ export function buildPublicProofBrief(
     adCount: realAds.length,
     activeAdCount,
     summary: buildSummary(realAds, input),
-    decision: buildDecision(realAds, trail, input),
+    decision: buildDecision(realAds, trail, input, now),
     proofTrail: trail,
     insights: buildInsights(realAds, input.fetchedAt, now),
     reportRows: buildReportRows(realAds, input),
@@ -170,6 +170,7 @@ function buildDecision(
     freshForLiveClaim: boolean;
     checkedAgoLabel: string;
   },
+  now: Date,
 ) {
   const topHook = firstText(ads.map((ad) => ad.hook || ad.previewHeadline));
   const topCta = firstText(ads.map((ad) => ad.cta));
@@ -197,15 +198,15 @@ function buildDecision(
     input.country === "all" ? "the Meta Ad Library" : `the ${input.country} Ad Library`;
   const freshness =
     input.freshForLiveClaim && input.checkedAgoLabel
-      ? `Checked moments ago — captured ${formatCapturedAt(input.fetchedAt)}`
-      : `Last checked ${input.checkedAgoLabel} — captured ${formatCapturedAt(input.fetchedAt)}`;
+      ? `Checked moments ago — captured ${formatCapturedAt(input.fetchedAt, now)}`
+      : `Last checked ${input.checkedAgoLabel} — captured ${formatCapturedAt(input.fetchedAt, now)}`;
 
   return {
     subject,
     whatChanged,
     whyItMatters,
     priority: "Review before the next campaign refresh",
-    proofStatus: `Captured from ${countryPhrase} on ${formatCapturedAt(input.fetchedAt)}`,
+    proofStatus: `Captured from ${countryPhrase} on ${formatCapturedAt(input.fetchedAt, now)}`,
     source: `Meta Ad Library (public archive) — ${countryPhrase}`,
     freshness,
     nextAction: sourceUrl
@@ -292,11 +293,11 @@ function buildInsights(ads: AdRecord[], fetchedAt: string, now: Date) {
     const dateKey = firstSeen.slice(0, 10);
     if (seenDates.has(dateKey)) continue;
     seenDates.add(dateKey);
-    timeline.push(`Creative started running ${formatCapturedAt(firstSeen)}`);
+    timeline.push(`Creative started running ${formatCapturedAt(firstSeen, now)}`);
     if (timeline.length >= 3) break;
   }
   if (timeline.length === 0) {
-    timeline.push(`Capture on record ${formatCapturedAt(fetchedAt)}`);
+    timeline.push(`Capture on record ${formatCapturedAt(fetchedAt, now)}`);
   }
   timeline.push(`Brief generated from ${ads.length} real captures`);
 
@@ -335,7 +336,7 @@ function uniqueTexts(values: string[]): string[] {
   return unique;
 }
 
-function formatCapturedAt(iso: string): string {
+function formatCapturedAt(iso: string, now: Date): string {
   // Date-only Meta Ad Library captures (YYYY-MM-DD) carry no time of day;
   // rendering them with a clock would fabricate "12:00 AM". Show the date
   // only. timeZone: "UTC" keeps the calendar date stable across runtimes
@@ -348,6 +349,7 @@ function formatCapturedAt(iso: string): string {
     return parsed.toLocaleString("en", {
       month: "short",
       day: "numeric",
+      ...(capturedYearDiffers(parsed, now) ? { year: "numeric" } : {}),
       timeZone: "UTC",
     });
   }
@@ -360,5 +362,13 @@ function formatCapturedAt(iso: string): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    ...(capturedYearDiffers(parsed, now) ? { year: "numeric" } : {}),
   });
+}
+
+// A capture from a prior (or, defensively, future) UTC year must carry its
+// year so it cannot read as a recent same-year date. Same-year dates keep the
+// existing compact rendering. See issue #1032.
+function capturedYearDiffers(parsed: Date, now: Date): boolean {
+  return parsed.getUTCFullYear() !== now.getUTCFullYear();
 }
