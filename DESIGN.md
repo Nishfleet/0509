@@ -56,8 +56,10 @@ what they are, styled by the same tokens.
 
 The IA is the ratified five destinations — Today, Watch, Library, Deliver,
 Settings — with gate-visibility (nothing in the nav a plan cannot use) and
-member pages keeping their URLs under an owning destination. Program state:
-`/home/nish/workspaces/agent-state/0509-design-unification-ledger.md`.
+member pages keeping their URLs under an owning destination. Program state
+lives in `docs/BACKLOG.md` (the external ledger declared elsewhere was
+formally retired 2026-08-25 — it never existed on disk); the mechanical
+terminal gate is `docs/design-system-ratchet.json`.
 
 What SURVIVES from the section below, restated as v4 rules: the volume
 concept (full-volume deliverables, workspace volume, plain long-dwell

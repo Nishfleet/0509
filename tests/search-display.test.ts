@@ -5,6 +5,7 @@ import {
   formatProofCaptureLabel,
   formatResultCardSummary,
   formatSearchCaptureAgeLabel,
+  formatSearchMarketScope,
   formatSelectedLandingFactValue,
   formatSelectedLandingHeadline,
 } from "~/lib/search-display";
@@ -288,5 +289,26 @@ describe("formatSearchCaptureAgeLabel", () => {
     expect(formatSearchCaptureAgeLabel(undefined, now)).toBeNull();
     expect(formatSearchCaptureAgeLabel(null, now)).toBeNull();
     expect(formatSearchCaptureAgeLabel("not-a-date", now)).toBeNull();
+  });
+});
+
+describe("formatSearchMarketScope", () => {
+  it("returns null when no country is supplied", () => {
+    expect(formatSearchMarketScope(null)).toBeNull();
+    expect(formatSearchMarketScope(undefined)).toBeNull();
+    expect(formatSearchMarketScope("")).toBeNull();
+    expect(formatSearchMarketScope("   ")).toBeNull();
+  });
+
+  it("keeps the all-countries view unscoped", () => {
+    expect(formatSearchMarketScope("all")).toBeNull();
+    expect(formatSearchMarketScope("ALL")).toBeNull();
+    expect(formatSearchMarketScope("all")).not.toBe("across all countries");
+  });
+
+  it("names the market for a specific country", () => {
+    expect(formatSearchMarketScope("India")).toBe("in India");
+    expect(formatSearchMarketScope("IN")).toBe("in India");
+    expect(formatSearchMarketScope("usa")).toBe("in United States");
   });
 });

@@ -63,7 +63,7 @@ describe("captureLandingPageSnapshot request headers", () => {
     const fetch = mockFetchWithDns(
       vi.fn(async () =>
         new Response(
-          "<html><head><title>Header check</title></head><body><a href=\"/buy\">Buy now</a></body></html>",
+          "<html><head><title>Header check</title></head><body><a href=\"/buy\">Buy now</a><p>Our best-selling vitamin C serum is on launch sale with free shipping on all orders above the free-shipping threshold.</p></body></html>",
           { status: 200 },
         ),
       ) as never,
@@ -99,7 +99,7 @@ describe("captureLandingPageSnapshot request headers", () => {
           return new Response("boom", { status: 500 });
         }
         return new Response(
-          "<html><head><title>Retry check</title></head><body><a href=\"/buy\">Buy now</a></body></html>",
+          "<html><head><title>Retry check</title></head><body><a href=\"/buy\">Buy now</a><p>Our best-selling vitamin C serum is on launch sale with free shipping on all orders above the free-shipping threshold.</p></body></html>",
           { status: 200 },
         );
       }) as never,
@@ -138,7 +138,7 @@ describe("captureLandingPageSnapshot request headers", () => {
           });
         }
         return new Response(
-          "<html><head><title>Final page</title></head><body><a href=\"/buy\">Buy now</a></body></html>",
+          "<html><head><title>Final page</title></head><body><a href=\"/buy\">Buy now</a><p>Our best-selling vitamin C serum is on launch sale with free shipping on all orders above the free-shipping threshold.</p></body></html>",
           { status: 200 },
         );
       }) as never,

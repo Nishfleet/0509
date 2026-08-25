@@ -2862,15 +2862,19 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
             id: "event-1",
             watchlistId: "watch-1",
             runId: "run-1",
-            eventType: "ad_new",
+            // BET 1: ad_new no longer fires instant alerts (it collapses into
+            // a counted digest footnote). Use a landing_page_offer_changed
+            // event — still instant-eligible — so this test keeps verifying
+            // the creative-image embedding path for instant alerts.
+            eventType: "landing_page_offer_changed",
             status: "confirmed",
             importanceScore: 90,
             adId: "meta-1",
             baselineFromRunId: null,
             candidateId: "candidate-1",
             proofCaptureId: "proof-1",
-            title: "New ad detected",
-            summary: "Nykaa launched a new ad.",
+            title: "Landing page offer changed",
+            summary: "Nykaa changed their landing page offer.",
             metadata: {
               advertiser: "Nykaa",
             },

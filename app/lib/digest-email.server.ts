@@ -29,6 +29,11 @@ import {
   summarizePriorityMix,
   type DigestTrustItem,
 } from "~/lib/proof-classification";
+import {
+  adChurnFootnoteLine,
+  rerankDigestBrief,
+  type AdChurnSummary,
+} from "~/lib/digest-rerank";
 import { safeTimeZone } from "~/lib/safe-timezone";
 import type { WatchPeriodTriageStatus } from "~/lib/watch-event-evaluator.server";
 import {
@@ -161,7 +166,13 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       : `${totalEligibleEvents} change${totalEligibleEvents === 1 ? "" : "s"} found, ${actionCount} worth action.`;
   const preheader = `${answer} ${proofMixLabel(proofMix)}.`;
   const dateRange = `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`;
-  const omittedCount = Math.max(input.items.length - topItems.length, 0);
+  // BET 1: creative churn collapses into a single counted footnote line, so it
+  // is excluded from the "more changes in the full brief" count (it is already
+  // accounted for in the footnote, not omitted).
+  const adChurnSummary = summarizeAdChurn(input.items);
+  const adChurnFootnote = adChurnFootnoteLine(adChurnSummary);
+  const nonChurnItemCount = input.items.length - adChurnSummary.total;
+  const omittedCount = Math.max(nonChurnItemCount - topItems.length, 0);
   const trendLines =
     input.cadence === "weekly" ? buildDigestTrendRollups(input.items) : [];
 	const strategyParagraph = input.strategyParagraph?.trim() || null;
@@ -213,7 +224,8 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ${renderTrendSectionHtml(trendLines)}
       <h2 style="${EMAIL_H2_STYLE}">Top moves</h2>
       ${renderTopMoveGroupsHtml(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl)}
-      ${omittedCount > 0 ? `<p style="margin: 0 0 18px; color: #475467;">${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full brief.</p>` : ""}
+      ${adChurnFootnote ? `<p style="margin: 0 0 18px; color: #475467; font-size: 13px;">${escapeHtml(adChurnFootnote)}</p>` : ""}
+      ${omittedCount > 0 ? `<p style="margin: 0 0 18px; color: #475467;">${omittedCount} more change${omittedCount === 1 ? " is" : "s are"} in the full brief.</p>` : ""}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View full brief</a>
       </p>
@@ -241,7 +253,8 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     "Top moves:",
     ...renderTopMoveGroupsText(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl),
-    omittedCount > 0 ? `${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full brief.` : null,
+    adChurnFootnote,
+    omittedCount > 0 ? `${omittedCount} more change${omittedCount === 1 ? " is" : "s are"} in the full brief.` : null,
     "",
     `View full brief: ${input.fullDigestUrl}`,
     ...renderUpgradeNoteText(input),
@@ -814,15 +827,16 @@ function renderTopMoveGroupsText(
 }
 
 function rankDigestItems(items: DigestTrustItem[]) {
-  return items
-    .map((item, index) => ({ item, index, intelligence: readDigestIntelligence(item.metadata) }))
-    .filter((entry) => isDigestDecisionCandidate(entry.item))
-    .sort((a, b) => {
-      const scoreA = a.intelligence.priorityScore ?? -1;
-      const scoreB = b.intelligence.priorityScore ?? -1;
-      return scoreB - scoreA || a.index - b.index;
-    })
-    .map((entry) => entry.item);
+  // BET 1: creative churn (ad_new / ad_inactive) is collapsed out of the
+  // ranked headline stream by rerankDigestBrief; only landing_page_*
+  // commercial-field changes (and any remaining decision candidates) rank.
+  const candidates = items.filter((item) => isDigestDecisionCandidate(item));
+  const rerank = rerankDigestBrief(candidates);
+  return [...rerank.headlineItems, ...rerank.otherItems];
+}
+
+function summarizeAdChurn(items: DigestTrustItem[]): AdChurnSummary {
+  return rerankDigestBrief(items.filter((item) => isDigestDecisionCandidate(item))).adChurnSummary;
 }
 
 function subjectForDigest(totalCount: number, actionCount: number, topItems: DigestTrustItem[]) {

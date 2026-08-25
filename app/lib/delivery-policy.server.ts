@@ -175,6 +175,14 @@ function clearsInstantRule(
   event: WatchEventRecord,
   sensitivityMode: NormalizedSensitivityMode,
 ) {
+  // BET 1: creative churn (ad_new / ad_inactive) never fires an instant alert
+  // on its own. It only ever appears as a counted line in the digest brief, so
+  // a bare new-ad ping can never interrupt the customer regardless of score or
+  // sensitivity mode.
+  if (event.eventType === "ad_new" || event.eventType === "ad_inactive") {
+    return false;
+  }
+
   const threshold = INSTANT_THRESHOLDS[sensitivityMode];
 
   if (lane === "customer") {

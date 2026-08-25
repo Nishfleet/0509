@@ -331,7 +331,7 @@ describe("createLandingPageSnapshot", () => {
     expect(analysisInserts.some((statement) => statement.bindings.includes("cta_text"))).toBe(true);
     expect(analysisInserts.some((statement) => statement.bindings.includes("price_text"))).toBe(true);
     expect(analysisInserts.some((statement) => statement.bindings.includes("form_present"))).toBe(true);
-    expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v4"))).toBe(true);
+    expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v5"))).toBe(true);
   });
 
   it("keeps an accepted digest immutable when a stale retry result arrives", async () => {

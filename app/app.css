@@ -2139,12 +2139,41 @@ button[aria-busy="true"] {
   }
 
   .f9-auth-layout {
-    gap: 34px;
+    gap: 28px;
     padding: 34px 0;
   }
 
+  /* Mobile keeps the brand wordmark + headline + one supporting line so the
+     auth surface still names what the product is. The two 3-card proof grids
+     and the closing reminder paragraph are dropped — they double the fold
+     without adding proof on a 390-wide viewport. */
   .f9-auth-story {
+    display: block;
+    max-width: 520px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .f9-auth-story > p:last-child,
+  .f9-auth-story .f9-auth-proof-list {
     display: none;
+  }
+
+  .f9-auth-story > div:not(.f9-auth-proof-list) {
+    display: grid;
+    gap: 14px;
+  }
+
+  .f9-auth-story h1 {
+    font-size: clamp(2rem, 7.4vw, 2.6rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+
+  .f9-auth-story p {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.5;
   }
 
   .f9-auth-card {
@@ -2562,6 +2591,29 @@ one signal-green accent.
   .f9-home .ld-hero .f9-announcement {
     margin-bottom: 12px;
   }
+
+  /* The `.ld-flag` "proof" / "Sep N" pill is intentionally inset at
+     `right: -0.22em` on desktop so it tucks under the next word; on narrow
+     viewports the parent's right edge IS the viewport edge, so the negative
+     offset produces a 2–3 px horizontal overflow. Pull it back inside the
+     row so the page stops triggering the mobile scroll-x snap. */
+  .ld-wall .ld-flag {
+    right: -0.04em;
+    top: -0.18em;
+  }
+}
+
+/* The `.ld-flag` is `position: absolute` with `right: -0.22em`, but no
+   ancestor along the path is positioned, so it falls back to the viewport's
+   initial containing block. When the row's right edge sits at or near the
+   viewport edge (mobile 390 px, and 1440 px once the hero's content is laid
+   out), the pill punches 2–3 px past `document.documentElement.scrollWidth`
+   and triggers a phantom horizontal-scroll snap. Clip the row so the pill
+   can keep its tucked-corner offset visually without leaking past the page
+   bounds. */
+.ld-wall .ld-row {
+  position: relative;
+  overflow-x: clip;
 }
 
 .ld-case {
@@ -5194,6 +5246,30 @@ one signal-green accent.
   .f9-find-page .f9-dash-rail-footer a,
   .f9-find-page .f9-dash-rail-footer button {
     min-height: 44px;
+  }
+}
+
+/* At ≤420 px the four icon+label items (Home / Search / Pricing / Help)
+   total ~386 px and the last link gets clipped at the right edge. Hide
+   the label text and keep the icon + accessible name so all four fit on
+   one row inside the 354-px rail. The label survives in the DOM for
+   screen readers. */
+@media (max-width: 420px) {
+  .f9-find-page .f9-cursor-rail nav a > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .f9-find-page .f9-cursor-rail nav a {
+    padding-inline: 0;
+    width: 44px;
+    justify-content: center;
   }
 }
 

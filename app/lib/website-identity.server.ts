@@ -6,6 +6,7 @@ import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
+import { stripScriptAndStyle } from "~/lib/sanitize-text.server";
 
 export interface WebsiteIdentity {
   registrableDomain: string;
@@ -171,9 +172,11 @@ function extractCanonicalUrl(html: string, baseUrl: URL) {
 }
 
 function extractJsonLdOrganizationName(html: string) {
-  const scripts = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) ?? [];
-  for (const script of scripts) {
-    const payload = script.replace(/<\/?script[^>]*>/gi, "").trim();
+  const pattern =
+    /<script\b(?:[^>"']|"[^"]*"|'[^']*')*type=["']application\/ld\+json["'](?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)<\/script\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) !== null) {
+    const payload = stripScriptAndStyle(match[1] ?? "").trim();
     try {
       const parsed = JSON.parse(payload) as { name?: string; "@type"?: string };
       if (typeof parsed.name === "string" && (!parsed["@type"] || /organization/i.test(parsed["@type"]))) {
