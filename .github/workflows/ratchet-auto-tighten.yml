@@ -1,0 +1,229 @@
+name: Ratchet auto-tighten
+
+# Monotone design-system ratchet tightening on main.
+#
+# Background
+# ----------
+# scripts/design-system-ratchet.mjs is the design-debt fence. Until this fix it
+# enforced EXACT equality between the count of every banned marker in app/ and
+# the value in docs/design-system-ratchet.json. That made the file the only
+# place a contributor could tighten a ceiling, so every PR touching design
+# surfaces had to edit the shared JSON. Two PRs that each removed a few hex
+# colours combined in the merge queue to a count that matched neither PR's
+# ceiling and the queue ejected them both. PR #994 was ejected six times in
+# one day with "raw-hex-color: count 262 !== ceiling 258".
+#
+# The script now passes on count <= ceiling and only fails on count > ceiling.
+# That removes the obligation for contributors to touch the file — but the
+# ratchet property ("the ceiling only ever goes down") still has to be enforced
+# somewhere. This workflow is that somewhere.
+#
+# What it does
+# ------------
+# On every push to main, and on a daily safety-net cron, this workflow runs
+# `node scripts/design-system-ratchet.mjs --update` against main. `--update`
+# is monotone: it writes a ceiling only when the new count is LOWER than the
+# prior ceiling, refuses to raise (exit 2), and short-circuits to a no-op
+# when the file already matches reality. When the file changes, this
+# workflow commits the new ceilings to main directly, so the file has
+# exactly one writer.
+#
+# The push to main uses `contents: write` on a fine-grained token via the
+# workflow's GITHUB_TOKEN. No PR is opened because the change is mechanical,
+# monotone, and the gate-integrity check that would otherwise police it runs
+# on `pull_request_target` / `merge_group` only — it does not see direct
+# pushes, which is the correct shape: gate-integrity is there to catch
+# human-shaped softening, not bot-shaped monotonic tightening.
+#
+# Why direct-to-main instead of a PR
+# ----------------------------------
+# 1. Auto-tighten is the single writer of docs/design-system-ratchet.json.
+#    Making contributors co-write the same file was the original bug.
+# 2. A PR opened by GITHUB_TOKEN does not trigger pull_request CI; the only
+#    way to land such a PR is a PAT, which the rest of the workflow does not
+#    require. Direct commit keeps the dependency surface identical to the
+#    pre-existing market-signal-snapshot and d1-restore-proof-auto-refresh
+#    workflows.
+# 3. Any malicious edit sneaks past exactly one check — this workflow. The
+#    monotone property of --update (never raises, only lowers or no-ops) is
+#    the actual defence: a poison commit can lower a ceiling faster than
+#    reality, but it cannot raise one, and the resulting PR will then
+#    trigger a red CI run on every subsequent PR that touches the
+#    corresponding surface until reality catches up. gate-integrity still
+#    catches a raised ceiling on a PR, and the workflow's monotone
+#    contract means this commit cannot be that PR.
+#
+# Concurrency
+# -----------
+# `cancel-in-progress: false` and a single named group: two pushes close
+# together MUST serialise, never race. Without serialisation a second push
+# could see a half-written file; with it, the second push queues behind the
+# first and re-reads the now-updated ceilings.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Daily 04:07 UTC = 09:37 IST, deliberately offset from the
+    # market-signal 00:07 and d1-restore-proof :17 cron slots so a single
+    # GitHub-side rate limit cannot take two of them down at once.
+    - cron: "7 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: 0509-ratchet-auto-tighten
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  auto-tighten:
+    name: Tighten design-system ratchet ceilings
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Verify pinned main checkout
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          test "$HEAD_REF" = "refs/heads/main"
+          test -z "$(git symbolic-ref --quiet HEAD 2>/dev/null || true)"
+
+      - name: Run --update and capture a structured diff
+        id: tighten
+        env:
+          RATCHET_FILE: docs/design-system-ratchet.json
+        run: |
+          set -euo pipefail
+          before_sha="$(git rev-parse HEAD)"
+          printf 'before_sha=%s\n' "$before_sha" >> "$GITHUB_OUTPUT"
+
+          cp "$RATCHET_FILE" "$RUNNER_TEMP/ceilings-before.json"
+
+          # --update exits 0 on tighten / no-op and 2 on a refused raise.
+          # Exit 1 indicates a hard failure of the scanner itself; treat
+          # it as a loud failure so an unhandled error never lands as a
+          # green push.
+          set +e
+          node scripts/design-system-ratchet.mjs --update
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
+            echo "ratchet_auto_tighten_scanner_failed status=$status" >&2
+            exit 1
+          fi
+          if [ "$status" -eq 2 ]; then
+            echo "ratchet_auto_tighten_refused_to_raise" >&2
+            {
+              echo "### :warning: ratchet auto-tighten refused to raise"
+              echo ""
+              echo "The scanner saw at least one count above its prior ceiling. The file was left untouched. Investigate the most recent merge to main — a contributor may have raised a ceiling in a way the script's monotone --update caught."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if git diff --quiet -- "$RATCHET_FILE"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "ratchet_auto_tighten_no_change"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+          # Build a human-readable summary of every ceiling that moved.
+          summary_file="$RUNNER_TEMP/ratchet-changes.txt"
+          : > "$summary_file"
+          BEFORE_PATH="$RUNNER_TEMP/ceilings-before.json" AFTER_PATH="$RATCHET_FILE" SUMMARY_PATH="$summary_file" python3 - <<'PY'
+          import json
+          import os
+          before_path = os.environ["BEFORE_PATH"]
+          after_path = os.environ["AFTER_PATH"]
+          summary_path = os.environ["SUMMARY_PATH"]
+          with open(before_path, "r", encoding="utf-8") as fh:
+              before = json.load(fh)
+          with open(after_path, "r", encoding="utf-8") as fh:
+              after = json.load(fh)
+          rows = []
+          for key in sorted(set(before) | set(after)):
+              old = before.get(key)
+              new = after.get(key)
+              if old != new:
+                  rows.append(f"- `{key}`: {old} -> {new}")
+          if rows:
+              with open(summary_path, "w", encoding="utf-8") as fh:
+                  fh.write("\n".join(rows) + "\n")
+          else:
+              with open(summary_path, "w", encoding="utf-8") as fh:
+                  fh.write("(formatting change only)\n")
+          PY
+          printf 'changes<<EOF\n%sEOF\n' "$(cat "$summary_file")" >> "$GITHUB_OUTPUT"
+
+      - name: Commit tightened ceilings to main
+        if: steps.tighten.outputs.changed == 'true'
+        shell: bash
+        env:
+          RATCHET_FILE: docs/design-system-ratchet.json
+          CHANGES: ${{ steps.tighten.outputs.changes }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- "$RATCHET_FILE"
+          if git diff --cached --quiet; then
+            echo "ratchet_auto_tighten_nothing_to_commit"
+            exit 0
+          fi
+
+          {
+            echo "chore(ratchet): auto-tighten design-system ceilings"
+            echo ""
+            echo "Mechanical monotone tightening run on main by .github/workflows/ratchet-auto-tighten.yml."
+            echo "Ceilings are lowered to the current marker count -- never raised."
+            echo "No contributor action is required."
+            echo ""
+            echo "Changes:"
+            printf '%s\n' "$CHANGES"
+          } > "$RUNNER_TEMP/commit-msg.txt"
+
+          git commit -F "$RUNNER_TEMP/commit-msg.txt"
+
+          # push-with-lease refuses the push if a remote-only commit has
+          # slipped in between this checkout and now. On a fresh checkout
+          # with `cancel-in-progress: false` the named concurrency group
+          # guarantees serialisation, so a real race should never happen;
+          # `--force-with-lease` is the safe fallback that still refuses
+          # when somebody else's commit was lost.
+          set +e
+          git push --force-with-lease origin HEAD:main
+          push_status=$?
+          set -e
+          if [ "$push_status" -ne 0 ]; then
+            echo "ratchet_auto_tighten_push_failed status=$push_status" >&2
+            exit 1
+          fi
+
+          AFTER_SHA="$(git rev-parse HEAD)"
+          {
+            echo "### :wrench: ratchet auto-tighten"
+            echo ""
+            echo "Ceilings lowered to current marker counts on main."
+            echo ""
+            echo "Commit: \`${AFTER_SHA}\`"
+            echo ""
+            echo "Changes:"
+            printf '%s\n' "$CHANGES"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm clean final state on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/design-system-ratchet.mjs
