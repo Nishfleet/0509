@@ -96,12 +96,14 @@ jobs:
         run: |
           set -euo pipefail
           test "$HEAD_REF" = "refs/heads/main"
-          # actions/checkout leaves a detached HEAD; a symbolic HEAD here would mean
-          # we are not on the exact checked-out commit. Written as an explicit if
-          # rather than an error-suppressing conditional, which gate-integrity.sh
-          # correctly reads as a softened CI step.
-          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
-            echo "expected a detached HEAD from actions/checkout" >&2
+          # actions/checkout was given `ref: main`, so HEAD is ATTACHED to the main
+          # branch — deliberately its tip, because the cron path must tighten against
+          # the latest tree rather than the commit that triggered the run. The
+          # original guard asserted a DETACHED HEAD, which this checkout can never
+          # produce, so the job failed on its very first run on main.
+          branch="$(git rev-parse --abbrev-ref HEAD)"
+          if [ "$branch" != "main" ]; then
+            echo "expected the main branch to be checked out, got: $branch" >&2
             exit 1
           fi
 
