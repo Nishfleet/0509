@@ -490,7 +490,7 @@ describe("buildSearchAnswer market scope", () => {
     );
   });
 
-  it("spells the all-countries view explicitly in verified verdicts", () => {
+  it("keeps the all-countries view unscoped in verified verdicts", () => {
     const answer = buildSearchAnswer({
       result: response({
         ads: [ad()],
@@ -503,11 +503,11 @@ describe("buildSearchAnswer market scope", () => {
     });
 
     expect(answer.title).toBe(
-      "1 verified ad linked to boat-lifestyle.com across all countries",
+      "1 verified ad linked to boat-lifestyle.com",
     );
   });
 
-  it("names the market in no-verified verdicts so country filters cannot contradict", () => {
+  it("names the market in no-verified verdicts and keeps the all view unscoped", () => {
     const india = buildSearchAnswer({
       result: response({
         ads: [],
@@ -533,7 +533,36 @@ describe("buildSearchAnswer market scope", () => {
       "No verified ads found for boat-lifestyle.com in India",
     );
     expect(all.title).toBe(
-      "No verified ads found for boat-lifestyle.com across all countries",
+      "No verified ads found for boat-lifestyle.com",
+    );
+  });
+
+  it("does not let the all view contradict a specific-country view", () => {
+    const all = buildSearchAnswer({
+      result: response({
+        ads: [],
+        broaderCandidateCount: 0,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "all",
+    });
+    const india = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "India",
+    });
+
+    expect(all.title).toBe("No verified ads found for boat-lifestyle.com");
+    expect(all.title).not.toContain("across all countries");
+    expect(india.title).toBe(
+      "1 verified ad linked to boat-lifestyle.com in India",
     );
   });
 
