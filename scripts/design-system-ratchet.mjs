@@ -111,6 +111,10 @@ export const BANNED_PATTERNS = [
   {
     // #rgb / #rrggbb / #rrggbbaa written straight into a component, route or
     // the stylesheet instead of a token.
+    //
+    // Known floor: 19 of these are the custom-property definitions in
+    // app.css's `:root` block — the token system itself has to spell its
+    // colours somehow. This rule's terminal value is that floor, not 0.
     name: "raw-hex-color",
     count: (source) =>
       countRegex(
@@ -130,6 +134,21 @@ export const BANNED_PATTERNS = [
     // longhands, which are the usual way one slips back in.
     name: "non-token-border-radius",
     count: (source) => countNonTokenDeclaration(source, BORDER_RADIUS_DECLARATION, ["var("]),
+  },
+  {
+    // A gradient chosen at the call site. Gradients are the single loudest
+    // way a page drifts out of the system — and per the house design rules,
+    // the purple-blue gradient is the exact tell of a generated-looking
+    // page. Any gradient that survives belongs in a token.
+    name: "css-gradient",
+    count: (source) => countRegex(source, /\b(?:linear|radial|conic)-gradient\s*\(/g),
+  },
+  {
+    // `!important` is how a design system stops being enforceable: once one
+    // rule wins by fiat, the next one has to as well. Every occurrence is a
+    // specificity problem that was worked around rather than fixed.
+    name: "css-important",
+    count: (source) => countRegex(source, /!important\b/g),
   },
   {
     // Tailwind arbitrary values (`bg-[#0e0d0a]`, `rounded-[7px]`) route around
