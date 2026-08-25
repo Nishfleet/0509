@@ -117,3 +117,92 @@ describe("public proof brief — date-only captures", () => {
     expect(started).toMatch(/\d{1,2}:\d{2}/);
   });
 });
+
+// Year-aware rendering (#1032): a capture whose UTC year differs from "now"
+// must carry its year in every public string that previously stripped it —
+// decision.proofStatus, decision.freshness, and the insight timeline. Same-year
+// captures keep the existing compact rendering.
+describe("public proof brief — year-aware capture dates (#1032)", () => {
+  const PRIOR_YEAR_NOW = new Date("2026-08-25T17:27:13.848Z");
+  const PRIOR_YEAR_FETCHED = "2026-08-25T14:27:13.848Z";
+
+  it("appends the year to a date-only capture from a prior UTC year in the timeline", () => {
+    const ad = makeDateOnlyAd({ firstSeenAt: "2025-09-04" });
+    const brief = buildPublicProofBrief([ad], {
+      fetchedAt: PRIOR_YEAR_FETCHED,
+      country: "all",
+      freshForLiveClaim: false,
+      checkedAgoLabel: "moments ago",
+      website: "nykaa.com",
+      now: PRIOR_YEAR_NOW,
+    });
+    expect(brief).not.toBeNull();
+    if (!brief) return;
+
+    const started = brief.insights.timeline.find((entry) =>
+      entry.startsWith("Creative started running"),
+    );
+    expect(started).toBeDefined();
+    expect(started).toBe("Creative started running Sep 4, 2025");
+  });
+
+  it("appends the year to a full-ISO capture from a prior UTC year in the timeline", () => {
+    const ad = makeDateOnlyAd({ firstSeenAt: "2025-09-04T09:47:00.000Z" });
+    const brief = buildPublicProofBrief([ad], {
+      fetchedAt: PRIOR_YEAR_FETCHED,
+      country: "all",
+      freshForLiveClaim: false,
+      checkedAgoLabel: "moments ago",
+      website: "nykaa.com",
+      now: PRIOR_YEAR_NOW,
+    });
+    expect(brief).not.toBeNull();
+    if (!brief) return;
+
+    const started = brief.insights.timeline.find((entry) =>
+      entry.startsWith("Creative started running"),
+    );
+    expect(started).toBeDefined();
+    expect(started).toContain("Sep 4, 2025");
+    expect(started).toMatch(/\d{1,2}:\d{2}/);
+  });
+
+  it("appends the year to decision.proofStatus and freshness for a prior-year fetchedAt", () => {
+    // fetchedAt drives proofStatus and freshness via formatCapturedAt.
+    const ad = makeDateOnlyAd({ firstSeenAt: "2025-09-04" });
+    const brief = buildPublicProofBrief([ad], {
+      fetchedAt: "2025-09-04T14:27:13.848Z",
+      country: "all",
+      freshForLiveClaim: false,
+      checkedAgoLabel: "about a year ago",
+      website: "nykaa.com",
+      now: PRIOR_YEAR_NOW,
+    });
+    expect(brief).not.toBeNull();
+    if (!brief) return;
+
+    expect(brief.decision.proofStatus).toContain("Sep 4, 2025");
+    expect(brief.decision.freshness).toContain("Sep 4, 2025");
+  });
+
+  it("keeps the compact rendering for a same-year date-only capture", () => {
+    const ad = makeDateOnlyAd({ firstSeenAt: "2026-08-22" });
+    const brief = buildPublicProofBrief([ad], {
+      fetchedAt: PRIOR_YEAR_FETCHED,
+      country: "all",
+      freshForLiveClaim: false,
+      checkedAgoLabel: "moments ago",
+      website: "nykaa.com",
+      now: PRIOR_YEAR_NOW,
+    });
+    expect(brief).not.toBeNull();
+    if (!brief) return;
+
+    const started = brief.insights.timeline.find((entry) =>
+      entry.startsWith("Creative started running"),
+    );
+    expect(started).toBeDefined();
+    expect(started).toBe("Creative started running Aug 22");
+    expect(started).not.toContain("2026");
+  });
+});

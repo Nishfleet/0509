@@ -888,3 +888,100 @@ describe("signal-quality hardening (2026-06-12)", () => {
     expect(withInr).toBe(without + 10);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #949: CTA change event fires on a page whose CTA verb was previously
+// invisible to the detector.
+//
+// Before v5, a page with CTA "Build my report" had ctaText: null in every
+// proof capture. The diff could never see a CTA change because both sides
+// were null. With the v5 button-text fallback, the CTA is now extracted, so
+// a real change from "Build my report" to "Generate my report" fires a
+// confirmed landing_page_cta_changed event.
+// ---------------------------------------------------------------------------
+
+describe("CTA change on a previously-blind page (v5, issue #949)", () => {
+  it("does not fire on a null → non-null CTA transition (null stays missing by design)", () => {
+    // The first v5 capture after rollout extracts a CTA that was previously
+    // null (pre-v5 the verb didn't match any priority pattern). The evaluator
+    // intentionally treats null on one side as "missing field, not a change"
+    // — the same rule that protects against false positives on price-null
+    // transitions. The real win comes on the NEXT capture, when both sides
+    // have real CTA text (see the following test).
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Generate my report",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v5",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v4",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: null, // pre-v5: "Build my report" was invisible
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-06-20T00:00:00.000Z",
+    });
+
+    // First v5 capture establishes the baseline — no event fires yet.
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("fires a confirmed CTA change when both sides now extract via the v5 fallback", () => {
+    // Post-v5: both captures extract the CTA via the button-text fallback.
+    // A real change from "Build my report" to "Generate my report" fires.
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Generate my report",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        extractorVersion: "lp-signals-v5",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v5",
+        extractedFields: {
+          rawHeadline: "Glow Serum Sale",
+          normalizedHeadline: "glow serum sale",
+          normalizedHeadlineHash: "hash-a",
+          ctaText: "Build my report",
+          priceText: "Starting at ₹499",
+          formPresent: true,
+        },
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-06-20T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("confirmed");
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        eventType: "landing_page_cta_changed",
+        status: "confirmed",
+        metadata: expect.objectContaining({
+          from: "Build my report",
+          to: "Generate my report",
+        }),
+      }),
+    ]);
+  });
+});

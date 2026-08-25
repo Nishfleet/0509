@@ -163,6 +163,7 @@ describe("shared marketing footer", () => {
       "/api/docs",
       "/status",
       "/changelog",
+      "/competitor-monitoring",
       "/trust",
       "/privacy",
       "/terms",

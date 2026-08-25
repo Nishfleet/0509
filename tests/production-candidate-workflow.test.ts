@@ -296,7 +296,7 @@ describe("exact production candidate workflow", () => {
 
     const deploySteps = deploy?.steps ?? [];
     const finalCas = stepIndex(deploy, "Reconfirm frozen main before provider mutation");
-    const firstProviderMutation = stepIndex(deploy, "Synchronize private canary token");
+    const firstProviderMutation = stepIndex(deploy, "Deploy");
     expect(finalCas).toBeGreaterThan(stepIndex(deploy, "Verify and extract private remote-restore evidence"));
     expect(firstProviderMutation).toBe(finalCas + 1);
     expect(deploySteps[finalCas]?.run).toBe("./scripts/ci-verify-production-candidate.sh");
@@ -510,7 +510,7 @@ describe("exact production candidate workflow", () => {
     );
     expect(cleanupMutation).toBeGreaterThanOrEqual(0);
     const exactApplyRestoreGate =
-      "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || needs.apply_and_restore.result == 'success')";
+      "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'push' || needs.apply_and_restore.result == 'success')";
     expect(restore.restore?.if).toBe(exactApplyRestoreGate);
     expect(restore.cleanup?.if).toBe(
       "always() && needs.authorize_release.result == 'success'",

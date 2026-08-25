@@ -68,6 +68,21 @@ name: Required verifier integrity
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
+  merge_group:
+
+# Supersede-cancel per PR. Without this the workflow was the single largest
+# consumer of the shared `vps-verify` runner pool: every synchronize queued
+# another run and none ever cancelled, so 64 of 80 queued runs on 2026-08-21
+# belonged to this workflow across 38 branches. That starved `Deploy
+# production` (same runner labels) for 1h14m+ behind 79 jobs while 29 merged
+# PRs sat unshipped. Grouping by PR number (NOT github.ref, which under
+# pull_request_target resolves to the base branch and would collapse every
+# open PR into one mutually-cancelling group) matches the behaviour ci.yml
+# and secret-scan.yml already rely on: only a superseded run for the SAME PR
+# is cancelled, and the newest run always reports the required context.
+concurrency:
+  group: required-verifier-integrity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -93,28 +108,39 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
-          test "$GITHUB_EVENT_NAME" = "pull_request_target"
-          test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
-          # Self-hosted runners on pull_request_target may set GITHUB_REF to
-          # either refs/pull/N/merge (hosted behavior) or refs/heads/<branch>
-          # (when the runner checks out the head branch directly). Accept both
-          # forms and additionally validate the PR number, head SHA, and base
-          # ref via the explicit event fields so a runner cannot be tricked
-          # into evaluating a different PR or branch.
-          case "$GITHUB_REF" in
-            refs/pull/[1-9]*[0-9]*/merge) ;;
-            refs/heads/*) ;;
-            *) echo "unexpected GITHUB_REF: $GITHUB_REF" >&2; exit 1 ;;
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad GITHUB_SHA: $GITHUB_SHA" >&2; exit 1; }
+          case "$GITHUB_EVENT_NAME" in
+            pull_request_target)
+              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+              # Self-hosted runners on pull_request_target may set GITHUB_REF to
+              # either refs/pull/N/merge (hosted behavior) or refs/heads/<branch>
+              # (when the runner checks out the head branch directly). Accept both
+              # forms and additionally validate the PR number, head SHA, and base
+              # ref via the explicit event fields so a runner cannot be tricked
+              # into evaluating a different PR or branch.
+              case "$GITHUB_REF" in
+                refs/pull/[1-9]*[0-9]*/merge) ;;
+                refs/heads/*) ;;
+                *) echo "unexpected GITHUB_REF: $GITHUB_REF" >&2; exit 1 ;;
+              esac
+              # PR_NUMBER, HEAD_SHA, and BASE_REF must be well-formed (non-empty,
+              # PR number a positive integer, head SHA 40 lowercase hex, base ref
+              # a non-empty branch name). Any malformed field fails closed.
+              [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "bad PR_NUMBER: $PR_NUMBER" >&2; exit 1; }
+              [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad HEAD_SHA: $HEAD_SHA" >&2; exit 1; }
+              test -n "$BASE_REF" || { echo "empty BASE_REF" >&2; exit 1; }
+              ;;
+            merge_group)
+              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]] || { echo "unexpected GITHUB_REF: $GITHUB_REF" >&2; exit 1; }
+              ;;
+            *)
+              echo "unexpected GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME" >&2; exit 1
+              ;;
           esac
-          # PR_NUMBER, HEAD_SHA, and BASE_REF must be well-formed (non-empty,
-          # PR number a positive integer, head SHA 40 lowercase hex, base ref
-          # a non-empty branch name). Any malformed field fails closed.
-          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "bad PR_NUMBER: $PR_NUMBER" >&2; exit 1; }
-          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad HEAD_SHA: $HEAD_SHA" >&2; exit 1; }
-          test -n "$BASE_REF" || { echo "empty BASE_REF" >&2; exit 1; }
 
       - name: Resolve candidate context through the GitHub API
         id: context
+        if: github.event_name == 'pull_request_target'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -196,6 +222,7 @@ jobs:
 
       - name: Evaluate required-verifier integrity
         id: evaluate
+        if: github.event_name == 'pull_request_target'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -217,6 +244,7 @@ jobs:
           bash "$script" < "$RUNNER_TEMP/context-bundle.json"
 
       - name: Run deterministic fixture regression
+        if: github.event_name == 'pull_request_target'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

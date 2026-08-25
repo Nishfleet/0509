@@ -6,6 +6,10 @@ function sqlString(value: string) {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
+function isPragmaFirst(statements: string[]) {
+  return /^\s*PRAGMA\b/iu.test(statements[0] ?? "");
+}
+
 function run(sql: string) {
   const database = new DatabaseSync(":memory:");
   try {
@@ -72,6 +76,56 @@ describe("D1 restore transform", () => {
     expect(() =>
       transformD1RestoreSql(`SELECT '${"z".repeat(20_000)}';`, { maxBytes: 8_000 }),
     ).toThrow("oversized SQL statement");
+  });
+
+  it("restores an export whose child table is created before its parent", () => {
+    // Shape of the real 2026-08-25 production export: migration 0077 rebuilt
+    // watch_event before it rebuilt event_candidate, so the export emits
+    // watch_event and its rows first and event_candidate afterwards. With
+    // foreign keys enforced — which is what D1 does on import — the INSERT
+    // fails with `no such table: main.event_candidate` and the restore drill,
+    // and therefore the deploy gate, goes red.
+    const source = [
+      "PRAGMA defer_foreign_keys=TRUE;",
+      'CREATE TABLE IF NOT EXISTS "watch_event" (',
+      "  id TEXT PRIMARY KEY NOT NULL,",
+      "  candidate_id TEXT,",
+      "  FOREIGN KEY (candidate_id) REFERENCES event_candidate(id) ON DELETE SET NULL",
+      ");",
+      "INSERT INTO \"watch_event\" (\"id\",\"candidate_id\") VALUES('we-1',NULL);",
+      'CREATE TABLE IF NOT EXISTS "event_candidate" (',
+      "  id TEXT PRIMARY KEY NOT NULL,",
+      "  title TEXT NOT NULL",
+      ");",
+      "INSERT INTO \"event_candidate\" (\"id\",\"title\") VALUES('ec-1','New ad detected');",
+      "CREATE INDEX idx_watch_event_candidate ON watch_event(candidate_id);",
+      "",
+    ].join("\n");
+
+    const enforced = (sql: string) => {
+      const database = new DatabaseSync(":memory:");
+      try {
+        database.exec("PRAGMA foreign_keys = ON;");
+        database.exec(sql);
+        return database.prepare("SELECT COUNT(*) AS count FROM watch_event").get() as { count: number };
+      } finally {
+        database.close();
+      }
+    };
+
+    expect(() => enforced(source)).toThrow(/no such table: main\.event_candidate/u);
+
+    const result = transformD1RestoreSql(source);
+    expect(result.transformed).toBe(0);
+    const firstInsert = result.statements.findIndex((statement) => /^\s*INSERT\b/iu.test(statement));
+    const lastCreateTable = result.statements.reduce(
+      (last, statement, index) => (/^\s*CREATE\s+TABLE\b/iu.test(statement) ? index : last),
+      -1,
+    );
+    expect(lastCreateTable).toBeGreaterThanOrEqual(0);
+    expect(lastCreateTable).toBeLessThan(firstInsert);
+    expect(isPragmaFirst(result.statements)).toBe(true);
+    expect(enforced(result.sql)).toEqual({ count: 1 });
   });
 
   it("allows an explicit key map when a data-only export omits schema", () => {

@@ -468,6 +468,32 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).toContain("All 6 ads, on the wall");
   });
 
+  it("omits 'by other advertisers' in the closer when every verified linking creative is the brand's own (unverified matches only)", async () => {
+    // Mirrors the live hubspot.com defect in the visible closer copy: 4
+    // verified brand-owned ads + 6 unverified text-matches. The closer split
+    // must not fold the 6 unverified matches into "by other advertisers".
+    const ads = Array.from({ length: 10 }, (_v, i) => ad({ metaAdId: `ad-${i}` }));
+    const stale = await render(
+      populated({
+        ads,
+        brandOwnedAdCount: 4,
+        verifiedLinkCount: 4,
+        unverifiedMatchCount: 6,
+        teaser: { ...teaser, totalCount: 4, activeCount: 4 },
+      }),
+    );
+
+    // The closer attributes only the verified brand-owned creatives to Nike.
+    expect(stale).toContain("4 run by Nike");
+    // The unverified text-matches must NOT be attributed to other advertisers.
+    expect(stale).not.toContain("6 by other advertisers");
+    expect(stale).not.toContain("0 by other advertisers");
+    // The unverified matches appear only in the labelled note.
+    expect(stale).toContain(
+      "Another 6 ads matched the search for nike.com without a verified link.",
+    );
+  });
+
   it("never labels a creative with the brand name when its advertiser is unconfirmed", async () => {
     const ads = Array.from({ length: 5 }, (_v, i) =>
       ad({ metaAdId: `ad-${i}`, advertiser: i === 0 ? "" : "Nike" }),

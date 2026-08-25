@@ -179,6 +179,15 @@ export function mapLandingFailureOutcome(
       return "rate_limited";
     case "landing_content_empty_or_oversized":
       return "empty";
+    // Capture-validity gate rejections (BET 4): a challenge/cookie-wall/partial
+    // -SPA/error body is a render failure, recorded as `capture_failed` and
+    // never an alert. Telemetry-wise it is a failed capture, not a block.
+    case "landing_challenge_page":
+    case "landing_cookie_wall":
+    case "landing_partial_spa":
+    case "landing_error_page":
+    case "landing_content_signature_too_small":
+      return "failed";
     case "landing_fetch_failed":
       return "failed";
     default:

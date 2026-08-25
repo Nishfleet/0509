@@ -1,5 +1,9 @@
 import { captureRenderedLandingPageSnapshot } from "~/lib/browser-run.server";
 import { readResponseTextWithinLimit, utf8ByteLength } from "~/lib/bounded-response.server";
+import {
+  assessCaptureValidity,
+  type CaptureValidityReasonCode,
+} from "~/lib/capture-validity.server";
 import { decodeHtmlEntities as decodeHtml } from "~/lib/decode-html.server";
 import {
   mapLandingFailureOutcome,
@@ -19,6 +23,11 @@ import {
   hasMeaningfulLandingPageBodyText,
   LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
 } from "~/lib/landing-page-signals.server";
+import {
+  recordFetchStage,
+  recordRenderStage,
+  type LandingPagePipelineCounters,
+} from "~/lib/landing-page-pipeline-instrumentation.server";
 import { normalizeHeadline } from "~/lib/normalize";
 import {
   normalizePublicHttpUrl,
@@ -51,7 +60,8 @@ export type LandingPageCaptureFailureReasonCode =
   | "landing_rate_limited"
   | "landing_http_error"
   | "landing_fetch_failed"
-  | "landing_content_empty_or_oversized";
+  | "landing_content_empty_or_oversized"
+  | CaptureValidityReasonCode;
 
 export interface LandingPageCaptureFailureDetail {
   reasonCode: LandingPageCaptureFailureReasonCode;
@@ -78,6 +88,13 @@ interface CaptureLandingPageSnapshotOptions {
    * race still caps how long the capture may wait on a slow write.
    */
   executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
+  /**
+   * Optional pipeline-instrumentation accumulator (issue #949). When present,
+   * the fetch and render stages record their outcome and bail-out reason on
+   * this counter so the caller can flush a per-check stage summary. The
+   * counter is never mutated in a way that affects capture behaviour.
+   */
+  instrumentation?: LandingPagePipelineCounters | null;
 }
 
 interface LandingPageCaptureAttemptState {
@@ -338,6 +355,51 @@ async function captureLandingPageSnapshotAt(
       documentMode: "raw",
     });
     const looksLikeSignalEmptyShell = !hasMeaningfulBodyText;
+    // Capture-validity gate (BET 4): a 200 with a challenge/cookie-wall/partial
+    // -SPA/error body is a render failure, not a real page. The extracted
+    // signals would come from the wall, not the page, and any diff against the
+    // last real proof would be a phantom change. Try the rendered fallback
+    // first (the wall may render client-side past the gate); if that fails or
+    // is disabled, record a `capture_failed` with the gate's reason and never
+    // produce a snapshot from this HTML.
+    const validity = assessCaptureValidity({
+      html,
+      fetchStatus: response.status,
+      documentMode: "raw",
+    });
+    if (!validity.valid) {
+      if (
+        options.allowRenderedFallback !== false &&
+        !state.renderedAttempted
+      ) {
+        state.renderedAttempted = true;
+        await recordLandingLeg(env, telemetry, mapLandingFailureOutcome(validity.reasonCode!), {
+          resultCount: 1,
+          resultBytes: utf8ByteLength(html),
+        });
+        const renderedSnapshot = await captureRenderedSnapshot(
+          env,
+          finalUrl.toString(),
+          options,
+          telemetry,
+        );
+        if (renderedSnapshot) {
+          return renderedSnapshot;
+        }
+        captureWarningCodes.push("capture_validity_render_failed");
+      }
+      return recordFailedLanding(
+        env,
+        telemetry,
+        options,
+        validity.reasonCode!,
+        {
+          fetchStatus: response.status,
+          captureValidityReason: validity.reason,
+          captureValidityFingerprint: validity.fingerprint,
+        },
+      );
+    }
     const headline =
       decodeHtml(findFirstMatch(html, OG_TITLE_REGEX) ?? "") ||
       decodeHtml(findFirstMatch(html, TITLE_REGEX) ?? "") ||
@@ -389,6 +451,7 @@ async function captureLandingPageSnapshotAt(
       metadata: {
         captureMethod: "landing_page_fetch",
         captureWarningCodes,
+        captureValidated: true,
         ...(fetchAttempts > 1 ? { fetchAttempts } : {}),
         ...(looksLikeSignalEmptyShell
           ? { unreadableReasonCode: "landing_signals_not_detected" }
@@ -474,9 +537,15 @@ async function captureRenderedSnapshot(
         })
       : captureRenderedLandingPageSnapshot(env, url, attribution));
     telemetry.attemptUsed = attribution.telemetryAttempts.used;
+    if (options.instrumentation) {
+      recordRenderStage(options.instrumentation, snapshot ? "succeeded" : "failed");
+    }
     return snapshot;
   } catch (error) {
     logLandingCaptureWarning("rendered_fallback_failed", error);
+    if (options.instrumentation) {
+      recordRenderStage(options.instrumentation, "failed", "rendered_fallback_failed");
+    }
     return null;
   }
 }
