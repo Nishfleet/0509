@@ -13,6 +13,29 @@ on:
         type: choice
         options:
           - apply_and_restore
+  push:
+    # Every push to main produces fresh, exact-commit evidence for the commit
+    # that just landed. The deploy gate's fresh-exact-24h policy refuses
+    # anything older than 24h, and refuses to match a different commit even
+    # when the migration ledger and the workflow shape are unchanged. A daily
+    # 02:17 IST schedule (below) therefore still leaves a race window: a push
+    # at 02:18 IST waits 24h for the next schedule, and any deploy of that
+    # commit in between is blocked even though the schema has not moved. A
+    # push trigger closes that window commit-by-commit.
+    #
+    # Same low-traffic design as schedule: the restore job queues behind any
+    # running deploy in the shared 0509-production-provider-mutations
+    # concurrency group, so the only contention is the export itself, which
+    # is the operation already in the schedule. The 4m32s measured drill is
+    # the cost per push; with main advancing about 12 commits per day the
+    # provider lane is occupied for roughly an hour a day. That is the cost
+    # of removing the 24h race window without weakening the gate.
+    #
+    # The push branch and the existing 02:17 IST schedule intentionally
+    # overlap: the schedule is the safety net for any day no push lands, and
+    # the push branch is what makes a deploy of a just-merged commit able to
+    # pass without first waiting for the next schedule.
+    branches: [main]
   schedule:
     # Daily, 02:17 IST - the same low-traffic window the twice-weekly schedule
     # used, now every night (Nish, 2026-08-07).
@@ -58,8 +81,12 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           test "$GITHUB_RUN_ATTEMPT" = "1"
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          # An unattended run (schedule or push to main) backs up whatever
+          # main is and must NOT carry an operator-supplied expected_sha, so
+          # nothing can smuggle a chosen commit into an unattended run. A
+          # manual run still has to name the exact commit and have it match.
           case "$GITHUB_EVENT_NAME" in
-            schedule)
+            schedule|push)
               test -z "$EXPECTED_SHA"
               ;;
             workflow_dispatch)
@@ -163,7 +190,7 @@ jobs:
           test "$D1_APPLY_AND_RESTORE_AUTOMATION_APPROVED" = "0509-apply-and-restore"
           npx wrangler d1 migrations apply 0509 --remote
   restore:
-    if: "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || needs.apply_and_restore.result == 'success')"
+    if: "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'push' || needs.apply_and_restore.result == 'success')"
     needs:
       - authorize_release
       - apply_and_restore
