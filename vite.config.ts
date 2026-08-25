@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { reactRouter } from "@react-router/dev/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { resolveLocalReleaseCloudflareInspectorPort } from "./scripts/local-release-server.mjs";
@@ -35,7 +36,17 @@ const e2eBetterAuthSecret =
 // error 97`). Manual `npm run dev` keeps the default inspector.
 const cloudflareInspectorPort = resolveLocalReleaseCloudflareInspectorPort();
 
-export default defineConfig(({ mode }) => ({
+// The `workers` vitest project runs `tests/integration/**` on real workerd via
+// Miniflare, against a real local D1 built by applying the repo's real
+// `migrations/*.sql`. Reading those files has to happen here, in Node, because
+// workerd has no filesystem — they reach the setup file through the test-only
+// `TEST_MIGRATIONS` binding.
+//
+// Only read them under vitest: `npm run dev`, `build` and `preview` must not
+// pay for 70+ file reads they never use.
+const INTEGRATION_TEST_GLOB = "tests/integration/**/*.integration.test.ts";
+
+export default defineConfig(async ({ mode }) => ({
   plugins:
     mode === "test"
       ? [tsconfigPaths()]
@@ -71,13 +82,55 @@ export default defineConfig(({ mode }) => ({
     },
   },
   test: {
-    environment: "node",
-    // Vitest only defaults NODE_ENV to "test" when it is unset; an inherited
-    // NODE_ENV=production makes react@19 resolve its production build, whose
-    // `act` export is undefined ("act is not a function"). Pin it so a leaked
-    // NODE_ENV from a caller's shell or CI cannot break the suite.
-    env: { NODE_ENV: "test" },
-    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
-    testTimeout: 10_000,
+    projects: [
+      {
+        // The historical suite: plain Vitest on node. `extends: true` keeps the
+        // root config's plugins (tsconfigPaths) and resolution identical to
+        // what it was before projects existed.
+        extends: true,
+        test: {
+          name: "node",
+          environment: "node",
+          // Vitest only defaults NODE_ENV to "test" when it is unset; an
+          // inherited NODE_ENV=production makes react@19 resolve its
+          // production build, whose `act` export is undefined ("act is not a
+          // function"). Pin it so a leaked NODE_ENV from a caller's shell or
+          // CI cannot break the suite.
+          env: { NODE_ENV: "test" },
+          include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+          // Integration suites belong to the `workers` project below; running
+          // them on node would silently skip the real runtime.
+          exclude: [INTEGRATION_TEST_GLOB],
+          testTimeout: 10_000,
+        },
+      },
+      {
+        // Real workerd (via Miniflare) + real local D1 with the repo's real
+        // migrations applied. This is the only project where a D1 assertion
+        // means anything: everything else mocks the binding.
+        extends: true,
+        plugins: [
+          cloudflareTest(async () => ({
+            wrangler: { configPath: "./tests/integration/wrangler.test.jsonc" },
+            miniflare: {
+              // Test-only binding: the setup file applies these inside workerd.
+              bindings: {
+                TEST_MIGRATIONS: await readD1Migrations(
+                  path.join(import.meta.dirname, "migrations"),
+                ),
+              },
+            },
+          })),
+        ],
+        test: {
+          name: "workers",
+          include: [INTEGRATION_TEST_GLOB],
+          setupFiles: ["./tests/integration/apply-migrations.ts"],
+          // Applying 70+ migrations to a fresh local D1 costs more than a unit
+          // test's 10s budget on a loaded CI runner.
+          testTimeout: 30_000,
+        },
+      },
+    ],
   },
 }));

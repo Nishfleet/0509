@@ -1,0 +1,25 @@
+{
+  // Test-only Worker config for the workerd/D1 integration project (see the
+  // `workers` project in vite.config.ts). It deliberately declares ONLY the D1
+  // binding: these suites exercise the D1 data layer directly, so there is no
+  // `main` entrypoint, no browser/AI/workflow/email bindings, and no routes or
+  // cron triggers to simulate.
+  //
+  // `compatibility_date` and `compatibility_flags` MUST stay identical to the
+  // production wrangler.jsonc — a runtime-behaviour difference between the
+  // tests and production would make a green suite meaningless.
+  //
+  // `database_id` is a local-only placeholder. Miniflare never contacts the
+  // Cloudflare API here; the schema comes from applying the real
+  // `migrations/*.sql` in tests/integration/apply-migrations.ts.
+  "name": "0509-d1-integration-tests",
+  "compatibility_date": "2026-03-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "0509-d1-integration-tests",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ]
+}
