@@ -10,6 +10,7 @@ import {
 import {
   createAdObservation,
   createEventCandidate,
+  createLandingPageSnapshot,
   createProofCapture,
   createWatchEvent,
   createWatchlistRun,
@@ -3715,6 +3716,12 @@ async function evaluateSelectiveProofCandidates(
       await assertOrchestratedWatchlistRunLease(env, input.runId, {
         orchestrationToken: input.lease?.processingToken,
       });
+      // Persist a fresh capture as a versioned landing_page_snapshot row.
+      // Replayed captures (freshSnapshot === null) reuse an existing proof
+      // capture and must not append a duplicate snapshot row.
+      const landingPageSnapshotId = freshSnapshot
+        ? await persistLandingPageSnapshotRow(env, freshSnapshot)
+        : null;
       const proofCaptureId = await createProofCapture(env, {
         proofTargetId: persistedProofTarget.id,
         status: "succeeded",
@@ -3729,7 +3736,12 @@ async function evaluateSelectiveProofCandidates(
         extractedFields,
         fieldConfidence,
         extractionWarnings,
-        captureMetadata: snapshot.metadata ?? {},
+        captureMetadata: {
+          ...(snapshot.metadata ?? {}),
+          ...(landingPageSnapshotId
+            ? { landingPageSnapshotId }
+            : {}),
+        },
         renderMode: readSnapshotRenderMode(snapshot),
         deviceProfile: readSnapshotDeviceProfile(snapshot),
         extractorVersion:
@@ -4205,6 +4217,12 @@ async function evaluateDirectWebsiteProofCandidate(
           (capture) => capture.idempotencyKey !== finalProofRequestKey,
         ),
       ) ?? lastSuccessfulProof;
+    // Persist a fresh capture as a versioned landing_page_snapshot row.
+    // Replayed captures (freshSnapshot === null) reuse an existing proof
+    // capture and must not append a duplicate snapshot row.
+    const landingPageSnapshotId = freshSnapshot
+      ? await persistLandingPageSnapshotRow(env, freshSnapshot)
+      : null;
     const proofCaptureId = await createProofCapture(env, {
       proofTargetId: persistedProofTarget.id,
       status: "succeeded",
@@ -4223,6 +4241,7 @@ async function evaluateDirectWebsiteProofCandidate(
         ...(snapshot.metadata ?? {}),
         source: "direct_competitor_website",
         watchlistTargetId: input.watchlist.targetId,
+        ...(landingPageSnapshotId ? { landingPageSnapshotId } : {}),
       },
       renderMode: readSnapshotRenderMode(snapshot),
       deviceProfile: readSnapshotDeviceProfile(snapshot),
@@ -4820,6 +4839,32 @@ function proofCaptureToLandingPageSnapshot(
       replayedFromDurableCapture: true,
     },
   };
+}
+
+/**
+ * Persist a fresh landing-page capture as a versioned `landing_page_snapshot`
+ * row (headline, CTA, price, form-present, artifact key, capture-validity
+ * state in metadata). Additive and never throws: a snapshot-row write failure
+ * is logged and swallowed so the monitoring run still records its proof
+ * capture and events. Returns the new snapshot id, or null when the row could
+ * not be persisted. Only called for fresh captures — replayed captures reuse
+ * an existing proof capture and must not append a duplicate snapshot row.
+ */
+async function persistLandingPageSnapshotRow(
+  env: AppEnv,
+  snapshot: LandingPageSnapshotData,
+): Promise<string | null> {
+  try {
+    return await createLandingPageSnapshot(env, snapshot);
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "landing_page_snapshot_persist_failed",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
+    return null;
+  }
 }
 
 function readSnapshotString(
