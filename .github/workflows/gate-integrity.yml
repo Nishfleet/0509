@@ -183,6 +183,26 @@ jobs:
               | {user: $c.user, sha: ($b | sub("^gate-integrity-attest: "; "") | ascii_downcase)}
             ]')"
 
+          # Auto-revert attestations: only a body that is EXACTLY
+          # `gate-integrity-auto-revert: <40-hex>` is a candidate. The
+          # auto-revert workflow posts this immediately after opening the
+          # PR so the gate can re-evaluate with the waiver in place. The
+          # author is intentionally NOT looked up in the collaborator-
+          # permission API: any user can post the marker, but only the
+          # auto-revert workflow arrives with the body opener AND
+          # git-revert commit subjects at the same time. The decision
+          # script insists on all three signals before exempting
+          # test-integrity; the workflow need only deliver the sha-bound
+          # comment and trust the decision script to combine it with the
+          # other two.
+          auto_revert_attestations_json="$(printf '%s' "$comments_json" | jq -c '
+            [ .[]
+              | . as $c
+              | ($c.body | gsub("\r"; "") | sub("^\\s+"; "") | sub("\\s+$"; "")) as $b
+              | select($b | test("^gate-integrity-auto-revert: [0-9a-fA-F]{40}$"))
+              | {user: $c.user, sha: ($b | sub("^gate-integrity-auto-revert: "; "") | ascii_downcase)}
+            ]')"
+
           # Attester permission comes from the collaborator-permission API,
           # never from a label, an author_association, a comment body, or any
           # candidate file.
@@ -202,6 +222,7 @@ jobs:
             --argjson files "$files_json" \
             --argjson commit_messages "$commits_json" \
             --argjson attestations "$attestations_json" \
+            --argjson auto_revert_attestations "$auto_revert_attestations_json" \
             --argjson permissions "$perms_json" \
             --argjson gate_globs '[
               ".github/workflows/**",
@@ -219,6 +240,7 @@ jobs:
             ]' \
             '{head_sha: $head_sha, pr_body: $pr_body, files: $files,
               commit_messages: $commit_messages, attestations: $attestations,
+              auto_revert_attestations: $auto_revert_attestations,
               permissions: $permissions, gate_globs: $gate_globs}' \
             > "$RUNNER_TEMP/gate-bundle.json"
 

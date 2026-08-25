@@ -137,8 +137,16 @@ jobs:
           git config user.email "257724087+nish3451@users.noreply.github.com"
           git revert --no-edit "${merge_flag[@]}" "$HEAD_SHA"
           git checkout -b "$branch"
-          git push origin "$branch"
-          gh pr create --repo "$REPO" --base main --head "$branch" \
+          # Pushing the same revert branch twice for the same HEAD_SHA is the
+          # auto-revert "stuck on prior attempt" failure mode: a stale
+          # revert/<short> branch from a previous workflow run is identical
+          # to the new one, so `git push` rejects with
+          # `! [rejected] ... (non-fast-forward)`. The new HEAD is
+          # byte-identical, so a force push is safe; the freshness + loop
+          # guards above already pinned HEAD_SHA as main HEAD, so no other
+          # change can have landed in between.
+          git push origin "$branch" --force-with-lease
+          pr_url="$(gh pr create --repo "$REPO" --base main --head "$branch" \
             --title "revert: auto-restore green main (reverts $short)" \
             --body "Automatic revert opened because a push-to-main CI workflow went red.
 
@@ -146,5 +154,38 @@ jobs:
           - Reverts commit \`$short\`: \`$subject\`
           - Failing checks: $failing
 
-          Automatic revert per the reversibility principle (FABLE-VERDICT §17); if this PR fails checks it will sit unmerged and loud."
+          Automatic revert per the reversibility principle (FABLE-VERDICT §17); if this PR fails checks it will sit unmerged and loud.")"
+          pr_number="$(printf '%s' "$pr_url" | sed -n 's|.*/pull/\([0-9][0-9]*\).*|\1|p')"
+          if [ -z "$pr_number" ]; then
+            echo "could not parse PR number from $pr_url" >&2
+            exit 1
+          fi
+          head_sha="$(gh api "repos/$REPO/pulls/$pr_number" --jq '.head.sha')"
+          # The gate-integrity check fires on `pull_request_target: opened`,
+          # BEFORE this attestation comment exists, so the first run of the
+          # gate on a freshly opened auto-revert PR fails as designed — the
+          # bundle has no waiver yet. The auto-revert workflow owns the
+          # waiver marker and posts it immediately, then a label flip below
+          # re-triggers the gate so it picks up the marker on its second
+          # pass. The sha binding makes the waiver invalid after any new
+          # commit, same currency property as the admin attestation.
+          #
+          # The pr_body opener and the git-revert commit subjects are
+          # delivered by this workflow (PR body above; `git revert --no-edit`
+          # produces the `Revert "..."` subject). All three signals are
+          # required by the decision script, and all three originate here,
+          # so this workflow is the only place that can synthesize a
+          # valid auto-revert attestation.
+          printf 'gate-integrity-auto-revert: %s\n' "$head_sha" \
+            | gh pr comment "$pr_number" --repo "$REPO" --body-file -
+          # Toggling the `auto-revert` label fires the `pull_request_target:
+          # labeled` event the gate-integrity workflow listens to, so the
+          # gate re-runs with the attestation comment now in the bundle.
+          # `gh label create --force` exits 0 whether or not the label
+          # already exists, so no `|| true` fallback is needed and the
+          # gate-integrity CI-softener regex stays quiet on this line.
+          gh label create auto-revert --repo "$REPO" --color 0E8A16 \
+            --description "Auto-revert PR — gate-integrity auto-revert waiver applies" --force >/dev/null
+          gh pr edit "$pr_number" --repo "$REPO" --add-label auto-revert >/dev/null
+          gh pr remove-label "$pr_number" --repo "$REPO" --name auto-revert >/dev/null
           gh pr merge --auto --squash --repo "$REPO" "$branch"

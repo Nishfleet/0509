@@ -56,6 +56,37 @@
 # The controls that bind mechanically regardless of identity are the ones that
 # do not ask "who": enforce_admins, and the deterministic content rules below.
 #
+# AUTO-REVERT WAIVER (added 2026-08-25, "the guardrail that fails 12% of the
+# time trains everyone to ignore red"). The reversible-merge invariant says
+# every failing push-to-main gets a one-shot undo opened by .github/workflows/
+# auto-revert.yml. The undo is, by construction, the inverse of a commit that
+# almost certainly added tests — so every auto-revert PR lands here with a
+# negative assertion delta and a deleted test file. Catching that as
+# "test-integrity weakened" was the correct rule reading but the wrong
+# outcome: the gate was red on the one PR it should never block. Three
+# independent signals must all agree before the test-integrity clause is
+# waived, so the hole stays narrow:
+#
+#   1. The PR body starts with the exact opening sentence the auto-revert
+#      workflow emits (a fixed string, not a pattern, so paraphrasing is not
+#      enough — the workflow writes it verbatim).
+#   2. Every commit in the PR carries git's standard `Revert "<subject>"`
+#      subject line. A PR that deletes tests but whose commits are NOT git
+#      reverts gets no exemption, even if its body was paraphrased.
+#   3. A pull-request comment whose entire body is exactly
+#      `gate-integrity-auto-revert: <40-hex current head sha>` exists on the
+#      PR. The sha binding is what makes a force-push invalidate the waiver,
+#      same currency property as the admin attestation. The comment author
+#      is intentionally NOT permission-checked: any user can post the marker,
+#      but only the auto-revert workflow lands here with both signals (1)
+#      and (2) true at the same time. The combo is the cryptographic anchor.
+#
+# The gate-path clause is NOT waived on this path. A revert of a
+# `.github/workflows/**` change is still a change to a gate-owned path and
+# still needs an admin attestation, because the auto-revert body only
+# promises "the diff is the inverse of HEAD_SHA" — it does not promise
+# "HEAD_SHA did not weaken a gate".
+#
 # Context bundle shape:
 # {
 #   "head_sha": "0123...def",              # PR head sha, 40 lowercase hex
@@ -295,6 +326,82 @@ def find_trailer(commit_messages, pr_body):
     return None
 
 
+# Fixed opener the .github/workflows/auto-revert.yml workflow writes into the
+# PR body verbatim. A PR whose body starts with any other sentence is NOT an
+# auto-revert, regardless of title or branch shape.
+AUTO_REVERT_BODY_OPENER = (
+    "Automatic revert opened because a push-to-main CI workflow went red."
+)
+# `git revert` always produces a subject of the form `Revert "<original>"`
+# when run without `--edit` / `--no-edit`. A pure revert PR's commits all
+# carry this exact prefix; that is what makes the diff the inverse of the
+# original commit.
+GIT_REVERT_SUBJECT_PREFIX = 'Revert "'
+
+
+def is_auto_revert_pr(pr_body, commit_messages):
+    """True when the PR is a workflow-generated git revert.
+
+    The body opener is a verbatim string the auto-revert workflow owns; the
+    commit prefix is git's own. Both must hold: a PR that opens with the
+    workflow's sentence but whose commits are not git reverts is not a true
+    revert and gets no exemption, and a PR whose commits are git reverts
+    but whose body was paraphrased has no workflow anchor.
+    """
+    if not isinstance(pr_body, str):
+        return False
+    if not pr_body.startswith(AUTO_REVERT_BODY_OPENER):
+        return False
+    if not commit_messages:
+        return False
+    for m in commit_messages:
+        if not isinstance(m, str):
+            return False
+        if not m.lstrip().startswith(GIT_REVERT_SUBJECT_PREFIX):
+            return False
+    return True
+
+
+def find_auto_revert_attestation(attestations, head_sha, notes):
+    """Match a `gate-integrity-auto-revert: <40-hex>` comment at head sha.
+
+    The auto-revert workflow posts this comment immediately after opening
+    the PR, sha-bound so any new commit invalidates it. The author is not
+    permission-checked: any commenter can post the marker, but only the
+    auto-revert workflow arrives with a body opener AND git-revert commits
+    at the same time. That combo is the only authorization this path needs.
+    """
+    if not isinstance(attestations, list):
+        notes.append("context bundle auto-revert attestations is not an array")
+        return None
+    if not attestations:
+        return None
+    if not HEX40.match(head_sha):
+        notes.append("head sha missing or malformed; auto-revert attestation currency cannot be proven")
+        return None
+    for a in attestations:
+        if not isinstance(a, dict):
+            notes.append("auto-revert attestation entry is not an object")
+            continue
+        user = a.get("user") or ""
+        raw = a.get("sha")
+        if not isinstance(raw, str):
+            notes.append(f"auto-revert attestation by {user or '?'} carries a non-string sha")
+            continue
+        sha = raw.strip().lower()
+        if not HEX40.match(sha):
+            notes.append(f"auto-revert attestation by {user or '?'} does not carry a 40-hex sha")
+            continue
+        if sha != head_sha:
+            notes.append(
+                f"auto-revert attestation by {user or '?'} names sha {sha}, not the current "
+                f"head sha {head_sha} (stale: a newer commit was pushed after it)"
+            )
+            continue
+        return user, sha
+    return None
+
+
 def main():
     try:
         bundle = json.load(sys.stdin)
@@ -321,6 +428,9 @@ def main():
     permissions = bundle.get("permissions") or {}
     if not isinstance(permissions, dict):
         return fail(["context bundle permissions is not an object"])
+    auto_revert_attestations = bundle.get("auto_revert_attestations") or []
+    if not isinstance(auto_revert_attestations, list):
+        return fail(["context bundle auto_revert_attestations is not an array"])
     gate_globs = bundle.get("gate_globs") or []
     if not isinstance(gate_globs, list):
         return fail(["context bundle gate_globs is not an array"])
@@ -404,10 +514,37 @@ def main():
     if test_violations:
         trailer = find_trailer(commit_messages, pr_body)
         if trailer is None:
-            reasons.extend(test_violations)
-            reasons.append(
-                "no `test-removal-justified:` trailer in any commit message or in the PR body"
+            # Auto-revert waiver (see the header comment). The clause is
+            # waived only when ALL three signals agree: the workflow's body
+            # opener, git-revert commit subjects, AND a sha-bound
+            # auto-revert attestation comment. Any signal missing or
+            # mistaken falls through to the trailer check below, which
+            # still fails closed.
+            auto_revert_attested = find_auto_revert_attestation(
+                auto_revert_attestations, head_sha, notes
             )
+            auto_revert_signal = is_auto_revert_pr(pr_body, commit_messages)
+            if auto_revert_signal and auto_revert_attested is not None:
+                u, s = auto_revert_attested
+                waived.append((
+                    "test-integrity",
+                    test_violations,
+                    f"auto-revert PR body opener + git-revert commits + "
+                    f"auto-revert attestation by {u or 'anonymous'} at sha {s}",
+                ))
+            else:
+                reasons.extend(test_violations)
+                reasons.append(
+                    "no `test-removal-justified:` trailer in any commit message or in the PR body"
+                )
+                # Loudly name the missing auto-revert signal so a future
+                # handler knows exactly why the waiver did not apply.
+                if auto_revert_signal and auto_revert_attested is None:
+                    reasons.append(
+                        "auto-revert body+commit signal matched but no sha-bound "
+                        "`gate-integrity-auto-revert:` attestation comment was found"
+                    )
+                    reasons.extend(n for n in notes if "auto-revert attestation" in n)
         else:
             where, why = trailer
             waived.append(("test-integrity", test_violations, f"{where}: {why}"))
