@@ -35,6 +35,7 @@ import { demoSearch, MetaApiError, filterAdsBySearchFilters, searchAds as search
 import { fingerprintSavedQuery, hashString } from "~/lib/normalize";
 import type {
   AdDiscoveryProvider,
+  AdRecord,
   DiscoveryFailureClass,
   DiscoveryRouteContext,
   MetaIntegrationStatus,
@@ -157,6 +158,12 @@ const DISCOVERY_QUERY_LEASE_FRESHNESS_SKEW_MS = 2 * 1000;
 const PUBLIC_SEARCH_BROWSER_FAILURE_FALLBACK_WINDOW_MS = 6 * 60 * 60 * 1000;
 const META_API_FALLBACK_SUMMARY =
   "Browser capture is unavailable right now; showing API fallback results.";
+// BET 2 (issue #951): TTL for a PARTIAL discovery cache entry written mid-capture
+// (after the initial Ad Library surface, before the interactive scroll). Long
+// enough that the scroll finishes and the final write replaces it; short enough
+// that a crashed background run does not strand the visitor on a partial set
+// forever — the next fresh search re-scrapes once it expires.
+const PARTIAL_DISCOVERY_CACHE_TTL_MS = 2 * 60 * 1000;
 
 interface DiscoveryCooldownState {
   cooldownUntil: string;
@@ -628,6 +635,38 @@ export async function searchAdsViaSourceResolver(
       : null;
   const freshCacheHit = !forceLive ? unexpiredCache : forceLiveSharedHit;
   if (freshCacheHit) {
+    // BET 2 (issue #951): a partial entry was written mid-capture (initial
+    // surface, before the scroll finished). Serve its ads so the first card
+    // paints immediately, but PRESERVE the warming/partial flags so the
+    // client keeps polling for the final complete write instead of stopping
+    // at a "healthy" hit and hiding the in-progress state. The partial TTL
+    // (2 min) is short enough that a crashed background run expires and the
+    // next fresh search re-scrapes; the final write replaces it sooner.
+    if (isPartialDiscoveryCacheEntry(freshCacheHit)) {
+      await recordCacheServe(
+        freshCacheHit,
+        "hit",
+        "degraded",
+        freshCacheHit.payload.ads.length,
+      );
+      return {
+        ...toServableDiscoveryPayload(freshCacheHit.payload),
+        source: provider,
+        provider,
+        cacheStatus: "hit",
+        cacheFetchedAt: freshCacheHit.fetchedAt,
+        // Keep warming + degraded so the client renders a real progress state
+        // ("N ads so far, loading more…") and keeps polling. The final write
+        // clears these flags and the next poll swaps in the complete set.
+        discoveryStatus: "degraded",
+        discoveryProgress: "warming",
+        discoveryPartial: true,
+        discoverySummary:
+          freshCacheHit.payload.discoverySummary ??
+          "Showing the first ads while we load more from the Ad Library.",
+        discoveryFailureClass: null,
+      };
+    }
     await recordCacheServe(freshCacheHit, "hit", "succeeded", freshCacheHit.payload.ads.length);
     return {
       ...toServableDiscoveryPayload(freshCacheHit.payload),
@@ -885,6 +924,24 @@ export async function searchAdsViaSourceResolver(
             jobId: telemetryContext.jobId,
             telemetryAttempts,
             executionContext: options.executionContext ?? null,
+            // BET 2 (issue #951): progressive streaming. The browser capture
+            // fires this with the first batch of ads (initial surface, before
+            // the scroll) so the resolver can write a PARTIAL cache entry that
+            // the search page's poll paints immediately — first card in
+            // seconds, not after the whole scroll. Only armed for the
+            // background cold-path warm (canWarmInBackground), where the
+            // response already returned and the poll is the only consumer.
+            onPartialResults: canWarmInBackground
+              ? (partialAds) =>
+                  writePartialDiscoveryCacheEntry(effectiveEnv, {
+                    cacheKey,
+                    provider,
+                    routeContext,
+                    query,
+                    cursor: cursor ?? null,
+                    partialAds,
+                  })
+              : undefined,
           });
         } else {
           metaApiProviderStartedAtMs = Date.now();
@@ -1980,6 +2037,90 @@ function isUsableLiveDiscoveryResult(
   }
 
   return result.ads.length > 0 || result.discoveryEmptyReason === "no_results";
+}
+
+/**
+ * BET 2 (issue #951): writes a PARTIAL discovery cache entry mid-capture — the
+ * first batch of ads from the initial Ad Library surface, before the
+ * interactive scroll finishes. The payload carries `discoveryPartial: true`
+ * and `discoveryProgress: "warming"` so the poll-side serve path (below) keeps
+ * the client polling and renders a real progress state instead of stopping at
+ * a "healthy" hit. The final `upsertDiscoveryCacheEntry` in
+ * `runDiscoveryWithLease` replaces this entry (same cache key) with the
+ * complete, non-partial result once the scroll lands. Never throws: a failed
+ * partial write is a missed streaming opportunity, not a failed search — the
+ * background capture keeps running and the final write still lands.
+ */
+async function writePartialDiscoveryCacheEntry(
+  env: AppEnv,
+  input: {
+    cacheKey: string;
+    provider: AdDiscoveryProvider;
+    routeContext: DiscoveryRouteContext;
+    query: NormalizedSavedQuery;
+    cursor: string | null;
+    partialAds: AdRecord[];
+  },
+): Promise<void> {
+  if (!env.DB || input.partialAds.length === 0) {
+    return;
+  }
+  const timestamp = new Date().toISOString();
+  try {
+    await upsertDiscoveryCacheEntry(env, {
+      cacheKey: input.cacheKey,
+      provider: input.provider,
+      routeContext: input.routeContext,
+      queryFingerprint: fingerprintSavedQuery(input.query),
+      country: input.query.filters.country || "all",
+      cursor: input.cursor,
+      payload: {
+        ads: input.partialAds,
+        nextCursor: null,
+        source: input.provider,
+        provider: input.provider,
+        cacheStatus: "miss",
+        discoveryStatus: "degraded",
+        discoveryPartial: true,
+        discoveryProgress: "warming",
+        discoverySummary:
+          "Showing the first ads while we load more from the Ad Library.",
+        discoveryFailureClass: null,
+        // Writer contract stamp — same as the final write, so a partial entry
+        // is never rejected by the broken-advertiser-filter zero-result gate
+        // (it carries ads, so it would pass anyway, but the stamp keeps the
+        // invariant that every written entry declares its filter contract).
+        discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+      },
+      fetchedAt: timestamp,
+      expiresAt: new Date(Date.now() + PARTIAL_DISCOVERY_CACHE_TTL_MS).toISOString(),
+      browserMsUsed: null,
+    });
+  } catch (error) {
+    // Swallow: a failed partial write must never abort the background capture.
+    // `upsertDiscoveryCacheEntry` already swallows missing-table errors
+    // internally; anything else here is a transient D1 blip that the final
+    // write (same key) will overwrite when the scroll lands.
+    console.warn(
+      JSON.stringify({
+        event: "public_search_partial_cache_write_failed",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
+  }
+}
+
+/**
+ * BET 2 (issue #951): a cached entry written mid-capture carries
+ * `discoveryPartial: true` in its payload. The fresh-hit path serves it but
+ * MUST preserve the warming flag so the client keeps polling for the final
+ * (complete) write instead of stopping at a "healthy" hit and hiding the
+ * in-progress state.
+ */
+function isPartialDiscoveryCacheEntry(
+  cached: NonNullable<Awaited<ReturnType<typeof getDiscoveryCacheEntry>>>,
+): boolean {
+  return Boolean(cached.payload?.discoveryPartial);
 }
 
 function resolveFailureClass(error: unknown): DiscoveryFailureClass {

@@ -11593,6 +11593,21 @@ textarea.f9-wk-in {
   margin-top: 14px;
 }
 
+/* BET 2 (issue 951): progressive streaming progress banner. Sits above the
+   result rows when the first batch has landed but the scroll-and-collect
+   passes are still running. Shares the lede/note type roles so it reads as
+   the same voice as the honest empty states, separated by a hairline rule so
+   it is visually distinct from the rows below without introducing a new
+   colour. */
+.f9-wk-progress {
+  padding: 12px 0 14px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-progress > .f9-wk-lede + .f9-wk-note {
+  margin-top: 4px;
+}
+
 .f9-wk-more-results {
   padding: 14px 0 0;
 }
