@@ -82,6 +82,41 @@ export default defineConfig(async ({ mode }) => ({
     },
   },
   test: {
+    // Measurement only — nothing gates on these numbers yet. `npm run test`
+    // emits `coverage/lcov.info` so a diff-coverage check has real data to
+    // read the day it is wired up, and `text-summary` puts the number in the
+    // existing test job's log without adding a CI step.
+    //
+    // Coverage is collected from the `node` project ONLY, which is why
+    // package.json runs the two projects as two commands. The Workers Vitest
+    // integration cannot produce V8 coverage — workerd has no `node:inspector`,
+    // so the provider throws `ERR_METHOD_NOT_IMPLEMENTED` and every test file
+    // in the `workers` project is skipped. Cloudflare's own known-issues page
+    // says so and points at Istanbul instead; Istanbul was measured here and
+    // rejected: it takes the suite from 40s to 91s AND its instrumentation
+    // breaks 4 existing test files. `coverage.enabled: false` inside a project
+    // config is ignored by Vitest 4, so splitting the invocation is the only
+    // honest option.
+    //
+    // `all: false` keeps the report to files the suite actually loads: with
+    // `all: true` v8 has to transform every file under `app/` and `workers/`
+    // on every run, which is a large tax on a job that already runs 5.5k
+    // tests. The consequence is honest — an untested file is absent from the
+    // report rather than shown at 0% — and diff coverage, the metric that
+    // matters here, reads the changed lines either way.
+    coverage: {
+      provider: "v8",
+      reporter: ["text-summary", "lcov"],
+      reportsDirectory: "./coverage",
+      all: false,
+      include: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
+      exclude: [
+        "app/**/*.d.ts",
+        "workers/**/*.d.ts",
+        "app/routes.ts",
+        "**/*.test.{ts,tsx}",
+      ],
+    },
     projects: [
       {
         // The historical suite: plain Vitest on node. `extends: true` keeps the
