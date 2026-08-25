@@ -429,8 +429,45 @@ describe("runner-shaped detached candidate identity", () => {
     git(repo, ["commit", "-q", "-m", "newer main tip"]);
     git(repo, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
     git(repo, ["remote", "add", "origin", "https://github.com/Nishfleet/0509.git"]);
+
+    // Redirect origin's network operations (ls-remote/fetch) to a LOCAL bare
+    // repo via `url.<bare>.insteadOf`, so resolveCandidateBranch never hits
+    // api.github.com / github.com and races the 10s test budget. The bare's
+    // refs/heads/main is an INDEPENDENT commit (unrelated history, not a
+    // descendant of pinned), so the local ancestry check deterministically
+    // fails and resolveCandidateBranch returns "detached" — exactly the runner
+    // state where the provider containment proof (mocked below via
+    // GITHUB_API_URL) becomes the deciding verdict. The slug still resolves to
+    // Nishfleet/0509 because parseGitHubOriginSlug reads the raw
+    // remote.origin.url (the configured github URL), not the insteadOf-rewritten
+    // value. Without this redirect the three runner tests made real network
+    // calls that timed out at 10000ms on the shared self-hosted runner (lines
+    // 481/531), sitting directly inside the deploy gate's predeploy readiness
+    // step and the codex-node-checks CI step.
+    const bare = createIndependentOriginBare();
+    git(repo, ["config", `url.${bare}.insteadOf`, "https://github.com/Nishfleet/0509.git"]);
+
     git(repo, ["switch", "--detach", "-q", pinned]);
     return { repo, pinned };
+  }
+
+  // A bare repo whose refs/heads/main is a single commit with unrelated
+  // history to any candidate repo, used as a deterministic local stand-in for
+  // the real github origin via insteadOf.
+  function createIndependentOriginBare(): string {
+    const bare = mkdtempSync(join(tmpdir(), "0509-candidate-origin-bare-"));
+    repos.push(bare);
+    git(bare, ["init", "-q", "--bare"]);
+    const work = mkdtempSync(join(tmpdir(), "0509-candidate-origin-work-"));
+    repos.push(work);
+    git(work, ["init", "-q", "-b", "main"]);
+    git(work, ["config", "user.email", "candidate-test@example.com"]);
+    git(work, ["config", "user.name", "Candidate Test"]);
+    writeFileSync(join(work, "origin-main.txt"), "independent origin main\n");
+    git(work, ["add", "."]);
+    git(work, ["commit", "-q", "-m", "independent origin main"]);
+    git(bare, ["fetch", "-q", work, "refs/heads/main:refs/heads/main"]);
+    return bare;
   }
 
   async function withCompareApi(
