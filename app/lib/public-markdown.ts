@@ -59,6 +59,11 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "Product overview: scans, digests, alerts, and proof captures.",
   },
+  "/pricing": {
+    title: "Pricing",
+    description:
+      "Competitor monitoring plans: free single-competitor watch, Scout, Starter, and Agency, plus proof capture packs. Prices localize at checkout.",
+  },
   "/help": {
     title: "Help center",
     description: "Customer help center.",
