@@ -203,6 +203,27 @@ fixture softener_in_ungated_script '{"files": [
   {"filename": "scripts/local-helper.sh", "status": "modified", "patch": "+  grep foo bar || true"}]}'
 run_fixture softener_in_ungated_script FAIL "CI step softened"
 
+# Prose that NAMES a banned construct is not that construct. The very first run
+# of this check against real PR data flagged its own workflow header, because
+# the header contains a sentence explaining what `|| true` does.
+fixture softener_in_yaml_comment '{"files": [
+  {"filename": ".github/workflows/gate-integrity.yml", "status": "added",
+   "patch": "+# a PR can append `|| true` or `continue-on-error: true` to a CI step"}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+run_fixture softener_in_yaml_comment PASS "gate-path waived" "CI step softened"
+
+fixture skip_in_test_comment '{"files": [
+  {"filename": "tests/auth.test.ts", "status": "modified",
+   "patch": "+  // do not use it.skip here; the gate rejects it"}]}'
+run_fixture skip_in_test_comment PASS
+
+# Commenting a test OUT is still a real assertion loss, so comment exclusion
+# must apply symmetrically to added and removed lines, never only to added.
+fixture assertions_commented_out '{"files": [
+  {"filename": "tests/auth.test.ts", "status": "modified",
+   "patch": "-  expect(a).toBe(1);\n-  expect(b).toBe(2);\n+  // expect(a).toBe(1);\n+  // expect(b).toBe(2);"}]}'
+run_fixture assertions_commented_out FAIL "net assertion count fell by 2"
+
 # --- gate-path: ratchet weakening -------------------------------------------
 fixture ratchet_raised '{"files": [
   {"filename": "docs/design-system-ratchet.json", "status": "modified",
