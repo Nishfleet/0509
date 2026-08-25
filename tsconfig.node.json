@@ -63,7 +63,10 @@
     "composite": true,
     "strict": true,
     "ignoreDeprecations": "5.0",
-    "types": ["vite/client", "node"],
+    // `@cloudflare/vitest-plugin/types` declares the `cloudflare:test` module
+    // used by tests/integration/**; `cloudflare:workers` comes from the
+    // generated worker-configuration.d.ts.
+    "types": ["vite/client", "node", "@cloudflare/vitest-plugin/types"],
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "target": "ES2022",
     "module": "ES2022",
