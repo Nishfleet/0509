@@ -252,6 +252,7 @@ describe("D1 remote restore evidence automation", () => {
           }>;
         };
         schedule?: Array<{ cron?: string }>;
+        push?: { branches?: string[] };
       };
       permissions?: Record<string, string>;
       jobs?: {
@@ -326,6 +327,11 @@ describe("D1 remote restore evidence automation", () => {
     // Still pinned exactly: the hour is a deliberate low-traffic window and a
     // silent drift out of it should fail here.
     expect(workflow.on?.schedule).toEqual([{ cron: "47 20 * * *" }]);
+    // Push to main: every merge produces fresh, exact-commit evidence so the
+    // 24h race window between push and next schedule cannot block a deploy
+    // of a just-merged commit. Still pinned exactly: a silent drop of the
+    // push trigger should fail here.
+    expect(workflow.on?.push?.branches).toEqual(["main"]);
     expect(workflow.permissions).toEqual({ contents: "read" });
     expect(workflow.on?.workflow_dispatch?.inputs?.operation).toMatchObject({
       required: true,
@@ -347,8 +353,13 @@ describe("D1 remote restore evidence automation", () => {
     );
     expect(apply?.needs).toBe("authorize_release");
     expect(apply?.environment).toBe("production");
+    // Schedule or push to main both bypass apply_and_restore, which only runs
+    // on an explicit manual dispatch. The gate's exact-commit check then
+    // matches the resulting evidence against whichever commit the deploy is
+    // pinning. Pinned exactly: any silent drift of the restore gate should
+    // fail here.
     const exactApplyRestoreGate =
-      "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || needs.apply_and_restore.result == 'success')";
+      "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'push' || needs.apply_and_restore.result == 'success')";
     expect(workflow.jobs?.restore?.if).toBe(exactApplyRestoreGate);
     expect(workflow.jobs?.cleanup?.if).toBe(
       "always() && needs.authorize_release.result == 'success'",
