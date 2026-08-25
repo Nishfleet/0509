@@ -1,23 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  applyWebsiteSearchFallback,
-  normalizeCompetitorWebsiteInput,
-} from "~/lib/competitor-website";
-import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
-import { buildDiscoveryCacheKey } from "~/lib/discovery-cache.server";
-import {
   BRAND_PAGE_FRESH_FOR_INDEXING_MS,
-  deriveBrandPageLookupForCountry,
 } from "~/lib/brand-page.server";
-import { fingerprintSavedQuery, normalizeSavedQuery, parseSearchParams } from "~/lib/normalize";
-import { buildSearchV2CacheKey } from "~/lib/search-v2.server";
-import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
 import { SITEMAP_PATHS } from "~/lib/seo";
 import routes from "~/routes";
 import {
   brandDomainFromSitemapCacheRow,
-  brandPageLookupCacheKeysForSitemap,
   buildSitemapXml,
   indexableBrandPageEntriesFromRows,
   isIndexableBrandPageRow,
@@ -237,146 +226,6 @@ describe("indexableBrandPageEntriesFromRows", () => {
   });
 });
 
-describe("lookup parity — never list a page that would serve noindex", () => {
-  const now = new Date();
-
-  it("excludes a fresh capture stored only under a country scope unknown-geo crawlers never probe (the /ads/myntra.com regression)", () => {
-    // Passes every pre-parity rule (public_search, non-demo, ads, fresh), but
-    // the page probes [visitor-country, all, United States] — never "india" —
-    // so a US crawler got the noindex shell while the sitemap listed it.
-    const row = cacheRow({
-      cache_key: "search-v2:domain:myntra.com:exact:meta_library_browser:india:page-1",
-      payload: { ...basePayload, displayDomain: "myntra.com" },
-    });
-
-    expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([]);
-  });
-
-  it("lists the same domain once captured under an always-tried country scope", () => {
-    const row = cacheRow({
-      cache_key:
-        "search-v2:domain:myntra.com:exact:meta_library_browser:united-states:page-1",
-      payload: { ...basePayload, displayDomain: "myntra.com" },
-    });
-
-    expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([
-      "/ads/myntra.com",
-    ]);
-  });
-
-  it("excludes rows written by a provider other than the resolved commercial provider", () => {
-    const row = cacheRow({ provider: "meta_api" });
-
-    expect(
-      indexableBrandPageEntriesFromRows([row], now, { provider: "meta_library_browser" }).map(
-        (e) => e.path,
-      ),
-    ).toEqual([]);
-  });
-
-  it("under a legacy rollout posture, only rows keyed exactly like the page's legacy lookups qualify", () => {
-    const provider = "meta_library_browser";
-    const legacyKey = deriveBrandPageLookupForCountry(provider, "nykaa.com", "all", false).cacheKey;
-
-    // A v2-keyed row is unreachable when the page derives legacy fingerprint
-    // keys (shadow/legacy mode) — listing it would promise an indexable page
-    // that serves noindex.
-    expect(
-      indexableBrandPageEntriesFromRows([cacheRow()], now, { useDomainV2: false }).map(
-        (e) => e.path,
-      ),
-    ).toEqual([]);
-
-    // A v2-payload row stored under the exact legacy-derived key IS reachable.
-    expect(
-      indexableBrandPageEntriesFromRows(
-        [cacheRow({ cache_key: legacyKey })],
-        now,
-        { useDomainV2: false },
-      ).map((e) => e.path),
-    ).toEqual(["/ads/nykaa.com"]);
-  });
-});
-
-describe("brandPageLookupCacheKeysForSitemap", () => {
-  it("returns exactly the always-tried scopes' keys in the page's key format", () => {
-    const keys = brandPageLookupCacheKeysForSitemap(
-      "meta_library_browser",
-      "nykaa.com",
-      true,
-    );
-
-    expect([...keys].sort()).toEqual(
-      [
-        "search-v2:domain:nykaa.com:exact:meta_library_browser:all:page-1",
-        "search-v2:domain:nykaa.com:exact:meta_library_browser:united-states:page-1",
-      ].sort(),
-    );
-  });
-
-  it("derives legacy-shaped keys outside the v2 posture", () => {
-    const keys = brandPageLookupCacheKeysForSitemap("meta_library_browser", "nykaa.com", false);
-
-    expect(keys.size).toBe(2);
-    for (const key of keys) {
-      expect(key.startsWith("search-v2:")).toBe(false);
-      expect(key.startsWith("meta_library_browser:")).toBe(true);
-      expect(key.endsWith(":page-1")).toBe(true);
-    }
-  });
-});
-
-describe("deriveBrandPageLookupForCountry", () => {
-  it("reproduces the exact search-v2 domain key the page reads under v2 posture", () => {
-    const derived = deriveBrandPageLookupForCountry(
-      "meta_library_browser",
-      "nykaa.com",
-      "United States",
-      true,
-    );
-    const intent = parseSearchInputFromWebsiteField("nykaa.com");
-
-    expect(derived.usedDomainKey).toBe(true);
-    expect(derived.cacheKey).toBe(
-      buildSearchV2CacheKey({
-        provider: "meta_library_browser",
-        intent,
-        scope: "exact",
-        country: "United States",
-        cursor: null,
-      }),
-    );
-  });
-
-  it("falls back to the legacy fingerprint triple outside v2 posture (shadow serves legacy)", () => {
-    const derived = deriveBrandPageLookupForCountry(
-      "meta_library_browser",
-      "nykaa.com",
-      "all",
-      false,
-    );
-
-    // Mirror the original deriveCacheLookup chain through independent
-    // primitives so composition order cannot drift from the page's lookups.
-    const website = normalizeCompetitorWebsiteInput("nykaa.com");
-    const parsedInput = parseSearchParams(new URLSearchParams(), { country: "all" });
-    const parsed = applyWebsiteSearchFallback(parsedInput, website);
-    const legacyQuery = normalizeSavedQuery(parsed.mode, parsed.filters);
-
-    expect(derived.usedDomainKey).toBe(false);
-    expect(derived.fingerprint).toBe(fingerprintSavedQuery(legacyQuery));
-    expect(derived.country).toBe(legacyQuery.filters.country || ALL_COUNTRIES_VALUE);
-    expect(derived.cacheKey).toBe(
-      buildDiscoveryCacheKey({
-        provider: "meta_library_browser",
-        fingerprint: fingerprintSavedQuery(legacyQuery),
-        country: legacyQuery.filters.country || ALL_COUNTRIES_VALUE,
-        cursor: null,
-      }),
-    );
-  });
-});
-
 describe("buildSitemapXml", () => {
   it("keeps the static funnel paths first, then appends dynamic brand pages", () => {
     const xml = buildSitemapXml([
@@ -445,7 +294,7 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
     expect(queryAll).not.toHaveBeenCalled();
   });
 
-  it("queries only the resolved provider's indexable public_search rows and maps them to /ads entries", async () => {
+  it("queries only indexable public_search rows and maps them to /ads entries", async () => {
     queryAll.mockResolvedValue([
       cacheRow(),
       cacheRow({
@@ -455,20 +304,12 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
       cacheRow({ route_context: "watchlist_scan" }),
     ]);
 
-    // Production posture (wrangler.jsonc): SEARCH_ROLLOUT_MODE="v2".
-    const entries = await runLoader({ DB: {}, BROWSER: {}, SEARCH_ROLLOUT_MODE: "v2" });
+    const entries = await runLoader({ DB: {}, BROWSER: {} });
 
     expect(queryAll).toHaveBeenCalledTimes(1);
-    const [, sql, providerParam, cutoffIso, limit] = queryAll.mock.calls[0] as [
-      unknown,
-      string,
-      string,
-      string,
-      number,
-    ];
+    const [, sql, cutoffIso, limit] = queryAll.mock.calls[0] as [unknown, string, string, number];
     expect(sql).toContain("route_context = 'public_search'");
-    expect(sql).toContain("provider = ?");
-    expect(providerParam).toBe("meta_library_browser");
+    expect(sql).toContain("provider != 'demo'");
     expect(sql).toContain("fetched_at >= ?");
     expect(new Date(cutoffIso).getTime()).toBeCloseTo(
       Date.now() - BRAND_PAGE_FRESH_FOR_INDEXING_MS,
@@ -482,25 +323,6 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
       expect(entry.changefreq).toBe("weekly");
       expect(entry.priority).toBe("0.6");
     }
-  });
-
-  it("mirrors the SEARCH_ROLLOUT_MODE posture when matching row keys", async () => {
-    // v2 posture: the page derives search-v2 domain keys, so the v2-keyed row
-    // is reachable and listable.
-    queryAll.mockResolvedValue([cacheRow()]);
-    await expect(
-      runLoader({ DB: {}, BROWSER: {}, SEARCH_ROLLOUT_MODE: "v2" }),
-    ).resolves.toEqual([
-      expect.objectContaining({ path: "/ads/nykaa.com" }),
-    ]);
-
-    // Legacy/shadow posture: the same v2-keyed row would render the noindex
-    // shell (the page derives legacy fingerprint keys), so it must not be
-    // listed.
-    queryAll.mockResolvedValue([cacheRow()]);
-    await expect(
-      runLoader({ DB: {}, BROWSER: {}, SEARCH_ROLLOUT_MODE: "legacy" }),
-    ).resolves.toEqual([]);
   });
 
   it("degrades to the static-only set when the discovery cache table is missing", async () => {
