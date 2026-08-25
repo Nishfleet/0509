@@ -527,6 +527,7 @@ export default function MarketingRoute() {
           </p>
           <div className="ld-proof-actions">
             <Link to={publicSearchTrialPath}>Try the search preview</Link>
+            <Link to="/competitor-monitoring">Read the methodology</Link>
             <a href="#pricing">See plans</a>
           </div>
         </div>
