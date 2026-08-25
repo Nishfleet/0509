@@ -3638,6 +3638,14 @@ async function evaluateSelectiveProofCandidates(
       const freshSnapshot = replayedSnapshot
         ? null
         : await captureLandingPageSnapshot(env, observation.landing_page_url!, {
+            // Proof captures must save a screenshot (the homepage promises
+            // "saves the screenshots"). preferRendered runs the Browser
+            // Rendering → Browserless chain first so the snapshot carries a
+            // screenshotArtifactKey; plain-http (HTML-only, no screenshot) is
+            // only the fallback when the rendered chain is unavailable. The
+            // direct-website proof path already does this (see
+            // evaluateDirectWebsiteProofCandidate); this matches it.
+            preferRendered: true,
             onFailure: (detail) => {
               captureFailureDetail = detail;
             },
