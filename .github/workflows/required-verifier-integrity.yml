@@ -70,6 +70,20 @@ on:
     types: [opened, synchronize, reopened]
   merge_group:
 
+# Supersede-cancel per PR. Without this the workflow was the single largest
+# consumer of the shared `vps-verify` runner pool: every synchronize queued
+# another run and none ever cancelled, so 64 of 80 queued runs on 2026-08-21
+# belonged to this workflow across 38 branches. That starved `Deploy
+# production` (same runner labels) for 1h14m+ behind 79 jobs while 29 merged
+# PRs sat unshipped. Grouping by PR number (NOT github.ref, which under
+# pull_request_target resolves to the base branch and would collapse every
+# open PR into one mutually-cancelling group) matches the behaviour ci.yml
+# and secret-scan.yml already rely on: only a superseded run for the SAME PR
+# is cancelled, and the newest run always reports the required context.
+concurrency:
+  group: required-verifier-integrity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: read
