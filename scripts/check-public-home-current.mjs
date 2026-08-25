@@ -7,7 +7,9 @@ import { dirname } from "node:path";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const sourceFiles = [
   "app/routes/marketing.tsx",
+  "app/routes/pricing.tsx",
   "app/components/brand-wordmark.tsx",
+  "app/components/pricing-section.tsx",
   "app/app.css",
   "app/root.tsx",
   "app/routes.ts",
