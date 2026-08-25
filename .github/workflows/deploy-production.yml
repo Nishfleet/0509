@@ -1,6 +1,18 @@
 name: Deploy production
 
 on:
+  # Auto-deploy on green (Nish, 2026-08-25): every push to main runs the same
+  # exact-SHA deploy job with the merged commit. Required checks (Gitleaks,
+  # codex-node-checks, required-verifier-integrity, semgrep) are already
+  # enforced by branch protection on the PR that produced the merge, so the
+  # push-triggered deploy runs the full release gate (backup-proof two-clock
+  # check, verifier integrity, typecheck, tests, restore evidence, post-deploy
+  # canaries) without any human button. The authorize job's `push)` branch and
+  # ci-verify-production-candidate.sh's `push)` case were already wired for
+  # this event — they pin GITHUB_SHA (the merge commit) and require empty
+  # dispatch inputs, so no gate is weakened.
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -38,7 +50,20 @@ on:
 concurrency:
   group: 0509-production-provider-mutations
   cancel-in-progress: false
-  queue: max
+  # Deploy-latest (Nish, 2026-08-25): without `queue: max`, GitHub cancels
+  # older PENDING runs in this group when a new run enters, while the
+  # currently RUNNING deploy continues uninterrupted. This gives "deploy
+  # latest" semantics — superseded queued deploys cancel, the newest queued
+  # deploy runs after the current one finishes — without ever interrupting a
+  # deploy mid-flight (cancel-in-progress: false). The running deploy ships
+  # its exact pinned SHA; the next deploy ships the newer one.
+  #
+  # The d1-backup-r2 and d1-remote-restore-evidence workflows keep their own
+  # `queue: max`, so a backup entering the group preserves queued runs; only
+  # a deploy entering cancels superseded queued work. A queued nightly backup
+  # cancelled by a push deploy re-runs the next night, and the deploy's
+  # generate_restore_evidence job creates fresh evidence inline if the proof
+  # is stale, so no gate is weakened.
 
 permissions: {}
 
