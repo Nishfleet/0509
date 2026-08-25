@@ -550,23 +550,6 @@ jobs:
           TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/ci-verify-production-candidate.sh
 
-      - name: Synchronize private canary token
-        shell: bash
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
-          CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
-        run: |
-          set -euo pipefail
-          # Classic `wrangler secret put` matches the classic `wrangler deploy`
-          # this pipeline uses (deploy-production-plan.mjs). `wrangler versions
-          # secret put` re-fetches the worker and reparses multipart FormData,
-          # which broke with "Failed to parse body as FormData" (run
-          # 31514742997) while the classic path keeps working.
-          printf '%s' "$CANARY_BYPASS_TOKEN" |
-            ./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509
-
       - name: Deploy
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -583,6 +566,33 @@ jobs:
           BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ${{ inputs.bootstrap_previous_success_sha || '' }}
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
         run: npm run deploy
+
+      - name: Synchronize private canary token
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
+          CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
+        run: |
+          set -euo pipefail
+          # Runs AFTER `wrangler deploy` (deploy-production-plan.mjs ships the
+          # pinned SHA via classic `wrangler deploy`). Classic `wrangler secret
+          # put` requires the worker's latest version to be deployed; before
+          # the deploy it failed with "Secret edit failed. You attempted to
+          # modify a secret, but the latest version of your Worker isn't
+          # currently deployed." (run 32854505876, and 6 wrong auto-reverts
+          # followed). `wrangler versions secret put` avoids that prerequisite
+          # but re-fetches the worker and reparses multipart FormData, which
+          # broke with "Failed to parse body as FormData" (run 31514742997).
+          # Reordering so deploy runs first is the path that keeps both the
+          # classic secret command and the classic deploy command working:
+          # `wrangler deploy` makes the latest version the deployed version,
+          # then `wrangler secret put` updates the secret on it. Secrets
+          # persist across deploys, so the worker keeps the previous canary
+          # token through the deploy and this step syncs the new value after.
+          printf '%s' "$CANARY_BYPASS_TOKEN" |
+            ./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509
 
       - name: Verify complete release evidence set
         if: success()
