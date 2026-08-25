@@ -78,7 +78,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     whatsappLaunchScoped && signals.whatsappDelivery.recentSent === 0
       ? "no_recent_whatsapp_delivered"
       : null,
-    ...metaAdsBeta.blockers.map((blocker) => `meta_ads_beta:${blocker}`),
+    ...metaAdsBeta.blockers.map((blocker) => `meta_ads:${blocker}`),
   ].filter((value): value is string => Boolean(value));
   const advisories = [
     signals.emailDelivery.recentSent > 0 ? null : "no_recent_general_email_provider_accepted",

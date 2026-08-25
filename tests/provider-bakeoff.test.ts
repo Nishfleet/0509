@@ -717,7 +717,7 @@ describe("current 0509 probe", () => {
       text: async () => `
         <html>
           <body>
-            <div class="source-pill" data-f9-result-source="meta_library_browser">Meta ads beta · Fresh results</div>
+            <div class="source-pill" data-f9-result-source="meta_library_browser">Meta ads · Fresh results</div>
             <h2>3 ads found</h2>
           </body>
         </html>
@@ -750,7 +750,7 @@ describe("current 0509 probe", () => {
       text: async () => `
         <html>
           <body>
-            <div class="source-pill" data-f9-result-source="meta_library_browser">Meta ads beta · Fresh results</div>
+            <div class="source-pill" data-f9-result-source="meta_library_browser">Meta ads · Fresh results</div>
             <h2>3 ads found</h2>
           </body>
         </html>

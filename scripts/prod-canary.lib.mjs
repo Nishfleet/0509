@@ -561,7 +561,7 @@ export function formatProductionCanaryReport(report) {
 
   if (report.metaAdsBeta?.status === "needs_proof") {
     const readinessNote = formatReadinessNote(report.metaAdsBeta.readiness);
-    lines.push(`meta ads beta: needs proof${readinessNote}`);
+    lines.push(`meta ads: needs proof${readinessNote}`);
     if (report.blockingFailures.length > 0) {
       lines.push(
         `meta ads probe: ${report.blockingFailures
@@ -573,7 +573,7 @@ export function formatProductionCanaryReport(report) {
       lines.push("meta ads strict gate: failed");
     }
   } else if (report.metaAdsBeta?.beta) {
-    lines.push("meta ads beta: ok");
+    lines.push("meta ads: ok");
   } else if (report.blockingFailures.length === 0) {
     lines.push("search: ok");
   } else {

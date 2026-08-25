@@ -201,7 +201,7 @@ function buildReadiness(input: {
 
   return {
     ok: blockers.length === 0,
-    label: blockers.length === 0 ? "Ready to review graduation" : "Beta: needs validation",
+    label: blockers.length === 0 ? "Ready to review graduation" : "Needs validation",
     windowDays: WINDOW_DAYS,
     sampleTarget: MIN_LIVE_SAMPLES,
     samples,
