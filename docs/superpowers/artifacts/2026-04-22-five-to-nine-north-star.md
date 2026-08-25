@@ -27,7 +27,7 @@ Between end-of-day and the next standup, competitors launch new ads, change offe
 
 ## Short Pitch
 
-- `Most teams do competitor research, but they still find changes too late. Five to Nine watches competitor ads and landing pages on Meta, confirms the real changes, and sends proof-backed alerts by email and WhatsApp so teams can act before the next workday starts.`
+- `Most teams do competitor research, but they still find changes too late. Five to Nine watches competitor ads and landing pages on Meta, confirms the real changes, and sends proof-backed alerts by email so teams can act before the next workday starts.`
 
 ## Positioning Rules
 
@@ -35,7 +35,7 @@ Between end-of-day and the next standup, competitors launch new ads, change offe
 - Lead with `what changed` before `analysis`.
 - Lead with trusted alerts before dashboards.
 - Treat search as the hook, not the whole product.
-- Keep `email + WhatsApp` as day-one delivery language.
+- Keep `email` as the day-one delivery language. WhatsApp and Slack are dormant, non-GA channels — barred from customer-facing delivery claims until a provider is configured and Nish un-gates them.
 
 ## Do Not Lead With
 
