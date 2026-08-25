@@ -137,6 +137,13 @@ export async function expectPrimaryActionAboveFold(
   label = "primary next action",
 ): Promise<void> {
   await expect(action, `${label} should be visible`).toBeVisible();
+  // The assertion checks the *initial* viewport, so measure from the top of
+  // the page. WebKit auto-scrolls ~11px on mobile when a field is filled
+  // (e.g. Journey 2 onboarding on a 375x812 viewport), which makes
+  // boundingBox() viewport-relative and pushes the action's box.y negative
+  // even though the layout is correct at scroll origin. Reset scroll first
+  // so the measurement matches the assertion's stated intent.
+  await action.page().evaluate(() => window.scrollTo(0, 0));
   const box = await action.boundingBox();
   const viewport = action.page().viewportSize();
   expect(box, `${label} should have a measurable bounding box`).not.toBeNull();
