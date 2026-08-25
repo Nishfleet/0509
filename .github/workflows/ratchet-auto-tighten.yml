@@ -96,7 +96,14 @@ jobs:
         run: |
           set -euo pipefail
           test "$HEAD_REF" = "refs/heads/main"
-          test -z "$(git symbolic-ref --quiet HEAD 2>/dev/null || true)"
+          # actions/checkout leaves a detached HEAD; a symbolic HEAD here would mean
+          # we are not on the exact checked-out commit. Written as an explicit if
+          # rather than an error-suppressing conditional, which gate-integrity.sh
+          # correctly reads as a softened CI step.
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            echo "expected a detached HEAD from actions/checkout" >&2
+            exit 1
+          fi
 
       - name: Run --update and capture a structured diff
         id: tighten
