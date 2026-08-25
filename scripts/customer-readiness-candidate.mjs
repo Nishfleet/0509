@@ -367,7 +367,13 @@ function isAncestorOf(cwd, ancestor, descendant) {
 }
 
 function parseGitHubOriginSlug(cwd) {
-  const originUrl = optionalGitText(cwd, ["remote", "get-url", "origin"], "");
+  // Read the literal configured origin URL (`remote.origin.url`) rather than
+  // `git remote get-url origin`, which applies `url.<base>.insteadOf`
+  // rewrites. Slug parsing wants the configured GitHub URL itself; an
+  // insteadOf-rewritten URL (e.g. a local mirror used in tests) would never
+  // match the github.com regex and would silently drop the provider proof.
+  // In production no insteadOf is configured, so the two reads are identical.
+  const originUrl = optionalGitText(cwd, ["config", "--get", "remote.origin.url"], "");
   const match = originUrl.match(
     /^(?:https?:\/\/|ssh:\/\/)?(?:git@)?github\.com[:/]([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/i,
   );
