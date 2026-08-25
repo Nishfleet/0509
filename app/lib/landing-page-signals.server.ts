@@ -1,10 +1,60 @@
-export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v4";
+export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v5";
 
 const CTA_PRIORITY_PATTERNS = [
   /\b(buy now|shop now|add to cart|get offer|claim deal|book demo|whatsapp us|get started)\b/i,
   /\b(order now|start now|apply now|join now|download app|talk to us)\b/i,
+  // v5: the priority list was the single biggest bail-out in the detector
+  // (issue #949). Real commercial CTAs like "Sign up free", "Try it now",
+  // "Contact sales", "Get a quote", "Subscribe", "Start free trial" all
+  // returned null and made the CTA diff blind to them — a page whose CTA
+  // never matched could never fire a CTA change, even when it genuinely
+  // changed. These verbs are unambiguously commercial actions.
+  /\b(sign up|sign up free|try free|try now|try it now|try it free|start free trial|start trial|free trial)\b/i,
+  /\b(contact us|contact sales|talk to sales|get a quote|get quote|request a quote|request quote)\b/i,
+  /\b(subscribe|register|create account|create free account|create your account)\b/i,
+  /\b(explore plans|view plans|see plans|see pricing|view pricing|see plans & pricing)\b/i,
+  /\b(schedule a demo|request a demo|book a demo|demo request)\b/i,
   /\bsubmit\b/i,
 ] as const;
+
+// v5 button-text fallback: when no candidate matches a priority pattern, the
+// detector previously returned null — making the CTA diff permanently blind
+// to that page. A `<button>` element is an action control by definition, so
+// its text is a real CTA even when the verb is not in the priority list (e.g.
+// "Build my report", "Send my brief"). The fallback picks the first
+// non-trivial button text that is not obvious UI chrome.
+//
+// The blocklist is deliberately tiny and conservative: only buttons that are
+// unambiguously navigation/chrome (menu, close, search, settings, etc.).
+// Commercial verbs are never blocked here — they either match a priority
+// pattern above or flow through the fallback as a real CTA.
+const CTA_CHROME_BUTTON_TEXTS = new Set([
+  "menu",
+  "close",
+  "open",
+  "toggle",
+  "expand",
+  "collapse",
+  "next",
+  "previous",
+  "prev",
+  "back",
+  "forward",
+  "search",
+  "filter",
+  "sort",
+  "settings",
+  "account",
+  "ok",
+  "okay",
+  "cancel",
+  "delete",
+  "remove",
+  "edit",
+  "save",
+  "yes",
+  "no",
+]);
 
 const PRICE_PATTERNS = [
   /\b(starting at\s+(?:₹|rs\.?\s*)\s*\d[\d,]*)\b/i,
@@ -42,7 +92,7 @@ const HEAD_CONTENT_CONTAINER_NAMES = new Set([
 const SHELL_PLACEHOLDER_PATTERN =
   /^(?:loading(?:\s+(?:app|application))?(?:,\s*please wait)?|please wait|initializing)(?:[.!…]+)?$/i;
 
-// Ad-slot suppression (lp-signals-v4): rotating third-party ad creatives are
+// Ad-slot suppression (since lp-signals-v4): rotating third-party ad creatives are
 // the loudest remaining landing-page noise source. A banner that swaps
 // between "Buy now · $19.99" and "Claim deal · $9.99" must never become
 // customer-visible offer/CTA/form events, so ad containers are stripped from
@@ -128,13 +178,19 @@ export function extractLandingPageSignals(
     html ?? "",
     options.documentMode ?? "raw",
   );
+  // Issue #949: button candidates are extracted separately so the v5
+  // button-text fallback in pickBestCta can use them. They are cleaned
+  // exactly once here — spreading them into ctaCandidates and cleaning
+  // again would double-decode HTML entities (e.g. "&amp;hellip;" →
+  // "&hellip;" → "…"), corrupting literal entity text.
+  const buttonCandidates = extractButtonText(normalizedHtml).map(cleanText);
   const ctaCandidates = [
-    ...extractButtonText(normalizedHtml),
-    ...extractSubmitValues(normalizedHtml),
-    ...extractActionLinks(normalizedHtml),
-  ].map(cleanText);
+    ...buttonCandidates,
+    ...extractSubmitValues(normalizedHtml).map(cleanText),
+    ...extractActionLinks(normalizedHtml).map(cleanText),
+  ];
 
-  const ctaText = pickBestCta(ctaCandidates);
+  const ctaText = pickBestCta(ctaCandidates, buttonCandidates);
   const priceText = pickPrice(normalizedHtml);
   const formPresent = detectFormPresence(normalizedHtml);
 
@@ -539,7 +595,7 @@ function extractActionLinks(html: string) {
   return [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)].map((match) => stripTags(match[1] ?? ""));
 }
 
-function pickBestCta(candidates: string[]) {
+function pickBestCta(candidates: string[], buttonCandidates: string[] = []) {
   const unique = [...new Set(candidates.filter(Boolean))];
 
   for (const pattern of CTA_PRIORITY_PATTERNS) {
@@ -547,6 +603,20 @@ function pickBestCta(candidates: string[]) {
     if (match) {
       return match;
     }
+  }
+
+  // v5 fallback (issue #949): no priority verb matched. Before this fallback
+  // the detector returned null, which made the CTA diff permanently blind to
+  // any page whose CTA verb was not in the priority list — a real CTA change
+  // on such a page could never fire. A `<button>` is an action control, so
+  // its text is a real CTA even without a priority verb. Pick the first
+  // non-trivial, non-chrome button so the diff can see genuine changes.
+  // Submit inputs and action links are NOT used for the fallback: links are
+  // often navigation, and submit values usually carry priority verbs already.
+  for (const candidate of buttonCandidates) {
+    if (!candidate) continue;
+    if (CTA_CHROME_BUTTON_TEXTS.has(candidate.toLowerCase())) continue;
+    return candidate;
   }
 
   return null;
