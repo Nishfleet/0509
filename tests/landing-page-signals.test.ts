@@ -801,7 +801,7 @@ describe("captureLandingPageSnapshot", () => {
               </head>
               <body>
                 <button>Shop now</button>
-                <p>Starting at ₹499 only today</p>
+                <p>Starting at ₹499 only today. Our best-selling vitamin C serum is on launch sale with free shipping on all orders above the free-shipping threshold.</p>
               </body>
             </html>
           `,
@@ -848,7 +848,7 @@ describe("captureLandingPageSnapshot", () => {
     mockFetchWithDns(
       vi.fn(async () =>
         new Response(
-          "<html><head><title>Readable offer</title></head><body><button>Buy now</button></body></html>",
+          "<html><head><title>Readable offer</title></head><body><button>Buy now</button><p>Our best-selling vitamin C serum is on launch sale with free shipping on all orders above the free-shipping threshold.</p></body></html>",
           { status: 200 },
         ),
       ) as never,

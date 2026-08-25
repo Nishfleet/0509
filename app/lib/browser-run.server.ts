@@ -6,6 +6,7 @@ import {
   readResponseTextWithinLimit,
   utf8ByteLength,
 } from "~/lib/bounded-response.server";
+import { assessCaptureValidity } from "~/lib/capture-validity.server";
 import { decodeHtmlEntities as decodeHtml } from "~/lib/decode-html.server";
 import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
@@ -908,6 +909,20 @@ async function buildBrowserRenderedSnapshot(
   const headline = resolveHeadline(html);
   const normalized = normalizeHeadline(headline);
 
+  // Capture-validity gate (BET 4): the rendered leg is the last line of
+  // defense. A challenge/cookie-wall/partial-SPA/error body that survived the
+  // plain-http leg (or came straight to render) is still a render failure
+  // here. Returning null records a `capture_failed` and never produces a
+  // snapshot from this HTML — no diff, no event, no alert.
+  const validity = assessCaptureValidity({
+    html,
+    fetchStatus: 200,
+    documentMode: "rendered",
+  });
+  if (!validity.valid) {
+    return null;
+  }
+
   const persisted = await persistBrowserArtifacts(
     env,
     input.canonicalUrl,
@@ -920,6 +935,12 @@ async function buildBrowserRenderedSnapshot(
     ...(screenshotTooLarge ? ["screenshot_too_large"] : []),
     ...persisted.captureWarningCodes,
   ];
+  // Screenshot corroboration (BET 4): the extracted price/CTA signals are
+  // corroborated by a real rendered screenshot, not by markdown extraction
+  // alone. A non-null screenshot that survived the gate is positive
+  // corroboration; a missing/oversized screenshot is neutral (the gate still
+  // passed on the HTML) and is recorded honestly.
+  const screenshotCorroborates = Boolean(screenshotBytes);
 
   return {
       rawUrl: input.url,
@@ -938,6 +959,8 @@ async function buildBrowserRenderedSnapshot(
         htmlArtifactKey: persisted.htmlArtifactKey,
         screenshotArtifactKey: persisted.screenshotArtifactKey,
         captureWarningCodes,
+        captureValidated: true,
+        screenshotCorroborates,
         ...(headline === "Landing page" &&
         !signals.ctaText &&
         !signals.priceText &&
