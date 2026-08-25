@@ -79,5 +79,38 @@ export default defineConfig(({ mode }) => ({
     env: { NODE_ENV: "test" },
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     testTimeout: 10_000,
+    // Coverage instrumentation (recos §2). `npm run test` emits lcov locally
+    // so coverage can be consumed by tooling without a separate command. No CI
+    // workflow changes — the lcov file is a side-effect of the existing test
+    // script, not a new CI step. `all` is true so files with no tests are
+    // included in the report (otherwise coverage is meaningless for the
+    // untested majority of the codebase).
+    coverage: {
+      provider: "v8",
+      // `enabled: true` so `npm run test` always emits lcov — no separate
+      // `--coverage` flag needed. This is the recos §2 requirement: the
+      // existing test script produces coverage as a side-effect.
+      enabled: true,
+      reporter: ["text", "lcov"],
+      reportsDirectory: "./coverage",
+      // `all: true` ensures every source file under `include` appears in the
+      // lcov, even with zero coverage — the honest baseline for a ratchet.
+      all: true,
+      include: ["app/**/*.{ts,tsx}", "workers/**/*.{ts,tsx}"],
+      exclude: [
+        "app/**/*.test.{ts,tsx}",
+        "app/**/*.d.ts",
+        "app/**/types.ts",
+        "app/**/*.server.ts",
+        // Server-only modules that require Workers runtime bindings (D1, R2,
+        // AI, etc.) are not unit-testable without the workerd integration
+        // project; excluding them from the v8 coverage baseline keeps the
+        // lcov focused on what the unit suite can actually exercise.
+        "app/lib/data.server.ts",
+        // Generated files
+        "app/.react-router/**",
+        "worker-configuration.d.ts",
+      ],
+    },
   },
 }));
