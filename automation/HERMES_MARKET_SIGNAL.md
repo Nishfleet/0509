@@ -1,6 +1,6 @@
 # Hermes 0509 morning market-signal contract
 
-Run only on `hostinger-kvm4` from `/home/nish/workspaces/products/0509`.
+Run on `netcup-rs2000` from `/home/nish/workspaces/products/0509`.
 
 ## Goal
 
