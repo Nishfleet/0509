@@ -1,0 +1,266 @@
+name: Gate integrity
+
+# Deterministic, base-branch-owned detector for the gate-bypass moves that
+# `Required verifier integrity` does not see (P10-B, Nish, 2026-08-25:
+# "cover all our bases so no agent can run amok and bypass our quality gates").
+#
+# required-verifier-integrity guards a fixed list of verifier DEFINITIONS by
+# exact filename. A PR can still delete the tests a gate runs, add `.skip`,
+# widen `.gitleaksignore`, raise a design-ratchet ceiling, or append `|| true`
+# to a CI step — every one of those weakens the gates without touching a single
+# listed file. This workflow closes that surface. The two checks are siblings,
+# not duplicates: this one reads the diff's CONTENT.
+#
+# Hosting (the part that actually matters): like its sibling, this workflow runs
+# on `pull_request_target`, so GitHub evaluates the BASE branch's copy of this
+# file, not the candidate's. The decision script and its fixture regression are
+# fetched from the base ref through the API and run with a base-scoped token.
+# Candidate code is never checked out and never executed. A PR therefore cannot
+# edit, skip, or soften the check that is judging it — which is the whole point:
+# without that property the check deletes itself the first time it blocks a
+# worker (quality-first-recos.md §1.2, "critical placement rule").
+#
+# Why not the native GitHub feature: an org-level ruleset *required workflow*
+# would enforce this above the repository, where a PR cannot reach at all. It is
+# Team-and-above; `gh api orgs/Nishfleet/rulesets` returns
+# `403 Upgrade to GitHub Team` on 2026-08-25. Same answer for Code Quality
+# coverage merge protection (§1.1). `pull_request_target` is the free-plan
+# equivalent of the same property, and the repo already relies on it.
+#
+# Why not Danger.js, the obvious off-the-shelf harness: Danger runs from the
+# candidate's own tree and node_modules, so the rules a PR is judged by would be
+# the rules that PR just shipped. That is precisely the hole being closed here.
+#
+# merge_group: the required context must also report on the queue's ref or the
+# merge queue hangs forever waiting for it. As in required-verifier-integrity,
+# the decision steps are scoped to `pull_request_target` and the merge_group run
+# is an authorizer-only pass-through: a PR must already be green at the PR level
+# (with base-branch bytes) before it can be queued at all, so the PR-level run is
+# the authoritative one.
+#
+# Hygiene contract, matching the repo's other required contexts: the required
+# job has NO job-level `if:` (a skipped required context COUNTS AS SATISFIED on
+# GitHub, so the authorizer is a step, not a condition on the job), no
+# `continue-on-error`, no trailing `|| true`, and no mutable `uses:` — this job
+# runs only the runner-provided `gh` CLI and shell tools.
+
+on:
+  pull_request_target:
+    # `labeled`/`unlabeled` are included so an already-open PR can be re-checked
+    # without a force-push: toggling any label re-runs the gate. Without it,
+    # every PR open at the moment this check became required would sit forever
+    # with a never-reported required context.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  merge_group:
+
+# Grouped by PR number, never by github.ref: under pull_request_target
+# github.ref resolves to the BASE branch, which would collapse every open PR
+# into one mutually-cancelling group and leave most PRs with no reported
+# context. Same lesson, same fix as required-verifier-integrity.yml.
+concurrency:
+  group: gate-integrity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  gate-integrity:
+    name: gate-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Authorize exact verification candidate
+        id: authorize
+        shell: bash
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad GITHUB_SHA: $GITHUB_SHA" >&2; exit 1; }
+          case "$GITHUB_EVENT_NAME" in
+            pull_request_target)
+              # Fork PRs are refused outright: this gate reads the PR's own diff
+              # to judge it, and a fork head is not covered by the base-branch
+              # trust boundary the rest of this workflow relies on.
+              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+              # Self-hosted runners may set GITHUB_REF to refs/pull/N/merge or
+              # refs/heads/<branch>; accept both and validate the explicit event
+              # fields instead, so a runner cannot be steered onto another PR.
+              case "$GITHUB_REF" in
+                refs/pull/[1-9]*[0-9]*/merge) ;;
+                refs/heads/*) ;;
+                *) echo "unexpected GITHUB_REF: $GITHUB_REF" >&2; exit 1 ;;
+              esac
+              [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "bad PR_NUMBER: $PR_NUMBER" >&2; exit 1; }
+              [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad HEAD_SHA: $HEAD_SHA" >&2; exit 1; }
+              test -n "$BASE_REF" || { echo "empty BASE_REF" >&2; exit 1; }
+              ;;
+            merge_group)
+              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]] || { echo "unexpected GITHUB_REF: $GITHUB_REF" >&2; exit 1; }
+              ;;
+            *)
+              echo "unexpected GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME" >&2; exit 1
+              ;;
+          esac
+
+      - name: Resolve candidate context through the GitHub API
+        id: context
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          # Every input is read through the API in the base branch's context, so
+          # a candidate cannot shape the evidence about itself.
+          #
+          # `gh api --paginate` applies --jq PER PAGE and concatenates results,
+          # so a >100-item PR would emit several back-to-back arrays rather than
+          # one JSON document. Emit one object per line and slurp, exactly as
+          # required-verifier-integrity.yml does.
+          #
+          # Patches are stripped to their +/- lines before they enter the
+          # bundle. The decision script only ever reads added and removed lines,
+          # and context lines are the bulk of a diff — dropping them keeps a
+          # large PR's bundle small without losing a single signal.
+          files_json="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
+            --jq '.[] | {
+                    filename,
+                    previous_filename,
+                    status,
+                    patch: (
+                      if .patch == null then null
+                      else (.patch | split("\n")
+                            | map(select((startswith("+") or startswith("-"))
+                                          and (startswith("+++") or startswith("---") | not)))
+                            | join("\n"))
+                      end
+                    )
+                  }' | jq -s .)"
+
+          # Commit messages carry the `test-removal-justified:` trailer.
+          #
+          # Deliberately NOT the `--jq '.[] | …' | jq -s .` idiom the other
+          # fetches use. That idiom works because they emit OBJECTS, which stay
+          # valid JSON when gh prints them raw. A commit message is a STRING,
+          # and gh's `--jq` prints strings raw (jq -r semantics), so the message
+          # arrives unquoted with its newlines intact and the slurp then chokes
+          # on the first bare word. Caught by running this against real PR data
+          # rather than fixtures — the fixtures could never have seen it.
+          #
+          # Instead: no `--jq` at all, so gh emits one JSON array per page;
+          # `jq -s` slurps the pages into an array of arrays and `.[][]`
+          # flattens them. Embedded newlines survive, which matters because the
+          # trailer lives on its own line at the end of the message.
+          commits_json="$(gh api --paginate "repos/$REPO/pulls/$PR/commits?per_page=100" \
+            | jq -s '[.[][] | .commit.message]')"
+
+          # Attestation comments: only a body that is EXACTLY
+          # `gate-integrity-attest: <40-hex>` (after trimming whitespace and
+          # CRs) is a candidate. Prose mentioning the phrase cannot attest, and
+          # filtering here bounds the permission lookups below to the handful of
+          # logins that actually attested.
+          comments_json="$(gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" \
+            --jq '.[] | {body: (.body // ""), user: (.user.login // "")}' | jq -s .)"
+          attestations_json="$(printf '%s' "$comments_json" | jq -c '
+            [ .[]
+              | . as $c
+              | ($c.body | gsub("\r"; "") | sub("^\\s+"; "") | sub("\\s+$"; "")) as $b
+              | select($b | test("^gate-integrity-attest: [0-9a-fA-F]{40}$"))
+              | {user: $c.user, sha: ($b | sub("^gate-integrity-attest: "; "") | ascii_downcase)}
+            ]')"
+
+          # Attester permission comes from the collaborator-permission API,
+          # never from a label, an author_association, a comment body, or any
+          # candidate file.
+          perms_file="$RUNNER_TEMP/perms.tsv"
+          : > "$perms_file"
+          logins="$(printf '%s' "$attestations_json" | jq -r '.[].user | select(. != "")' | sort -u)"
+          for login in $logins; do
+            perm="$(gh api "repos/$REPO/collaborators/$login/permission" --jq '.permission')"
+            printf '%s\t%s\n' "$login" "$perm" >> "$perms_file"
+          done
+          perms_json="$(awk -F'\t' 'NF==2 {print}' "$perms_file" | jq -Rn \
+            '[inputs | split("\t") | select(length==2) | {key: .[0], value: .[1]}] | from_entries')"
+
+          jq -n \
+            --arg head_sha "$HEAD_SHA" \
+            --arg pr_body "${PR_BODY:-}" \
+            --argjson files "$files_json" \
+            --argjson commit_messages "$commits_json" \
+            --argjson attestations "$attestations_json" \
+            --argjson permissions "$perms_json" \
+            --argjson gate_globs '[
+              ".github/workflows/**",
+              ".github/scripts/**",
+              ".github/CODEOWNERS",
+              ".gitleaksignore",
+              ".gitleaks.toml",
+              ".semgrepignore",
+              ".semgrep.yml",
+              ".semgrep.yaml",
+              "scripts/design-system-ratchet.mjs",
+              "docs/design-system-ratchet.json",
+              "scripts/ci-vitest-run.sh",
+              "scripts/ci-verify-*.sh"
+            ]' \
+            '{head_sha: $head_sha, pr_body: $pr_body, files: $files,
+              commit_messages: $commit_messages, attestations: $attestations,
+              permissions: $permissions, gate_globs: $gate_globs}' \
+            > "$RUNNER_TEMP/gate-bundle.json"
+
+      - name: Evaluate gate integrity
+        id: evaluate
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          # The decision logic is fetched from the BASE branch's CURRENT ref,
+          # never from the candidate tree. base.sha is deliberately not used: it
+          # is the PR-creation-time base commit and predates this gate for any
+          # already-open PR, while the workflow YAML GitHub evaluates for
+          # pull_request_target is the base branch's current file.
+          script="$RUNNER_TEMP/gate-integrity.sh"
+          gh api "repos/$REPO/contents/.github/scripts/gate-integrity.sh?ref=$BASE_REF" \
+            --jq '.content' | base64 -d > "$script"
+          test -s "$script"
+          bash "$script" < "$RUNNER_TEMP/gate-bundle.json"
+
+      - name: Run deterministic fixture regression
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          # Proves the exact shipped decision bytes still behave as pinned, on
+          # every run, so the rules cannot rot into a permanent PASS.
+          fixture="$RUNNER_TEMP/test-gate-integrity.sh"
+          gh api "repos/$REPO/contents/.github/scripts/test-gate-integrity.sh?ref=$BASE_REF" \
+            --jq '.content' | base64 -d > "$fixture"
+          test -s "$fixture"
+          decision="$RUNNER_TEMP/.github/scripts/gate-integrity.sh"
+          mkdir -p "$(dirname "$decision")"
+          gh api "repos/$REPO/contents/.github/scripts/gate-integrity.sh?ref=$BASE_REF" \
+            --jq '.content' | base64 -d > "$decision"
+          cp "$fixture" "$RUNNER_TEMP/.github/scripts/test-gate-integrity.sh"
+          bash "$RUNNER_TEMP/.github/scripts/test-gate-integrity.sh"
