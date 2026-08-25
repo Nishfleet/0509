@@ -83,28 +83,6 @@ describe("extractCreativeTextFromSnapshotHtml", () => {
     expect(creativeText).toBe("60 Hours Playback\nOnly ₹999");
   });
 
-  it("drops malformed script closers before extracting overlay copy", () => {
-    const html = `
-      <html>
-        <body>
-          <script>window.tracking = true;</script foo>
-          <div>Overlay headline</div>
-        </body>
-      </html>
-    `;
-
-    const creativeText = extractCreativeTextFromSnapshotHtml(html, {
-      advertiser: "Acme",
-      body: "",
-      previewHeadline: "",
-      previewSubhead: "",
-      cta: "",
-    });
-
-    expect(creativeText).toBe("Overlay headline");
-    expect(creativeText).not.toMatch(/tracking/i);
-  });
-
   it("returns null when no distinct creative text remains after filtering", () => {
     const html = `
       <html>

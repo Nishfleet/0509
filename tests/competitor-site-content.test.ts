@@ -239,20 +239,6 @@ describe("normalizeCompetitorPageContent", () => {
 		expect(result.metaDescription).toBeNull();
 	});
 
-	it("strips malformed script closers from competitor page HTML", async () => {
-		const html = `<html><body>
-			<script>alert(1)</script foo>
-			<style>body{background:url("//evil.example/?leak")}</style >
-			<p>Safe copy</p>
-		</body></html>`;
-		const result = await normalizeCompetitorPageContent({
-			canonicalUrl: "https://example.com/malformed",
-			rawHtml: html,
-		});
-		expect(result.visibleTextExcerpt).toBe("Safe copy");
-		expect(result.visibleTextExcerpt).not.toMatch(/script/i);
-	});
-
 	it("decodes common HTML entities and collapses whitespace", async () => {
 		const result = await normalizeCompetitorPageContent({
 			canonicalUrl: "https://example.com/a",

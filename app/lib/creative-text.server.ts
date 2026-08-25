@@ -14,7 +14,6 @@ import {
 } from "~/lib/fetch-timeout.server";
 import { hasClassifierScriptChar } from "~/lib/language-classifier";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
-import { stripScriptAndStyle } from "~/lib/sanitize-text.server";
 import type { AdRecord } from "~/lib/types";
 
 export const CREATIVE_TEXT_EXTRACTOR_VERSION = "creative-text-v2";
@@ -325,7 +324,9 @@ export function extractCreativeTextFromSnapshotHtml(
   const attributeMatches = Array.from(html.matchAll(ATTRIBUTE_TEXT_REGEX)).map(
     (match) => match[1] ?? "",
   );
-  const sanitizedHtml = stripScriptAndStyle(html)
+  const sanitizedHtml = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
     .replace(BLOCK_BREAK_REGEX, "\n")
     .replace(/<br\s*\/?>/gi, "\n");

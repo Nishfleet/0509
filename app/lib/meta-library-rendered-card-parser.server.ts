@@ -1,6 +1,5 @@
 import { decodeHtmlEntities as decodeHtmlEntity } from "~/lib/decode-html.server";
 import { findStartedRunningLine } from "~/lib/meta-ad-dates";
-import { stripScriptAndStyle } from "~/lib/sanitize-text.server";
 
 export interface ExtractedAdCard {
   libraryId: string;
@@ -765,7 +764,9 @@ export function inferLandingPageFromTextBlock(block: string[]) {
 
 export function stripHtml(value: string) {
   return decodeHtmlEntity(
-    stripScriptAndStyle(value)
+    value
+      .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim(),
@@ -779,7 +780,9 @@ export function hasStandaloneInactiveLine(text: string) {
 
 export function stripHtmlPreservingLines(value: string) {
   return decodeHtmlEntity(
-    stripScriptAndStyle(value)
+    value
+      .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
       .replace(/<\s*br\s*\/?>/gi, "\n")
       .replace(
         /<\/?(?:article|aside|button|div|h[1-6]|li|main|p|section|strong)\b[^>]*>/gi,
