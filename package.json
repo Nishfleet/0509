@@ -48,7 +48,7 @@
     "preview": "npm run build && vite preview",
     "provider:bakeoff": "node scripts/provider-bakeoff.mjs",
     "provider:bakeoff:launch": "node scripts/provider-bakeoff.mjs --launch-gate",
-    "test": "bash ./scripts/ci-vitest-run.sh",
+    "test": "bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project node --coverage && bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project workers",
     "test:watch": "vitest --configLoader runner",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
   },
@@ -72,6 +72,7 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "@vitest/coverage-v8": "^4.1.10",
     "happy-dom": "^20.11.2",
     "typescript": "5.9.3",
     "vite": "^8.2.1",
