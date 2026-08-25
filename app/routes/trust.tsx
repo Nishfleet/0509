@@ -3,7 +3,12 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { AGENT_BLOCKED_CAPABILITIES } from "~/lib/agent-action-catalog";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const description =
@@ -25,6 +30,15 @@ export default function TrustRoute() {
       title="Trust and security basics."
       intro="This is the current lightweight trust surface. It does not make compliance claims that have not been verified."
     >
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "Trust | Five to Nine",
+            description,
+            pathname: "/trust",
+          }),
+        )}
+      />
       <PublicDocBlock title="Security contact and vulnerability intake">
         <p>
           Send security reports to <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>. Include the affected

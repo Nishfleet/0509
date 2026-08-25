@@ -73,7 +73,15 @@ function git(cwd: string, ...args: string[]) {
 
 describe("exact production candidate workflow", () => {
   it("authorizes a pinned main SHA before any privileged runner or secret", () => {
-    expect(Object.keys(workflow.on).sort()).toEqual(["workflow_dispatch"]);
+    // Auto-deploy on green (Nish, 2026-08-25): push to main triggers the same
+    // exact-SHA deploy as a manual workflow_dispatch. The authorize job's
+    // `push)` branch (already wired before this trigger was added) pins
+    // GITHUB_SHA and requires empty dispatch inputs, so no gate is weakened.
+    expect(Object.keys(workflow.on).sort()).toEqual([
+      "push",
+      "workflow_dispatch",
+    ]);
+    expect(workflow.on.push).toEqual({ branches: ["main"] });
     expect(workflow.on.workflow_dispatch?.inputs?.expected_sha).toEqual({
       description: "Exact main commit authorized for production deployment",
       required: true,

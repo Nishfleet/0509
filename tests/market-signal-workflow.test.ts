@@ -43,15 +43,21 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(parsed.on?.workflow_dispatch).toBeDefined();
   });
 
-  it("grants the token the scopes the snapshot script needs", () => {
-    // The script reads the issue list (gh api .../issues) and pushes the
-    // snapshot to the data branch, so the token needs issues: read and
-    // contents: write. A bare contents-only block 403s on the issues API:
+  it("grants the token only the scopes the snapshot script needs", () => {
+    // The script reads the issue list (gh api .../issues), so the token needs
+    // issues: read. A bare contents-only block 403s on the issues API:
     // "Resource not accessible by integration" (first three restored runs,
-    // 2026-08-12). No pull-requests scope is requested: the snapshot no
-    // longer lands through a PR (the Nishfleet org forbids Actions from
-    // creating PRs), so the workflow never creates or merges one.
-    expect(parsed.permissions).toEqual({ contents: "write", issues: "read" });
+    // 2026-08-12). No contents: write and no pull-requests scope: the snapshot
+    // no longer lands in this repo at all -- it is pushed to the private sink
+    // Nishfleet/0509-telemetry with a deploy key (TELEMETRY_DEPLOY_KEY secret),
+    // not the GITHUB_TOKEN, so the workflow needs no write scope on this public
+    // repo. contents: read is the checkout default.
+    expect(parsed.permissions).toEqual({ contents: "read", issues: "read" });
+    // The permissions block itself must not grant write scopes. (Comments may
+    // mention the old scopes for context; only the parsed permissions matter.)
+    const permissionsBlock = source.match(/permissions:\n((?:  \S.*\n)+)/)?.[1] ?? "";
+    expect(permissionsBlock).not.toContain("contents: write");
+    expect(permissionsBlock).not.toContain("pull-requests: write");
   });
 
   it("generates the snapshot with Cloudflare token secrets on the self-hosted production-environment job", () => {
@@ -88,10 +94,15 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(source).toContain(`--output "$SNAPSHOT_PATH"`);
     expect(source).toContain(`git add -- "$SNAPSHOT_PATH"`);
     expect(contract).toContain(`ops/market-signal/0509-market-signal.json`);
-    // The snapshot no longer lands on main; Hermes reads it from the
-    // automation-owned data branch, so the contract must point there.
+    // The snapshot no longer lands on main or in this public repo; Hermes
+    // reads it from the automation-owned data branch in the PRIVATE sink repo
+    // Nishfleet/0509-telemetry, so the contract must point there.
     expect(contract).toContain(`automation/market-signal-snapshot`);
-    expect(contract).toContain(`git show origin/automation/market-signal-snapshot:ops/market-signal/0509-market-signal.json`);
+    expect(contract).toContain(`Nishfleet/0509-telemetry`);
+    expect(contract).toContain(`git fetch https://github.com/Nishfleet/0509-telemetry.git automation/market-signal-snapshot`);
+    expect(contract).toContain(`git show FETCH_HEAD:ops/market-signal/0509-market-signal.json`);
+    // The contract must NOT point at the public repo for the snapshot.
+    expect(contract).not.toContain(`git show origin/automation/market-signal-snapshot:`);
   });
 
   it("passes GH_TOKEN to the generate step so the script can read the issue list", () => {
@@ -101,27 +112,58 @@ describe("daily market-signal D1 snapshot workflow", () => {
     // there is no gh pr create / gh pr merge to authenticate.
     const generate = job.steps?.find((step) => step.name === "Generate market-signal D1 snapshot");
     expect(generate?.env?.GH_TOKEN).toBe("${{ github.token }}");
-    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to private telemetry sink")?.run ?? "";
     expect(publish).not.toMatch(/\bgh pr\b/u);
   });
 
-  it("publishes the snapshot to a dedicated data branch without creating a PR", () => {
-    // The Nishfleet org forbids Actions from creating PRs, so the old
-    // PR-squash-merge landing died on every run from 2026-08-21 on. The
-    // snapshot now pushes to a dedicated automation-owned data branch; no PR
-    // is opened, so no org or repo policy is weakened. Hermes reads the
-    // snapshot from this branch (see the contract test above).
-    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
-    expect(publish).toContain("automation/market-signal-snapshot");
-    expect(publish).toContain("git push");
-    expect(publish).toContain("market_signal_snapshot_published");
+  it("publishes the snapshot to the private telemetry sink, never this public repo", () => {
+    // The public 0509 repo went public on 2026-08-24; an audit found the old
+    // shape had been publishing live traction telemetry as branches in the
+    // public repo. The snapshot now pushes to the PRIVATE sink
+    // Nishfleet/0509-telemetry on the same automation-owned data branch name,
+    // using a deploy key (TELEMETRY_DEPLOY_KEY secret) because the default
+    // GITHUB_TOKEN cannot push cross-repo. No PR is opened. Hermes reads the
+    // snapshot from the private branch (see the contract test above).
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to private telemetry sink");
+    expect(publish).toBeDefined();
+    const run = publish?.run ?? "";
+    const env = publish?.env ?? {};
+    expect(run).toContain("automation/market-signal-snapshot");
+    expect(run).toContain("git push");
+    expect(run).toContain("market_signal_snapshot_published");
+    // The private sink repo is named in the step env, and the run builds the
+    // push URL from it: git@github.com:${TELEMETRY_REPO}.git
+    expect(env.TELEMETRY_REPO).toBe("Nishfleet/0509-telemetry");
+    expect(env.TELEMETRY_DEPLOY_KEY).toBe("${{ secrets.TELEMETRY_DEPLOY_KEY }}");
+    expect(run).toContain("git@github.com:${TELEMETRY_REPO}.git");
+    expect(run).toContain("TELEMETRY_DEPLOY_KEY");
+    expect(run).toContain("GIT_SSH_COMMAND");
+    expect(run).toContain("market_signal_missing_telemetry_deploy_key");
     // No PR machinery anywhere in the workflow.
-    expect(publish).not.toContain("gh pr create");
-    expect(publish).not.toContain("gh pr merge");
-    expect(publish).not.toContain("gh pr checks");
-    expect(publish).not.toContain("--squash");
-    expect(publish).not.toContain("--auto");
+    expect(run).not.toContain("gh pr create");
+    expect(run).not.toContain("gh pr merge");
+    expect(run).not.toContain("gh pr checks");
+    expect(run).not.toContain("--squash");
+    expect(run).not.toContain("--auto");
     expect(source).not.toContain("pull-requests: write");
+    // The deploy key is written to a temp file and unlinked on exit so it
+    // never persists on the runner or leaks into logs.
+    expect(run).toContain("RUNNER_TEMP/telemetry_deploy_key");
+    expect(run).toContain("rm -f");
+    expect(run).toContain("trap");
+  });
+
+  it("never pushes the snapshot to this public repo's origin", () => {
+    // The headline remediation: the public 0509 repo must never gain a
+    // market-signal snapshot branch again. The publish step must not push to
+    // `origin` -- it pushes only to the private telemetry repo URL built from
+    // TELEMETRY_REPO. (Comments may mention "origin" to explain the contrast;
+    // only an actual `git push origin` would be a regression.)
+    const run = job.steps?.find((step) => step.name === "Publish snapshot to private telemetry sink")?.run ?? "";
+    expect(run).not.toMatch(/git push[^\n]*\borigin\b/);
+    // The workflow has no contents: write permission, so even a stray
+    // `git push origin` would fail closed.
+    expect(parsed.permissions?.contents).toBe("read");
   });
 
   it("fails loud when the snapshot cannot be published", () => {
@@ -129,7 +171,7 @@ describe("daily market-signal D1 snapshot workflow", () => {
     // exit 0. The publish step runs under `set -euo pipefail`, so a push
     // failure (after the --force-if-includes / --force fallback) exits
     // non-zero. The only exit 0 path is a genuinely unchanged snapshot.
-    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to private telemetry sink")?.run ?? "";
     expect(publish).toContain("set -euo pipefail");
     expect(publish).toContain("market_signal_snapshot_unchanged");
     expect(publish).toContain("market_signal_snapshot_published");
@@ -143,7 +185,7 @@ describe("daily market-signal D1 snapshot workflow", () => {
     // which the org policy now blocks. One stable data branch lets every
     // rerun force-push to the same ref, so Hermes always reads the latest
     // snapshot from a fixed branch name and no stale PRs accumulate.
-    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to private telemetry sink")?.run ?? "";
     expect(publish).toContain('SNAPSHOT_BRANCH="automation/market-signal-snapshot"');
     expect(publish).not.toContain("$(date -u +%Y%m%d)");
     expect(publish).not.toContain("gh pr list");
@@ -156,10 +198,14 @@ describe("daily market-signal D1 snapshot workflow", () => {
     // main for every restored run. --force-if-includes is the documented
     // safe alternative for first push; the explicit --force fallback is the
     // last-resort path so the workflow degrades loudly instead of silently
-    // never landing.
-    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    // never landing. The push target is the private telemetry repo URL, not
+    // `origin` (this public repo).
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to private telemetry sink")?.run ?? "";
     expect(publish).toContain("--force-if-includes");
-    expect(publish).toContain("git push --force origin");
+    expect(publish).toContain("git push --force");
+    // The push target is the private telemetry repo URL (built from
+    // TELEMETRY_REPO env), not `origin` (this public repo).
+    expect(publish).toContain("git@github.com:${TELEMETRY_REPO}.git");
   });
 
   it("surfaces the snapshot to a human without Actions opening a PR", () => {
@@ -168,7 +214,7 @@ describe("daily market-signal D1 snapshot workflow", () => {
     // pointing a human at the data branch and commit so the snapshot diff is
     // reviewable in the GitHub UI. This is the mechanism that preserves review
     // now that the PR-squash-merge gate is gone.
-    const publish = job.steps?.find((step) => step.name === "Publish snapshot to data branch")?.run ?? "";
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to private telemetry sink")?.run ?? "";
     expect(publish).toContain("$GITHUB_STEP_SUMMARY");
     expect(publish).toContain("automation/market-signal-snapshot");
     expect(publish).toContain("BRANCH_URL");

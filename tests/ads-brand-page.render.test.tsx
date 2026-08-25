@@ -176,18 +176,53 @@ describe("/ads/:domain — Case File render", () => {
     );
   });
 
-  it("spells out the all-countries view instead of implying a single market", async () => {
+  it("names the all-countries view as a single ALL-countries query, not worldwide coverage", async () => {
     const markup = await render(populated({ adLibraryCountry: "all countries" }));
 
+    // The wall source line names the single all-countries query — it must
+    // not claim worldwide coverage ("across all countries").
     expect(markup).toContain(
-      "real creatives from the Meta Ad Library across all countries · cached about 2 hours ago",
+      "real creatives from the Meta Ad Library&#x27;s all-countries query · cached about 2 hours ago",
     );
     expect(markup).toContain(
-      '"description":"See 6 Meta ads from Nike (nike.com), from a public check of the Meta Ad Library across all countries about 2 hours ago. Get an email when their ads or offer change."',
+      '"description":"See 6 Meta ads from Nike (nike.com), from a public check of the Meta Ad Library\'s all-countries query about 2 hours ago. Get an email when their ads or offer change."',
     );
+    // The false worldwide claim never renders on any surface.
+    expect(markup).not.toContain("across all countries");
     // No single country is implied anywhere in the source lines.
     expect(markup).not.toContain("the India Ad Library");
     expect(markup).not.toContain("the public India Ad Library");
+  });
+
+  it("regression: adLibrarySourcePhrase never revives the worldwide claim", async () => {
+    const { adLibrarySourcePhrase, publicAdLibrarySourcePhrase } = await import(
+      "~/routes/ads.$domain"
+    );
+
+    // The all-countries value is a single `country=ALL` query, not a union
+    // of every market — the phrase must name it as one query and must never
+    // bring back "across all countries".
+    expect(adLibrarySourcePhrase("all countries")).toBe(
+      "the Meta Ad Library's all-countries query",
+    );
+    expect(adLibrarySourcePhrase("all countries")).not.toContain("across all countries");
+    // The null fallback (no country on the snapshot) gets the same honest
+    // phrasing rather than implying worldwide coverage.
+    expect(adLibrarySourcePhrase(null)).toBe("the Meta Ad Library's all-countries query");
+    expect(adLibrarySourcePhrase(null)).not.toContain("across all countries");
+
+    // The public closer-line variant follows the same rule.
+    expect(publicAdLibrarySourcePhrase("all countries")).toBe(
+      "the public Meta Ad Library's all-countries query",
+    );
+    expect(publicAdLibrarySourcePhrase("all countries")).not.toContain("across all countries");
+    expect(publicAdLibrarySourcePhrase(null)).toBe(
+      "the public Meta Ad Library's all-countries query",
+    );
+
+    // Named-country copy is unchanged.
+    expect(adLibrarySourcePhrase("India")).toBe("the India Ad Library");
+    expect(publicAdLibrarySourcePhrase("India")).toBe("the public India Ad Library");
   });
 
   it("shows the honest overflow tile and the signup CTA carrying the domain", async () => {
@@ -431,6 +466,32 @@ describe("/ads/:domain — Case File render", () => {
     );
     // The wall still carries every cached creative.
     expect(stale).toContain("All 6 ads, on the wall");
+  });
+
+  it("omits 'by other advertisers' in the closer when every verified linking creative is the brand's own (unverified matches only)", async () => {
+    // Mirrors the live hubspot.com defect in the visible closer copy: 4
+    // verified brand-owned ads + 6 unverified text-matches. The closer split
+    // must not fold the 6 unverified matches into "by other advertisers".
+    const ads = Array.from({ length: 10 }, (_v, i) => ad({ metaAdId: `ad-${i}` }));
+    const stale = await render(
+      populated({
+        ads,
+        brandOwnedAdCount: 4,
+        verifiedLinkCount: 4,
+        unverifiedMatchCount: 6,
+        teaser: { ...teaser, totalCount: 4, activeCount: 4 },
+      }),
+    );
+
+    // The closer attributes only the verified brand-owned creatives to Nike.
+    expect(stale).toContain("4 run by Nike");
+    // The unverified text-matches must NOT be attributed to other advertisers.
+    expect(stale).not.toContain("6 by other advertisers");
+    expect(stale).not.toContain("0 by other advertisers");
+    // The unverified matches appear only in the labelled note.
+    expect(stale).toContain(
+      "Another 6 ads matched the search for nike.com without a verified link.",
+    );
   });
 
   it("never labels a creative with the brand name when its advertiser is unconfirmed", async () => {

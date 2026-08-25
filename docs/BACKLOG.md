@@ -6,9 +6,20 @@ never self-invented work; every run ends with a PR link or a named blocker.
 ## ACTIVE PROGRAM: design unification (Nish, ratified 2026-08-08)
 
 The tri-audit (Sol + Grok + Fable, 2026-08-07/08) superseded the remaining
-BL phase plan. Canonical program state lives OUTSIDE this repo at
-`/home/nish/workspaces/agent-state/0509-design-unification-ledger.md` —
-that ledger, not this file, is the source of truth for what remains.
+BL phase plan. The external ledger declared as canonical
+(`/home/nish/workspaces/agent-state/0509-design-unification-ledger.md`) was
+**formally retired 2026-08-25**: it never existed on disk, so pointing at it
+made the doc set contradict reality. The real source of truth for program
+state is this repo:
+
+- **What remains / what landed:** this section + the per-phase entries below.
+- **The mechanical terminal gate:** `docs/design-system-ratchet.json` +
+  `scripts/design-system-ratchet.mjs` (every legacy-marker ceiling is at 0 as
+  of 2026-08-25, satisfying the program's terminal condition).
+- **The design system spec:** `DESIGN.md`.
+
+Do not resurrect the external ledger path. If program state needs a single
+pointer, it is this file.
 
 Ratified by Nish, non-negotiable:
 
@@ -34,7 +45,7 @@ Next: deep destination rebuilds (Today decision queue, Watch merge with
 one history object, Settings consolidation, Deliver merge), the report
 document re-set with frozen proof semantics, `/search` into the one
 shell, the CSS endgame, and the email/copy-catalog pass — sequenced in
-the ledger.
+this file (the external ledger is retired, see above).
 
 ## Historical note
 

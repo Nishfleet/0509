@@ -762,6 +762,79 @@ describe("/ads/:domain meta", () => {
     );
   });
 
+  it("omits 'from other advertisers' when every verified linking creative is the brand's own (unverified matches only)", async () => {
+    installBrandPageMocks();
+    // Mirrors the live hubspot.com defect: 4 verified brand-owned ads + 6
+    // unverified text-matches. The prefix must say 4, the breakdown must NOT
+    // fold the 6 unverified matches into "from other advertisers", and the
+    // unverified matches appear only in the labelled tail.
+    const verifiedAds = Array.from({ length: 4 }, (_v, i) => ({
+      ...baseAd,
+      metaAdId: `meta-verified-${i}`,
+    }));
+    const unverifiedAds = Array.from({ length: 6 }, (_v, i) => ({
+      ...baseAd,
+      metaAdId: `meta-text-${i}`,
+      domainMatch: undefined,
+    }));
+    const tags = await metaFor({
+      ...richData,
+      domain: "hubspot.com",
+      brandName: "Hubspot",
+      ads: [...verifiedAds, ...unverifiedAds],
+      brandOwnedAdCount: 4,
+      verifiedLinkCount: 4,
+      unverifiedMatchCount: 6,
+    });
+
+    const description = tags.find((tag) => tag.name === "description")?.content ?? "";
+    expect(description).toContain("See 4 Meta ads linking to hubspot.com");
+    expect(description).toContain("4 from Hubspot");
+    // The unverified text-matches must NOT be attributed to other advertisers.
+    expect(description).not.toContain("6 from other advertisers");
+    expect(description).not.toContain("0 from other advertisers");
+    // The unverified matches appear only in the labelled tail.
+    expect(description).toContain(
+      "Another 6 ads matched the search without a verified link to hubspot.com.",
+    );
+  });
+
+  it("keeps the 'and Y from other advertisers' split when verified-from-other creatives exist alongside unverified matches", async () => {
+    installBrandPageMocks();
+    // 4 verified brand-owned + 2 verified-from-other + 6 unverified matches.
+    // The breakdown sums to verifiedLinkCount (4 + 2 == 6); the 6 unverified
+    // matches stay in the tail and never enter the "from other advertisers" count.
+    const brandVerified = Array.from({ length: 4 }, (_v, i) => ({
+      ...baseAd,
+      metaAdId: `meta-brand-${i}`,
+    }));
+    const otherVerified = Array.from({ length: 2 }, (_v, i) => ({
+      ...baseAd,
+      metaAdId: `meta-other-${i}`,
+      advertiser: "Competitor Co",
+    }));
+    const unverifiedAds = Array.from({ length: 6 }, (_v, i) => ({
+      ...baseAd,
+      metaAdId: `meta-text-${i}`,
+      domainMatch: undefined,
+    }));
+    const tags = await metaFor({
+      ...richData,
+      ads: [...brandVerified, ...otherVerified, ...unverifiedAds],
+      brandOwnedAdCount: 4,
+      verifiedLinkCount: 6,
+      unverifiedMatchCount: 6,
+    });
+
+    const description = tags.find((tag) => tag.name === "description")?.content ?? "";
+    expect(description).toContain("See 6 Meta ads linking to nykaa.com — 4 from Nykaa and 2 from other advertisers");
+    expect(description).toContain(
+      "Another 6 ads matched the search without a verified link to nykaa.com.",
+    );
+    // The unverified count must not leak into the "from other advertisers" slot.
+    expect(description).not.toContain("8 from other advertisers");
+  });
+
   it("describes the honest shell without fabricating ad data", async () => {
     installBrandPageMocks();
     const tags = await metaFor({
