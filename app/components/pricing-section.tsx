@@ -7,7 +7,11 @@ import {
   dodoAnnualUnavailableCopy,
 } from "~/lib/dodo-pricing-display";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
-import { EVIDENCE_USAGE_CUSTOMER_COPY } from "~/lib/pricing";
+import {
+  EVIDENCE_USAGE_CUSTOMER_COPY,
+  PUBLISHED_BUNDLE_PRICES_USD,
+  PUBLISHED_PLAN_PRICES_USD,
+} from "~/lib/pricing";
 import type { FaqJsonLdEntry } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { PublicCommercialLaunchSummary } from "~/lib/commercial-launch-gate.server";
@@ -74,7 +78,7 @@ export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry
     {
       question: "Where do prices come from?",
       answer:
-        "Display prices load from Dodo Payments in your local currency at preview time. We never hardcode checkout amounts in the app.",
+        "Published plan prices are shown on this page. Checkout shows the exact amount in your local currency, loaded from Dodo Payments at preview time.",
     },
   ];
 }
@@ -159,8 +163,10 @@ export function valueMathLabel(
   }
 
   const perDay = formatMinorCurrency(
-    Number.isFinite(monthlyPrice?.amount) ? Number(monthlyPrice?.amount) / 30 : null,
-    monthlyPrice?.currency,
+    Number.isFinite(monthlyPrice?.amount)
+      ? Number(monthlyPrice?.amount) / 30
+      : PUBLISHED_PLAN_PRICES_USD[planId].monthly / 30,
+    monthlyPrice?.currency || "USD",
   );
   return perDay ? `About ${perDay}/day` : "Simple monthly start";
 }
@@ -179,14 +185,16 @@ function bundleValueLabel(
   creditQuantity: number | null | undefined,
 ) {
   const price = preview?.usageBundles?.[bundleId];
-  if (!Number.isFinite(price?.amount) || !Number.isFinite(creditQuantity) || Number(creditQuantity) <= 0) {
+  const amount = Number.isFinite(price?.amount)
+    ? Number(price?.amount)
+    : PUBLISHED_BUNDLE_PRICES_USD[bundleId] * 100;
+  const currency = price?.currency || "USD";
+  if (!Number.isFinite(creditQuantity) || Number(creditQuantity) <= 0) {
     return "Purchased proof captures never expire";
   }
-  const unit = formatMinorCurrency(
-    Number(price?.amount) / Number(creditQuantity),
-    price?.currency,
-    { roundWhole: false },
-  );
+  const unit = formatMinorCurrency(amount / Number(creditQuantity), currency, {
+    roundWhole: false,
+  });
   return unit ? `${unit} per proof capture` : "Purchased proof captures never expire";
 }
 
@@ -223,16 +231,19 @@ export function PricingSection({
         ? commercialLaunch.starterSaleOpen
         : commercialLaunch.agencySaleOpen;
   const saleOpenPricingPlans = rootData.pricingPlans.filter((plan) => isPlanSaleOpen(plan.slug));
+  const previewResolved = localPricing?.available === true;
+  // Published prices stand whenever the live preview has not resolved yet, so
+  // the annual toggle is usable from first paint. The gate only tightens once
+  // the preview reports annual checkout is not sellable for a plan.
+  const annualAvailableFor = (plan: PricingPlanSlug) =>
+    isPlanSaleOpen(plan) &&
+    (dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan]) || !previewResolved);
   const annualCycleAvailable =
     saleOpenPricingPlans.length > 0 &&
-    saleOpenPricingPlans.some((plan) =>
-      dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan.slug]),
-    );
+    saleOpenPricingPlans.some((plan) => annualAvailableFor(plan.slug));
   const annualSavingsValidated =
     saleOpenPricingPlans.length > 0 &&
-    saleOpenPricingPlans.every((plan) =>
-      dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan.slug]),
-    );
+    saleOpenPricingPlans.every((plan) => annualAvailableFor(plan.slug));
 
   useEffect(() => {
     if (billingCycle === "yearly" && !annualCycleAvailable) {
@@ -344,8 +355,15 @@ export function PricingSection({
             localPricing?.annualValidation?.[plan.slug],
           );
           const planSaleOpen = isPlanSaleOpen(plan.slug);
+          // Without a resolved live preview the published anchors stand, so
+          // checkout intent stays open. The annual gate only tightens once
+          // the preview reports annual checkout is not sellable.
           const selectedAnnualBlocked =
-            billingCycle === "yearly" && planSaleOpen && yearlyReady && !annualIsValid;
+            billingCycle === "yearly" &&
+            planSaleOpen &&
+            previewResolved &&
+            yearlyReady &&
+            !annualIsValid;
           const valueLabel = valueMathLabel(
             localPricing,
             plan.slug,
@@ -539,8 +557,8 @@ export function PricingSection({
           <div>
             <dt>Where do prices come from?</dt>
             <dd>
-              Display prices load from Dodo Payments in your local currency at preview time. We
-              never hardcode checkout amounts in the app.
+              Published plan prices are shown on this page. Checkout shows the exact amount in your
+              local currency, loaded from Dodo Payments at preview time.
             </dd>
           </div>
         </dl>

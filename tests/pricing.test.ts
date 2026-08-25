@@ -5,6 +5,8 @@ import {
   EVIDENCE_USAGE_CUSTOMER_COPY,
   pricingPlans,
   pricingPlansForRegion,
+  PUBLISHED_BUNDLE_PRICES_USD,
+  PUBLISHED_PLAN_PRICES_USD,
   usageBundles,
 } from "~/lib/pricing";
 
@@ -16,19 +18,35 @@ describe("pricingPlans", () => {
     expect(plans.map((plan) => plan.slug)).toEqual(["scout", "starter", "agency"]);
   });
 
-  it("keeps visible fallback pricing neutral until live prices return", () => {
+  it("publishes the real per-plan USD prices on the plan labels", () => {
     const [scout, starter, agency] = pricingPlans();
 
-    expect(scout.monthlyLabel).toBe("Localized at checkout");
-    expect(scout.yearlyLabel).toBe("Billed annually — 4 months free");
-    expect(starter.monthlyLabel).toBe("Localized at checkout");
-    expect(starter.yearlyLabel).toBe("Billed annually — 4 months free");
-    expect(agency.monthlyLabel).toBe("Localized at checkout");
-    expect(agency.yearlyLabel).toBe("Billed annually — 4 months free");
+    expect(scout.monthlyLabel).toBe("$11 USD/mo");
+    expect(scout.yearlyLabel).toBe("$88 USD/year");
+    expect(starter.monthlyLabel).toBe("$59 USD/mo");
+    expect(starter.yearlyLabel).toBe("$472 USD/year");
+    expect(agency.monthlyLabel).toBe("$199 USD/mo");
+    expect(agency.yearlyLabel).toBe("$1592 USD/year");
+    // Annual is exactly 8x monthly (the 4-months-free offer).
     for (const plan of [scout, starter, agency]) {
-      expect(plan.monthlyLabel.toLowerCase()).not.toContain("price loading");
-      expect(plan.yearlyLabel.toLowerCase()).not.toContain("price loading");
+      expect(PUBLISHED_PLAN_PRICES_USD[plan.slug].yearly).toBe(
+        PUBLISHED_PLAN_PRICES_USD[plan.slug].monthly * 8,
+      );
     }
+  });
+
+  it("publishes real per-pack USD prices on the bundle labels", () => {
+    const [burst, campaign, scale] = usageBundles();
+
+    expect(burst.priceLabel).toBe("$59 USD");
+    expect(campaign.priceLabel).toBe("$179 USD");
+    expect(scale.priceLabel).toBe("$599 USD");
+    expect(PUBLISHED_BUNDLE_PRICES_USD.proof_2000).toBeGreaterThan(
+      PUBLISHED_BUNDLE_PRICES_USD.proof_500,
+    );
+    expect(PUBLISHED_BUNDLE_PRICES_USD.proof_7500).toBeGreaterThan(
+      PUBLISHED_BUNDLE_PRICES_USD.proof_2000,
+    );
   });
 
   it("keeps plan caps generous but finite", () => {
@@ -73,17 +91,17 @@ describe("pricingPlans", () => {
     expect(usageBundles()).toEqual([
       expect.objectContaining({
         slug: "proof_500",
-        priceLabel: "Localized at checkout",
+        priceLabel: "$59 USD",
         creditLabel: "500 extra proof captures",
       }),
       expect.objectContaining({
         slug: "proof_2000",
-        priceLabel: "Localized at checkout",
+        priceLabel: "$179 USD",
         creditLabel: "2,000 extra proof captures",
       }),
       expect.objectContaining({
         slug: "proof_7500",
-        priceLabel: "Localized at checkout",
+        priceLabel: "$599 USD",
         creditLabel: "7,500 extra proof captures",
       }),
     ]);
