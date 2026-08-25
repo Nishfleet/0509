@@ -23,7 +23,14 @@ name: Auto revert
 
 on:
   workflow_run:
-    workflows: ["Secret Scan", "semgrep-actionlint", "backlog-console-refresh test"]
+    # "Deploy production" is wired here (Nish, 2026-08-25) so a failed
+    # auto-deploy-on-green run opens a revert PR the same way a red push-to-main
+    # CI workflow does. The deploy's own rollback_failed_release step handles
+    # the Worker runtime; this handles the source — reverting the merged commit
+    # on main so the next push doesn't re-trigger a failing deploy. The
+    # freshness guard (main HEAD must still equal the failing commit) and the
+    # loop guard (a red revert is a structural stop) apply identically.
+    workflows: ["Secret Scan", "semgrep-actionlint", "backlog-console-refresh test", "Deploy production"]
     types: [completed]
     branches: [main]
 
