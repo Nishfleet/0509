@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+  merge_group:
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -56,6 +57,10 @@ jobs:
               test "$GITHUB_RUN_ATTEMPT" = "1"
               [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
               test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              ;;
+            merge_group)
+              test -z "$EXPECTED_SHA"
+              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
               ;;
             *)
               exit 1
