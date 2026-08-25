@@ -304,5 +304,136 @@ fixture no_patch_on_deleted_test '{"files": [
   {"filename": "tests/auth.test.ts", "status": "removed"}]}'
 run_fixture no_patch_on_deleted_test FAIL "test file deleted"
 
+# --- auto-revert waiver ----------------------------------------------------
+# The .github/workflows/auto-revert.yml workflow opens a revert PR for every
+# failing push-to-main run. The undo is, by construction, the inverse of a
+# commit that almost certainly added tests — so the gate would flag every
+# auto-revert PR as test-integrity weakened unless it recognises the
+# workflow's own signals. Three must agree before the waiver applies:
+#   1. PR body opens with the workflow's verbatim sentence.
+#   2. Every commit subject starts with git's `Revert "` prefix.
+#   3. A sha-bound `gate-integrity-auto-revert:` comment exists.
+# Missing any one falls through to the trailer check, which fails closed.
+
+# 1+2+3 all present → waiver applies, the deletion is expected for a revert.
+AUTO_REVERT_PR_BODY='Automatic revert opened because a push-to-main CI workflow went red.\n\n- Failing run: Deploy production — https://example/run/1\n- Reverts commit `abcdef0`: `Merge pull request #1 from foo/bar`\n- Failing checks: Deploy Worker'
+# Wrapped in Python single-quotes so the literal " inside Revert "..." survives
+# the bash→Python eval hop without breaking the outer JSON string.
+AUTO_REVERT_COMMIT_REVERT="'''Revert \"Merge pull request #1 from foo/bar\"\n\nThis reverts commit abcdef0123456789abcdef0123456789abcdef01.'''"
+AUTO_REVERT_ATTS='[{"user": "github-actions[bot]", "sha": HEAD}]'
+
+fixture auto_revert_full_waiver '{
+  "pr_body": "'"$AUTO_REVERT_PR_BODY"'",
+  "commit_messages": ['"$AUTO_REVERT_COMMIT_REVERT"'],
+  "auto_revert_attestations": '"$AUTO_REVERT_ATTS"',
+  "files": [{"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});\n-it(\"b\", () => {});"}]}'
+run_fixture auto_revert_full_waiver PASS "test-integrity waived"
+
+# A real-world shape: the reverted merge removed an entire test file and
+# dropped assertions across several others — net assertion delta is large
+# and negative. The waiver must still apply because the workflow itself
+# produced this diff.
+fixture auto_revert_big_diff_waived '{
+  "pr_body": "'"$AUTO_REVERT_PR_BODY"'",
+  "commit_messages": ['"$AUTO_REVERT_COMMIT_REVERT"'],
+  "auto_revert_attestations": '"$AUTO_REVERT_ATTS"',
+  "files": [
+    {"filename": "tests/sanitize-text.server.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"},
+    {"filename": "tests/creative-text.test.ts", "status": "modified",
+     "patch": "-  expect(a).toBe(1);\n-  expect(b).toBe(2);\n-  expect(c).toBe(3);\n+  // refactor"}]}'
+run_fixture auto_revert_big_diff_waived PASS "test-integrity waived"
+
+# 1+2 but missing the attestation comment — fail closed, name the missing
+# signal so the human knows exactly why the waiver did not apply.
+fixture auto_revert_no_attest '{
+  "pr_body": "'"$AUTO_REVERT_PR_BODY"'",
+  "commit_messages": ['"$AUTO_REVERT_COMMIT_REVERT"'],
+  "files": [{"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"}]}'
+run_fixture auto_revert_no_attest FAIL "no sha-bound \`gate-integrity-auto-revert:\`"
+
+# 1+3 but the commits are NOT git reverts — a PR that opens with the
+# workflow's sentence but whose commits were hand-written gets no
+# exemption. The body opener alone is not enough.
+fixture auto_revert_body_only '{
+  "pr_body": "'"$AUTO_REVERT_PR_BODY"'",
+  "commit_messages": ["chore: delete dead tests"],
+  "auto_revert_attestations": '"$AUTO_REVERT_ATTS"',
+  "files": [{"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"}]}'
+run_fixture auto_revert_body_only FAIL "test file deleted"
+
+# 2+3 but the body is paraphrased — also fail closed. The opener is a fixed
+# string the workflow owns; matching only the subject prefix is not enough.
+fixture auto_revert_paraphrased_body '{
+  "pr_body": "This is a manual revert of the bad deploy commit.",
+  "commit_messages": ['"$AUTO_REVERT_COMMIT_REVERT"'],
+  "auto_revert_attestations": '"$AUTO_REVERT_ATTS"',
+  "files": [{"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"}]}'
+run_fixture auto_revert_paraphrased_body FAIL "test file deleted"
+
+# Stale auto-revert attestation: comment names a sha that is no longer the
+# PR head. A force-push after the comment must invalidate the waiver,
+# exactly like the admin attestation.
+fixture auto_revert_stale_attest '{
+  "pr_body": "'"$AUTO_REVERT_PR_BODY"'",
+  "commit_messages": ['"$AUTO_REVERT_COMMIT_REVERT"'],
+  "auto_revert_attestations": [{"user": "github-actions[bot]", "sha": OLD}],
+  "files": [{"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"}]}'
+run_fixture auto_revert_stale_attest FAIL "stale: a newer commit was pushed after it"
+
+# The gate-path clause is NOT waived on the auto-revert path. A revert of a
+# gate-owned path still needs an admin attestation, because the auto-revert
+# body only promises "the diff is the inverse of HEAD_SHA" — it does not
+# promise HEAD_SHA did not weaken a gate.
+fixture auto_revert_touches_gate '{
+  "pr_body": "'"$AUTO_REVERT_PR_BODY"'",
+  "commit_messages": ['"$AUTO_REVERT_COMMIT_REVERT"'],
+  "auto_revert_attestations": '"$AUTO_REVERT_ATTS"',
+  "files": [
+    {"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"},
+    {"filename": ".github/workflows/auto-revert.yml", "status": "modified", "patch": "+  timeout-minutes: 5"}]}'
+run_fixture auto_revert_touches_gate FAIL "gate-owned path changed"
+
+# With BOTH the auto-revert waiver AND an admin attestation, the gate-path
+# half passes (waived by admin) and the test-integrity half passes (waived
+# by the auto-revert) — but the two waivers remain independent and each
+# marks only its own clause.
+fixture auto_revert_and_admin_attest '{
+  "pr_body": "'"$AUTO_REVERT_PR_BODY"'",
+  "commit_messages": ['"$AUTO_REVERT_COMMIT_REVERT"'],
+  "attestations": ATTEST, "permissions": ADMIN,
+  "auto_revert_attestations": '"$AUTO_REVERT_ATTS"',
+  "files": [
+    {"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"},
+    {"filename": ".github/workflows/auto-revert.yml", "status": "modified", "patch": "+  timeout-minutes: 5"}]}'
+run_fixture auto_revert_and_admin_attest PASS "test-integrity waived"
+
+# An auto-revert PR that doesn't actually delete tests stays clean: the
+# waiver is not needed, but if every signal is in place the gate still
+# passes quietly. This pins the no-op path so a future "always waive on
+# auto-revert signal" regression is caught.
+fixture auto_revert_no_test_changes '{
+  "pr_body": "'"$AUTO_REVERT_PR_BODY"'",
+  "commit_messages": ['"$AUTO_REVERT_COMMIT_REVERT"'],
+  "auto_revert_attestations": '"$AUTO_REVERT_ATTS"',
+  "files": [{"filename": "app/lib/x.ts", "status": "modified", "patch": "+const y = 1"}]}'
+run_fixture auto_revert_no_test_changes PASS "" "::warning"
+
+# Malformed auto-revert attestation entry (wrong shape) must not crash the
+# gate and must not produce a spurious waiver. The fixture exercises the
+# `entry is not an object` branch.
+fixture auto_revert_malformed_attest_entry '{
+  "pr_body": "'"$AUTO_REVERT_PR_BODY"'",
+  "commit_messages": ['"$AUTO_REVERT_COMMIT_REVERT"'],
+  "auto_revert_attestations": ["not-an-object"],
+  "files": [{"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"}]}'
+run_fixture auto_revert_malformed_attest_entry FAIL "test file deleted"
+
+# auto_revert_attestations present but not a list → fail closed (matches
+# the existing type-validation contract for every other bundle field).
+fixture auto_revert_attest_not_array '{
+  "auto_revert_attestations": "oops",
+  "files": [{"filename": "README.md", "status": "modified", "patch": "+x"}]}'
+run_fixture auto_revert_attest_not_array FAIL "auto_revert_attestations is not an array"
+
 printf '\n%s passed, %s failed\n' "$PASS_COUNT" "$FAIL_COUNT"
 test "$FAIL_COUNT" -eq 0
