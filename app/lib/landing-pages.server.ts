@@ -19,6 +19,11 @@ import {
   hasMeaningfulLandingPageBodyText,
   LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
 } from "~/lib/landing-page-signals.server";
+import {
+  recordFetchStage,
+  recordRenderStage,
+  type LandingPagePipelineCounters,
+} from "~/lib/landing-page-pipeline-instrumentation.server";
 import { normalizeHeadline } from "~/lib/normalize";
 import {
   normalizePublicHttpUrl,
@@ -78,6 +83,13 @@ interface CaptureLandingPageSnapshotOptions {
    * race still caps how long the capture may wait on a slow write.
    */
   executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
+  /**
+   * Optional pipeline-instrumentation accumulator (issue #949). When present,
+   * the fetch and render stages record their outcome and bail-out reason on
+   * this counter so the caller can flush a per-check stage summary. The
+   * counter is never mutated in a way that affects capture behaviour.
+   */
+  instrumentation?: LandingPagePipelineCounters | null;
 }
 
 interface LandingPageCaptureAttemptState {
@@ -474,9 +486,15 @@ async function captureRenderedSnapshot(
         })
       : captureRenderedLandingPageSnapshot(env, url, attribution));
     telemetry.attemptUsed = attribution.telemetryAttempts.used;
+    if (options.instrumentation) {
+      recordRenderStage(options.instrumentation, snapshot ? "succeeded" : "failed");
+    }
     return snapshot;
   } catch (error) {
     logLandingCaptureWarning("rendered_fallback_failed", error);
+    if (options.instrumentation) {
+      recordRenderStage(options.instrumentation, "failed", "rendered_fallback_failed");
+    }
     return null;
   }
 }
