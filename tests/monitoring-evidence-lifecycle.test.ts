@@ -891,6 +891,43 @@ describe("monitoring plan-tier attribution propagation", () => {
     }
   });
 
+  it("requests a rendered (screenshot-bearing) capture for proof_capture (#957)", async () => {
+    // The homepage promises "saves the screenshots". A plain-http-first
+    // capture yields HTML only (no screenshotArtifactKey), which left 81% of
+    // succeeded proof_capture rows without a screenshot. Both proof-capture
+    // paths must pass preferRendered: true so the Browser Rendering →
+    // Browserless chain runs first and the snapshot carries a screenshot.
+    vi.resetModules();
+    const env = createEvidenceEnv("starter");
+    env.sqlite.exec(`
+      INSERT INTO watchlist_run (id, watchlist_id, status, processing_token)
+      VALUES ('run-rendered', 'watch-1', 'running', NULL);
+    `);
+    const createdProofCaptures: Array<Record<string, unknown>> = [];
+    const mocks = await installManualRunMocks({
+      capture: "success",
+      createdProofCaptures,
+      createdCandidates: [],
+      createdEvents: [],
+      deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+        attempts: 0,
+        channels: [],
+        details: [],
+      }),
+    });
+    const { runWatchlistManual } = await import("~/lib/monitoring.server");
+
+    await runWatchlistManual(env, manualWatchlist);
+
+    expect(mocks.captureLandingPageSnapshot.mock.calls.length).toBeGreaterThan(0);
+    for (const call of mocks.captureLandingPageSnapshot.mock.calls) {
+      expect(call[2]).toMatchObject({
+        routeContext: "proof_capture",
+        preferRendered: true,
+      });
+    }
+  });
+
   it("threads the caller's exact ExecutionContext into proof captures", async () => {
     vi.resetModules();
     const env = createEvidenceEnv("starter");
