@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 /**
  * F1 — the design-system ratchet (tri-audit; landed early by plan-review
@@ -154,5 +154,122 @@ describe("the marker list itself is pinned (Sol wave-2)", () => {
     const kept = JSON.parse(readFileSync(file, "utf8")) as Record<string, number>;
     expect(kept[Object.keys(realCeilings)[0]]).toBe(-1);
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("P10-A colour / font / radius extension", () => {
+  const root = join(__dirname, "..");
+  const script = join(root, "scripts", "design-system-ratchet.mjs");
+  const fixtureDir = join(root, "app", "__ratchet_fixture_p10a__");
+
+  afterEach(() => {
+    if (existsSync(fixtureDir)) {
+      rmSync(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
+  it("passes at the seeded counts for raw hex / gradient / radius / font / !important", () => {
+    const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("Ratchet clean");
+  });
+
+  it("fails when a new raw hex literal is added to app/", () => {
+    mkdirSync(fixtureDir, { recursive: true });
+    writeFileSync(
+      join(fixtureDir, "tmp.css"),
+      ".ratchet-fixture-tmp { color: #deadbe; }\n",
+    );
+
+    const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/raw-hex-outside-token-block/);
+    // Today's seeded ceiling is 374; a new literal nudges it to 375.
+    expect(result.stderr).toMatch(/count 375 !== ceiling 374/);
+  });
+
+  it("fails when a new gradient is added to app/", () => {
+    mkdirSync(fixtureDir, { recursive: true });
+    writeFileSync(
+      join(fixtureDir, "tmp.css"),
+      ".ratchet-fixture-tmp { background: linear-gradient(red, blue); }\n",
+    );
+
+    const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/gradient: count 23 !== ceiling 22/);
+  });
+
+  it("fails when a non-token font-family is added to app/", () => {
+    mkdirSync(fixtureDir, { recursive: true });
+    writeFileSync(
+      join(fixtureDir, "tmp.css"),
+      ".ratchet-fixture-tmp { font-family: 'Comic Sans MS'; }\n",
+    );
+
+    const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/font-family-non-token: count 1 !== ceiling 0/);
+  });
+
+  it("fails when a non-zero border-radius is added to app/", () => {
+    mkdirSync(fixtureDir, { recursive: true });
+    writeFileSync(
+      join(fixtureDir, "tmp.css"),
+      ".ratchet-fixture-tmp { border-radius: 7px; }\n",
+    );
+
+    const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/border-radius-nonzero: count 116 !== ceiling 115/);
+  });
+
+  it("fails when a new !important is added to app/", () => {
+    mkdirSync(fixtureDir, { recursive: true });
+    writeFileSync(
+      join(fixtureDir, "tmp.css"),
+      ".ratchet-fixture-tmp { color: red !important; }\n",
+    );
+
+    const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/important: count 27 !== ceiling 26/);
+  });
+
+  it("re-adds the new BANNED_MARKERS-and-PATTERN_MARKERS manifest, with no exemption by omission", () => {
+    const source = readFileSync(
+      join(root, "scripts", "design-system-ratchet.mjs"),
+      "utf8",
+    );
+    // Legacy markers
+    const bannedMatch = source.match(/BANNED_MARKERS = \[([^\]]+)\]/);
+    expect(bannedMatch).not.toBeNull();
+    const banned = [...(bannedMatch?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(banned).toEqual([
+      "f9-ed-",
+      "f9-app-",
+      "f9-work-",
+      "f9-dashboard-grid",
+      "f9-muted-copy",
+      "f9-secondary-button",
+      "f9-primary-button",
+      "f9-text-link",
+      "f9-message",
+      "f9-bl0",
+      "f9-pr-",
+      "f9-nt-",
+      "f9-col-",
+      "f9-clients-",
+      "f9-search-page",
+      "DashboardPageHeader",
+      "components/empty-state",
+      "style={",
+    ]);
+    // Pattern markers
+    expect(source).toContain('"raw-hex-outside-token-block"');
+    expect(source).toContain('"gradient"');
+    expect(source).toContain('"border-radius-nonzero"');
+    expect(source).toContain('"font-family-non-token"');
+    expect(source).toContain('"important"');
   });
 });

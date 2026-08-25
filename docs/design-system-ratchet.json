@@ -16,5 +16,10 @@
   "f9-search-page": 0,
   "DashboardPageHeader": 0,
   "components/empty-state": 0,
-  "style={": 0
+  "style={": 0,
+  "raw-hex-outside-token-block": 374,
+  "gradient": 22,
+  "border-radius-nonzero": 115,
+  "font-family-non-token": 0,
+  "important": 26
 }
