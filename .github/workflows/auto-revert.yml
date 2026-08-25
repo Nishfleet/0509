@@ -106,6 +106,28 @@ jobs:
           Human-order problem; a human must decide the revert order."
             exit 1
           fi
+          # Repeated-failure guard (Nish, 2026-08-25): if the SAME workflow
+          # also concluded failure for the parent of the red commit, the fault
+          # is infrastructural (deploy pipeline, secrets, provider) rather than
+          # this commit — reverting would just re-trigger the same failure and
+          # the next red run would revert the revert, looping. Halt instead.
+          # Mirrors the loop/freshness guards' style: halt issue + exit 1.
+          parent_sha="$(git rev-parse --verify "${HEAD_SHA}^" 2>/dev/null || true)"
+          if [ -n "$parent_sha" ]; then
+            parent_failed="$(gh api "repos/$REPO/actions/runs?branch=main&head_sha=$parent_sha" \
+              --paginate --jq '.workflow_runs[]? | select(.name=="'"$RUN_NAME"'") | select(.conclusion=="failure") | .id' 2>/dev/null \
+              | head -n1 || true)"
+            if [ -n "$parent_failed" ]; then
+              halt "AUTO-REVERT HALT: $RUN_NAME failing across consecutive commits — infra fault, not this commit" "The same workflow (\`$RUN_NAME\`) also failed on the parent commit, so the failure is infrastructural and reverting this commit would loop.
+
+          - Failing run: $RUN_NAME — $RUN_URL
+          - Red commit: \`$HEAD_SHA\` — \`$subject\`
+          - Parent commit: \`$parent_sha\` (also failed \`$RUN_NAME\`)
+
+          A repeated failure across consecutive commits is an infra fault (deploy pipeline, secrets, provider), not a regression in this commit. A human must look."
+              exit 1
+            fi
+          fi
           failing="$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs" --paginate \
             --jq '.check_runs[] | select(.conclusion=="failure") | .name' 2>/dev/null \
             | sort -u | paste -sd', ' - || true)"
