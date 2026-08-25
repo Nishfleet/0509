@@ -9,6 +9,7 @@ name: semgrep-actionlint
 
 on:
   pull_request:
+  merge_group:
   push:
     branches: [main]
 
