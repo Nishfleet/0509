@@ -20,5 +20,7 @@
   "raw-hex-color": 258,
   "non-token-font-family": 7,
   "non-token-border-radius": 158,
+  "css-gradient": 22,
+  "css-important": 26,
   "tailwind-arbitrary-value": 0
 }
