@@ -278,7 +278,11 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
   }
   const totalCount = data.ads.length;
   const adWord = totalCount === 1 ? "ad" : "ads";
-  const otherCount = totalCount - data.brandOwnedAdCount;
+  // Only verified-from-other advertisers count as "other advertisers" in the
+  // breakdown — unverified text-matches get their own labelled tail, never
+  // the "from other advertisers" clause. The prefix already names
+  // verifiedLinkCount, so the breakdown must sum to it (X + Y == V).
+  const otherCount = data.verifiedLinkCount - data.brandOwnedAdCount;
   const linkWord = data.verifiedLinkCount === 1 ? "ad" : "ads";
   const unverifiedWord = data.unverifiedMatchCount === 1 ? "ad" : "ads";
   const check = `a public check of ${adLibrarySourcePhrase(data.adLibraryCountry)} ${data.checkedAgo}`;
@@ -295,7 +299,12 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
   if (data.brandOwnedAdCount === 0) {
     return `See ${data.verifiedLinkCount} Meta ${linkWord} from other advertisers linking to ${data.domain}, from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
   }
-  return `See ${data.verifiedLinkCount} Meta ${linkWord} linking to ${data.domain} — ${data.brandOwnedAdCount} from ${data.brandName} and ${otherCount} from other advertisers — from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
+  // When every verified linking creative is the brand's own (no
+  // verified-from-other), drop the "and Y from other advertisers" clause —
+  // the unverified matches appear only in the tail.
+  const otherClause =
+    otherCount > 0 ? ` and ${otherCount} from other advertisers` : "";
+  return `See ${data.verifiedLinkCount} Meta ${linkWord} linking to ${data.domain} — ${data.brandOwnedAdCount} from ${data.brandName}${otherClause} — from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
@@ -389,7 +398,10 @@ function BrandAdsResults({
   const watchLabel = `Watch ${data.domain}`;
   const allBrandOwned = totalCount > 0 && data.brandOwnedAdCount === totalCount;
   const noneBrandOwned = data.brandOwnedAdCount === 0;
-  const otherCount = totalCount - data.brandOwnedAdCount;
+  // Mirror brandPageDescription: "other advertisers" in the closer split means
+  // verified-from-other only, so the split sums to verifiedLinkCount and
+  // unverified text-matches stay in their own labelled note.
+  const otherCount = data.verifiedLinkCount - data.brandOwnedAdCount;
 
   return (
     <>
@@ -697,7 +709,10 @@ function closerHonestyLine(
   if (noneBrandOwned) {
     return `Ad creatives are real ads from ${source}, run by other advertisers linking to ${data.domain}${cached}.${tail}${unverifiedNote}`;
   }
-  return `Ad creatives are real ads from ${source} linking to ${data.domain}${cached} — ${data.brandOwnedAdCount} run by ${data.brandName} and ${otherCount} by other advertisers.${tail}${unverifiedNote}`;
+  // Drop the "and Y by other advertisers" clause when there are no
+  // verified-from-other creatives — unverified matches live in unverifiedNote.
+  const otherClause = otherCount > 0 ? ` and ${otherCount} by other advertisers` : "";
+  return `Ad creatives are real ads from ${source} linking to ${data.domain}${cached} — ${data.brandOwnedAdCount} run by ${data.brandName}${otherClause}.${tail}${unverifiedNote}`;
 }
 
 /**
