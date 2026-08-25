@@ -35,7 +35,7 @@ function createPage(html: string, finalUrl: string) {
 describe("captureBrowserRunSnapshot decode wiring", () => {
   it("decodes the og:title headline entities once", async () => {
     const page = createPage(
-      `<html><head><meta property="og:title" content="Tom &amp; Jerry &lt;3"></head><body><main>rendered offer body copy</main></body></html>`,
+      `<html><head><meta property="og:title" content="Tom &amp; Jerry &lt;3"></head><body><main>rendered offer body copy with enough text to count as meaningful body content for the landing page signal extractor gate</main></body></html>`,
       "https://example.com/offer",
     );
     const browser = {
@@ -61,7 +61,7 @@ describe("captureBrowserRunSnapshot decode wiring", () => {
 
   it("does not double-decode an already-decoded ampersand in the headline", async () => {
     const page = createPage(
-      `<html><head><meta property="og:title" content="a & b already decoded"></head><body><main>rendered offer body copy</main></body></html>`,
+      `<html><head><meta property="og:title" content="a & b already decoded"></head><body><main>rendered offer body copy with enough text to count as meaningful body content for the landing page signal extractor gate</main></body></html>`,
       "https://example.com/offer",
     );
     const browser = {

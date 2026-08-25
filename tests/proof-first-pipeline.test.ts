@@ -176,6 +176,8 @@ function installSharedMocks(input: {
       metadata: {
         htmlArtifactKey: "landing-pages/page.html",
         screenshotArtifactKey: "landing-pages/page.jpeg",
+        captureValidated: true,
+        screenshotCorroborates: true,
         extractorVersion: "lp-signals-v1",
         extractedFieldConfidence: {
           headline: 0.95,

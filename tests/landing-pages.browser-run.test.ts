@@ -124,7 +124,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     const put = vi.fn();
     const fetch = mockFetchWithDns(
       vi.fn(async () =>
-        new Response("<html><head><title>Raw page</title></head><body>Raw offer</body></html>", {
+        new Response("<html><head><title>Raw page</title></head><body>Raw offer. Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</body></html>", {
           status: 200,
         }),
       ) as never,
@@ -411,7 +411,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
           </head>
           <body>
             <button>Shop now</button>
-            <p>Starting at ₹499 only today</p>
+            <p>Starting at ₹499 only today. Our best-selling vitamin C serum is now at 20% off for the launch week. Free shipping on all orders above ₹999.</p>
             <form action="/lead">
               <input name="phone" />
               <input type="submit" value="Get Offer" />
@@ -486,7 +486,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
       setRequestInterception: vi.fn(),
       setViewport: vi.fn(),
       content: vi.fn().mockResolvedValue(
-        "<html><head><title>Readable render</title></head><body><button>Buy now</button></body></html>",
+        "<html><head><title>Readable render</title></head><body><button>Buy now</button><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>",
       ),
       screenshot: vi.fn().mockRejectedValue(new Error("screenshot failed")),
       url: vi.fn().mockReturnValue("https://example.com/offer"),
@@ -528,7 +528,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
       setRequestInterception: vi.fn(),
       setViewport: vi.fn(),
       content: vi.fn().mockResolvedValue(
-        "<html><head><title>Oversized screenshot proof</title></head><body><button>Buy now</button></body></html>",
+        "<html><head><title>Oversized screenshot proof</title></head><body><button>Buy now</button><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>",
       ),
       screenshot: vi.fn().mockResolvedValue(new Uint8Array(3_000_001)),
       url: vi.fn().mockReturnValue("https://example.com/offer"),
@@ -606,7 +606,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
                     </head>
                     <body>
                       <a href="/offer">Claim deal</a>
-                      <p>Up to 30% off this week</p>
+                      <p>Up to 30% off this week. Our best-selling vitamin C serum is on launch sale with free shipping on all orders above the free-shipping threshold.</p>
                       <form>
                         <input name="email" />
                         <button type="submit">Submit</button>
@@ -689,7 +689,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         }
         return new Response(JSON.stringify({
           data: {
-            html: { html: "<html><head><title>Proof</title></head><body></body></html>" },
+            html: { html: "<html><head><title>Proof</title></head><body><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>" },
             screenshot: { base64: btoa(String.fromCharCode(...screenshotBytes)) },
             documentRequests: [{ url: "https://www.example.com/glow" }],
             url: { url: "https://www.example.com/glow" },
@@ -781,7 +781,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         return new Response(
           JSON.stringify({
             data: {
-              html: { html: "<html><head><title>Huge proof</title></head><body></body></html>" },
+              html: { html: "<html><head><title>Huge proof</title></head><body><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>" },
               screenshot: { base64: `${"A".repeat(4_000_004)}` },
               documentRequests: [{ url: "https://www.example.com/glow" }],
               url: { url: "https://www.example.com/glow" },
@@ -826,7 +826,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
           JSON.stringify({
             data: {
               html: {
-                html: "<html><head><title>Decoded proof</title></head><body><a>Buy now</a></body></html>",
+                html: "<html><head><title>Decoded proof</title></head><body><a>Buy now</a><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>",
               },
               screenshot: { base64: "%%%truncated%%%" },
               documentRequests: [{ url: "https://www.example.com/glow" }],
@@ -961,7 +961,7 @@ describe("captureLandingPageSnapshot plain_http attribution rows", () => {
     mockFetchWithDns(
       vi.fn(async () =>
         new Response(
-          "<html><head><title>Offer</title></head><body>Real offer details here</body></html>",
+          "<html><head><title>Offer</title></head><body>Real offer details here. Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</body></html>",
           { status: 200 },
         ),
       ) as never,
@@ -1125,7 +1125,7 @@ describe("landing attribution outcome and attempt fidelity", () => {
       goto: vi.fn().mockResolvedValue(undefined),
       url: vi.fn().mockReturnValue(undefined),
       content: vi.fn().mockResolvedValue(
-        "<html><head><title>Gated offer</title></head><body>Rendered offer body</body></html>",
+        "<html><head><title>Gated offer</title></head><body>Rendered offer body. Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</body></html>",
       ),
       screenshot: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
       setRequestInterception: vi.fn().mockResolvedValue(undefined),
@@ -1236,7 +1236,7 @@ describe("rendered chain attempt ordering and job correlation", () => {
                   html: `
                     <html>
                       <head><title>Rendered proof</title></head>
-                      <body><button>Shop now</button><p>Only today</p></body>
+                      <body><button>Shop now</button><p>Only today. Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body>
                     </html>
                   `,
                 },
@@ -1312,7 +1312,7 @@ describe("rendered chain attempt ordering and job correlation", () => {
                   html: `
                     <html>
                       <head><title>Rendered proof</title></head>
-                      <body><button>Shop now</button></body>
+                      <body><button>Shop now</button><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body>
                     </html>
                   `,
                 },
@@ -1372,7 +1372,7 @@ describe("rendered chain attempt ordering and job correlation", () => {
     mockFetchWithDns(
       vi.fn(async () =>
         new Response(
-          "<html><head><title>Offer</title></head><body>Real offer details here</body></html>",
+          "<html><head><title>Offer</title></head><body>Real offer details here. Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</body></html>",
           { status: 200 },
         ),
       ) as never,
@@ -1411,7 +1411,7 @@ describe("rendered chain attempt ordering and job correlation", () => {
     mockFetchWithDns(
       vi.fn(async () =>
         new Response(
-          "<html><head><title>Offer</title></head><body>Real offer details here</body></html>",
+          "<html><head><title>Offer</title></head><body>Real offer details here. Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</body></html>",
           { status: 200 },
         ),
       ) as never,
@@ -1454,7 +1454,7 @@ describe("rendered chain attempt ordering and job correlation", () => {
     mockFetchWithDns(
       vi.fn(async () =>
         new Response(
-          "<html><head><title>Offer</title></head><body>Real offer details here</body></html>",
+          "<html><head><title>Offer</title></head><body>Real offer details here. Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</body></html>",
           { status: 200 },
         ),
       ) as never,
@@ -1811,7 +1811,7 @@ describe("rendered-first duration origin (controlled clock)", () => {
     mockFetchWithDns(
       vi.fn(async () =>
         new Response(
-          "<html><head><title>Offer</title></head><body>Real offer details here</body></html>",
+          "<html><head><title>Offer</title></head><body>Real offer details here. Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</body></html>",
           { status: 200 },
         ),
       ) as never,
@@ -1860,7 +1860,7 @@ describe("captureLandingPageSnapshot transient retry", () => {
           return new Response("boom", { status: 500 });
         }
         return new Response(
-          '<html><head><title>Retried page</title></head><body><a href="/buy">Buy now</a><p>$49</p></body></html>',
+          '<html><head><title>Retried page</title></head><body><a href="/buy">Buy now</a><p>$49</p><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>',
           { status: 200 },
         );
       }) as never,
@@ -1910,7 +1910,7 @@ describe("captureLandingPageSnapshot transient retry", () => {
       setRequestInterception: vi.fn(),
       setViewport: vi.fn(),
       content: vi.fn().mockResolvedValue(
-        "<html><head><title>SPA hydrated</title></head><body><button>Book now</button><form><input name=\"email\" /></form></body></html>",
+        "<html><head><title>SPA hydrated</title></head><body><button>Book now</button><form><input name=\"email\" /></form><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>",
       ),
       screenshot: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
       url: vi.fn().mockReturnValue("https://example.com/spa"),
@@ -1966,7 +1966,7 @@ describe("captureLandingPageSnapshot transient retry", () => {
           JSON.stringify({
             data: {
               html: {
-                html: "<html><head><title>Retried render</title></head><body><a>Claim deal</a></body></html>",
+                html: "<html><head><title>Retried render</title></head><body><a>Claim deal</a><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>",
               },
               screenshot: { base64: btoa(String.fromCharCode(1, 2, 3)) },
               documentRequests: [{ url: "https://www.example.com/glow" }],

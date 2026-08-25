@@ -3788,6 +3788,9 @@ async function evaluateSelectiveProofCandidates(
         sensitivityMode: "balanced",
         burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
         currentCapturedAt: snapshot.capturedAt,
+        screenshotCorroborates:
+          readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
+          false,
       });
 
       for (const event of evaluated.events) {
@@ -4303,6 +4306,9 @@ async function evaluateDirectWebsiteProofCandidate(
       sensitivityMode: "balanced",
       burstCount: 1,
       currentCapturedAt: snapshot.capturedAt,
+      screenshotCorroborates:
+        readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
+        false,
     });
 
     const proofEvents: WatchEventRecord[] = [];
@@ -4873,6 +4879,14 @@ function readSnapshotString(
 ) {
   const value = metadata?.[key];
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function readSnapshotBoolean(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  return typeof value === "boolean" ? value : null;
 }
 
 function readSnapshotConfidence(snapshot: {
