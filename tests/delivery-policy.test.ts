@@ -249,4 +249,30 @@ describe("delivery policy", () => {
     expect(first).toBe(second);
     expect(third).not.toBe(first);
   });
+
+  it("never fires an instant alert for bare ad_new/ad_inactive creative churn (BET 1)", () => {
+    // ad_new carries a base importance of 76 — above the balanced instant
+    // threshold (75) — yet creative churn must never interrupt the customer on
+    // its own. It only ever appears as a counted line in the digest brief.
+    for (const eventType of ["ad_new", "ad_inactive"] as const) {
+      const decision = evaluateDeliveryPolicy({
+        lane: "customer",
+        event: watchEvent({
+          eventType,
+          status: "confirmed",
+          importanceScore: 100,
+        }),
+        workspaceConfig: {
+          ...workspaceConfig,
+          sensitivityMode: "aggressive",
+        },
+        watchlistConfig: null,
+        now: "2026-04-18T12:00:00.000Z",
+      });
+
+      expect(decision.instantEligible).toBe(false);
+      // Churn stays digest-eligible so it still reaches the counted footnote.
+      expect(decision.digestEligible).toBe(true);
+    }
+  });
 });
