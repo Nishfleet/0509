@@ -64,11 +64,12 @@ describe("workflow routing hardening", () => {
     expect(typecheck?.env?.NODE_OPTIONS).toBe("--max-old-space-size=2048");
   });
 
-  it("serializes every provider mutation without cancelling or replacing queued work", () => {
+  it("serializes every provider mutation without cancelling running work", () => {
+    // Backup, restore, and soak workflows keep `queue: max` so every queued
+    // run eventually executes — none are superseded or cancelled.
     for (const filename of [
       "d1-backup-r2.yml",
       "d1-remote-restore-evidence.yml",
-      "deploy-production.yml",
       "finalize-production-soak.yml",
     ]) {
       const concurrency = workflow(filename).parsed.concurrency;
@@ -78,6 +79,18 @@ describe("workflow routing hardening", () => {
         queue: "max",
       });
     }
+    // Deploy production uses deploy-latest semantics (Nish, 2026-08-25):
+    // cancel-in-progress: false (a running deploy is never interrupted) but
+    // no `queue: max`, so superseded queued deploys are cancelled and only
+    // the newest queued deploy runs after the current one finishes. This
+    // does not weaken any gate — the deploy that proceeds runs the full
+    // release gate at full strength.
+    const deployConcurrency =
+      workflow("deploy-production.yml").parsed.concurrency;
+    expect(deployConcurrency).toEqual({
+      group: "0509-production-provider-mutations",
+      "cancel-in-progress": false,
+    });
     for (const filename of ["ci.yml", "cross-browser-matrix.yml", "d1-backup-validate.yml", "secret-scan.yml"]) {
       expect(workflow(filename).parsed.concurrency?.["cancel-in-progress"], filename).toBe(true);
     }

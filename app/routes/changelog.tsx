@@ -1,7 +1,12 @@
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 
 const description =
   "Customer-facing updates for Five to Nine, with clear product and availability boundaries.";
@@ -22,6 +27,15 @@ export default function ChangelogRoute() {
       title="What changed in Five to Nine."
       intro="A short record of customer-visible changes. We keep planned work and unverified provider actions out until they are proven."
     >
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "Changelog | Five to Nine",
+            description,
+            pathname: "/changelog",
+          }),
+        )}
+      />
       <PublicDocBlock title="2026-08-22">
         <ul className="f9-doc-list">
           <li>Full-site watch discovery now finds and classifies pages across a competitor&apos;s whole site — not just the landing page — with a bounded crawl and per-page-type cadence, so you see changes on pricing pages, product pages, and blog posts alongside the ads you already tracked.</li>

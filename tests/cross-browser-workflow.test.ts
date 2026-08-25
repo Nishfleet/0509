@@ -23,14 +23,20 @@ describe("cross-browser workflow", () => {
     };
   };
 
-  it("installs browsers without system deps", () => {
+  it("installs browsers with system deps on hosted runners", () => {
+    // PR #902 moved this workflow from self-hosted runners (which pre-install
+    // WebKit's GTK-4 / GStreamer / flite system libraries) to ubuntu-latest.
+    // The hosted ubuntu-24.04 image does not ship those libs, so the install
+    // step must use --with-deps or every firefox/webkit/mobile launch fails
+    // with "Host system is missing dependencies to run browsers". This
+    // regressed nightly on 2026-08-24 and 2026-08-25.
     const browserInstall = parsed.jobs.matrix.steps.find(
       (step) => step.name === "Install Playwright browsers",
     );
     expect(browserInstall).toMatchObject({
-      run: "npx playwright install chromium firefox webkit",
+      run: "npx playwright install --with-deps chromium firefox webkit",
     });
-    expect(browserInstall?.run).not.toContain("--with-deps");
+    expect(browserInstall?.run).toContain("--with-deps");
 
     const proof = parsed.jobs.matrix.steps.find(
       (step) => step.name === "Run cross-browser risk proof",

@@ -3,7 +3,12 @@ import { Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const privacyDescription =
@@ -21,6 +26,15 @@ export const meta: MetaFunction = () =>
 export default function PrivacyRoute() {
   return (
     <main className="f9-legal-page">
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "Privacy | Five to Nine",
+            description: privacyDescription,
+            pathname: "/privacy",
+          }),
+        )}
+      />
       <SimpleHeader />
       <section className="f9-container f9-legal-section">
         <article className="f9-legal-card">

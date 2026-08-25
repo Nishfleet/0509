@@ -3,7 +3,12 @@ import { Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const termsDescription =
@@ -21,6 +26,15 @@ export const meta: MetaFunction = () =>
 export default function TermsRoute() {
   return (
     <main className="f9-legal-page">
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "Terms | Five to Nine",
+            description: termsDescription,
+            pathname: "/terms",
+          }),
+        )}
+      />
       <SimpleHeader />
       <section className="f9-container f9-legal-section">
         <article className="f9-legal-card">

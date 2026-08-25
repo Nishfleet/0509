@@ -28,6 +28,7 @@ import {
 import { isoFromCountryName } from "~/lib/countries";
 import { fingerprintSavedQuery, normalizeNumericPageId } from "~/lib/normalize";
 import { truncateTextSafe } from "~/lib/text-safe";
+import { decodeHtmlEntities as decodeHtmlEntity } from "~/lib/decode-html.server";
 import {
   findStartedRunningLine,
   parseStartedRunningDate,
@@ -35,7 +36,6 @@ import {
 import {
   absolutizeMetaAdUrl,
   applyRelayPageIdentitiesToCards,
-  decodeHtmlEntity,
   extractAdArchivePageIdentities,
   extractCreativeMediaFromHtml,
   extractAdCopyFromCardText,
@@ -43,6 +43,7 @@ import {
   extractTextCardsFromVisibleText,
   hasNoResultsSignal,
   inferCta,
+  inferLandingPageFromTextBlock,
   inferPlatforms,
   isAdLibraryChromeCta,
   parseRenderedMetaLibraryHtml,
@@ -2092,7 +2093,14 @@ function extractQuickActionPayloadFromScrape(
       previewSubhead: null,
       cta: inferCta(text),
       adSnapshotUrl: absolutizeMetaAdUrl(href),
-      landingPageUrl: extractExternalLink(html),
+      landingPageUrl:
+        extractExternalLink(html) ??
+        inferLandingPageFromTextBlock(
+          lineText
+            .split(/\n+/)
+            .map((line) => line.trim())
+            .filter(Boolean),
+        ),
       platforms: inferPlatforms(text),
       active: readStandaloneActiveStatus(lineText),
       startedRunning: findStartedRunningLine(lineText),

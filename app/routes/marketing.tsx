@@ -206,9 +206,15 @@ function proofTimeLabel(iso: string | null | undefined): string {
     if (Number.isNaN(parsed.getTime())) {
       return "recently";
     }
+    // A capture from a prior (or, defensively, future) UTC year must carry
+    // its year so "Sep 4" cannot read as a recent or upcoming same-year date
+    // for a year-old capture. Same-year dates keep the compact rendering.
+    // See issue 1032 (homepage proof wall year-stripping bug).
+    const includeYear = parsed.getUTCFullYear() !== new Date().getUTCFullYear();
     return parsed.toLocaleString("en", {
       month: "short",
       day: "numeric",
+      ...(includeYear ? { year: "numeric" } : {}),
       timeZone: "UTC",
     });
   }
@@ -527,6 +533,7 @@ export default function MarketingRoute() {
           </p>
           <div className="ld-proof-actions">
             <Link to={publicSearchTrialPath}>Try the search preview</Link>
+            <Link to="/competitor-monitoring">Read the methodology</Link>
             <a href="#pricing">See plans</a>
           </div>
         </div>

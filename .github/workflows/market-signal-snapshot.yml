@@ -19,20 +19,29 @@ name: Daily market-signal D1 snapshot
 # The commit is a no-op when the snapshot is unchanged.
 #
 # The snapshot is published to a dedicated automation-owned data branch
-# (`automation/market-signal-snapshot`), NOT merged to main. The previous shape
-# landed on protected main through a PR squash merge, but the Nishfleet org
-# policy "Allow GitHub Actions to create and approve pull requests" is disabled,
-# so `gh pr create` died with a GraphQL error on every run from 2026-08-21 on.
-# Flipping that org setting needs admin:org scope and loosens an org-wide
-# security control for one daily data file, which is not worth it. Pushing to a
-# data branch needs no PR, so no org or repo policy is weakened. Hermes reads
-# the snapshot from this branch directly (see
-# automation/HERMES_MARKET_SIGNAL.md), so no human merge is required for the
-# daily signal to flow. A human can review the snapshot diff on the data branch
-# at any time; the publish step writes a job summary pointing at it, which is
-# the mechanism that surfaces the snapshot to a human without Actions opening a
-# PR. A snapshot that cannot be produced or pushed fails the job -- never exit 0
-# on a publish failure.
+# (`automation/market-signal-snapshot`) in the PRIVATE sink repo
+# `Nishfleet/0509-telemetry`, NOT merged to main and NOT pushed to this public
+# repo. The public 0509 repo went public on 2026-08-24; an audit
+# (0509-public-flip-audit.md) found the previous shape had been publishing live
+# traction telemetry (users_total, paid_accounts, plan mix, billing events) as
+# branches in the public repo. Those branches were deleted and this workflow
+# was disabled; it is re-pointed at the private sink so the telemetry never
+# returns to a public surface.
+#
+# Cross-repo push: the workflow's default GITHUB_TOKEN cannot push to another
+# repo, so the publish step writes the deploy key stored as the
+# `TELEMETRY_DEPLOY_KEY` repo secret (a write-enabled deploy key on
+# 0509-telemetry) to a temp file and pushes over SSH with a one-shot ssh
+# commandConfig. The private half never appears in logs: it is written under
+# $RUNNER_TEMP, used once, and unlinked.
+#
+# The branch name and snapshot path are unchanged from the old public-branch
+# shape (`automation/market-signal-snapshot` / `ops/market-signal/0509-market-signal.json`),
+# so Hermes reads the snapshot from the same ref/path -- only the repo changed
+# (see automation/HERMES_MARKET_SIGNAL.md). A human can review the snapshot diff
+# on the private data branch at any time; the publish step writes a job summary
+# pointing at it. A snapshot that cannot be produced or pushed fails the job --
+# never exit 0 on a publish failure.
 on:
   schedule:
     # Daily 00:07 UTC = 05:37 IST: before the Hermes morning report reads the
@@ -46,17 +55,18 @@ concurrency:
   queue: max
 
 # The snapshot script reads the repository's issue list for the github section
-# of the signal, so the token needs issues: read in addition to the contents
-# write needed to push the snapshot to the data branch. Without issues: read
-# the script's `gh api .../issues` call dies with "Resource not accessible by
+# of the signal, so the token needs issues: read. Without issues: read the
+# script's `gh api .../issues` call dies with "Resource not accessible by
 # integration (HTTP 403)" (seen on the first three restored runs,
 # 2026-08-12T01:21Z/01:29Z/01:33Z); since #682 the scheduled token carries
 # issues: read, and if a read ever fails again the script degrades to
 # github: { unavailable: true } and the snapshot still publishes.
-# No pull-requests scope is requested: the snapshot no longer lands through a
-# PR, so the workflow never needs to create or merge one.
+# No contents: write and no pull-requests scope: the snapshot no longer lands
+# in this repo at all. It is pushed to the private sink Nishfleet/0509-telemetry
+# with a deploy key (TELEMETRY_DEPLOY_KEY secret), not the GITHUB_TOKEN, so the
+# workflow needs no write scope on this public repo.
 permissions:
-  contents: write
+  contents: read
   issues: read
 
 jobs:
@@ -120,18 +130,45 @@ jobs:
             }
             console.log('market_signal_snapshot_fresh ' + snapshot.generatedAt);
           "
-      - name: Publish snapshot to data branch
-        # The snapshot is pushed to a dedicated automation-owned data branch
-        # instead of merged to main, because the Nishfleet org forbids Actions
-        # from creating PRs (see the workflow header). No PR is opened, so no
-        # org or repo policy is weakened. The branch is automation-owned (one
-        # commit on top of main per day), so a force push is safe. A snapshot
-        # that cannot be pushed fails the job -- never exit 0 on a publish
-        # failure. The job summary surfaces the branch and commit to a human
-        # for review without Actions opening a PR; Hermes reads the snapshot
-        # from this branch directly (automation/HERMES_MARKET_SIGNAL.md).
+      - name: Publish snapshot to private telemetry sink
+        # The snapshot is pushed to the PRIVATE repo Nishfleet/0509-telemetry
+        # on the automation-owned data branch `automation/market-signal-snapshot`,
+        # never to this public repo. The default GITHUB_TOKEN cannot push
+        # cross-repo, so the publish step writes the TELEMETRY_DEPLOY_KEY secret
+        # (a write-enabled deploy key on 0509-telemetry) to a temp file under
+        # $RUNNER_TEMP and pushes over SSH with a one-shot GIT_SSH_COMMAND that
+        # pins that key. The key file is unlinked before the step exits, success
+        # or failure, so it never persists on the runner. A snapshot that cannot
+        # be pushed fails the job -- never exit 0 on a publish failure. The job
+        # summary surfaces the private branch and commit to a human for review;
+        # Hermes reads the snapshot from this branch directly
+        # (automation/HERMES_MARKET_SIGNAL.md).
+        env:
+          TELEMETRY_DEPLOY_KEY: ${{ secrets.TELEMETRY_DEPLOY_KEY }}
+          TELEMETRY_REPO: Nishfleet/0509-telemetry
         run: |
           set -euo pipefail
+
+          # Refuse an empty deploy key before writing anything: a missing
+          # secret would otherwise produce an opaque SSH auth failure downstream.
+          if [ -z "${TELEMETRY_DEPLOY_KEY:-}" ]; then
+            echo "market_signal_missing_telemetry_deploy_key" >&2
+            exit 1
+          fi
+
+          # Write the deploy key to a temp file under $RUNNER_TEMP, scoped to
+          # this step, mode 600, and unlink it on exit so it never persists.
+          KEY_FILE="$RUNNER_TEMP/telemetry_deploy_key"
+          printf '%s\n' "$TELEMETRY_DEPLOY_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          trap 'rm -f "$KEY_FILE"' EXIT
+
+          # One-shot SSH command that pins the deploy key and disables any
+          # inherited agent or default identity. StrictHostKeyChecking=accept-new
+          # trusts github.com's host key on first connect (the runner image
+          # already carries it, but this is robust to image drift).
+          export GIT_SSH_COMMAND="ssh -i \"$KEY_FILE\" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=\"$RUNNER_TEMP/telemetry_known_hosts\""
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- "$SNAPSHOT_PATH"
@@ -144,32 +181,40 @@ jobs:
           # -C resets an existing data branch from a rerun instead of failing;
           # the branch is automation-owned, so a force push is safe.
           git switch -C "$SNAPSHOT_BRANCH"
-          # --force-if-includes refuses the push if a remote-only commit has
-          # slipped in (e.g. a manual commit landed on the data branch). If the
-          # branch has no upstream yet, --force creates it; the automation owns
-          # the branch so a force push is safe and the explicit fallback keeps
-          # the workflow from dying on the very first run.
+
+          # Push to the PRIVATE telemetry repo, not this repo's origin. The
+          # deploy key is scoped to 0509-telemetry with write access, so a push
+          # anywhere else fails closed.
+          TELEMETRY_URL="git@github.com:${TELEMETRY_REPO}.git"
+          # Add the telemetry remote pointing at the private repo. --force-if-includes
+          # refuses the push if a remote-only commit has slipped in (e.g. a manual
+          # commit landed on the data branch). If the branch has no upstream yet,
+          # --force creates it; the automation owns the branch so a force push is
+          # safe and the explicit fallback keeps the workflow from dying on the
+          # very first run.
           set +e
-          git push --force-if-includes origin "HEAD:$SNAPSHOT_BRANCH"
+          git push --force-if-includes "${TELEMETRY_URL}" "HEAD:$SNAPSHOT_BRANCH"
           push_status=$?
           set -e
           if [ "$push_status" -ne 0 ]; then
-            git push --force origin "HEAD:$SNAPSHOT_BRANCH"
+            git push --force "${TELEMETRY_URL}" "HEAD:$SNAPSHOT_BRANCH"
           fi
+
           COMMIT_SHA="$(git rev-parse HEAD)"
-          BRANCH_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${SNAPSHOT_BRANCH}"
-          COMMIT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${COMMIT_SHA}"
+          BRANCH_URL="https://github.com/${TELEMETRY_REPO}/tree/${SNAPSHOT_BRANCH}"
+          COMMIT_URL="https://github.com/${TELEMETRY_REPO}/commit/${COMMIT_SHA}"
           echo "market_signal_snapshot_published ${BRANCH_URL}"
-          # Surface the snapshot to a human without Actions opening a PR: the
-          # data branch and commit are reviewable in the GitHub UI, and this
-          # job summary records where to look. Hermes reads the snapshot from
-          # this branch directly, so no human merge is required for the daily
-          # signal to flow.
+          # Surface the snapshot to a human: the private data branch and commit
+          # are reviewable in the GitHub UI by anyone with read access to
+          # 0509-telemetry, and this job summary records where to look. Hermes
+          # reads the snapshot from this branch directly, so no human merge is
+          # required for the daily signal to flow.
           {
-            echo "## Market-signal snapshot published"
+            echo "## Market-signal snapshot published (private sink)"
             echo ""
+            echo "Private repo: \`${TELEMETRY_REPO}\`"
             echo "Branch: ${BRANCH_URL}"
             echo "Commit: ${COMMIT_URL}"
             echo ""
-            echo "The snapshot is pushed to \`${SNAPSHOT_BRANCH}\` instead of merged to \`main\`, because the Nishfleet org forbids Actions from creating PRs. Hermes reads it from this branch (see \`automation/HERMES_MARKET_SIGNAL.md\`). Review the diff on the branch before it feeds the morning report."
+            echo "The snapshot is pushed to the **private** \`${TELEMETRY_REPO}\` repo on \`${SNAPSHOT_BRANCH}\`, not to this public repo. Hermes reads it from there (see \`automation/HERMES_MARKET_SIGNAL.md\`). Review the diff on the private branch before it feeds the morning report."
           } >> "$GITHUB_STEP_SUMMARY"
