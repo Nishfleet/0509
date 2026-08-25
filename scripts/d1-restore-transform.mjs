@@ -2,9 +2,13 @@
 
 /**
  * Turn D1 export statements containing very large TEXT literals into a set of
- * D1-sized statements. This is intentionally restore-only: it accepts a
+ * D1-sized statements, and order the result so it restores against a database
+ * that enforces foreign keys. This is intentionally restore-only: it accepts a
  * complete export, discovers primary keys from its CREATE TABLE statements,
  * and refuses to guess about SQL it cannot prove safe to rewrite.
+ *
+ * See `orderRestoreStatements` for why every `CREATE TABLE` is hoisted ahead of
+ * the rows.
  */
 
 export const DEFAULT_MAX_STATEMENT_BYTES = 90_000;
@@ -311,6 +315,61 @@ function quoteIdentifier(value) {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
+function isPragmaStatement(statement) {
+  const word = readKeyword(statement, skipTrivia(statement, 0));
+  return word?.normalized === "pragma";
+}
+
+/**
+ * Hoist every `CREATE TABLE` ahead of the rows so a restore never inserts into
+ * a child table whose parent table has not been created yet.
+ *
+ * A D1 export walks `sqlite_master` in creation order and emits each table
+ * immediately followed by its rows, so the export order is the order the tables
+ * happen to have been created in. A table rebuild (`CREATE ..._next` / `DROP` /
+ * `ALTER TABLE ... RENAME TO`, the convention used by 0002/0007/0008/0009/0019/
+ * 0077) moves the rebuilt table to the end of that order. When a migration
+ * rebuilds a child before its parent — 0077 rebuilt `watch_event`, which has
+ * `FOREIGN KEY (candidate_id) REFERENCES event_candidate(id)`, before it
+ * rebuilt `event_candidate` — the export emits `INSERT INTO "watch_event"`
+ * while `event_candidate` does not exist yet.
+ *
+ * SQLite resolves a foreign key's parent table when the row is written, so with
+ * foreign keys enforced that INSERT fails with
+ * `no such table: main.event_candidate`. D1 enforces them on import, which is
+ * why the 2026-08-25 restore drills went red the moment 0077 reached production
+ * (`sqlite3` and `node:sqlite` default to `foreign_keys = OFF`, so the same
+ * dump restores locally without complaint — the failure only appears against
+ * D1). `PRAGMA defer_foreign_keys=TRUE`, which the export emits, defers
+ * constraint *violations* to commit; it cannot conjure a missing table.
+ *
+ * Creating every table first removes the dependency on creation order entirely:
+ * indexes, triggers, and rows all land after every table exists. Order within
+ * each group is preserved, so nothing else about the restore changes.
+ *
+ * @param {string[]} statements
+ * @returns {string[]}
+ */
+export function orderRestoreStatements(statements) {
+  if (!Array.isArray(statements)) {
+    throw new TypeError("D1 restore statements must be an array.");
+  }
+  const leadingPragmas = [];
+  const tables = [];
+  const rest = [];
+  let sawNonPragma = false;
+  for (const statement of statements) {
+    if (!sawNonPragma && isPragmaStatement(statement)) {
+      leadingPragmas.push(statement);
+      continue;
+    }
+    sawNonPragma = true;
+    if (parseCreateTable(statement)) tables.push(statement);
+    else rest.push(statement);
+  }
+  return [...leadingPragmas, ...tables, ...rest];
+}
+
 function splitStatements(sql) {
   const statements = [];
   let start = 0;
@@ -491,12 +550,13 @@ export function transformD1RestoreSql(sql, options = {}) {
     }
     transformed += 1;
   }
+  const ordered = orderRestoreStatements(output);
   return {
-    sql: output.join(""),
-    statements: output,
+    sql: ordered.join(""),
+    statements: ordered,
     transformed,
     maxBytes,
-    statementBytes: output.map(byteLength),
+    statementBytes: ordered.map(byteLength),
   };
 }
 
