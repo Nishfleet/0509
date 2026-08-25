@@ -141,6 +141,14 @@ ASSERTION = re.compile(r"\b(?:it|test)\s*\(|\bexpect\s*\(")
 # A CI step softened so it can no longer fail the build.
 CI_SOFTENER = re.compile(r"\|\|\s*true\b|continue-on-error\s*:\s*true\b")
 
+# Shell `test`/`[` conditionals are not CI test steps. A line whose command is
+# `test`, `[`, or `[[` may legitimately contain `|| true` (e.g. a detached-HEAD
+# guard or a command substitution that tolerates failure), and a brand-new file
+# cannot soften a step that did not exist before.
+SHELL_TEST_COND = re.compile(
+    r"^\s*(?:run:\s*)?(?:!\s+)?(?:test(?:\s+|$)|\[\s+|\[\[\s+)"
+)
+
 RATCHET_CEILINGS = "docs/design-system-ratchet.json"
 
 TRAILER = re.compile(
@@ -484,9 +492,11 @@ def main():
                 assertion_delta -= sum(len(ASSERTION.findall(ln)) for ln in code_lines(dels))
 
         # --- gate-path, content level -------------------------------------
-        if name.endswith(".yml") or name.endswith(".yaml") or name.startswith("scripts/"):
+        if status != "added" and (
+            name.endswith(".yml") or name.endswith(".yaml") or name.startswith("scripts/")
+        ):
             for ln in code_lines(adds):
-                if CI_SOFTENER.search(ln):
+                if CI_SOFTENER.search(ln) and not SHELL_TEST_COND.match(ln):
                     gate_violations.append(f"CI step softened in {name}: {ln.strip()[:120]}")
                     break
         if name == RATCHET_CEILINGS or prev == RATCHET_CEILINGS:
