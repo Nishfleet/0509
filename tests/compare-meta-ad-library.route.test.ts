@@ -88,4 +88,23 @@ describe("compare meta-ad-library route", () => {
       "<loc>https://0509.io/compare/meta-ad-library</loc>",
     );
   });
+
+  it("emits one FAQPage JSON-LD block whose mainEntity count matches the visible FAQ entries", async () => {
+    const { default: CompareMetaAdLibraryRoute, metaAdLibraryFaqEntries } = await import(
+      "~/routes/compare.meta-ad-library"
+    );
+    const markup = renderToStaticMarkup(createElement(CompareMetaAdLibraryRoute));
+
+    const ldBlocks = [...markup.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
+    const faqBlocks = ldBlocks
+      .map((match) => JSON.parse(match[1]))
+      .filter((data) => data["@type"] === "FAQPage");
+
+    expect(faqBlocks).toHaveLength(1);
+    const mainEntity = faqBlocks[0].mainEntity as Array<{ name: string }>;
+    expect(mainEntity).toHaveLength(metaAdLibraryFaqEntries.length);
+    expect(mainEntity.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining(metaAdLibraryFaqEntries.map((entry) => entry.question)),
+    );
+  });
 });
