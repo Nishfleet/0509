@@ -51,13 +51,19 @@ const DELIVERY_MANAGEMENT_INTENTS = new Set([
   "toggle-delivery-target",
 ]);
 
-export async function handleWatchlistsAction({ context, request }: ActionFunctionArgs) {
+export async function handleWatchlistsAction(args: ActionFunctionArgs) {
+  const { context, request } = args;
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
+
+  if (intent === "preview-market-desk-import" || intent === "create-market-desk-import") {
+    const { handleSetupChecklistAction } = await import("~/lib/setup-checklist-action.server");
+    return handleSetupChecklistAction(args, formData);
+  }
 
   if (isMember && DELIVERY_MANAGEMENT_INTENTS.has(intent)) {
     return data(
