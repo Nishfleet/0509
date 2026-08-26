@@ -8,7 +8,7 @@ import {
   type SneakerResaleLocaleId,
 } from "~/lib/locale-markets";
 import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
-import { canonicalLinks, publicSeoMeta, sneakerResaleHreflangLinks } from "~/lib/seo";
+import { canonicalUrl, publicSeoMeta, sneakerResaleHreflangLinks } from "~/lib/seo";
 
 function localeFromParams(params: LoaderFunctionArgs["params"] | { locale?: string }): SneakerResaleLocaleId {
   const locale = params.locale;
@@ -18,13 +18,9 @@ function localeFromParams(params: LoaderFunctionArgs["params"] | { locale?: stri
   return locale;
 }
 
-export const links: LinksFunction = ({ params }) => {
-  const locale = params.locale;
-  if (!isSneakerResaleLocaleId(locale) || locale === "en") {
-    return [];
-  }
-  return [...canonicalLinks(sneakerResaleMarket(locale).pathname), ...sneakerResaleHreflangLinks()];
-};
+// links() cannot see route params in this router version, so the
+// locale-specific canonical tag ships as a meta-descriptor link instead.
+export const links: LinksFunction = () => sneakerResaleHreflangLinks();
 
 export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const locale = localeFromParams(params);
@@ -34,18 +30,21 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   return { locale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
-  if (!data) {
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+  if (!loaderData) {
     return [];
   }
-  const market = sneakerResaleMarket(data.locale);
-  const copy = sneakerResaleCopy(data.locale);
-  return publicSeoMeta({
-    title: copy.title,
-    description: copy.description,
-    pathname: market.pathname,
-    ogLocale: market.ogLocale,
-  });
+  const market = sneakerResaleMarket(loaderData.locale);
+  const copy = sneakerResaleCopy(loaderData.locale);
+  return [
+    ...publicSeoMeta({
+      title: copy.title,
+      description: copy.description,
+      pathname: market.pathname,
+      ogLocale: market.ogLocale,
+    }),
+    { tagName: "link", rel: "canonical", href: canonicalUrl(market.pathname) },
+  ];
 };
 
 export default function SneakerResaleLocaleRoute() {
