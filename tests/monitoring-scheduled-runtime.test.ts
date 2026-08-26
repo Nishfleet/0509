@@ -99,6 +99,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  vi.doUnmock("~/lib/discovery-panel.server");
   vi.restoreAllMocks();
   vi.resetModules();
 });
@@ -141,6 +142,8 @@ function mockMonitoringDependencies(input: {
   searchResponse?: Record<string, unknown>;
   billingInfo?: Record<string, unknown>;
   workflowWatchlist?: WatchlistRecord | null;
+  /** When false, the real panel warmup runs against the mocked ad-source. */
+  mockPanelWarmup?: boolean;
 }) {
   const createWatchlistRun = vi
     .fn()
@@ -160,6 +163,9 @@ function mockMonitoringDependencies(input: {
     discoveryFailureClass: null,
     ...input.searchResponse,
   });
+  const hasFreshDiscoveryCacheEntry = vi
+    .fn()
+    .mockResolvedValue(input.mockPanelWarmup === false ? false : true);
 
   vi.doMock("~/lib/analysis.server", () => ({
     buildAnalysisFields: vi.fn(() => []),
@@ -173,7 +179,20 @@ function mockMonitoringDependencies(input: {
     },
     resolveCommercialDiscoveryProvider: vi.fn(() => input.provider),
     searchAdsViaSourceResolver,
+    hasFreshDiscoveryCacheEntry,
   }));
+  if (input.mockPanelWarmup === false) {
+    vi.doUnmock("~/lib/discovery-panel.server");
+  } else {
+    vi.doMock("~/lib/discovery-panel.server", () => ({
+      warmDiscoveryEvalPanel: vi.fn().mockResolvedValue({
+        attempted: 0,
+        succeeded: 0,
+        failed: 0,
+        skipped: 0,
+      }),
+    }));
+  }
   vi.doMock("~/lib/data.server", () => ({
     addDigestItem: vi.fn(),
     clearDigestItems: vi.fn(),
@@ -315,6 +334,43 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       },
     );
     expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
+  });
+
+  it("warms the 12-brand public-search panel on the same scheduled pass", async () => {
+    const mocks = mockMonitoringDependencies({
+      provider: "meta_library_browser",
+      mockPanelWarmup: false,
+    });
+
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: {},
+    };
+
+    const { runScheduledDiscoveryWarmup } = await import("~/lib/monitoring.server");
+    const result = await runScheduledDiscoveryWarmup(env as never);
+
+    expect(result).toMatchObject({
+      attempted: 14,
+      succeeded: 14,
+      failed: 0,
+      skipped: 0,
+    });
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(14);
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        mode: "advertiser",
+        filters: expect.objectContaining({ query: "allbirds" }),
+      }),
+      null,
+      expect.objectContaining({
+        purpose: "public_search_warmup",
+        cacheKeyOverride: expect.stringContaining("search-v2:domain:allbirds.com:exact:"),
+      }),
+    );
   });
 
   it("treats cache-only warmup responses as skipped instead of refreshed", async () => {

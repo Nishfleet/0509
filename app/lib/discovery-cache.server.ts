@@ -98,6 +98,37 @@ export function resolveDiscoveryCacheTtlMs(routeContext: DiscoveryRouteContext) 
 }
 
 /**
+ * Interactive public search and the 6-hourly panel warmup share a cache
+ * family: both scrape deep (search-v2 domain keys) so a first-time
+ * `/search?website=` visitor can be served the warmed entry. Shallow
+ * watchlist/scheduled_warmup entries stay out (FIX-1).
+ */
+export function isPublicSearchFamily(routeContext: string | null | undefined) {
+  const value = (routeContext ?? "").trim();
+  return value === "public_search" || value === "public_search_warmup";
+}
+
+/**
+ * D1 CHECKs on discovery_cache_entry / discovery_fetch_log / discovery_query_lease
+ * only allow public_search | watchlist_scan | scheduled_warmup. Expanding those
+ * CHECKs needs a table rebuild (DROP TABLE), which this PR must not do.
+ * Persist the warmup as public_search so readers and CHECKs accept it; TTL is
+ * applied at write time via expires_at (24h for public_search_warmup).
+ */
+export function toPersistedDiscoveryRouteContext(
+  routeContext: DiscoveryRouteContext,
+): Exclude<DiscoveryRouteContext, "public_search_warmup"> {
+  return routeContext === "public_search_warmup" ? "public_search" : routeContext;
+}
+
+/** Telemetry CHECK (migration 0076) has no public_search_warmup value. */
+export function toTelemetryRouteContext(
+  routeContext: DiscoveryRouteContext,
+): Exclude<DiscoveryRouteContext, "public_search_warmup"> {
+  return routeContext === "public_search_warmup" ? "scheduled_warmup" : routeContext;
+}
+
+/**
  * WP-36: scheduled scans may reuse any shared discovery_cache_entry younger
  * than the plan's scan cadence (cross-workspace). Interactive search is
  * unaffected — it still uses forceLive / expiresAt rules only.
@@ -254,9 +285,9 @@ export function isDiscoveryCacheRouteCompatible(
   if (requestIsScheduled) {
     return entryIsScheduled;
   }
-  // Interactive public search only accepts other public_search entries.
-  if (requestContext === "public_search") {
-    return entry === "public_search";
+  // Interactive public search and panel warmup share deep public-search entries.
+  if (isPublicSearchFamily(requestContext)) {
+    return isPublicSearchFamily(entry);
   }
   // Unknown future contexts: require exact match.
   return entry === requestContext;
