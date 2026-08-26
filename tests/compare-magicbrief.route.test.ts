@@ -15,6 +15,7 @@ beforeEach(() => {
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
         React.createElement("form", props, children),
       useRouteLoaderData: () => undefined,
+      useLoaderData: () => ({ featuredAdsLink: null }),
     };
   });
 });
