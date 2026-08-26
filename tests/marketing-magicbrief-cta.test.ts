@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -90,5 +91,28 @@ describe("marketing MagicBrief migration CTA", () => {
     expect(markup).toContain("migration guide");
     expect(markup).toContain("mailto:support@0509.io");
     expect(markup).toContain("support@0509.io");
+  });
+
+  it("puts a Moving from MagicBrief callout in the homepage hero", async () => {
+    const markup = await renderHomepage();
+
+    expect(markup).toContain('class="f9-announcement f9-migration-callout"');
+    expect(markup).toContain("Moving from MagicBrief?");
+    expect(markup).toContain("Bring your competitor list. Gain the receipts.");
+    expect(markup).toContain('href="/compare/magicbrief"');
+    expect(markup).not.toContain("full migration");
+    expect(markup).not.toContain("we migrate everything");
+  });
+
+  it("reuses the migration page headline instead of inventing new copy", () => {
+    const marketing = readFileSync("app/routes/marketing.tsx", "utf8");
+    const compare = readFileSync("app/routes/compare.magicbrief.tsx", "utf8");
+
+    expect(compare).toContain(
+      "Moving from MagicBrief? Bring your competitor list. Gain the receipts.",
+    );
+    expect(marketing).toContain("Moving from MagicBrief?");
+    expect(marketing).toContain("Bring your competitor list. Gain the receipts.");
+    expect(marketing).toContain('to="/compare/magicbrief"');
   });
 });
