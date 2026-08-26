@@ -169,6 +169,11 @@ export function getBetterAuth(env: AppEnv, request: Request) {
           // Magic-link signup inserts emailVerified=true without firing
           // afterEmailVerification. Idempotent welcome covers both paths.
           after: async (user) => {
+            const { applySignupSourceToNewUser } = await import("~/lib/signup-source");
+            await applySignupSourceToNewUser(env, {
+              request,
+              user,
+            });
             if (user.emailVerified) {
               await maybeSendWelcomeEmail(env, user);
             }

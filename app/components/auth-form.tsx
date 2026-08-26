@@ -12,6 +12,8 @@ interface AuthFormProps {
   linkSent?: boolean;
   oauthProviders?: AuthOAuthProvider[];
   passkeysEnabled?: boolean;
+  /** Allowlisted signup marker only — never the raw query string. */
+  signupSource?: string;
 }
 
 type AuthOAuthProvider = "google" | "microsoft";
@@ -31,6 +33,7 @@ export function AuthForm({
   linkSent = false,
   oauthProviders = [],
   passkeysEnabled = false,
+  signupSource,
 }: AuthFormProps) {
   const navigation = useNavigation();
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
@@ -86,6 +89,9 @@ export function AuthForm({
             <input name="mode" type="hidden" value={mode} />
             <input name="redirectTo" type="hidden" value={redirectTo} />
             <input name="email" type="hidden" value={sentEmail} />
+            {isSignup && signupSource ? (
+              <input name="signupSource" type="hidden" value={signupSource} />
+            ) : null}
             {isSignup ? (
               <input name="name" type="hidden" value={(initialName ?? "").trim() || "Account"} />
             ) : null}
@@ -102,6 +108,9 @@ export function AuthForm({
       <Form className="f9-auth-form" method="post">
         <input name="mode" type="hidden" value={mode} />
         <input name="redirectTo" type="hidden" value={redirectTo} />
+        {isSignup && signupSource ? (
+          <input name="signupSource" type="hidden" value={signupSource} />
+        ) : null}
         {isSignup ? (
           <label className="f9-field">
             <span>Name</span>

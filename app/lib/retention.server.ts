@@ -119,6 +119,20 @@ export async function runRetentionSweep(
       bindings: [cutoff(MAGIC_LINK_TICKET_GRACE_DAYS), cutoff(MAGIC_LINK_TICKET_GRACE_DAYS)],
     },
     {
+      // Pending signup attribution holds an email until the user row exists.
+      // Expire it on the stored deadline so abandoned signups do not keep PII.
+      name: "signup_source_pending",
+      sql: `
+        DELETE FROM signup_source_pending
+        WHERE email IN (
+          SELECT email FROM signup_source_pending
+          WHERE expires_at < ?
+          LIMIT 500
+        )
+      `,
+      bindings: [new Date(now).toISOString()],
+    },
+    {
       name: "meta_integration_log",
       sql: `
         DELETE FROM meta_integration_log
