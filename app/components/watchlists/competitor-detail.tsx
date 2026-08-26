@@ -358,7 +358,11 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
             <h3 className="f9-wk-mt0">Evidence and alerts</h3>
           </div>
         </div>
-        <RecentEvidenceChecksCard data={data} />
+        <RecentEvidenceChecksCard
+          checksExpanded={props.checksExpanded}
+          data={data}
+          watchlistId={watchlist.id}
+        />
         <RecentChecksSection
           checksExpanded={props.checksExpanded}
           runs={data.runs}
