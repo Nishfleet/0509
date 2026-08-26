@@ -99,6 +99,10 @@ export function OfferTimelineLedger({ entries }: { entries: OfferLedgerEntry[] }
                   </a>
                 ) : null}
               </p>
+            ) : entry.evidenceNote ? (
+              <p className="f9-timeline-receipts f9-timeline-receipts-note">
+                {entry.evidenceNote}
+              </p>
             ) : null}
           </div>
         </li>

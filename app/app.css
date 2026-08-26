@@ -7710,6 +7710,10 @@ reds soften --- */
   display: inline-flex;
   align-items: center;
 }
+.f9-timeline-receipts-note {
+  color: var(--ink-faint);
+  font-style: italic;
+}
 @media (max-width: 620px) {
   .f9-timeline-entry {
     grid-template-columns: 1fr;
