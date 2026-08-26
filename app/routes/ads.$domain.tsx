@@ -57,7 +57,13 @@ import type {
 } from "~/lib/brand-page.server";
 import { countBrandOwnedAds } from "~/lib/brand-page.server";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
-import { canonicalUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import {
+  adsPageServiceJsonLd,
+  canonicalUrl,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
 
@@ -379,26 +385,39 @@ export default function BrandAdsRoute() {
   return (
     <main className="f9-home f9-ads-page">
       {/*
-       * Truthful WebPage JSON-LD, and ONLY on indexable pages: the honest
-       * shell, demo-sourced entries, stale (> 7 days) captures, and the
-       * emergency-brake flag all carry noindex — structured data on those
-       * states would be dead weight at best and a freshness lie at worst.
-       * Every field mirrors the visible page: the meta title/description,
-       * the canonical URL, the on-screen "Last checked" stamp (dateModified),
-       * and the brand the page is about.
+       * Truthful WebPage + Service JSON-LD, and ONLY on indexable pages: the
+       * honest shell, demo-sourced entries, stale (> 7 days) captures, and
+       * the emergency-brake flag all carry noindex — structured data on
+       * those states would be dead weight at best and a freshness lie at
+       * worst. Every field mirrors the visible page: the meta
+       * title/description, the canonical URL, the on-screen "Last checked"
+       * stamp (dateModified), the brand the page is about, and the Watch
+       * {domain} offer with Five to Nine as the provider.
        */}
       {!data.noindex ? (
-        <script
-          {...jsonLdScriptProps(
-            webPageJsonLd({
-              name: brandPageTitle(data),
-              description: brandPageDescription(data),
-              pathname: data.canonicalPath,
-              dateModified: data.lastCheckedAt ?? undefined,
-              aboutName: data.brandName,
-            }),
-          )}
-        />
+        <>
+          <script
+            {...jsonLdScriptProps(
+              webPageJsonLd({
+                name: brandPageTitle(data),
+                description: brandPageDescription(data),
+                pathname: data.canonicalPath,
+                dateModified: data.lastCheckedAt ?? undefined,
+                aboutName: data.brandName,
+              }),
+            )}
+          />
+          <script
+            {...jsonLdScriptProps(
+              adsPageServiceJsonLd({
+                brandName: data.brandName,
+                domain: data.domain,
+                description: brandPageDescription(data),
+                pathname: data.canonicalPath,
+              }),
+            )}
+          />
+        </>
       ) : null}
       {data.hasCachedAds ? (
         <BrandTicker
