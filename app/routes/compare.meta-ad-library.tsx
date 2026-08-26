@@ -113,6 +113,7 @@ export default function CompareMetaAdLibraryRoute() {
             name: "Five to Nine vs checking the Meta Ad Library by hand",
             description: pageDescription,
             pathname: "/compare/meta-ad-library",
+            comparedProductName: "Meta Ad Library",
           }),
         )}
       />

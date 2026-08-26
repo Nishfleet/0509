@@ -134,6 +134,9 @@ export function faqPageJsonLd(entries: ReadonlyArray<FaqJsonLdEntry>) {
  *   the page has no such stamp — never invented.
  * - `aboutName`: the subject of the page when it is about a specific brand
  *   (e.g. the /ads/:domain brand pages). Must match a name the page shows.
+ * - `comparedProductName`: the competitor product a `/compare/*` page is
+ *   about. Emitted as `SoftwareApplication` `mainEntity` with only the name
+ *   the page already shows — never ratings, prices, or review counts.
  */
 export function webPageJsonLd(input: {
   name: string;
@@ -141,6 +144,7 @@ export function webPageJsonLd(input: {
   pathname: string;
   dateModified?: string;
   aboutName?: string;
+  comparedProductName?: string;
 }) {
   return {
     "@context": "https://schema.org",
@@ -151,6 +155,14 @@ export function webPageJsonLd(input: {
     ...(input.dateModified ? { dateModified: input.dateModified } : {}),
     ...(input.aboutName
       ? { about: { "@type": "Organization", name: input.aboutName } }
+      : {}),
+    ...(input.comparedProductName
+      ? {
+          mainEntity: {
+            "@type": "SoftwareApplication",
+            name: input.comparedProductName,
+          },
+        }
       : {}),
     isPartOf: { "@type": "WebSite", name: SITE_NAME, url: SITE_ORIGIN },
     publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
