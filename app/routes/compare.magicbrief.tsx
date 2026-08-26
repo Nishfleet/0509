@@ -8,6 +8,7 @@ import {
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
+  webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
@@ -121,6 +122,16 @@ export default function CompareMagicBriefRoute() {
 
   return (
     <main className="f9-home">
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "MagicBrief alternative: Five to Nine | Migration guide",
+            description: pageDescription,
+            pathname: "/compare/magicbrief",
+            comparedProductName: "MagicBrief",
+          }),
+        )}
+      />
       <script {...jsonLdScriptProps(structuredFaq)} />
       <MarketingNav />
 
