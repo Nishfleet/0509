@@ -604,6 +604,12 @@ export interface WatchlistProofSummary {
   successfulAttempts: number;
   failedAttempts: number;
   skippedAttempts: number;
+  /** Skipped because a plan/credit allowance was reached — the budget gate. */
+  skippedDueToBudget: number;
+  /** Skipped because a provider rate limit or circuit breaker fired. */
+  skippedDueToRateLimit: number;
+  /** Skipped because the change was a duplicate of a recent capture. */
+  skippedDueToDedupe: number;
   lastAttemptAt: string | null;
   lastSuccessfulProofAt: string | null;
 }

@@ -270,3 +270,72 @@ describe("per-plan daily proof caps (2026-06-12)", () => {
     expect(decision.shouldCapture).toBe(false);
   });
 });
+
+describe("paid-tier v1 per-watchlist budgets (Q3 #958)", () => {
+  const paidFreshness = {
+    sensitivityMode: "balanced" as const,
+    triggerEventTypes: ["landing_page_cta_changed" as const],
+    lastSuccessfulProofAt: "2026-04-01T00:00:00.000Z",
+    watchlistRunAttemptCount: 0,
+    watchlistDailyAttemptCount: 0,
+    workspaceDailyAttemptCount: 0,
+    workspaceDailyCap: 40,
+    workspaceEvidenceRemaining: 200,
+    workspaceRecentAttempts: [],
+    activeCaptureCount: 0,
+    burstCount: 1,
+    proofRequestDuplicate: false,
+    recentFailureCountForTarget: 0,
+    applyPerWatchlistBudgets: false,
+    now: "2026-04-18T00:00:00.000Z",
+  };
+
+  it("does not v1-budget-skip a paid watchlist that still has remaining checks", () => {
+    const decision = evaluateProofPolicy({
+      ...paidFreshness,
+      watchlistRunAttemptCount: 8,
+      watchlistDailyAttemptCount: 30,
+    });
+
+    expect(decision.shouldCapture).toBe(true);
+    expect(decision.skipReason).toBeNull();
+  });
+
+  it("still budget-skips a paid watchlist when the plan allowance is exhausted", () => {
+    const decision = evaluateProofPolicy({
+      ...paidFreshness,
+      workspaceEvidenceRemaining: 0,
+    });
+
+    expect(decision).toMatchObject({
+      shouldCapture: false,
+      skipReason: "skipped_due_to_budget",
+    });
+  });
+
+  it("still budget-skips a paid watchlist above the plan daily cap", () => {
+    const decision = evaluateProofPolicy({
+      ...paidFreshness,
+      workspaceDailyAttemptCount: 40,
+      workspaceDailyCap: 40,
+    });
+
+    expect(decision).toMatchObject({
+      shouldCapture: false,
+      skipReason: "skipped_due_to_budget",
+    });
+  });
+
+  it("still v1-budget-skips a free watchlist at 3 captures per run", () => {
+    const decision = evaluateProofPolicy({
+      ...paidFreshness,
+      applyPerWatchlistBudgets: true,
+      watchlistRunAttemptCount: 3,
+    });
+
+    expect(decision).toMatchObject({
+      shouldCapture: false,
+      skipReason: "skipped_due_to_budget",
+    });
+  });
+});
