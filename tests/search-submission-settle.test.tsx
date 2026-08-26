@@ -648,9 +648,13 @@ describe("public search submission settle", () => {
     const markup = await renderMarkup();
     const text = markup.replace(/&#x27;/g, "'");
 
-    expect(text).toContain("Couldn't capture this page");
-    expect(text).toContain("Couldn't check this page");
-    expect(text).toContain("Unavailable");
+    expect(text).not.toContain("Couldn't capture this page");
+    expect(text).not.toContain("Couldn't check this page");
+    expect(text).not.toContain("Unavailable");
+    expect(text).not.toContain("Landing page not captured yet");
+    expect(text).toContain("This landing page didn't yield a usable snapshot");
+    expect(text).toContain("No usable snapshot");
+    expect(text).toContain("Open the link below to read the live offer, or try the ad again.");
     expect(text).not.toContain("Headline not captured yet");
     expect(text).not.toContain("Not checked yet");
   });

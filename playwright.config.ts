@@ -67,6 +67,15 @@ export default defineConfig({
     : undefined,
   projects: [
     {
+      name: "search-landing-page-capture",
+      testDir: "./tests/e2e",
+      testMatch: /search-landing-page-capture\.spec\.ts/,
+      timeout: 60_000,
+      use: {
+        ...devices["Desktop Chrome"],
+      },
+    },
+    {
       name: "local-auth",
       // Landing-language live-proof captures ride the same local fixture
       // server and skip themselves unless their package flag is set, so
