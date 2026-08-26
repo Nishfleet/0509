@@ -12,6 +12,8 @@ import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { collectReactRouterManifestCspWarnings } from "./csp-manifest-warning.mjs";
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(__dirname, "..", "var", "visual-audit");
 const PRODUCTION_URL = process.env.E2E_PROD_BASE_URL ?? "https://0509.io";
@@ -72,6 +74,19 @@ async function captureConsole(page) {
     errors.push({ text: `[pageerror] ${err.message}`, stack: err.stack });
   });
   return { errors, warnings };
+}
+
+async function installCspViolationListener(page) {
+  await page.addInitScript(() => {
+    window.__cspViolations = [];
+    document.addEventListener("securitypolicyviolation", (event) => {
+      window.__cspViolations.push({
+        blockedURI: event.blockedURI,
+        violatedDirective: event.violatedDirective,
+        disposition: event.disposition,
+      });
+    });
+  });
 }
 
 async function captureNetwork(page) {
@@ -332,6 +347,7 @@ async function runForRoute(browser, route, viewport, results) {
   const page = await ctx.newPage();
   const consoleState = await captureConsole(page);
   const failedRequests = await captureNetwork(page);
+  await installCspViolationListener(page);
 
   const url = `${PRODUCTION_URL}${route.path}`;
   log(`visit ${url} @ ${viewport.name}`);
@@ -351,6 +367,17 @@ async function runForRoute(browser, route, viewport, results) {
   await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
   await page.waitForTimeout(500);
 
+  const cspViolations = navError
+    ? []
+    : await page.evaluate(() => window.__cspViolations || []).catch(() => []);
+  const cspManifestWarnings = collectReactRouterManifestCspWarnings({
+    consoleMessages: [...consoleState.errors, ...consoleState.warnings],
+    violations: cspViolations,
+  });
+  if (cspManifestWarnings.length > 0) {
+    log(`csp __manifest warning on ${route.path} @ ${viewport.name}: ${cspManifestWarnings.length}`);
+  }
+
   const key = `${route.name}-${viewport.name}-${results.browserName}`;
   const shotPath = resolve(OUT_DIR, `${key}.png`);
   try {
@@ -368,6 +395,7 @@ async function runForRoute(browser, route, viewport, results) {
     navError,
     consoleErrors: consoleState.errors.slice(0, 10),
     consoleWarnings: consoleState.warnings.slice(0, 5),
+    cspManifestWarnings,
     failedRequests: failedRequests.slice(0, 15),
     overflow: null,
     overlappingControls: [],

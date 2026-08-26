@@ -158,17 +158,46 @@ function addDomainAlias(aliases: Set<string>, hostname: string, originRegistrabl
   }
 }
 
-function extractTagContent(html: string, tagName: string) {
-  const match = html.match(new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i"));
+function tagContentPatternForTag(tagName: string): RegExp | null {
+  switch (tagName) {
+    case "title":
+      return /<title[^>]*>([\s\S]*?)<\/title>/i;
+    default:
+      return null;
+  }
+}
+
+/** Extract inner text of allowlisted HTML tags. Unknown tags, including
+ * those that contain regex metacharacters, return null. */
+export function extractTagContent(html: string, tagName: string) {
+  const pattern = tagContentPatternForTag(tagName);
+  if (pattern === null) return null;
+  const match = html.match(pattern);
   return match?.[1]?.replace(/\s+/g, " ").trim() ?? null;
 }
 
-function extractMetaContent(html: string, key: string) {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const patterns = [
-    new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`, "i"),
-    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${escaped}["']`, "i"),
-  ];
+function metaContentPatternsForKey(key: string): RegExp[] | null {
+  switch (key) {
+    case "og:site_name":
+      return [
+        /<meta[^>]+(?:property|name)=["']og:site_name["'][^>]+content=["']([^"']+)["']/i,
+        /<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']og:site_name["']/i,
+      ];
+    case "application-name":
+      return [
+        /<meta[^>]+(?:property|name)=["']application-name["'][^>]+content=["']([^"']+)["']/i,
+        /<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']application-name["']/i,
+      ];
+    default:
+      return null;
+  }
+}
+
+/** Extract content of allowlisted meta names. Unknown keys, including
+ * those that contain regex metacharacters, return null. */
+export function extractMetaContent(html: string, key: string) {
+  const patterns = metaContentPatternsForKey(key);
+  if (patterns === null) return null;
 
   for (const pattern of patterns) {
     const match = html.match(pattern);

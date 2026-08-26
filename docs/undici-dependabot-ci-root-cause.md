@@ -33,7 +33,7 @@ types no longer matched the hand-maintained `AppEnv` interface in
 - name: Typecheck
   env:
     NODE_OPTIONS: --max-old-space-size=2048
-  run: ./scripts/deploy-window-lock.sh run -- npm run typecheck
+  run: npm run typecheck
 ```
 
 `npm run typecheck` = `npm run cf-typegen && react-router typegen && tsc -b`

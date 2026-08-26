@@ -190,9 +190,11 @@ export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
 ];
 
 /** A capture older than this is not "the hook on" a current ad — surfacing
- *  its date in the hero next to the "checked N hours ago" freshness stamp
- *  reads as a contradiction (a year-old date beside a 2-hour-old check). The
- *  hero swaps to non-date-bearing "on record" copy past this age. See #1076. */
+ *  its date in the proof strip next to the "checked N hours ago" freshness
+ *  stamp reads as a contradiction (a year-old date beside a 2-hour-old
+ *  check). The strip swaps to non-date-bearing "on record" copy past this
+ *  age. See #1076. The H1 is the chosen Safe buyer-job wall and never
+ *  carries a capture date (#1173). */
 const PROOF_CAPTURE_FRESH_DAYS = 30;
 
 /** Days between a capture timestamp and `now`. Returns Infinity for an
@@ -370,42 +372,91 @@ export default function MarketingRoute() {
     : null;
   const heroProofTime = proofBrief ? proofTimeLabel(heroCaptureIso) : null;
   // A capture older than PROOF_CAPTURE_FRESH_DAYS is not "the hook on" a
-  // current ad. Surfacing its date in the hero next to the "checked N hours
-  // ago" freshness stamp reads as a contradiction, so the hero drops the date
-  // pill and reframes to "on record" copy that matches the capture's age.
-  // See #1076.
+  // current ad. Surfacing its date next to the "checked N hours ago"
+  // freshness stamp reads as a contradiction, so the proof strip drops the
+  // date and reframes to "on record" copy. See #1076. The H1 no longer
+  // carries capture dates (#1173 / BET 9 Safe).
   const heroCaptureStale = proofBrief
     ? captureAgeDays(heroCaptureIso) > PROOF_CAPTURE_FRESH_DAYS
     : false;
-  const heroWall = proofBrief && heroTopHook ? (
+  // Chosen BET 9 direction: Safe. Buyer + job stay in the H1 even when live
+  // Nykaa proof is present. See docs/design/hero-directions/CHOSEN.md.
+  const heroWall = (
     <h1 className="ld-wall">
-      <span className="ld-row">“{truncateHook(heroTopHook, 30)}”</span>
-      <span className="ld-row">
-        {heroCaptureStale ? (
-          <>is a hook on record across {proofBrief.adCount} Meta ads</>
-        ) : (
-          <>
-            {proofBrief.freshForLiveClaim ? "is the hook on" : "was the hook on"} {proofBrief.adCount}{" "}
-            Meta ads <i className="ld-flag">{heroProofTime}</i>
-          </>
-        )}
-      </span>
-      <span className="ld-row ld-row-indent">linking to {proofBrief.website}.</span>
-      <span className="ld-row">We saved the proof.</span>
-    </h1>
-  ) : (
-    <h1 className="ld-wall">
-      <span className="ld-row">Know when</span>
-      <span className="ld-row">competitors change</span>
+      <span className="ld-row">Growth teams</span>
+      <span className="ld-row">who track competitors</span>
       <span className="ld-row ld-row-indent">
+        know the{" "}
         <ins className="ld-ins">
-          the offer<i className="ld-flag">proof</i>
+          offer<i className="ld-flag">proof</i>
         </ins>{" "}
         before
       </span>
       <span className="ld-row">the call.</span>
     </h1>
   );
+
+  const heroProofStrip =
+    proofBrief && heroTopHook ? (
+      <aside className="ld-proof-strip" aria-label="Live proof brief">
+        <div className="ld-proof-strip-head">
+          <span className="ld-proof-live">Live proof</span>
+          <b>We saved the proof — {proofBrief.website}</b>
+          <span className="ld-proof-time">
+            {heroCaptureStale
+              ? "On record · Meta Ad Library"
+              : `Captured ${heroProofTime} · Meta Ad Library`}
+          </span>
+        </div>
+        <div className="ld-proof-strip-body">
+          <div className="ld-proof-hook">
+            <span className="ld-proof-quote">“{truncateHook(heroTopHook, 48)}”</span>
+            <span className="ld-proof-attrib">
+              {heroCaptureStale ? (
+                <>
+                  is a hook on record across {proofBrief.adCount} Meta ads linking to{" "}
+                  {proofBrief.website}. We saved every one.
+                </>
+              ) : (
+                <>
+                  {proofBrief.freshForLiveClaim ? "is the hook on" : "was the hook on"}{" "}
+                  {proofBrief.adCount} Meta ads linking to {proofBrief.website}. We saved
+                  every one.
+                </>
+              )}
+            </span>
+          </div>
+          <div className="ld-proof-trail">
+            <ul>
+              {proofBrief.proofTrail.map((item) => (
+                <li key={item.id}>
+                  <span className="ld-proof-signal">{item.signal}</span>
+                  {truncateHook(item.evidence, 48)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="ld-proof-strip-foot">
+          Every row links to the same public page. No proof, no claim.
+        </div>
+      </aside>
+    ) : (
+      <aside className="ld-proof-strip" aria-label="Live proof brief">
+        <div className="ld-proof-strip-head">
+          <span className="ld-proof-live">Live proof</span>
+          <b>No live proof yet</b>
+        </div>
+        <div className="ld-proof-strip-body">
+          <div className="ld-proof-hook">
+            <span className="ld-proof-quote">We haven’t captured this competitor recently.</span>
+            <span className="ld-proof-attrib">
+              Run the public search preview to see current ads and sources.
+            </span>
+          </div>
+        </div>
+      </aside>
+    );
 
   const heroShotCards = proofBrief ? (
     proofBrief.proofTrail.map((item) => (
@@ -507,12 +558,14 @@ export default function MarketingRoute() {
           <Link className="ld-rec" to="/proof">
             Proof-backed brief
           </Link>
-          <span>A rival page changed while your growth team was offline</span>
+          <span>For growth teams who track competitors</span>
         </p>
 
         <div className="ld-hero-grid">
           <div className="ld-hero-copy">
             {heroWall}
+
+            {heroProofStrip}
 
             <p className="ld-deck-copy">
               Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;

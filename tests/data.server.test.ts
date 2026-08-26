@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
-
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -89,6 +86,7 @@ import {
   suppressEmailTargetsForUserAndAddress,
   resumeEmailTargetsForUserAndAddress,
 } from "~/lib/data.server";
+import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 function createMockDb(
   resultOverrides: Array<{ sqlIncludes: string; results: unknown[] }> = [],
@@ -181,55 +179,6 @@ function createMissingTableDb(tableName: string) {
       };
     },
   };
-}
-
-function createSqliteD1() {
-  const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec("PRAGMA foreign_keys = ON;");
-  type SqliteBindings = Parameters<ReturnType<DatabaseSync["prepare"]>["run"]>;
-  const toSqliteBindings = (bindings: unknown[]) => bindings as SqliteBindings;
-
-  return {
-    close: () => sqlite.close(),
-    sqlite,
-    db: {
-      prepare(sql: string) {
-        return {
-          bind(...bindings: unknown[]) {
-            return {
-              async run() {
-                const result = sqlite.prepare(sql).run(...toSqliteBindings(bindings));
-                return { success: true, meta: { changes: Number(result.changes ?? 0) } };
-              },
-              async all<T>() {
-                return {
-                  results: sqlite.prepare(sql).all(...toSqliteBindings(bindings)) as T[],
-                };
-              },
-            };
-          },
-        };
-      },
-      async batch<T extends { run(): Promise<{ meta?: { changes?: number } }> }>(statements: T[]) {
-        sqlite.exec("BEGIN IMMEDIATE");
-        try {
-          const results = [];
-          for (const statement of statements) {
-            results.push(await statement.run());
-          }
-          sqlite.exec("COMMIT");
-          return results;
-        } catch (error) {
-          sqlite.exec("ROLLBACK");
-          throw error;
-        }
-      },
-    },
-  };
-}
-
-function applyMigration(sqlite: DatabaseSync, path: string) {
-  sqlite.exec(readFileSync(path, "utf8"));
 }
 
 function findStatement(

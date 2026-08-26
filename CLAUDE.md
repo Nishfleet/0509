@@ -98,10 +98,10 @@ steps. PR #552 shipped a `verify:` line claiming `npx tsc --noEmit -p tsconfig.j
 and CI failed it on a `TS2339` in the same diff. A gate that cannot go red is a missing gate,
 not a weak one: never cite `tsc --noEmit -p tsconfig.json` as type evidence.
 
-On the shared VPS, fleet and self-hosted-runner verification must use
-`scripts/deploy-window-lock.sh run -- <command>` rather than calling `flock`
-directly. The wrapper provides three bounded, temp-isolated verification lanes;
-production `acquire`/`release` remains exclusive.
+CI and deploy verification run on GitHub-hosted `ubuntu-latest`. Do not wrap
+those commands in `flock` or a custom lock script; GitHub's job isolation is
+the isolation. Production provider mutations use the
+`0509-production-provider-mutations` concurrency group.
 
 ## Dev
 ```bash

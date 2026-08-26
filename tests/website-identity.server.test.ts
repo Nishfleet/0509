@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockFetch, releaseSpy } = vi.hoisted(() => ({
@@ -19,6 +20,8 @@ vi.mock("~/lib/public-url.server", () => ({
 
 import {
   clearWebsiteIdentityCacheForTests,
+  extractMetaContent,
+  extractTagContent,
   resolveWebsiteIdentity,
 } from "~/lib/website-identity.server";
 
@@ -102,5 +105,66 @@ describe("website-identity decode wiring", () => {
 
     expect(identity?.registrableDomain).toBe("mamaearth.com");
     expect(identity?.domainAliases).toContain("mamaearth.in");
+  });
+});
+
+describe("extractTagContent tag allowlist", () => {
+  const titleHtml = "<html><head><title>Acme  Labs</title></head></html>";
+
+  it("extracts allowlisted title tags", () => {
+    expect(extractTagContent(titleHtml, "title")).toBe("Acme Labs");
+  });
+
+  it("rejects tags that contain regex metacharacters instead of interpolating them", () => {
+    expect(extractTagContent(titleHtml, ".*")).toBeNull();
+    expect(extractTagContent(titleHtml, "(")).toBeNull();
+    expect(extractTagContent(titleHtml, "title.*")).toBeNull();
+  });
+
+  it("rejects unknown HTML tags even when they are valid names", () => {
+    const html = "<html><head><h1>Not the title</h1><title>Acme</title></head></html>";
+    expect(extractTagContent(html, "h1")).toBeNull();
+  });
+});
+
+describe("extractMetaContent meta-name allowlist", () => {
+  const ogHtml = `<html><head><meta property="og:site_name" content="Acme Labs"/></head></html>`;
+  const appHtml = `<html><head><meta name="application-name" content="Acme App"/></head></html>`;
+  const reversedHtml = `<html><head><meta content="Acme Reversed" property="og:site_name"/></head></html>`;
+
+  it("extracts allowlisted og:site_name and application-name metas", () => {
+    expect(extractMetaContent(ogHtml, "og:site_name")).toBe("Acme Labs");
+    expect(extractMetaContent(appHtml, "application-name")).toBe("Acme App");
+  });
+
+  it("extracts content that appears before the name or property attribute", () => {
+    expect(extractMetaContent(reversedHtml, "og:site_name")).toBe("Acme Reversed");
+  });
+
+  it("rejects keys that contain regex metacharacters instead of interpolating them", () => {
+    expect(extractMetaContent(ogHtml, ".*")).toBeNull();
+    expect(extractMetaContent(ogHtml, "(")).toBeNull();
+    expect(extractMetaContent(ogHtml, "og:site_name.*")).toBeNull();
+  });
+
+  it("rejects unknown meta names even when they are valid HTML names", () => {
+    const html = `<html><head>
+      <meta name="description" content="not the site name"/>
+      <meta property="og:site_name" content="Acme"/>
+    </head></html>`;
+    expect(extractMetaContent(html, "description")).toBeNull();
+    expect(extractMetaContent(html, "og:site_name")).toBe("Acme");
+  });
+
+  it("never interpolates a meta key into a RegExp constructor", () => {
+    const source = readFileSync("app/lib/website-identity.server.ts", "utf8");
+    const start = source.indexOf("function metaContentPatternsForKey");
+    const end = source.indexOf("function extractCanonicalUrl");
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const region = source.slice(start, end);
+    expect(region).not.toMatch(/new\s+RegExp\s*\(/);
+    expect(region).toContain("og:site_name");
+    expect(region).toContain("application-name");
   });
 });

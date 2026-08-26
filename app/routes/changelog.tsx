@@ -44,6 +44,7 @@ export default function ChangelogRoute() {
           <li>Shared search result pages now show the brand name and country, so recipients see which market the snapshot covers before they open it.</li>
           <li>The /pricing and /ads public pages now carry a single plain-text h1 heading, so screen readers and search engines read one clear page title.</li>
           <li>The homepage proof wall no longer shows stale capture dates, so the freshness signal stays honest.</li>
+          <li>The Ad Aggression Score now has its own public formula page, linked from every brand ads page, so anyone can see how the 0–100 number is computed.</li>
         </ul>
       </PublicDocBlock>
 

@@ -126,6 +126,31 @@ describe("the ratchet cannot be gamed", () => {
     expect(backlog).toMatch(/exceeds its ceiling/);
   });
 
+  it("BACKLOG does not claim the terminal condition while any ceiling is non-zero", () => {
+    // #1185: BACKLOG said every ceiling was 0 and the program was done.
+    // That was true only for BANNED_MARKERS. Pattern ceilings were still
+    // hundreds. The JSON is the live count; BACKLOG must not contradict it.
+    const ceilings = JSON.parse(
+      readFileSync(join(root, "docs", "design-system-ratchet.json"), "utf8"),
+    ) as Record<string, number>;
+    const remaining = Object.entries(ceilings)
+      .filter(([, value]) => value > 0)
+      .map(([key]) => key);
+    const backlog = readFileSync(join(root, "docs", "BACKLOG.md"), "utf8");
+    expect(backlog).toContain("docs/design-system-ratchet.json");
+    if (remaining.length === 0) {
+      return;
+    }
+    expect(backlog).not.toMatch(/every legacy-marker ceiling is at 0/);
+    expect(backlog).not.toMatch(/satisfying the program'?s terminal condition/);
+    expect(backlog).toMatch(/not yet satisfied/);
+    for (const key of remaining) {
+      expect(backlog, `BACKLOG must name remaining ceiling ${key}`).toContain(
+        key,
+      );
+    }
+  });
+
   it("deleting a marker's ceiling key fails — no exemption by omission", () => {
     const { [Object.keys(realCeilings)[0]]: _dropped, ...rest } = realCeilings;
     const result = runWithCeilings(rest);

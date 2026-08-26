@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Verify pre-generated exact R2 restore evidence and package it for upload.
 #
-# Must be invoked as argv to deploy-window-lock.sh run — never via
-# stdin/heredoc. Verification lanes background the command, so bash redirects
-# the lane's stdin to /dev/null and a heredoc body never executes.
+# Called directly as a `run:` step from deploy-production.yml.
 #
 # Archive path is owned by RESTORE_EVIDENCE_ARCHIVE (job-level env). The
 # upload-artifact step must reference ${{ env.RESTORE_EVIDENCE_ARCHIVE }} —

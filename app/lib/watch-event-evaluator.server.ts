@@ -6,6 +6,11 @@ import type {
   WatchEventType,
 } from "~/lib/types";
 import { stripChurnTokens } from "~/lib/normalize";
+import {
+  classifyExtractorSuppression,
+  type ExtractorSuppressionFingerprints,
+  type ExtractorSuppressionReason,
+} from "~/lib/landing-page-signals.server";
 // Zero-noise period triage lives in an isomorphic module (the app route
 // renders it client-side); server callers keep importing this module.
 export {
@@ -47,6 +52,9 @@ type ComparableProofFields = {
   ctaText: string | null;
   priceText: string | null;
   formPresent: boolean | null;
+  extractorRawTextHash?: string | null;
+  extractorAdSlotStrippedTextHash?: string | null;
+  extractorChurnStableTextHash?: string | null;
 };
 
 export interface EvaluatedWatchEventDraft {
@@ -125,6 +133,31 @@ export function evaluateProofBackedEvents(input: {
   ].filter((draft): draft is NonNullable<typeof draft> => Boolean(draft));
 
   if (candidateDrafts.length === 0) {
+    const extractorVersionChanged = Boolean(
+      input.currentProof.extractorVersion &&
+        lastSuccessfulProof.extractorVersion !== input.currentProof.extractorVersion,
+    );
+    const suppression = extractorVersionChanged
+      ? null
+      : classifyExtractorSuppression(
+          readExtractorFingerprints(
+            toComparableProofFields(lastSuccessfulProof.extractedFields),
+          ),
+          readExtractorFingerprints(input.currentProof),
+        );
+    if (suppression) {
+      return {
+        status: "suppressed",
+        events: [
+          buildExtractorSuppressionDraft(
+            suppression,
+            input.proofTargetIdentity,
+            lastSuccessfulProof,
+            input.currentCapturedAt,
+          ),
+        ],
+      };
+    }
     return {
       status: "invalidated",
       events: [],
@@ -338,6 +371,53 @@ function toComparableProofFields(fields: Record<string, unknown>): ComparablePro
     ctaText: stringOrNull(fields.ctaText),
     priceText: stringOrNull(fields.priceText),
     formPresent: typeof fields.formPresent === "boolean" ? fields.formPresent : null,
+    extractorRawTextHash: stringOrNull(fields.extractorRawTextHash),
+    extractorAdSlotStrippedTextHash: stringOrNull(fields.extractorAdSlotStrippedTextHash),
+    extractorChurnStableTextHash: stringOrNull(fields.extractorChurnStableTextHash),
+  };
+}
+
+function readExtractorFingerprints(fields: {
+  extractorRawTextHash?: string | null;
+  extractorAdSlotStrippedTextHash?: string | null;
+  extractorChurnStableTextHash?: string | null;
+}): ExtractorSuppressionFingerprints | null {
+  const rawTextHash = stringOrNull(fields.extractorRawTextHash);
+  const adSlotStrippedTextHash = stringOrNull(fields.extractorAdSlotStrippedTextHash);
+  const churnStableTextHash = stringOrNull(fields.extractorChurnStableTextHash);
+  if (!rawTextHash || !adSlotStrippedTextHash || !churnStableTextHash) {
+    return null;
+  }
+  return { rawTextHash, adSlotStrippedTextHash, churnStableTextHash };
+}
+
+function buildExtractorSuppressionDraft(
+  suppression: ExtractorSuppressionReason,
+  proofTargetIdentity: string,
+  lastSuccessfulProof: ProofCaptureRecord,
+  currentCapturedAt?: string | null,
+): EvaluatedWatchEventDraft {
+  const churn = suppression === "churn_stable";
+  return {
+    eventType: "landing_page_headline_changed",
+    status: "suppressed",
+    importanceScore: 0,
+    title: churn ? "Only a timestamp changed" : "Only a rotating banner changed",
+    summary: churn
+      ? "The page was captured. The only difference was a timestamp, so no alert was sent."
+      : "The page was captured. The only difference was a rotating banner, so no alert was sent.",
+    metadata: {
+      proofTargetIdentity,
+      kind: "extractor_suppression",
+      suppression,
+      ...(lastSuccessfulProof.succeededAt && currentCapturedAt
+        ? {
+            beforeCapturedAt: lastSuccessfulProof.succeededAt,
+            capturedAt: currentCapturedAt,
+          }
+        : {}),
+    },
+    dedupeReason: null,
   };
 }
 

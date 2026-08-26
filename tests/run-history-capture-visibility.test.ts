@@ -188,6 +188,38 @@ describe("run-history capture visibility (#969)", () => {
       expect(row!.kind).toBe("suppressed_unconfirmed_by_screenshot");
       expectNoAlert(row!);
     });
+
+    it("records suppressed_churn_stable from an extractor-suppression candidate and never alerts", () => {
+      const row = resolveSuppressedCandidateRefusal(
+        candidate({
+          id: "candidate-churn",
+          status: "suppressed",
+          metadata: { kind: "extractor_suppression", suppression: "churn_stable" },
+        }),
+      );
+
+      expect(row).not.toBeNull();
+      expect(row!.kind).toBe("suppressed_churn_stable");
+      expect(row!.reasonCode).toBe("churn_stable");
+      expect(row!.explanation).toBe("Only a timestamp changed");
+      expectNoAlert(row!);
+    });
+
+    it("records suppressed_ad_slot_strip from an extractor-suppression candidate and never alerts", () => {
+      const row = resolveSuppressedCandidateRefusal(
+        candidate({
+          id: "candidate-banner",
+          status: "suppressed",
+          metadata: { kind: "extractor_suppression", suppression: "ad_slot_strip" },
+        }),
+      );
+
+      expect(row).not.toBeNull();
+      expect(row!.kind).toBe("suppressed_ad_slot_strip");
+      expect(row!.reasonCode).toBe("ad_slot_strip");
+      expect(row!.explanation).toBe("Only a rotating banner changed");
+      expectNoAlert(row!);
+    });
   });
 
   it("does not list a succeeded capture or a confirmed change as a refusal", () => {
