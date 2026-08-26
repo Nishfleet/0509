@@ -215,11 +215,14 @@ export function planIntentPath(
 export function PricingSection({
   commercialLaunch,
   initialPricingPreview,
+  headingLevel = "h2",
 }: {
   commercialLaunch: PublicCommercialLaunchSummary;
   initialPricingPreview: LocalPricingPreview | null;
+  headingLevel?: "h1" | "h2";
 }) {
   const rootData = useRouteLoaderData("root") as RootLoaderData;
+  const HeadingTag = headingLevel;
   const primaryCta = rootData.session ? "/app" : "/auth/signup";
   const primaryLabel = rootData.session ? "Open app" : "Create account";
   const [localPricing, setLocalPricing] = useState<LocalPricingPreview | null>(initialPricingPreview);
@@ -307,7 +310,7 @@ export function PricingSection({
     <section className="f9-growth-pricing" id="pricing">
       <div className="ld-section-head">
         <span className="ld-kicker">Plans</span>
-        <h2>Choose the monitoring rhythm your team needs.</h2>
+        <HeadingTag>Choose the monitoring rhythm your team needs.</HeadingTag>
         <div className="ld-plan-summary" aria-label="Pricing summary">
           <span>Recommended launch plan</span>
           <strong>Start with Starter</strong>

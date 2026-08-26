@@ -73,6 +73,7 @@ export default function PricingRoute() {
       />
       <MarketingNav />
       <PricingSection
+        headingLevel="h1"
         commercialLaunch={commercialLaunch}
         initialPricingPreview={routeData.pricingPreview?.available ? routeData.pricingPreview : null}
       />

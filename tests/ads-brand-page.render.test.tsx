@@ -514,6 +514,34 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).toContain("Advertiser unconfirmed · nike.com");
     expect((markup.match(/Nike · nike\.com/g) ?? []).length).toBe(4);
   });
+
+  it("renders exactly one plain-text h1 that names the brand", async () => {
+    const markup = await render(populated());
+    const h1Matches = markup.match(/<h1\b[^>]*>[^<]+<\/h1>/g) ?? [];
+    expect(h1Matches).toHaveLength(1);
+    expect(h1Matches[0]).toBe(
+      '<h1 class="f9-ads-headline" id="brand-ads-title">Nike was running 6 Meta ads at the last check.</h1>',
+    );
+  });
+
+  it("renders exactly one plain-text h1 on the cache-miss shell", async () => {
+    const markup = await render(
+      populated({
+        hasCachedAds: false,
+        ads: [],
+        checkedAgo: null,
+        teaser: null,
+        aggression: null,
+        changeEvents: [],
+        noindex: true,
+      }),
+    );
+    const h1Matches = markup.match(/<h1\b[^>]*>[^<]+<\/h1>/g) ?? [];
+    expect(h1Matches).toHaveLength(1);
+    expect(h1Matches[0]).toBe(
+      '<h1 class="f9-ads-headline f9-ads-shell-head" id="brand-ads-title">We haven&#x27;t watched nike.com yet — here&#x27;s what you&#x27;d wake up to.</h1>',
+    );
+  });
 });
 
 describe("/ads/:domain — truthful WebPage JSON-LD", () => {
