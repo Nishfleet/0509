@@ -298,8 +298,18 @@ export function parseRetryAfterMs(header, fallbackMs = SEARCH_429_DEFAULT_WAIT_M
  * }} [input]
  * @returns {typeof fetch}
  */
-export function createPacedFetch({
-  fetchImpl = fetch,
+/**
+ * Sliding-window limiter for the anonymous /search budget. `acquire()`
+ * waits until a slot is free; callers time first-card AFTER this returns
+ * so queueing is not counted as product latency.
+ * @param {{
+ *   sleepImpl?: (ms: number) => Promise<void>,
+ *   nowImpl?: () => number,
+ *   maxRequests?: number,
+ *   windowMs?: number,
+ * }} [input]
+ */
+export function createRateLimiter({
   sleepImpl = defaultSleep,
   nowImpl = () => Date.now(),
   maxRequests = SEARCH_RATE_LIMIT_MAX,
@@ -307,19 +317,52 @@ export function createPacedFetch({
 } = {}) {
   /** @type {number[]} */
   const stamps = [];
+  return {
+    async acquire() {
+      for (;;) {
+        const now = nowImpl();
+        while (stamps.length > 0 && now - stamps[0] >= windowMs) {
+          stamps.shift();
+        }
+        if (stamps.length < maxRequests) {
+          stamps.push(now);
+          return;
+        }
+        const waitMs = Math.max(25, windowMs - (now - stamps[0]) + 25);
+        await sleepImpl(waitMs);
+      }
+    },
+  };
+}
+
+/**
+ * Wrap `fetchImpl` so concurrent callers never issue more than
+ * `maxRequests` inside any `windowMs` sliding window.
+ * @param {{
+ *   fetchImpl?: typeof fetch,
+ *   sleepImpl?: (ms: number) => Promise<void>,
+ *   nowImpl?: () => number,
+ *   maxRequests?: number,
+ *   windowMs?: number,
+ * }} [input]
+ * @returns {typeof fetch}
+ */
+export function createPacedFetch({
+  fetchImpl = fetch,
+  sleepImpl = defaultSleep,
+  nowImpl = () => Date.now(),
+  maxRequests = SEARCH_RATE_LIMIT_MAX,
+  windowMs = SEARCH_RATE_LIMIT_WINDOW_MS,
+} = {}) {
+  const limiter = createRateLimiter({
+    sleepImpl,
+    nowImpl,
+    maxRequests,
+    windowMs,
+  });
   return async function pacedFetch(input, init) {
-    for (;;) {
-      const now = nowImpl();
-      while (stamps.length > 0 && now - stamps[0] >= windowMs) {
-        stamps.shift();
-      }
-      if (stamps.length < maxRequests) {
-        stamps.push(now);
-        return fetchImpl(input, init);
-      }
-      const waitMs = Math.max(25, windowMs - (now - stamps[0]) + 25);
-      await sleepImpl(waitMs);
-    }
+    await limiter.acquire();
+    return fetchImpl(input, init);
   };
 }
 
@@ -454,6 +497,7 @@ async function readBodyAndFindFirstRow(response, nowImpl = () => Date.now()) {
  *   warmingBudgetMs?: number,
  *   warmingPollIntervalMs?: number,
  *   max429Retries?: number,
+ *   beforeRequest?: () => Promise<void> | void,
  * }} input
  * @returns {Promise<ProbeResult>}
  */
@@ -468,6 +512,7 @@ export async function probeDomain({
   warmingBudgetMs = SEARCH_WARMING_TOTAL_BUDGET_MS,
   warmingPollIntervalMs = SEARCH_WARMING_POLL_INTERVAL_MS,
   max429Retries = SEARCH_429_RETRY_LIMIT,
+  beforeRequest,
 }) {
   const url = buildSearchUrl({ baseUrl, domain });
   let polls = 0;
@@ -476,11 +521,16 @@ export async function probeDomain({
   let lastStatus = null;
   let lastResponseHeaders = null;
   let rateLimitHits = 0;
-  const requestStart = nowImpl();
+  // Set on the first non-429 attempt so pacer queue time and 429 backoff
+  // are not counted as time-to-first-card. Warming polls keep this value
+  // so the 35s wait IS counted (that wait is what the visitor sees).
+  let requestStart = null;
 
   while (true) {
     let response;
     try {
+      await beforeRequest?.();
+      if (requestStart === null) requestStart = nowImpl();
       response = await fetchImpl(url, {
         method: "GET",
         headers: {
@@ -500,7 +550,7 @@ export async function probeDomain({
         status: null,
         polls,
         firstCardAtMs: null,
-        elapsedMs: nowImpl() - requestStart,
+        elapsedMs: nowImpl() - (requestStart ?? nowImpl()),
         requestErrorMs:
           error instanceof Error ? error.message : String(error),
         tierCounts: { verified: 0, likely: 0, unmatched: 0 },
@@ -527,7 +577,7 @@ export async function probeDomain({
           status: 429,
           polls,
           firstCardAtMs: null,
-          elapsedMs: nowImpl() - requestStart,
+          elapsedMs: nowImpl() - (requestStart ?? nowImpl()),
           retryAfter: retryAfterHeader,
           tierCounts: { verified: 0, likely: 0, unmatched: 0 },
           rowCount: 0,
@@ -539,6 +589,7 @@ export async function probeDomain({
           emptyReason: null,
         };
       }
+      requestStart = null;
       await sleepImpl(parseRetryAfterMs(retryAfterHeader));
       continue;
     }
@@ -551,7 +602,7 @@ export async function probeDomain({
         status: response.status,
         polls,
         firstCardAtMs: null,
-        elapsedMs: nowImpl() - requestStart,
+        elapsedMs: nowImpl() - (requestStart ?? nowImpl()),
         bodyBytes: body.length,
         tierCounts: { verified: 0, likely: 0, unmatched: 0 },
         rowCount: 0,
@@ -573,13 +624,13 @@ export async function probeDomain({
       // Wall-clock from the original request, not HTML byte offset. Adding
       // `firstRowAt` (a character index) used to report gymshark at ~15 s
       // on a 1.8 s cache hit.
-      firstCardAtMs = Math.max(0, firstRowSeenAt - requestStart);
+      firstCardAtMs = Math.max(0, firstRowSeenAt - (requestStart ?? firstRowSeenAt));
     }
     // A warming page that already has rows is the #951 first card. Stop.
     // Keep polling only while the page is empty and still warming.
     const isFinalPass = !parsed.isWarming || parsed.rowCount > 0;
     if (isFinalPass) {
-      const elapsedMs = nowImpl() - requestStart;
+      const elapsedMs = nowImpl() - (requestStart ?? nowImpl());
       const isDeadEnd = parsed.rowCount === 0;
       return {
         domain,
@@ -607,8 +658,8 @@ export async function probeDomain({
       };
     }
     polls += 1;
-    if (nowImpl() - requestStart >= warmingBudgetMs) {
-      const elapsedMs = nowImpl() - requestStart;
+    if (nowImpl() - (requestStart ?? nowImpl()) >= warmingBudgetMs) {
+      const elapsedMs = nowImpl() - (requestStart ?? nowImpl());
       return {
         domain,
         url: url.toString(),
@@ -653,6 +704,7 @@ function defaultSleep(ms) {
  *   warmingPollIntervalMs?: number,
  *   onResult?: (probe: ProbeResult, index: number, total: number) => void,
  *   paceRequests?: boolean,
+ *   beforeRequest?: () => Promise<void> | void,
  * }} input
  * @returns {Promise<RunResult>}
  */
@@ -668,22 +720,26 @@ export async function runLiveVerification({
   warmingPollIntervalMs = SEARCH_WARMING_POLL_INTERVAL_MS,
   onResult,
   paceRequests = true,
+  beforeRequest,
 }) {
-  const resolvedFetch = paceRequests
-    ? createPacedFetch({ fetchImpl, sleepImpl, nowImpl })
-    : fetchImpl;
+  const limiter = paceRequests
+    ? createRateLimiter({ sleepImpl, nowImpl })
+    : null;
+  const resolvedBeforeRequest = beforeRequest
+    ?? (limiter ? () => limiter.acquire() : undefined);
   const results = [];
   for (const domain of domains) {
     const probeStartedAt = nowImpl();
     const result = await probeDomain({
       domain,
       baseUrl,
-      fetchImpl: resolvedFetch,
+      fetchImpl,
       sleepImpl,
       nowImpl,
       userAgent,
       warmingBudgetMs,
       warmingPollIntervalMs,
+      beforeRequest: resolvedBeforeRequest,
     });
     results.push(result);
     onResult?.(result, results.length, domains.length);
@@ -887,15 +943,14 @@ async function main() {
   emitLine(
     `BET 2 live verification starting @ ${baseUrl} (n=${BET2_DOMAINS.length}${includeRerun ? ` + ${SECTION_1_8_RERUN.length} rerun` : ""}, spacing=${spacingMs}ms)`,
   );
-  // One pacer for the 25-set AND the §1.8 HTTP rerun. Separate
-  // createPacedFetch() instances would each think the 20/10min window
-  // is empty and 429 the tail.
-  const pacedFetch = createPacedFetch();
+  // One limiter for the 25-set AND the §1.8 HTTP rerun. Acquire happens
+  // BEFORE the first-card clock starts, so queue time is not product latency.
+  const limiter = createRateLimiter();
   const run = await runLiveVerification({
     domains: BET2_DOMAINS,
     baseUrl,
-    fetchImpl: pacedFetch,
     paceRequests: false,
+    beforeRequest: () => limiter.acquire(),
     requestSpacingMs: spacingMs,
     onResult: (probe, index, total) => {
       emitLine(formatProbeLine(probe, index, total));
@@ -905,8 +960,8 @@ async function main() {
     ? await runLiveVerification({
         domains: SECTION_1_8_RERUN,
         baseUrl,
-        fetchImpl: pacedFetch,
         paceRequests: false,
+        beforeRequest: () => limiter.acquire(),
         requestSpacingMs: spacingMs,
         onResult: (probe, index, total) => {
           if (index === 1) {

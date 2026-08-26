@@ -441,6 +441,83 @@ describe("probeDomain with mock fetch", () => {
     expect(result.rowCount).toBe(1);
   });
 
+  it("does not count 429 backoff in first-card time", async () => {
+    const html = htmlForRows([
+      { tier: "verified", advertiser: "A", summary: "X" },
+    ]);
+    let now = 0;
+    let calls = 0;
+    const fetchMock = (async () => {
+      calls += 1;
+      if (calls === 1) {
+        return mockFetchResponse("slow down", {
+          status: 429,
+          headers: { "retry-after": "5" },
+        });
+      }
+      return mockFetchResponse(html);
+    }) as unknown as typeof fetch;
+    const result = await probeDomain({
+      domain: "retry-timing.example",
+      baseUrl: "https://example.test",
+      fetchImpl: fetchMock,
+      sleepImpl: async (ms) => {
+        now += ms;
+      },
+      nowImpl: () => now,
+    });
+    expect(calls).toBe(2);
+    expect(result.outcome).toBe("verified");
+    expect(result.firstCardAtMs).toBe(0);
+  });
+
+  it("does not count beforeRequest queue time in first-card time", async () => {
+    const html = htmlForRows([
+      { tier: "verified", advertiser: "A", summary: "X" },
+    ]);
+    let now = 0;
+    const fetchMock = (async () => mockFetchResponse(html)) as unknown as typeof fetch;
+    const result = await probeDomain({
+      domain: "queued.example",
+      baseUrl: "https://example.test",
+      fetchImpl: fetchMock,
+      sleepImpl: async () => {},
+      nowImpl: () => now,
+      beforeRequest: async () => {
+        now += 40_000;
+      },
+    });
+    expect(result.outcome).toBe("verified");
+    expect(result.firstCardAtMs).toBe(0);
+  });
+
+  it("counts warming-poll wait in first-card time", async () => {
+    const warmingHtml = `<html><body><section class="f9-results-panel" data-f9-result-source="meta_library_browser" data-f9-result-cache-status="miss"><h2 class="f9-wk-sec-title">Search in progress</h2></section></body></html>`;
+    const readyHtml = htmlForRows([
+      { tier: "verified", advertiser: "A", summary: "X" },
+    ]);
+    let now = 0;
+    let calls = 0;
+    const fetchMock = (async () => {
+      calls += 1;
+      return mockFetchResponse(calls === 1 ? warmingHtml : readyHtml);
+    }) as unknown as typeof fetch;
+    const result = await probeDomain({
+      domain: "warming-then-ready.example",
+      baseUrl: "https://example.test",
+      fetchImpl: fetchMock,
+      sleepImpl: async (ms) => {
+        now += ms;
+      },
+      nowImpl: () => now,
+      warmingBudgetMs: 60_000,
+      warmingPollIntervalMs: 35_000,
+    });
+    expect(calls).toBe(2);
+    expect(result.outcome).toBe("verified");
+    expect(result.firstCardAtMs).toBe(35_000);
+  });
+
   it("records outcome=demo_sourced when the panel data source is demo", async () => {
     const demoHtml = `<html><body><section class="f9-results-panel" data-f9-result-source="demo" data-f9-result-cache-status="none"><h2 class="f9-wk-sec-title">1 verified ad linked to nykaa.com</h2><div class="f9-wk-row"><span class="f9-wk-say">Festive sale</span></div></section></body></html>`;
     const fetchMock = (async () => mockFetchResponse(demoHtml)) as unknown as typeof fetch;
