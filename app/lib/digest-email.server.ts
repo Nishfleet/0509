@@ -34,6 +34,7 @@ import {
   rerankDigestBrief,
   type AdChurnSummary,
 } from "~/lib/digest-rerank";
+import { firstBriefEmailSubject } from "~/lib/first-brief";
 import { safeTimeZone } from "~/lib/safe-timezone";
 import type { WatchPeriodTriageStatus } from "~/lib/watch-event-evaluator.server";
 import {
@@ -128,6 +129,7 @@ export interface DigestEmailInput {
   hasPreviousBrief?: boolean | null;
   nextScanAt?: string | null;
   nextScanLabel?: string | null;
+  firstBrief?: boolean;
 }
 
 export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
@@ -156,7 +158,11 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const proofMix = summarizeDigestProofMix(input.items);
   const priorityMix = summarizePriorityMix(input.items);
   const cadenceLabel = digestCadenceLabel(input.cadence);
-  const subject = subjectForDigest(input.items.length, actionCount, topItems);
+  const firstBriefCompetitor =
+    input.items.find((item) => item.watchlistName?.trim())?.watchlistName ?? "";
+  const subject = input.firstBrief
+    ? firstBriefEmailSubject(firstBriefCompetitor)
+    : subjectForDigest(input.items.length, actionCount, topItems);
   const totalEligibleEvents = input.totalEligibleEvents ?? input.items.length;
   const includedEvents = input.includedEvents ?? input.items.length;
   const omittedEvents = input.omittedEvents ?? Math.max(totalEligibleEvents - includedEvents, 0);

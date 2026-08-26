@@ -1989,4 +1989,34 @@ describe("buildDigestEmail — brief retention frame (lane 1)", () => {
     expect(email.html).toContain("first brief on file");
     expect(email.html).toContain("Expiry unset");
   });
+
+  it("names the activation brief email from the competitor, not the weekly count line", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-08-26T10:00:00.000Z",
+      periodEnd: "2026-09-02T10:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        digestItem(
+          "Glowkart",
+          "Baseline captured: 3 active ads",
+          80,
+          "scan_backed",
+          "ev-glowkart",
+          "ad_new",
+        ),
+      ],
+      firstBrief: true,
+      hasPreviousBrief: false,
+    });
+
+    expect(email.subject).toBe("Your first brief: Glowkart");
+    expect(email.subject).not.toContain("worth action");
+  });
 });

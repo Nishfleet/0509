@@ -324,6 +324,33 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ),
     firstScanStatesPromise,
   ]);
+  const { shouldEnsureFirstBrief } = await import("~/lib/first-brief");
+  let resolvedDigests = digests;
+  if (shouldEnsureFirstBrief({ watchlists, digests })) {
+    try {
+      const { ensureFirstBriefForWorkspace } =
+        await import("~/lib/first-brief.server");
+      await ensureFirstBriefForWorkspace(env, workspaceUserId);
+      resolvedDigests = await optionalSection(
+        "digests",
+        listDigests(env, workspaceUserId),
+        digests,
+      );
+    } catch {
+      sectionWarnings.push({
+        section: "digests",
+        message: "We couldn't load this section.",
+      });
+    }
+  }
+  const { emitFunnelFirstBriefViewed } =
+    await import("~/lib/funnel-measurement.server");
+  const { findFirstBriefDigest, hasEvidenceLinkedItem } =
+    await import("~/lib/first-brief");
+  const viewedFirstBrief = findFirstBriefDigest(resolvedDigests);
+  if (viewedFirstBrief && hasEvidenceLinkedItem(viewedFirstBrief.items)) {
+    emitFunnelFirstBriefViewed(env, request);
+  }
   const recentProofCaptures = recentProofPairs.flatMap((pair) =>
     pair.previous ? [pair.current, pair.previous] : [pair.current],
   );
@@ -338,7 +365,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     savedQueries,
     collections,
     watchlists,
-    digests,
+    digests: resolvedDigests,
     recentEvents,
     recentProofCaptures,
     recentProofPairs,
@@ -900,6 +927,22 @@ export default function AppDashboardRoute() {
             evidence={landingEvidence.evidence}
             timeZone={data.workspaceDeliveryTimezone}
           />
+        ) : null}
+        {marketDeskBrief.items.some((item) => item.href) ? (
+          <RuledList aria-label="First brief evidence">
+            {marketDeskBrief.items
+              .filter((item) => item.href)
+              .map((item) => (
+                <RuledRow
+                  key={`${item.title}:${item.href}`}
+                  name={item.title}
+                  say={item.detail}
+                  status={item.label}
+                  statusTone="on"
+                  to={item.href}
+                />
+              ))}
+          </RuledList>
         ) : null}
       </section>
 
