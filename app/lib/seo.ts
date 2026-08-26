@@ -170,6 +170,34 @@ export function webPageJsonLd(input: {
 }
 
 /**
+ * schema.org Service for an indexable /ads/:domain brand page. Describes the
+ * per-competitor ad-monitoring offer the page already shows: Watch {domain},
+ * the brand the page is about, the canonical URL, and Five to Nine as the
+ * provider. Description must be the same string as the visible meta
+ * description (brandPageDescription) — never a second invented claim.
+ *
+ * Do not add price, rating, or availability fields. The page says the watch
+ * is free, but prices live in Dodo and must not be hardcoded in structured
+ * data (same rule as organizationJsonLd).
+ */
+export function adsPageServiceJsonLd(input: {
+  brandName: string;
+  domain: string;
+  description: string;
+  pathname: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: `Watch ${input.domain}`,
+    description: input.description,
+    url: canonicalUrl(input.pathname),
+    provider: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
+    about: { "@type": "Organization", name: input.brandName },
+  } as const;
+}
+
+/**
  * Props for a JSON-LD <script> tag. Escapes `<` so page data can never break
  * out of the script element.
  */
