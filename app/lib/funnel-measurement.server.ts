@@ -2,6 +2,10 @@ import { logAppEvent } from "~/lib/log.server";
 import type { DiscoveryFailureClass } from "~/lib/types";
 
 import type { AppEnv } from "~/lib/env.server";
+import {
+  sneakerResaleMarketForSignupSource,
+  type SneakerResaleLocaleId,
+} from "~/lib/locale-markets";
 
 /**
  * Anonymous first-party funnel measurement (docs/funnel-measurement-spec.md).
@@ -27,12 +31,21 @@ export type FunnelEventKind =
   | "migration_view"
   | "signup_start"
   | "signup_start_magicbrief"
+  | "signup_start_locale_en"
+  | "signup_start_locale_de"
+  | "signup_start_locale_ja"
+  | "signup_start_locale_pt_br"
+  | "locale_segment_view_en"
+  | "locale_segment_view_de"
+  | "locale_segment_view_ja"
+  | "locale_segment_view_pt_br"
   | "first_brief_viewed";
 
 export type FunnelRoute =
   | "home"
   | "search_preview"
   | "magicbrief_migration"
+  | "sneaker_resale"
   | "signup"
   | "activation";
 
@@ -60,6 +73,14 @@ const FUNNEL_ROUTES: Record<FunnelEventKind, FunnelRoute> = {
   migration_view: "magicbrief_migration",
   signup_start: "signup",
   signup_start_magicbrief: "signup",
+  signup_start_locale_en: "signup",
+  signup_start_locale_de: "signup",
+  signup_start_locale_ja: "signup",
+  signup_start_locale_pt_br: "signup",
+  locale_segment_view_en: "sneaker_resale",
+  locale_segment_view_de: "sneaker_resale",
+  locale_segment_view_ja: "sneaker_resale",
+  locale_segment_view_pt_br: "sneaker_resale",
   first_brief_viewed: "activation",
 };
 
@@ -71,6 +92,14 @@ const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
   migration_view: "funnel_migration_view",
   signup_start: "funnel_signup_start",
   signup_start_magicbrief: "funnel_signup_start_magicbrief",
+  signup_start_locale_en: "funnel_signup_start_locale_en",
+  signup_start_locale_de: "funnel_signup_start_locale_de",
+  signup_start_locale_ja: "funnel_signup_start_locale_ja",
+  signup_start_locale_pt_br: "funnel_signup_start_locale_pt_br",
+  locale_segment_view_en: "funnel_locale_segment_view_en",
+  locale_segment_view_de: "funnel_locale_segment_view_de",
+  locale_segment_view_ja: "funnel_locale_segment_view_ja",
+  locale_segment_view_pt_br: "funnel_locale_segment_view_pt_br",
   first_brief_viewed: "funnel_first_brief_viewed",
 };
 
@@ -82,7 +111,29 @@ const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
   migration_view: "Anonymous MagicBrief migration page view",
   signup_start: "Anonymous signup started",
   signup_start_magicbrief: "Anonymous signup started from the MagicBrief migration page",
+  signup_start_locale_en: "Anonymous signup started from the English sneaker-resale page",
+  signup_start_locale_de: "Anonymous signup started from the German sneaker-resale page",
+  signup_start_locale_ja: "Anonymous signup started from the Japanese sneaker-resale page",
+  signup_start_locale_pt_br: "Anonymous signup started from the Brazilian Portuguese sneaker-resale page",
+  locale_segment_view_en: "Anonymous English sneaker-resale page view",
+  locale_segment_view_de: "Anonymous German sneaker-resale page view",
+  locale_segment_view_ja: "Anonymous Japanese sneaker-resale page view",
+  locale_segment_view_pt_br: "Anonymous Brazilian Portuguese sneaker-resale page view",
   first_brief_viewed: "First brief viewed in session",
+};
+
+const LOCALE_SEGMENT_VIEW_KIND: Record<SneakerResaleLocaleId, FunnelEventKind> = {
+  en: "locale_segment_view_en",
+  de: "locale_segment_view_de",
+  ja: "locale_segment_view_ja",
+  "pt-br": "locale_segment_view_pt_br",
+};
+
+const LOCALE_SIGNUP_KIND: Record<SneakerResaleLocaleId, FunnelEventKind> = {
+  en: "signup_start_locale_en",
+  de: "signup_start_locale_de",
+  ja: "signup_start_locale_ja",
+  "pt-br": "signup_start_locale_pt_br",
 };
 
 export function funnelMeasurementEnabled(env: AppEnv): boolean {
@@ -220,6 +271,40 @@ export function emitFunnelSignupStartFromMigrationReferrer(
     request,
     fromMigrationReferrer ? "signup_start_magicbrief" : "signup_start",
   );
+}
+
+/**
+ * Locale sneaker-resale page view. Locale is an allowlisted id, never a
+ * caller-controlled string, so it can only select which event kind fires.
+ */
+export function emitFunnelLocaleSegmentView(
+  env: AppEnv,
+  request: Request,
+  locale: SneakerResaleLocaleId,
+) {
+  emitFunnelEvent(env, request, LOCALE_SEGMENT_VIEW_KIND[locale]);
+}
+
+/**
+ * Signup attribution from an allowlisted `source=` marker (MagicBrief
+ * migration or a sneaker-resale locale page). The raw query value is compared
+ * to constants and never stored.
+ */
+export function emitFunnelSignupStartFromAllowlistedSource(
+  env: AppEnv,
+  request: Request,
+  source: string | null,
+) {
+  if (source === MAGICBRIEF_MIGRATION_SOURCE) {
+    emitFunnelEvent(env, request, "signup_start_magicbrief");
+    return;
+  }
+  const localeMarket = sneakerResaleMarketForSignupSource(source);
+  if (localeMarket) {
+    emitFunnelEvent(env, request, LOCALE_SIGNUP_KIND[localeMarket.id]);
+    return;
+  }
+  emitFunnelEvent(env, request, "signup_start");
 }
 
 export function emitFunnelFirstBriefViewed(env: AppEnv, request: Request) {

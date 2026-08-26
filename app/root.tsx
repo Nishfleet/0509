@@ -26,6 +26,7 @@ import {
   siteRepWidgetForRequestState,
 } from "~/lib/siterep-widget";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { htmlLangForPathname } from "~/lib/locale-markets";
 import { applyTheme, THEME_BOOT_SCRIPT, THEME_COLOR_LIGHT } from "~/lib/theme-client";
 import type { AppSession, PricingPlan, UsageBundle } from "~/lib/types";
 export {
@@ -279,9 +280,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
   }, [shouldReloadForSiteRepWidget]);
 
+  const documentLang = htmlLangForPathname(location.pathname);
+
   if (shouldReloadForSiteRepWidget) {
     return (
-      <html lang="en">
+      <html lang={documentLang}>
         <head>
           <meta charSet="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -297,7 +300,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     // suppressHydrationWarning: THEME_BOOT_SCRIPT sets data-f9-theme on
     // <html> and rewrites the theme-color meta before React hydrates.
-    <html lang="en" suppressHydrationWarning>
+    <html lang={documentLang} suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />

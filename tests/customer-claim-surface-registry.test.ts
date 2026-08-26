@@ -336,7 +336,9 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // 2026-08-26: /proof joined the sitemap — public capture-validity rules page (issue #970).
   // 2026-08-26: BET 8 switch pages joined the sitemap (issue #1117).
   // 2026-08-26: /methodology/ad-aggression-score joined the sitemap (issue #960).
-  sitemapPaths: ["/", "/search", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping", "/compare/visualping-ad-library", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief", "/switch/panoramata", "/switch/visualping", "/competitor-monitoring", "/proof", "/methodology/ad-aggression-score", "/pricing", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  // 2026-08-27: sneaker-resale locale cluster joined the sitemap (issue #1154).
+  // Product UI stays English; these are indexable marketing surfaces only.
+  sitemapPaths: ["/", "/search", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping", "/compare/visualping-ad-library", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief", "/switch/panoramata", "/switch/visualping", "/competitor-monitoring", "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale", "/pt-br/sneaker-resale", "/proof", "/methodology/ad-aggression-score", "/pricing", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",

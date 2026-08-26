@@ -80,6 +80,8 @@ export default [
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
   route("competitor-monitoring", "routes/competitor-monitoring.tsx"),
+  route("sneaker-resale", "routes/sneaker-resale.tsx"),
+  route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
   route("team/accept", "routes/team.accept.tsx"),
 	route("share/:token/pdf", "routes/share.$token.pdf.ts"),
   route("share/:token", "routes/share.$token.tsx"),

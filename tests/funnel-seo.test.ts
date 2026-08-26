@@ -201,6 +201,7 @@ describe("shared marketing footer", () => {
       "app/routes/compare.panoramata.tsx",
       "app/routes/compare.adspyder.tsx",
       "app/components/switch-landing.tsx",
+      "app/components/sneaker-resale-landing.tsx",
     ]) {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("<MarketingFooter />");
