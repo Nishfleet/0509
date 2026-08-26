@@ -2793,6 +2793,24 @@ describe("page-id-aware discovery", () => {
     expect(url.searchParams.get("search_type")).toBe("keyword_unordered");
   });
 
+  it("uses keyword_unordered for advertiser-mode domain stems so exact-phrase empties cannot dead-end", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: {} }));
+    const { buildSearchUrl } = await import("~/lib/meta-library-browser.server");
+
+    const url = new URL(
+      buildSearchUrl({
+        mode: "advertiser",
+        filters: {
+          ...buildQuery().filters,
+          query: "nike",
+        },
+      }),
+    );
+
+    expect(url.searchParams.get("search_type")).toBe("keyword_unordered");
+    expect(url.searchParams.get("q")).toBe("nike");
+  });
+
   it("floats brand-name advertiser matches above unrelated advertisers", async () => {
     vi.doMock("@cloudflare/puppeteer", () => ({ default: {} }));
     const { rankExtractedCardsByAdvertiserMatch } = await import(

@@ -181,9 +181,12 @@ export function isDiscoveryCacheWithinMaxAge(
  * - keyword-mode zeros: never gated (keyword search never ran the filter).
  *
  * Bump this value whenever the advertiser evidence-filter contract changes in
- * a way that invalidates previously cached zero results.
+ * a way that invalidates previously cached zero results. v2 also covers the
+ * advertiser-mode scrape switching from keyword_exact_phrase to
+ * keyword_unordered (BET 2 #1202: exact-phrase empties like slack.com were
+ * cached as honest no_results and served as dead-ends).
  */
-export const DISCOVERY_ADVERTISER_FILTER_EPOCH = "advertiser-evidence-filter-v1";
+export const DISCOVERY_ADVERTISER_FILTER_EPOCH = "advertiser-keyword-unordered-v2";
 
 /**
  * Strip writer-contract internals from a cached payload before it is served

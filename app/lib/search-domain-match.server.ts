@@ -5,7 +5,9 @@ import {
 } from "~/lib/search-domain-match";
 import {
   comparableHostname,
-  hostnamesMatchBrandRegionalProperty,
+  foldDomainLabel,
+  hostnamesMatchBrandStemExtension,
+  hostnamesMatchBrandVerifiedProperty,
   hostnamesMatchDomainIntent,
   registrableDomainFromHostname,
 } from "~/lib/search-query";
@@ -55,13 +57,27 @@ export function explainDomainMatch(
     return buildExplanation(ad, level, landingHost, "landing_page_url", customerLandingReason(level, intent));
   }
 
-  if (landingHost && hostnamesMatchBrandRegionalProperty(landingHost, intent)) {
+  if (landingHost && hostnamesMatchBrandVerifiedProperty(landingHost, intent)) {
     return buildExplanation(
       ad,
       "verified_alias",
       landingHost,
       "regional_property",
-      `Landing page matches ${comparableHostname(landingHost)}, a regional site for ${displayDomain(intent)}`,
+      `Landing page matches ${comparableHostname(landingHost)}, a related site for ${displayDomain(intent)}`,
+    );
+  }
+
+  if (
+    landingHost &&
+    hostnamesMatchBrandStemExtension(landingHost, intent) &&
+    advertiserMatchesBrandStem(ad, intent)
+  ) {
+    return buildExplanation(
+      ad,
+      "verified_alias",
+      landingHost,
+      "brand_stem_property",
+      `Landing page matches ${comparableHostname(landingHost)}, a product site for ${displayDomain(intent)}`,
     );
   }
 
@@ -268,19 +284,52 @@ function displayDomain(intent: ParsedSearchQuery) {
 }
 
 function hasVerifiedEntityLink(ad: AdRecord, intent: ParsedSearchQuery, identityAliases: string[]) {
-  const landingHost = extractHostname(ad.landingPageUrl);
-  if (!landingHost || !hostnamesMatchDomainIntent(landingHost, intent)) {
+  if (identityAliases.length === 0) {
+    return false;
+  }
+  if (!advertiserIsBrandStem(ad, intent)) {
     return false;
   }
 
-  const advertiser = ad.advertiser.toLowerCase();
-  return identityAliases.some((alias) => alias && advertiser.includes(alias.toLowerCase()));
+  const stem = foldDomainLabel(stemFromDomain(intent.registrableDomain ?? ""));
+  if (!stem || stem.length < 3) {
+    return false;
+  }
+
+  return identityAliases.some((alias) => identityAliasConfirmsStem(alias, stem));
+}
+
+function identityAliasConfirmsStem(alias: string, stem: string) {
+  const head = alias.split(/[|–—:•]/)[0] ?? alias;
+  const foldedHead = foldDomainLabel(head);
+  const foldedAlias = foldDomainLabel(alias);
+  const leading = foldDomainLabel(head.trim().split(/\s+/)[0] ?? "");
+  return foldedHead === stem || foldedAlias === stem || leading === stem;
+}
+
+function advertiserMatchesBrandStem(ad: AdRecord, intent: ParsedSearchQuery) {
+  return hasBrandNameMatch(ad, intent) || advertiserIsBrandStem(ad, intent);
+}
+
+function advertiserIsBrandStem(ad: AdRecord, intent: ParsedSearchQuery) {
+  const stem = foldDomainLabel(stemFromDomain(intent.registrableDomain ?? ""));
+  if (!stem || stem.length < 3) {
+    return false;
+  }
+
+  const foldedAdvertiser = foldDomainLabel(ad.advertiser);
+  if (foldedAdvertiser === stem) {
+    return true;
+  }
+
+  const stripped = foldDomainLabel(stripBrandSuffixes(foldForMatch(ad.advertiser)));
+  return stripped === stem;
 }
 
 /**
  * Brand-name match (BET 2 "likely" tier). The advertiser IS the brand — its
  * name is the brand stem, optionally followed by common corporate/geo
- * suffixes ("Allbirds", "Allbirds Official", "Notion Inc") — but no landing
+ * suffixes ("Allbirds", "Allbirds Official", "Allbirds Japan") — but no landing
  * page or advertiser-domain link was captured to prove it. This is the tier
  * that keeps allbirds/notion/oura off the dead-end empty state.
  *
@@ -290,7 +339,7 @@ function hasVerifiedEntityLink(ad: AdRecord, intent: ParsedSearchQuery, identity
  * (unmatched), preserving the okara.ai precision fix.
  */
 function hasBrandNameMatch(ad: AdRecord, intent: ParsedSearchQuery) {
-  const stem = stemFromDomain(intent.registrableDomain ?? "");
+  const stem = foldDomainLabel(stemFromDomain(intent.registrableDomain ?? ""));
   if (!stem || stem.length < 3) {
     return false;
   }
@@ -304,18 +353,21 @@ function hasBrandNameMatch(ad: AdRecord, intent: ParsedSearchQuery) {
     return false;
   }
 
-  const raw = ad.advertiser.trim().toLowerCase();
+  const foldedAdvertiser = foldDomainLabel(ad.advertiser);
+  if (foldedAdvertiser === stem) {
+    return true;
+  }
+
+  const raw = foldForMatch(ad.advertiser).trim();
   if (!raw) {
     return false;
   }
 
-  const tokens = raw.split(/\s+/);
-  // The brand is the leading token ("allbirds official" → "allbirds"), or the
-  // whole name minus common suffixes equals the stem ("allbirds inc" → "allbirds").
-  if (tokens[0] === stem) {
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  if (tokens[0] && foldDomainLabel(tokens[0]) === stem) {
     return true;
   }
-  return stripBrandSuffixes(raw) === stem;
+  return foldDomainLabel(stripBrandSuffixes(raw)) === stem;
 }
 
 const BRAND_NAME_SUFFIXES = [
@@ -342,6 +394,19 @@ const BRAND_NAME_SUFFIXES = [
   "uk",
   "eu",
   "india",
+  "japan",
+  "jp",
+  "me",
+  "au",
+  "nz",
+  "ca",
+  "kr",
+  "cn",
+  "ae",
+  "sa",
+  "asia",
+  "europe",
+  "middle east",
   "pvt",
   "pvt.",
   "private limited",
@@ -394,6 +459,15 @@ function hasKeywordOnlyMatch(ad: AdRecord, intent: ParsedSearchQuery) {
     .toLowerCase();
 
   return haystack.includes(stem);
+}
+
+function foldForMatch(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function inferAdvertiserDomain(advertiser: string) {
