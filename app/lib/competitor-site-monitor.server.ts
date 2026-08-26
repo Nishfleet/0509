@@ -41,7 +41,7 @@ import {
   normalizePublicHttpUrl,
   resolvePublicHttpUrl,
 } from "~/lib/public-url.server";
-import { stripScriptAndStyle } from "~/lib/sanitize-text.server";
+import { stripAllTags, stripScriptAndStyle } from "~/lib/sanitize-text.server";
 import type {
   WebsitePageDiscoverySource,
   WebsitePageKind,
@@ -257,11 +257,11 @@ function extractXmlText(xml: string, tag: string): string[] {
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(xml)) !== null) {
     const inner = match[1] ?? "";
-    const text = stripScriptAndStyle(inner)
-      .replace(/<\?xml[^>]*\?>/gi, "")
-      .replace(/<![^>]*>/g, "")
-      .replace(/<[^>]+>/g, "")
-      .trim();
+    const text = stripAllTags(
+      stripScriptAndStyle(inner)
+        .replace(/<\?xml[^>]*\?>/gi, "")
+        .replace(/<![^>]*>/g, ""),
+    ).trim();
     if (text !== "") out.push(text);
   }
   return out;
