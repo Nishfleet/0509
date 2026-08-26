@@ -102,6 +102,7 @@ import {
   formatOfferLabel,
   formatProofCaptureLabel,
   formatResultsPanelTitle,
+  formatSearchCommandTitle,
   formatSearchCaptureAgeLabel,
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
@@ -1091,6 +1092,10 @@ export default function SearchRoute() {
   );
   const selectedAdAngle = selectedAd ? classifyAdRecordAngle(selectedAd) : null;
   const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
+  const commandTitle = competitorWebsite.raw
+    ? "Find competitor ads"
+    : formatSearchCommandTitle(data.filters.query, data.filters.country);
+  const websiteInputValue = competitorWebsite.raw || data.filters.query;
   const trackingRole: WatchlistTrackingRole = "competitor";
   const targetNoun = "competitor";
   const currentSearchParams = withTrackingContext(
@@ -1593,7 +1598,7 @@ export default function SearchRoute() {
       <DashboardPage className="f9-wk-page">
         <WorkingHeader
           context={headerContext}
-          title="Find competitor ads"
+          title={commandTitle}
           titleId="search-command-title"
         />
 
@@ -1616,7 +1621,7 @@ export default function SearchRoute() {
                 aria-describedby={commandHint ? "search-command-hint" : undefined}
                 autoComplete="url"
                 className="f9-wk-in"
-                defaultValue={competitorWebsite.raw}
+                defaultValue={websiteInputValue}
                 inputMode="url"
                 name="website"
                 placeholder="https://competitor.com"
