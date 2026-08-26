@@ -98,9 +98,16 @@ export function applyTheme(pathname: string): "light" | "dark" {
  * Pre-paint boot script. Mirrors applyTheme() without imports so it can be
  * inlined in <head>. Only ADDS the dark attribute (the server never renders
  * it, so there is nothing to remove before hydration).
+ *
+ * The storage key and dark theme-color are inlined as literal strings rather
+ * than interpolated from the exported constants. Interpolating a value (even
+ * a constant) into an executable script string is a code-construction sink
+ * (CodeQL `js/bad-code-sanitization`): `JSON.stringify` does not make a value
+ * safe to splice into code. The literals below MUST stay in sync with
+ * `THEME_STORAGE_KEY` and `THEME_COLOR_DARK` — `tests/theme-client.test.ts`
+ * asserts the boot script contains those exact literals, so drifting them
+ * fails the test. The stored preference `s` is only ever compared against the
+ * fixed allowlist ("dark"/"light"); it never flows into a code-construction
+ * sink, so a malicious localStorage value cannot execute.
  */
-export const THEME_BOOT_SCRIPT = `(function(){try{var s=null;try{s=localStorage.getItem(${JSON.stringify(
-  THEME_STORAGE_KEY,
-)})}catch(e){}var d=s==="dark"||(s!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);var p=location.pathname;var t=p==="/app"||p.indexOf("/app/")===0||p==="/search"||p.indexOf("/search/")===0;if(d&&t){document.documentElement.setAttribute("data-f9-theme","dark");var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",${JSON.stringify(
-  THEME_COLOR_DARK,
-)});}}catch(e){}})();`;
+export const THEME_BOOT_SCRIPT = `(function(){try{var s=null;try{s=localStorage.getItem("f9-theme")}catch(e){}var d=s==="dark"||(s!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);var p=location.pathname;var t=p==="/app"||p.indexOf("/app/")===0||p==="/search"||p.indexOf("/search/")===0;if(d&&t){document.documentElement.setAttribute("data-f9-theme","dark");var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content","#171611");}}catch(e){}})();`;
