@@ -75,7 +75,7 @@ const fiveToNineAdds = [
   },
   {
     theirs: "Saved evidence",
-    ours: "Confirmed changes are saved with screenshots, page text, and the original source link, so the claim survives the closed tab.",
+    ours: "Confirmed changes are saved with page text, the original source link, and a screenshot when the capture includes one, so the claim survives the closed tab.",
   },
   {
     theirs: "Email briefs",
@@ -101,7 +101,7 @@ export const metaAdLibraryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "What does Five to Nine add to the Meta Ad Library?",
     answer:
-      "Paid plans check watched competitors every 3–6 hours, so the visits happen whether or not you remember. Each scan is compared against the last one, so you hear when something actually changed. Confirmed changes are saved with screenshots, page text, and the original source link, and arrive as a digest brief — daily on Starter and Agency, weekly on Scout — with instant alerts available on Starter and Agency.",
+      "Paid plans check watched competitors every 3–6 hours, so the visits happen whether or not you remember. Each scan is compared against the last one, so you hear when something actually changed. Confirmed changes are saved with page text, the original source link, and a screenshot when the capture includes one, and arrive as a digest brief — daily on Starter and Agency, weekly on Scout — with instant alerts available on Starter and Agency.",
   },
 ] as const;
 

@@ -23,16 +23,13 @@ import type { PublicProofBrief } from "~/lib/public-proof.server";
 export { planIntentPath, valueMathLabel, billingFaqJsonLdEntries } from "~/components/pricing-section";
 export type { LocalPricingPreview } from "~/components/pricing-section";
 
-// Kept under ~155 characters so search results show the whole line instead of
-// truncating mid-sentence. The audit flagged the previous 166-character copy.
-// Same claims, nothing new promised. The hero leads with what a scheduled
-// reliability check proves every day: public landing-page change monitoring
-// with screenshot evidence. Meta Ad Library coverage is named as a public
-// source below and in the FAQ, not promised as a scheduled first-class lane
-// until the Meta discovery reliability check publishes a green state on a
-// schedule.
+// Kept under ~160 characters so search results show the whole line instead of
+// truncating mid-sentence. Screenshot coverage on live proof_capture is a
+// minority (BET 10 / 977), so this line promises source-linked proof — page
+// text and the original link — not a screenshot on every change. Meta Ad
+// Library coverage is named as a public source below and in the FAQ.
 const marketingDescription =
-  "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then sends screenshot evidence and change alerts before your next meeting.";
+  "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then files source-linked proof and change alerts before your next meeting.";
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 
@@ -110,7 +107,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 function buildTickerEvents(brief: PublicProofBrief | null) {
   if (!brief) {
     return [
-      ["Proof-backed monitoring", "screenshot evidence"],
+      ["Proof-backed monitoring", "source-linked proof"],
       ["Every change keeps its source link", "source trail"],
       ["The brief files what moved", "morning brief"],
     ] as const;
@@ -141,7 +138,7 @@ const howSteps = [
     step: "03",
     title: "The brief stays focused",
     detail:
-      "Your brief groups meaningful changes with screenshots, links, and one next review — daily on Starter and Agency, weekly on Scout.",
+      "Your brief groups meaningful changes with source-linked proof and one next review — daily on Starter and Agency, weekly on Scout.",
   },
 ] as const;
 
@@ -166,7 +163,7 @@ const quietSignals = [
 const backboneStats = [
   { value: "Paste", label: "competitor sites", detail: "start from the brands you already track" },
   { value: "Watch", label: "ads, pages, website moves", detail: "scheduled monitoring is included with your plan" },
-  { value: "Prove", label: "screenshots and source links", detail: "no proof, no claim" },
+  { value: "Prove", label: "source-linked proof", detail: "no proof, no claim" },
   { value: "Brief", label: "the counter-move", detail: "what changed, why it matters, what to do next" },
 ] as const;
 
@@ -192,7 +189,7 @@ export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "How is this different from ad-spy tools?",
     answer:
-      "Ad-spy tools are built for browsing creatives, and some search many platforms’ ad libraries at once. Five to Nine monitors the Meta Ad Library only — other platforms’ ad libraries are out of scope — and is built around what changed: offers, prices, CTAs, and landing-page copy, each confirmed change saved with screenshots, page text, and links, then summarized in a brief. If you mainly want a large multi-platform creative library, ours is narrower; the change evidence is deeper.",
+      "Ad-spy tools are built for browsing creatives, and some search many platforms’ ad libraries at once. Five to Nine monitors the Meta Ad Library only — other platforms’ ad libraries are out of scope — and is built around what changed: offers, prices, CTAs, and landing-page copy, each confirmed change saved with page text, the source link, and a screenshot when the capture includes one, then summarized in a brief. If you mainly want a large multi-platform creative library, ours is narrower; the change evidence is deeper.",
   },
   {
     question: "How fast will I hear about changes?",
@@ -527,7 +524,7 @@ export default function MarketingRoute() {
     <aside className="ld-brief-strip" aria-label="Proof brief">
       <b>Proof brief</b>
       <ul>
-        <li>Every change keeps a screenshot and source link</li>
+        <li>Every change keeps its source link</li>
         <li>The brief files what moved and why it matters</li>
         <li>No proof, no claim</li>
       </ul>
@@ -549,7 +546,7 @@ export default function MarketingRoute() {
       <p className="ld-sr-only">
         {proofBrief
           ? `A real proof brief for ${proofBrief.competitorName}: ${proofBrief.adCount} Meta ads with captured hooks, offers, and source links.`
-          : "Five to Nine watches competitors' Meta ads and landing pages, then sends screenshot evidence and change alerts."}
+          : "Five to Nine watches competitors' Meta ads and landing pages, then files source-linked proof and change alerts."}
       </p>
 
       <MarketingNav />
@@ -589,7 +586,7 @@ export default function MarketingRoute() {
 
             <p className="ld-deck-copy">
               Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
-              landing pages for price, offer, and CTA changes, saves the screenshots, and files the brief —{" "}
+              landing pages for price, offer, and CTA changes, saves page text and the source link — plus a screenshot when the capture includes one — and files the brief —{" "}
               <b>before your alarm goes off.</b>
             </p>
 
@@ -738,7 +735,7 @@ export default function MarketingRoute() {
               </ul>
               <p className="ld-trail-note" role="note">
                 Every row above is a real capture. Open the source link and check it yourself —
-                saved watches attach screenshots, page text, and original links.
+                saved watches attach page text and original links, plus a screenshot when the capture includes one.
               </p>
             </article>
 
