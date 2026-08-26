@@ -48,6 +48,7 @@ describe("homepage mobile first viewport (#971)", () => {
     expect(budget).toMatch(/\.f9-home \.ld-command input\s*\{[^}]*min-height:\s*44px/);
     expect(budget).toMatch(/\.f9-home \.ld-command button\s*\{[^}]*min-height:\s*44px/);
     expect(budget).toMatch(/\.f9-home \.ld-hero \.f9-hero-proof-actions\s*\{[^}]*flex-direction:\s*row/);
+    expect(budget).toMatch(/\.f9-home \.ld-hero \.ld-case \{ margin-bottom: 6px; \}/);
     expect(budget).not.toMatch(/\.ld-nav-links\s*\{[^}]*display:\s*none/);
     expect(budget).not.toMatch(/\.ld-command\s*\{[^}]*display:\s*none/);
     expect(budget).not.toMatch(/\.ld-honest\s*\{[^}]*display:\s*none/);
@@ -64,5 +65,29 @@ describe("homepage mobile first viewport (#971)", () => {
     const wall = ruleBody(".ld-hero-grid .ld-wall");
     expect(wall).toMatch(/font-size:\s*clamp\(2\.2rem, 3\.6vw, 3\.2rem\)/);
     expect(wall).not.toMatch(/font-size:\s*clamp\([^)]*4\.5rem\)/);
+  });
+});
+
+describe("homepage desktop first viewport (#1212)", () => {
+  it("sits the MagicBrief callout on one row with the free-preview pill", () => {
+    const row = ruleBody(".f9-home .ld-hero .ld-hero-callouts");
+    expect(row).toMatch(/display:\s*flex/);
+    expect(row).toMatch(/flex-wrap:\s*wrap/);
+    const pills = ruleBody(".f9-home .ld-hero .ld-hero-callouts .f9-announcement");
+    expect(pills).toMatch(/margin-bottom:\s*0/);
+  });
+
+  it("pins the hero grid to the top so the side stack cannot shove the command under the 1440 fold", () => {
+    const grid = ruleBody(".ld-hero-grid");
+    expect(grid).toMatch(/align-items:\s*start/);
+    expect(grid).not.toMatch(/align-items:\s*center/);
+  });
+
+  it("keeps the homepage nav and case file compact enough for a Nykaa-length wall", () => {
+    const nav = ruleBody(".f9-home .ld-nav");
+    expect(nav).toMatch(/padding-top:\s*16px/);
+    expect(nav).toMatch(/padding-bottom:\s*16px/);
+    const heroCase = ruleBody(".f9-home .ld-hero .ld-case");
+    expect(heroCase).toMatch(/margin-bottom:\s*10px/);
   });
 });
