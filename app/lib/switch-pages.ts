@@ -139,7 +139,7 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
       {
         title: "Past screenshots",
         detail:
-          "Historical evidence from MagicBrief does not carry over. New watches save fresh screenshots, page text, and source links going forward.",
+          "Historical evidence from MagicBrief does not carry over. New watches save page text and the source link going forward, plus a screenshot when the capture includes one.",
       },
     ],
     relatedComparePath: "/compare/magicbrief",
@@ -182,7 +182,7 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
       {
         title: "Ads and landing pages from here on",
         detail:
-          "Paid plans check public Meta ads and the live landing page on a schedule, and save screenshot, page text, and the source link when the page actually renders.",
+          "Paid plans check public Meta ads and the live landing page on a schedule, and save page text, the source link, and a screenshot when the capture includes one.",
       },
     ],
     doesNotTransfer: [

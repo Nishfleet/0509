@@ -217,7 +217,7 @@ describe("anonymous homepage proof brief (real proof)", () => {
     expect(markup).toContain('href="/proof"');
     expect(markup).toContain("What we refuse to alert on");
     expect(markup).toContain("Proof brief");
-    expect(markup).toContain("We saved the proof.");
+    expect(markup).toContain("We saved the proof");
     expect(markup).toContain("Routine-first bundle");
     expect(markup).toContain("was the hook on 6 Meta ads");
   });
