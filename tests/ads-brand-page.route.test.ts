@@ -24,7 +24,10 @@ const baseAd: AdRecord = {
   adSnapshotUrl: "https://cdn.example.com/meta-nykaa-1.png",
   countries: ["all"],
   platforms: ["Instagram"],
-  firstSeenAt: isoAgo(5 * DAY_MS),
+  // 30-day first-seen: clears the 14-day aggression-score floor so the page
+  // renders its differentiator and stays indexable (a sub-floor capture would
+  // self-noindex as thin content — see the loader's aggression gate).
+  firstSeenAt: isoAgo(30 * DAY_MS),
   lastSeenAt: null,
   active: true,
   researchSummary: "Summary",
@@ -188,7 +191,7 @@ describe("/ads/:domain loader", () => {
     expect(result.teaser).toMatchObject({
       totalCount: 1,
       activeCount: 1,
-      longestRunningDays: 5,
+      longestRunningDays: 30,
       longestRunningHook: "Glow like never before.",
       formats: ["image"],
     });
@@ -354,6 +357,9 @@ describe("/ads/:domain loader", () => {
             // A real creative the provider returned for "nykaa.com" that merely
             // MENTIONS nykaa in its text — no landing page, no domainMatch
             // verdict. It must never feed the score, teaser, or change feed.
+            // Its first-seen (5 days ago) sits INSIDE the 14-day change-feed
+            // window — an unfiltered feed would emit its event, so an empty
+            // feed proves the exclusion.
             {
               ...baseAd,
               metaAdId: "meta-text-1",
@@ -362,6 +368,7 @@ describe("/ads/:domain loader", () => {
               domainMatch: undefined,
               previewHeadline: "Nykaa sale code inside!",
               variantCount: 4,
+              firstSeenAt: isoAgo(5 * DAY_MS),
             },
           ],
           nextCursor: null,
@@ -384,10 +391,9 @@ describe("/ads/:domain loader", () => {
     expect(result.verifiedLinkedAds.map((ad) => ad.metaAdId)).toEqual(["meta-nykaa-1"]);
     expect(result.unverifiedMatchCount).toBe(1);
     expect(result.brandOwnedAdCount).toBe(1);
-    // The teaser/score/change feed speak only about the verified capture. The
-    // unverified ad's first-seen (5 days ago) sits INSIDE the change-feed
-    // window — an unfiltered feed would emit its event, so an empty feed
-    // proves the exclusion.
+    // The teaser/score/change feed speak only about the verified capture
+    // (the unverified ad's 5-day first-seen sits inside the change-feed
+    // window, so an empty feed proves the exclusion — see the ad fixture).
     expect(result.teaser?.totalCount).toBe(1);
     expect(result.aggression?.adCount).toBe(1);
     expect(result.changeEvents).toHaveLength(0);
@@ -615,6 +621,76 @@ describe("/ads/:domain indexing flag", () => {
 
     expect(result.hasCachedAds).toBe(false);
     expect(result.noindex).toBe(true);
+  });
+
+  it("noindexes a fresh capture with 0 verified-linked ads (thin page: ad wall without the score)", async () => {
+    // 24 unverified text-mention matches: the provider returned them for
+    // nykaa.com, but none carries a landing-page or domainMatch verdict
+    // linking it to the domain. The wall renders, but the Ad Aggression Score
+    // (the page's differentiator) cannot — so the page self-noindexes rather
+    // than ship as indexable thin content.
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [
+            {
+              ...baseAd,
+              metaAdId: "meta-text-1",
+              advertiser: "BeautyDeals Hub",
+              landingPageUrl: null,
+              domainMatch: undefined,
+              firstSeenAt: isoAgo(30 * DAY_MS),
+            },
+          ],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.ads).toHaveLength(1);
+    expect(result.verifiedLinkCount).toBe(0);
+    expect(result.aggression).toBeNull();
+    expect(result.noindex).toBe(true);
+  });
+
+  it("noindexes a fresh capture whose verified-linked ad is too recent to score (window < 14 days)", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [{ ...baseAd, firstSeenAt: isoAgo(2 * DAY_MS) }],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.verifiedLinkCount).toBe(1);
+    expect(result.aggression).toBeNull();
+    expect(result.noindex).toBe(true);
+  });
+
+  it("stays indexable when the verified-linked capture clears the 14-day score floor", async () => {
+    // baseAd carries a verified domainMatch and a 30-day first-seen — the
+    // score renders, so the page stays indexable (no regression to the
+    // pages that already render the full score).
+    const mocks = installBrandPageMocks({ entry: cacheEntry() });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.verifiedLinkCount).toBe(1);
+    expect(result.aggression).not.toBeNull();
+    expect(result.noindex).toBe(false);
   });
 });
 

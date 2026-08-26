@@ -18,6 +18,7 @@ import routes from "~/routes";
 import {
   brandDomainFromSitemapCacheRow,
   brandPageLookupCacheKeysForSitemap,
+  brandPageRowRendersAggressionScore,
   buildSitemapXml,
   indexableBrandPageEntriesFromRows,
   isIndexableBrandPageRow,
@@ -31,8 +32,28 @@ function isoAgo(ms: number) {
   return new Date(Date.now() - ms).toISOString();
 }
 
+// A cached ad that carries VERIFIED link evidence (a registrable_domain
+// domainMatch verdict) AND enough history (30-day first-seen) for the Ad
+// Aggression Score to render. Sitemap rows backed by this ad qualify for the
+// sitemap; rows whose ads lack verified-link evidence or history back thin
+// pages and must stay out.
+const verifiedAd = {
+  metaAdId: "meta-nykaa-1",
+  source: "meta_library_browser",
+  landingPageUrl: "https://nykaa.com/shop",
+  domainMatch: {
+    level: "registrable_domain",
+    reason: "Landing page matches nykaa.com",
+    matchedDomain: "nykaa.com",
+  },
+  firstSeenAt: isoAgo(30 * DAY_MS),
+  lastSeenAt: null,
+  active: true,
+  variantCount: 1,
+};
+
 const basePayload = {
-  ads: [{ metaAdId: "meta-nykaa-1", source: "meta_library_browser" }],
+  ads: [verifiedAd],
   nextCursor: null,
   source: "meta_library_browser",
   provider: "meta_library_browser",
@@ -295,6 +316,127 @@ describe("lookup parity — never list a page that would serve noindex", () => {
         { useDomainV2: false },
       ).map((e) => e.path),
     ).toEqual(["/ads/nykaa.com"]);
+  });
+});
+
+describe("aggression-score gate — never list a thin page (ad wall without its score)", () => {
+  const now = new Date();
+
+  it("lists a row whose verified-linked ad clears the 14-day score floor", () => {
+    expect(indexableBrandPageEntriesFromRows([cacheRow()], now).map((e) => e.path)).toEqual([
+      "/ads/nykaa.com",
+    ]);
+  });
+
+  it("excludes a row whose ads have NO verified link evidence (the 0-verified-ads thin-page defect)", () => {
+    // 24 unverified text-mention matches: the provider returned them for the
+    // domain, but none carries a landing-page or domainMatch verdict linking
+    // them to it. The page would render the ad wall without the score, so it
+    // self-noindexes — the sitemap must not list it.
+    const unverifiedOnlyPayload = {
+      ...basePayload,
+      ads: [
+        {
+          metaAdId: "meta-text-1",
+          source: "meta_library_browser",
+          landingPageUrl: null,
+          domainMatch: undefined,
+          firstSeenAt: isoAgo(30 * DAY_MS),
+          active: true,
+          variantCount: 1,
+        },
+      ],
+    };
+
+    expect(
+      indexableBrandPageEntriesFromRows([cacheRow({ payload: unverifiedOnlyPayload })], now).map(
+        (e) => e.path,
+      ),
+    ).toEqual([]);
+  });
+
+  it("excludes a row whose verified-linked ad is too recent to clear the 14-day floor", () => {
+    // A verified link exists, but the only first-seen is 2 days ago — the
+    // score cannot render (window < MIN_AGGRESSION_WINDOW_DAYS), so the page
+    // is thin and must stay out of the sitemap.
+    const tooRecentPayload = {
+      ...basePayload,
+      ads: [{ ...verifiedAd, firstSeenAt: isoAgo(2 * DAY_MS) }],
+    };
+
+    expect(
+      indexableBrandPageEntriesFromRows([cacheRow({ payload: tooRecentPayload })], now).map(
+        (e) => e.path,
+      ),
+    ).toEqual([]);
+  });
+
+  it("excludes a row whose verified-linked ad carries no first-seen date", () => {
+    const noFirstSeenPayload = {
+      ...basePayload,
+      ads: [{ ...verifiedAd, firstSeenAt: null }],
+    };
+
+    expect(
+      indexableBrandPageEntriesFromRows([cacheRow({ payload: noFirstSeenPayload })], now).map(
+        (e) => e.path,
+      ),
+    ).toEqual([]);
+  });
+
+  it("lists a row when at least one verified-linked ad clears the floor even if other ads do not", () => {
+    const mixedPayload = {
+      ...basePayload,
+      ads: [
+        // An unverified text-mention match — renders on the wall, never feeds
+        // the score.
+        {
+          metaAdId: "meta-text-1",
+          source: "meta_library_browser",
+          landingPageUrl: null,
+          domainMatch: undefined,
+          firstSeenAt: isoAgo(30 * DAY_MS),
+          active: true,
+          variantCount: 1,
+        },
+        // The verified-linked ad with enough history — the score renders.
+        verifiedAd,
+      ],
+    };
+
+    expect(
+      indexableBrandPageEntriesFromRows([cacheRow({ payload: mixedPayload })], now).map(
+        (e) => e.path,
+      ),
+    ).toEqual(["/ads/nykaa.com"]);
+  });
+
+  it("brandPageRowRendersAggressionScore mirrors the gate for a verified, scoreable row", () => {
+    expect(brandPageRowRendersAggressionScore(cacheRow(), "nykaa.com", now)).toBe(true);
+  });
+
+  it("brandPageRowRendersAggressionScore is false for a 0-verified-ads row", () => {
+    const unverifiedOnlyPayload = {
+      ...basePayload,
+      ads: [
+        {
+          metaAdId: "meta-text-1",
+          source: "meta_library_browser",
+          landingPageUrl: null,
+          domainMatch: undefined,
+          firstSeenAt: isoAgo(30 * DAY_MS),
+          active: true,
+          variantCount: 1,
+        },
+      ],
+    };
+    expect(
+      brandPageRowRendersAggressionScore(
+        cacheRow({ payload: unverifiedOnlyPayload }),
+        "nykaa.com",
+        now,
+      ),
+    ).toBe(false);
   });
 });
 
