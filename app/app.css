@@ -2529,6 +2529,13 @@ one signal-green accent.
   padding: 22px clamp(20px, 4vw, 48px);
 }
 
+@media (min-width: 861px) {
+  .f9-home .ld-nav {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+}
+
 .ld-brand { color: inherit; }
 
 .ld-brand.f9-brandmark:focus-visible {
@@ -2632,6 +2639,10 @@ one signal-green accent.
   text-transform: uppercase;
   color: var(--ld-ink-soft);
   margin: 0 0 16px;
+}
+
+.f9-home .ld-hero .ld-case {
+  margin-bottom: 10px;
 }
 
 .ld-rec {
@@ -3913,8 +3924,20 @@ one signal-green accent.
 
 /* MagicBrief wind-down callout (issue 965): same pill as the free-preview
    announcement; only the accent changes so the migration path is visible
-   next to it. display:flex + fit-content on .f9-announcement stacks the
-   two pills instead of sitting them on one row. */
+   next to it. #1212 wraps both pills in .ld-hero-callouts so they sit on
+   one desktop row instead of stacking the search command under the fold. */
+.f9-home .ld-hero .ld-hero-callouts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.f9-home .ld-hero .ld-hero-callouts .f9-announcement {
+  margin-bottom: 0;
+}
+
 .f9-home .ld-hero .f9-migration-callout {
   box-shadow: inset 0 0 0 1.5px var(--ld-red);
 }
@@ -4732,7 +4755,9 @@ one signal-green accent.
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
   gap: clamp(28px, 4vw, 64px);
-  align-items: center;
+  /* start, not center: the evidence stack is taller than the copy, and
+     centering shoved the search command under the 1440x900 fold (#1212). */
+  align-items: start;
 }
 
 .ld-hero-grid .ld-wall {
@@ -16567,6 +16592,7 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   .ld-deck-copy { font-size: 0.88rem; line-height: 1.35; margin-top: 8px; }
   .ld-hero-copy .ld-command { margin-top: 10px; }
   .ld-case { margin-bottom: 6px; gap: 8px; font-size: 0.7rem; }
+  .f9-home .ld-hero .ld-case { margin-bottom: 6px; }
 
   /* Beat the 760px column stack so the pill stays one row and the secondary
      line ("Paste a competitor site…") yields vertical room to the command. */
