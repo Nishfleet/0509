@@ -64,6 +64,8 @@ const MAX_BROWSERLESS_PROOF_RETRIES = 1;
 const BROWSERLESS_RETRY_DELAY_MS = 300;
 /** Retry budget for Browser Run Quick Action calls (2 attempts total). */
 const QUICK_ACTION_MAX_ATTEMPTS = 2;
+/** Retry budget for a viewport screenshot after HTML is already in hand. */
+const SCREENSHOT_CAPTURE_ATTEMPTS = 2;
 const QUICK_ACTION_RETRY_MAX_DELAY_MS = 1_000;
 const QUICK_ACTION_RETRY_DELAY_MS = 250;
 const BROWSER_RUN_QUICK_ACTION_TIMEOUT_MS = 30_000;
@@ -178,6 +180,13 @@ interface BrowserRequestLike {
 
 interface RenderedCaptureOptions {
   persistArtifacts?: boolean;
+  /**
+   * When true, a rendered snapshot is only considered usable if both the
+   * screenshot bytes and the persisted screenshot artifact are non-null.
+   * This is the default for proof_capture callers and prevents the HTML-only
+   * "succeeded" captures that issue #1103 measured.
+   */
+  requireScreenshot?: boolean;
   /** Bounded attribution context recorded in `browser_job_telemetry` (optional).
    * Never carries URLs, tokens, or content. */
   jobId?: string;
@@ -356,15 +365,20 @@ export async function captureBrowserRunSnapshot(
     }
     let screenshot: Uint8Array | ArrayBuffer | Buffer | null = null;
     const captureWarningCodes: string[] = [];
-    try {
-      screenshot = await page.screenshot({
-        type: "jpeg",
-        quality: 85,
-        fullPage: false,
-      });
-    } catch (error) {
-      captureWarningCodes.push("screenshot_capture_failed");
-      logRenderedCaptureWarning("screenshot_capture_failed", error);
+    for (let attempt = 1; attempt <= SCREENSHOT_CAPTURE_ATTEMPTS; attempt += 1) {
+      try {
+        screenshot = await page.screenshot({
+          type: "jpeg",
+          quality: 85,
+          fullPage: false,
+        });
+        break;
+      } catch (error) {
+        if (attempt >= SCREENSHOT_CAPTURE_ATTEMPTS) {
+          captureWarningCodes.push("screenshot_capture_failed");
+          logRenderedCaptureWarning("screenshot_capture_failed", error);
+        }
+      }
     }
 
     const snapshot = await buildBrowserRenderedSnapshot(env, {
@@ -374,6 +388,7 @@ export async function captureBrowserRunSnapshot(
       screenshot,
       provider: "cloudflare_browser_run",
       persistArtifacts: options.persistArtifacts,
+      requireScreenshot: options.requireScreenshot,
       captureWarningCodes,
       pageLoadStrategy,
       gotoAttempts,
@@ -684,6 +699,7 @@ async function attemptBrowserlessProofSnapshot(
       screenshot,
       provider: "browserless_bql",
       persistArtifacts: options.persistArtifacts,
+      requireScreenshot: options.requireScreenshot,
       captureWarningCodes,
     });
     if (!snapshot) {
@@ -885,6 +901,7 @@ async function buildBrowserRenderedSnapshot(
     html: string;
     provider: string;
     persistArtifacts?: boolean;
+    requireScreenshot?: boolean;
     screenshot: Uint8Array | ArrayBuffer | Buffer | null;
     captureWarningCodes?: string[];
     pageLoadStrategy?: "networkidle2" | "load";
@@ -929,12 +946,16 @@ async function buildBrowserRenderedSnapshot(
     html,
     screenshotBytes,
     input.persistArtifacts !== false,
+    input.requireScreenshot === true,
   );
   const captureWarningCodes = [
     ...(input.captureWarningCodes ?? []),
     ...(screenshotTooLarge ? ["screenshot_too_large"] : []),
     ...persisted.captureWarningCodes,
   ];
+  if (input.requireScreenshot && !persisted.screenshotArtifactKey) {
+    return null;
+  }
   // Screenshot corroboration (BET 4): the extracted price/CTA signals are
   // corroborated by a real rendered screenshot, not by markdown extraction
   // alone. A non-null screenshot that survived the gate is positive
@@ -1014,6 +1035,7 @@ async function persistBrowserArtifacts(
   html: string,
   screenshot: Uint8Array | null,
   persistArtifacts: boolean,
+  requireScreenshot: boolean = false,
 ) {
   if (!persistArtifacts || !env.LANDING_PAGE_ARTIFACTS) {
     return {
@@ -1050,20 +1072,22 @@ async function persistBrowserArtifacts(
       logRenderedCaptureWarning("screenshot_persistence_failed", error);
     }
   }
-  try {
-    await env.LANDING_PAGE_ARTIFACTS.put(htmlArtifactKey, html, {
-      httpMetadata: {
-        contentType: "text/html; charset=utf-8",
-      },
-      customMetadata: {
-        sourceUrl: canonicalUrl,
-        renderMode: MOBILE_RENDER_MODE,
-      },
-    });
-    persistedHtmlArtifactKey = htmlArtifactKey;
-  } catch (error) {
-    captureWarningCodes.push("html_persistence_failed");
-    logRenderedCaptureWarning("html_persistence_failed", error);
+  if (!requireScreenshot || persistedScreenshotArtifactKey) {
+    try {
+      await env.LANDING_PAGE_ARTIFACTS.put(htmlArtifactKey, html, {
+        httpMetadata: {
+          contentType: "text/html; charset=utf-8",
+        },
+        customMetadata: {
+          sourceUrl: canonicalUrl,
+          renderMode: MOBILE_RENDER_MODE,
+        },
+      });
+      persistedHtmlArtifactKey = htmlArtifactKey;
+    } catch (error) {
+      captureWarningCodes.push("html_persistence_failed");
+      logRenderedCaptureWarning("html_persistence_failed", error);
+    }
   }
 
   return {

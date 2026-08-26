@@ -1536,7 +1536,7 @@ describe("runWatchlistManual cheap scan path", () => {
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
       "https://competitor.example/onboarding",
-      expect.objectContaining({ preferRendered: true }),
+      expect.objectContaining({ preferRendered: true, requireScreenshot: true }),
     );
     expect(createProofCapture).toHaveBeenCalledWith(
       expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
@@ -1798,7 +1798,7 @@ describe("runWatchlistManual cheap scan path", () => {
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
       expect.anything(),
       "https://competitor.example/onboarding",
-      expect.objectContaining({ preferRendered: true }),
+      expect.objectContaining({ preferRendered: true, requireScreenshot: true }),
     );
     expect(createEventCandidate).toHaveBeenCalledWith(
       expect.anything(),
