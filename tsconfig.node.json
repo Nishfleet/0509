@@ -45,6 +45,7 @@
     "scripts/check-live-public-home*.mjs",
     "scripts/release-scheduled-observation-contract.mjs",
     "scripts/release-evidence-archive.mjs",
+    "e2e/csp-manifest-warning.mjs",
     "e2e/helpers/release-scope.mjs",
     "e2e/helpers/release-origin.ts",
     "e2e/helpers/release-experience.ts",
