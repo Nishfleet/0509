@@ -36,6 +36,49 @@ export function buildIdleSearchResult(): SearchResponse {
   };
 }
 
+/**
+ * Page-level H1 for the public /search route. When the visitor lands from a
+ * shared keyword link (`?q=` or `?query=`) with a country scope, the heading
+ * names the brand and market so the page is immediately readable. The idle
+ * page keeps the generic "Find competitor ads" title.
+ */
+export function formatSearchCommandTitle(
+  query: string,
+  country: string,
+): string {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return "Find competitor ads";
+  }
+  const brand = titleCaseSearchTerm(trimmed);
+  const scope = formatSearchPageScope(country);
+  return scope ? `${brand} ads ${scope}` : `${brand} ads`;
+}
+
+export function formatSearchPageScope(
+  country: string | null | undefined,
+): string | null {
+  const trimmed = country?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.toLowerCase() === ALL_COUNTRIES_VALUE) {
+    return "in all countries";
+  }
+  return formatSearchMarketScope(country);
+}
+
+function titleCaseSearchTerm(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => {
+      const [first, ...rest] = part;
+      return `${first?.toUpperCase() ?? ""}${rest.join("").toLowerCase()}`;
+    })
+    .join(" ");
+}
+
 export interface SearchAccumulationState {
   searchKey: string;
   result: SearchResponse;
