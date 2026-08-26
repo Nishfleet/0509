@@ -12,6 +12,17 @@ const HOSTED_CI_WORKFLOWS = [
   ".github/workflows/cross-browser-matrix.yml",
 ] as const;
 
+// Issue #1155: agent-facing docs still taught the deleted lock wrapper after
+// PR #902. Workflows are already locked above; these files are the remaining
+// instruction surface. Historical mentions belong in PROJECT-HISTORY.md.
+const NO_LOCK_WRAPPER_DOCS = [
+  "CLAUDE.md",
+  "scripts/ci-prepare-remote-restore-evidence.sh",
+  "scripts/ci-bind-remote-restore-candidate.sh",
+  "tests/d1-remote-restore-evidence.test.ts",
+  "docs/undici-dependabot-ci-root-cause.md",
+] as const;
+
 const hostedRunner = "ubuntu-latest";
 
 type WorkflowJob = {
@@ -21,6 +32,12 @@ type WorkflowJob = {
 type Workflow = {
   jobs?: Record<string, WorkflowJob>;
 };
+
+function lockWrapperDocViolations(source: string): string[] {
+  return source.includes("deploy-window-lock")
+    ? ["deploy-window-lock wrapper"]
+    : [];
+}
 
 function hostedCiWorkflowViolations(source: string): string[] {
   const parsed = parse(source) as Workflow;
@@ -77,6 +94,22 @@ jobs:
         Object.keys(parsed.jobs ?? {}).length,
         `${workflowPath} must have jobs`,
       ).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps agent-facing docs from teaching the deleted lock wrapper", () => {
+    expect(
+      lockWrapperDocViolations(
+        "Must use scripts/deploy-window-lock.sh run -- npm test",
+      ),
+    ).toEqual(["deploy-window-lock wrapper"]);
+    expect(lockWrapperDocViolations("run: npm run typecheck")).toEqual([]);
+    expect(
+      NO_LOCK_WRAPPER_DOCS.some((path) => path.includes("deploy-window-lock")),
+    ).toBe(false);
+    for (const docPath of NO_LOCK_WRAPPER_DOCS) {
+      const source = readFileSync(docPath, "utf8");
+      expect(lockWrapperDocViolations(source), docPath).toEqual([]);
     }
   });
 });
