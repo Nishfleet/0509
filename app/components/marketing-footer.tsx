@@ -42,9 +42,13 @@ export function MarketingFooter() {
         <Link to="/compare/meta-ad-library">vs checking the Meta Ad Library by hand</Link>
         <Link to="/compare/magicbrief">vs MagicBrief</Link>
         <Link to="/compare/visualping">vs Visualping</Link>
+        <Link to="/compare/visualping-ad-library">vs Visualping for ad libraries</Link>
         <Link to="/compare/spyland">vs Spyland</Link>
         <Link to="/compare/pulzifi">vs Pulzifi</Link>
         <Link to="/compare/foreplay">vs Foreplay</Link>
+        <Link to="/compare/foreplay-spyder">vs Foreplay Spyder</Link>
+        <Link to="/compare/panoramata">vs Panoramata</Link>
+        <Link to="/compare/adspyder">vs AdSpyder</Link>
       </nav>
       <nav className="ld-footer-compare" aria-label="Switch">
         <span className="ld-footer-group-label">Switch</span>
