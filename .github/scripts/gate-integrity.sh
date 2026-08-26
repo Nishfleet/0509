@@ -48,13 +48,21 @@
 # new commit, and leaves a named, timestamped audit record. Same owner decision,
 # same properties, one fewer concept.
 #
+# IDENTITY SEPARATION (0509#1140 / fleet-ops#413). The attestor must be a
+# different GitHub login from the implementers (PR author and pusher). A
+# worker bot can never attest. Same-identity implement+attest is REJECT when
+# a worker identity is among the implementers. Owner self-attest of a
+# human-only PR still PASSes until a second admin exists — that is the
+# sole-admin path, not a worker hole.
+#
 # HONEST LIMIT (reported to Nish with this check, P10-B item 5): Nishfleet/0509
-# has exactly ONE collaborator, and the fleet's workers hold that identity's
-# token. Every identity-keyed control on this repository — code-owner review,
-# an approval label, this attestation — is therefore an audit trail, not an
-# authorization boundary, until worker credentials are split from the owner's.
-# The controls that bind mechanically regardless of identity are the ones that
-# do not ask "who": enforce_admins, and the deterministic content rules below.
+# has exactly ONE collaborator. When workers used that identity's token, every
+# identity-keyed control was an audit trail, not an authorization boundary.
+# Workers now push as nishfleet-worker[bot], so this check is a real boundary
+# on App-authored PRs. Human-token impersonation is closed elsewhere (the
+# scream/canary), not here. The controls that bind regardless of identity are
+# still the ones that do not ask "who": enforce_admins, and the deterministic
+# content rules below.
 #
 # AUTO-REVERT WAIVER (added 2026-08-25, "the guardrail that fails 12% of the
 # time trains everyone to ignore red"). The reversible-merge invariant says
@@ -90,6 +98,9 @@
 # Context bundle shape:
 # {
 #   "head_sha": "0123...def",              # PR head sha, 40 lowercase hex
+#   "author": "nishfleet-worker[bot]",     # PR author login (implementer)
+#   "pusher": "nishfleet-worker[bot]",     # head-commit GitHub login (implementer)
+#   "implementers": ["..."],               # optional extra implementer logins
 #   "files": [{"filename": "tests/a.test.ts",
 #              "previous_filename": null,
 #              "status": "removed",
@@ -121,6 +132,51 @@ import re
 import sys
 
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
+
+# GitHub App login that implements fleet PRs. A member of this set can never
+# attest, and its presence among implementers forbids owner self-attest.
+DEFAULT_WORKER_IDENTITIES = ("nishfleet-worker[bot]",)
+
+
+def norm_login(login):
+    if not isinstance(login, str):
+        return ""
+    return login.strip().lower()
+
+
+def collect_implementers(bundle):
+    """PR author + pusher (+ optional implementers list) as GitHub logins."""
+    out = set()
+    for key in ("author", "pusher"):
+        n = norm_login(bundle.get(key) or "")
+        if n:
+            out.add(n)
+    extra = bundle.get("implementers")
+    if isinstance(extra, list):
+        for item in extra:
+            n = norm_login(item)
+            if n:
+                out.add(n)
+    return out
+
+
+def identity_rejects_attestor(user, implementers):
+    """Reason this attestor is forbidden, or None.
+
+    Same rules as fleet-ops lib/attest-identity-gate.py (fleet-ops#413):
+      1. A worker identity can never attest.
+      2. Overlap + a worker among implementers → same-identity REJECT.
+      3. Overlap with no worker implementer → owner self-attest, allowed.
+    """
+    attestor = norm_login(user)
+    if not attestor:
+        return None
+    workers = {norm_login(x) for x in DEFAULT_WORKER_IDENTITIES}
+    if attestor in workers:
+        return f"worker identity cannot attest: {user}"
+    if attestor in implementers and (implementers & workers):
+        return f"same identity implemented and attested: {user}"
+    return None
 
 TEST_PATH = re.compile(
     r"(?:^|/)(?:tests?|__tests__|e2e)/|"
@@ -177,7 +233,9 @@ Remedies (each violation class needs its own; neither one waives the other).
      collaborator-permission API by the base-branch-owned workflow, never from
      the comment itself. The sha must equal the PR's current head sha, so
      pushing any new commit invalidates the attestation and a fresh one is
-     required. Taking this path emits a loud warning annotation and a
+     required. The attestor must be a different GitHub login from the
+     implementers when a worker identity is among them; nishfleet-worker[bot]
+     can never attest. Taking this path emits a loud warning annotation and a
      job-summary entry naming the admin and the sha.
 """.rstrip()
 
@@ -278,7 +336,7 @@ def ratchet_weakened(patch):
     return findings
 
 
-def find_attestation(attestations, permissions, head_sha, notes):
+def find_attestation(attestations, permissions, head_sha, notes, implementers):
     if not isinstance(attestations, list):
         notes.append("context bundle attestations is not an array")
         return None
@@ -294,6 +352,10 @@ def find_attestation(attestations, permissions, head_sha, notes):
         user = a.get("user") or ""
         if not user:
             notes.append("attestation comment has no resolvable author")
+            continue
+        blocked = identity_rejects_attestor(user, implementers)
+        if blocked:
+            notes.append(blocked)
             continue
         raw = a.get("sha")
         if not isinstance(raw, str):
@@ -439,6 +501,10 @@ def main():
     auto_revert_attestations = bundle.get("auto_revert_attestations") or []
     if not isinstance(auto_revert_attestations, list):
         return fail(["context bundle auto_revert_attestations is not an array"])
+    extra_implementers = bundle.get("implementers")
+    if extra_implementers is not None and not isinstance(extra_implementers, list):
+        return fail(["context bundle implementers is not an array"])
+    implementers = collect_implementers(bundle)
     gate_globs = bundle.get("gate_globs") or []
     if not isinstance(gate_globs, list):
         return fail(["context bundle gate_globs is not an array"])
@@ -560,7 +626,9 @@ def main():
             waived.append(("test-integrity", test_violations, f"{where}: {why}"))
 
     if gate_violations:
-        attested = find_attestation(attestations, permissions, head_sha, notes)
+        attested = find_attestation(
+            attestations, permissions, head_sha, notes, implementers
+        )
         if attested is None:
             reasons.extend(gate_violations)
             reasons.append(

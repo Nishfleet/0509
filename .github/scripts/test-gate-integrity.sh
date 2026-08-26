@@ -154,6 +154,45 @@ fixture workflow_edited_attested '{
   "attestations": ATTEST, "permissions": ADMIN}'
 run_fixture workflow_edited_attested PASS "gate-path waived"
 
+# Identity separation (0509#1140 / fleet-ops#413). Same login implementing
+# and attesting FAILS when a worker is among the implementers. A worker bot
+# can never attest. Disjoint identities PASS. Owner self-attest of a
+# human-only PR still PASSes.
+WORKER_BOT="nishfleet-worker[bot]"
+WORKER_ADMIN='{"nishfleet-worker[bot]": "admin", "nish3451": "admin"}'
+WORKER_SELF_ATTEST='[{"user": "nishfleet-worker[bot]", "sha": HEAD}]'
+
+fixture same_identity_implements_and_attests '{
+  "author": "'"$WORKER_BOT"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": '"$WORKER_SELF_ATTEST"', "permissions": '"$WORKER_ADMIN"'}'
+run_fixture same_identity_implements_and_attests FAIL "worker identity cannot attest"
+
+fixture worker_implements_human_attests '{
+  "author": "'"$WORKER_BOT"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": '"$WORKER_ADMIN"'}'
+run_fixture worker_implements_human_attests PASS "gate-path waived"
+
+fixture human_implements_worker_attests '{
+  "author": "nish3451",
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": '"$WORKER_SELF_ATTEST"', "permissions": '"$WORKER_ADMIN"'}'
+run_fixture human_implements_worker_attests FAIL "worker identity cannot attest"
+
+fixture human_only_owner_self_attest '{
+  "author": "nish3451",
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+run_fixture human_only_owner_self_attest PASS "gate-path waived"
+
+fixture worker_and_human_implement_human_attests '{
+  "author": "'"$WORKER_BOT"'",
+  "pusher": "nish3451",
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": '"$WORKER_ADMIN"'}'
+run_fixture worker_and_human_implement_human_attests FAIL "same identity implemented and attested"
+
 fixture workflow_attested_stale '{
   "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
   "attestations": [{"user": "nish3451", "sha": OLD}], "permissions": ADMIN}'

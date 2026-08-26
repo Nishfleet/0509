@@ -319,8 +319,9 @@ ATTEST_HEAD_MIXED="A1B2C3D4E5F60718293A4B5C6D7E8F9012345678"
 ATTEST_OLD="0000111122223333444455556666777788889999"
 ATTEST_PROTECTED='[".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh", ".github/workflows/deploy-production.yml", ".github/workflows/finalize-production-soak.yml", "scripts/ci-verify-production-candidate.sh", "scripts/ci-verify-provider-main-cas.sh"]'
 
-# 20. Current admin attestation by the sole admin (who is also the PR author),
-#     protected change, zero reviews -> PASS, and the output must be loud.
+# 20. Current admin attestation by the sole admin (who is also the PR author)
+#     on a human-only PR, protected change, zero reviews -> PASS, loud.
+#     Owner self-attest stays allowed until a second admin exists (0509#1140).
 FIXTURE_SRC='{
   "author": "nish3451",
   "head_commit_date": "2026-08-13T17:00:00Z",
@@ -497,6 +498,78 @@ run_fixture "failure documents the independent-review remedy" FAIL "$WORK_DIR/30
   "1. Independent review (preferred"
 run_fixture "failure documents the attestation remedy" FAIL "$WORK_DIR/30-no-remedy.json" \
   "verifier-attest: <40-hex current head sha>"
+
+# ---------------------------------------------------------------------------
+# Identity separation (0509#1140 / fleet-ops#413).
+# same identity implements and attests → FAIL
+# nishfleet-worker[bot] implements + nish3451 attests → PASS
+# nish3451 implements + nishfleet-worker[bot] attests → FAIL
+# human-only owner self-attest remains PASS (fixture 20 above).
+# ---------------------------------------------------------------------------
+WORKER_BOT="nishfleet-worker[bot]"
+WORKER_ADMIN='{"nishfleet-worker[bot]": "admin", "nish3451": "admin"}'
+
+# 32. Same identity: worker implements and attests -> FAIL.
+FIXTURE_SRC='{
+  "author": "'"$WORKER_BOT"'",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "'"$WORKER_BOT"'", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "32-same-identity"
+run_fixture "same identity implements and attests fails" FAIL "$WORK_DIR/32-same-identity.json" \
+  "worker identity cannot attest"
+
+# 33. Worker implements, human admin attests -> PASS (the intended split).
+FIXTURE_SRC='{
+  "author": "'"$WORKER_BOT"'",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "nish3451", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "33-worker-human"
+run_fixture "worker implements and human attests passes" PASS "$WORK_DIR/33-worker-human.json" \
+  "::warning title=Verifier integrity: sole-admin attestation"
+
+# 34. Human implements, worker attests -> FAIL (vice versa).
+FIXTURE_SRC='{
+  "author": "nish3451",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "'"$WORKER_BOT"'", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "34-human-worker"
+run_fixture "human implements and worker attests fails" FAIL "$WORK_DIR/34-human-worker.json" \
+  "worker identity cannot attest"
+
+# 35. Worker author + human pusher, human attests -> FAIL (overlap + worker
+#     implementer). Owner cannot self-attest a PR a worker also implemented.
+FIXTURE_SRC='{
+  "author": "'"$WORKER_BOT"'",
+  "pusher": "nish3451",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "nish3451", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "35-overlap-worker"
+run_fixture "worker plus human implementers block owner self-attest" FAIL "$WORK_DIR/35-overlap-worker.json" \
+  "same identity implemented and attested"
 
 echo ""
 if [[ $FAIL_COUNT -eq 0 ]]; then

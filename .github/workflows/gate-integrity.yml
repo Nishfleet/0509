@@ -122,6 +122,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_BODY: ${{ github.event.pull_request.body }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           set -euo pipefail
           # Every input is read through the API in the base branch's context, so
@@ -167,6 +168,12 @@ jobs:
           # trailer lives on its own line at the end of the message.
           commits_json="$(gh api --paginate "repos/$REPO/pulls/$PR/commits?per_page=100" \
             | jq -s '[.[][] | .commit.message]')"
+
+          # Implementers are GitHub actor logins, not git author names
+          # (fleet-ops#413 / 0509#1140). PR author plus the GitHub user
+          # attached to the head commit (author, else committer).
+          pusher="$(gh api "repos/$REPO/commits/$HEAD_SHA" \
+            --jq '.author.login // .committer.login // ""')"
 
           # Attestation comments: only a body that is EXACTLY
           # `gate-integrity-attest: <40-hex>` (after trimming whitespace and
@@ -219,6 +226,8 @@ jobs:
           jq -n \
             --arg head_sha "$HEAD_SHA" \
             --arg pr_body "${PR_BODY:-}" \
+            --arg author "${AUTHOR:-}" \
+            --arg pusher "${pusher:-}" \
             --argjson files "$files_json" \
             --argjson commit_messages "$commits_json" \
             --argjson attestations "$attestations_json" \
@@ -238,7 +247,8 @@ jobs:
               "scripts/ci-vitest-run.sh",
               "scripts/ci-verify-*.sh"
             ]' \
-            '{head_sha: $head_sha, pr_body: $pr_body, files: $files,
+            '{head_sha: $head_sha, pr_body: $pr_body, author: $author, pusher: $pusher,
+              files: $files,
               commit_messages: $commit_messages, attestations: $attestations,
               auto_revert_attestations: $auto_revert_attestations,
               permissions: $permissions, gate_globs: $gate_globs}' \
