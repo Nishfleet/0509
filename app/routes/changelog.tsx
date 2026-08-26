@@ -38,6 +38,7 @@ export default function ChangelogRoute() {
       />
       <PublicDocBlock title="2026-08-26">
         <ul className="f9-doc-list">
+          <li>A public page at /proof now lists the landing-page captures we refuse to turn into alerts, linked from the homepage proof claim.</li>
           <li>Brand pages at /ads/:domain now headline the verified ad count, so leftover unverified matches no longer rewrite a fully brand-owned title into a split count.</li>
           <li>Restored compare pages reappear in the sitemap and llms.txt index, so search engines and AI answer engines can find them again.</li>
           <li>Shared search result pages now show the brand name and country, so recipients see which market the snapshot covers before they open it.</li>

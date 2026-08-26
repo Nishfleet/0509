@@ -20,6 +20,7 @@ export const PUBLIC_MARKDOWN_PATHS = [
   "/status",
   "/changelog",
   "/trust",
+  "/proof",
   "/privacy",
   "/terms",
 ] as const;
@@ -74,6 +75,11 @@ const LLMS_PAGE_DETAILS: Record<
     title: "Competitor monitoring",
     description:
       "Product overview: scans, digests, alerts, and proof captures.",
+  },
+  "/proof": {
+    title: "What we refuse to alert on",
+    description:
+      "Public capture-validity rules: the landing-page captures that never become alerts.",
   },
   "/pricing": {
     title: "Pricing",
@@ -153,7 +159,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 - Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Signed-in support cases cover paid-customer account help, with email fallback for users who cannot sign in.
 - Paid customer support paths cover: ${CUSTOMER_SUPPORT_PATHS.map((path) => path.label).join(", ")}.
-- Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
+- Public help, docs, API docs, status, changelog, trust, and proof-rules pages are available at /help, /docs, /api/docs, /status, /changelog, /trust, and /proof.
 - The public status page summarizes customer-facing surfaces without exposing private account activity.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric evidence, creative timeline, and landing-page history from saved evidence, watch events, and digest items.

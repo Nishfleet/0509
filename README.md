@@ -41,6 +41,7 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/status` public launch and operations status
 - `/changelog` public product changelog
 - `/trust` public trust and security basics
+- `/proof` public capture-validity rules — what we refuse to turn into alerts
 - `/api/demo-proof` live proof brief payload for buyer and agent evaluation (real cached captures; never sample data)
 - `/api/mcp` MCP JSON-RPC endpoint for account-owned readiness, exports, and narrow audited workspace actions with a customer API key
 - `/api/v1` machine-readable customer API index for workspace readiness, account exports, and audited agent actions

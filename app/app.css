@@ -2637,6 +2637,14 @@ one signal-green accent.
   gap: 7px;
 }
 
+/* Homepage `.f9-home a` is more specific and would otherwise wash the kicker
+   back to the case-file ink. Keep the live-dot colour when the claim is a link. */
+.f9-home a.ld-rec {
+  color: var(--ld-red);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .ld-rec::before {
   content: "";
   width: 8px;
