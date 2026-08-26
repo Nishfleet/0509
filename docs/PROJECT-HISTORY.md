@@ -2,6 +2,16 @@
 
 Narrative records moved out of `CLAUDE.md` so per-session guidance stays operational. Entries below preserve the original wording and are organized by the date of the event.
 
+## 2026-08-26
+
+### #944 production-verification closeout (#1121)
+
+- Re-ran the #944 acceptance check on production 2026-08-26T15:06Z from claim/issue-0509-1121: all four `/compare/{visualping,spyland,pulzifi,foreplay}` URLs return 200 and serve real compare-page bodies (~19KB each, with `<h1>` titles — not the 404 shell), the `https://0509.io/` marketing footer lists all six compare links, and `--count-matches 'href="/compare/(foreplay|visualping|pulzifi|spyland)"'` on the homepage = 4.
+- The deploy that shipped the fix is worker version `6e371cad-4d4e-41fe-aec3-413b65f7e1ac` (timestamp 2026-08-26T13:29:59.695051Z, served by `https://0509.io/api/health`); repo HEAD at verification time was `7d6a60e7` (merged PR #1115, claim/issue-0509-1114).
+- The `agent-blocked` label on #944 was removed earlier the same day (2026-08-26T14:54:36Z, by the prior verification pass) and is currently not set. The proof comment with the curl output was posted on #944 as part of #1121's accept #1.
+- The close itself (accept #3 of #1121) is reserved for an orchestrator pass per the fleet worker hard rule `NEVER gh issue close, no exceptions for workers — the merged PR closes it. An orchestrator-only, evidence-gated close exception exists — FABLE-VERDICT §16 — it is never yours.`; this PR documents the verification, label-removal evidence, and posts the proof comment, then closes #1121 only.
+- No compare-page content was changed (verification-only). Rollback: if any of the four URLs regress to 404 or the footer drops their links, reopen #1121, re-apply `agent-blocked` to #944, and rerun the same curl block.
+
 ## 2026-08-12
 
 ### Meta ads beta graduation
