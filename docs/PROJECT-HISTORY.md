@@ -12,6 +12,16 @@ Narrative records moved out of `CLAUDE.md` so per-session guidance stays operati
 - This PR closes #1121 and #944. No compare-page content was changed.
 - Rollback: if any of the four URLs regress to 404 or the footer drops their links, reopen #944, re-apply `agent-blocked`, and rerun the curl block.
 
+## 2026-08-24
+
+### GitHub-hosted CI runners and stale PR #882 closeout
+
+- PR #902 (merged 2026-08-23, commit 7ebe3c33) moved every workflow in this repo to GitHub-hosted `ubuntu-latest` and deleted the self-hosted runner pool and `scripts/deploy-window-lock.sh`. No self-hosted runner was still registered — the last one stopped 2026-08-23 and the ci-autoscale timer was deleted with the fleet control plane — so provider mutations now rely on the existing `0509-production-provider-mutations` concurrency group.
+- PR #882 (`chore/ci-github-hosted-runners`, created 2026-08-22) was closed 2026-08-24 because its `runs-on` change was already on `main`. Rebasing it would reintroduce `scripts/deploy-window-lock.sh run --` wrappers in `ci.yml` and `cross-browser-matrix.yml` that #902 deliberately removed. The current `runs-on` on `main` for those two workflows is `ubuntu-latest`.
+- No product code changed. No deploy, canary, or secret-scan workflows were moved.
+- Verification: `gh pr view 882 --json state,mergedAt,mergeable` returns `state:CLOSED`, `mergedAt:null`, `mergeable:CONFLICTING`; `rg -n 'runs-on:' .github/workflows/ci.yml .github/workflows/cross-browser-matrix.yml` returns `ubuntu-latest` for both.
+- Rollback: revert #902 to restore the self-hosted runner pool, or reopen #882 and rebase if self-hosted CI becomes mandatory again.
+
 ## 2026-08-12
 
 ### Meta ads beta graduation
