@@ -7,8 +7,11 @@ import {
 } from "../scripts/check-live-public-home.mjs";
 import {
   CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC,
+  CONNECT_SRC,
+  cspAllowsReactRouterManifest,
   HTML_NO_STORE_HEADERS,
   PUBLIC_HTML_CACHE_CONTROL,
+  REACT_ROUTER_MANIFEST_PATH,
   SECURITY_HEADERS,
   withSecurityHeaders,
 } from "../workers/security-headers";
@@ -39,7 +42,7 @@ describe("Worker security headers", () => {
     );
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     expect(cspDirective(response, "script-src")).toBe(BASE_SCRIPT_SRC);
-    expect(cspDirective(response, "connect-src")).toBe("connect-src 'self' https:");
+    expect(cspDirective(response, "connect-src")).toBe(CONNECT_SRC);
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("x-frame-options")).toBe("DENY");
     expect(response.headers.get("permissions-policy")).toContain("camera=()");
@@ -63,7 +66,7 @@ describe("Worker security headers", () => {
     expect(scriptSrc).toContain("'self'");
     expect(scriptSrc).toContain("'unsafe-inline'");
     expect(scriptSrc).toContain(CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC);
-    expect(cspDirective(response, "connect-src")).toBe("connect-src 'self' https:");
+    expect(cspDirective(response, "connect-src")).toBe(CONNECT_SRC);
     expect(cspDirective(response, "connect-src")).toContain("'self'");
   });
 
@@ -325,5 +328,35 @@ describe("Worker security headers", () => {
 
     expect(response.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
     expect(response.headers.has("cloudflare-cdn-cache-control")).toBe(false);
+  });
+
+  it("enforces CSP on /trust and /app/billing HTML so the React Router manifest is not a Report-Only gap", () => {
+    // Issue #1051: Firefox logged a Report-Only connect-src warning for the
+    // auth-shell __manifest loader on these two pages. The worker must keep
+    // the policy ENFORCED (not Report-Only) and connect-src must allow the
+    // same-origin /__manifest fetch React Router lazy discovery makes.
+    for (const pathname of ["/trust", "/app/billing"]) {
+      const response = withSecurityHeaders(
+        htmlResponse(),
+        new Request(`https://0509.io${pathname}`),
+      );
+      expect(response.headers.has("content-security-policy")).toBe(true);
+      expect(response.headers.has("content-security-policy-report-only")).toBe(false);
+      expect(cspDirective(response, "connect-src")).toBe(CONNECT_SRC);
+      expect(
+        cspAllowsReactRouterManifest(response.headers.get("content-security-policy") ?? ""),
+      ).toBe(true);
+    }
+  });
+
+  it("treats connect-src 'self' as covering the React Router __manifest fetch", () => {
+    expect(REACT_ROUTER_MANIFEST_PATH).toBe("/__manifest");
+    expect(cspAllowsReactRouterManifest("default-src 'self'; connect-src 'self' https:")).toBe(true);
+    expect(cspAllowsReactRouterManifest("default-src 'self'; connect-src 'none'")).toBe(false);
+    expect(cspAllowsReactRouterManifest("default-src 'none'")).toBe(false);
+    expect(cspAllowsReactRouterManifest("script-src 'self'")).toBe(true);
+    expect(
+      cspAllowsReactRouterManifest(`default-src 'self'; connect-src https://0509.io${REACT_ROUTER_MANIFEST_PATH}`),
+    ).toBe(true);
   });
 });
