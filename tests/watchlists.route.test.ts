@@ -2369,6 +2369,13 @@ describe("watchlists route rendering", () => {
     expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
     expect(markup).toContain("Add competitor");
     expect(markup).not.toContain("f9-evidence-cta--rank1");
+    // Q5: bulk import is one click from the board (expand the details).
+    expect(markup).toContain("Add several competitors by paste or CSV");
+    expect(markup).toContain('name="importSurface"');
+    expect(markup).toContain('value="watchlists"');
+    expect(markup).toContain('name="competitors"');
+    expect(markup).toContain('name="competitorFile"');
+    expect(markup).toContain('value="preview-market-desk-import"');
     // Aggregate-derived state filters stand down while their rollup is unavailable.
     expect(markup).not.toContain('class="f9-wk-tab');
     // The detail pane and the full record stay closed until a row is opened.
@@ -2446,6 +2453,9 @@ describe("watchlists route rendering", () => {
       "Add your first competitor and its first check starts immediately.",
     );
     expect(markup).toContain("See a proof brief");
+    expect(markup).toContain("Add several competitors by paste or CSV");
+    expect(markup).toContain('name="competitors"');
+    expect(markup).toContain('value="preview-market-desk-import"');
     // The screen still carries exactly one filled button, and it is the
     // header's — the one thing this page exists to do.
     expect(markup).not.toContain("f9-evidence-cta--rank1");
@@ -2504,6 +2514,9 @@ describe("watchlists route rendering", () => {
 
     expect(markup).toContain('<h1 class="f9-wk-title">Nykaa watch</h1>');
     expect(markup).toContain('href="/app/watchlists">All competitors</a>');
+    // Detail stays a record. Bulk import lives on the board: All competitors
+    // (click 1) then expand the paste/CSV details (click 2).
+    expect(markup).not.toContain("Add several competitors by paste or CSV");
     expect(markup.match(/id="competitor-detail"/g)).toHaveLength(1);
     expect(markup).not.toContain('aria-label="Competitors"');
     // BL-035 keeps a split INSIDE the detail (panel + fact rail). What must be
