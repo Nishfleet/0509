@@ -38,10 +38,6 @@ const EXPECTED_CUSTOMER_AGENT_ACTION_NAMES = [
   "delivery_settings.update",
   "delivery_target.update",
   "web_mentions.list",
-  "get_change_history",
-  "get_offer_state_at",
-  "diff_offer",
-  "list_suppressed",
 ] as const;
 const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
 const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled Agency customer API key.";
@@ -423,10 +419,9 @@ describe("customer API v1", () => {
     expect(actionsEndpoint?.actions).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
     expect(actionsEndpoint).toMatchObject({
       planRequirement: "Agency",
-      requiresWriteEnabled: false,
-      credentialRequirement: expect.stringContaining(WRITE_ENABLED_API_KEY_REQUIREMENT),
+      requiresWriteEnabled: true,
+      credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
     });
-    expect(actionsEndpoint?.credentialRequirement).toContain(READ_ONLY_API_KEY_REQUIREMENT);
     body.endpoints.forEach((endpoint) => {
       expect(endpoint.planRequirement).toBe("Agency");
       expect(endpoint.credentialRequirement).not.toContain("any active customer API key");
@@ -453,23 +448,8 @@ describe("customer API v1", () => {
     expect(body.toolActivation.readinessEndpoint).toBe("/api/v1/workspace-readiness");
     expect(body.toolActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
     expect(body.toolActivation.actionGroups.map((group) => group.label)).toContain("Evidence and reports");
-    expect(body.toolActivation.actionGroups.map((group) => group.label)).toContain("Offer change history");
-    expect(
-      body.toolActivation.actionGroups
-        .filter((group) => group.label !== "Offer change history")
-        .every((group) => group.requiresWriteEnabled),
-    ).toBe(true);
-    expect(
-      body.toolActivation.actionGroups.find((group) => group.label === "Offer change history"),
-    ).toMatchObject({
-      requiresWriteEnabled: false,
-      credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
-    });
-    expect(
-      body.toolActivation.actionGroups
-        .filter((group) => group.requiresWriteEnabled)
-        .every((group) => group.credentialRequirement.includes("write-enabled")),
-    ).toBe(true);
+    expect(body.toolActivation.actionGroups.every((group) => group.requiresWriteEnabled)).toBe(true);
+    expect(body.toolActivation.actionGroups.every((group) => group.credentialRequirement.includes("write-enabled"))).toBe(true);
     expect(body.toolActivation.actionGroups.flatMap((group) => group.actions)).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
     expect(body.toolActivation.actionGroups.flatMap((group) => group.actions)).not.toContain("get_workspace_readiness");
     expect(body.toolActivation.supportPaths.map((path) => path.label)).toContain("Billing changes and cancellation");

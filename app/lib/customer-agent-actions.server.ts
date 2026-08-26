@@ -490,66 +490,6 @@ export async function runCustomerAgentAction(
         };
       }
 
-      if (actionName === "get_change_history") {
-        const { getChangeHistoryFromAgent } = await import("~/lib/customer-agent-actions/change-history.server");
-        const history = await getChangeHistoryFromAgent(env, workspaceUserId, input, context.origin ?? null);
-        return {
-          resourceType: "change_history",
-          resourceId: history.domain,
-          result: history,
-          metadata: {
-            domain: history.domain,
-            since: history.since,
-            offerChangeCount: history.offerChanges.length,
-            eventCount: history.events.length,
-          },
-        };
-      }
-
-      if (actionName === "get_offer_state_at") {
-        const { getOfferStateAtFromAgent } = await import("~/lib/customer-agent-actions/change-history.server");
-        const offerState = await getOfferStateAtFromAgent(env, input, context.origin ?? null);
-        return {
-          resourceType: "offer_state",
-          resourceId: offerState.domain,
-          result: offerState,
-          metadata: {
-            domain: offerState.domain,
-            date: offerState.date,
-            capturedAt: offerState.state?.capturedAt ?? null,
-          },
-        };
-      }
-
-      if (actionName === "diff_offer") {
-        const { diffOfferFromAgent } = await import("~/lib/customer-agent-actions/change-history.server");
-        const offerDiff = await diffOfferFromAgent(env, input, context.origin ?? null);
-        return {
-          resourceType: "offer_diff",
-          resourceId: offerDiff.domain,
-          result: offerDiff,
-          metadata: {
-            domain: offerDiff.domain,
-            dateA: offerDiff.dateA,
-            dateB: offerDiff.dateB,
-          },
-        };
-      }
-
-      if (actionName === "list_suppressed") {
-        const { listSuppressedFromAgent } = await import("~/lib/customer-agent-actions/change-history.server");
-        const suppressed = await listSuppressedFromAgent(env, workspaceUserId, input, context.origin ?? null);
-        return {
-          resourceType: "suppressed_events",
-          resourceId: suppressed.domain,
-          result: suppressed,
-          metadata: {
-            domain: suppressed.domain,
-            count: suppressed.events.length,
-          },
-        };
-      }
-
       throw new CustomerAgentActionError("unsupported_action", "Unsupported agent action.", { status: 404 });
     } catch (error) {
       if (error instanceof Response) {
