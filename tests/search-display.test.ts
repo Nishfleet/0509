@@ -5,6 +5,7 @@ import {
   formatProofCaptureLabel,
   formatResultCardSummary,
   formatSearchCaptureAgeLabel,
+  formatSearchCommandTitle,
   formatSearchMarketScope,
   formatSelectedLandingFactValue,
   formatSelectedLandingHeadline,
@@ -310,5 +311,21 @@ describe("formatSearchMarketScope", () => {
     expect(formatSearchMarketScope("India")).toBe("in India");
     expect(formatSearchMarketScope("IN")).toBe("in India");
     expect(formatSearchMarketScope("usa")).toBe("in United States");
+  });
+});
+
+describe("formatSearchCommandTitle", () => {
+  it("title-cases the brand and names all countries on a shared search URL", () => {
+    expect(formatSearchCommandTitle("nike", "all")).toBe("Nike ads in all countries");
+  });
+
+  it("resolves country names from the catalog", () => {
+    expect(formatSearchCommandTitle("nike", "IN")).toBe("Nike ads in India");
+    expect(formatSearchCommandTitle("nike", "usa")).toBe("Nike ads in United States");
+  });
+
+  it("falls back to the generic title when the query is empty", () => {
+    expect(formatSearchCommandTitle("", "all")).toBe("Find competitor ads");
+    expect(formatSearchCommandTitle("   ", "all")).toBe("Find competitor ads");
   });
 });
