@@ -6,11 +6,11 @@ Narrative records moved out of `CLAUDE.md` so per-session guidance stays operati
 
 ### #944 production-verification closeout (#1121)
 
-- Re-ran the #944 acceptance check on production 2026-08-26T15:06Z from claim/issue-0509-1121: all four `/compare/{visualping,spyland,pulzifi,foreplay}` URLs return 200 and serve real compare-page bodies (~19KB each, with `<h1>` titles — not the 404 shell), the `https://0509.io/` marketing footer lists all six compare links, and `--count-matches 'href="/compare/(foreplay|visualping|pulzifi|spyland)"'` on the homepage = 4.
-- The deploy that shipped the fix is worker version `6e371cad-4d4e-41fe-aec3-413b65f7e1ac` (timestamp 2026-08-26T13:29:59.695051Z, served by `https://0509.io/api/health`); repo HEAD at verification time was `7d6a60e7` (merged PR #1115, claim/issue-0509-1114).
-- The `agent-blocked` label on #944 was removed earlier the same day (2026-08-26T14:54:36Z, by the prior verification pass) and is currently not set. The proof comment with the curl output was posted on #944 as part of #1121's accept #1.
-- The close itself (accept #3 of #1121) is reserved for an orchestrator pass per the fleet worker hard rule `NEVER gh issue close, no exceptions for workers — the merged PR closes it. An orchestrator-only, evidence-gated close exception exists — FABLE-VERDICT §16 — it is never yours.`; this PR documents the verification, label-removal evidence, and posts the proof comment, then closes #1121 only.
-- No compare-page content was changed (verification-only). Rollback: if any of the four URLs regress to 404 or the footer drops their links, reopen #1121, re-apply `agent-blocked` to #944, and rerun the same curl block.
+- Re-ran the #944 acceptance check on production 2026-08-26T16:33Z: all four `/compare/{visualping,spyland,pulzifi,foreplay}` URLs return 200 and serve real compare-page bodies (~19KB each — not the 404 shell). The homepage footer lists all six compare links; count of the four target hrefs is 4. Footer bundle `marketing-footer-DqQcCRXc.js` carries all six compare paths.
+- The deploy that shipped the fix is worker version `6e371cad-4d4e-41fe-aec3-413b65f7e1ac` (timestamp 2026-08-26T13:29:59Z). Repo HEAD at verification was `7d6a60e7`.
+- The `agent-blocked` label on #944 is not set (removed 2026-08-26T14:54Z). Proof comments with the curl output are on #944.
+- This PR closes #1121 and #944. No compare-page content was changed.
+- Rollback: if any of the four URLs regress to 404 or the footer drops their links, reopen #944, re-apply `agent-blocked`, and rerun the curl block.
 
 ## 2026-08-12
 
