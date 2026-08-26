@@ -89,11 +89,14 @@ describe("marketing rebuild", () => {
   it("leads with a real-data proof hook and never with a fabricated sample story", () => {
     expect(marketingRoute).toContain("is the hook on");
     expect(marketingRoute).toContain("linking to");
-    expect(marketingRoute).toContain("We saved the proof.");
+    expect(marketingRoute).toContain("We saved the proof");
+    expect(marketingRoute).toContain('className="ld-proof-strip"');
+    expect(marketingRoute).toContain("Growth teams");
+    expect(marketingRoute).toContain("who track competitors");
     expect(marketingRoute).toContain("Proof-backed brief");
     expect(marketingRoute).toContain('to="/proof"');
     expect(marketingRoute).toContain("What we refuse to alert on");
-    expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
+    expect(marketingRoute).toContain("For growth teams who track competitors");
     expect(marketingRoute).toContain("Your growth team would&rsquo;ve found out from a client.");
     expect(marketingRoute).toContain("landing pages for price, offer, and CTA changes");
     expect(marketingRoute).toContain("before your alarm goes off");
@@ -279,7 +282,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain('className="ld-ticker"');
     expect(marketingRoute).toContain('className="ld-wall"');
     expect(marketingRoute).toContain("Proof-backed brief");
-    expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
+    expect(marketingRoute).toContain("For growth teams who track competitors");
     expect(marketingRoute).toContain('action="/search"');
     expect(marketingRoute).toContain("Preview available ads");
     expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');
