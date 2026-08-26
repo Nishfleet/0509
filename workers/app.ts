@@ -144,6 +144,16 @@ export default {
           return withSecurityHeaders(screenshotResponse, request);
         }
       }
+
+      const { parseProofPageTextPathname } = await import("../app/lib/proof-page-text");
+      const { serveProofPageText } = await import("../app/lib/proof-page-text.server");
+      const pageTextKey = parseProofPageTextPathname(url.pathname);
+      if (pageTextKey) {
+        const pageTextResponse = await serveProofPageText(env, request, pageTextKey);
+        if (pageTextResponse) {
+          return withSecurityHeaders(pageTextResponse, request);
+        }
+      }
     }
 
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;

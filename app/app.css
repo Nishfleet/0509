@@ -7538,6 +7538,165 @@ reds soften --- */
   }
 }
 
+/* Public Offer Timeline (/timeline/:domain). Reuses ads-page tokens. */
+.f9-timeline-asof {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.5rem 0 1rem;
+}
+.f9-timeline-asof label {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.f9-timeline-asof input[type="date"] {
+  font-family: var(--ld-mono);
+  font-size: 1rem;
+  padding: 0.45rem 0.7rem;
+  min-height: 44px;
+  border: 2px solid var(--ink);
+  background: var(--bone);
+  color: var(--ink);
+}
+.f9-timeline-asof-result {
+  border: 2.5px solid var(--ink);
+  padding: 1rem 1.15rem;
+  margin: 0 0 1.25rem;
+}
+.f9-timeline-asof-result h2 {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 0.4rem;
+}
+.f9-timeline-share {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  max-width: 40rem;
+}
+.f9-timeline-share label {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.f9-timeline-share input {
+  font-family: var(--ld-mono);
+  font-size: 0.92rem;
+  min-height: 44px;
+  padding: 0.45rem 0.7rem;
+  border: 2px solid var(--ink);
+  background: var(--bone);
+  color: var(--ink);
+}
+.f9-timeline-also {
+  font-size: 0.95rem;
+}
+.f9-timeline-section {
+  padding: 2.5rem 0 4rem;
+}
+.f9-timeline-section-title {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 1.25rem;
+}
+.f9-timeline-empty {
+  color: var(--ink-faint);
+}
+.f9-timeline-ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 2.5px solid var(--ink);
+}
+.f9-timeline-entry {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 1.25rem;
+  padding: 0 0 1.75rem 1.5rem;
+  position: relative;
+}
+.f9-timeline-entry::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 0.35rem;
+  width: 8px;
+  height: 8px;
+  background: var(--green-ink);
+  border: 2px solid var(--ink);
+}
+.f9-timeline-date {
+  font-family: var(--ld-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.f9-timeline-headline {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+}
+.f9-timeline-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0 0 0.75rem;
+  color: var(--ink-faint);
+}
+.f9-timeline-diff {
+  margin: 0 0 0.75rem;
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.35rem 0.5rem;
+}
+.f9-timeline-diff dt {
+  font-family: var(--ld-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.f9-timeline-before {
+  text-decoration: line-through;
+  color: var(--ink-faint);
+}
+.f9-timeline-arrow {
+  padding: 0 0.4rem;
+}
+.f9-timeline-after {
+  font-weight: 600;
+}
+.f9-timeline-initial {
+  margin: 0 0 0.75rem;
+  color: var(--ink-faint);
+}
+.f9-timeline-receipts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin: 0;
+}
+.f9-timeline-receipts a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+@media (max-width: 620px) {
+  .f9-timeline-entry {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+  .f9-timeline-diff {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 /* BL-016 — persistent setup checklist (brief §6.11, R6). */
 .f9-evidence-setup-card {
