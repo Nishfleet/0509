@@ -13,9 +13,13 @@ describe("global-first default examples", () => {
 		"app/routes/compare.magicbrief.tsx",
 		"app/routes/compare.meta-ad-library.tsx",
 		"app/routes/compare.visualping.tsx",
+		"app/routes/compare.visualping-ad-library.tsx",
 		"app/routes/compare.spyland.tsx",
 		"app/routes/compare.pulzifi.tsx",
 		"app/routes/compare.foreplay.tsx",
+		"app/routes/compare.foreplay-spyder.tsx",
+		"app/routes/compare.panoramata.tsx",
+		"app/routes/compare.adspyder.tsx",
 		"app/lib/switch-pages.ts",
 		"app/components/switch-landing.tsx",
 	])("has no hardcoded India brand placeholder in %s", (path) => {

@@ -202,7 +202,7 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
           "Drag comparison, A/B-test detection, and Panoramata's longer stored history stay in Panoramata. We do not migrate them.",
       },
     ],
-    relatedComparePath: null,
+    relatedComparePath: "/compare/panoramata",
     extraSection: null,
   },
   visualping: {
