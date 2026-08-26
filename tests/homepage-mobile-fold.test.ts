@@ -44,11 +44,15 @@ describe("homepage mobile first viewport (#971)", () => {
     expect(budget).toMatch(/\.ld-hero-grid \.ld-wall\s*\{[^}]*font-size:\s*1\.75rem/);
     expect(budget).not.toMatch(/\.ld-hero-grid \.ld-wall\s*\{[^}]*font-size:\s*2\.3rem/);
     expect(budget).toMatch(/\.f9-home \.ld-hero \.f9-announcement\s*\{[^}]*flex-direction:\s*row/);
+    expect(budget).toMatch(/\.f9-home \.ld-hero \.f9-announcement\s*\{[^}]*min-height:\s*44px/);
     expect(budget).toMatch(/\.f9-home \.ld-hero \.f9-announcement span\s*\{[^}]*display:\s*none/);
     expect(budget).toMatch(/\.f9-home \.ld-command input\s*\{[^}]*min-height:\s*44px/);
     expect(budget).toMatch(/\.f9-home \.ld-command button\s*\{[^}]*min-height:\s*44px/);
     expect(budget).toMatch(/\.f9-home \.ld-hero \.f9-hero-proof-actions\s*\{[^}]*flex-direction:\s*row/);
+    expect(budget).toMatch(/\.ld-hero \{ padding-top: 0; \}/);
+    expect(budget).toMatch(/\.ld-hero-copy \.ld-command \{ margin-top: 0; \}/);
     expect(budget).toMatch(/\.f9-home \.ld-hero \.ld-case \{ margin-bottom: 6px; \}/);
+    expect(budget).toMatch(/\.f9-home \.ld-hero \.ld-hero-callouts \{ margin-bottom: 0; \}/);
     expect(budget).not.toMatch(/\.ld-nav-links\s*\{[^}]*display:\s*none/);
     expect(budget).not.toMatch(/\.ld-command\s*\{[^}]*display:\s*none/);
     expect(budget).not.toMatch(/\.ld-honest\s*\{[^}]*display:\s*none/);
