@@ -2805,6 +2805,7 @@ one signal-green accent.
 .ld-proof h2,
 .ld-quiet h2,
 .ld-stats h2,
+.f9-home .f9-growth-pricing h1,
 .f9-home .f9-growth-pricing h2,
 .ld-final h2 {
   font-family: var(--ld-display);
@@ -3895,6 +3896,7 @@ one signal-green accent.
 
 .f9-home .ld-hero .f9-announcement span { color: var(--ld-ink-soft); }
 
+.f9-home .f9-growth-pricing h1,
 .f9-home .f9-growth-pricing h2 { color: var(--ld-ink); }
 
 /* ============================================================
