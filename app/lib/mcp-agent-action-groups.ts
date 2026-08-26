@@ -27,10 +27,6 @@ export const MCP_TOOL_NAME_BY_AGENT_ACTION = {
   "delivery_settings.update": "update_delivery_settings",
   "delivery_target.update": "update_delivery_target",
   "web_mentions.list": "list_web_mentions",
-  get_change_history: "get_change_history",
-  get_offer_state_at: "get_offer_state_at",
-  diff_offer: "diff_offer",
-  list_suppressed: "list_suppressed",
 } as const satisfies Record<AgentCatalogActionName, string>;
 
 export function mcpActionGroups() {

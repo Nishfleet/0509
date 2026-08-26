@@ -167,29 +167,7 @@ export function offerStateAsOf(
   return match;
 }
 
-export function parseSinceInstant(value: string | null | undefined): string | null {
-  const asOf = parseAsOfDate(value);
-  if (asOf) {
-    return `${asOf}T00:00:00.000Z`;
-  }
-  if (!value) {
-    return null;
-  }
-  const trimmed = value.trim();
-  const parsed = Date.parse(trimmed);
-  if (Number.isNaN(parsed)) {
-    return null;
-  }
-  return new Date(parsed).toISOString();
-}
-
-type OfferDiffFields = Pick<OfferSnapshotInput, "headline" | "ctaText" | "priceText" | "formPresent">;
-
-export function diffOfferStates(before: OfferDiffFields, after: OfferDiffFields): OfferTransition {
-  return diffOffer(before, after);
-}
-
-function diffOffer(before: OfferDiffFields, after: OfferDiffFields): OfferTransition {
+function diffOffer(before: OfferSnapshotInput, after: OfferSnapshotInput): OfferTransition {
   return {
     headline: changeIfDifferent(before.headline, after.headline),
     ctaText: changeIfDifferent(before.ctaText, after.ctaText),
