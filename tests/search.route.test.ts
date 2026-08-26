@@ -1735,6 +1735,7 @@ describe("search loader", () => {
       discoveryStatus: "healthy",
       discoverySummary: null,
       discoveryFailureClass: null,
+      verifiedCount: 1,
     };
 
     const { formatResultsPanelTitle } = await import("~/routes/search");
@@ -1811,6 +1812,7 @@ describe("search loader", () => {
       discoveryStatus: "healthy",
       discoverySummary: null,
       discoveryFailureClass: null,
+      verifiedCount: 1,
     };
 
     const { formatResultsPanelTitle } = await import("~/routes/search");

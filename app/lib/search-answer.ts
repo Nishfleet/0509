@@ -1,5 +1,5 @@
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
-import { formatSearchMarketScope } from "~/lib/search-display";
+import { formatSearchMarketScope, resolveResultTierCounts } from "~/lib/search-display";
 import type { SearchResponse } from "~/lib/types";
 
 export type SearchAnswerState =
@@ -321,13 +321,31 @@ function buildCompleteSearchAnswer(input: {
   }
 
   if (input.isDomainSearch && domain && verifiedCount === 0) {
+    const tiers = resolveResultTierCounts(result);
+    const likelyCount = tiers.likely;
+    const unmatchedCount = tiers.unmatched;
     return {
       state: "no_verified",
       title: withMarketScope(`No verified ads found for ${domain}`, input.country, marketScopeOptions),
-      summary: "Returned ads were not connected to this website through advertiser or landing-page evidence.",
+      summary: likelyCount > 0
+        ? "No ad was provably linked to this website, but brand-name matches are below. Confirm the likely ones before treating them as proof."
+        : "Returned ads were not connected to this website through advertiser or landing-page evidence.",
       facts: [
         { label: "Verified ads", value: "0", detail: "Exact website match only" },
-        { label: "Returned ads", value: String(adCount), detail: "Review as unverified candidates only" },
+        {
+          label: "Likely matches",
+          value: String(likelyCount),
+          detail: likelyCount > 0
+            ? "Advertiser name fits this brand; website link not captured"
+            : "No brand-name matches",
+        },
+        {
+          label: "Unmatched candidates",
+          value: String(unmatchedCount),
+          detail: unmatchedCount > 0
+            ? "Returned by the source with no brand connection"
+            : "No unmatched candidates",
+        },
         landingFact,
       ],
       note: "This is not evidence that the competitor is inactive; it only means this search did not verify a connected ad.",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { domainMatchTier } from "~/lib/search-domain-match";
 import {
   classifyDomainMatches,
   explainDomainMatch,
@@ -87,5 +88,16 @@ describe("domain match hierarchy", () => {
 
     const matches = classifyDomainMatches([registrable, exactHost], intent, { includeUnverified: false });
     expect(matches[0]?.ad.metaAdId).toBe("a");
+  });
+});
+
+describe("domainMatchTier", () => {
+  it("maps verified levels to verified, brand-name to likely, and everything else to unmatched", () => {
+    expect(domainMatchTier("exact_hostname")).toBe("verified");
+    expect(domainMatchTier("likely_brand_name")).toBe("likely");
+    expect(domainMatchTier("unverified_text_candidate")).toBe("unmatched");
+    expect(domainMatchTier("unverified_provider_candidate")).toBe("unmatched");
+    expect(domainMatchTier(undefined)).toBe("unmatched");
+    expect(domainMatchTier(null)).toBe("unmatched");
   });
 });
