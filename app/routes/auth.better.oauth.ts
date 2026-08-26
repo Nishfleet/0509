@@ -54,5 +54,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
   });
   const headers = new Headers();
   appendBetterAuthSetCookieHeaders(headers, oauthStart.headers);
+  if (mode === "signup") {
+    const { rememberAllowlistedSignupSource, signupSourceCookieHeader, signupSourceFromRequest } =
+      await import("~/lib/signup-source");
+    const signupSource = await rememberAllowlistedSignupSource(env, {
+      email,
+      source:
+        signupSourceFromRequest(request, String(formData.get("signupSource") ?? "")) ??
+        new URL(request.url).searchParams.get("source"),
+    });
+    if (signupSource) {
+      headers.append("Set-Cookie", signupSourceCookieHeader(request, signupSource));
+    }
+  }
   throw redirect(oauthStart.url, { headers });
 }
