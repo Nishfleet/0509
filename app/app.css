@@ -9804,6 +9804,29 @@ a.f9-wk-btn {
   justify-content: flex-end;
 }
 
+/* BET 2: the "Yes, that's them" confirm link on a likely-tier row. It sits
+   in the trail slot (above the row-wide hit area) and opens the detail pane
+   where the track/signup CTA lives — one click to confirm, not a dead-end. */
+.f9-wk-row-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.f9-wk-row-confirm:hover {
+  text-decoration: underline;
+}
+
+.f9-wk-row-confirm .f9-wk-chev {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
 /* A paragraph that answers a section when there is no list to show. */
 .f9-wk-note {
   max-width: 62ch;

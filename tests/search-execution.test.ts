@@ -422,6 +422,8 @@ describe("search observability privacy", () => {
         searchScope: "exact",
         displayDomain: "private-competitor.example",
         verifiedCount: 0,
+        likelyCount: 0,
+        unmatchedCount: 0,
         rawCandidateCount: 0,
         broaderCandidateCount: 0,
         missingVerificationCount: 0,
