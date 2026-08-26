@@ -59,6 +59,23 @@ describe("theme preference model", () => {
     window.localStorage.setItem(THEME_STORAGE_KEY, "neon");
     expect(readStoredThemePreference()).toBe("system");
   });
+
+  it("rejects code-injection attempts and falls back to system", () => {
+    // These are the CodeQL #11/#12 attack payloads: a malicious theme string
+    // persisted to localStorage must never reach a code-construction sink.
+    // The allowlist rejects every one of them before any dispatch.
+    const payloads = [
+      "'; alert(1); //",
+      "1) { window.location='http://evil' } function x(",
+      "<script>alert(1)</script>",
+      "",
+    ];
+    for (const payload of payloads) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, payload);
+      expect(isThemePreference(payload), payload).toBe(false);
+      expect(readStoredThemePreference(), payload).toBe("system");
+    }
+  });
 });
 
 describe("themed route scope", () => {
@@ -127,5 +144,31 @@ describe("pre-paint boot script", () => {
     // eslint-disable-next-line no-eval -- exercising the literal inline script
     (0, eval)(THEME_BOOT_SCRIPT);
     expect(document.documentElement.hasAttribute("data-f9-theme")).toBe(false);
+  });
+
+  it("never lets a malicious stored value reach the DOM attribute", () => {
+    // The boot script only ever writes the literal "dark"; the stored value
+    // `s` is used solely in allowlist comparisons, never as the attribute.
+    const payloads = [
+      "'; alert(1); //",
+      "1) { window.location='http://evil' } function x(",
+      "<script>alert(1)</script>",
+      "",
+    ];
+    for (const payload of payloads) {
+      document.documentElement.removeAttribute("data-f9-theme");
+      window.localStorage.setItem(THEME_STORAGE_KEY, payload);
+      window.history.replaceState(null, "", "/app/watchlists");
+      // eslint-disable-next-line no-eval -- exercising the literal inline script
+      (0, eval)(THEME_BOOT_SCRIPT);
+      const attr = document.documentElement.getAttribute("data-f9-theme");
+      // The attribute is either absent or the literal "dark" — never the
+      // attacker-controlled payload.
+      expect(attr === null || attr === "dark", payload).toBe(true);
+      const attrStr = attr ?? "";
+      expect(attrStr, payload).not.toContain("alert");
+      expect(attrStr, payload).not.toContain("evil");
+      expect(attrStr, payload).not.toContain("<script>");
+    }
   });
 });
