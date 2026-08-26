@@ -5,10 +5,12 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BASE_URL,
   FOLD_EPSILON_PX,
+  NESTED_OVERFLOW_TOLERANCE_PX,
   SELECTORS,
   VIEWPORTS,
   evaluateTermination,
   evaluateViewport,
+  findFirstViewportNestedOverflow,
   formatReport,
   isFallbackHeadline,
   rectInFold,
@@ -33,6 +35,7 @@ function passingSnapshot(fold = 900): {
     pointerEvents: string;
   };
   consoleErrors: string[];
+  nestedOverflowCandidates: { selector: string; overflow: number; top: number }[];
 } {
   return {
     fold,
@@ -48,6 +51,7 @@ function passingSnapshot(fold = 900): {
       pointerEvents: "auto",
     },
     consoleErrors: [] as string[],
+    nestedOverflowCandidates: [],
   };
 }
 
@@ -131,6 +135,38 @@ describe("isEmptyProofStrip", () => {
   });
 });
 
+describe("findFirstViewportNestedOverflow", () => {
+  it("keeps a nested overflow whose box starts inside the first viewport", () => {
+    const candidates = [
+      { selector: "a.ld-cta", overflow: 20, top: 700 },
+    ];
+    expect(findFirstViewportNestedOverflow(candidates, 844)).toEqual(candidates);
+  });
+
+  it("drops a below-the-fold overflow so a proof-actions link cannot flip the gate", () => {
+    // Mirrors the #1262 deploy blocker: "Read the methodology" sits at top≈1495.
+    const candidates = [
+      { selector: "a", overflow: 20, top: 1495 },
+    ];
+    expect(findFirstViewportNestedOverflow(candidates, 844)).toEqual([]);
+  });
+
+  it("treats the 2px release-e2e floor as clean", () => {
+    expect(NESTED_OVERFLOW_TOLERANCE_PX).toBe(2);
+    expect(
+      findFirstViewportNestedOverflow(
+        [{ selector: "span", overflow: 2, top: 100 }],
+        900,
+      ),
+    ).toEqual([]);
+  });
+
+  it("returns an empty list when the snapshot has no candidates", () => {
+    expect(findFirstViewportNestedOverflow(undefined, 900)).toEqual([]);
+    expect(findFirstViewportNestedOverflow(null, 900)).toEqual([]);
+  });
+});
+
 describe("evaluateViewport", () => {
   it("passes when headline, deck, and a clickable submit all sit in the first viewport", () => {
     const verdict = evaluateViewport({
@@ -194,6 +230,36 @@ describe("evaluateViewport", () => {
     const noDeck = passingSnapshot(900);
     noDeck.valueProposition = null;
     expect(evaluateViewport({ name: "desktop", ...noDeck }).pass).toBe(false);
+  });
+
+  it("fails when a first-viewport element overflows its box (the release-e2e class)", () => {
+    const snapshot = passingSnapshot(844);
+    snapshot.scrollWidth = 390;
+    snapshot.clientWidth = 390;
+    snapshot.nestedOverflowCandidates = [
+      { selector: "a.ld-cta", overflow: 20, top: 760 },
+    ];
+    const verdict = evaluateViewport({ name: "mobile", ...snapshot });
+    expect(verdict.pass).toBe(false);
+    expect(
+      verdict.checks.find((c) => c.name === "no_nested_overflow_in_first_viewport")
+        ?.ok,
+    ).toBe(false);
+  });
+
+  it("passes when the only nested overflow sits below the first viewport", () => {
+    const snapshot = passingSnapshot(844);
+    snapshot.scrollWidth = 390;
+    snapshot.clientWidth = 390;
+    snapshot.nestedOverflowCandidates = [
+      { selector: "a", overflow: 20, top: 1495 },
+    ];
+    const verdict = evaluateViewport({ name: "mobile", ...snapshot });
+    expect(verdict.pass).toBe(true);
+    expect(
+      verdict.checks.find((c) => c.name === "no_nested_overflow_in_first_viewport")
+        ?.ok,
+    ).toBe(true);
   });
 });
 
