@@ -540,6 +540,45 @@ export async function countProofCapturesForWorkspaceSince(
 
   return row?.total ?? 0;
 }
+export const PROOF_SCREENSHOT_SHARE_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+export async function countRecentSucceededProofScreenshotShare(
+  env: AppEnv,
+  nowIso: string,
+  windowMs: number = PROOF_SCREENSHOT_SHARE_WINDOW_MS,
+) {
+  const windowStartedAt = new Date(Date.parse(nowIso) - windowMs).toISOString();
+  const row = await one<{
+    succeeded: number;
+    with_screenshot: number | null;
+  }>(
+    env,
+    `
+      SELECT
+        COUNT(*) AS succeeded,
+        SUM(
+          CASE
+            WHEN screenshot_artifact_key IS NOT NULL
+              AND TRIM(screenshot_artifact_key) != ''
+            THEN 1
+            ELSE 0
+          END
+        ) AS with_screenshot
+      FROM proof_capture
+      WHERE status = 'succeeded'
+        AND succeeded_at IS NOT NULL
+        AND succeeded_at >= ?
+    `,
+    windowStartedAt,
+  );
+
+  return {
+    succeeded: Number(row?.succeeded ?? 0),
+    withScreenshot: Number(row?.with_screenshot ?? 0),
+    windowStartedAt,
+  };
+}
+
 export async function getSuccessfulProofCaptureStatsForUser(env: AppEnv, userId: string) {
   const row = await one<{
     total: number;
@@ -595,6 +634,13 @@ export async function createProofCapture(
     if (existing) {
       return getReusableProofCaptureId(existing, input);
     }
+  }
+
+  if (
+    input.status === "succeeded" &&
+    !(typeof input.screenshotArtifactKey === "string" && input.screenshotArtifactKey.trim().length > 0)
+  ) {
+    throw new Error("proof_capture_succeeded_without_screenshot");
   }
 
   const id = createId();
