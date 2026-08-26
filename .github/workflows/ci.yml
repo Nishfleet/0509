@@ -95,13 +95,6 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Cache vitest transform output
-        if: runner.environment == 'github-hosted' && github.event_name == 'pull_request'
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
-        with:
-          path: |
-            node_modules/.vite
-          key: vitest-v4-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
@@ -121,17 +114,6 @@ jobs:
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
               --project workers
-      - name: Cache TypeScript incremental build info
-        if: runner.environment == 'github-hosted' && github.event_name == 'pull_request'
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
-        with:
-          path: |
-            tsconfig.node.tsbuildinfo
-            tsconfig.cloudflare.tsbuildinfo
-            tsconfig.node.tsbuild.tsbuildinfo
-            tsconfig.cloudflare.tsbuild.tsbuild.tsbuildinfo
-            .react-router/types
-          key: tsc-b-${{ runner.os }}-${{ hashFiles('tsconfig*.json', 'tsconfig*.tsbuild', 'package-lock.json') }}
       - name: Typecheck
         env:
           NODE_OPTIONS: --max-old-space-size=2048
@@ -200,13 +182,6 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Cache vitest transform output
-        if: runner.environment == 'github-hosted' && github.event_name == 'pull_request'
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
-        with:
-          path: |
-            node_modules/.vite
-          key: vitest-v4-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
@@ -284,13 +259,6 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Cache vitest transform output
-        if: runner.environment == 'github-hosted' && github.event_name == 'pull_request'
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
-        with:
-          path: |
-            node_modules/.vite
-          key: vitest-v4-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
@@ -368,13 +336,6 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Cache vitest transform output
-        if: runner.environment == 'github-hosted' && github.event_name == 'pull_request'
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
-        with:
-          path: |
-            node_modules/.vite
-          key: vitest-v4-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
