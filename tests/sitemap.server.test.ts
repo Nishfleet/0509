@@ -13,7 +13,7 @@ import {
 import { fingerprintSavedQuery, normalizeSavedQuery, parseSearchParams } from "~/lib/normalize";
 import { buildSearchV2CacheKey } from "~/lib/search-v2.server";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
-import { SITEMAP_PATHS } from "~/lib/seo";
+import { NOINDEX_ACTION_SURFACES, SITEMAP_PATHS } from "~/lib/seo";
 import routes from "~/routes";
 import {
   brandDomainFromSitemapCacheRow,
@@ -767,5 +767,21 @@ describe("SITEMAP_PATHS", () => {
       const matched = patterns.some((pattern) => pattern.test(pathname));
       expect(matched, `${sitemapPath} has no registered, non-splat route`).toBe(true);
     }
+  });
+
+  it("keeps restored money pages in the sitemap and signup out", () => {
+    const moneyPages = [
+      "/pricing",
+      "/compare/foreplay",
+      "/compare/visualping",
+      "/compare/pulzifi",
+      "/compare/spyland",
+    ] as const;
+
+    for (const path of moneyPages) {
+      expect(SITEMAP_PATHS, `${path} dropped from SITEMAP_PATHS`).toContain(path);
+    }
+    expect(SITEMAP_PATHS).not.toContain("/auth/signup");
+    expect(NOINDEX_ACTION_SURFACES).toContain("/auth/signup");
   });
 });
