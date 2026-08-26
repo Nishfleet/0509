@@ -2354,6 +2354,8 @@ export function rankExtractedCardsByAdvertiserMatch(
 
 function normalizeBrandMatchToken(value: string | null | undefined) {
   return (value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "")
     .trim();
@@ -2450,10 +2452,12 @@ export function buildSearchUrl(query: NormalizedSavedQuery) {
     return `https://www.facebook.com/ads/library/?${params.toString()}`;
   }
 
-  params.set(
-    "search_type",
-    query.mode === "advertiser" ? "keyword_exact_phrase" : "keyword_unordered",
-  );
+  // BET 2 (#1202): domain searches use advertiser mode with the brand stem as
+  // `q`. keyword_exact_phrase returned honest zeros for stems like "slack"
+  // (Salesforce-owned page, ads phrased around Slack AI / Salesforce) and those
+  // zeros were cached as dead-ends. Unordered still ranks brand-name
+  // advertisers first; the three-tier model labels the rest unmatched.
+  params.set("search_type", "keyword_unordered");
   params.set("q", query.filters.query || "");
 
   return `https://www.facebook.com/ads/library/?${params.toString()}`;

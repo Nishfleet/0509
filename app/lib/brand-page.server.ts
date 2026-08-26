@@ -36,7 +36,7 @@ import type { AppEnv } from "~/lib/env.server";
 import { fingerprintSavedQuery, normalizeSavedQuery, parseSearchParams } from "~/lib/normalize";
 import {
   comparableHostname,
-  hostnamesMatchBrandRegionalProperty,
+  hostnamesMatchBrandVerifiedProperty,
   hostnamesMatchDomainIntent,
   parseSearchInputFromWebsiteField,
   registrableDomainFromHostname,
@@ -349,7 +349,7 @@ export function adHasVerifiedDomainLink(
   // Existing cache rows for allbirds.com / mamaearth.com still carry
   // unverified domainMatch from before regional-property matching. Re-read
   // the landing host so a deploy repairs those pages without a recrawl.
-  return hostnamesMatchBrandRegionalProperty(landingHost, { registrableDomain });
+  return hostnamesMatchBrandVerifiedProperty(landingHost, { registrableDomain });
 }
 
 /** How many cached creatives carry verified link evidence to the domain. */

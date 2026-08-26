@@ -158,6 +158,153 @@ export function hostnamesMatchBrandRegionalProperty(
   return isGeographicPublicSuffix(candidateSuffix);
 }
 
+/**
+ * Hyphen vs concatenated brand domains: hugo-boss.com vs hugoboss.com.
+ * Folded labels must match, the registrable hosts must differ, and both
+ * sides must be ICANN. Does not treat the searched host as its own twin.
+ */
+export function hostnamesMatchBrandCollapsedLabel(
+  candidateHost: string | null | undefined,
+  intent: Pick<ParsedSearchQuery, "registrableDomain">,
+) {
+  if (!candidateHost || !intent.registrableDomain) {
+    return false;
+  }
+
+  const candidateNormalized = normalizeHostname(candidateHost);
+  const candidateParsed = parseHostname(candidateNormalized, { allowPrivateDomains: false });
+  const intentParsed = parseHostname(intent.registrableDomain, { allowPrivateDomains: false });
+  const candidateLabel = foldDomainLabel(candidateParsed.domainWithoutSuffix ?? "");
+  const intentLabel = foldDomainLabel(intentParsed.domainWithoutSuffix ?? "");
+  const candidateRegistrable = registrableDomainFromHostname(candidateNormalized);
+  const intentRegistrable = intent.registrableDomain;
+
+  if (!candidateLabel || candidateLabel !== intentLabel || candidateLabel.length < 4) {
+    return false;
+  }
+  if (!candidateRegistrable || candidateRegistrable === intentRegistrable) {
+    return false;
+  }
+  if (!candidateParsed.isIcann || !intentParsed.isIcann) {
+    return false;
+  }
+  if (candidateParsed.domain && MULTITENANT_REGISTRABLE_SUFFIXES.has(candidateParsed.domain)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Brand TLD on an open ccTLD (.so/.io/.ai) whose ads land on the same label
+ * at .com/.net/.org: notion.so → notion.com.
+ *
+ * One direction only. Searching analytics.com must not verify analytics.io.
+ */
+export function hostnamesMatchOpenCctldToGenericCommercial(
+  candidateHost: string | null | undefined,
+  intent: Pick<ParsedSearchQuery, "registrableDomain">,
+) {
+  if (!candidateHost || !intent.registrableDomain) {
+    return false;
+  }
+
+  const candidateNormalized = normalizeHostname(candidateHost);
+  const candidateParsed = parseHostname(candidateNormalized, { allowPrivateDomains: false });
+  const intentParsed = parseHostname(intent.registrableDomain, { allowPrivateDomains: false });
+  const candidateLabel = (candidateParsed.domainWithoutSuffix ?? "").toLowerCase();
+  const intentLabel = (intentParsed.domainWithoutSuffix ?? "").toLowerCase();
+  const candidateSuffix = (candidateParsed.publicSuffix ?? "").toLowerCase();
+  const intentSuffix = (intentParsed.publicSuffix ?? "").toLowerCase();
+
+  if (!candidateLabel || candidateLabel !== intentLabel || candidateLabel.length < 3) {
+    return false;
+  }
+  if (!OPEN_CCTLD_USED_AS_GENERIC.has(intentSuffix)) {
+    return false;
+  }
+  if (!isGenericCommercialPublicSuffix(candidateSuffix)) {
+    return false;
+  }
+  if (!candidateParsed.isIcann || !intentParsed.isIcann) {
+    return false;
+  }
+  if (candidateParsed.domain && MULTITENANT_REGISTRABLE_SUFFIXES.has(candidateParsed.domain)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Product-domain extension on the same generic commercial TLD: oura.com ads
+ * that land on ouraring.com. Search label length >= 4, remainder >= 3.
+ * Callers that need advertiser confirmation (search matching) must still
+ * check the advertiser is the brand; this helper is hostname-only.
+ */
+export function hostnamesMatchBrandStemExtension(
+  candidateHost: string | null | undefined,
+  intent: Pick<ParsedSearchQuery, "registrableDomain">,
+) {
+  if (!candidateHost || !intent.registrableDomain) {
+    return false;
+  }
+
+  const candidateNormalized = normalizeHostname(candidateHost);
+  const candidateParsed = parseHostname(candidateNormalized, { allowPrivateDomains: false });
+  const intentParsed = parseHostname(intent.registrableDomain, { allowPrivateDomains: false });
+  const candidateLabel = foldDomainLabel(candidateParsed.domainWithoutSuffix ?? "");
+  const intentLabel = foldDomainLabel(intentParsed.domainWithoutSuffix ?? "");
+  const candidateSuffix = (candidateParsed.publicSuffix ?? "").toLowerCase();
+  const intentSuffix = (intentParsed.publicSuffix ?? "").toLowerCase();
+
+  if (intentLabel.length < 4 || candidateLabel.length < intentLabel.length + 3) {
+    return false;
+  }
+  if (!candidateLabel.startsWith(intentLabel)) {
+    return false;
+  }
+  const remainder = candidateLabel.slice(intentLabel.length);
+  if (!/^[a-z]{3,}$/.test(remainder)) {
+    return false;
+  }
+  if (!isGenericCommercialPublicSuffix(intentSuffix) || !isGenericCommercialPublicSuffix(candidateSuffix)) {
+    return false;
+  }
+  if (candidateSuffix !== intentSuffix) {
+    return false;
+  }
+  if (!candidateParsed.isIcann || !intentParsed.isIcann) {
+    return false;
+  }
+  if (candidateParsed.domain && MULTITENANT_REGISTRABLE_SUFFIXES.has(candidateParsed.domain)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Hostname-only verified brand properties (regional, hyphen-collapsed, and
+ * open-ccTLD → .com). Stem extensions stay separate because they need an
+ * advertiser check in the matcher.
+ */
+export function hostnamesMatchBrandVerifiedProperty(
+  candidateHost: string | null | undefined,
+  intent: Pick<ParsedSearchQuery, "registrableDomain">,
+) {
+  return (
+    hostnamesMatchBrandRegionalProperty(candidateHost, intent) ||
+    hostnamesMatchBrandCollapsedLabel(candidateHost, intent) ||
+    hostnamesMatchOpenCctldToGenericCommercial(candidateHost, intent)
+  );
+}
+
+export function foldDomainLabel(label: string) {
+  return label
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
 const GENERIC_COMMERCIAL_PUBLIC_SUFFIXES = new Set(["com", "net", "org"]);
 
 /**

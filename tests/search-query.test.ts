@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  hostnamesMatchBrandCollapsedLabel,
   hostnamesMatchBrandRegionalProperty,
+  hostnamesMatchBrandStemExtension,
+  hostnamesMatchBrandVerifiedProperty,
+  hostnamesMatchOpenCctldToGenericCommercial,
   parseSearchInput,
   parseSearchInputFromWebsiteField,
   registrableDomainFromHostname,
@@ -132,5 +136,67 @@ describe("hostnamesMatchBrandRegionalProperty", () => {
 
   it("does not widen okara.ai to okara.pk (the geography-keyword precision case)", () => {
     expect(hostnamesMatchBrandRegionalProperty("okara.pk", okara)).toBe(false);
+  });
+});
+
+describe("hostnamesMatchBrandCollapsedLabel (BET 2 hugo-boss.com)", () => {
+  const hugoBoss = parseSearchInputFromWebsiteField("hugo-boss.com");
+
+  it("treats hugoboss.com as the hyphen-stripped twin of hugo-boss.com", () => {
+    expect(hostnamesMatchBrandCollapsedLabel("www.hugoboss.com", hugoBoss)).toBe(true);
+    expect(hostnamesMatchBrandCollapsedLabel("hugoboss.com", hugoBoss)).toBe(true);
+  });
+
+  it("does not treat the searched host itself as a collapsed twin", () => {
+    expect(hostnamesMatchBrandCollapsedLabel("hugo-boss.com", hugoBoss)).toBe(false);
+    expect(hostnamesMatchBrandCollapsedLabel("www.hugo-boss.com", hugoBoss)).toBe(false);
+  });
+
+  it("does not collapse unrelated brands", () => {
+    expect(hostnamesMatchBrandCollapsedLabel("nike.com", hugoBoss)).toBe(false);
+  });
+});
+
+describe("hostnamesMatchOpenCctldToGenericCommercial (BET 2 notion.so)", () => {
+  const notion = parseSearchInputFromWebsiteField("notion.so");
+
+  it("treats notion.com as the .com twin of a .so brand search", () => {
+    expect(hostnamesMatchOpenCctldToGenericCommercial("www.notion.com", notion)).toBe(true);
+    expect(hostnamesMatchOpenCctldToGenericCommercial("notion.com", notion)).toBe(true);
+  });
+
+  it("does not treat analytics.com → analytics.io as a brand twin (the open-ccTLD hole)", () => {
+    const analytics = parseSearchInputFromWebsiteField("analytics.com");
+    expect(hostnamesMatchOpenCctldToGenericCommercial("analytics.io", analytics)).toBe(false);
+  });
+});
+
+describe("hostnamesMatchBrandStemExtension (BET 2 oura.com)", () => {
+  const oura = parseSearchInputFromWebsiteField("oura.com");
+
+  it("treats ouraring.com as a product-domain extension of oura.com", () => {
+    expect(hostnamesMatchBrandStemExtension("www.ouraring.com", oura)).toBe(true);
+    expect(hostnamesMatchBrandStemExtension("ouraring.com", oura)).toBe(true);
+  });
+
+  it("does not treat a 3-letter stem as an extension base (tcs.com / tcsomething.com)", () => {
+    const tcs = parseSearchInputFromWebsiteField("tcs.com");
+    expect(hostnamesMatchBrandStemExtension("tcsomething.com", tcs)).toBe(false);
+  });
+
+  it("does not treat an unrelated host as a stem extension", () => {
+    expect(hostnamesMatchBrandStemExtension("nike.com", oura)).toBe(false);
+    expect(hostnamesMatchBrandStemExtension("eshal-clinic.example.com", oura)).toBe(false);
+  });
+});
+
+describe("hostnamesMatchBrandVerifiedProperty", () => {
+  it("unions regional, collapsed-label, and open-ccTLD twins", () => {
+    const allbirds = parseSearchInputFromWebsiteField("allbirds.com");
+    const hugoBoss = parseSearchInputFromWebsiteField("hugo-boss.com");
+    const notion = parseSearchInputFromWebsiteField("notion.so");
+    expect(hostnamesMatchBrandVerifiedProperty("allbirds.co.uk", allbirds)).toBe(true);
+    expect(hostnamesMatchBrandVerifiedProperty("hugoboss.com", hugoBoss)).toBe(true);
+    expect(hostnamesMatchBrandVerifiedProperty("notion.com", notion)).toBe(true);
   });
 });
