@@ -19,9 +19,8 @@
 # This wrapper retries ONCE, and only when the failure is that exact pool
 # startup timeout. Any other failure (assertion errors, build errors, worker
 # crashes) exits with the original status immediately, so the retry cannot
-# mask a real regression. When invoked through the deploy-window lane, the
-# retry happens inside the lane already acquired, so it never re-enters the
-# verification queue.
+# mask a real regression. The retry is purely internal to this wrapper and
+# does not re-enter any external queue or verification step.
 #
 # Usage:
 #   ci-vitest-run.sh [--] [command...]
