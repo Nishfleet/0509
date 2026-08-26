@@ -212,6 +212,40 @@ fixture softener_in_yaml_comment '{"files": [
   "attestations": ATTEST, "permissions": ADMIN}'
 run_fixture softener_in_yaml_comment PASS "gate-path waived" "CI step softened"
 
+# A brand-new workflow cannot *soften* a step that did not exist, and a shell
+# `test`/`[` conditional is not a CI test step even when it contains `|| true`.
+fixture added_workflow_shell_guard '{"files": [
+  {"filename": ".github/workflows/ratchet-auto-tighten.yml", "status": "added",
+   "patch": "+          test -z \"$(git symbolic-ref --quiet HEAD 2>/dev/null || true)\""}]}'
+run_fixture added_workflow_shell_guard FAIL "gate-owned path changed (added)" "CI step softened"
+
+fixture added_workflow_shell_guard_attested '{
+  "files": [{"filename": ".github/workflows/ratchet-auto-tighten.yml", "status": "added",
+   "patch": "+          test -z \"$(git symbolic-ref --quiet HEAD 2>/dev/null || true)\""}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+run_fixture added_workflow_shell_guard_attested PASS "gate-path waived" "CI step softened"
+
+fixture modified_script_shell_guard '{"files": [
+  {"filename": "scripts/local-helper.sh", "status": "modified",
+   "patch": "+  test -z \"$(git symbolic-ref --quiet HEAD 2>/dev/null || true)\""}]}'
+run_fixture modified_script_shell_guard PASS
+
+fixture modified_script_bracket_guard '{"files": [
+  {"filename": "scripts/local-helper.sh", "status": "modified",
+   "patch": "+  [ 1 -eq 2 ] || true"}]}'
+run_fixture modified_script_bracket_guard PASS
+
+fixture modified_script_double_bracket_guard '{"files": [
+  {"filename": "scripts/local-helper.sh", "status": "modified",
+   "patch": "+  [[ 1 -eq 2 ]] || true"}]}'
+run_fixture modified_script_double_bracket_guard PASS
+
+fixture workflow_run_test_guard_attested '{
+  "files": [{"filename": ".github/workflows/uptime-health.yml", "status": "modified",
+   "patch": "+        run: test -z \"$(git symbolic-ref --quiet HEAD 2>/dev/null || true)\""}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+run_fixture workflow_run_test_guard_attested PASS "gate-path waived" "CI step softened"
+
 fixture skip_in_test_comment '{"files": [
   {"filename": "tests/auth.test.ts", "status": "modified",
    "patch": "+  // do not use it.skip here; the gate rejects it"}]}'
