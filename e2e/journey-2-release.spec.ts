@@ -185,7 +185,7 @@ for (const viewport of viewports) {
     await expect(proofSummary.getByRole("heading", { name: "Nykaa" })).toBeVisible();
     await expect(proofSummary.getByText("Source: Meta Ad Library visual check")).toBeVisible();
     await expect(proofSummary.getByText("Recent cached result")).toBeVisible();
-    await expect(proofSummary.getByText("Landing page not captured yet")).toBeVisible();
+    await expect(proofSummary.getByText("Landing page check did not finish").first()).toBeVisible();
     await expect(proofSummary.getByRole("heading", { name: "Festive glow sale" })).toBeVisible();
     await expect(page.locator(".f9-results-panel")).toHaveAttribute("data-f9-result-cache-status", "hit");
     await expect(page.locator(".f9-results-panel")).toHaveAttribute("data-f9-result-source", "meta_library_browser");

@@ -369,7 +369,7 @@ img {
   display: inline-flex;
   align-items: center;
   gap: 11px;
-  min-height: 34px;
+  min-height: 44px;
   margin-bottom: 34px;
   padding: 7px 15px;
   border-radius: 999px;
@@ -2651,6 +2651,7 @@ one signal-green accent.
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  min-height: 44px;
 }
 
 /* Homepage `.f9-home a` is more specific and would otherwise wash the kicker
@@ -2906,6 +2907,7 @@ one signal-green accent.
 
 .ld-proof-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 18px;
   margin-bottom: clamp(24px, 3vw, 36px);
   font-family: var(--ld-mono);
@@ -16589,10 +16591,11 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   .ld-proof-trail,
   .ld-proof-strip-foot { display: none; }
   .ld-hero-copy { overflow-x: clip; }
-  .ld-deck-copy { font-size: 0.88rem; line-height: 1.35; margin-top: 8px; }
-  .ld-hero-copy .ld-command { margin-top: 10px; }
-  .ld-case { margin-bottom: 6px; gap: 8px; font-size: 0.7rem; }
-  .f9-home .ld-hero .ld-case { margin-bottom: 6px; }
+  .ld-deck-copy { font-size: 0.88rem; line-height: 1.35; margin-top: 4px; }
+  .ld-hero-copy .ld-command { margin-top: 4px; }
+  .ld-case { margin-bottom: 2px; gap: 8px; font-size: 0.7rem; }
+  .f9-home .ld-hero .ld-case { margin-bottom: 2px; }
+  .f9-home .ld-hero .ld-hero-callouts { margin-bottom: 4px; }
 
   /* Beat the 760px column stack so the pill stays one row and the secondary
      line ("Paste a competitor site…") yields vertical room to the command. */
@@ -16614,6 +16617,34 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   .f9-home .ld-command button {
     min-height: 44px;
     padding: 10px 14px;
+  }
+
+  /* Beat the 860px column stack: the search input + CTA share one 44px row
+     on phones so the form clears the fold (journey-1 budget, issue 971).
+     Keep the button text wrapping and the input min-width 0 so the row's
+     min-content never exceeds the grid cell (no horizontal overflow).
+     `.ld-hero-copy` min-width 0 lets the 1fr grid track shrink below the
+     form's placeholder-driven min-content at 375px. */
+  .ld-hero-copy {
+    min-width: 0;
+  }
+  .ld-command {
+    flex-direction: row;
+    align-items: stretch;
+    min-width: 0;
+  }
+  .f9-home .ld-command input {
+    min-width: 0;
+  }
+  .f9-home .ld-command button {
+    min-width: 0;
+    width: auto;
+    white-space: normal;
+    font-size: 0.72rem;
+    line-height: 1.15;
+    padding: 6px 12px;
+    border-left: 2.5px solid var(--ld-ink);
+    border-top: 0;
   }
 
   /* Beat the 760px stacked proof-action links (each 44px tall) so they sit
