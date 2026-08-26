@@ -1,4 +1,14 @@
+import { hashString, stripChurnTokens } from "~/lib/normalize";
+
 export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v5";
+
+export type ExtractorSuppressionReason = "churn_stable" | "ad_slot_strip";
+
+export interface ExtractorSuppressionFingerprints {
+  rawTextHash: string;
+  adSlotStrippedTextHash: string;
+  churnStableTextHash: string;
+}
 
 const CTA_PRIORITY_PATTERNS = [
   /\b(buy now|shop now|add to cart|get offer|claim deal|book demo|whatsapp us|get started)\b/i,
@@ -174,10 +184,8 @@ export function extractLandingPageSignals(
   html: string,
   options: { documentMode?: "raw" | "rendered" } = {},
 ) {
-  const normalizedHtml = removeNonVisibleElements(
-    html ?? "",
-    options.documentMode ?? "raw",
-  );
+  const documentMode = options.documentMode ?? "raw";
+  const normalizedHtml = removeNonVisibleElements(html ?? "", documentMode);
   // Issue #949: button candidates are extracted separately so the v5
   // button-text fallback in pickBestCta can use them. They are cleaned
   // exactly once here — spreading them into ctaCandidates and cleaning
@@ -199,7 +207,92 @@ export function extractLandingPageSignals(
     priceText,
     formPresent,
     extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    suppressionFingerprints: computeExtractorSuppressionFingerprints(
+      html ?? "",
+      documentMode,
+    ),
   };
+}
+
+export function extractorSuppressionMetadata(
+  fingerprints: ExtractorSuppressionFingerprints,
+) {
+  return {
+    extractorRawTextHash: fingerprints.rawTextHash,
+    extractorAdSlotStrippedTextHash: fingerprints.adSlotStrippedTextHash,
+    extractorChurnStableTextHash: fingerprints.churnStableTextHash,
+  };
+}
+
+/**
+ * Layered HTML hashes so a later scan can tell "the markup moved" from
+ * "a real offer/CTA/headline moved". Visible text is not enough: the BET 4
+ * timestamp fixture lives in a meta attribute, and rotating banner creatives
+ * live in href/src attributes. Layer A keeps ad slots. Layer B strips them.
+ * Layer C is B after churn-token and ISO-timestamp stripping. Same C +
+ * different B is timestamp churn. Same B + different A is a rotating banner.
+ *
+ * ISO timestamps are stripped here only. They are not added to the shared
+ * headline churn list, because that list is baked into stored hashes.
+ */
+export function computeExtractorSuppressionFingerprints(
+  html: string,
+  documentMode: "raw" | "rendered" = "raw",
+): ExtractorSuppressionFingerprints {
+  const rawHtml = htmlForFingerprint(html, documentMode, false);
+  const adSlotStrippedHtml = htmlForFingerprint(html, documentMode, true);
+  const churnStableHtml = stripFingerprintChurn(adSlotStrippedHtml);
+  return {
+    rawTextHash: hashString(rawHtml),
+    adSlotStrippedTextHash: hashString(adSlotStrippedHtml),
+    churnStableTextHash: hashString(churnStableHtml),
+  };
+}
+
+export function classifyExtractorSuppression(
+  previous: ExtractorSuppressionFingerprints | null | undefined,
+  current: ExtractorSuppressionFingerprints | null | undefined,
+): ExtractorSuppressionReason | null {
+  if (
+    !previous?.rawTextHash ||
+    !previous.adSlotStrippedTextHash ||
+    !previous.churnStableTextHash ||
+    !current?.rawTextHash ||
+    !current.adSlotStrippedTextHash ||
+    !current.churnStableTextHash
+  ) {
+    return null;
+  }
+  if (current.churnStableTextHash !== previous.churnStableTextHash) {
+    return null;
+  }
+  if (current.adSlotStrippedTextHash !== previous.adSlotStrippedTextHash) {
+    return "churn_stable";
+  }
+  if (current.rawTextHash !== previous.rawTextHash) {
+    return "ad_slot_strip";
+  }
+  return null;
+}
+
+function htmlForFingerprint(
+  html: string,
+  documentMode: "raw" | "rendered",
+  stripAdSlots: boolean,
+) {
+  return removeNonVisibleElements(html, documentMode, false, false, stripAdSlots);
+}
+
+// Fingerprint-only. Do not fold this into stripChurnTokens: that helper
+// feeds stored normalizedHeadlineHash values, and adding a pattern there
+// would fire a one-time headline-change alert on every watched page.
+const FINGERPRINT_ISO_TIMESTAMP =
+  /\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}(?:\.\d+)?z?/gi;
+
+function stripFingerprintChurn(html: string) {
+  return stripChurnTokens(
+    html.toLowerCase().replace(FINGERPRINT_ISO_TIMESTAMP, " "),
+  );
 }
 
 export function hasMeaningfulLandingPageBodyText(
@@ -221,8 +314,11 @@ function removeNonVisibleElements(
   documentMode: "raw" | "rendered",
   removeDocumentMetadata = false,
   ignoreNoscript = false,
+  stripAdSlots = true,
 ) {
-  const adSlotStripped = stripAdSlotRegions(html ?? "");
+  const adSlotStripped = stripAdSlots
+    ? stripAdSlotRegions(html ?? "")
+    : (html ?? "");
   const elementNames = new Set(
     documentMode === "rendered"
       ? ["script", "style", "noscript", "template"]
