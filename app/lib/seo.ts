@@ -93,9 +93,9 @@ export function webSiteJsonLd() {
       "@type": "SearchAction",
       target: {
         "@type": "EntryPoint",
-        urlTemplate: `${SITE_ORIGIN}/search?website={website}`,
+        urlTemplate: `${SITE_ORIGIN}/search?q={search_term_string}`,
       },
-      "query-input": "required name=website",
+      "query-input": "required name=search_term_string",
     },
   } as const;
 }

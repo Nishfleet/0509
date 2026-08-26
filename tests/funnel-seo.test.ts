@@ -95,7 +95,10 @@ describe("structured data (JSON-LD)", () => {
     expect(webSite.url).toBe("https://0509.io");
     expect(webSite.potentialAction["@type"]).toBe("SearchAction");
     expect(webSite.potentialAction.target.urlTemplate).toBe(
-      "https://0509.io/search?website={website}",
+      "https://0509.io/search?q={search_term_string}",
+    );
+    expect(webSite.potentialAction["query-input"]).toBe(
+      "required name=search_term_string",
     );
 
     for (const serialized of [JSON.stringify(organization), JSON.stringify(webSite)]) {

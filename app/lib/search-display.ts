@@ -39,9 +39,10 @@ export function buildIdleSearchResult(): SearchResponse {
 
 /**
  * Page-level H1 for the public /search route. When the visitor lands from a
- * shared keyword link (`?q=` or `?query=`) with a country scope, the heading
- * names the brand and market so the page is immediately readable. The idle
- * page keeps the generic "Find competitor ads" title.
+ * shared keyword link (`?q=` or `?query=`) or a valid competitor website
+ * (`?website=nike.com`) with a country scope, the heading names the brand
+ * and market so the page is immediately readable. The idle page keeps the
+ * generic "Find competitor ads" title.
  */
 export function formatSearchCommandTitle(
   query: string,

@@ -1093,9 +1093,10 @@ export default function SearchRoute() {
   );
   const selectedAdAngle = selectedAd ? classifyAdRecordAngle(selectedAd) : null;
   const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
-  const commandTitle = competitorWebsite.raw
-    ? "Find competitor ads"
-    : formatSearchCommandTitle(data.filters.query, data.filters.country);
+  const commandTitle = formatSearchCommandTitle(
+    competitorWebsite.displayName ?? data.filters.query,
+    data.filters.country,
+  );
   const websiteInputValue = competitorWebsite.raw || data.filters.query;
   const trackingRole: WatchlistTrackingRole = "competitor";
   const targetNoun = "competitor";
