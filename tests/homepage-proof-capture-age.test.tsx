@@ -9,12 +9,16 @@ type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unkn
 // suite runs. 2026-08-26 matches the issue's live observation date.
 const NOW = new Date("2026-08-26T00:19:48.000Z");
 
-function proofBriefWithCapturedAt(capturedAt: string, freshForLiveClaim = false) {
+function proofBriefWithCapturedAt(
+  capturedAt: string,
+  freshForLiveClaim = false,
+  fetchedAt = "2026-08-26T00:19:48.000Z",
+) {
   return {
     competitorName: "Nykaa",
     website: "nykaa.com",
     adLibraryCountry: "India",
-    fetchedAt: "2026-08-26T00:19:48.000Z",
+    fetchedAt,
     checkedAgoLabel: "about 2 hours ago",
     freshForLiveClaim,
     adCount: 12,
@@ -111,39 +115,45 @@ afterEach(() => {
 });
 
 describe("homepage hero proof wall — capture-age gate (#1076)", () => {
-  it("hides the capture date and swaps to non-date-bearing 'on record' copy when the top capture is 100 days old", async () => {
-    // 2026-05-18 captured, rendered on 2026-08-26: 100 days old, past the
-    // 30-day freshness window. The hero must not surface the old date next to
-    // the "checked about 2 hours ago" freshness stamp.
-    mockReactRouter(proofBriefWithCapturedAt("2026-05-18"));
+  it("keeps the dated hook line for a long-running ad while our own check is fresh", async () => {
+    // The ad has been delivering since 2025-09-04 — 356 days by render time —
+    // but our Ad Library check ran hours ago. A long-running competitor ad is
+    // the strongest proof the homepage has, not the weakest, so the hero keeps
+    // the dated "was the hook on ... <date>" line. Gating this on the ad's own
+    // delivery date demoted essentially every real ad on the page.
+    mockReactRouter(proofBriefWithCapturedAt("2025-09-04"));
+    const markup = await renderMarketing();
+
+    const h1 = heroH1(markup);
+    expect(h1).toContain("was the hook on 12 Meta ads");
+    expect(h1).not.toContain("is a hook on record across");
+    // #1032: a prior-year capture carries its year so it cannot read as recent.
+    expect(heroFlagText(markup)).toBe("Sep 4, 2025");
+    expect(h1).toContain("Unlock the secret to radiant");
+  });
+
+  it("drops the date and swaps to 'on record' copy once our own check goes stale", async () => {
+    // Cache fetched 2026-05-18, rendered 2026-08-26: 100 days since we last
+    // checked. We cannot date a hook off a cache we stopped refreshing, so the
+    // hero drops the pill and reframes.
+    mockReactRouter(
+      proofBriefWithCapturedAt("2026-05-10", false, "2026-05-18T00:19:48.000Z"),
+    );
     const markup = await renderMarketing();
 
     const h1 = heroH1(markup);
     expect(h1).toContain("is a hook on record across 12 Meta ads");
     expect(heroFlagText(markup)).toBeNull();
-    // The H1 must not carry the stale capture date in any form.
-    expect(h1).not.toMatch(/May 18/);
-    // The hook quote itself is still shown — it is real proof, only the date
-    // and the "the hook on" framing are dropped. The quote is truncated to 30
-    // chars in the hero, so assert the visible prefix.
+    expect(h1).not.toMatch(/May 10/);
+    // The hook quote is still real proof; only the date and framing are dropped.
     expect(h1).toContain("Unlock the secret to radiant");
   });
 
-  it("does not surface a year-old capture date in the hero (the live #1076 case)", async () => {
-    // 2025-09-04 captured, rendered on 2026-08-26: 356 days old — the exact
-    // case the issue observed live. The hero must not show "Sep 4, 2025".
-    mockReactRouter(proofBriefWithCapturedAt("2025-09-04"));
-    const markup = await renderMarketing();
-
-    const h1 = heroH1(markup);
-    expect(h1).not.toMatch(/Sep 4/);
-    expect(h1).toContain("is a hook on record across 12 Meta ads");
-  });
-
-  it("keeps the date-bearing hero copy when the top capture is inside the 30-day window", async () => {
-    // 2026-08-22 captured, rendered on 2026-08-26: 4 days old, inside the
-    // 30-day window. The hero keeps the "was the hook on ... <date>" copy.
-    mockReactRouter(proofBriefWithCapturedAt("2026-08-22"));
+  it("keeps the dated copy at the edge of the freshness window", async () => {
+    // Checked 4 days ago — well inside the 30-day window.
+    mockReactRouter(
+      proofBriefWithCapturedAt("2026-08-22", false, "2026-08-22T00:19:48.000Z"),
+    );
     const markup = await renderMarketing();
 
     const h1 = heroH1(markup);
@@ -151,29 +161,21 @@ describe("homepage hero proof wall — capture-age gate (#1076)", () => {
     expect(heroFlagText(markup)).toBe("Aug 22");
   });
 
-  it("swaps the hero even when freshForLiveClaim is true but the capture is stale", async () => {
-    // The cache was fetched moments ago (freshForLiveClaim true) but the ad
-    // capture itself is 100 days old. This is the contradiction the issue
-    // names: "checked 2 hours ago" beside a year-old date. The hero must still
-    // drop the date.
-    mockReactRouter(proofBriefWithCapturedAt("2026-05-18", true));
+  it("uses present tense only while the check is fresh enough for a live claim", async () => {
+    mockReactRouter(proofBriefWithCapturedAt("2025-09-04", true));
     const markup = await renderMarketing();
 
-    const h1 = heroH1(markup);
-    expect(h1).toContain("is a hook on record across 12 Meta ads");
-    expect(heroFlagText(markup)).toBeNull();
+    expect(heroH1(markup)).toContain("is the hook on 12 Meta ads");
   });
 
-  it("does not contradict the 'checked about 2 hours ago' freshness stamp in the brief strip", async () => {
-    // The freshness stamp elsewhere on the page speaks to the cache fetch
-    // time; the hero must not surface a stale capture date that reads as a
-    // contradiction. With the swap, the hero carries no date at all.
+  it("does not contradict the 'checked about 2 hours ago' freshness stamp", async () => {
+    // The stamp speaks to when we checked; the hero pill speaks to when the ad
+    // was captured. Past tense holds them together without contradiction: we
+    // checked hours ago, and that hook was running on 12 ads as of Sep 4, 2025.
     mockReactRouter(proofBriefWithCapturedAt("2025-09-04"));
     const markup = await renderMarketing();
 
     expect(markup).toContain("last checked about 2 hours ago");
-    const h1 = heroH1(markup);
-    expect(h1).not.toMatch(/Sep 4/);
-    expect(h1).not.toMatch(/<i class="ld-flag">/);
+    expect(heroH1(markup)).toContain("was the hook on 12 Meta ads");
   });
 });

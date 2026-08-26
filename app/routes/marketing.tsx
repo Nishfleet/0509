@@ -189,10 +189,13 @@ export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   },
 ];
 
-/** A capture older than this is not "the hook on" a current ad — surfacing
- *  its date in the hero next to the "checked N hours ago" freshness stamp
- *  reads as a contradiction (a year-old date beside a 2-hour-old check). The
- *  hero swaps to non-date-bearing "on record" copy past this age. See #1076. */
+/** Our own Ad Library check going older than this makes the hero's dated
+ *  proof line unsupportable — we cannot date a hook off a cache we stopped
+ *  refreshing a month ago. Past this age the hero swaps to non-date-bearing
+ *  "on record" copy. Measured on the cache's `fetchedAt` (when WE captured),
+ *  never on an ad's own delivery-start date: a still-running ad that launched
+ *  a year ago is perfectly good proof, and gating on its start date demoted
+ *  every long-running competitor ad on the homepage. See #1076. */
 const PROOF_CAPTURE_FRESH_DAYS = 30;
 
 /** Days between a capture timestamp and `now`. Returns Infinity for an
@@ -369,13 +372,14 @@ export default function MarketingRoute() {
     ? proofBrief.proofTrail[0]?.capturedAt ?? proofBrief.fetchedAt
     : null;
   const heroProofTime = proofBrief ? proofTimeLabel(heroCaptureIso) : null;
-  // A capture older than PROOF_CAPTURE_FRESH_DAYS is not "the hook on" a
-  // current ad. Surfacing its date in the hero next to the "checked N hours
-  // ago" freshness stamp reads as a contradiction, so the hero drops the date
-  // pill and reframes to "on record" copy that matches the capture's age.
-  // See #1076.
+  // Staleness is a property of OUR check, not of the ad. `heroCaptureIso`
+  // falls back to the ad's lastSeenAt/firstSeenAt — its delivery dates — so
+  // measuring age on it demoted every ad that has simply been running a long
+  // time, which is most of them. The date pill keeps showing the ad's capture
+  // date (that is what it means); the "on record" reframe now fires only when
+  // the cache behind it has itself gone stale. See #1076.
   const heroCaptureStale = proofBrief
-    ? captureAgeDays(heroCaptureIso) > PROOF_CAPTURE_FRESH_DAYS
+    ? captureAgeDays(proofBrief.fetchedAt) > PROOF_CAPTURE_FRESH_DAYS
     : false;
   const heroWall = proofBrief && heroTopHook ? (
     <h1 className="ld-wall">

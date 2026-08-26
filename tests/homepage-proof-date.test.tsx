@@ -122,29 +122,24 @@ afterEach(() => {
 });
 
 describe("homepage hero proof wall — year-aware capture dates (#1032)", () => {
-  it("renders the calendar year for a date-only capture from a prior UTC year in the proof-trail stamp, and swaps the hero to non-date-bearing copy (#1076)", async () => {
-    // 2025-09-04 captured, rendered on 2026-08-25: 355 days old, past the
-    // 30-day freshness window, so the hero no longer surfaces the date (it
-    // would read as a contradiction next to the "checked N hours ago" stamp).
-    // The #1032 year-formatting logic still runs and carries the year in the
-    // proof-trail card stamp so "Sep 4" cannot read as a same-year date.
+  it("renders the calendar year for a date-only capture from a prior UTC year", async () => {
+    // 2025-09-04 captured, rendered on 2026-08-25. The ad has been delivering
+    // for a year and our check is current, so the hero keeps the dated line —
+    // the year is what stops "Sep 4" reading as a same-year date (#1032).
     mockReactRouter(proofBriefWithCapturedAt("2025-09-04"));
     const markup = await renderMarketing();
 
-    // Hero swaps to "on record" copy and drops the date pill entirely.
-    expect(heroFlagText(markup)).toBeNull();
-    expect(heroH1(markup)).toContain("is a hook on record across 12 Meta ads");
-    expect(heroH1(markup)).not.toContain("Sep 4");
+    expect(heroFlagText(markup)).toBe("Sep 4, 2025");
+    expect(heroH1(markup)).toContain("was the hook on 12 Meta ads");
 
-    // The year-formatted date still appears in the proof-trail card stamp.
+    // The same year-formatted date appears in the proof-trail card stamp.
     const stamp = proofTrailStampText(markup);
     expect(stamp).toContain("Sep 4, 2025");
   });
 
   it("keeps the compact rendering for a date-only capture from the current UTC year", async () => {
-    // 2026-08-22 captured, rendered on 2026-08-25: 3 days old, inside the
-    // 30-day freshness window, so the hero keeps the date-bearing copy and no
-    // year is appended (same UTC year).
+    // 2026-08-22 captured, rendered on 2026-08-25: same UTC year, so the hero
+    // keeps the compact rendering with no year appended.
     mockReactRouter(proofBriefWithCapturedAt("2026-08-22"));
     const markup = await renderMarketing();
 
@@ -153,14 +148,13 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     expect(flag).not.toContain("2026");
   });
 
-  it("does not surface any capture date in the hero for a year-old capture (#1076)", async () => {
+  it("never renders a bare year-stripped 'Sep 4' in the hero for a prior-year capture (#1032)", async () => {
     mockReactRouter(proofBriefWithCapturedAt("2025-09-04"));
     const markup = await renderMarketing();
 
     const h1 = heroH1(markup);
-    // The hero no longer carries a date pill, so "Sep 4" cannot appear in any
-    // form — year-bearing or otherwise — inside the H1.
-    expect(h1).not.toMatch(/Sep 4/);
-    expect(h1).not.toMatch(/<i class="ld-flag">/);
+    // The date may appear, but only ever carrying its year — a bare "Sep 4"
+    // would read as this year's date for a year-old capture.
+    expect(h1).not.toMatch(/Sep 4(?!, 2025)/);
   });
 });
