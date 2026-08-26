@@ -6,6 +6,7 @@
     "vite.config.ts",
     "scripts/prod-canary*.mjs",
     "scripts/bet2-live-verification.mjs",
+    "scripts/bet3-live-verification.mjs",
     "scripts/bet9-first-viewport-verification.mjs",
     "scripts/monitoring-fanout-canary*.mjs",
     "scripts/provider-bakeoff*.mjs",
