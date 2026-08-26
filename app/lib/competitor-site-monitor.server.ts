@@ -251,9 +251,21 @@ function stripXmlNamespaces(xml: string): string {
   return xml.replace(/<(urlset|sitemapindex)(\s[^>]*)?>/gi, "<$1>");
 }
 
-function extractXmlText(xml: string, tag: string): string[] {
+function xmlTextPatternForTag(tag: string): RegExp | null {
+  switch (tag) {
+    case "loc":
+      return /<loc\b[^>]*>([\s\S]*?)<\/loc\s*>/gi;
+    default:
+      return null;
+  }
+}
+
+/** Extract inner text of allowlisted sitemap tags. Unknown tags, including
+ * those that contain regex metacharacters, return no matches. */
+export function extractXmlText(xml: string, tag: string): string[] {
+  const pattern = xmlTextPatternForTag(tag);
+  if (pattern === null) return [];
   const out: string[] = [];
-  const pattern = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}\\s*>`, "gi");
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(xml)) !== null) {
     const inner = match[1] ?? "";
