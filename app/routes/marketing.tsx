@@ -17,6 +17,7 @@ import {
 } from "~/lib/seo";
 import { noPricingPreview, pricingPreviewWithinBound } from "~/lib/pricing-preview.server";
 import type { RootLoaderData } from "~/root";
+import { pickFeaturedAdsInternalLink, type IndexableAdsLink } from "~/lib/ads-internal-links";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
 
 export { planIntentPath, valueMathLabel, billingFaqJsonLdEntries } from "~/components/pricing-section";
@@ -75,6 +76,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     proofBrief = null;
   }
 
+  let indexableAdsLinks: IndexableAdsLink[] = [];
+  try {
+    const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
+    indexableAdsLinks = await loadIndexableAdsInternalLinks(env);
+  } catch (error) {
+    console.warn("Homepage indexable ads links load failed; omitting /ads links.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    indexableAdsLinks = [];
+  }
+
   if (pricingPreview.available) {
     // Buyer-country prices are embedded in this HTML, so the response must
     // never be shared-cached: a cached DE/EUR variant would otherwise be
@@ -82,12 +94,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     // explicitly-set cache-control on cacheable HTML paths instead of
     // stamping the generic public, max-age=300 policy.
     return Response.json(
-      { pricingPreview, commercialLaunch, proofBrief },
+      { pricingPreview, commercialLaunch, proofBrief, indexableAdsLinks },
       { headers: { "Cache-Control": "private, max-age=300", Vary: "cookie" } },
     );
   }
 
-  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief };
+  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks };
 }
 
 /**
@@ -276,6 +288,10 @@ export default function MarketingRoute() {
     agencySaleOpen: false,
   };
   const proofBrief = routeData.proofBrief ?? null;
+  const featuredAdsLink = pickFeaturedAdsInternalLink(
+    routeData.indexableAdsLinks ?? [],
+    "nykaa.com",
+  );
   const primaryCta = rootData.session ? "/app" : "/auth/signup";
   const primaryLabel = rootData.session ? "Open app" : "Create account";
 
@@ -634,6 +650,7 @@ export default function MarketingRoute() {
           <div className="ld-proof-actions">
             <Link to={publicSearchTrialPath}>Try the search preview</Link>
             <Link to="/competitor-monitoring">Read the methodology</Link>
+            {featuredAdsLink ? <Link to={featuredAdsLink.path}>See a live example</Link> : null}
             <Link to="/proof">What we refuse to alert on</Link>
             <a href="#pricing">See plans</a>
           </div>

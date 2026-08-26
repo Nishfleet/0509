@@ -73,6 +73,7 @@ describe("marketing pricing SSR", () => {
       pricingPreview: availablePreview,
       commercialLaunch,
       proofBrief: null,
+      indexableAdsLinks: [],
     });
     expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
       DODO_0509_API_KEY: "provider-key",
@@ -106,6 +107,7 @@ describe("marketing pricing SSR", () => {
       pricingPreview: { available: false },
       commercialLaunch,
       proofBrief: null,
+      indexableAdsLinks: [],
     });
   });
 
@@ -143,6 +145,7 @@ describe("marketing pricing SSR", () => {
       pricingPreview: { available: false },
       commercialLaunch,
       proofBrief: null,
+      indexableAdsLinks: [],
     });
     expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
     expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({

@@ -1,6 +1,7 @@
 import { Form, Link } from "react-router";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
+import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
@@ -19,15 +20,16 @@ const pageDescription =
 export const links: LinksFunction = () => canonicalLinks("/compare/magicbrief");
 
 // Wind-down traffic to this page is the blitz's headline capture signal
-// (docs/magicbrief-blitz-capture.md). The anonymous funnel event is the only
-// thing the loader does — default-off, GPC-suppressed, and coarse per the
-// measurement spec.
+// (docs/magicbrief-blitz-capture.md). The loader emits the anonymous funnel
+// event (default-off, GPC-suppressed, coarse) and, when the sitemap would
+// list an indexable brand page, a "See <brand>'s ads" link.
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { emitFunnelMigrationView } = await import("~/lib/funnel-measurement.server");
   const env = getEnv(context);
   emitFunnelMigrationView(env, request);
-  return null;
+  const { loadFeaturedAdsInternalLink } = await import("~/lib/ads-internal-links.server");
+  return { featuredAdsLink: await loadFeaturedAdsInternalLink(env) };
 }
 
 export const meta: MetaFunction = () =>
@@ -243,6 +245,7 @@ export default function CompareMagicBriefRoute() {
         <h2>
           Plan your migration <span aria-hidden="true">→</span>
         </h2>
+        <CompareAdsExampleLink />
         <p className="ld-pricing-note">
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> with your MagicBrief export (or just
           a list of brands you tracked) and we&rsquo;ll set up your watchlists with you, person to
