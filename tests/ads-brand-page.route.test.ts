@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AdRecord } from "~/lib/types";
+import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -89,6 +90,7 @@ interface MockOptions {
   provider?: string;
   rateLimitResponse?: Response | null;
   onCacheRead?: () => void;
+  offerTimelineEntries?: OfferLedgerEntry[];
 }
 
 function installBrandPageMocks(options: MockOptions = {}) {
@@ -104,6 +106,10 @@ function installBrandPageMocks(options: MockOptions = {}) {
   const enforcePublicBrandPageRateLimit = vi
     .fn()
     .mockResolvedValue(options.rateLimitResponse ?? null);
+  const loadOfferTimeline = vi.fn().mockResolvedValue({
+    entries: options.offerTimelineEntries ?? [],
+    asOfState: null,
+  });
 
   vi.doMock("~/lib/context.server", () => ({
     getEnv: vi.fn(() => env),
@@ -125,6 +131,10 @@ function installBrandPageMocks(options: MockOptions = {}) {
   vi.doMock("~/lib/rate-limit.server", () => ({
     enforcePublicBrandPageRateLimit,
   }));
+  vi.doMock("~/lib/offer-timeline.server", () => ({
+    loadOfferTimeline,
+    isOfferTimelineShareEnabled: vi.fn(() => true),
+  }));
 
   return {
     env,
@@ -134,6 +144,7 @@ function installBrandPageMocks(options: MockOptions = {}) {
     searchMetaLibraryByBrowser,
     searchMetaApiAds,
     enforcePublicBrandPageRateLimit,
+    loadOfferTimeline,
   };
 }
 
@@ -157,6 +168,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/meta-api.server");
   vi.doUnmock("~/lib/meta-library-browser.server");
   vi.doUnmock("~/lib/rate-limit.server");
+  vi.doUnmock("~/lib/offer-timeline.server");
   vi.restoreAllMocks();
   vi.resetModules();
 });
@@ -201,6 +213,38 @@ describe("/ads/:domain loader", () => {
     expect(mocks.getDiscoveryCacheEntry).toHaveBeenCalled();
     expect(mocks.searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(mocks.hasFreshDiscoveryCacheEntry).not.toHaveBeenCalled();
+    expect(mocks.searchMetaLibraryByBrowser).not.toHaveBeenCalled();
+    expect(mocks.searchMetaApiAds).not.toHaveBeenCalled();
+  });
+
+  it("loads stored offer timeline states without any live capture", async () => {
+    const entry: OfferLedgerEntry = {
+      id: "backfill-nykaa-20260825",
+      capturedAt: "2026-08-25T00:00:00.000Z",
+      dateLabel: "25 Aug 2026",
+      canonicalUrl: "https://www.nykaa.com/",
+      headline: "Nykaa. Beauty and wellness.",
+      ctaText: null,
+      priceText: null,
+      formPresent: null,
+      screenshotHref: null,
+      pageTextHref: null,
+      evidenceNote: "Captured on 25 Aug 2026, no screenshot",
+      transition: null,
+    };
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry(),
+      offerTimelineEntries: [entry],
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.offerTimelineEntries).toEqual([entry]);
+    expect(mocks.loadOfferTimeline).toHaveBeenCalledWith(mocks.env, {
+      domain: "nykaa.com",
+      asOf: null,
+    });
+    expect(mocks.searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(mocks.searchMetaLibraryByBrowser).not.toHaveBeenCalled();
     expect(mocks.searchMetaApiAds).not.toHaveBeenCalled();
   });

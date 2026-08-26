@@ -55,6 +55,7 @@ function entry(overrides: Partial<OfferLedgerEntry> = {}): OfferLedgerEntry {
     formPresent: true,
     screenshotHref: `/artifacts/proof/${encodeURIComponent(SCREENSHOT_A)}`,
     pageTextHref: `/artifacts/page-text/${encodeURIComponent(HTML_A)}`,
+    evidenceNote: null,
     transition: null,
     ...overrides,
   };
@@ -157,5 +158,38 @@ describe("/timeline/:domain render", () => {
   it("hides share chrome when the rollback flag is off", async () => {
     const markup = await render(data({ shareEnabled: false }));
     expect(markup).not.toContain("Share this timeline");
+  });
+
+  it("renders the honest no-screenshot label for a backfill state with no receipts", async () => {
+    const backfillEntry = entry({
+      id: "backfill-nike-20260715",
+      capturedAt: "2026-07-15T09:00:00.000Z",
+      dateLabel: "15 Jul 2026",
+      canonicalUrl: "https://www.nike.com/",
+      headline: "Nike. Just Do It.",
+      ctaText: "Shop Now",
+      priceText: null,
+      formPresent: false,
+      screenshotHref: null,
+      pageTextHref: null,
+      evidenceNote: "Captured on 15 Jul 2026, no screenshot",
+      transition: null,
+    });
+
+    const markup = await render(
+      data({
+        domain: "nike.com",
+        brandName: "Nike",
+        canonicalPath: "/timeline/nike.com",
+        sharePath: "/timeline/nike.com",
+        shareUrl: "https://0509.io/timeline/nike.com",
+        entries: [backfillEntry],
+      }),
+    );
+
+    expect(markup).toContain("Nike. Just Do It.");
+    expect(markup).toContain("Captured on 15 Jul 2026, no screenshot");
+    expect(markup).not.toContain("Screenshot ·");
+    expect(markup).not.toContain("Page text ·");
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  backfillEvidenceNote,
   buildOfferLedger,
   canonicalUrlBelongsToDomain,
   formatOfferDate,
@@ -25,6 +26,7 @@ function snapshot(overrides: Partial<OfferSnapshotInput> & Pick<OfferSnapshotInp
     formPresent: true,
     screenshotKey: SCREENSHOT_A,
     pageTextKey: HTML_A,
+    evidenceNote: null,
     ...overrides,
   };
 }
@@ -108,6 +110,28 @@ describe("buildOfferLedger", () => {
     expect(ledger[2]?.transition?.priceText).toEqual({ before: "₹799", after: "₹599" });
     expect(ledger[2]?.transition?.headline).toBeNull();
     expect(ledger[2]?.screenshotHref).toBe(`/artifacts/proof/${encodeURIComponent(SCREENSHOT_C)}`);
+  });
+
+  it("passes an honest evidence note through for a backfill snapshot with no artifacts", () => {
+    const note = backfillEvidenceNote("2026-07-15T09:00:00.000Z");
+    expect(note).toContain("no screenshot");
+    expect(note).toContain(formatOfferDate("2026-07-15T09:00:00.000Z"));
+
+    const ledger = buildOfferLedger([
+      snapshot({
+        id: "backfill-1",
+        capturedAt: "2026-07-15T09:00:00.000Z",
+        headline: "Seeded state",
+        screenshotKey: null,
+        pageTextKey: null,
+        evidenceNote: note,
+      }),
+    ]);
+
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]?.screenshotHref).toBeNull();
+    expect(ledger[0]?.pageTextHref).toBeNull();
+    expect(ledger[0]?.evidenceNote).toBe(note);
   });
 });
 

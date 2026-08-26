@@ -10,6 +10,7 @@ import { queryAll } from "~/lib/data/d1.server";
 import { parseJson } from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
+  backfillEvidenceNote,
   buildOfferLedger,
   canonicalUrlBelongsToDomain,
   offerStateAsOf,
@@ -130,6 +131,8 @@ function escapeLike(value: string): string {
 
 function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
   const metadata = parseJson<Record<string, unknown>>(row.metadata_json, {});
+  const screenshotKey = readScreenshotKey(metadata);
+  const pageTextKey = readPageTextKey(row.artifact_key, metadata);
   return {
     id: row.id,
     canonicalUrl: row.canonical_url,
@@ -138,9 +141,21 @@ function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
     ctaText: readNullableString(row.cta_text),
     priceText: readNullableString(row.price_text),
     formPresent: readFormPresent(row.form_present),
-    screenshotKey: readScreenshotKey(metadata),
-    pageTextKey: readPageTextKey(row.artifact_key, metadata),
+    screenshotKey,
+    pageTextKey,
+    // A backfill row (issue #968) carries no screenshot and no page text by
+    // design — fabricating either would be dishonest. Instead it gets the
+    // honest "Captured on <date>, no screenshot" label so the timeline never
+    // presents a state without naming its evidence.
+    evidenceNote:
+      !screenshotKey && !pageTextKey && isBackfillMetadata(metadata)
+        ? backfillEvidenceNote(row.captured_at)
+        : null,
   };
+}
+
+function isBackfillMetadata(metadata: Record<string, unknown>): boolean {
+  return metadata.backfill === true;
 }
 
 function readNullableString(value: string | null): string | null {
