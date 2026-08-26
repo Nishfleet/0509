@@ -676,7 +676,7 @@ function failLandingCapture(
   return null;
 }
 
-function snapshotHasScreenshotArtifact(snapshot: LandingPageSnapshotData): boolean {
+export function snapshotHasScreenshotArtifact(snapshot: LandingPageSnapshotData): boolean {
   const key = snapshot.metadata?.screenshotArtifactKey;
   return typeof key === "string" && key.length > 0;
 }

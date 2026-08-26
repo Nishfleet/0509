@@ -42,6 +42,7 @@ import {
   getDiscoveryProviderState,
   getLaunchReadinessSignals,
   getSuccessfulProofCaptureStatsForUser,
+  countRecentSucceededProofScreenshotShare,
   getSuccessfulRunStatsForUserBetween,
   getOperatorRiskSummary,
   getOperatorSnapshot,
@@ -4057,6 +4058,7 @@ describe("createProofCapture", () => {
         {
           proofTargetId: target!.id,
           status: "succeeded",
+          screenshotArtifactKey: "landing-pages/2026-04-18/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpeg",
           extractorVersion: "proof-extractor-v1",
           idempotencyKey: "capture:watch-1:meta-boat-1",
           attemptedAt: "2026-04-18T16:00:00.000Z",
@@ -4068,6 +4070,7 @@ describe("createProofCapture", () => {
         {
           proofTargetId: target!.id,
           status: "succeeded",
+          screenshotArtifactKey: "landing-pages/2026-04-18/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpeg",
           extractorVersion: "proof-extractor-v1",
           idempotencyKey: "capture:watch-1:meta-boat-1",
           attemptedAt: "2026-04-18T16:00:00.000Z",
@@ -4140,7 +4143,7 @@ describe("createProofCapture", () => {
       skip_reason: null,
       failure_code: null,
       failure_reason: null,
-      screenshot_artifact_key: null,
+      screenshot_artifact_key: "landing-pages/2026-04-18/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpeg",
       html_artifact_key: null,
       extracted_fields_json: "{}",
       field_confidence_json: "{}",
@@ -4189,6 +4192,7 @@ describe("createProofCapture", () => {
         {
           proofTargetId: "target-1",
           status: "succeeded",
+          screenshotArtifactKey: "landing-pages/2026-04-18/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpeg",
           extractorVersion: "proof-extractor-v1",
           idempotencyKey: "capture:race",
           attemptedAt: "2026-04-18T16:00:00.000Z",
@@ -4243,6 +4247,75 @@ describe("createProofCapture", () => {
       ),
     ).rejects.toThrow(/incompatible status/);
     expect(mock.statements.some((entry) => entry.sql.includes("INSERT INTO proof_capture"))).toBe(false);
+  });
+
+  it("refuses a new succeeded proof capture without a screenshot artifact key (#1181)", async () => {
+    const mock = createMockDb();
+
+    await expect(
+      createProofCapture(
+        { DB: mock.db } as never,
+        {
+          proofTargetId: "target-1",
+          status: "succeeded",
+          extractorVersion: "proof-extractor-v1",
+          idempotencyKey: "capture:html-only",
+          attemptedAt: "2026-08-27T00:00:00.000Z",
+          succeededAt: "2026-08-27T00:00:01.000Z",
+        },
+      ),
+    ).rejects.toThrow(/proof_capture_succeeded_without_screenshot/);
+    expect(mock.statements.some((entry) => entry.sql.includes("INSERT INTO proof_capture"))).toBe(
+      false,
+    );
+  });
+
+  it("still records a failed proof capture without a screenshot artifact key", async () => {
+    const mock = createMockDb();
+
+    await createProofCapture(
+      { DB: mock.db } as never,
+      {
+        proofTargetId: "target-1",
+        status: "failed",
+        failureCode: "screenshot_required",
+        failureReason: "Landing-page proof capture failed.",
+        extractorVersion: "proof-extractor-v1",
+        idempotencyKey: "capture:failed-no-shot",
+      },
+    );
+
+    expect(mock.statements.some((entry) => entry.sql.includes("INSERT INTO proof_capture"))).toBe(
+      true,
+    );
+  });
+});
+
+describe("countRecentSucceededProofScreenshotShare", () => {
+  it("counts succeeded rows in a 48h window that carry a screenshot key", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "screenshot_artifact_key IS NOT NULL",
+        results: [{ succeeded: 34, with_screenshot: 0 }],
+      },
+    ]);
+
+    const result = await countRecentSucceededProofScreenshotShare(
+      { DB: mock.db } as never,
+      "2026-08-27T00:00:00.000Z",
+    );
+
+    expect(result).toEqual({
+      succeeded: 34,
+      withScreenshot: 0,
+      windowStartedAt: "2026-08-25T00:00:00.000Z",
+    });
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("screenshot_artifact_key IS NOT NULL"),
+    );
+    expect(statement?.sql).toContain("status = 'succeeded'");
+    expect(statement?.sql).toContain("succeeded_at >=");
+    expect(statement?.bindings).toEqual(["2026-08-25T00:00:00.000Z"]);
   });
 });
 
