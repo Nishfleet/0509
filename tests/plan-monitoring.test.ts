@@ -79,6 +79,164 @@ function observation(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function failedDirectWebsiteCapture(id: string) {
+  const attemptedAt = new Date().toISOString();
+  return {
+    id,
+    proofTargetId: "target-direct-1",
+    status: "failed" as const,
+    skipReason: null,
+    failureCode: "direct_website_proof_capture_failed",
+    failureReason: "Competitor website proof capture failed.",
+    screenshotArtifactKey: null,
+    htmlArtifactKey: null,
+    extractedFields: {},
+    fieldConfidence: {},
+    extractionWarnings: [],
+    captureMetadata: {},
+    renderMode: "mobile",
+    deviceProfile: "mobile_default",
+    extractorVersion: "lp-signals-v1",
+    idempotencyKey: `proof-request:watch-1:failed:${id}`,
+    attemptedAt,
+    succeededAt: null,
+    createdAt: attemptedAt,
+    updatedAt: attemptedAt,
+  };
+}
+
+const runDirectWebsiteWatchlist = async (options: {
+  plan?: string;
+  watchlistDailyAttempts?: number;
+  workspaceDailyAttempts?: number;
+  proofCapturesPerMonth?: number;
+  lastSuccessfulProofAt?: string | null;
+  recentTargetCaptures?: ReturnType<typeof failedDirectWebsiteCapture>[];
+}) => {
+  const createProofCapture = vi.fn().mockResolvedValue("proof-direct-skip");
+  const captureLandingPageSnapshot = vi.fn();
+  const plan = options.plan ?? "starter";
+  const lastSuccessfulProofAt = options.lastSuccessfulProofAt ?? null;
+  const planLimit = (digests: boolean, digestCadence: string) => ({
+    digests,
+    digestCadence,
+    ...(options.proofCapturesPerMonth !== undefined
+      ? { proofCapturesPerMonth: options.proofCapturesPerMonth }
+      : {}),
+  });
+
+  vi.doMock("~/lib/analysis.server", () => ({
+    buildAnalysisFields: vi.fn(() => []),
+  }));
+  vi.doMock("~/lib/creative-text.server", () => ({
+    captureCreativeText: vi.fn(),
+  }));
+  vi.doMock("~/lib/ad-source.server", () => ({
+    CommercialDiscoveryError: class CommercialDiscoveryError extends Error {
+      failureClass = "browser_launch_failed" as const;
+    },
+    resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+    searchAdsViaSourceResolver: vi.fn().mockResolvedValue({
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+    }),
+  }));
+  vi.doMock("~/lib/data.server", () => ({
+    addDigestItem: vi.fn(),
+    clearDigestItems: vi.fn(),
+    countProofCapturesForWatchlistSince: vi
+      .fn()
+      .mockResolvedValue(options.watchlistDailyAttempts ?? 0),
+    countProofCapturesForWorkspaceSince: vi
+      .fn()
+      .mockResolvedValue(options.workspaceDailyAttempts ?? 0),
+    createAdObservation: vi.fn(),
+    createDigestRun: vi.fn(),
+    createEventCandidate: vi.fn(),
+    createLandingPageSnapshot: vi.fn(),
+    createProofCapture,
+    createWatchEvent: vi.fn(),
+    createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+    finishWatchlistRun: vi.fn(),
+    getDigestByPeriod: vi.fn(),
+    getDigest: vi.fn().mockResolvedValue(null),
+    listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+    ...digestScheduleDataMocks(),
+    getUserDeliveryProfile: vi.fn().mockResolvedValue({
+      id: "user-1",
+      email: "owner@example.com",
+      name: "Owner",
+    }),
+    hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
+    getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
+    getSavedQuery: vi.fn(),
+    getWatchlist: vi.fn(),
+    hydrateAdsWithPersistedCreatives: vi.fn().mockResolvedValue([]),
+    listActiveWatchlists: vi.fn(),
+    listEventCandidates: vi.fn().mockResolvedValue([]),
+    listObservationsForRun: vi.fn().mockResolvedValue([]),
+    listProofCapturesForTarget: vi
+      .fn()
+      .mockResolvedValue(options.recentTargetCaptures ?? []),
+    listProofCapturesForTargets: vi.fn().mockResolvedValue(new Map()),
+    listLastSuccessfulProofCapturesForAds: vi.fn().mockResolvedValue(new Map()),
+    listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+    listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
+    listWatchEvents: vi.fn().mockResolvedValue([]),
+    listWatchEventsForRun: vi.fn().mockResolvedValue([]),
+    listAdsByIds: vi.fn().mockResolvedValue([]),
+    listWatchEventsBetween: vi.fn(),
+    listWatchlists: vi.fn(),
+    logMetaIntegrationStatus: vi.fn(),
+    touchWatchlistScanned: vi.fn(),
+    upsertAd: vi.fn(),
+    upsertDigestDelivery: vi.fn(),
+    upsertProofTarget: vi.fn().mockResolvedValue({
+      id: "target-direct-1",
+      watchlistId: "watch-1",
+      adId: null,
+      landingPageUrl: "https://competitor.example/onboarding",
+      canonicalPageIdentity: "competitor.example/onboarding",
+      proofTargetIdentity: "watch-1:none:competitor.example/onboarding",
+      lastCaptureAttemptAt: lastSuccessfulProofAt,
+      lastSuccessfulProofAt,
+      lastSuccessfulCaptureId: lastSuccessfulProofAt ? "proof-prev" : null,
+      createdAt: "2026-04-10T00:00:01.000Z",
+      updatedAt: "2026-04-10T00:00:01.000Z",
+    }),
+  }));
+  vi.doMock("~/lib/landing-pages.server", () => ({
+    captureLandingPageSnapshot,
+  }));
+  vi.doMock("~/lib/delivery.server", () => ({
+    deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+      attempts: 0,
+      channels: [],
+      details: [],
+    }),
+  }));
+  vi.doMock("~/lib/plan.server", () => ({
+    getUserPlan: vi.fn().mockResolvedValue(plan),
+    PLAN_LIMITS: {
+      free: planLimit(false, "none"),
+      starter: planLimit(true, "weekly"),
+      agency: planLimit(true, "daily_and_weekly"),
+    },
+  }));
+
+  const { runWatchlistManual } = await import("~/lib/monitoring.server");
+  await runWatchlistManual({} as never, {
+    ...watchlist,
+    targetId: "https://competitor.example/onboarding",
+    targetFingerprint: "fp-competitor-website",
+    targetLabel: "Competitor",
+    targetCountry: null,
+  });
+
+  return { createProofCapture, captureLandingPageSnapshot };
+};
+
 function digestScheduleDataMocks() {
   let jobs: Array<{
     id: string;
@@ -2465,6 +2623,84 @@ describe("runWatchlistManual cheap scan path", () => {
             eventType: "landing_page_url_changed",
           }),
         ],
+      }),
+    );
+  });
+
+  it("records skipped_due_to_budget when the workspace daily cap blocks direct website proof (#1184)", async () => {
+    const { createProofCapture, captureLandingPageSnapshot } =
+      await runDirectWebsiteWatchlist({
+        workspaceDailyAttempts: 40,
+      });
+
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+    expect(createProofCapture).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        proofTargetId: "target-direct-1",
+        status: "skipped_due_to_budget",
+        skipReason: "skipped_due_to_budget",
+      }),
+    );
+    expect(createProofCapture).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: "skipped_due_to_rate_limit" }),
+    );
+  });
+
+  it("records skipped_due_to_budget when the monthly cap blocks direct website proof (#1184)", async () => {
+    const { createProofCapture, captureLandingPageSnapshot } =
+      await runDirectWebsiteWatchlist({
+        proofCapturesPerMonth: 0,
+      });
+
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+    expect(createProofCapture).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        proofTargetId: "target-direct-1",
+        status: "skipped_due_to_budget",
+        skipReason: "skipped_due_to_budget",
+      }),
+    );
+  });
+
+  it("records skipped_due_to_budget, not rate_limit, when the free per-watchlist day cap blocks direct website proof (#1184)", async () => {
+    const { createProofCapture, captureLandingPageSnapshot } =
+      await runDirectWebsiteWatchlist({
+        plan: "free",
+        watchlistDailyAttempts: 12,
+      });
+
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+    expect(createProofCapture).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "skipped_due_to_budget",
+        skipReason: "skipped_due_to_budget",
+      }),
+    );
+    expect(createProofCapture).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: "skipped_due_to_rate_limit" }),
+    );
+  });
+
+  it("still records skipped_due_to_rate_limit when direct website proof is in failure cooldown (#1184)", async () => {
+    const { createProofCapture, captureLandingPageSnapshot } =
+      await runDirectWebsiteWatchlist({
+        recentTargetCaptures: [
+          failedDirectWebsiteCapture("proof-fail-1"),
+          failedDirectWebsiteCapture("proof-fail-2"),
+        ],
+      });
+
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+    expect(createProofCapture).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "skipped_due_to_rate_limit",
+        skipReason: "skipped_due_to_rate_limit",
       }),
     );
   });
