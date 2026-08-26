@@ -3,7 +3,9 @@ import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-rout
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { BrowseTrackedCompetitors } from "~/components/ads-internal-links";
 import type { AppEnv } from "~/lib/env.server";
+import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
 import {
   canonicalLinks,
@@ -40,7 +42,19 @@ export async function loader({ context }: LoaderFunctionArgs) {
     proofBrief = null;
   }
 
-  return { proofBrief };
+  let indexableAdsLinks: IndexableAdsLink[] = [];
+  try {
+    const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
+    indexableAdsLinks = await loadIndexableAdsInternalLinks(env);
+  } catch (error) {
+    console.warn(
+      "Competitor-monitoring indexable ads links load failed; omitting /ads links.",
+      { errorName: error instanceof Error ? error.name : typeof error },
+    );
+    indexableAdsLinks = [];
+  }
+
+  return { proofBrief, indexableAdsLinks };
 }
 
 function proofTimeLabel(iso: string | null | undefined): string {
@@ -215,7 +229,7 @@ export const categoryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
 ];
 
 export default function CompetitorMonitoringCategoryRoute() {
-  const { proofBrief } = useLoaderData<typeof loader>();
+  const { proofBrief, indexableAdsLinks = [] } = useLoaderData<typeof loader>();
   const structuredFaq = faqPageJsonLd(categoryFaqEntries);
 
   return (
@@ -458,6 +472,8 @@ export default function CompetitorMonitoringCategoryRoute() {
           </div>
         )}
       </section>
+
+      <BrowseTrackedCompetitors links={indexableAdsLinks} />
 
       <section className="ld-quiet" id="sources">
         <div className="ld-section-head">
