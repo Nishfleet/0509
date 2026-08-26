@@ -1,6 +1,7 @@
 import { Form, Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
+import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
@@ -12,6 +13,8 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+
+export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
 
 const pageDescription =
   "The Meta Ad Library is free and public — it's the source Five to Nine reads. What manual checking costs you, and what scheduled checks, diffs, saved screenshots, and email briefs add.";
@@ -196,6 +199,7 @@ export default function CompareMetaAdLibraryRoute() {
         <h2>
           Start with the free preview <span aria-hidden="true">→</span>
         </h2>
+        <CompareAdsExampleLink />
         <p className="ld-pricing-note">
           Paste a competitor website into the <Link to="/search">search preview</Link> — no
           account needed — and see what is publicly available before deciding anything. Questions
