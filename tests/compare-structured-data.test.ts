@@ -10,9 +10,13 @@ const PINNED_COMPARED_PRODUCT: Record<string, string> = {
   "compare.magicbrief": "MagicBrief",
   "compare.meta-ad-library": "Meta Ad Library",
   "compare.visualping": "Visualping",
+  "compare.visualping-ad-library": "Visualping",
   "compare.spyland": "Spyland",
   "compare.pulzifi": "Pulzifi",
   "compare.foreplay": "Foreplay",
+  "compare.foreplay-spyder": "Foreplay Spyder",
+  "compare.panoramata": "Panoramata",
+  "compare.adspyder": "AdSpyder",
 };
 
 function compareRouteIds(): string[] {
@@ -114,7 +118,14 @@ describe("every /compare/* page emits schema.org JSON-LD", () => {
     expect(serialized).not.toMatch(/[$₹€£]\s?\d/);
   });
 
-  it.each(["compare.magicbrief", "compare.meta-ad-library"])(
+  it.each([
+    "compare.magicbrief",
+    "compare.meta-ad-library",
+    "compare.panoramata",
+    "compare.foreplay-spyder",
+    "compare.adspyder",
+    "compare.visualping-ad-library",
+  ])(
     "%s keeps a FAQPage block because the page has a visible FAQ",
     async (routeId) => {
       const routeModule = (await import(`~/routes/${routeId}`)) as { default: () => ReactNode };

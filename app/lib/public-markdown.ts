@@ -60,6 +60,11 @@ const LLMS_PAGE_DETAILS: Record<
     title: "Five to Nine vs Visualping",
     description: "How Five to Nine compares with Visualping.",
   },
+  "/compare/visualping-ad-library": {
+    title: "Five to Nine vs Visualping for ad libraries",
+    description:
+      "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
+  },
   "/compare/spyland": {
     title: "Five to Nine vs Spyland",
     description: "How Five to Nine compares with Spyland.",
@@ -71,6 +76,20 @@ const LLMS_PAGE_DETAILS: Record<
   "/compare/foreplay": {
     title: "Five to Nine vs Foreplay",
     description: "How Five to Nine compares with Foreplay.",
+  },
+  "/compare/foreplay-spyder": {
+    title: "Five to Nine vs Foreplay Spyder",
+    description:
+      "How Five to Nine's change diffs compare with Foreplay Spyder's ad and landing-page archive.",
+  },
+  "/compare/panoramata": {
+    title: "Five to Nine vs Panoramata",
+    description:
+      "How Five to Nine compares with Panoramata on ads-plus-pages monitoring and list prices.",
+  },
+  "/compare/adspyder": {
+    title: "Five to Nine vs AdSpyder",
+    description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
   },
   "/switch/magicbrief": {
     title: "Switch from MagicBrief",
