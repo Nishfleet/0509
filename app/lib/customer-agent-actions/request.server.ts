@@ -36,6 +36,10 @@ const IDEMPOTENCY_IGNORED_ACTIONS = new Set<CustomerAgentActionName>([
   "memory.list",
   "client_room.list",
   "support_case.list",
+  "get_change_history",
+  "get_offer_state_at",
+  "diff_offer",
+  "list_suppressed",
 ]);
 
 export interface CustomerAgentActionContext {

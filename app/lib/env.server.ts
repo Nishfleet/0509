@@ -122,6 +122,14 @@ export interface AppEnv {
    * still renders logged out.
    */
   PUBLIC_OFFER_TIMELINE_SHARE?: string;
+  /**
+   * BET 6 packaging flag (#1108). Unset/"0" keeps change-history MCP/API
+   * tools on the current Agency plan check. Explicit "1"/"true"/"yes"/"on"
+   * lets a worker open those four read tools to any plan that already has a
+   * customer API key, without changing who can mint keys. Flip only after
+   * Nish sign-off.
+   */
+  CHANGE_HISTORY_READ_OPEN?: string;
   PRESENCE_WEBSITE_ROLLOUT?: string;
   PRESENCE_X_ROLLOUT?: string;
   PRESENCE_REDDIT_ROLLOUT?: string;
