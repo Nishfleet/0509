@@ -1,5 +1,11 @@
-import { meterWidthClass } from "~/lib/meter-width";
+import { Link } from "react-router";
+
+import {
+  AD_AGGRESSION_METHODOLOGY_PATH,
+  MIN_AGGRESSION_WINDOW_DAYS,
+} from "~/lib/aggression-score";
 import type { BrandPageAggression } from "~/lib/brand-page.server";
+import { meterWidthClass } from "~/lib/meter-width";
 
 const COMPONENT_ROWS: { key: keyof BrandPageAggression["components"]; label: string }[] = [
   { key: "velocity", label: "Velocity" },
@@ -24,8 +30,9 @@ export function BrandScoreCard({ aggression }: { aggression: BrandPageAggression
       <div className="f9-ads-score-card f9-ads-score-thin">
         <div className="f9-ads-score-label">Ad Aggression Score</div>
         <p className="f9-ads-score-thin-note">
-          Not enough history yet to score — we need at least 14 days of watching before we put a
-          number on it. Start watching and the score fills in.
+          Not enough history yet to score — we need at least {MIN_AGGRESSION_WINDOW_DAYS} days of
+          watching before we put a number on it. Start watching and the score fills in.{" "}
+          <Link to={AD_AGGRESSION_METHODOLOGY_PATH}>How the score is computed</Link>
         </p>
       </div>
     );
@@ -62,8 +69,8 @@ export function BrandScoreCard({ aggression }: { aggression: BrandPageAggression
         })}
       </div>
       <p className="f9-ads-score-formula">
-        Four parts, 0–25 each — they add up to the score, no hidden weighting. The whole formula is
-        public.
+        Four parts, 0–25 each — they add up to the score, no hidden weighting.{" "}
+        <Link to={AD_AGGRESSION_METHODOLOGY_PATH}>How the score is computed</Link>
       </p>
     </div>
   );
