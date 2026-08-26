@@ -23,6 +23,9 @@ describe("public SEO files", () => {
     // does not index the signup entry (see NOINDEX_ACTION_SURFACES in seo.ts).
     expect(sitemap?.body).toContain("<loc>https://0509.io/search</loc>");
     expect(sitemap?.body).not.toContain("<loc>https://0509.io/auth/signup</loc>");
+    // Restored after the #944/#945 404s cleared (#963): /pricing must stay in
+    // the published sitemap with the compare pages, never behind a later drop.
+    expect(sitemap?.body).toContain("<loc>https://0509.io/pricing</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/magicbrief</loc>");
     expect(sitemap?.body).toContain(
       "<loc>https://0509.io/compare/meta-ad-library</loc>",
