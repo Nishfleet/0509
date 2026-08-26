@@ -30,6 +30,10 @@ export const AGGRESSION_TESTING_SATURATION_SHARE = 0.5;
 
 export const AGGRESSION_FORMULA_VERSION = 1;
 
+/** Public methodology page for the formula documented in this module. */
+export const AD_AGGRESSION_METHODOLOGY_PATH =
+	"/methodology/ad-aggression-score" as const;
+
 export interface AggressionScoreComponents {
 	/** 0-25: launch rate — new ads per week over the observed window. */
 	velocity: number;
@@ -104,6 +108,31 @@ const AGGRESSION_BANDS: readonly (AggressionBand & { max: number })[] = [
 		interpretation: "Running an all-out launch and testing push.",
 	},
 ];
+
+export interface PublicAggressionBand extends AggressionBand {
+	minScore: number;
+	maxScore: number;
+}
+
+/**
+ * Inclusive score ranges for the public methodology page. Derived from the
+ * same band table `aggressionBandForScore` uses, so the published ranges
+ * cannot drift from the scorer.
+ */
+export function publicAggressionBands(): readonly PublicAggressionBand[] {
+	let minScore = 0;
+	return AGGRESSION_BANDS.map((band) => {
+		const published = {
+			id: band.id,
+			label: band.label,
+			interpretation: band.interpretation,
+			minScore,
+			maxScore: band.max,
+		};
+		minScore = band.max + 1;
+		return published;
+	});
+}
 
 export function aggressionBandForScore(score: number): AggressionBand {
 	const band =
