@@ -79,6 +79,23 @@ describe("stripScriptAndStyle", () => {
     const result = stripScriptAndStyle("<!--<!- text -->safe");
     expect(hasCommentOpenToken(result)).toBe(false);
   });
+
+  it("strips CodeQL incomplete-multi nested comment sequences until <!-- is gone", () => {
+    // CodeQL js/incomplete-multi-character-sanitization qhelp: a single
+    // replace of /<!--|--!?>/g on these inputs re-forms <!--.
+    const nestedBang = stripScriptAndStyle("<!<!--- comment --->>");
+    expect(hasCommentOpenToken(nestedBang)).toBe(false);
+
+    const smuggled = stripScriptAndStyle("<<!--- x --->>");
+    expect(hasCommentOpenToken(smuggled)).toBe(false);
+    expect(smuggled).not.toMatch(/<!--/);
+  });
+
+  it("does not re-form <!-- after removing one nested opener (the overlapping <!<!----> case)", () => {
+    const result = stripScriptAndStyle("<!<!---->safe");
+    expect(hasCommentOpenToken(result)).toBe(false);
+    expect(result.endsWith("safe")).toBe(true);
+  });
 });
 
 describe("stripAllTags", () => {
