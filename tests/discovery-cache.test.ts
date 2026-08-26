@@ -85,6 +85,16 @@ describe("isStaleZeroResultDiscoveryCacheEntry (advertiser-filter contract epoch
     ).toBe(true);
   });
 
+  it("rejects advertiser-mode zeros written before the keyword-unordered scrape contract", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({
+        adCount: 0,
+        mode: "advertiser",
+        filterEpoch: "advertiser-evidence-filter-v1",
+      }),
+    ).toBe(true);
+  });
+
   it("accepts an advertiser-mode zero stamped with the current epoch", () => {
     expect(
       isStaleZeroResultDiscoveryCacheEntry({
@@ -108,7 +118,7 @@ describe("isStaleZeroResultDiscoveryCacheEntry (advertiser-filter contract epoch
   });
 
   it("pins the current epoch value", () => {
-    expect(DISCOVERY_ADVERTISER_FILTER_EPOCH).toBe("advertiser-evidence-filter-v1");
+    expect(DISCOVERY_ADVERTISER_FILTER_EPOCH).toBe("advertiser-keyword-unordered-v2");
   });
 });
 
