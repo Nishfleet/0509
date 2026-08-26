@@ -691,15 +691,33 @@ export interface CrawlPagesInput {
 
 const HREF_PATTERN = /<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/gi;
 
+/** Allowlisted URL schemes. Any absolute URL whose scheme is not in this set
+ * is rejected before it can reach a rendered surface (href, img src, digest
+ * email). Relative URLs have no scheme and resolve against the crawl base. */
+const SAFE_URL_SCHEMES = new Set(["http:", "https:", "mailto:", "tel:"]);
+
+/** Allowlist check for URL schemes. Relative URLs (no scheme) resolve against
+ * the placeholder origin and come back http; absolute URLs keep their own
+ * scheme. Anything outside the allowlist (data:, vbscript:, javascript:,
+ * file:, ...) returns false so the caller drops it. */
+function hasSafeUrlScheme(href: string): boolean {
+  try {
+    const parsed = new URL(href, "http://placeholder.invalid/");
+    return SAFE_URL_SCHEMES.has(parsed.protocol.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 /** Extract candidate hrefs from raw HTML (absolute resolution happens in the
- * crawler; only http(s) schemes survive canonicalization). */
+ * crawler; only allowlisted schemes survive extraction). */
 export function extractInternalLinkHrefs(html: string): string[] {
   if (typeof html !== "string" || html === "") return [];
   const out: string[] = [];
   let match: RegExpExecArray | null;
   while ((match = HREF_PATTERN.exec(html)) !== null) {
     const href = match[1]?.trim() ?? "";
-    if (href === "" || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+    if (href === "" || href.startsWith("#") || !hasSafeUrlScheme(href)) {
       continue;
     }
     if (href.length > 2048) continue;
