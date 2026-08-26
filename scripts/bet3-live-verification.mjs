@@ -715,6 +715,7 @@ export function evaluateTermination(
   const timelineReachableCheck = {
     name: "timeline_route_reachable",
     ok: non200Domains.length === 0,
+    skip: false,
     observed: non200Domains.length,
     threshold: 0,
     detail:
@@ -733,6 +734,7 @@ export function evaluateTermination(
   const demoBackfillCheck = {
     name: "demo_backfill_present",
     ok: demoMissing.length === 0,
+    skip: false,
     observed: DEMO_BRAND_PAGE_DOMAINS.length - demoMissing.length,
     threshold: DEMO_BRAND_PAGE_DOMAINS.length,
     detail:
@@ -753,6 +755,7 @@ export function evaluateTermination(
   const watchedCompetitorCheck = {
     name: "watched_competitor_three_screenshot_states",
     ok: qualifyingWatched.length > 0,
+    skip: false,
     observed: qualifyingWatched.length,
     threshold: 1,
     detail: bestWatched
@@ -769,6 +772,7 @@ export function evaluateTermination(
   const shareCheck = {
     name: "share_link_present_and_logged_out",
     ok: shareQualifying.length > 0,
+    skip: false,
     observed: shareQualifying.length,
     threshold: 1,
     detail:
@@ -788,6 +792,7 @@ export function evaluateTermination(
   const noReceipt404sCheck = {
     name: "no_receipt_404s",
     ok: brokenReceipts.length === 0,
+    skip: false,
     observed: brokenReceipts.length,
     threshold: 0,
     detail:
