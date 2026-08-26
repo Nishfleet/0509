@@ -264,7 +264,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
     upsertProofTarget,
   } = await import("~/lib/data.server");
   const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-  const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+  const { captureLandingPageSnapshot, snapshotHasScreenshotArtifact } = await import(
+    "~/lib/landing-pages.server"
+  );
   const { compensateUncommittedProofArtifacts } = await import(
     "~/lib/proof-artifact-retention.server"
   );
@@ -317,10 +319,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
   });
   const snapshot =
     requestedProofProvider === "browserless"
-      ? await (await import("~/lib/browser-run.server")).captureBrowserlessProofSnapshot(env, proofUrl)
-      : await captureLandingPageSnapshot(env, proofUrl);
+      ? await (await import("~/lib/browser-run.server")).captureBrowserlessProofSnapshot(
+          env,
+          proofUrl,
+          { requireScreenshot: true },
+        )
+      : await captureLandingPageSnapshot(env, proofUrl, {
+          preferRendered: true,
+          requireScreenshot: true,
+        });
 
-  if (!snapshot) {
+  if (!snapshot || !snapshotHasScreenshotArtifact(snapshot)) {
     const blocker =
       requestedProofProvider === "browserless"
         ? "browserless_proof_capture_failed"
