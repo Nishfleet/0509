@@ -3886,6 +3886,8 @@ one signal-green accent.
 }
 
 .f9-home .ld-hero .f9-announcement {
+  display: flex;
+  width: fit-content;
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--ld-ink);
   border-radius: 999px;
@@ -3903,6 +3905,19 @@ one signal-green accent.
 }
 
 .f9-home .ld-hero .f9-announcement span { color: var(--ld-ink-soft); }
+
+/* MagicBrief wind-down callout (issue 965): same pill as the free-preview
+   announcement; only the accent changes so the migration path is visible
+   next to it. display:flex + fit-content on .f9-announcement stacks the
+   two pills instead of sitting them on one row. */
+.f9-home .ld-hero .f9-migration-callout {
+  box-shadow: inset 0 0 0 1.5px var(--ld-red);
+}
+
+.f9-home .ld-hero .f9-migration-callout strong {
+  background: var(--ld-red);
+  color: var(--ld-card);
+}
 
 .f9-home .f9-growth-pricing h1,
 .f9-home .f9-growth-pricing h2 { color: var(--ld-ink); }
