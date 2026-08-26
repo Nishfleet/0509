@@ -16,6 +16,9 @@ concurrency:
 
 permissions: {}
 
+env:
+  VITEST_TOTAL_SHARDS: "4"
+
 jobs:
   codex-node-checks:
     # Required context (branch protection). It must be structurally incapable
@@ -25,7 +28,9 @@ jobs:
     # an if: can skip on cancellation or any future condition edit). The
     # authorizer is step 1 of THIS job, so a fork PR or unapproved dispatch
     # candidate fails the required check with a real failure - a gate that
-    # cannot verify must say no, never render green or skipped.
+    # cannot verify must say no, never render green or skipped. This contract
+    # is identical for the sibling shard jobs below; tests/required-context-no-skip.test.ts
+    # enforces it structurally across all of them.
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -85,7 +90,6 @@ jobs:
           if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
             exit 1
           fi
-
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ".node-version"
@@ -100,12 +104,249 @@ jobs:
           fi
       - name: Build
         run: npm run build
-      - name: Test
-        run: npm run test
+      - name: Test (shard 1 of ${{ env.VITEST_TOTAL_SHARDS }})
+        run: |
+          set -euo pipefail
+          bash ./scripts/ci-vitest-run.sh -- \
+            npx --no-install vitest run --configLoader runner \
+              --shard=1/${{ env.VITEST_TOTAL_SHARDS }} \
+              --project node --coverage
+          bash ./scripts/ci-vitest-run.sh -- \
+            npx --no-install vitest run --configLoader runner \
+              --project workers
       - name: Typecheck
         env:
-          # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while
-          # this project's composite TypeScript build needs more headroom.
-          # Keep it below MemoryHigh/MemoryMax so systemd still fails closed.
           NODE_OPTIONS: --max-old-space-size=2048
         run: npm run typecheck
+
+  codex-node-checks-shard-2:
+    # Required context (branch protection) — shard 2 of 4. Same no-skip
+    # contract as codex-node-checks above: no job-level if:/needs:, authorizer
+    # is step 1, fork PR fails with a real failure. See that job's header.
+    name: codex-node-checks-shard-2
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 270
+    steps:
+      - name: Authorize exact verification candidate
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              test -z "$EXPECTED_SHA"
+              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+              [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
+              ;;
+            workflow_dispatch)
+              test "$GITHUB_REF" = "refs/heads/main"
+              test "$GITHUB_RUN_ATTEMPT" = "1"
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              ;;
+            merge_group)
+              test -z "$EXPECTED_SHA"
+              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.authorize.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized checkout
+        shell: bash
+        env:
+          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
+          else
+            npm install --ignore-scripts
+          fi
+      - name: Test (shard 2 of ${{ env.VITEST_TOTAL_SHARDS }})
+        run: |
+          set -euo pipefail
+          bash ./scripts/ci-vitest-run.sh -- \
+            npx --no-install vitest run --configLoader runner \
+              --shard=2/${{ env.VITEST_TOTAL_SHARDS }} \
+              --project node
+
+  codex-node-checks-shard-3:
+    # Required context (branch protection) — shard 3 of 4. Same no-skip
+    # contract as codex-node-checks above.
+    name: codex-node-checks-shard-3
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 270
+    steps:
+      - name: Authorize exact verification candidate
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              test -z "$EXPECTED_SHA"
+              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+              [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
+              ;;
+            workflow_dispatch)
+              test "$GITHUB_REF" = "refs/heads/main"
+              test "$GITHUB_RUN_ATTEMPT" = "1"
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              ;;
+            merge_group)
+              test -z "$EXPECTED_SHA"
+              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.authorize.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized checkout
+        shell: bash
+        env:
+          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
+          else
+            npm install --ignore-scripts
+          fi
+      - name: Test (shard 3 of ${{ env.VITEST_TOTAL_SHARDS }})
+        run: |
+          set -euo pipefail
+          bash ./scripts/ci-vitest-run.sh -- \
+            npx --no-install vitest run --configLoader runner \
+              --shard=3/${{ env.VITEST_TOTAL_SHARDS }} \
+              --project node
+
+  codex-node-checks-shard-4:
+    # Required context (branch protection) — shard 4 of 4. Same no-skip
+    # contract as codex-node-checks above.
+    name: codex-node-checks-shard-4
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 270
+    steps:
+      - name: Authorize exact verification candidate
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              test -z "$EXPECTED_SHA"
+              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+              [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
+              ;;
+            workflow_dispatch)
+              test "$GITHUB_REF" = "refs/heads/main"
+              test "$GITHUB_RUN_ATTEMPT" = "1"
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              ;;
+            merge_group)
+              test -z "$EXPECTED_SHA"
+              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.authorize.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized checkout
+        shell: bash
+        env:
+          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
+          else
+            npm install --ignore-scripts
+          fi
+      - name: Test (shard 4 of ${{ env.VITEST_TOTAL_SHARDS }})
+        run: |
+          set -euo pipefail
+          bash ./scripts/ci-vitest-run.sh -- \
+            npx --no-install vitest run --configLoader runner \
+              --shard=4/${{ env.VITEST_TOTAL_SHARDS }} \
+              --project node
