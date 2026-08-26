@@ -62,6 +62,35 @@ describe("sneaker-resale locale landing pages", () => {
     }
   });
 
+  it("emits reciprocal hreflang from no-arg links() and a locale canonical from loaderData", async () => {
+    const { links, meta } = await import("~/routes/$locale.sneaker-resale");
+
+    // This router version calls links() with no args (see ads.$domain.tsx).
+    const headLinks = links();
+    expect(headLinks).toContainEqual({
+      rel: "alternate",
+      hrefLang: "de",
+      href: "https://0509.io/de/sneaker-resale",
+    });
+    expect(headLinks).toContainEqual({
+      rel: "alternate",
+      hrefLang: "x-default",
+      href: "https://0509.io/sneaker-resale",
+    });
+
+    const tags = meta({
+      loaderData: { locale: "de" },
+      params: { locale: "de" },
+      location: { pathname: "/de/sneaker-resale" },
+    } as never) as Array<Record<string, string>>;
+    expect(tags).toContainEqual({
+      tagName: "link",
+      rel: "canonical",
+      href: "https://0509.io/de/sneaker-resale",
+    });
+    expect(tags).toContainEqual({ property: "og:locale", content: "de_DE" });
+  });
+
   it("404s unknown locale prefixes and the English prefix duplicate", async () => {
     const { loader } = await import("~/routes/$locale.sneaker-resale");
     const context = { cloudflare: { env: {} } };
