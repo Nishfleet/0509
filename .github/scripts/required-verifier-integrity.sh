@@ -128,6 +128,40 @@ def collect_implementers(bundle):
     return out
 
 
+def apply_actions_event_implementers(bundle):
+    """Fill missing author from the GitHub Actions event payload.
+
+    pull_request_target already writes GITHUB_EVENT_PATH. Reading it is a
+    local file, not network, so fixtures stay hermetic when GITHUB_ACTIONS
+    is unset. Bundle author always wins when already set. Live
+    required-verifier-integrity.yml already passes author; this is the
+    same fallback gate-integrity uses until 0509#1176 lands.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    if norm_login(bundle.get("author") or ""):
+        return
+    path = os.environ.get("GITHUB_EVENT_PATH") or ""
+    if not path or not os.path.isfile(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as fh:
+            event = json.load(fh)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return
+    if not isinstance(event, dict):
+        return
+    pr = event.get("pull_request")
+    if not isinstance(pr, dict):
+        return
+    user = pr.get("user")
+    if not isinstance(user, dict):
+        return
+    login = user.get("login")
+    if isinstance(login, str) and login.strip():
+        bundle["author"] = login.strip()
+
+
 def identity_rejects_attestor(user, implementers):
     """Reason this attestor is forbidden, or None.
 
@@ -301,6 +335,7 @@ def main():
     extra_implementers = bundle.get("implementers")
     if extra_implementers is not None and not isinstance(extra_implementers, list):
         return fail(["context bundle implementers is not an array"])
+    apply_actions_event_implementers(bundle)
     implementers = collect_implementers(bundle)
     protected = set(bundle.get("protected_files") or [])
 

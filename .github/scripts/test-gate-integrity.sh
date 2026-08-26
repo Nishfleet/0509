@@ -193,6 +193,43 @@ fixture worker_and_human_implement_human_attests '{
   "attestations": ATTEST, "permissions": '"$WORKER_ADMIN"'}'
 run_fixture worker_and_human_implement_human_attests FAIL "same identity implemented and attested"
 
+# Live Actions fallback (0509#1140): the current gate-integrity.yml does not
+# put author in the bundle (App has no Workflows permission). On GitHub
+# Actions the decision script reads pull_request.user.login from
+# GITHUB_EVENT_PATH so the identity split still fires. Bundle author wins
+# when already set. A malformed event file must not crash the gate.
+WORKER_EVENT='{"pull_request":{"user":{"login":"nishfleet-worker[bot]"}}}'
+HUMAN_EVENT='{"pull_request":{"user":{"login":"nish3451"}}}'
+
+fixture actions_event_worker_self_attest '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": '"$WORKER_SELF_ATTEST"', "permissions": '"$WORKER_ADMIN"'}'
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/actions_event_worker_self_attest.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/actions_event_worker_self_attest.event.json" \
+  run_fixture actions_event_worker_self_attest FAIL "worker identity cannot attest"
+
+fixture actions_event_worker_human_attest '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": '"$WORKER_ADMIN"'}'
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/actions_event_worker_human_attest.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/actions_event_worker_human_attest.event.json" \
+  run_fixture actions_event_worker_human_attest PASS "gate-path waived"
+
+fixture actions_event_does_not_override_bundle '{
+  "author": "nish3451",
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/actions_event_does_not_override_bundle.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/actions_event_does_not_override_bundle.event.json" \
+  run_fixture actions_event_does_not_override_bundle PASS "gate-path waived"
+
+fixture actions_event_malformed '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+printf 'not json' > "$WORK_DIR/actions_event_malformed.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/actions_event_malformed.event.json" \
+  run_fixture actions_event_malformed PASS "gate-path waived"
+
 fixture workflow_attested_stale '{
   "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
   "attestations": [{"user": "nish3451", "sha": OLD}], "permissions": ADMIN}'

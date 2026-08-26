@@ -571,6 +571,73 @@ build_bundle "35-overlap-worker"
 run_fixture "worker plus human implementers block owner self-attest" FAIL "$WORK_DIR/35-overlap-worker.json" \
   "same identity implemented and attested"
 
+# 36-39. Live Actions fallback: bundle omits author, GITHUB_EVENT_PATH
+# supplies pull_request.user.login. Same identity split as fixtures 32-34.
+# Bundle author wins when already set. Malformed event must not crash.
+WORKER_EVENT='{"pull_request":{"user":{"login":"nishfleet-worker[bot]"}}}'
+
+FIXTURE_SRC='{
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "'"$WORKER_BOT"'", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "36-actions-event-worker-self"
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/36-actions-event-worker-self.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/36-actions-event-worker-self.event.json" \
+  run_fixture "actions event worker self-attest fails" FAIL "$WORK_DIR/36-actions-event-worker-self.json" \
+  "worker identity cannot attest"
+
+FIXTURE_SRC='{
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "nish3451", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "37-actions-event-worker-human"
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/37-actions-event-worker-human.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/37-actions-event-worker-human.event.json" \
+  run_fixture "actions event worker author human attest passes" PASS "$WORK_DIR/37-actions-event-worker-human.json" \
+  "::warning title=Verifier integrity: sole-admin attestation"
+
+FIXTURE_SRC='{
+  "author": "nish3451",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "nish3451", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": {"nish3451": "admin"},
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "38-actions-event-bundle-wins"
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/38-actions-event-bundle-wins.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/38-actions-event-bundle-wins.event.json" \
+  run_fixture "actions event does not override bundle author" PASS "$WORK_DIR/38-actions-event-bundle-wins.json" \
+  "::warning title=Verifier integrity: sole-admin attestation"
+
+FIXTURE_SRC='{
+  "author": "nish3451",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "nish3451", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": {"nish3451": "admin"},
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "39-actions-event-malformed"
+printf 'not json' > "$WORK_DIR/39-actions-event-malformed.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/39-actions-event-malformed.event.json" \
+  run_fixture "malformed actions event does not crash" PASS "$WORK_DIR/39-actions-event-malformed.json" \
+  "::warning title=Verifier integrity: sole-admin attestation"
+
 echo ""
 if [[ $FAIL_COUNT -eq 0 ]]; then
   echo "ALL FIXTURES PASS ($PASS_COUNT/$PASS_COUNT)"
