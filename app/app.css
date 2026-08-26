@@ -2589,7 +2589,7 @@ one signal-green accent.
 }
 
 .f9-home .ld-hero .f9-announcement {
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 @media (max-width: 600px) {
@@ -4736,9 +4736,9 @@ one signal-green accent.
 }
 
 .ld-hero-grid .ld-wall {
-  /* Keep the proof wall forceful without pushing the no-account search below
-     the first desktop viewport. */
-  font-size: clamp(2.6rem, 5vw, 4.5rem);
+  /* Safe BET 9 wall (#1173): buyer-job H1 plus a proof strip must still
+     leave the search command in the 1440x900 first viewport. */
+  font-size: clamp(2.2rem, 3.6vw, 3.2rem);
 }
 
 .ld-deck-copy {
@@ -4746,7 +4746,7 @@ one signal-green accent.
   line-height: 1.5;
   font-weight: 500;
   max-width: 540px;
-  margin: clamp(16px, 2vw, 24px) 0 0;
+  margin: clamp(10px, 1.4vw, 14px) 0 0;
 }
 
 .ld-deck-copy b {
@@ -4758,7 +4758,7 @@ one signal-green accent.
 
 .ld-hero-copy .ld-command {
   width: min(100%, 680px);
-  margin-top: clamp(22px, 3vw, 32px);
+  margin-top: clamp(12px, 1.8vw, 18px);
 }
 
 .ld-hero-copy .ld-honest {
@@ -5006,6 +5006,123 @@ one signal-green accent.
 .ld-brief-strip li:last-child { border-bottom: 0; }
 
 .ld-brief-strip small { color: var(--ld-ink-faint); }
+
+/* BET 9 Safe — live proof demoted from the H1 to a strip under it (#1173). */
+.ld-proof-strip {
+  margin: 12px 0 0;
+  border: 1.5px solid var(--ld-ink);
+  background: var(--ld-card);
+  box-shadow: 6px 6px 0 rgba(14, 13, 10, 0.12);
+  max-width: 920px;
+}
+
+.ld-proof-strip-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1.5px solid var(--ld-ink);
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  font-family: var(--ld-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ld-proof-strip-head b { font-weight: 600; }
+
+.ld-proof-strip-head .ld-proof-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ld-green);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.ld-proof-strip-head .ld-proof-live::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background: var(--ld-green);
+}
+
+.ld-proof-strip-head .ld-proof-time {
+  margin-left: auto;
+  color: var(--ld-ink-faint);
+  font-weight: 500;
+}
+
+.ld-proof-strip-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 0;
+  align-items: stretch;
+}
+
+.ld-proof-hook {
+  padding: 10px 14px;
+  border-right: 1.5px solid var(--ld-ink);
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: clamp(0.95rem, 1.3vw, 1.15rem);
+  line-height: 1.25;
+  color: var(--ld-ink);
+}
+
+.ld-proof-hook .ld-proof-quote {
+  display: block;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+
+.ld-proof-hook .ld-proof-attrib {
+  display: block;
+  margin-top: 10px;
+  font-family: var(--ld-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ld-ink-soft);
+}
+
+.ld-proof-trail {
+  padding: 10px 12px;
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--ld-ink-soft);
+}
+
+.ld-proof-trail ul { list-style: none; margin: 0; padding: 0; }
+
+.ld-proof-trail li {
+  padding: 4px 0;
+  border-bottom: 1px dotted var(--ld-line);
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.ld-proof-trail li:last-child { border-bottom: 0; }
+
+.ld-proof-trail li .ld-proof-signal {
+  color: var(--ld-green-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ld-proof-strip-foot {
+  padding: 10px 18px;
+  border-top: 1px solid var(--ld-line);
+  font-family: var(--ld-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  color: var(--ld-ink-faint);
+  text-transform: uppercase;
+}
 
 @media (max-width: 1100px) {
   .ld-stack { height: 520px; max-width: 400px; }
@@ -16430,6 +16547,23 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   .ld-ticker { padding: 6px 0; }
   .ld-hero { padding-top: 10px; }
   .ld-hero-grid .ld-wall { font-size: 1.75rem; }
+  /* Compact the demoted proof strip so the command still clears the fold. */
+  .ld-proof-strip { margin-top: 8px; box-shadow: 4px 4px 0 rgba(14, 13, 10, 0.12); }
+  .ld-proof-strip-head {
+    padding: 6px 10px;
+    font-size: 0.64rem;
+    gap: 8px;
+  }
+  .ld-proof-strip-body { grid-template-columns: 1fr; }
+  .ld-proof-hook {
+    padding: 8px 10px;
+    font-size: 0.95rem;
+    border-right: 0;
+  }
+  .ld-proof-hook .ld-proof-attrib { margin-top: 6px; }
+  .ld-proof-trail,
+  .ld-proof-strip-foot { display: none; }
+  .ld-hero-copy { overflow-x: clip; }
   .ld-deck-copy { font-size: 0.88rem; line-height: 1.35; margin-top: 8px; }
   .ld-hero-copy .ld-command { margin-top: 10px; }
   .ld-case { margin-bottom: 6px; gap: 8px; font-size: 0.7rem; }
