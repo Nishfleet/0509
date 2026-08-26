@@ -15,12 +15,12 @@ import {
 import { sendMonthlyCustomerRecaps } from "../app/lib/monthly-recap.server";
 import {
   isPublicMarkdownPage,
-  LLMS_TEXT,
+  buildLlmsText,
   PUBLIC_MARKDOWN,
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
 import { publicSeoFileForPathname } from "../app/lib/seo";
-import { publicSitemapFile } from "../app/lib/sitemap.server";
+import { loadIndexableBrandPageEntries, publicSitemapFile } from "../app/lib/sitemap.server";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import {
   observeScheduledTask,
@@ -103,7 +103,11 @@ export default {
     }
 
     if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/llms.txt") {
-      return markdownResponse(request, LLMS_TEXT);
+      // Same indexable /ads/:domain set as sitemap.xml — never list a noindex shell.
+      return markdownResponse(
+        request,
+        buildLlmsText(await loadIndexableBrandPageEntries(env)),
+      );
     }
     if (
       (request.method === "GET" || request.method === "HEAD") &&

@@ -549,6 +549,57 @@ describe("buildSitemapXml", () => {
   });
 });
 
+describe("llms.txt parity with dynamic sitemap brand paths", () => {
+  it("includes every indexable sitemap brand path and omits noindex shells", async () => {
+    const { buildLlmsText } = await import("~/lib/public-markdown");
+    const now = new Date();
+    const nikeAd = {
+      ...verifiedAd,
+      metaAdId: "meta-nike-1",
+      landingPageUrl: "https://nike.com/shop",
+      domainMatch: {
+        ...verifiedAd.domainMatch,
+        reason: "Landing page matches nike.com",
+        matchedDomain: "nike.com",
+      },
+    };
+    const indexable = cacheRow({
+      cache_key: "search-v2:domain:nike.com:exact:meta_library_browser:all:page-1",
+      payload: { ...basePayload, displayDomain: "nike.com", ads: [nikeAd] },
+    });
+    const stale = cacheRow({
+      cache_key: "search-v2:domain:stale.com:exact:meta_library_browser:all:page-1",
+      payload: { ...basePayload, displayDomain: "stale.com" },
+      fetched_at: isoAgo(BRAND_PAGE_FRESH_FOR_INDEXING_MS + DAY_MS),
+    });
+    const demo = cacheRow({
+      cache_key: "search-v2:domain:demo.com:exact:meta_library_browser:all:page-1",
+      payload: { ...basePayload, displayDomain: "demo.com", source: "demo", provider: "demo" },
+    });
+    const otherCountry = cacheRow({
+      cache_key: "search-v2:domain:myntra.com:exact:meta_library_browser:india:page-1",
+      payload: { ...basePayload, displayDomain: "myntra.com" },
+    });
+
+    const brandEntries = indexableBrandPageEntriesFromRows(
+      [indexable, stale, demo, otherCountry, cacheRow()],
+      now,
+    );
+    const sitemapAds = [...buildSitemapXml(brandEntries).matchAll(/https:\/\/0509\.io\/ads\/[^<]+/g)].map(
+      (match) => match[0],
+    );
+    const llmsAds = [...buildLlmsText(brandEntries).matchAll(/https:\/\/0509\.io\/ads\/[^)]+/g)].map(
+      (match) => match[0],
+    );
+
+    expect(sitemapAds).toEqual(["https://0509.io/ads/nike.com", "https://0509.io/ads/nykaa.com"]);
+    expect(llmsAds).toEqual(sitemapAds);
+    expect(llmsAds).not.toContain("https://0509.io/ads/stale.com");
+    expect(llmsAds).not.toContain("https://0509.io/ads/demo.com");
+    expect(llmsAds).not.toContain("https://0509.io/ads/myntra.com");
+  });
+});
+
 describe("loadIndexableBrandPageEntries (D1 read)", () => {
   let queryAll: ReturnType<typeof vi.fn>;
 
