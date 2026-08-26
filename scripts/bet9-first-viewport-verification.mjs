@@ -19,6 +19,12 @@ import { chromium } from "@playwright/test";
 
 export const DEFAULT_BASE_URL = "https://0509.io";
 export const FOLD_EPSILON_PX = 1;
+// Nested-overflow tolerance mirrors the Gate-B release e2e
+// (`e2e/helpers/release-experience.ts` `expectNoHorizontalOverflow`), which
+// treats `scrollWidth - clientWidth <= max(allowed, 2)` as clean. The first-
+// viewport canary uses the same 2px floor so it cannot pass a layout the
+// release e2e would reject.
+export const NESTED_OVERFLOW_TOLERANCE_PX = 2;
 
 export const VIEWPORTS = Object.freeze([
   Object.freeze({ name: "desktop", width: 1440, height: 900 }),
@@ -110,6 +116,36 @@ export function isClickableCta(cta) {
 
 /**
  * @typedef {{
+ *   selector: string,
+ *   overflow: number,
+ *   top: number,
+ * }} NestedOverflowCandidate
+ */
+
+/**
+ * Keep only the nested-overflow candidates whose box starts inside the first
+ * viewport. The release e2e checks the whole page; the BET 9 gate is the first
+ * viewport, so a below-the-fold overflow (e.g. a proof-actions link) is filed
+ * separately and must not flip this canary. An element participates in the
+ * first viewport when its top sits above the fold (with subpixel slack).
+ *
+ * @param {readonly NestedOverflowCandidate[] | null | undefined} candidates
+ * @param {number} fold
+ * @param {number} [epsilon]
+ * @returns {NestedOverflowCandidate[]}
+ */
+export function findFirstViewportNestedOverflow(candidates, fold, epsilon = FOLD_EPSILON_PX) {
+  if (!Array.isArray(candidates)) return [];
+  return candidates.filter((candidate) => {
+    if (!candidate) return false;
+    if (typeof candidate.top !== "number") return false;
+    if (candidate.top >= fold + epsilon) return false;
+    return (candidate.overflow ?? 0) > NESTED_OVERFLOW_TOLERANCE_PX;
+  });
+}
+
+/**
+ * @typedef {{
  *   top: number,
  *   bottom: number,
  *   height: number,
@@ -130,6 +166,7 @@ export function isClickableCta(cta) {
  *   valueProposition: MeasuredRect | null,
  *   cta: MeasuredRect | null,
  *   consoleErrors: string[],
+ *   nestedOverflowCandidates?: NestedOverflowCandidate[],
  *   injected?: boolean,
  *   screenshotPath?: string,
  * }} ViewportSnapshot
@@ -160,6 +197,11 @@ export function evaluateViewport(snapshot) {
   const ctaClickable = isClickableCta(snapshot.cta);
   const noOverflow = snapshot.scrollWidth <= snapshot.clientWidth;
   const noConsole = snapshot.consoleErrors.length === 0;
+  const nestedInFold = findFirstViewportNestedOverflow(
+    snapshot.nestedOverflowCandidates,
+    fold,
+  );
+  const noNestedInFold = nestedInFold.length === 0;
 
   const checks = [
     {
@@ -188,6 +230,19 @@ export function evaluateViewport(snapshot) {
       name: "no_horizontal_scroll",
       ok: noOverflow,
       detail: `scrollWidth=${snapshot.scrollWidth} clientWidth=${snapshot.clientWidth} overflow=${snapshot.scrollWidth - snapshot.clientWidth}`,
+    },
+    {
+      name: "no_nested_overflow_in_first_viewport",
+      ok: noNestedInFold,
+      detail:
+        nestedInFold.length === 0
+          ? "first-viewport nested overflow: 0"
+          : `first-viewport nested overflow: ${nestedInFold
+              .map(
+                (entry) =>
+                  `${entry.selector} +${entry.overflow}px @top=${Math.round(entry.top)}`,
+              )
+              .join(" | ")}`,
     },
     {
       name: "zero_console_errors",
@@ -339,7 +394,8 @@ export async function runFirstViewportCheck(input = {}) {
         injected = injected || stripInjected;
       }
 
-      const snapshot = await page.evaluate((selectors) => {
+      const snapshot = await page.evaluate(
+        ({ selectors, nestedOverflowTolerance }) => {
         /** @param {Element | null} node */
         const box = (node) => {
           if (!node) return null;
@@ -363,6 +419,30 @@ export async function runFirstViewportCheck(input = {}) {
           };
         };
         const doc = document.documentElement;
+        /** @type {NestedOverflowCandidate[]} */
+        const nestedOverflowCandidates = [];
+        for (const el of document.querySelectorAll("*")) {
+          if (
+            el.classList.contains("f9-sr-only") ||
+            el.classList.contains("ld-sr-only")
+          ) {
+            continue;
+          }
+          if (el instanceof HTMLSelectElement) continue;
+          const overflow = el.scrollWidth - el.clientWidth;
+          if (overflow <= nestedOverflowTolerance) continue;
+          const style = window.getComputedStyle(el);
+          if (style.display === "inline" || style.display === "contents") continue;
+          if (["auto", "scroll", "hidden", "clip"].includes(style.overflowX)) continue;
+          const rect = el.getBoundingClientRect();
+          const selector =
+            el.tagName.toLowerCase() +
+            (el.id ? `#${el.id}` : "") +
+            (typeof el.className === "string" && el.className
+              ? `.${el.className.trim().split(/\s+/u).join(".")}`
+              : "");
+          nestedOverflowCandidates.push({ selector, overflow, top: rect.top });
+        }
         return {
           fold: window.innerHeight,
           scrollWidth: doc.scrollWidth,
@@ -370,8 +450,10 @@ export async function runFirstViewportCheck(input = {}) {
           headline: box(document.querySelector(selectors.headline)),
           valueProposition: box(document.querySelector(selectors.valueProposition)),
           cta: box(document.querySelector(selectors.cta)),
+          nestedOverflowCandidates: nestedOverflowCandidates.slice(0, 20),
         };
-      }, SELECTORS);
+      },
+      { selectors: SELECTORS, nestedOverflowTolerance: NESTED_OVERFLOW_TOLERANCE_PX });
 
       const screenshotPath = join(outDir, `${spec.name}-${spec.width}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: false });
@@ -387,6 +469,7 @@ export async function runFirstViewportCheck(input = {}) {
           valueProposition: snapshot.valueProposition,
           cta: snapshot.cta,
           consoleErrors,
+          nestedOverflowCandidates: snapshot.nestedOverflowCandidates,
           injected,
           screenshotPath,
         }),
