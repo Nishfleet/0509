@@ -108,6 +108,7 @@ import {
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
   formatSearchSourceLabel,
+  formatLandingPageCaptureGap,
   formatSelectedLandingFactValue,
   formatSelectedLandingHeadline,
   hasRecentSearchDelay,
@@ -263,6 +264,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
+      landingPageCaptureFailure: null,
       collections: [],
       plan: null,
       session,
@@ -291,6 +293,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
+      landingPageCaptureFailure: null,
       collections: [],
       plan: null,
       session,
@@ -469,6 +472,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           resultCaptureAgeLabel: null,
           stealSummary: null,
           selectionEnrichmentPending: false,
+          landingPageCaptureFailure: null,
           collections,
           plan,
           session,
@@ -496,6 +500,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       resultCaptureAgeLabel: null,
       stealSummary: null,
       selectionEnrichmentPending: false,
+      landingPageCaptureFailure: null,
       collections,
       plan,
       session,
@@ -600,13 +605,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
 
   const waitUntil = cloudflare?.ctx?.waitUntil?.bind(cloudflare?.ctx);
-  const hasExplicitSelection = Boolean(url.searchParams.get("selected"));
+  // Anonymous default /search (no ?selected=) still auto-opens the featured
+  // ad in the detail pane. Skipping enrichment there left the core promise
+  // ("we check the landing page") as a dead-end gap for the first ad a
+  // visitor sees. Provider-deny E2E fixtures stay capture-free.
   const enrichSelected =
-    !providerDeny.enabled && (Boolean(session) || hasExplicitSelection);
+    !providerDeny.enabled && Boolean(parsed.filters.query);
   const {
     result: hydratedResult,
     selectedAd,
     selectionEnrichmentPending,
+    landingPageCaptureFailure,
   } = await prepareSearchResultSelection(
     env,
     searchExecution.result,
@@ -616,7 +625,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       hydratePersisted: Boolean(session),
       ...(session || !enrichSelected ? {} : { allowRenderedFallback: false }),
       ...(plan ? { planTier: plan } : {}),
-      ...(typeof waitUntil === "function" ? { waitUntil } : {}),
+      // Signed-in captures persist, so waitUntil + revalidation can paint
+      // fast. Anonymous captures are request-scoped: awaiting them is the
+      // only way the snapshot reaches the HTML.
+      ...(typeof waitUntil === "function" && session ? { waitUntil } : {}),
     },
   );
 
@@ -661,6 +673,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ),
     stealSummary,
     selectionEnrichmentPending: Boolean(selectionEnrichmentPending),
+    landingPageCaptureFailure,
     collections,
     plan,
     session,
@@ -2183,7 +2196,12 @@ export default function SearchRoute() {
                 <p className="f9-wk-prov">
                   <span>{formatSearchSourceLabel(visibleResult)}</span>
                   <span>{formatSearchFreshnessLabel(visibleResult)}</span>
-                  <span>{formatProofCaptureLabel(selectedAd)}</span>
+                  <span>
+                    {formatProofCaptureLabel(selectedAd, {
+                      pending: selectionEnrichmentUiPending,
+                      failureReason: data.landingPageCaptureFailure?.reasonCode,
+                    })}
+                  </span>
                 </p>
                 {selectedAd.domainMatch?.reason ? (
                   <p className="f9-wk-quote">{selectedAd.domainMatch.reason}</p>
@@ -2255,6 +2273,7 @@ export default function SearchRoute() {
                       landingPageUrl: selectedAd.landingPageUrl,
                       hasLandingPage: Boolean(selectedAd.landingPage),
                       pending: selectionEnrichmentUiPending,
+                      failureReason: data.landingPageCaptureFailure?.reasonCode,
                     })}
                   </h4>
                   <DetailFacts
@@ -2268,6 +2287,7 @@ export default function SearchRoute() {
                           landingPageUrl: selectedAd.landingPageUrl,
                           hasLandingPage: Boolean(selectedAd.landingPage),
                           pending: selectionEnrichmentUiPending,
+                          failureReason: data.landingPageCaptureFailure?.reasonCode,
                         }),
                       },
                       {
@@ -2279,6 +2299,7 @@ export default function SearchRoute() {
                           landingPageUrl: selectedAd.landingPageUrl,
                           hasLandingPage: Boolean(selectedAd.landingPage),
                           pending: selectionEnrichmentUiPending,
+                          failureReason: data.landingPageCaptureFailure?.reasonCode,
                         }),
                       },
                       {
@@ -2290,6 +2311,7 @@ export default function SearchRoute() {
                           landingPageUrl: selectedAd.landingPageUrl,
                           hasLandingPage: Boolean(selectedAd.landingPage),
                           pending: selectionEnrichmentUiPending,
+                          failureReason: data.landingPageCaptureFailure?.reasonCode,
                         }),
                       },
                       {
@@ -2302,10 +2324,22 @@ export default function SearchRoute() {
                           hasLandingPage: Boolean(selectedAd.landingPage),
                           pending: selectionEnrichmentUiPending,
                           failedPageCheck: true,
+                          failureReason: data.landingPageCaptureFailure?.reasonCode,
                         }),
                       },
                     ]}
                   />
+                  {!selectedAd.landingPage &&
+                  selectedAd.landingPageUrl &&
+                  !selectionEnrichmentUiPending ? (
+                    <p className="f9-wk-small">
+                      {
+                        formatLandingPageCaptureGap(
+                          data.landingPageCaptureFailure?.reasonCode,
+                        ).detail
+                      }
+                    </p>
+                  ) : null}
                   {selectedAd.landingPageUrl ? (
                     <a
                       className="f9-wk-url"
