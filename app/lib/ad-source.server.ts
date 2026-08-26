@@ -21,8 +21,11 @@ import {
   toServableDiscoveryPayload,
   isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
+  isPublicSearchFamily,
   isStaleZeroResultDiscoveryCacheEntry,
   resolveDiscoveryCacheTtlMs,
+  toPersistedDiscoveryRouteContext,
+  toTelemetryRouteContext,
 } from "~/lib/discovery-cache.server";
 import { resolveE2EFixtureProviderFromEnv } from "~/lib/e2e-provider.server";
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
@@ -538,6 +541,7 @@ export async function searchAdsViaSourceResolver(
   const telemetrySource =
     options.telemetrySource ??
     (routeContext === "public_search" ? "manual" : "scheduled");
+  const telemetryRouteContext = toTelemetryRouteContext(routeContext);
   const telemetryCorrelationKey = await buildTelemetryCorrelationKey({
     provider,
     fingerprint: fingerprintSavedQuery(query),
@@ -548,7 +552,7 @@ export async function searchAdsViaSourceResolver(
   const telemetryContext = {
     jobId: crypto.randomUUID(),
     idempotencyKey: await sha256Hex(telemetryCorrelationKey),
-    routeContext,
+    routeContext: telemetryRouteContext,
     planTier: options.planTier ?? null,
     source: telemetrySource,
   };
@@ -917,8 +921,8 @@ export async function searchAdsViaSourceResolver(
             // Deep scroll only for interactive public search. Watchlist and
             // scheduled warmup keep the shallow default so DEFAULT_PAGE_BUDGET
             // remains the scan-cost guard.
-            mode: routeContext === "public_search" ? "interactive" : "shallow",
-            routeContext,
+            mode: isPublicSearchFamily(routeContext) ? "interactive" : "shallow",
+            routeContext: telemetryRouteContext,
             planTier: options.planTier ?? null,
             source: telemetrySource,
             jobId: telemetryContext.jobId,
@@ -955,7 +959,7 @@ export async function searchAdsViaSourceResolver(
               cursor,
               {
                 allowDemoFallback: false,
-                interactive: routeContext === "public_search" && !cursor,
+                interactive: isPublicSearchFamily(routeContext) && !cursor,
               },
             ),
             provider,
@@ -1367,7 +1371,7 @@ async function tryMetaApiFallback(
         idempotencyKey,
         jobKind: "meta_discovery",
         actualProvider: "customer_meta_api",
-        routeContext: input.routeContext,
+        routeContext: toTelemetryRouteContext(input.routeContext),
         planTier: input.planTier ?? null,
         source:
           input.telemetrySource ??
@@ -1438,7 +1442,7 @@ async function tryMetaApiFallback(
         idempotencyKey,
         jobKind: "meta_discovery",
         actualProvider: "customer_meta_api",
-        routeContext: input.routeContext,
+        routeContext: toTelemetryRouteContext(input.routeContext),
         planTier: input.planTier ?? null,
         source:
           input.telemetrySource ??
@@ -1577,7 +1581,7 @@ async function acquireDiscoveryQueryLease(
       .bind(
         input.cacheKey,
         input.provider,
-        input.routeContext,
+        toPersistedDiscoveryRouteContext(input.routeContext),
         holderId,
         leaseExpiresAt,
         now,

@@ -9,7 +9,10 @@ import {
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { BrowserJobPlanTier } from "~/lib/browser-job-telemetry.server";
-import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
+import {
+  captureLandingPageSnapshot,
+  type LandingPageCaptureFailureDetail,
+} from "~/lib/landing-pages.server";
 import {
   buildTranslatedAnalysisField,
   translateAdText,
@@ -105,6 +108,7 @@ export async function prepareSearchResultSelection(
 
   let selectedAd: AdRecord | null = selectedAdBase;
   let selectionEnrichmentPending = false;
+  let landingPageCaptureFailure: LandingPageCaptureFailureDetail | null = null;
   const providerResultIsFresh = result.cacheStatus === "miss";
 
   if (selectedAdBase && options.enrichSelected !== false) {
@@ -144,13 +148,18 @@ export async function prepareSearchResultSelection(
         );
       }
     } else if (needsWork) {
-      // Synchronous path (tests / no ExecutionContext): keep prior behavior.
-      selectedAd = await enrichAndPersistSelectedAd(
+      // Synchronous path (tests / no ExecutionContext / anonymous public
+      // search): the snapshot must land in this response. Anonymous captures
+      // are not persisted, so a waitUntil handoff would throw the result away
+      // and the detail pane would keep showing a capture gap.
+      const enriched = await enrichAndPersistSelectedAd(
         env,
         selectedAdBase,
         providerResultIsFresh,
         enrichOptions,
       );
+      selectedAd = enriched.ad;
+      landingPageCaptureFailure = enriched.landingPageCaptureFailure;
     }
     // When needsWork is false, hydrated/persisted evidence already filled the
     // slots — return base (with persisted creatives) and skip duplicate work.
@@ -163,6 +172,7 @@ export async function prepareSearchResultSelection(
     },
     selectedAd,
     selectionEnrichmentPending,
+    landingPageCaptureFailure,
   };
 }
 
@@ -176,7 +186,10 @@ async function enrichAndPersistSelectedAd(
     persistSelected,
     captureCreativeAndTranslation,
   }: EnrichAndPersistSelectedAdOptions,
-): Promise<AdRecord> {
+): Promise<{
+  ad: AdRecord;
+  landingPageCaptureFailure: LandingPageCaptureFailureDetail | null;
+}> {
   const creativeSourceUrl =
     selectedAdBase.adSnapshotUrl?.trim() ||
     selectedAdBase.creativeImageUrl?.trim() ||
@@ -197,6 +210,7 @@ async function enrichAndPersistSelectedAd(
               : null,
         }))
       : Promise.resolve({ value: null, capturedAt: null });
+  let landingPageCaptureFailure: LandingPageCaptureFailureDetail | null = null;
   const [snapshot, creativeCapture] = await Promise.all([
     selectedAdBase.landingPageUrl && !selectedAdBase.landingPage
       ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl, {
@@ -204,10 +218,16 @@ async function enrichAndPersistSelectedAd(
           routeContext: "selection_enrichment",
           planTier,
           ...(allowRenderedFallback ? {} : { allowRenderedFallback: false }),
+          onFailure: (detail) => {
+            landingPageCaptureFailure = detail;
+          },
         })
       : Promise.resolve(selectedAdBase.landingPage ?? null),
     creativeCapturePromise,
   ]);
+  if (snapshot) {
+    landingPageCaptureFailure = null;
+  }
   const creativeText = creativeCapture.value;
   const creativeCapturedAt = creativeCapture.capturedAt;
 
@@ -262,7 +282,7 @@ async function enrichAndPersistSelectedAd(
     );
   }
 
-  return selectedAd;
+  return { ad: selectedAd, landingPageCaptureFailure };
 }
 
 function canonicalSelectionAd(

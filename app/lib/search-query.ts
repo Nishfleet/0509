@@ -115,6 +115,142 @@ export function hostnamesMatchDomainIntent(
   return false;
 }
 
+/**
+ * Same brand, different country site: allbirds.com vs allbirds.co.uk,
+ * mamaearth.com vs mamaearth.in.
+ *
+ * Restricted so it cannot reopen the okara.ai geography-keyword hole:
+ * the searched domain must be a generic commercial TLD (.com/.net/.org),
+ * the landing host must share the brand label and use a geographic ccTLD,
+ * and open ccTLDs used as generic brands (.io, .ai, .co, …) never count.
+ */
+export function hostnamesMatchBrandRegionalProperty(
+  candidateHost: string | null | undefined,
+  intent: Pick<ParsedSearchQuery, "registrableDomain">,
+) {
+  if (!candidateHost || !intent.registrableDomain) {
+    return false;
+  }
+
+  const candidateNormalized = normalizeHostname(candidateHost);
+  const candidateParsed = parseHostname(candidateNormalized, { allowPrivateDomains: false });
+  const intentParsed = parseHostname(intent.registrableDomain, { allowPrivateDomains: false });
+  const candidateLabel = candidateParsed.domainWithoutSuffix?.toLowerCase() ?? "";
+  const intentLabel = intentParsed.domainWithoutSuffix?.toLowerCase() ?? "";
+  const candidateSuffix = (candidateParsed.publicSuffix ?? "").toLowerCase();
+  const intentSuffix = (intentParsed.publicSuffix ?? "").toLowerCase();
+
+  if (!candidateLabel || candidateLabel !== intentLabel || candidateLabel.length < 3) {
+    return false;
+  }
+  if (candidateSuffix === intentSuffix) {
+    return false;
+  }
+  if (!candidateParsed.isIcann || !intentParsed.isIcann) {
+    return false;
+  }
+  if (candidateParsed.domain && MULTITENANT_REGISTRABLE_SUFFIXES.has(candidateParsed.domain)) {
+    return false;
+  }
+  if (!isGenericCommercialPublicSuffix(intentSuffix)) {
+    return false;
+  }
+  return isGeographicPublicSuffix(candidateSuffix);
+}
+
+const GENERIC_COMMERCIAL_PUBLIC_SUFFIXES = new Set(["com", "net", "org"]);
+
+/**
+ * ccTLDs sold as generic/brand TLDs. Treating them as country sites would
+ * verify analytics.com ads that land on analytics.io — different companies.
+ */
+const OPEN_CCTLD_USED_AS_GENERIC = new Set([
+  "io",
+  "ai",
+  "tv",
+  "me",
+  "cc",
+  "co",
+  "ws",
+  "nu",
+  "fm",
+  "am",
+  "ly",
+  "gd",
+  "to",
+  "gg",
+  "je",
+  "sh",
+  "so",
+  "cm",
+  "tk",
+  "ml",
+  "ga",
+  "cf",
+  "gq",
+  "pw",
+  "vc",
+  "sc",
+  "bz",
+  "ms",
+  "tc",
+  "vg",
+  "ac",
+  "gl",
+]);
+
+const COMPOUND_GEOGRAPHIC_PUBLIC_SUFFIXES = new Set([
+  "co.uk",
+  "org.uk",
+  "ac.uk",
+  "com.au",
+  "net.au",
+  "org.au",
+  "co.nz",
+  "net.nz",
+  "org.nz",
+  "com.kw",
+  "com.sa",
+  "com.bh",
+  "com.qa",
+  "com.om",
+  "com.ae",
+  "co.za",
+  "co.jp",
+  "co.kr",
+  "com.mx",
+  "com.br",
+  "com.ar",
+  "com.co",
+  "com.sg",
+  "com.hk",
+  "com.my",
+  "com.ph",
+  "com.tr",
+  "com.ng",
+  "co.in",
+  "com.in",
+  "co.id",
+  "com.tw",
+  "com.pk",
+  "com.bd",
+  "com.np",
+  "com.lk",
+  "com.vn",
+  "com.eg",
+]);
+
+function isGenericCommercialPublicSuffix(publicSuffix: string) {
+  return GENERIC_COMMERCIAL_PUBLIC_SUFFIXES.has(publicSuffix);
+}
+
+function isGeographicPublicSuffix(publicSuffix: string) {
+  if (COMPOUND_GEOGRAPHIC_PUBLIC_SUFFIXES.has(publicSuffix)) {
+    return true;
+  }
+  return publicSuffix.length === 2 && !OPEN_CCTLD_USED_AS_GENERIC.has(publicSuffix);
+}
+
 function emptyParsedSearchQuery(originalInput: string): ParsedSearchQuery {
   return {
     intent: "text",

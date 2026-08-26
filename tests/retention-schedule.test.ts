@@ -40,6 +40,7 @@ vi.mock("~/lib/presence-service.server", () => ({
 vi.mock("~/lib/public-markdown", () => ({
   isPublicMarkdownPage: vi.fn(() => false),
   LLMS_TEXT: "",
+  buildLlmsText: vi.fn(() => ""),
   PUBLIC_MARKDOWN: "",
   wantsPublicMarkdown: vi.fn(() => false),
 }));

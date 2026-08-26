@@ -14,6 +14,12 @@ export interface WebsiteIdentity {
   title: string | null;
   siteName: string | null;
   aliases: string[];
+  /**
+   * Other registrable domains proven to be the same site: hosts seen on the
+   * redirect chain or in the HTML canonical. mamaearth.com → mamaearth.in
+   * is the load-bearing case. Brand names stay in `aliases`; these are hosts.
+   */
+  domainAliases: string[];
   resolvedAt: string;
 }
 
@@ -55,12 +61,14 @@ export function clearWebsiteIdentityCacheForTests() {
 
 async function fetchWebsiteIdentity(safeUrl: URL, registrableDomain: string): Promise<WebsiteIdentity | null> {
   let currentUrl: URL | null = safeUrl;
+  const domainAliases = new Set<string>();
 
   for (let redirects = 0; currentUrl && redirects <= MAX_IDENTITY_FETCH_REDIRECTS; redirects += 1) {
     const resolved = await resolvePublicHttpUrl(currentUrl);
     if (!resolved) {
       return null;
     }
+    addDomainAlias(domainAliases, resolved.hostname, registrableDomain);
 
     let response: Response;
     try {
@@ -113,6 +121,13 @@ async function fetchWebsiteIdentity(safeUrl: URL, registrableDomain: string): Pr
       extractMetaContent(html, "application-name") ??
       extractJsonLdOrganizationName(html);
     const canonical = extractCanonicalUrl(html, resolved);
+    if (canonical) {
+      try {
+        addDomainAlias(domainAliases, new URL(canonical).hostname, registrableDomain);
+      } catch {
+        // Canonical is best-effort; a malformed URL must not fail identity.
+      }
+    }
 
     const aliases = new Set<string>();
     if (siteName) {
@@ -128,11 +143,19 @@ async function fetchWebsiteIdentity(safeUrl: URL, registrableDomain: string): Pr
       title,
       siteName,
       aliases: [...aliases].filter(Boolean),
+      domainAliases: [...domainAliases],
       resolvedAt: new Date().toISOString(),
     };
   }
 
   return null;
+}
+
+function addDomainAlias(aliases: Set<string>, hostname: string, originRegistrable: string) {
+  const hopRegistrable = registrableDomainFromHostname(hostname);
+  if (hopRegistrable && hopRegistrable !== originRegistrable) {
+    aliases.add(hopRegistrable);
+  }
 }
 
 function extractTagContent(html: string, tagName: string) {

@@ -195,6 +195,7 @@ export const SITEMAP_PATHS = [
   "/switch/panoramata",
   "/switch/visualping",
   "/competitor-monitoring",
+  "/proof",
   "/pricing",
   "/help",
   "/docs",
@@ -232,6 +233,10 @@ export interface SitemapEntry {
   lastmod?: string;
   changefreq?: string;
   priority?: string;
+  /** Number of non-demo ads backing an /ads/:domain entry; used by llms.txt. */
+  adCount?: number;
+  /** ISO timestamp of the underlying cache fetch; used by llms.txt. */
+  fetchedAt?: string;
 }
 
 /**
@@ -244,6 +249,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/": { changefreq: "daily", priority: "1.0" },
   "/search": { changefreq: "weekly", priority: "0.9" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
+  "/proof": { changefreq: "monthly", priority: "0.5" },
   "/pricing": { changefreq: "weekly", priority: "0.8" },
   "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/compare/meta-ad-library": { changefreq: "weekly", priority: "0.7" },

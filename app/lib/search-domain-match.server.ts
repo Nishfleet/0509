@@ -3,7 +3,12 @@ import {
   isVerifiedDomainMatchLevel,
   type DomainMatchLevel,
 } from "~/lib/search-domain-match";
-import { comparableHostname, hostnamesMatchDomainIntent, registrableDomainFromHostname } from "~/lib/search-query";
+import {
+  comparableHostname,
+  hostnamesMatchBrandRegionalProperty,
+  hostnamesMatchDomainIntent,
+  registrableDomainFromHostname,
+} from "~/lib/search-query";
 import type { ParsedSearchQuery } from "~/lib/search-query";
 import type { AdRecord } from "~/lib/types";
 
@@ -48,6 +53,16 @@ export function explainDomainMatch(
         : "registrable_domain";
 
     return buildExplanation(ad, level, landingHost, "landing_page_url", customerLandingReason(level, intent));
+  }
+
+  if (landingHost && hostnamesMatchBrandRegionalProperty(landingHost, intent)) {
+    return buildExplanation(
+      ad,
+      "verified_alias",
+      landingHost,
+      "regional_property",
+      `Landing page matches ${comparableHostname(landingHost)}, a regional site for ${displayDomain(intent)}`,
+    );
   }
 
   const snapshotHost = extractHostname(ad.adSnapshotUrl);

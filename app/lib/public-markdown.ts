@@ -20,6 +20,7 @@ export const PUBLIC_MARKDOWN_PATHS = [
   "/status",
   "/changelog",
   "/trust",
+  "/proof",
   "/privacy",
   "/terms",
 ] as const;
@@ -28,9 +29,10 @@ const PUBLIC_MARKDOWN_PATH_SET = new Set<string>(PUBLIC_MARKDOWN_PATHS);
 
 // llms.txt page index: one titled, described link per canonical public page so
 // AI answer engines get a verifiable link list instead of prose-only claims.
-// Entries derive from the shared SITEMAP_PATHS constant (same source as
-// sitemap.xml): adding a path there without describing it here is a type
-// error, so the two surfaces can never drift.
+// Static entries derive from SITEMAP_PATHS (same source as sitemap.xml): adding
+// a path there without describing it here is a type error. Dynamic /ads/:domain
+// brand pages are appended at request time from the same indexable set the
+// sitemap emits — see buildLlmsText — so noindex shells never appear here.
 const LLMS_PAGE_DETAILS: Record<
   (typeof SITEMAP_PATHS)[number],
   { title: string; description: string }
@@ -90,6 +92,11 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "Product overview: scans, digests, alerts, and proof captures.",
   },
+  "/proof": {
+    title: "What we refuse to alert on",
+    description:
+      "Public capture-validity rules: the landing-page captures that never become alerts.",
+  },
   "/pricing": {
     title: "Pricing",
     description:
@@ -137,12 +144,55 @@ export const LLMS_PAGES = SITEMAP_PATHS.map((path) => ({
   ...LLMS_PAGE_DETAILS[path],
 }));
 
-const LLMS_PAGES_SECTION = [
-  "Pages:",
-  ...LLMS_PAGES.map(
-    (page) => `- [${page.title}](${page.url}): ${page.description}`,
-  ),
-].join("\n");
+const ADS_BRAND_PATH = /^\/ads\/([^/]+)$/;
+
+/**
+ * One llms.txt index line for an indexable /ads/:domain brand page. Callers
+ * must only pass paths the sitemap would emit (fresh, non-demo, indexable).
+ * Returns null for anything that is not a single-segment /ads/:domain path.
+ */
+export function llmsPageForBrandPath(
+  path: string,
+  adCount?: number,
+  fetchedAt?: string,
+): {
+  path: string;
+  url: string;
+  title: string;
+  description: string;
+} | null {
+  const match = ADS_BRAND_PATH.exec(path);
+  if (!match) {
+    return null;
+  }
+  const domain = match[1];
+  const countPhrase =
+    adCount !== undefined
+      ? `${adCount} live Meta Ad Library ad${adCount === 1 ? "" : "s"}`
+      : "Live Meta Ad Library ads";
+  const datePhrase = fetchedAt ? `, captured on ${fetchedAt.slice(0, 10)}` : "";
+  return {
+    path,
+    url: canonicalUrl(path),
+    title: `${domain} Meta ads`,
+    description:
+      `${countPhrase} for ${domain} from public search${datePhrase}. Listed only while the capture is fresh enough to index (within 7 days). Not a worldwide or all-platform catalog.`,
+  };
+}
+
+function renderLlmsPagesSection(
+  brandPages: readonly { title: string; url: string; description: string }[],
+): string {
+  return [
+    "Pages:",
+    ...LLMS_PAGES.map(
+      (page) => `- [${page.title}](${page.url}): ${page.description}`,
+    ),
+    ...brandPages.map(
+      (page) => `- [${page.title}](${page.url}): ${page.description}`,
+    ),
+  ].join("\n");
+}
 
 export const PUBLIC_MARKDOWN = `---
 title: Five to Nine
@@ -168,7 +218,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 - Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Signed-in support cases cover paid-customer account help, with email fallback for users who cannot sign in.
 - Paid customer support paths cover: ${CUSTOMER_SUPPORT_PATHS.map((path) => path.label).join(", ")}.
-- Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
+- Public help, docs, API docs, status, changelog, trust, and proof-rules pages are available at /help, /docs, /api/docs, /status, /changelog, /trust, and /proof.
 - The public status page summarizes customer-facing surfaces without exposing private account activity.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric evidence, creative timeline, and landing-page history from saved evidence, watch events, and digest items.
@@ -209,11 +259,25 @@ Five to Nine should not claim SOC 2, HIPAA, GDPR compliance, zero retention, no 
 Use the visible product and founder contact paths on the site.
 `;
 
-export const LLMS_TEXT = `# Five to Nine
+/**
+ * Render llms.txt. Pass the same brand-page sitemap entries the live sitemap
+ * emits so AI answer engines see every indexable /ads/:domain URL. An empty
+ * list is the no-D1 / demo / emergency-brake fallback (static funnel pages
+ * only) — the same degradation sitemap.xml uses.
+ */
+export function buildLlmsText(
+  brandEntries: readonly { path: string; adCount?: number; fetchedAt?: string }[] = [],
+): string {
+  const brandPages = brandEntries.flatMap((entry) => {
+    const page = llmsPageForBrandPath(entry.path, entry.adCount, entry.fetchedAt);
+    return page ? [page] : [];
+  });
+  const pagesSection = renderLlmsPagesSection(brandPages);
+  return `# Five to Nine
 
 Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence. Presence Desk tracks your brand and competitors across declared sources with proof-backed briefs.
 
-${LLMS_PAGES_SECTION}
+${pagesSection}
 
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
@@ -250,6 +314,10 @@ AI access:
 - AI training/fine-tuning crawlers are denied in robots.txt (ai-train=no): ${AI_TRAINING_CRAWLERS.join(", ")}.
 - This policy is decided and recorded in docs/ai-crawler-policy.md.
 `;
+}
+
+/** Static-only fallback (no brand pages). Live /llms.txt uses buildLlmsText. */
+export const LLMS_TEXT = buildLlmsText();
 
 export function wantsPublicMarkdown(request: Request): boolean {
   return (request.headers.get("Accept") ?? "").toLowerCase().includes("text/markdown");
@@ -258,3 +326,4 @@ export function wantsPublicMarkdown(request: Request): boolean {
 export function isPublicMarkdownPage(pathname: string): boolean {
   return PUBLIC_MARKDOWN_PATH_SET.has(pathname);
 }
+

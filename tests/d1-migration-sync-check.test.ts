@@ -87,7 +87,7 @@ Migrations to be applied:
     );
   });
 
-  it("allows competitor-site monitoring to trail after teams delivery landed first", () => {
+  it("matches the production ledger exactly with no cleanup allowance", () => {
     const repositoryBaseline = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter(
       (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
     );
@@ -103,11 +103,17 @@ Migrations to be applied:
     const repository = [...repositoryBaseline, ...repositorySuffix];
     const productionLedger = [
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
-      ...repositorySuffix.slice(0, 6),
+      ...repositorySuffix,
     ];
+    // POST_DEPLOY_CLEANUP_MIGRATIONS is empty (2026-08-26 auditor fix):
+    // 0077 was never a destructive cleanup — it is a live migration still
+    // present in the repo and applied to production. With an empty set the
+    // only allowed ledger is the exact repository ledger; a production ledger
+    // trailing 0077 is a genuine drift that must block (the migration must be
+    // applied, not silently waved through as "cleanup").
     expect(
       allowedProductionMigrationLedgers(repository, POST_DEPLOY_CLEANUP_MIGRATIONS),
-    ).toEqual(expect.arrayContaining([productionLedger]));
+    ).toEqual([productionLedger]);
     const output = `
 Migrations to be applied:
 ┌────────────────────────────────────────────────────┐
@@ -116,8 +122,10 @@ Migrations to be applied:
 │ 0077_competitor_site_monitoring.sql                │
 └────────────────────────────────────────────────────┘
 `;
-    expect(hasOnlyPostDeployCleanupMigrations(output)).toBe(true);
-    expect(blockingPendingMigrationNames(output)).toEqual([]);
+    expect(hasOnlyPostDeployCleanupMigrations(output)).toBe(false);
+    expect(blockingPendingMigrationNames(output)).toEqual([
+      "0077_competitor_site_monitoring.sql",
+    ]);
   });
 
   it("fails closed on baseline drift, duplicates, and invalid retired names", () => {
