@@ -926,6 +926,7 @@ describe("monitoring plan-tier attribution propagation", () => {
       expect(call[2]).toMatchObject({
         routeContext: "proof_capture",
         preferRendered: true,
+        requireScreenshot: true,
       });
     }
   });
