@@ -11,6 +11,7 @@ import {
   PAGE_KIND_CADENCE,
   parseRobotsRules,
   parseRobotsSitemapUrls,
+  extractXmlText,
   parseSitemapIndexUrls,
   parseSitemapUrls,
   runWebsiteSiteScan,
@@ -179,6 +180,26 @@ describe("sitemap parsing", () => {
     expect(parseSitemapUrls("<html><body>not a sitemap</body></html>")).toEqual([]);
     expect(parseSitemapUrls("")).toEqual([]);
     expect(parseSitemapIndexUrls("<urlset></urlset>")).toEqual([]);
+  });
+});
+
+describe("extractXmlText tag allowlist", () => {
+  const locXml = "<url><loc>https://competitor.example/pricing</loc></url>";
+
+  it("extracts allowlisted loc tags", () => {
+    expect(extractXmlText(locXml, "loc")).toEqual(["https://competitor.example/pricing"]);
+  });
+
+  it("rejects tags that contain regex metacharacters instead of interpolating them", () => {
+    const poisoned = "<url><loc>https://competitor.example/ok</loc></url>";
+    expect(extractXmlText(poisoned, ".*")).toEqual([]);
+    expect(extractXmlText(poisoned, "(")).toEqual([]);
+    expect(extractXmlText(poisoned, "loc.*")).toEqual([]);
+  });
+
+  it("rejects unknown sitemap tags even when they are valid XML names", () => {
+    const xml = "<url><lastmod>2026-08-26</lastmod><loc>https://competitor.example/ok</loc></url>";
+    expect(extractXmlText(xml, "lastmod")).toEqual([]);
   });
 });
 
