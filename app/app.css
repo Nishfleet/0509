@@ -6921,6 +6921,12 @@ reds soften --- */
   margin-top: 0.8rem;
   line-height: 1.5;
 }
+.f9-ads-score-formula a,
+.f9-ads-score-thin-note a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
 .f9-ads-score-thin {
   box-shadow: 5px 5px 0 var(--ink-faint);
 }
