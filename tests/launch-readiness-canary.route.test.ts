@@ -75,9 +75,17 @@ afterEach(() => {
 });
 
 function mockLandingPageCapture(snapshot: Record<string, unknown> | null = createSnapshot()) {
+  const captureLandingPageSnapshot = vi.fn().mockResolvedValue(snapshot);
   vi.doMock("~/lib/landing-pages.server", () => ({
-    captureLandingPageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    captureLandingPageSnapshot,
+    snapshotHasScreenshotArtifact,
   }));
+  return captureLandingPageSnapshot;
+}
+
+function snapshotHasScreenshotArtifact(snapshot: { metadata?: Record<string, unknown> } | null) {
+  const key = snapshot?.metadata?.screenshotArtifactKey;
+  return typeof key === "string" && key.length > 0;
 }
 
 function createSnapshot() {
@@ -90,11 +98,13 @@ function createSnapshot() {
     ctaText: "Start now",
     priceText: null,
     formPresent: true,
-    captureMethod: "landing_page_fetch",
+    captureMethod: "browser_render",
     capturedAt: "2026-06-04T10:00:00.000Z",
     artifactKey: "landing-pages/2026-06-04/canary.html",
     metadata: {
       fetchStatus: 200,
+      htmlArtifactKey: "landing-pages/2026-06-04/canary.html",
+      screenshotArtifactKey: "landing-pages/2026-06-04/canary.jpeg",
       extractedFieldConfidence: {
         headline: 1,
       },
@@ -229,7 +239,10 @@ describe("launch readiness canary route", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({ createProofCapture, createWatchlistRun }));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-    vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot,
+      snapshotHasScreenshotArtifact,
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -328,7 +341,7 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest,
     }));
-    mockLandingPageCapture();
+    const captureLandingPageSnapshot = mockLandingPageCapture();
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -385,11 +398,20 @@ describe("launch readiness canary route", () => {
       1,
       expect.objectContaining({ kind: "launch_readiness_canary" }),
     );
+    expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://0509.io/",
+      expect.objectContaining({
+        preferRendered: true,
+        requireScreenshot: true,
+      }),
+    );
     expect(createProofCapture).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         proofTargetId: "proof-target-1",
         status: "succeeded",
+        screenshotArtifactKey: "landing-pages/2026-06-04/canary.jpeg",
         extractedFields: expect.objectContaining({
           rawHeadline: "Five to Nine",
           canonicalUrl: "https://0509.io/",
@@ -1226,6 +1248,7 @@ describe("launch readiness canary route", () => {
     }));
     vi.doMock("~/lib/landing-pages.server", () => ({
       captureLandingPageSnapshot: vi.fn(),
+      snapshotHasScreenshotArtifact,
     }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
@@ -1242,6 +1265,7 @@ describe("launch readiness canary route", () => {
     expect(captureBrowserlessProofSnapshot).toHaveBeenCalledWith(
       expect.anything(),
       "https://0509.io/",
+      expect.objectContaining({ requireScreenshot: true }),
     );
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
@@ -1371,6 +1395,61 @@ describe("launch readiness canary route", () => {
         status: "failed",
       }),
     );
+  });
+
+  it("refuses an HTML-only canary snapshot instead of storing a succeeded proof (#1181)", async () => {
+    const createProofCapture = vi.fn();
+    const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
+    const snapshot = createSnapshot();
+    const htmlOnly = {
+      ...snapshot,
+      metadata: {
+        fetchStatus: snapshot.metadata.fetchStatus,
+        htmlArtifactKey: snapshot.metadata.htmlArtifactKey,
+        extractedFieldConfidence: snapshot.metadata.extractedFieldConfidence,
+      },
+    };
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn().mockResolvedValue(undefined),
+      clearDigestItems: vi.fn().mockResolvedValue(undefined),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createProofCapture,
+      createWatchEvent: vi.fn().mockResolvedValue("event-1"),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun,
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest: vi.fn(),
+    }));
+    mockLandingPageCapture(htmlOnly);
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "x-0509-canary-token": "secret-token",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      blocker: "proof_capture_failed",
+      runId: "run-1",
+    });
+    expect(createProofCapture).not.toHaveBeenCalled();
   });
 
   it("fails closed when no internal canary email is configured", async () => {

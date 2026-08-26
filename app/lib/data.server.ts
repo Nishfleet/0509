@@ -75,6 +75,7 @@ export {
   listRecentProofCapturesForWatchlist,
   countProofCapturesForWatchlistSince,
   countProofCapturesForWorkspaceSince,
+  countRecentSucceededProofScreenshotShare,
   getSuccessfulProofCaptureStatsForUser,
   listRecentWorkspaceProofCaptures,
   createProofCapture,
