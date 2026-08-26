@@ -217,8 +217,11 @@ describe("anonymous homepage proof brief (real proof)", () => {
     expect(markup).toContain('href="/proof"');
     expect(markup).toContain("What we refuse to alert on");
     expect(markup).toContain("Proof brief");
-    expect(markup).toContain("We saved the proof.");
     expect(markup).toContain("Routine-first bundle");
-    expect(markup).toContain("was the hook on 6 Meta ads");
+    // The hero H1 is the restored #188 diff and carries no proof claim, so the
+    // real capture clocks now have to show up in the proof-trail card stamps —
+    // which is the thing this test is named for.
+    expect(markup).toContain("Ad hook · 10:17 PM");
+    expect(markup).toContain("Ad offer · 10:17 PM");
   });
 });

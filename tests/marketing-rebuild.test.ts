@@ -86,10 +86,19 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain('className="f9-announcement" to="/search"');
   });
 
-  it("leads with a real-data proof hook and never with a fabricated sample story", () => {
-    expect(marketingRoute).toContain("is the hook on");
-    expect(marketingRoute).toContain("linking to");
-    expect(marketingRoute).toContain("We saved the proof.");
+  it("leads with the 'Caught in the act' typographic price-diff hero", () => {
+    // Nish restored the #188 hero on 2026-08-26 over the real-data proof-brief
+    // H1. The illustrated numbers are deliberate and owner-approved for this
+    // element; the "never a fabricated sample story" rule still binds every
+    // proof claim on the page, which the assertions below hold.
+    expect(marketingRoute).toContain("They cut");
+    expect(marketingRoute).toContain("$159");
+    expect(marketingRoute).toContain("$129");
+    expect(marketingRoute).toContain("03:47 AM");
+    // "We saved the proof." arrived with the 2026-08-11 proof-brief H1 and was
+    // never part of the #188 hero, so it leaves with it. The deck still carries
+    // the promise ("saves the screenshots, and files the brief").
+    expect(marketingRoute).toContain("saves the screenshots");
     expect(marketingRoute).toContain("Proof-backed brief");
     expect(marketingRoute).toContain('to="/proof"');
     expect(marketingRoute).toContain("What we refuse to alert on");
@@ -98,9 +107,6 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("landing pages for price, offer, and CTA changes");
     expect(marketingRoute).toContain("before your alarm goes off");
     expect(marketingRoute).not.toContain("Sample proof-backed brief");
-    expect(marketingRoute).not.toContain("$159");
-    expect(marketingRoute).not.toContain("$129");
-    expect(marketingRoute).not.toContain("They cut");
     expect(marketingRoute).not.toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
     expect(marketingRoute).toContain("start from the brands you already track");
     expect(marketingRoute).toContain("scheduled monitoring is included with your plan");
