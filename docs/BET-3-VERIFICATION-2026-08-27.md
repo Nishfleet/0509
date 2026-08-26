@@ -1,59 +1,52 @@
 # BET 3 — "The Offer Timeline" verification record
 
 **Issue:** #974
-**Date:** 2026-08-26T20:54:51Z
 **Scope:** Verification-only. If the check fails, the blocking parts are not done.
 
 ## Termination check (§3.4 BET 3, verbatim)
 
-> For a competitor watched ≥14 days, the timeline renders ≥3 dated offer states
-> with working screenshot links; `landing_page_snapshot` row count >0 and
-> growing daily; a share link to the timeline renders correctly logged out.
-> Proof = the live URL plus the row-count delta.
-
-**Result: FAIL.** The canary ran. The bet is still red. This record is the run,
-not a close.
+> For a competitor watched ≥14 days, the timeline renders ≥3 dated offer
+> states with working screenshot links; `landing_page_snapshot` row count >0
+> and growing daily; a share link to the timeline renders correctly logged
+> out. Proof = the live URL plus the row-count delta.
 
 The detector is `npm run canary:bet3` (`scripts/bet3-live-verification.mjs`).
-Re-run it against `https://0509.io` after production has the `#967` route and
-`#968` backfill, and after a competitor has actually been watched for 14 days
-with three screenshot-backed states.
+Exit 1 unless every check PASSes. A D1 SKIP is not a pass.
 
-## Dependencies
+## Live runs against https://0509.io
 
-| Part | Issue | State | Live on 0509.io? |
-|---|---|---|---|
-| Snapshot store | #952 | closed 2026-08-25T08:00Z | Write path is in `main`. Production deploys have been red since. |
-| Public `/timeline/:domain` | #967 | closed 2026-08-26T16:59Z | **No.** Every demo URL 404s. |
-| Demo-brand backfill | #968 | closed 2026-08-26T19:27Z | **No.** Migration 0079 is in `main` and seeds one dated state per brand with an honest "no screenshot" label — not three screenshot-backed states, and not 14 days of watching. |
+### Run 1 — 2026-08-26T20:54:51Z
 
-#952 closed about two days before this run. A competitor watched ≥14 days is a
-date gate: the earliest honest pass is **2026-09-08**, and only if live
-capture actually stores three screenshot-backed states rather than
-fabricating them. #968's honesty contract forbids fabricated screenshots.
+Worker pre-deploy. All five `/timeline/:domain` URLs 404; the canary's
+`timeline_route_reachable` and `demo_backfill_present` FAILed. Record of
+the red state at the time the canary landed. The Worker was up (the
+`/ads/nike.com` route returned 200), so the failure was missing deployed
+bytes, not DNS.
 
-## Live run
+### Run 2 — 2026-08-26T22:50:52Z
 
-Command:
-
-```
-npm run canary:bet3
-```
-
-Against `https://0509.io` at 2026-08-26T20:54:51Z, unauthenticated, exit 1:
+Worker post-deploy (merge `22389a3d` → production). Five URLs return 200,
+each carries the demo-brand backfill (#968) and a logged-out share URL.
+The canary's `timeline_route_reachable`, `demo_backfill_present`,
+`share_link_present_and_logged_out`, and `no_receipt_404s` now PASS. The
+remaining red is the **§3.4 watched-competitor gate** (no probed brand has
+been watched ≥14 days with three screenshot-backed states — a date gate,
+not a code gap) and the two `landing_page_snapshot` SKIPs (the public
+canary has no Cloudflare API token; pass `BET3_SNAPSHOT_COUNT` and
+`BET3_PRIOR_SNAPSHOT_COUNT` when a later run can see the table).
 
 ```
 BET 3 live verification @ https://0509.io
 Probed 5 domain(s)
-  verified: 0 | dead-ends: 0 | not_found: 5 | rate-limited: 0 | errors: 0
-  share present: 0 | receipt links: 0 working / 0 broken
-  total offer states observed: 0
+  verified: 5 | dead-ends: 0 | not_found: 0 | rate-limited: 0 | errors: 0
+  share present: 5 | receipt links: 0 working / 0 broken
+  total offer states observed: 5
 
 Termination checks:
-  FAIL timeline_route_reachable: non-200 responses: nike.com, nykaa.com, allbirds.com, lenskart.com, mamaearth.com
-  FAIL demo_backfill_present: missing backfill for: nike.com, nykaa.com, allbirds.com, lenskart.com, mamaearth.com
+  PASS timeline_route_reachable: all probed domains returned HTTP 200
+  PASS demo_backfill_present: all 5 demo brand domains have >=1 offer state
   FAIL watched_competitor_three_screenshot_states: no probed domain has been watched >=14 days with >=3 dated states and working screenshot links
-  FAIL share_link_present_and_logged_out: no probed domain rendered a matching canonical share URL
+  PASS share_link_present_and_logged_out: share URL present and logged out on: nike.com, nykaa.com, allbirds.com, lenskart.com, mamaearth.com
   PASS no_receipt_404s: no receipt links returned 404 or 5xx
   SKIP snapshot_row_count_positive: SKIP: landing_page_snapshot count not available (no D1 probe)
   SKIP snapshot_row_count_growing_daily: SKIP: growing-daily needs two observations; this run has no prior count
@@ -61,33 +54,35 @@ Termination checks:
 
 Per-URL (all logged-out GET, no cookies):
 
-| URL | Status |
-|---|---|
-| https://0509.io/timeline/nike.com | 404 |
-| https://0509.io/timeline/nykaa.com | 404 |
-| https://0509.io/timeline/allbirds.com | 404 |
-| https://0509.io/timeline/lenskart.com | 404 |
-| https://0509.io/timeline/mamaearth.com | 404 |
-
-`/ads/nike.com` still returns 200. The Worker is up. This path is missing
-from the deployed Worker, not from DNS. Deploy production is red
-(#1172 Gate-B journeys, #1152 D1 restore-evidence).
+| URL | Status | Offer states | Share URL |
+|---|---|---|---|
+| https://0509.io/timeline/nike.com | 200 | 1 (no screenshot, backfill label) | https://0509.io/timeline/nike.com |
+| https://0509.io/timeline/nykaa.com | 200 | 1 (no screenshot, backfill label) | https://0509.io/timeline/nykaa.com |
+| https://0509.io/timeline/allbirds.com | 200 | 1 (no screenshot, backfill label) | https://0509.io/timeline/allbirds.com |
+| https://0509.io/timeline/lenskart.com | 200 | 1 (no screenshot, backfill label) | https://0509.io/timeline/lenskart.com |
+| https://0509.io/timeline/mamaearth.com | 200 | 1 (no screenshot, backfill label) | https://0509.io/timeline/mamaearth.com |
 
 A SKIP is not a green run. The two D1 checks were skipped because this
 public probe does not carry a Cloudflare API token. Pass
 `BET3_SNAPSHOT_COUNT` and `BET3_PRIOR_SNAPSHOT_COUNT` on a later run to
 measure the row-count delta.
 
-## Why this is not a close
+## Why this is not yet a close
 
 The issue's accept criteria are live, not "the code exists on main":
 
 - A competitor watched ≥14 days with ≥3 dated offer states and working
-  screenshot links — not in production, and not honest to seed.
-- `landing_page_snapshot` row count >0 and growing daily — not measured.
-- A share link that renders logged out — the share page 404s.
+  screenshot links — date gate. The honest backfill in #968 has one state
+  per brand (no screenshot). Fabricating screenshots is forbidden by the
+  contract #968 closed under.
+- `landing_page_snapshot` row count >0 and growing daily — not measured
+  from the canary; needs a D1 probe.
+- A share link that renders logged out — passes now.
 
-This canary does not fix those. It is how we know BET 3 is still red.
+The §3.4 watched-competitor clause needs a real ≥14-day watch on a real
+competitor before the canary can PASS it. The earliest honest pass for a
+brand first watched on 2026-08-25 (the demo backfill date) is
+2026-09-08.
 
 ## Unit tests for the detector
 
@@ -95,6 +90,6 @@ This canary does not fix those. It is how we know BET 3 is still red.
 npx vitest run --configLoader runner --project node tests/bet3-live-verification.test.ts
 ```
 
-Result: **26 passed (26)** — parser, termination checks (including the 14-day
-span and screenshot-link requirement), rate limiter, package.json lock, and
-the rule that a D1 SKIP is not a pass.
+Result: **26 passed (26)** — parser, termination checks (including the
+14-day span and screenshot-link requirement), rate limiter, package.json
+lock, and the rule that a D1 SKIP is not a pass.
