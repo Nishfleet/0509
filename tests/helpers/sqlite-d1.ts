@@ -3,8 +3,35 @@ import { DatabaseSync } from "node:sqlite";
 
 type SqliteBindings = Parameters<ReturnType<DatabaseSync["prepare"]>["run"]>;
 
-function toSqliteBindings(bindings: unknown[]) {
-  return bindings as SqliteBindings;
+const NUMBERED_PLACEHOLDER = /\?([1-9]\d*)/g;
+
+function numberedPlaceholderIndexes(sql: string): Set<number> {
+  const indexes = new Set<number>();
+  for (const match of sql.matchAll(NUMBERED_PLACEHOLDER)) {
+    indexes.add(Number(match[1]));
+  }
+  return indexes;
+}
+
+function toSqliteValue(value: unknown) {
+  return value === undefined ? null : value;
+}
+
+function toSqliteBindings(sql: string, bindings: unknown[]): SqliteBindings {
+  const indexes = numberedPlaceholderIndexes(sql);
+  if (indexes.size === 0) {
+    return bindings as SqliteBindings;
+  }
+
+  // node:sqlite (Node 24) treats ?1 as a named parameter. Spreading the D1
+  // bind list as anonymous values throws SQLITE_RANGE ("column index out of range").
+  // Only names that appear in the SQL are accepted; skipped numbers (?4 when
+  // the query uses ?1 and ?6) are unknown named parameters, not unused slots.
+  const named: Record<string, ReturnType<typeof toSqliteValue>> = {};
+  for (const index of indexes) {
+    named[String(index)] = toSqliteValue(bindings[index - 1]);
+  }
+  return [named] as SqliteBindings;
 }
 
 export function applyMigration(sqlite: DatabaseSync, path: string) {
@@ -22,7 +49,7 @@ export function createSqliteD1() {
       prepare(sql: string) {
         return {
           bind(...bindings: unknown[]) {
-            const bound = toSqliteBindings(bindings);
+            const bound = toSqliteBindings(sql, bindings);
             return {
               async run() {
                 const result = sqlite.prepare(sql).run(...bound);
