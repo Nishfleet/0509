@@ -22,6 +22,7 @@ import {
   nowIso,
   parseJson,
 } from "~/lib/data/helpers.server";
+import { toPersistedDiscoveryRouteContext } from "~/lib/discovery-cache.server";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   AdRecord,
@@ -221,7 +222,7 @@ export async function upsertDiscoveryCacheEntry(
       `,
       input.cacheKey,
       input.provider,
-      input.routeContext,
+      toPersistedDiscoveryRouteContext(input.routeContext),
       input.queryFingerprint,
       input.country,
       input.cursor,
@@ -332,7 +333,7 @@ export async function createDiscoveryFetchLog(
       `,
       createId(),
       input.provider,
-      input.routeContext,
+      toPersistedDiscoveryRouteContext(input.routeContext),
       input.queryFingerprint,
       input.country,
       input.status,

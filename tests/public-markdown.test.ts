@@ -5,6 +5,8 @@ import {
   LLMS_PAGES,
   LLMS_TEXT,
   PUBLIC_MARKDOWN,
+  buildLlmsText,
+  llmsPageForBrandPath,
   wantsPublicMarkdown,
 } from "~/lib/public-markdown";
 import { auditedAgentActionGroups } from "~/lib/agent-action-catalog";
@@ -19,6 +21,7 @@ describe("public markdown", () => {
     expect(isPublicMarkdownPage("/status")).toBe(true);
     expect(isPublicMarkdownPage("/changelog")).toBe(true);
     expect(isPublicMarkdownPage("/trust")).toBe(true);
+    expect(isPublicMarkdownPage("/proof")).toBe(true);
     expect(isPublicMarkdownPage("/search")).toBe(false);
     expect(isPublicMarkdownPage("/privacy")).toBe(true);
     expect(isPublicMarkdownPage("/terms")).toBe(true);
@@ -63,7 +66,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("customer API key creation, rotation, and revocation");
     expect(PUBLIC_MARKDOWN).toContain("Signed-in support cases cover paid-customer account help");
     expect(PUBLIC_MARKDOWN).toContain("Paid customer support paths cover");
-    expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, and trust pages are available");
+    expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, trust, and proof-rules pages are available");
     expect(PUBLIC_MARKDOWN).toContain("summarizes customer-facing surfaces without exposing private account activity");
     expect(PUBLIC_MARKDOWN).toContain("Email delivery is in product scope for eligible accounts");
     expect(PUBLIC_MARKDOWN).toContain("Public Markdown separates local capability, configured paths, and live proof");
@@ -177,8 +180,9 @@ describe("public markdown", () => {
       expect(LLMS_TEXT).toContain(`[${page.title}](${page.url}): ${page.description}`);
     });
 
-    // Every markdown link in llms.txt resolves to a sitemap path — no
-    // invented or dead routes can sneak in.
+    // Every markdown link in the static llms.txt fallback resolves to a
+    // sitemap path — no invented or dead routes can sneak in. Dynamic
+    // /ads/:domain entries are appended only via buildLlmsText.
     const linkedPaths = [...LLMS_TEXT.matchAll(/\]\((https:\/\/0509\.io[^)]*)\)/g)].map(
       (match) => new URL(match[1]).pathname,
     );
@@ -186,6 +190,58 @@ describe("public markdown", () => {
     for (const path of linkedPaths) {
       expect(SITEMAP_PATHS as readonly string[]).toContain(path);
     }
+  });
+
+  it("lists every dynamic sitemap brand path in rendered llms.txt", () => {
+    const brandEntries = [
+      { path: "/ads/nykaa.com" },
+      { path: "/ads/nike.com" },
+      { path: "/ads/gymshark.com" },
+      { path: "/ads/lenskart.com" },
+    ];
+    const rendered = buildLlmsText(brandEntries);
+
+    for (const entry of brandEntries) {
+      const page = llmsPageForBrandPath(entry.path);
+      expect(page).not.toBeNull();
+      expect(rendered).toContain(`[${page!.title}](${page!.url}): ${page!.description}`);
+      expect(page!.description).toContain("Meta Ad Library");
+      expect(page!.description).toContain("7 days");
+      expect(page!.description).toMatch(/not a worldwide/i);
+    }
+
+    const linkedPaths = [...rendered.matchAll(/\]\((https:\/\/0509\.io[^)]*)\)/g)].map(
+      (match) => new URL(match[1]).pathname,
+    );
+    expect(linkedPaths).toEqual([...SITEMAP_PATHS, ...brandEntries.map((entry) => entry.path)]);
+  });
+
+  it("includes ad count and freshness in /ads/:domain llms descriptions", () => {
+    const rendered = buildLlmsText([
+      { path: "/ads/nykaa.com", adCount: 3, fetchedAt: "2026-08-26T14:40:00.000Z" },
+      { path: "/ads/nike.com", adCount: 1, fetchedAt: "2026-08-25T10:00:00.000Z" },
+    ]);
+
+    expect(rendered).toContain("3 live Meta Ad Library ads for nykaa.com from public search, captured on 2026-08-26.");
+    expect(rendered).toContain("1 live Meta Ad Library ad for nike.com from public search, captured on 2026-08-25.");
+    expect(rendered).toContain("Listed only while the capture is fresh enough to index (within 7 days)");
+    expect(rendered).toMatch(/Not a worldwide/i);
+    expect(rendered).not.toMatch(/worldwide coverage/i);
+  });
+
+  it("does not list noindex /ads shells or non-brand paths in llms.txt", () => {
+    const rendered = buildLlmsText([
+      { path: "/ads" },
+      { path: "/ads/nike.com/extra" },
+      { path: "/search" },
+      { path: "/ads/" },
+    ]);
+
+    expect(rendered).not.toContain("https://0509.io/ads/");
+    expect(llmsPageForBrandPath("/ads")).toBeNull();
+    expect(llmsPageForBrandPath("/ads/nike.com/extra")).toBeNull();
+    expect(llmsPageForBrandPath("/ads/")).toBeNull();
+    expect(buildLlmsText()).toBe(LLMS_TEXT);
   });
 
   it("labels configured capability separately from live proof", () => {

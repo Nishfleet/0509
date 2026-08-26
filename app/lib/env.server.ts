@@ -115,6 +115,13 @@ export interface AppEnv {
    * cache older than 7 days are ALWAYS noindex regardless of this flag.
    */
   PUBLIC_BRAND_PAGES_INDEXABLE?: string;
+  /**
+   * Public Offer Timeline share-link chrome. Unset or any value other than
+   * "0" shows the copyable `/timeline/:domain` URL. Explicit "0" hides it
+   * (rollback for #967 share-link generation). The timeline route itself
+   * still renders logged out.
+   */
+  PUBLIC_OFFER_TIMELINE_SHARE?: string;
   PRESENCE_WEBSITE_ROLLOUT?: string;
   PRESENCE_X_ROLLOUT?: string;
   PRESENCE_REDDIT_ROLLOUT?: string;

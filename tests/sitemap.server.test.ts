@@ -13,7 +13,7 @@ import {
 import { fingerprintSavedQuery, normalizeSavedQuery, parseSearchParams } from "~/lib/normalize";
 import { buildSearchV2CacheKey } from "~/lib/search-v2.server";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
-import { SITEMAP_PATHS } from "~/lib/seo";
+import { NOINDEX_ACTION_SURFACES, SITEMAP_PATHS } from "~/lib/seo";
 import routes from "~/routes";
 import {
   brandDomainFromSitemapCacheRow,
@@ -438,6 +438,62 @@ describe("aggression-score gate — never list a thin page (ad wall without its 
       ),
     ).toBe(false);
   });
+
+  it("lists allbirds.com when the capture lands on allbirds.co.uk with enough history", () => {
+    const row = cacheRow({
+      cache_key: "search-v2:domain:allbirds.com:exact:meta_library_browser:all:page-1",
+      payload: {
+        ...basePayload,
+        displayDomain: "allbirds.com",
+        ads: [
+          {
+            metaAdId: "meta-allbirds-uk",
+            source: "meta_library_browser",
+            landingPageUrl: "https://www.allbirds.co.uk/products/womens-dasher",
+            domainMatch: {
+              level: "unverified_provider_candidate",
+              reason: "Returned by the Meta source; website connection not verified",
+              matchedDomain: null,
+            },
+            firstSeenAt: isoAgo(131 * DAY_MS),
+            active: true,
+            variantCount: 1,
+          },
+        ],
+      },
+    });
+    expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([
+      "/ads/allbirds.com",
+    ]);
+  });
+
+  it("lists mamaearth.com when the capture lands on mamaearth.in with enough history", () => {
+    const row = cacheRow({
+      cache_key: "search-v2:domain:mamaearth.com:exact:meta_library_browser:all:page-1",
+      payload: {
+        ...basePayload,
+        displayDomain: "mamaearth.com",
+        ads: [
+          {
+            metaAdId: "meta-mamaearth-in",
+            source: "meta_library_browser",
+            landingPageUrl: "https://mamaearth.in/product/ubtan-face-wash",
+            domainMatch: {
+              level: "unverified_text_candidate",
+              reason: "Mentions “mamaearth” in ad text only",
+              matchedDomain: null,
+            },
+            firstSeenAt: isoAgo(120 * DAY_MS),
+            active: true,
+            variantCount: 1,
+          },
+        ],
+      },
+    });
+    expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([
+      "/ads/mamaearth.com",
+    ]);
+  });
 });
 
 describe("brandPageLookupCacheKeysForSitemap", () => {
@@ -546,6 +602,57 @@ describe("buildSitemapXml", () => {
 
     expect(xml).toContain("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">");
     expect(xml).not.toContain("/ads/");
+  });
+});
+
+describe("llms.txt parity with dynamic sitemap brand paths", () => {
+  it("includes every indexable sitemap brand path and omits noindex shells", async () => {
+    const { buildLlmsText } = await import("~/lib/public-markdown");
+    const now = new Date();
+    const nikeAd = {
+      ...verifiedAd,
+      metaAdId: "meta-nike-1",
+      landingPageUrl: "https://nike.com/shop",
+      domainMatch: {
+        ...verifiedAd.domainMatch,
+        reason: "Landing page matches nike.com",
+        matchedDomain: "nike.com",
+      },
+    };
+    const indexable = cacheRow({
+      cache_key: "search-v2:domain:nike.com:exact:meta_library_browser:all:page-1",
+      payload: { ...basePayload, displayDomain: "nike.com", ads: [nikeAd] },
+    });
+    const stale = cacheRow({
+      cache_key: "search-v2:domain:stale.com:exact:meta_library_browser:all:page-1",
+      payload: { ...basePayload, displayDomain: "stale.com" },
+      fetched_at: isoAgo(BRAND_PAGE_FRESH_FOR_INDEXING_MS + DAY_MS),
+    });
+    const demo = cacheRow({
+      cache_key: "search-v2:domain:demo.com:exact:meta_library_browser:all:page-1",
+      payload: { ...basePayload, displayDomain: "demo.com", source: "demo", provider: "demo" },
+    });
+    const otherCountry = cacheRow({
+      cache_key: "search-v2:domain:myntra.com:exact:meta_library_browser:india:page-1",
+      payload: { ...basePayload, displayDomain: "myntra.com" },
+    });
+
+    const brandEntries = indexableBrandPageEntriesFromRows(
+      [indexable, stale, demo, otherCountry, cacheRow()],
+      now,
+    );
+    const sitemapAds = [...buildSitemapXml(brandEntries).matchAll(/https:\/\/0509\.io\/ads\/[^<]+/g)].map(
+      (match) => match[0],
+    );
+    const llmsAds = [...buildLlmsText(brandEntries).matchAll(/https:\/\/0509\.io\/ads\/[^)]+/g)].map(
+      (match) => match[0],
+    );
+
+    expect(sitemapAds).toEqual(["https://0509.io/ads/nike.com", "https://0509.io/ads/nykaa.com"]);
+    expect(llmsAds).toEqual(sitemapAds);
+    expect(llmsAds).not.toContain("https://0509.io/ads/stale.com");
+    expect(llmsAds).not.toContain("https://0509.io/ads/demo.com");
+    expect(llmsAds).not.toContain("https://0509.io/ads/myntra.com");
   });
 });
 
@@ -711,5 +818,21 @@ describe("SITEMAP_PATHS", () => {
       const matched = patterns.some((pattern) => pattern.test(pathname));
       expect(matched, `${sitemapPath} has no registered, non-splat route`).toBe(true);
     }
+  });
+
+  it("keeps restored money pages in the sitemap and signup out", () => {
+    const moneyPages = [
+      "/pricing",
+      "/compare/foreplay",
+      "/compare/visualping",
+      "/compare/pulzifi",
+      "/compare/spyland",
+    ] as const;
+
+    for (const path of moneyPages) {
+      expect(SITEMAP_PATHS, `${path} dropped from SITEMAP_PATHS`).toContain(path);
+    }
+    expect(SITEMAP_PATHS).not.toContain("/auth/signup");
+    expect(NOINDEX_ACTION_SURFACES).toContain("/auth/signup");
   });
 });

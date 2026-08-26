@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   formatAdDetailBody,
+  formatLandingPageCaptureGap,
   formatProofCaptureLabel,
   formatResultCardSummary,
   formatSearchCaptureAgeLabel,
   formatSearchCommandTitle,
   formatSearchMarketScope,
+  formatSearchPageScope,
   formatSelectedLandingFactValue,
   formatSelectedLandingHeadline,
 } from "~/lib/search-display";
@@ -53,16 +55,40 @@ describe("formatProofCaptureLabel", () => {
     );
   });
 
-  it("falls back to the not-captured label when capturedAt is missing or invalid", () => {
+  it("falls back to honest gap copy when capturedAt is missing or invalid", () => {
     expect(formatProofCaptureLabel(adWithCapture("not-a-date"))).toBe(
-      "Landing page not captured yet",
+      "Landing page check did not finish",
     );
     expect(
       formatProofCaptureLabel({
         landingPageUrl: "https://example.com",
         landingPage: null,
       } as AdRecord),
-    ).toBe("Landing page not captured yet");
+    ).toBe("Landing page check did not finish");
+  });
+
+  it("names a blocked page instead of a generic not-captured label", () => {
+    expect(
+      formatProofCaptureLabel(
+        {
+          landingPageUrl: "https://example.com",
+          landingPage: null,
+        } as AdRecord,
+        { failureReason: "landing_blocked" },
+      ),
+    ).toBe("Landing page blocked the check");
+  });
+
+  it("says the check is in flight while enrichment is pending", () => {
+    expect(
+      formatProofCaptureLabel(
+        {
+          landingPageUrl: "https://example.com",
+          landingPage: null,
+        } as AdRecord,
+        { pending: true },
+      ),
+    ).toBe("Checking the landing page now");
   });
 
   it("falls back to the no-destination label when there is no landing-page URL", () => {
@@ -95,7 +121,7 @@ describe("formatSelectedLandingHeadline", () => {
     ).toBe("Analyzing creative…");
   });
 
-  it("returns Couldn't capture this page when a URL exists without a snapshot", () => {
+  it("returns honest gap copy when a URL exists without a snapshot", () => {
     expect(
       formatSelectedLandingHeadline({
         rawHeadline: null,
@@ -103,7 +129,16 @@ describe("formatSelectedLandingHeadline", () => {
         hasLandingPage: false,
         pending: false,
       }),
-    ).toBe("Couldn't capture this page");
+    ).toBe("This landing page didn't yield a usable snapshot");
+    expect(
+      formatSelectedLandingHeadline({
+        rawHeadline: null,
+        landingPageUrl: "https://example.com",
+        hasLandingPage: false,
+        pending: false,
+        failureReason: "landing_cookie_wall",
+      }),
+    ).toBe("This page asked for cookies first");
   });
 
   it("returns Headline not captured yet when there is no landing-page URL", () => {
@@ -141,7 +176,7 @@ describe("formatSelectedLandingFactValue", () => {
     ).toBe("Analyzing creative…");
   });
 
-  it("returns Unavailable when a URL exists without a snapshot", () => {
+  it("returns a named gap instead of Unavailable when a URL exists without a snapshot", () => {
     expect(
       formatSelectedLandingFactValue({
         capturedLabel: "Not detected",
@@ -149,10 +184,19 @@ describe("formatSelectedLandingFactValue", () => {
         hasLandingPage: false,
         pending: false,
       }),
-    ).toBe("Unavailable");
+    ).toBe("No usable snapshot");
+    expect(
+      formatSelectedLandingFactValue({
+        capturedLabel: "Not detected",
+        landingPageUrl: "https://example.com",
+        hasLandingPage: false,
+        pending: false,
+        failureReason: "landing_blocked",
+      }),
+    ).toBe("Blocked by the site");
   });
 
-  it("returns Couldn't check this page for a failed page check", () => {
+  it("returns a named page-check gap instead of Couldn't check this page", () => {
     expect(
       formatSelectedLandingFactValue({
         capturedLabel: "Not checked yet",
@@ -161,7 +205,40 @@ describe("formatSelectedLandingFactValue", () => {
         pending: false,
         failedPageCheck: true,
       }),
-    ).toBe("Couldn't check this page");
+    ).toBe("Landing page check did not finish");
+    expect(
+      formatSelectedLandingFactValue({
+        capturedLabel: "Not checked yet",
+        landingPageUrl: "https://example.com",
+        hasLandingPage: false,
+        pending: false,
+        failedPageCheck: true,
+        failureReason: "landing_partial_spa",
+      }),
+    ).toBe("Landing page needs a full browser");
+  });
+});
+
+describe("formatLandingPageCaptureGap", () => {
+  it("always names a next step, never the old dead-end copy", () => {
+    const reasons = [
+      undefined,
+      "landing_blocked",
+      "landing_challenge_page",
+      "landing_cookie_wall",
+      "landing_partial_spa",
+      "landing_rate_limited",
+      "landing_url_invalid",
+      "landing_fetch_failed",
+      "unknown_reason",
+    ];
+    for (const reason of reasons) {
+      const gap = formatLandingPageCaptureGap(reason);
+      expect(gap.headline).not.toMatch(/Couldn't capture this page/i);
+      expect(gap.headline).not.toMatch(/Landing page not captured yet/i);
+      expect(gap.factValue).not.toBe("Unavailable");
+      expect(gap.detail.length).toBeGreaterThan(10);
+    }
   });
 });
 
@@ -314,9 +391,42 @@ describe("formatSearchMarketScope", () => {
   });
 });
 
+describe("formatSearchPageScope", () => {
+  it("names the Meta Ad Library all-countries query, never worldwide coverage", () => {
+    expect(formatSearchPageScope("all")).toBe(
+      "from the Meta Ad Library's all-countries query",
+    );
+    expect(formatSearchPageScope("ALL")).toBe(
+      "from the Meta Ad Library's all-countries query",
+    );
+    expect(formatSearchPageScope("all")).not.toContain("in all countries");
+    expect(formatSearchPageScope("all")).not.toContain("across all countries");
+    expect(formatSearchPageScope("ALL")).not.toContain("in all countries");
+    expect(formatSearchPageScope("ALL")).not.toContain("across all countries");
+  });
+
+  it("names the market for a specific country", () => {
+    expect(formatSearchPageScope("India")).toBe("in India");
+    expect(formatSearchPageScope("IN")).toBe("in India");
+    expect(formatSearchPageScope("usa")).toBe("in United States");
+  });
+
+  it("returns null when no country is supplied", () => {
+    expect(formatSearchPageScope(null)).toBeNull();
+    expect(formatSearchPageScope(undefined)).toBeNull();
+    expect(formatSearchPageScope("")).toBeNull();
+    expect(formatSearchPageScope("   ")).toBeNull();
+  });
+});
+
 describe("formatSearchCommandTitle", () => {
-  it("title-cases the brand and names all countries on a shared search URL", () => {
-    expect(formatSearchCommandTitle("nike", "all")).toBe("Nike ads in all countries");
+  it("title-cases the brand and names the Meta Ad Library all-countries query", () => {
+    const title = formatSearchCommandTitle("nike", "all");
+    expect(title).toBe(
+      "Nike ads from the Meta Ad Library's all-countries query",
+    );
+    expect(title).not.toContain("in all countries");
+    expect(title).not.toContain("across all countries");
   });
 
   it("resolves country names from the catalog", () => {

@@ -15,6 +15,7 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain("https://0509.io/status");
     expect(sitemap?.body).toContain("https://0509.io/changelog");
     expect(sitemap?.body).toContain("https://0509.io/trust");
+    expect(sitemap?.body).toContain("https://0509.io/proof");
     expect(sitemap?.body).toContain("https://0509.io/privacy");
     expect(sitemap?.body).toContain("https://0509.io/terms");
     // Funnel entry points (feat/funnel-seo): the public search preview and
@@ -23,6 +24,9 @@ describe("public SEO files", () => {
     // does not index the signup entry (see NOINDEX_ACTION_SURFACES in seo.ts).
     expect(sitemap?.body).toContain("<loc>https://0509.io/search</loc>");
     expect(sitemap?.body).not.toContain("<loc>https://0509.io/auth/signup</loc>");
+    // Restored after the #944/#945 404s cleared (#963): /pricing must stay in
+    // the published sitemap with the compare pages, never behind a later drop.
+    expect(sitemap?.body).toContain("<loc>https://0509.io/pricing</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/magicbrief</loc>");
     expect(sitemap?.body).toContain(
       "<loc>https://0509.io/compare/meta-ad-library</loc>",
@@ -128,3 +132,4 @@ describe("public SEO files", () => {
     expect(skill).toContain("Email is the verified automated delivery channel for launch.");
   });
 });
+

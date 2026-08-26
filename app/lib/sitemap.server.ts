@@ -122,6 +122,10 @@ function parseSitemapCachePayload(value: string): SitemapCachePayload | null {
   return candidate as unknown as SitemapCachePayload;
 }
 
+function nonDemoAdsFromPayload(payload: SitemapCachePayload): unknown[] {
+  return payload.ads.filter((ad) => ad && (ad as { source?: unknown }).source !== "demo");
+}
+
 /**
  * Recover the registrable brand domain a cache row maps to, or null when the
  * row cannot be losslessly mapped to an /ads/:domain page:
@@ -189,7 +193,7 @@ export function isIndexableBrandPageRow(row: SitemapCacheRow, now: Date): boolea
   if (payload.source === "demo" || payload.provider === "demo") {
     return false;
   }
-  const ads = payload.ads.filter((ad) => ad && (ad as { source?: unknown }).source !== "demo");
+  const ads = nonDemoAdsFromPayload(payload);
   if (ads.length === 0) {
     return false;
   }
@@ -228,7 +232,7 @@ export function brandPageRowRendersAggressionScore(
   if (!payload) {
     return false;
   }
-  const ads = payload.ads.filter((ad) => ad && (ad as { source?: unknown }).source !== "demo");
+  const ads = nonDemoAdsFromPayload(payload);
   const verifiedLinkedAds = ads.filter((ad) =>
     adHasVerifiedDomainLink(ad as AdRecord, domain),
   );
@@ -321,11 +325,15 @@ export function indexableBrandPageEntriesFromRows(
     }
     seen.add(domain);
     const fetchedDate = row.fetched_at.slice(0, 10);
+    const payload = parseSitemapCachePayload(row.payload_json);
+    const adCount = payload ? nonDemoAdsFromPayload(payload).length : 0;
     entries.push({
       path: `/ads/${domain}`,
       lastmod: fetchedDate,
       changefreq: "weekly",
       priority: "0.6",
+      adCount,
+      fetchedAt: row.fetched_at,
     });
     if (entries.length >= SITEMAP_BRAND_PATH_LIMIT) {
       break;

@@ -2,12 +2,19 @@ import { createHash } from "node:crypto";
 
 // Empty unless a future destructive cleanup must intentionally run after a
 // schema-compatible Worker deploy. Completed cleanups should not remain here.
+//
+// 2026-08-26 AUDITOR FIX: 0077_competitor_site_monitoring.sql was added here
+// as a "reconcile the production ledger fork" entry (PR #899), but it is NOT
+// a destructive cleanup — the file still ships in migrations/ and is live in
+// production. A non-cleanup entry in this set breaks the contiguous-suffix
+// rule the moment a newer migration lands after it: with 0078 appended, the
+// tail [0077, 0078] cannot be expressed as "cleanup only 0077", so
+// allowedRemoteMigrationLedgers throws post_deploy_cleanup_migration_allowlist_invalid
+// and every deploy after the 0078 merge blocks. The empty set restores the
+// original design intent and matches the production ledger exactly (87 names
+// ending 0077, sha 8703562f1d… proven by the 2026-08-26T16:57Z drill).
 /** @type {Set<string>} */
-export const POST_DEPLOY_CLEANUP_MIGRATIONS = new Set([
-  // 0075_teams_delivery landed on production before this file existed at 0075;
-  // renumbered to 0077 so prod ledger (…teams, browser) matches repo prefix.
-  "0077_competitor_site_monitoring.sql",
-]);
+export const POST_DEPLOY_CLEANUP_MIGRATIONS = new Set([]);
 
 // Captured from the ordered production D1 migration ledger on 2026-07-30 by
 // workflow run 30556997891. D1's ledger is append-only even when a historical

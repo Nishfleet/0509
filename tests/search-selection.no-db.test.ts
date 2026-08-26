@@ -84,11 +84,12 @@ describe("search selection without D1", () => {
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
       expect.anything(),
       "https://example.com/offer",
-      {
+      expect.objectContaining({
         persistArtifacts: false,
         routeContext: "selection_enrichment",
         planTier: null,
-      },
+        onFailure: expect.any(Function),
+      }),
     );
   });
 
@@ -225,6 +226,7 @@ describe("selection-enrichment plan-tier propagation", () => {
         persistArtifacts: false,
         routeContext: "selection_enrichment",
         planTier: "starter",
+        onFailure: expect.any(Function),
       },
     );
   });
@@ -282,11 +284,55 @@ describe("anonymous selection landing capture", () => {
         routeContext: "selection_enrichment",
         planTier: null,
         allowRenderedFallback: false,
+        onFailure: expect.any(Function),
       },
     );
     expect(upsertAd).not.toHaveBeenCalled();
     expect(captureCreativeText).not.toHaveBeenCalled();
     expect(result.selectedAd?.landingPage).toEqual(capturedSnapshot);
+    expect(result.landingPageCaptureFailure).toBeNull();
+  });
+
+  it("returns the capture failure so the detail pane can name the reason", async () => {
+    const captureLandingPageSnapshot = vi.fn(
+      async (
+        _env: unknown,
+        _url: string,
+        options?: { onFailure?: (detail: { reasonCode: string; metadata: Record<string, unknown> }) => void },
+      ) => {
+        options?.onFailure?.({
+          reasonCode: "landing_blocked",
+          metadata: { status: 403 },
+        });
+        return null;
+      },
+    );
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildLandingPageAnalysisFields: vi.fn(() => []),
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn(),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
+
+    const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+    const result = await prepareSearchResultSelection(
+      { DB: {} } as never,
+      {
+        ads: [liveAd],
+        nextCursor: null,
+        source: "meta",
+      },
+      "meta-boat-1",
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
+    );
+
+    expect(result.selectedAd?.landingPage).toBeNull();
+    expect(result.landingPageCaptureFailure).toEqual({
+      reasonCode: "landing_blocked",
+      metadata: { status: 403 },
+    });
   });
 
   it("does not fetch demo landing URLs", async () => {
@@ -370,11 +416,12 @@ describe("anonymous selection landing capture", () => {
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
       expect.anything(),
       "https://example.com/offer",
-      {
+      expect.objectContaining({
         persistArtifacts: false,
         routeContext: "selection_enrichment",
         planTier: null,
-      },
+        onFailure: expect.any(Function),
+      }),
     );
     expect(captureLandingPageSnapshot.mock.calls[0]?.[2]).not.toHaveProperty(
       "allowRenderedFallback",

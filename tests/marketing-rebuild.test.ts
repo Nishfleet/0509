@@ -91,6 +91,8 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("linking to");
     expect(marketingRoute).toContain("We saved the proof.");
     expect(marketingRoute).toContain("Proof-backed brief");
+    expect(marketingRoute).toContain('to="/proof"');
+    expect(marketingRoute).toContain("What we refuse to alert on");
     expect(marketingRoute).toContain("A rival page changed while your growth team was offline");
     expect(marketingRoute).toContain("Your growth team would&rsquo;ve found out from a client.");
     expect(marketingRoute).toContain("landing pages for price, offer, and CTA changes");

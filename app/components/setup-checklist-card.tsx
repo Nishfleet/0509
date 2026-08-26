@@ -266,7 +266,7 @@ export function SetupChecklistCard({
   );
 }
 
-function ImportPreview({ preview }: { preview: CompetitorImportPreview }) {
+export function ImportPreview({ preview }: { preview: CompetitorImportPreview }) {
   const rejectedColumns = preview.rejectedColumns ?? [];
   return (
     <section aria-label="Competitor import preview" className="f9-import-preview">
@@ -292,7 +292,7 @@ function ImportPreview({ preview }: { preview: CompetitorImportPreview }) {
   );
 }
 
-function ImportRow({ row }: { row: CompetitorImportRow }) {
+export function ImportRow({ row }: { row: CompetitorImportRow }) {
   const disabled = row.status === "invalid" || row.status === "duplicate" || row.status === "existing";
   return (
     <label className={`f9-import-row is-${row.status}`}>

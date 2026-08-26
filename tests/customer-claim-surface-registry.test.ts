@@ -320,7 +320,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/app/shares", "/app/source-access", "/app/support", "/app/team",
     "/app/watchlists", "/help", "/search",
   ],
-  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/proof", "/privacy", "/terms"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
   // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
   // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
@@ -333,8 +333,9 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // 2026-08-25: /pricing rejoined the sitemap — the route is registered and the
   // live Worker bundle is ready to serve it (see issue #945).
   // 2026-08-26: four restored compare pages joined the sitemap (issue #1090).
+  // 2026-08-26: /proof joined the sitemap — public capture-validity rules page (issue #970).
   // 2026-08-26: BET 8 switch pages joined the sitemap (issue #1117).
-  sitemapPaths: ["/", "/search", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/switch/magicbrief", "/switch/panoramata", "/switch/visualping", "/competitor-monitoring", "/pricing", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  sitemapPaths: ["/", "/search", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/switch/magicbrief", "/switch/panoramata", "/switch/visualping", "/competitor-monitoring", "/proof", "/pricing", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",

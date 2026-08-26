@@ -91,6 +91,44 @@ describe("domain match hierarchy", () => {
   });
 });
 
+describe("regional brand properties (BET 3 demo /ads pages)", () => {
+  it("verifies Allbirds ads that land on allbirds.co.uk against an allbirds.com search", () => {
+    const intent = parseSearchInputFromWebsiteField("https://allbirds.com");
+    const regional = ad({
+      advertiser: "Allbirds",
+      landingPageUrl: "https://www.allbirds.co.uk/products/womens-dasher",
+    });
+
+    const exact = classifyDomainMatches([regional], intent, { includeUnverified: false });
+    expect(exact).toHaveLength(1);
+    expect(exact[0]?.match.level).toBe("verified_alias");
+    expect(exact[0]?.match.confidenceCategory).toBe("verified");
+  });
+
+  it("verifies Mamaearth ads that land on mamaearth.in against a mamaearth.com search", () => {
+    const intent = parseSearchInputFromWebsiteField("https://mamaearth.com");
+    const regional = ad({
+      advertiser: "Mamaearth",
+      landingPageUrl: "https://mamaearth.in/product/ubtan-face-wash",
+    });
+
+    const exact = classifyDomainMatches([regional], intent, { includeUnverified: false });
+    expect(exact).toHaveLength(1);
+    expect(exact[0]?.match.level).toBe("verified_alias");
+    expect(exact[0]?.match.confidenceCategory).toBe("verified");
+  });
+
+  it("still rejects the okara.ai geography-keyword clinic", () => {
+    const intent = parseSearchInputFromWebsiteField("https://okara.ai");
+    const clinic = ad({
+      advertiser: "ESHAL HOMEOPATHIC CLINIC OKARA",
+      landingPageUrl: "https://eshal-clinic.example.com",
+    });
+    const exact = classifyDomainMatches([clinic], intent, { includeUnverified: false });
+    expect(exact).toHaveLength(0);
+  });
+});
+
 describe("domainMatchTier", () => {
   it("maps verified levels to verified, brand-name to likely, and everything else to unmatched", () => {
     expect(domainMatchTier("exact_hostname")).toBe("verified");
