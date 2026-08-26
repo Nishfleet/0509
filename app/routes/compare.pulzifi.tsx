@@ -55,7 +55,7 @@ const pulzifiCosts = [
   {
     title: "Plans and limits vary",
     detail:
-      "Pricing is published in tiers; check pulzifi.com for current limits and frequency options.",
+      "Pricing is published in tiers; check the live source at https://pulzifi.com/ for current limits and frequency options.",
   },
 ] as const;
 

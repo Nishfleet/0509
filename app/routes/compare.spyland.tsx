@@ -50,7 +50,7 @@ const spylandCosts = [
   {
     title: "Daily is the default cadence",
     detail:
-      "Faster or slower check frequencies may be available, but daily is the standard pitch. Confirm current plans on spyland.ing.",
+      "Faster or slower check frequencies may be available, but daily is the standard pitch. Confirm current plans on the live source at https://spyland.ing/.",
   },
   {
     title: "Page insight, not ad source",
