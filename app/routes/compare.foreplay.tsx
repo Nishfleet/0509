@@ -102,7 +102,9 @@ export default function CompareForeplayRoute() {
         </h1>
         <p className="ld-deck-copy">
           Foreplay is strong for ad inspiration and creative research. Five to Nine is for scheduled,
-          source-backed proof of competitor offer and landing-page changes.
+          source-backed proof of competitor offer and landing-page changes. Spyder is Foreplay's
+          competitor-tracking product — see{" "}
+          <Link to="/compare/foreplay-spyder">Five to Nine vs Foreplay Spyder</Link>.
         </p>
 
         <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">

@@ -103,6 +103,11 @@ export default function CompareVisualpingRoute() {
         <p className="ld-deck-copy">
           Visualping is a solid website-change monitor. For tracking competitor offers, prices, and
           landing-page moves, the job is slightly different — and we built Five to Nine for that.
+          For the Meta Ad Library case specifically, see{" "}
+          <Link to="/compare/visualping-ad-library">
+            Five to Nine vs Visualping for ad libraries
+          </Link>
+          .
         </p>
 
         <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">

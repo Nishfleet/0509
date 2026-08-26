@@ -32,9 +32,17 @@ describe("public SEO files", () => {
       "<loc>https://0509.io/compare/meta-ad-library</loc>",
     );
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/visualping</loc>");
+    expect(sitemap?.body).toContain(
+      "<loc>https://0509.io/compare/visualping-ad-library</loc>",
+    );
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/spyland</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/pulzifi</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/foreplay</loc>");
+    expect(sitemap?.body).toContain(
+      "<loc>https://0509.io/compare/foreplay-spyder</loc>",
+    );
+    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/panoramata</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/adspyder</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/magicbrief</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/panoramata</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/visualping</loc>");
