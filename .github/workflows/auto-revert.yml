@@ -14,12 +14,12 @@ name: Auto revert
 # commit and now, the freshness guard files a halt issue naming both SHAs and
 # stops: that is a human-order problem.
 #
-# The PR is opened with the workflow's GITHUB_TOKEN. NOTE: a PR opened by
-# GITHUB_TOKEN does not itself trigger `pull_request` workflows, so the four
-# required checks will not report on the revert PR and armed auto-merge will
-# not fire until a PAT (secret AUTO_REVERT_PAT) is wired in. Until then the
-# PR sits open and loud — the mechanism still builds and opens the correct
-# revert; a human (or the PAT) lands it. This is flagged, not silent.
+# The revert PR is opened with a PAT (secret AUTO_REVERT_PAT) when wired,
+# otherwise it falls back to the workflow's GITHUB_TOKEN. A PAT-opened PR
+# triggers `pull_request` workflows, so the four required checks report and
+# armed auto-merge fires. AUTO_REVERT_PAT is set on this repo. A GITHUB_TOKEN
+# PR would still build and open the correct revert, but it would sit open and
+# loud until a human (or the PAT) lands it. This is flagged, not silent.
 
 on:
   workflow_run:
