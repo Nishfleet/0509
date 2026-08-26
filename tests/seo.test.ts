@@ -31,6 +31,9 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/spyland</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/pulzifi</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/foreplay</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/switch/magicbrief</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/switch/panoramata</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/switch/visualping</loc>");
     // Metadata: static entries carry changefreq and priority.
     expect(sitemap?.body).toContain("<changefreq>daily</changefreq>");
     expect(sitemap?.body).toContain("<priority>1.0</priority>");

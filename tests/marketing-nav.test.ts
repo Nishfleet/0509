@@ -84,7 +84,7 @@ describe("MarketingNav (shared public nav)", () => {
 		expect(compact).toMatch(/\.ld-nav-actions\s*\{[^}]*flex-wrap:\s*nowrap;/s);
 	});
 
-	it("is the header used by landing, all compare pages, and the legal doc shell", async () => {
+	it("is the header used by landing, all compare pages, switch pages, and the legal doc shell", async () => {
 		const marketing = readFileSync("app/routes/marketing.tsx", "utf8");
 		const magicbrief = readFileSync("app/routes/compare.magicbrief.tsx", "utf8");
 		const metaLibrary = readFileSync("app/routes/compare.meta-ad-library.tsx", "utf8");
@@ -92,6 +92,7 @@ describe("MarketingNav (shared public nav)", () => {
 		const spyland = readFileSync("app/routes/compare.spyland.tsx", "utf8");
 		const pulzifi = readFileSync("app/routes/compare.pulzifi.tsx", "utf8");
 		const foreplay = readFileSync("app/routes/compare.foreplay.tsx", "utf8");
+		const switchLanding = readFileSync("app/components/switch-landing.tsx", "utf8");
 
 		expect(marketing).toContain("<MarketingNav />");
 		expect(magicbrief).toContain("<MarketingNav />");
@@ -100,6 +101,7 @@ describe("MarketingNav (shared public nav)", () => {
 		expect(spyland).toContain("<MarketingNav />");
 		expect(pulzifi).toContain("<MarketingNav />");
 		expect(foreplay).toContain("<MarketingNav />");
+		expect(switchLanding).toContain("<MarketingNav />");
 
 		// The legal/doc shell no longer improvises its own chrome: its header IS
 		// MarketingNav, so the tagline and the Pricing/Search/Sign in links are

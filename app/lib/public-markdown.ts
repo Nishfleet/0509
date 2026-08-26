@@ -70,6 +70,21 @@ const LLMS_PAGE_DETAILS: Record<
     title: "Five to Nine vs Foreplay",
     description: "How Five to Nine compares with Foreplay.",
   },
+  "/switch/magicbrief": {
+    title: "Switch from MagicBrief",
+    description:
+      "MagicBrief closed 31 July 2026. What transfers into Five to Nine, what does not, and the free search preview.",
+  },
+  "/switch/panoramata": {
+    title: "Switch from Panoramata",
+    description:
+      "Same competitor ads and pages job from a pasted domain. What transfers, what does not, and the free search preview.",
+  },
+  "/switch/visualping": {
+    title: "Switch from Visualping",
+    description:
+      "Paste a domain instead of an Ad Library URL and a condition prompt. Published no-phantom-change rules and the free search preview.",
+  },
   "/competitor-monitoring": {
     title: "Competitor monitoring",
     description:

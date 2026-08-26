@@ -8,9 +8,9 @@ export const BRAND_ORIGIN_LINE =
   "Named for 05:09 — your competitor brief is filed before the workday starts.";
 
 /**
- * Shared marketing footer for the public funnel: landing page and compare
- * pages. Keep every public marketing surface on this one footer so link
- * groups (support, legal, compare pages) never drift apart.
+ * Shared marketing footer for the public funnel: landing page, compare
+ * pages, and switch pages. Keep every public marketing surface on this one
+ * footer so link groups (support, legal, compare, switch) never drift apart.
  */
 export function MarketingFooter() {
   return (
@@ -44,6 +44,12 @@ export function MarketingFooter() {
         <Link to="/compare/spyland">vs Spyland</Link>
         <Link to="/compare/pulzifi">vs Pulzifi</Link>
         <Link to="/compare/foreplay">vs Foreplay</Link>
+      </nav>
+      <nav className="ld-footer-compare" aria-label="Switch">
+        <span className="ld-footer-group-label">Switch</span>
+        <Link to="/switch/magicbrief">from MagicBrief</Link>
+        <Link to="/switch/panoramata">from Panoramata</Link>
+        <Link to="/switch/visualping">from Visualping</Link>
       </nav>
     </footer>
   );
