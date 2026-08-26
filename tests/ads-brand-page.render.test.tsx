@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BrandPageLoaderData } from "~/routes/ads.$domain";
+import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type { AdRecord } from "~/lib/types";
 
 // The default export reads `useLoaderData`; a mutable fixture lets each test
@@ -136,6 +137,7 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).toContain("Nike was running");
     expect(markup).toContain("6 Meta ads");
     expect(markup).toContain("Ad Aggression Score");
+    expect(markup).toContain(`href="${AD_AGGRESSION_METHODOLOGY_PATH}"`);
     expect(markup).toContain("f9-ads-watch-strip");
     expect(markup).toContain("f9-ads-statline");
     expect(markup).toContain("What changed this week");
@@ -157,6 +159,34 @@ describe("/ads/:domain — Case File render", () => {
     const sorted = [...order].sort((a, b) => a - b);
     expect(order).toEqual(sorted);
     expect(order.every((index) => index >= 0)).toBe(true);
+  });
+
+  it("links the methodology page from every /ads/:domain state, including the five live demo brands", async () => {
+    const methodologyHref = `href="${AD_AGGRESSION_METHODOLOGY_PATH}"`;
+    const demoDomains = ["nike.com", "nykaa.com", "allbirds.com", "lenskart.com", "mamaearth.com"] as const;
+
+    const scored = await render(populated());
+    const thin = await render(populated({ aggression: null }));
+    const shell = await render(
+      populated({
+        hasCachedAds: false,
+        ads: [],
+        checkedAgo: null,
+        teaser: null,
+        aggression: null,
+        changeEvents: [],
+        noindex: true,
+      }),
+    );
+    expect(scored).toContain(methodologyHref);
+    expect(thin).toContain(methodologyHref);
+    expect(shell).toContain(methodologyHref);
+
+    for (const domain of demoDomains) {
+      const markup = await render(populated({ domain, canonicalPath: `/ads/${domain}` }));
+      expect(markup).toContain(methodologyHref);
+      expect(markup).toContain(`"url":"https://0509.io/ads/${domain}"`);
+    }
   });
 
   it("names the country of the Ad Library the cached creatives came from", async () => {
@@ -265,6 +295,7 @@ describe("/ads/:domain — Case File render", () => {
     const markup = await render(populated({ aggression: null }));
 
     expect(markup).toContain("Not enough history yet to score");
+    expect(markup).toContain(`href="${AD_AGGRESSION_METHODOLOGY_PATH}"`);
     // No score band leaks through.
     expect(markup).not.toContain("f9-ads-score-num");
     // Stat line still renders from the teaser, minus the score-derived cell.
@@ -333,6 +364,7 @@ describe("/ads/:domain — Case File render", () => {
     );
 
     expect(markup).toContain("We haven&#x27;t watched nike.com yet");
+    expect(markup).toContain(`href="${AD_AGGRESSION_METHODOLOGY_PATH}"`);
     expect(markup).toContain("here&#x27;s what you&#x27;d wake up to");
     expect(markup).toContain("Run a free live search");
     expect(markup).toContain("Example");
