@@ -2,6 +2,11 @@ import {
   deriveBriefRetentionFields,
   type BriefRetentionFields,
 } from "~/lib/brief-retention";
+import {
+  findFirstBriefDigest,
+  firstBriefDigestHref,
+  marketDeskItemsFromFirstBrief,
+} from "~/lib/first-brief";
 import type { DigestRecord, WatchEventRecord, WatchlistRecord } from "~/lib/types";
 
 export interface MarketDeskBriefFollowUp {
@@ -61,6 +66,7 @@ export interface MarketDeskBriefItem {
   label: string;
   title: string;
   detail: string;
+  href?: string;
 }
 
 export interface MarketDeskBrief {
@@ -101,6 +107,14 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
   );
   const failedChecks = recentEvents.filter((event) => event.status === "proof_failed");
   const sentDigests = (input.digests ?? []).filter((digest) => digest.delivery?.status === "sent").length;
+  const firstBriefDigest = findFirstBriefDigest(input.digests);
+  const firstBriefItems = firstBriefDigest
+    ? marketDeskItemsFromFirstBrief({
+        digestId: firstBriefDigest.id,
+        items: firstBriefDigest.items,
+      })
+    : [];
+  const hasFirstBrief = firstBriefItems.length > 0;
   const overnightRuns = Math.max(0, Math.floor(input.overnightStats?.runs ?? 0));
   const overnightWatchlists = Math.max(0, Math.floor(input.overnightStats?.watchlistsChecked ?? 0));
   const overnightAdsSeen = Math.max(0, Math.floor(input.overnightStats?.adsSeen ?? 0));
@@ -146,9 +160,11 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       value: sentDigests,
       detail: sentDigests > 0
         ? "Email trail active"
-        : isFreePlan
-          ? "Weekly brief lands Monday"
-          : "No digest sent yet",
+        : hasFirstBrief
+          ? "First brief is on screen"
+          : isFreePlan
+            ? "Weekly brief lands Monday"
+            : "No digest sent yet",
     },
   ];
   const hasMetrics =
@@ -183,6 +199,26 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         title: followUp.title,
         detail: [followUp.ownerLabel, followUp.channelLabel].filter(Boolean).join(" · ") || "Open follow-up",
       })),
+      hasMetrics,
+      retention,
+    };
+  }
+
+  const nonBaselineConfirmed = confirmedChanges.filter(
+    (event) => ((event.metadata ?? {}) as Record<string, unknown>).kind !== "baseline",
+  );
+  if (hasFirstBrief && firstBriefDigest && nonBaselineConfirmed.length === 0) {
+    return {
+      state: "changes",
+      kicker: "Brief",
+      title: "Your first brief is ready",
+      summary: "The activation scan filed a brief from this session's baseline, with at least one evidence-linked item. Open it now — the weekly check still runs on Monday.",
+      action: {
+        href: firstBriefDigestHref(firstBriefDigest.id),
+        label: "Read the brief",
+      },
+      metrics,
+      items: firstBriefItems,
       hasMetrics,
       retention,
     };
