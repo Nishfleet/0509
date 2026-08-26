@@ -7,6 +7,10 @@
 export const REACT_ROUTER_MANIFEST_PATH = "/__manifest";
 
 /**
+ * @typedef {{ blockedURI?: string, violatedDirective?: string, disposition?: string }} CspViolationEvent
+ */
+
+/**
  * @param {unknown} text
  * @returns {boolean}
  */
@@ -20,16 +24,21 @@ export function isReactRouterManifestCspWarning(text) {
 /**
  * @param {{
  *   consoleMessages?: Array<string | { text?: string }>,
- *   violations?: Array<{ blockedURI?: string, violatedDirective?: string }>,
- * }} input
- * @returns {Array<string | { blockedURI?: string, violatedDirective?: string }>}
+ *   violations?: CspViolationEvent[],
+ * }} [input]
+ * @returns {Array<string | CspViolationEvent>}
  */
 export function collectReactRouterManifestCspWarnings(input = {}) {
   const consoleMessages = input.consoleMessages ?? [];
   const violations = input.violations ?? [];
-  const fromConsole = consoleMessages
-    .map((message) => (typeof message === "string" ? message : message?.text))
-    .filter((text) => isReactRouterManifestCspWarning(text));
+  /** @type {string[]} */
+  const fromConsole = [];
+  for (const message of consoleMessages) {
+    const text = typeof message === "string" ? message : message?.text;
+    if (typeof text === "string" && isReactRouterManifestCspWarning(text)) {
+      fromConsole.push(text);
+    }
+  }
   const fromViolations = violations.filter((violation) => {
     const uri = String(violation?.blockedURI ?? "");
     const directive = String(violation?.violatedDirective ?? "").toLowerCase();
