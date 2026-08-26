@@ -8,7 +8,7 @@ import {
   READ_ONLY_API_KEY_REQUIREMENT,
   WRITE_ENABLED_API_KEY_REQUIREMENT,
   apiActionNames,
-  customerAgentActionGroups,
+  auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
 import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
 
@@ -23,7 +23,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const toolActivation = {
     firstWorkflow: AGENT_FIRST_WORKFLOW,
     readinessEndpoint: "/api/v1/workspace-readiness",
-    actionGroups: customerAgentActionGroups(),
+    actionGroups: auditedAgentActionGroups(),
     supportPaths: CUSTOMER_SUPPORT_PATHS,
     blockedCapabilities: AGENT_BLOCKED_CAPABILITIES,
   };
@@ -62,9 +62,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
           formats: ["json"],
           actions: apiActionNames(),
           planRequirement: API_PLAN_REQUIREMENT,
-          requiresWriteEnabled: false,
-          credentialRequirement:
-            `Change-history reads: ${READ_ONLY_API_KEY_REQUIREMENT} Account actions: ${WRITE_ENABLED_API_KEY_REQUIREMENT}`,
+          requiresWriteEnabled: true,
+          credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
         },
         {
           method: "GET",
@@ -96,7 +95,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         "Landing-page evidence captured by this account",
         "Watchlist changes and digest items owned by this account",
         "Manual external evidence links, scoped memory, client rooms, redacted delivery settings, and existing web mention observations owned by this account",
-        "Dated landing-page offer states, diffs, change history, and suppressed events with evidence links",
       ],
       agentActivation: toolActivation,
       toolActivation,
