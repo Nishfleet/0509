@@ -19,7 +19,13 @@
  *        "haven't checked recently" shell, which self-noindexes),
  *      - fetched_at within the 7-day freshness window
  *        (BRAND_PAGE_FRESH_FOR_INDEXING_MS) — older captures render with an
- *        honest freshness line but must not rank.
+ *        honest freshness line but must not rank,
+ *      - the capture's Ad Aggression Score would render (at least one
+ *        verified-linked ad AND an observed window clearing the 14-day
+ *        floor) — the score is the page's named differentiator, so a row
+ *        whose page would ship the ad wall without it backs indexable thin
+ *        content. The loader self-noindexes such a page; this gate keeps it
+ *        out of the sitemap so the two agree.
  *   2. Domain recovery is strictly lossless-only: a row maps to a brand page
  *      ONLY when its cache key or payload carries the registrable domain
  *      (search-v2 domain keys embed it; v2 payloads carry searchIntent +
@@ -48,6 +54,8 @@
  */
 
 import {
+  adHasVerifiedDomainLink,
+  computeBrandPageAggressionScore,
   deriveBrandPageLookupForCountry,
   normalizeBrandPageDomain,
   BRAND_PAGE_FRESH_FOR_INDEXING_MS,
@@ -57,6 +65,7 @@ import { queryAll } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { renderSitemapXml, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
+import type { AdRecord } from "~/lib/types";
 
 /**
  * Hard bound on dynamic brand-page entries per sitemap render. Keeps the
@@ -194,6 +203,42 @@ export function isIndexableBrandPageRow(row: SitemapCacheRow, now: Date): boolea
 }
 
 /**
+ * Mirror of the brand-page loader's aggression-score gate. The page's named
+ * differentiator (the Ad Aggression Score + its four public sub-scores:
+ * Velocity/Testing/Freshness/Persistence) renders ONLY when the capture has
+ * at least one verified-linked ad AND the observed window clears the 14-day
+ * floor — `computeBrandPageAggressionScore` returns null otherwise. A row
+ * whose page would ship the ad wall without the score backs an indexable
+ * thin page; it must stay out of the sitemap so no indexable thin brand
+ * page remains. The wall still renders for a direct visitor (the loader
+ * only withholds indexability) — this gate keeps such pages out of the
+ * sitemap, mirroring the loader's `aggression === null → noindex` rule.
+ *
+ * The ads are read from the cached payload as-is (the cache stores full
+ * AdRecord objects); `computeBrandPageAggressionScore` returns null on any
+ * missing field, so a partial/payload-shape ad degrades to "not listable"
+ * rather than a false positive.
+ */
+export function brandPageRowRendersAggressionScore(
+  row: SitemapCacheRow,
+  domain: string,
+  now: Date,
+): boolean {
+  const payload = parseSitemapCachePayload(row.payload_json);
+  if (!payload) {
+    return false;
+  }
+  const ads = payload.ads.filter((ad) => ad && (ad as { source?: unknown }).source !== "demo");
+  const verifiedLinkedAds = ads.filter((ad) =>
+    adHasVerifiedDomainLink(ad as AdRecord, domain),
+  );
+  if (verifiedLinkedAds.length === 0) {
+    return false;
+  }
+  return computeBrandPageAggressionScore(verifiedLinkedAds as AdRecord[], now) !== null;
+}
+
+/**
  * The exact discovery-cache keys the /ads/:domain page reads for this domain,
  * under the given provider and rollout posture, restricted to the
  * always-tried country scopes. A row qualifies for the sitemap only when its
@@ -264,6 +309,14 @@ export function indexableBrandPageEntriesFromRows(
       options.useDomainV2 ?? true,
     );
     if (!lookupKeys.has(row.cache_key)) {
+      continue;
+    }
+    // The page's differentiator (Ad Aggression Score + 4 sub-scores) must
+    // render, or the loader self-noindexes the page — never list a thin
+    // page (ad wall without its score) in the sitemap. Mirrors the loader's
+    // `aggression === null → noindex` rule so the sitemap and the live page
+    // agree on indexability.
+    if (!brandPageRowRendersAggressionScore(row, domain, now)) {
       continue;
     }
     seen.add(domain);
