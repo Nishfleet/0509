@@ -3,7 +3,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const pageDescription =
@@ -55,7 +55,7 @@ const pulzifiCosts = [
   {
     title: "Plans and limits vary",
     detail:
-      "Pricing is published in tiers; check pulzifi.com for current limits and frequency options.",
+      "Pricing is published in tiers; check the live source at https://pulzifi.com/ for current limits and frequency options.",
   },
 ] as const;
 
@@ -81,6 +81,16 @@ const fiveToNineAdds = [
 export default function ComparePulzifiRoute() {
   return (
     <main className="f9-home">
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "Five to Nine vs Pulzifi",
+            description: pageDescription,
+            pathname: "/compare/pulzifi",
+            comparedProductName: "Pulzifi",
+          }),
+        )}
+      />
       <MarketingNav />
 
       <section className="ld-hero">

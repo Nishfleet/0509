@@ -1032,6 +1032,8 @@ describe("runWatchlistManual cheap scan path", () => {
       metadata: {
         htmlArtifactKey: "landing-pages/page.html",
         screenshotArtifactKey: "landing-pages/page.jpeg",
+        captureValidated: true,
+        screenshotCorroborates: true,
         extractorVersion: "lp-signals-v1",
         extractedFieldConfidence: {
           headline: 0.95,
@@ -1347,6 +1349,8 @@ describe("runWatchlistManual cheap scan path", () => {
       metadata: {
         htmlArtifactKey: "landing-pages/direct.html",
         screenshotArtifactKey: "landing-pages/direct.jpeg",
+        captureValidated: true,
+        screenshotCorroborates: true,
         extractorVersion: "lp-signals-v1",
         extractedFieldConfidence: {
           headline: 0.95,
@@ -1532,7 +1536,7 @@ describe("runWatchlistManual cheap scan path", () => {
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
       "https://competitor.example/onboarding",
-      expect.objectContaining({ preferRendered: true }),
+      expect.objectContaining({ preferRendered: true, requireScreenshot: true }),
     );
     expect(createProofCapture).toHaveBeenCalledWith(
       expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
@@ -1655,6 +1659,8 @@ describe("runWatchlistManual cheap scan path", () => {
       metadata: {
         htmlArtifactKey: "landing-pages/direct.html",
         screenshotArtifactKey: "landing-pages/direct.jpeg",
+        captureValidated: true,
+        screenshotCorroborates: true,
         extractorVersion: "lp-signals-v1",
         extractedFieldConfidence: {},
         extractionWarnings: [],
@@ -1792,7 +1798,7 @@ describe("runWatchlistManual cheap scan path", () => {
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
       expect.anything(),
       "https://competitor.example/onboarding",
-      expect.objectContaining({ preferRendered: true }),
+      expect.objectContaining({ preferRendered: true, requireScreenshot: true }),
     );
     expect(createEventCandidate).toHaveBeenCalledWith(
       expect.anything(),
@@ -2208,6 +2214,8 @@ describe("runWatchlistManual cheap scan path", () => {
       metadata: {
         htmlArtifactKey: "landing-pages/direct.html",
         screenshotArtifactKey: "landing-pages/direct.jpeg",
+        captureValidated: true,
+        screenshotCorroborates: true,
         extractorVersion: "lp-signals-v1",
         extractedFieldConfidence: {},
         extractionWarnings: [],

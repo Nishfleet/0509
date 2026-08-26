@@ -59,14 +59,18 @@ The account/workspace measures in §3.2 are **derived metrics, not emitted event
 | `funnel_signup_start` | Visitor begins signup (email magic link or OAuth) | Measure signup initiation | `event_id`, `timestamp`, `route` | Email, name, OAuth provider tokens |
 | `funnel_migration_view` | The MagicBrief migration page (`/compare/magicbrief`) renders for a visitor | Count wind-down-intent reach for the migration blitz (`docs/magicbrief-blitz-capture.md`) | `event_id`, `timestamp`, `route` | All §4 forbidden fields |
 | `funnel_signup_start_magicbrief` | Signup begins from a request whose URL carries the exact migration marker (`source=magicbrief-migration`), recognized server-side by exact string comparison against the allowlisted constant; the marker value itself is never stored | Measure wind-down capture at signup initiation | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
+| `funnel_first_brief_viewed` | Authenticated Overview or Briefs renders a first brief with ≥1 evidence-linked item | Measure same-session activation (signup → first brief on screen) | `event_id`, `timestamp`, `route` | Watchlist names, ad URLs, proof content, `workspace_id` |
 
-All v1 emitted events are anonymous and request-scoped: they carry no identifier that
+All v1 emitted events are request-scoped: they carry no identifier that
 can join one request to another or connect them to an account (see §4). The two
 MagicBrief blitz events follow every v1 rule unchanged: same field shape, same
 default-off gate, same GPC suppression, no new identifiers. The attribution is a
 coarse event-kind selection resolved on the server (the marker selects
 `funnel_signup_start_magicbrief` instead of `funnel_signup_start`) — it never adds a
 caller-controlled value to any record field, so anonymous events remain non-joinable.
+`funnel_first_brief_viewed` uses `account_scope=workspace` and `route=activation` because
+it fires after sign-in; it still stores no `workspace_id` and is not joinable to
+`funnel_signup_start`.
 
 ### 3.2 Derived activation metrics (read-only, not emitted)
 

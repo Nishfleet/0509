@@ -9,6 +9,7 @@ import {
   appEnv,
   countWatchEvents,
   db,
+  ISO_T0,
   seedAd,
   seedProofCapture,
   seedProofTarget,
@@ -234,5 +235,82 @@ describe("createWatchEvent against real D1", () => {
     // correct rather than lucky.
     await db().prepare("DELETE FROM watch_event WHERE id = ?").bind(id).run();
     expect(await createWatchEvent(appEnv, input)).toBe(id);
+  });
+});
+
+/**
+ * D1 enforces foreign keys. That is worth pinning explicitly, because the
+ * common assumption is the opposite — SQLite defaults `PRAGMA foreign_keys` to
+ * OFF, and a mocked binding enforces nothing at all. Several of the fleet's
+ * data-safety arguments (ON DELETE CASCADE cleaning up a deleted workspace,
+ * ON DELETE SET NULL detaching a dropped ad) are only true if this holds.
+ *
+ * Adopted from the superseded PR #1005, which found the orphan-FK case first.
+ */
+describe("referential integrity is enforced by D1, not by hope", () => {
+  it("rejects a watch_event whose run_id points at no run", async () => {
+    const { watchlistId } = await seedWatchlistWithRun();
+
+    await expect(
+      db()
+        .prepare(
+          `INSERT INTO watch_event (
+             id, watchlist_id, run_id, event_type, status, importance_score,
+             title, summary, metadata_json, created_at
+           ) VALUES (?, ?, 'run_does_not_exist', 'ad_new', 'confirmed', 0, ?, ?, '{}', ?)`,
+        )
+        .bind(`watch_event_orphan_${watchlistId}`, watchlistId, "orphan", "orphan", ISO_T0)
+        .run(),
+    ).rejects.toThrow(/FOREIGN KEY/i);
+
+    expect(await countWatchEvents(watchlistId)).toBe(0);
+  });
+
+  it("cascades a watchlist delete to its events", async () => {
+    // `ON DELETE CASCADE` is what makes account deletion actually delete the
+    // customer's data rather than orphan it. Untested, it is a comment.
+    //
+    // Two cascade paths reach a watch_event from a watchlist: directly via
+    // `watch_event.watchlist_id`, and indirectly via `watchlist_run.run_id`.
+    // Either alone is enough, so this asserts the outcome — the row is gone —
+    // rather than a particular path. Breaking BOTH turns the delete into a
+    // `FOREIGN KEY constraint failed`, which is how this test fails.
+    const { watchlistId, runId } = await seedWatchlistWithRun();
+    await createWatchEvent(appEnv, {
+      watchlistId,
+      runId,
+      eventType: "ad_new",
+      adId: null,
+      baselineFromRunId: null,
+      title: "Will be cascaded",
+      summary: "gone with its watchlist",
+      metadata: {},
+    });
+    expect(await countWatchEvents(watchlistId)).toBe(1);
+
+    await db().prepare("DELETE FROM watchlist WHERE id = ?").bind(watchlistId).run();
+    expect(await countWatchEvents(watchlistId)).toBe(0);
+  });
+
+  it("detaches, rather than deletes, an event whose ad is removed", async () => {
+    // `ad_id` is ON DELETE SET NULL: losing the ad must not lose the alert.
+    const { watchlistId, runId } = await seedWatchlistWithRun();
+    const adId = await seedAd();
+    const eventId = await createWatchEvent(appEnv, {
+      watchlistId,
+      runId,
+      eventType: "ad_inactive",
+      adId,
+      baselineFromRunId: null,
+      title: "Ad went inactive",
+      summary: "survives the ad row",
+      metadata: {},
+    });
+
+    await db().prepare("DELETE FROM ad WHERE id = ?").bind(adId).run();
+
+    const [event] = await listWatchEvents(appEnv, watchlistId);
+    expect(event.id).toBe(eventId);
+    expect(event.adId).toBeNull();
   });
 });

@@ -345,6 +345,14 @@ export interface SearchResponse {
   searchScope?: "exact" | "broader";
   displayDomain?: string | null;
   verifiedCount?: number;
+  /**
+   * BET 2 three-tier result model. `likelyCount` = brand-name matches
+   * (advertiser IS the brand, no website link captured); `unmatchedCount` =
+   * provider candidates with no brand connection (keyword-only text mentions
+   * and raw provider returns). Absent on legacy/non-v2 results.
+   */
+  likelyCount?: number;
+  unmatchedCount?: number;
   rawCandidateCount?: number;
   broaderCandidateCount?: number;
   missingVerificationCount?: number;

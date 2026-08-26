@@ -200,6 +200,10 @@ export interface DeliverWeeklyDigestInput {
   hasPreviousBrief?: boolean | null;
   nextScanAt?: string | null;
   nextScanLabel?: string | null;
+  // BET 7: the activation-scan brief uses the digest delivery path with
+  // this flag so the subject reads "Your first brief" instead of the weekly
+  // change-count line. Weekly cron leaves it unset.
+  firstBrief?: boolean;
 }
 
 export interface DeliverWatchlistAlertsInput {
@@ -1052,6 +1056,7 @@ async function deliverDigestToEmailTarget(
     hasPreviousBrief: input.hasPreviousBrief ?? null,
     nextScanAt: input.nextScanAt ?? null,
     nextScanLabel: input.nextScanLabel ?? null,
+    firstBrief: input.firstBrief === true,
   });
   const subject = input.proofEmailSubject ?? email.subject;
   const payloadSnapshot = {
@@ -2781,6 +2786,7 @@ function renderDigestEmail(
     hasPreviousBrief?: boolean | null;
     nextScanAt?: string | null;
     nextScanLabel?: string | null;
+    firstBrief?: boolean;
   },
 ): ReturnType<typeof buildDigestEmail> {
   const baseUrl = appBaseUrl(env);
@@ -2808,6 +2814,7 @@ function renderDigestEmail(
     hasPreviousBrief: input.hasPreviousBrief ?? null,
     nextScanAt: input.nextScanAt ?? null,
     nextScanLabel: input.nextScanLabel ?? null,
+    firstBrief: input.firstBrief === true,
   });
 }
 

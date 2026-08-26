@@ -6,6 +6,7 @@ import {
   crawlInternalPages,
   DEFAULT_PAGE_BUDGET,
   discoverSitemapPages,
+  extractInternalLinkHrefs,
   isPathDisallowedByRobots,
   PAGE_KIND_CADENCE,
   parseRobotsRules,
@@ -304,6 +305,44 @@ describe("discoverSitemapPages", () => {
 });
 
 // ==== Crawl ====
+
+describe("extractInternalLinkHrefs URL scheme allowlist", () => {
+  // Each case is wrapped in an <a href> tag so the extractor sees it. The
+  // accept list is http/https/mailto/tel; everything else is dropped so it
+  // cannot reach a rendered href or img src downstream.
+  const wrap = (href: string) => `<a href="${href}">x</a>`;
+
+  it("rejects data:, vbscript:, javascript:, and file: URLs", () => {
+    const html = [
+      wrap("data:text/html,<script>alert(1)</script>"),
+      wrap("vbscript:msgbox(1)"),
+      wrap("javascript:alert(1)"),
+      wrap("file:///etc/passwd"),
+    ].join("");
+    expect(extractInternalLinkHrefs(html)).toEqual([]);
+  });
+
+  it("accepts https, mailto, and tel URLs", () => {
+    const html = [
+      wrap("https://example.com/x"),
+      wrap("mailto:a@b.c"),
+      wrap("tel:+15555550100"),
+    ].join("");
+    expect(extractInternalLinkHrefs(html)).toEqual([
+      "https://example.com/x",
+      "mailto:a@b.c",
+      "tel:+15555550100",
+    ]);
+  });
+
+  it("still accepts relative http(s) internal links and drops fragment-only hrefs", () => {
+    const html = [wrap("/pricing"), wrap("#anchor"), wrap("https://competitor.example/blog/1")].join("");
+    expect(extractInternalLinkHrefs(html)).toEqual([
+      "/pricing",
+      "https://competitor.example/blog/1",
+    ]);
+  });
+});
 
 describe("crawlInternalPages", () => {
   it("crawls same-host internal links, never exceeding budget or leaving host", async () => {

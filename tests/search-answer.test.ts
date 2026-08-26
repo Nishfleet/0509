@@ -375,9 +375,65 @@ describe("buildSearchAnswer", () => {
       detail: "Exact website match only",
     });
     expect(answer.facts).toContainEqual({
-      label: "Returned ads",
+      label: "Likely matches",
+      value: "0",
+      detail: "No brand-name matches",
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Unmatched candidates",
       value: "1",
-      detail: "Review as unverified candidates only",
+      detail: "Returned by the source with no brand connection",
+    });
+  });
+
+  it("labels likely brand-name matches in the no-verified verdict (BET 2)", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [
+          ad({
+            metaAdId: "likely-1",
+            advertiser: "Boat",
+            landingPageUrl: null,
+            domainMatch: {
+              level: "likely_brand_name",
+              reason: "Advertiser name matches boat-lifestyle.com",
+              matchedDomain: "boat-lifestyle.com",
+            },
+          }),
+          ad({
+            metaAdId: "unmatched-1",
+            advertiser: "Reseller",
+            landingPageUrl: null,
+            domainMatch: {
+              level: "unverified_provider_candidate",
+              reason: "Returned by the Meta source; website connection not verified",
+              matchedDomain: null,
+            },
+          }),
+        ],
+        verifiedCount: 0,
+        likelyCount: 1,
+        unmatchedCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer).toMatchObject({
+      state: "no_verified",
+      title: "No verified ads found for boat-lifestyle.com",
+      summary: expect.stringContaining("brand-name matches are below"),
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Likely matches",
+      value: "1",
+      detail: "Advertiser name fits this brand; website link not captured",
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Unmatched candidates",
+      value: "1",
+      detail: "Returned by the source with no brand connection",
     });
   });
 
@@ -490,7 +546,7 @@ describe("buildSearchAnswer market scope", () => {
     );
   });
 
-  it("spells the all-countries view explicitly in verified verdicts", () => {
+  it("keeps the all-countries view unscoped in verified verdicts", () => {
     const answer = buildSearchAnswer({
       result: response({
         ads: [ad()],
@@ -503,11 +559,11 @@ describe("buildSearchAnswer market scope", () => {
     });
 
     expect(answer.title).toBe(
-      "1 verified ad linked to boat-lifestyle.com across all countries",
+      "1 verified ad linked to boat-lifestyle.com",
     );
   });
 
-  it("names the market in no-verified verdicts so country filters cannot contradict", () => {
+  it("names the market in no-verified verdicts and keeps the all view unscoped", () => {
     const india = buildSearchAnswer({
       result: response({
         ads: [],
@@ -533,7 +589,36 @@ describe("buildSearchAnswer market scope", () => {
       "No verified ads found for boat-lifestyle.com in India",
     );
     expect(all.title).toBe(
-      "No verified ads found for boat-lifestyle.com across all countries",
+      "No verified ads found for boat-lifestyle.com",
+    );
+  });
+
+  it("does not let the all view contradict a specific-country view", () => {
+    const all = buildSearchAnswer({
+      result: response({
+        ads: [],
+        broaderCandidateCount: 0,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "all",
+    });
+    const india = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      country: "India",
+    });
+
+    expect(all.title).toBe("No verified ads found for boat-lifestyle.com");
+    expect(all.title).not.toContain("across all countries");
+    expect(india.title).toBe(
+      "1 verified ad linked to boat-lifestyle.com in India",
     );
   });
 

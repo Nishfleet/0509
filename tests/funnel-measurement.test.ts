@@ -12,6 +12,7 @@ const FUNNEL_OPERATIONS = [
   "funnel_migration_view",
   "funnel_signup_start",
   "funnel_signup_start_magicbrief",
+  "funnel_first_brief_viewed",
 ];
 
 function emittedFunnelRecords(logSpy: MockInstance): Record<string, unknown>[] {
@@ -91,6 +92,41 @@ describe("funnel measurement gate", () => {
     const parsed = JSON.parse(withoutComments) as { vars?: Record<string, unknown> };
     const vars = parsed.vars ?? {};
     expect(vars.FUNNEL_MEASUREMENT_ENABLED).toBe("1");
+  });
+});
+
+describe("funnel first-brief viewed", () => {
+  let logSpy: MockInstance;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("emits a request-scoped activation event", async () => {
+    const { emitFunnelFirstBriefViewed } = await import("~/lib/funnel-measurement.server");
+    emitFunnelFirstBriefViewed({ FUNNEL_MEASUREMENT_ENABLED: "1" }, makeFunnelRequest());
+    const [record] = emittedFunnelRecords(logSpy) as [
+      { operation: string; details: Record<string, string> },
+    ];
+    expect(record.operation).toBe("funnel_first_brief_viewed");
+    expect(record.details.route).toBe("activation");
+    expect(record.details.account_scope).toBe("workspace");
+    expect(Object.keys(record.details).sort()).toEqual(
+      ["account_scope", "event_id", "route"].sort(),
+    );
+    expect(JSON.stringify(record)).not.toMatch(/watchlist|proof|email|workspace_id/i);
+  });
+
+  it("stays silent when the gate is off or GPC is set", async () => {
+    const { emitFunnelFirstBriefViewed } = await import("~/lib/funnel-measurement.server");
+    emitFunnelFirstBriefViewed({}, makeFunnelRequest());
+    const gpc = new Request("http://localhost/", { headers: { "sec-gpc": "1" } });
+    emitFunnelFirstBriefViewed({ FUNNEL_MEASUREMENT_ENABLED: "1" }, gpc);
+    expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
   });
 });
 

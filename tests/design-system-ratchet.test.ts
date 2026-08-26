@@ -10,20 +10,22 @@ import { describe, expect, it } from "vitest";
  * consensus: "without this, same mid-flight death as eras A-C").
  *
  * `scripts/design-system-ratchet.mjs` counts every marker of a retired
- * design era across app/ and fails when any count exceeds the frozen
+ * design era across app/ and fails when any count EXCEEDS the frozen
  * ceilings in docs/design-system-ratchet.json. Landing NEW legacy debt
- * fails CI here. Sweeps that lower a count tighten the ceiling via
- * `node scripts/design-system-ratchet.mjs --update` in the same PR — the
- * ceiling only ever goes down. The program's terminal condition includes
- * every ceiling at zero, after which a fourth design era is structurally
- * impossible to ship.
+ * fails CI here. Counts at or below their ceiling pass without editing
+ * the shared JSON — the ceiling only ever goes down, and the tightening
+ * happens automatically on main via
+ * `.github/workflows/ratchet-auto-tighten.yml`, so two legal sweeps
+ * never collide in the merge queue over a file neither needed to touch.
+ * The program's terminal condition includes every ceiling at zero, after
+ * which a fourth design era is structurally impossible to ship.
  */
 const root = join(__dirname, "..");
 
 describe("design-system ratchet", () => {
   const root = join(__dirname, "..");
 
-  it("no banned legacy marker grows beyond its frozen ceiling", () => {
+  it("no banned legacy marker exceeds its frozen ceiling", () => {
     const result = spawnSync(
       process.execPath,
       [join(root, "scripts", "design-system-ratchet.mjs")],
@@ -55,6 +57,7 @@ describe("the ratchet cannot be gamed", () => {
   function runWithCeilings(ceilings: Record<string, number>): {
     status: number | null;
     stderr: string;
+    stdout: string;
   } {
     const dir = mkdtempSync(join(tmpdir(), "ratchet-"));
     const file = join(dir, "ceilings.json");
@@ -63,15 +66,22 @@ describe("the ratchet cannot be gamed", () => {
       encoding: "utf8",
     });
     rmSync(dir, { recursive: true, force: true });
-    return { status: result.status, stderr: result.stderr };
+    return { status: result.status, stderr: result.stderr, stdout: result.stdout };
   }
 
-  it("a hand-raised ceiling fails — exact match means every sweep must --update", () => {
+  it("a hand-raised ceiling does NOT fail the ratchet itself — gate-integrity.sh catches that", () => {
+    // Raising a ceiling inflates the allowance and is invisible to the
+    // scanner, so the script must not be the place that catches it. The
+    // detector is the gate-integrity diff check on docs/design-system-ratchet.json
+    // (see .github/scripts/gate-integrity.sh: ratchet_weakened), not this
+    // script. If a future edit ever does make the script flag a raised
+    // ceiling, this test fails and the catch is doubled — which is fine,
+    // but the real backstop stays on the diff.
     const firstKey = Object.keys(realCeilings)[0];
-    const tampered = { ...realCeilings, [firstKey]: realCeilings[firstKey] + 50 };
-    const result = runWithCeilings(tampered);
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("!== ceiling");
+    const raised = { ...realCeilings, [firstKey]: realCeilings[firstKey] + 50 };
+    const result = runWithCeilings(raised);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.stdout).toContain("Ratchet clean");
   });
 
   it("deleting a marker's ceiling key fails — no exemption by omission", () => {
@@ -81,7 +91,37 @@ describe("the ratchet cannot be gamed", () => {
     expect(result.stderr).toContain("disagree");
   });
 
-  it("the real checked-in ceilings match reality exactly", () => {
+  it("a lowered ceiling fails — count above the new ceiling is new debt", () => {
+    // The monotonic property cuts BOTH ways: a sweep that removes debt
+    // also lowers the ceiling, but a hand-LOWERED ceiling that
+    // re-introduces a tripwire for already-clean debt would force every
+    // PR touching that surface to also edit the ratchet file. That's the
+    // exact merge-queue conflict this rewrite was supposed to remove.
+    // Count above the new ceiling therefore fails.
+    const firstKey = Object.keys(realCeilings)[0];
+    const lowered = { ...realCeilings, [firstKey]: realCeilings[firstKey] - 1 };
+    const result = runWithCeilings(lowered);
+    expect(result.status).toBe(1);
+    // First key in the JSON file is the f9-ed- marker; verify the violation
+    // line names THAT specific marker with a new count above the new ceiling.
+    expect(result.stderr).toContain(`${firstKey}: count 0 exceeds ceiling -1`);
+  });
+
+  it("a count strictly below its ceiling passes without editing the JSON", () => {
+    // This is the property that makes the merge queue stop fighting
+    // itself: PR-A removes 3 hex colours (count 255, ceiling 258), PR-B
+    // removes 4 more (count 254, ceiling 258), each PR's CI sees count ≤
+    // ceiling and the merge queue sees count ≤ ceiling. The shared JSON
+    // is not in either PR's diff, so there is nothing to conflict on.
+    const loosened = Object.fromEntries(
+      Object.entries(realCeilings).map(([key, value]) => [key, value + 50]),
+    );
+    const result = runWithCeilings(loosened);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.stdout).toContain("Ratchet clean");
+  });
+
+  it("the real checked-in ceilings do not exceed reality", () => {
     const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
     expect(result.status, result.stderr).toBe(0);
   });
@@ -178,6 +218,8 @@ describe("colour, font and radius rules", () => {
     "raw-hex-color",
     "non-token-font-family",
     "non-token-border-radius",
+    "css-gradient",
+    "css-important",
     "tailwind-arbitrary-value",
   ] as const;
 
@@ -228,7 +270,7 @@ describe("colour, font and radius rules", () => {
    */
   function ruleCount(rule: string, files: Record<string, string>): number {
     const { stderr } = runFixture(files);
-    const match = stderr.match(new RegExp(`${rule}: count (\\d+) !== ceiling 0`));
+    const match = stderr.match(new RegExp(`${rule}: count (\\d+) exceeds ceiling 0`));
     return match ? Number(match[1]) : 0;
   }
 
@@ -317,6 +359,38 @@ describe("colour, font and radius rules", () => {
     });
   });
 
+  describe("css-gradient", () => {
+    it("counts every gradient function", () => {
+      expect(ruleCount("css-gradient", { "app/app.css": "a { background: linear-gradient(#fff, #000); }" })).toBe(1);
+      expect(ruleCount("css-gradient", { "app/app.css": "a { background: radial-gradient(circle, red, blue); }" })).toBe(1);
+      expect(ruleCount("css-gradient", { "app/app.css": "a { background: conic-gradient(red, blue); }" })).toBe(1);
+      expect(
+        ruleCount("css-gradient", {
+          "app/routes/page.tsx": 'export default () => <div data-bg="linear-gradient(red, blue)" />;',
+        }),
+      ).toBe(1);
+    });
+
+    it("does not fire on a token background", () => {
+      expect(ruleCount("css-gradient", { "app/app.css": "a { background: var(--f9-surface); }" })).toBe(0);
+    });
+  });
+
+  describe("css-important", () => {
+    it("counts every !important", () => {
+      expect(ruleCount("css-important", { "app/app.css": "a { color: red !important; }" })).toBe(1);
+      expect(
+        ruleCount("css-important", {
+          "app/app.css": "a { color: red !important; border: 0 !important; }",
+        }),
+      ).toBe(2);
+    });
+
+    it("does not fire on ordinary declarations", () => {
+      expect(ruleCount("css-important", { "app/app.css": "a { color: var(--f9-ink); }" })).toBe(0);
+    });
+  });
+
   describe("tailwind-arbitrary-value", () => {
     it("counts arbitrary colour and radius utilities", () => {
       expect(
@@ -348,7 +422,7 @@ describe("colour, font and radius rules", () => {
           'export const Thing = () => <div className="c">{"#0e0d0a"}</div>;\n',
       });
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("raw-hex-color: count 1 !== ceiling 0");
+      expect(result.stderr).toContain("raw-hex-color: count 1 exceeds ceiling 0");
     });
 
     it("FAILS at a NON-zero seeded ceiling — 1 is fine, 2 is not", () => {
@@ -366,7 +440,7 @@ describe("colour, font and radius rules", () => {
         seeded,
       );
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("raw-hex-color: count 2 !== ceiling 1");
+      expect(result.stderr).toContain("raw-hex-color: count 2 exceeds ceiling 1");
     });
 
     it("FAILS on a non-token font, a literal radius and an arbitrary utility together", () => {
@@ -375,9 +449,18 @@ describe("colour, font and radius rules", () => {
         "app/routes/page.tsx": 'export default () => <div className="rounded-[7px]" />;\n',
       });
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("non-token-font-family: count 1 !== ceiling 0");
-      expect(result.stderr).toContain("non-token-border-radius: count 1 !== ceiling 0");
-      expect(result.stderr).toContain("tailwind-arbitrary-value: count 1 !== ceiling 0");
+      expect(result.stderr).toContain("non-token-font-family: count 1 exceeds ceiling 0");
+      expect(result.stderr).toContain("non-token-border-radius: count 1 exceeds ceiling 0");
+      expect(result.stderr).toContain("tailwind-arbitrary-value: count 1 exceeds ceiling 0");
+    });
+
+    it("FAILS on a new gradient and a new !important", () => {
+      const result = runFixture({
+        "app/app.css": "a { background: linear-gradient(red, blue); color: red !important; }\n",
+      });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("css-gradient: count 1 exceeds ceiling 0");
+      expect(result.stderr).toContain("css-important: count 1 exceeds ceiling 0");
     });
 
     it("does not reach app/lib — email and PDF templates are outside the design surface", () => {

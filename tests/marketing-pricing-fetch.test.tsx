@@ -270,8 +270,9 @@ describe("marketing pricing preview fetch timing", () => {
     const instances = installFakeIntersectionObserver();
 
     mounted = await mountMarketing();
-    // Cold anonymous state shows the honest fallback before the preview loads.
-    expect(mounted.container.textContent).toContain("Localized at checkout");
+    // Cold anonymous state shows the published USD anchor prices before the
+    // live preview loads.
+    expect(mounted.container.textContent).toContain("$59 USD");
     expect(mounted.container.textContent).not.toContain("$99");
 
     await act(async () => {

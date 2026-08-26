@@ -3,7 +3,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const pageDescription =
@@ -50,7 +50,7 @@ const spylandCosts = [
   {
     title: "Daily is the default cadence",
     detail:
-      "Faster or slower check frequencies may be available, but daily is the standard pitch. Confirm current plans on spyland.ing.",
+      "Faster or slower check frequencies may be available, but daily is the standard pitch. Confirm current plans on the live source at https://spyland.ing/.",
   },
   {
     title: "Page insight, not ad source",
@@ -81,6 +81,16 @@ const fiveToNineAdds = [
 export default function CompareSpylandRoute() {
   return (
     <main className="f9-home">
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "Five to Nine vs Spyland",
+            description: pageDescription,
+            pathname: "/compare/spyland",
+            comparedProductName: "Spyland",
+          }),
+        )}
+      />
       <MarketingNav />
 
       <section className="ld-hero">

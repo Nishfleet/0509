@@ -1,5 +1,9 @@
 import { captureRenderedLandingPageSnapshot } from "~/lib/browser-run.server";
 import { readResponseTextWithinLimit, utf8ByteLength } from "~/lib/bounded-response.server";
+import {
+  assessCaptureValidity,
+  type CaptureValidityReasonCode,
+} from "~/lib/capture-validity.server";
 import { decodeHtmlEntities as decodeHtml } from "~/lib/decode-html.server";
 import {
   mapLandingFailureOutcome,
@@ -19,6 +23,11 @@ import {
   hasMeaningfulLandingPageBodyText,
   LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
 } from "~/lib/landing-page-signals.server";
+import {
+  recordFetchStage,
+  recordRenderStage,
+  type LandingPagePipelineCounters,
+} from "~/lib/landing-page-pipeline-instrumentation.server";
 import { normalizeHeadline } from "~/lib/normalize";
 import {
   normalizePublicHttpUrl,
@@ -51,7 +60,9 @@ export type LandingPageCaptureFailureReasonCode =
   | "landing_rate_limited"
   | "landing_http_error"
   | "landing_fetch_failed"
-  | "landing_content_empty_or_oversized";
+  | "landing_content_empty_or_oversized"
+  | "screenshot_required"
+  | CaptureValidityReasonCode;
 
 export interface LandingPageCaptureFailureDetail {
   reasonCode: LandingPageCaptureFailureReasonCode;
@@ -63,6 +74,12 @@ interface CaptureLandingPageSnapshotOptions {
   onFailure?: (detail: LandingPageCaptureFailureDetail) => void;
   /** Persist only when the caller will create an owner-addressable D1 reference. */
   persistArtifacts?: boolean;
+  /**
+   * When true, the capture is only considered successful if it carries a
+   * persisted screenshotArtifactKey. This makes the screenshot step mandatory
+   * and prevents HTML-only proof captures (issue #1103).
+   */
+  requireScreenshot?: boolean;
   preferRendered?: boolean;
   /** Attribution context recorded in `browser_job_telemetry` (optional).
    * Never carries URLs, tokens, or content. Defaults derive from existing
@@ -78,6 +95,13 @@ interface CaptureLandingPageSnapshotOptions {
    * race still caps how long the capture may wait on a slow write.
    */
   executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
+  /**
+   * Optional pipeline-instrumentation accumulator (issue #949). When present,
+   * the fetch and render stages record their outcome and bail-out reason on
+   * this counter so the caller can flush a per-check stage summary. The
+   * counter is never mutated in a way that affects capture behaviour.
+   */
+  instrumentation?: LandingPagePipelineCounters | null;
 }
 
 interface LandingPageCaptureAttemptState {
@@ -242,6 +266,11 @@ async function captureLandingPageSnapshotAt(
       if (renderedSnapshot) {
         return renderedSnapshot;
       }
+      if (options.requireScreenshot) {
+        return failLandingCapture(options, "screenshot_required", {
+          renderedFallbackFailed: true,
+        });
+      }
       captureWarningCodes.push("rendered_fallback_failed");
     }
 
@@ -338,6 +367,51 @@ async function captureLandingPageSnapshotAt(
       documentMode: "raw",
     });
     const looksLikeSignalEmptyShell = !hasMeaningfulBodyText;
+    // Capture-validity gate (BET 4): a 200 with a challenge/cookie-wall/partial
+    // -SPA/error body is a render failure, not a real page. The extracted
+    // signals would come from the wall, not the page, and any diff against the
+    // last real proof would be a phantom change. Try the rendered fallback
+    // first (the wall may render client-side past the gate); if that fails or
+    // is disabled, record a `capture_failed` with the gate's reason and never
+    // produce a snapshot from this HTML.
+    const validity = assessCaptureValidity({
+      html,
+      fetchStatus: response.status,
+      documentMode: "raw",
+    });
+    if (!validity.valid) {
+      if (
+        options.allowRenderedFallback !== false &&
+        !state.renderedAttempted
+      ) {
+        state.renderedAttempted = true;
+        await recordLandingLeg(env, telemetry, mapLandingFailureOutcome(validity.reasonCode!), {
+          resultCount: 1,
+          resultBytes: utf8ByteLength(html),
+        });
+        const renderedSnapshot = await captureRenderedSnapshot(
+          env,
+          finalUrl.toString(),
+          options,
+          telemetry,
+        );
+        if (renderedSnapshot) {
+          return renderedSnapshot;
+        }
+        captureWarningCodes.push("capture_validity_render_failed");
+      }
+      return recordFailedLanding(
+        env,
+        telemetry,
+        options,
+        validity.reasonCode!,
+        {
+          fetchStatus: response.status,
+          captureValidityReason: validity.reason,
+          captureValidityFingerprint: validity.fingerprint,
+        },
+      );
+    }
     const headline =
       decodeHtml(findFirstMatch(html, OG_TITLE_REGEX) ?? "") ||
       decodeHtml(findFirstMatch(html, TITLE_REGEX) ?? "") ||
@@ -364,6 +438,11 @@ async function captureLandingPageSnapshotAt(
       }
       captureWarningCodes.push("signal_empty_render_failed");
     }
+    if (options.requireScreenshot) {
+      return failLandingCapture(options, "screenshot_required", {
+        captureMethod: "landing_page_fetch",
+      });
+    }
     let artifactKey: string | null = null;
     if (options.persistArtifacts !== false && env.LANDING_PAGE_ARTIFACTS) {
       try {
@@ -389,6 +468,7 @@ async function captureLandingPageSnapshotAt(
       metadata: {
         captureMethod: "landing_page_fetch",
         captureWarningCodes,
+        captureValidated: true,
         ...(fetchAttempts > 1 ? { fetchAttempts } : {}),
         ...(looksLikeSignalEmptyShell
           ? { unreadableReasonCode: "landing_signals_not_detected" }
@@ -466,17 +546,38 @@ async function captureRenderedSnapshot(
     telemetryAttempts: { used: telemetry.attemptUsed },
     executionContext: telemetry.executionContext,
   };
+  const renderOptions = {
+    ...attribution,
+    persistArtifacts: options.persistArtifacts,
+    requireScreenshot: options.requireScreenshot,
+  };
   try {
     const snapshot = await (options.persistArtifacts === false
       ? captureRenderedLandingPageSnapshot(env, url, {
+          ...renderOptions,
           persistArtifacts: false,
-          ...attribution,
         })
-      : captureRenderedLandingPageSnapshot(env, url, attribution));
+      : captureRenderedLandingPageSnapshot(env, url, renderOptions));
     telemetry.attemptUsed = attribution.telemetryAttempts.used;
+    if (
+      snapshot &&
+      options.requireScreenshot &&
+      !snapshotHasScreenshotArtifact(snapshot)
+    ) {
+      if (options.instrumentation) {
+        recordRenderStage(options.instrumentation, "failed", "screenshot_required");
+      }
+      return null;
+    }
+    if (options.instrumentation) {
+      recordRenderStage(options.instrumentation, snapshot ? "succeeded" : "failed");
+    }
     return snapshot;
   } catch (error) {
     logLandingCaptureWarning("rendered_fallback_failed", error);
+    if (options.instrumentation) {
+      recordRenderStage(options.instrumentation, "failed", "rendered_fallback_failed");
+    }
     return null;
   }
 }
@@ -571,6 +672,11 @@ function failLandingCapture(
 ) {
   options.onFailure?.({ reasonCode, metadata });
   return null;
+}
+
+function snapshotHasScreenshotArtifact(snapshot: LandingPageSnapshotData): boolean {
+  const key = snapshot.metadata?.screenshotArtifactKey;
+  return typeof key === "string" && key.length > 0;
 }
 
 function buildExtractionWarnings(input: {

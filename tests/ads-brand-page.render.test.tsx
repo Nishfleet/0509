@@ -405,6 +405,33 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).not.toContain("6 Meta ads are pointing at");
   });
 
+  it("uses the full brand-owned headline when every verified-linked ad is the brand's (unverified extras on the wall)", async () => {
+    // Mirrors live nike.com: 15 verified brand-owned creatives + 1 unverified
+    // wall match. The H1 must not use split "X of these Y" copy — every
+    // verified-linked ad is Nike's; the extra match belongs in the subline.
+    const ads = Array.from({ length: 16 }, (_v, i) => ad({ metaAdId: `ad-${i}` }));
+    const verifiedLinkedAds = ads.slice(0, 15);
+    const markup = await render(
+      populated({
+        ads,
+        verifiedLinkedAds,
+        brandOwnedAdCount: 15,
+        verifiedLinkCount: 15,
+        unverifiedMatchCount: 1,
+        teaser: { ...teaser, totalCount: 15, activeCount: 15 },
+      }),
+    );
+
+    const h1 = markup.match(/<h1[^>]*id="brand-ads-title"[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "";
+    expect(h1).toContain("Nike was running ");
+    expect(h1).toContain("15 Meta ads");
+    expect(h1).toContain("at the last check.");
+    expect(h1).not.toContain("of these");
+    expect(markup).toContain(
+      "Another 1 ad matched the search without a verified link to nike.com.",
+    );
+  });
+
   it("never claims ads POINT AT the domain when no creative has verified link evidence", async () => {
     const stale = await render(
       populated({
@@ -461,11 +488,38 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).toContain("Nike was running ");
     expect(stale).toContain("1 Meta ad");
     expect(stale).toContain("at the last check.");
+    expect(stale).not.toContain("of these");
     expect(stale).toContain(
       "Another 5 ads matched the search without a verified link to nike.com.",
     );
     // The wall still carries every cached creative.
     expect(stale).toContain("All 6 ads, on the wall");
+  });
+
+  it("omits 'by other advertisers' in the closer when every verified linking creative is the brand's own (unverified matches only)", async () => {
+    // Mirrors the live hubspot.com defect in the visible closer copy: 4
+    // verified brand-owned ads + 6 unverified text-matches. The closer split
+    // must not fold the 6 unverified matches into "by other advertisers".
+    const ads = Array.from({ length: 10 }, (_v, i) => ad({ metaAdId: `ad-${i}` }));
+    const stale = await render(
+      populated({
+        ads,
+        brandOwnedAdCount: 4,
+        verifiedLinkCount: 4,
+        unverifiedMatchCount: 6,
+        teaser: { ...teaser, totalCount: 4, activeCount: 4 },
+      }),
+    );
+
+    // The closer attributes only the verified brand-owned creatives to Nike.
+    expect(stale).toContain("4 run by Nike");
+    // The unverified text-matches must NOT be attributed to other advertisers.
+    expect(stale).not.toContain("6 by other advertisers");
+    expect(stale).not.toContain("0 by other advertisers");
+    // The unverified matches appear only in the labelled note.
+    expect(stale).toContain(
+      "Another 6 ads matched the search for nike.com without a verified link.",
+    );
   });
 
   it("never labels a creative with the brand name when its advertiser is unconfirmed", async () => {
@@ -487,6 +541,34 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).toContain("4 of these 5 Meta ads");
     expect(markup).toContain("Advertiser unconfirmed · nike.com");
     expect((markup.match(/Nike · nike\.com/g) ?? []).length).toBe(4);
+  });
+
+  it("renders exactly one plain-text h1 that names the brand", async () => {
+    const markup = await render(populated());
+    const h1Matches = markup.match(/<h1\b[^>]*>[^<]+<\/h1>/g) ?? [];
+    expect(h1Matches).toHaveLength(1);
+    expect(h1Matches[0]).toBe(
+      '<h1 class="f9-ads-headline" id="brand-ads-title">Nike was running 6 Meta ads at the last check.</h1>',
+    );
+  });
+
+  it("renders exactly one plain-text h1 on the cache-miss shell", async () => {
+    const markup = await render(
+      populated({
+        hasCachedAds: false,
+        ads: [],
+        checkedAgo: null,
+        teaser: null,
+        aggression: null,
+        changeEvents: [],
+        noindex: true,
+      }),
+    );
+    const h1Matches = markup.match(/<h1\b[^>]*>[^<]+<\/h1>/g) ?? [];
+    expect(h1Matches).toHaveLength(1);
+    expect(h1Matches[0]).toBe(
+      '<h1 class="f9-ads-headline f9-ads-shell-head" id="brand-ads-title">We haven&#x27;t watched nike.com yet — here&#x27;s what you&#x27;d wake up to.</h1>',
+    );
   });
 });
 

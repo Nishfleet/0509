@@ -75,6 +75,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const selectedDigest =
     selectedDigestCandidate?.userId === workspaceUserId ? selectedDigestCandidate : null;
 
+  const { emitFunnelFirstBriefViewed } =
+    await import("~/lib/funnel-measurement.server");
+  const { hasEvidenceLinkedItem, isFirstBriefDigest } =
+    await import("~/lib/first-brief");
+  if (selectedDigest && isFirstBriefDigest(selectedDigest) && hasEvidenceLinkedItem(selectedDigest.items)) {
+    emitFunnelFirstBriefViewed(env, request);
+  }
+
   return {
     digests,
     // E3 (2026-08-11): the brief as a retention loop — every brief states

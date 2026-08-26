@@ -64,19 +64,24 @@ describe("buildDigestEmail", () => {
       supportMailto: "mailto:support@0509.io",
       unsubscribeUrl: "https://0509.io/unsubscribe?sig=test",
       items: [
+        // BET 1: headline items are landing_page_* commercial-field changes.
         digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
-        digestItem("Nykaa", "New ad detected", 90, "scan_backed", "ev-nykaa-2"),
-        digestItem("boAt", "New ad detected", 85, "scan_backed"),
-        digestItem("Mamaearth", "CTA changed", 70, "scan_backed"),
-        digestItem("Plum", "Headline changed", 65, "scan_backed"),
-        digestItem("Sugar", "Form changed", 60, "scan_backed"),
-        digestItem("Dot", "Offer changed", 55, "scan_backed"),
-        digestItem("Wow", "CTA changed", 50, "scan_backed"),
+        digestItem("Nykaa", "Landing page CTA changed", 90, "scan_backed", "ev-nykaa-2", "landing_page_cta_changed"),
+        digestItem("boAt", "Landing page offer changed", 85, "scan_backed", "ev-boat", "landing_page_offer_changed"),
+        digestItem("Mamaearth", "Landing page CTA changed", 80, "scan_backed", "ev-mamaearth", "landing_page_cta_changed"),
+        digestItem("Plum", "Landing page headline changed", 75, "scan_backed", "ev-plum", "landing_page_headline_changed"),
+        // Cap at 5 — Sugar's form change is the 6th headline, omitted from top moves.
+        digestItem("Sugar", "Landing page form changed", 70, "scan_backed", "ev-sugar", "landing_page_form_changed"),
+        // Creative churn collapses into a counted footnote, never a top move.
+        digestItem("Dot", "New ad detected", 60, "scan_backed", "ev-dot", "ad_new"),
+        digestItem("Wow", "New ad detected", 55, "scan_backed", "ev-wow", "ad_new"),
+        digestItem("Boat2", "Ad retired", 50, "scan_backed", "ev-boat2", "ad_inactive"),
       ],
     });
 
-    expect(email.subject).toBe("8 changes found, 8 worth action");
-    expect(email.text).toContain("8 changes found, 8 worth action.");
+    // 9 total changes; 6 are headline-worthy (landing_page_*), 3 are churn.
+    expect(email.subject).toBe("9 changes found, 6 worth action");
+    expect(email.text).toContain("9 changes found, 6 worth action.");
     expect(email.html).toContain("Top moves");
     // Group headers with per-group counts (Nykaa has 2 of the top 5).
     expect(email.html).toContain("Nykaa");
@@ -85,9 +90,15 @@ describe("buildDigestEmail", () => {
     expect(email.html).toContain("boAt");
     expect(email.html).toContain("Mamaearth");
     expect(email.html).toContain("Plum");
-    // Cap at 5 — lower-priority Sugar/Dot/Wow omitted from top moves.
+    // Cap at 5 — Sugar's form change is omitted from top moves.
     expect(email.html).not.toContain("Sugar");
-    expect(email.html).toContain("3 more changes are in the full brief");
+    expect(email.html).toContain("1 more change is in the full brief");
+    // Creative churn collapses into a single counted footnote line.
+    expect(email.html).toContain("2 new creatives, 1 retired — open the wall to see them.");
+    expect(email.text).toContain("2 new creatives, 1 retired — open the wall to see them.");
+    // Churn competitor names never surface as top moves.
+    expect(email.html).not.toContain("Dot");
+    expect(email.html).not.toContain("Wow");
     expect(email.html).toContain("Verified evidence");
     expect(email.html).toContain("Check-spotted");
     // WP-24: each top-move deep-links to the watchlist event row (HTML-escaped &).
@@ -104,10 +115,10 @@ describe("buildDigestEmail", () => {
   it("groups interleaved ranked items into one header per watchlist", () => {
     const items = [
       digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
-      digestItem("boAt", "New ad detected", 90, "scan_backed"),
-      digestItem("Nykaa", "CTA changed", 85, "scan_backed", "ev-nykaa-2"),
-      digestItem("boAt", "Headline changed", 80, "scan_backed", "ev-boat-2"),
-      digestItem("Nykaa", "Form changed", 75, "scan_backed", "ev-nykaa-3"),
+      digestItem("boAt", "Landing page CTA changed", 90, "scan_backed", "ev-boat", "landing_page_cta_changed"),
+      digestItem("Nykaa", "Landing page CTA changed", 85, "scan_backed", "ev-nykaa-2", "landing_page_cta_changed"),
+      digestItem("boAt", "Landing page headline changed", 80, "scan_backed", "ev-boat-2", "landing_page_headline_changed"),
+      digestItem("Nykaa", "Landing page form changed", 75, "scan_backed", "ev-nykaa-3", "landing_page_form_changed"),
     ];
 
     const groups = groupTopMovesByWatchlist(items as never);
@@ -117,12 +128,12 @@ describe("buildDigestEmail", () => {
     // Rank order preserved inside each group.
     expect(groups[0].items.map((item) => item.title)).toEqual([
       "Landing page offer changed",
-      "CTA changed",
-      "Form changed",
+      "Landing page CTA changed",
+      "Landing page form changed",
     ]);
     expect(groups[1].items.map((item) => item.title)).toEqual([
-      "New ad detected",
-      "Headline changed",
+      "Landing page CTA changed",
+      "Landing page headline changed",
     ]);
 
     const email = buildDigestEmail({
@@ -242,7 +253,10 @@ describe("buildDigestEmail", () => {
       items: [
         {
           watchlistName: "<Nykaa>",
-          eventType: "ad_new",
+          // BET 1: use a landing_page_* event so the proof-backed item
+          // survives rerankDigestBrief and still exercises the top-move
+          // escape path. ad_new is now churn and collapses to the footnote.
+          eventType: "landing_page_offer_changed",
           title: "<script>alert(1)</script>",
           summary: "Safe <b>summary</b>",
           createdAt: "2026-06-08T00:00:00.000Z",
@@ -306,24 +320,24 @@ describe("buildDigestEmail", () => {
       unsubscribeUrl: null,
       items: [
         {
-          ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed"),
+          ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed", "ev-nykaa", "website_page_changed"),
           metadata: {
-            ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed").metadata,
+            ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed", "ev-nykaa", "website_page_changed").metadata,
             beforeCreativeImageUrl: "https://cdn.example.com/before.jpg",
             afterCreativeImageUrl: "https://cdn.example.com/after.jpg?sig=\"x\"",
           },
         },
         {
-          ...digestItem("boAt", "New ad detected", 85, "scan_backed"),
+          ...digestItem("boAt", "New ad detected", 85, "scan_backed", "ev-boat", "website_page_changed"),
           metadata: {
-            ...digestItem("boAt", "New ad detected", 85, "scan_backed").metadata,
+            ...digestItem("boAt", "New ad detected", 85, "scan_backed", "ev-boat", "website_page_changed").metadata,
             creativeImageUrl: "https://cdn.example.com/single.jpg",
           },
         },
         {
-          ...digestItem("Mamaearth", "CTA changed", 70, "scan_backed"),
+          ...digestItem("Mamaearth", "CTA changed", 70, "scan_backed", "ev-mamaearth", "landing_page_cta_changed"),
           metadata: {
-            ...digestItem("Mamaearth", "CTA changed", 70, "scan_backed").metadata,
+            ...digestItem("Mamaearth", "CTA changed", 70, "scan_backed", "ev-mamaearth", "landing_page_cta_changed").metadata,
             creativeImageUrl: "http://insecure.example.com/skip.jpg",
           },
         },
@@ -341,7 +355,12 @@ describe("buildDigestEmail", () => {
     expect(email.text).toContain("Creative: before/after thumbnails attached in the HTML email.");
     expect(email.text).toContain("Creative thumbnail attached in the HTML email.");
     // Mamaearth item has only an insecure URL — text must omit creative notes for that item.
-    expect(email.text).not.toMatch(/Mamaearth[\s\S]*Creative thumbnail/);
+    // The rerank now orders landing_page_cta_changed (Mamaearth) ahead of
+    // website_page_changed (boAt) by type weight, so anchor on the item number
+    // rather than assuming Mamaearth is the last entry.
+    const mamaearthTextBlock = email.text.split(/\n\d+\.\s/)[1] ?? "";
+    expect(mamaearthTextBlock.startsWith("CTA changed")).toBe(true);
+    expect(mamaearthTextBlock).not.toContain("Creative thumbnail");
   });
 
   it("renders landing-page before/after screenshots as a labelled evidence card", () => {
@@ -476,7 +495,7 @@ describe("buildDigestEmail", () => {
     expect(email.text).not.toContain("Landing page evidence");
   });
 
-  it("keeps ad creative thumbnails unchanged beside the landing-page card", () => {
+  it("collapses ad creative churn to a counted footnote and keeps the landing-page card", () => {
     const email = buildDigestEmail({
       name: "Owner",
       periodStart: "2026-06-01T00:00:00.000Z",
@@ -490,9 +509,9 @@ describe("buildDigestEmail", () => {
       unsubscribeUrl: null,
       items: [
         {
-          ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed"),
+          ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed", "ev-nykaa-ad", "ad_new"),
           metadata: {
-            ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed").metadata,
+            ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed", "ev-nykaa-ad", "ad_new").metadata,
             beforeCreativeImageUrl: "https://cdn.example.com/before.jpg",
             afterCreativeImageUrl: "https://cdn.example.com/after.jpg",
           },
@@ -508,10 +527,15 @@ describe("buildDigestEmail", () => {
       ],
     });
 
-    expect(email.html).toContain('src="https://cdn.example.com/before.jpg"');
+    // BET 1: the ad_new creative churn never renders its thumbnails as a top
+    // move — it collapses into a single counted footnote line.
+    expect(email.html).not.toContain('src="https://cdn.example.com/before.jpg"');
+    expect(email.html).toContain("1 new creative — open the wall to see them.");
+    expect(email.text).toContain("1 new creative — open the wall to see them.");
+    expect(email.text).not.toContain("Creative: before/after thumbnails attached in the HTML email.");
+    // The landing-page evidence card still renders for the headline item.
     expect(email.html).toContain("Landing page evidence");
     expect(email.html).toContain('src="https://cdn.example.com/lp-before.png"');
-    expect(email.text).toContain("Creative: before/after thumbnails attached in the HTML email.");
     expect(email.text).toContain("Landing page evidence: Offer / price changed");
   });
 
@@ -1879,17 +1903,18 @@ function digestItem(
   priorityScore: number,
   sourceStatus: "proof_backed" | "scan_backed",
   eventIdOverride?: string,
+  eventTypeOverride?: string,
 ) {
   const slug = watchlistName.toLowerCase().replace(/[^a-z0-9]+/g, "");
   return {
     watchlistName,
     watchlistId: `wl-${slug}`,
     eventId: eventIdOverride ?? `ev-${slug}`,
-    eventType: title.includes("offer")
+    eventType: eventTypeOverride ?? (title.includes("offer")
       ? "landing_page_offer_changed"
       : title.includes("CTA")
         ? "landing_page_cta_changed"
-        : "ad_new",
+        : "ad_new"),
     title,
     summary: `${title} summary with enough detail for review.`,
     createdAt: "2026-06-08T00:00:00.000Z",
@@ -1963,5 +1988,35 @@ describe("buildDigestEmail — brief retention frame (lane 1)", () => {
 
     expect(email.html).toContain("first brief on file");
     expect(email.html).toContain("Expiry unset");
+  });
+
+  it("names the activation brief email from the competitor, not the weekly count line", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-08-26T10:00:00.000Z",
+      periodEnd: "2026-09-02T10:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        digestItem(
+          "Glowkart",
+          "Baseline captured: 3 active ads",
+          80,
+          "scan_backed",
+          "ev-glowkart",
+          "ad_new",
+        ),
+      ],
+      firstBrief: true,
+      hasPreviousBrief: false,
+    });
+
+    expect(email.subject).toBe("Your first brief: Glowkart");
+    expect(email.subject).not.toContain("worth action");
   });
 });

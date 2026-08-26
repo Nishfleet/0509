@@ -441,6 +441,84 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(browser.disconnect).not.toHaveBeenCalled();
   });
 
+  it("fires onPartialResults with the initial surface ads before the interactive scroll (BET 2, #951)", async () => {
+    const { browser, page } = createBrowserHarness();
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const partialCalls: Array<{ adCount: number; firstAdId: string | null }> = [];
+    const result = await searchMetaLibraryByBrowser(
+      { BROWSER: {} as Fetcher },
+      buildQuery(),
+      {
+        mode: "interactive",
+        onPartialResults: (ads) => {
+          partialCalls.push({
+            adCount: ads.length,
+            firstAdId: ads[0]?.metaAdId ?? null,
+          });
+        },
+      },
+    );
+
+    // The partial callback fired exactly once, with the initial-surface ads,
+    // BEFORE the scroll-and-collect passes ran (the final result still has the
+    // same ad — the scroll found no new cards in this harness).
+    expect(partialCalls).toHaveLength(1);
+    expect(partialCalls[0]).toMatchObject({ adCount: 1, firstAdId: "1234567890" });
+    expect(result.ads).toEqual([
+      expect.objectContaining({ metaAdId: "1234567890" }),
+    ]);
+  });
+
+  it("does not fire onPartialResults in shallow mode (no scroll to skip) (BET 2, #951)", async () => {
+    const { browser, page } = createBrowserHarness();
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const partialCalls: unknown[] = [];
+    await searchMetaLibraryByBrowser(
+      { BROWSER: {} as Fetcher },
+      buildQuery(),
+      {
+        mode: "shallow",
+        onPartialResults: (ads) => {
+          partialCalls.push(ads);
+        },
+      },
+    );
+
+    // Shallow mode (watchlist/scheduled scans) never streams partials — there
+    // is no scroll to skip, so the single extraction IS the final result.
+    expect(partialCalls).toHaveLength(0);
+  });
+
   it("does not reuse idle Browser Run sessions unless explicitly enabled", async () => {
     const { browser, page } = createBrowserHarness();
     const launch = vi.fn().mockResolvedValue(browser);

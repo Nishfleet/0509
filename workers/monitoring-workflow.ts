@@ -56,7 +56,24 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
             backoff: "exponential",
           },
         },
-        async () => runFirstWatchlistScanWorkflowJob(this.env, firstScanPayload),
+        async () => {
+          const result = await runFirstWatchlistScanWorkflowJob(
+            this.env,
+            firstScanPayload,
+          );
+          try {
+            const { ensureFirstBriefForWatchlist } = await import(
+              "../app/lib/first-brief.server"
+            );
+            await ensureFirstBriefForWatchlist(
+              this.env,
+              firstScanPayload.watchlistId,
+            );
+          } catch {
+            // First-brief filing must never fail the activation scan.
+          }
+          return result;
+        },
       );
     }
 

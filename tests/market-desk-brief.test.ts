@@ -51,8 +51,9 @@ function digest(input: Partial<DigestRecord> = {}): DigestRecord {
     periodStart: input.periodStart ?? "2026-06-19T00:00:00.000Z",
     periodEnd: input.periodEnd ?? "2026-06-20T00:00:00.000Z",
     createdAt: input.createdAt ?? "2026-06-20T00:00:00.000Z",
+    summary: input.summary,
     items: input.items ?? [],
-    delivery: input.delivery ?? {
+    delivery: input.delivery !== undefined ? input.delivery : {
       id: "delivery-1",
       digestRunId: "digest-1",
       provider: "email",
@@ -325,6 +326,60 @@ describe("buildMarketDeskBrief", () => {
       value: 0,
       detail: "Weekly brief lands Monday",
     });
+  });
+
+  it("puts the first brief on screen when the activation digest has evidence", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      plan: "free",
+      watchlists: [watchlist({ lastScannedAt: "2026-06-20T08:00:00.000Z" })],
+      recentEvents: [
+        event({
+          eventType: "ad_new",
+          title: "Baseline captured: 3 active ads",
+          summary: "Starting point for Boat.",
+          metadata: { kind: "baseline" },
+        }),
+      ],
+      digests: [
+        digest({
+          summary: { kind: "first_brief" },
+          delivery: null,
+          items: [
+            {
+              id: "item-1",
+              digestRunId: "digest-1",
+              watchlistId: "watch-1",
+              watchlistName: "Boat watch",
+              eventType: "ad_new",
+              title: "Baseline captured: 3 active ads",
+              summary: "Starting point for Boat.",
+              createdAt: "2026-06-20T00:00:00.000Z",
+              metadata: {
+                eventId: "event-1",
+                sourceUrl: "https://www.facebook.com/ads/library/?id=ad-1",
+              },
+            },
+          ],
+        }),
+      ],
+    }));
+
+    expect(brief.title).toBe("Your first brief is ready");
+    expect(brief.action).toEqual({
+      href: "/app/digests?digest=digest-1&firstrun=1#first-brief-detail",
+      label: "Read the brief",
+    });
+    expect(brief.items[0]).toMatchObject({
+      label: "Evidence",
+      title: "Baseline captured: 3 active ads",
+      href: "/app/watchlists?watchlist=watch-1&event=event-1",
+    });
+    expect(brief.metrics).toContainEqual({
+      label: "Briefs sent",
+      value: 0,
+      detail: "First brief is on screen",
+    });
+    expect(JSON.stringify(brief.metrics)).not.toContain("Weekly brief lands Monday");
   });
 
   it("prioritizes confirmed competitor changes over quiet run stats", () => {

@@ -81,6 +81,17 @@ export function evaluateProofBackedEvents(input: {
   burstCount: number;
   currentCapturedAt?: string | null;
   now?: string;
+  /**
+   * Screenshot corroboration (BET 4): true when the current capture's
+   * extracted signals are corroborated by a real rendered screenshot, not by
+   * markdown/HTML extraction alone. When false, price/CTA offer events are
+   * suppressed (never an alert) — the change might be an extraction artifact
+   * from a partial render rather than a real page edit. Defaults to true to
+   * preserve the standing behavior for callers that have not opted in; the
+   * capture pipeline sets it from the snapshot's `screenshotCorroborates`
+   * metadata.
+   */
+  screenshotCorroborates?: boolean;
 }) : ProofEventEvaluationResult {
   const lastSuccessfulProof = input.lastSuccessfulProof;
   if (!lastSuccessfulProof) {
@@ -105,6 +116,7 @@ export function evaluateProofBackedEvents(input: {
         }
       : previous;
   const now = input.now ?? new Date().toISOString();
+  const screenshotCorroborates = input.screenshotCorroborates ?? true;
   const candidateDrafts = [
     buildFieldChangeDraft("landing_page_headline_changed", comparablePrevious, input.currentProof),
     buildFieldChangeDraft("landing_page_offer_changed", comparablePrevious, input.currentProof),
@@ -127,7 +139,21 @@ export function evaluateProofBackedEvents(input: {
       recentWatchEvents: input.recentWatchEvents,
       now,
     });
-    const status: Extract<WatchEventStatus, "confirmed" | "suppressed"> = duplicate
+    // Screenshot corroboration cross-check (BET 4): a price or CTA change
+    // extracted from HTML/markdown alone — with no screenshot to corroborate
+    // it — is exactly the phantom-change shape the category concedes. Suppress
+    // it (never an alert) and record the reason in metadata so a real drop is
+    // observable, not silent. Headline and form events do not require
+    // screenshot corroboration: the headline is read from the document title,
+    // and form presence is a structural signal, neither of which a missing
+    // screenshot can fake.
+    const requiresCorroboration =
+      draft.eventType === "landing_page_offer_changed" ||
+      draft.eventType === "landing_page_cta_changed";
+    const unconfirmedByScreenshot =
+      requiresCorroboration && !screenshotCorroborates;
+    const suppressed = duplicate || unconfirmedByScreenshot;
+    const status: Extract<WatchEventStatus, "confirmed" | "suppressed"> = suppressed
       ? "suppressed"
       : "confirmed";
 
@@ -151,6 +177,9 @@ export function evaluateProofBackedEvents(input: {
         from: draft.from,
         to: draft.to,
         diffHash: draft.diffHash,
+        ...(unconfirmedByScreenshot
+          ? { corroboration: "unconfirmed_by_screenshot" }
+          : {}),
         ...(lastSuccessfulProof.succeededAt && input.currentCapturedAt
           ? {
               beforeCapturedAt: lastSuccessfulProof.succeededAt,

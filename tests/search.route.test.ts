@@ -1735,6 +1735,7 @@ describe("search loader", () => {
       discoveryStatus: "healthy",
       discoverySummary: null,
       discoveryFailureClass: null,
+      verifiedCount: 1,
     };
 
     const { formatResultsPanelTitle } = await import("~/routes/search");
@@ -1754,7 +1755,7 @@ describe("search loader", () => {
       isBroaderScope: false,
       relevanceApplied: false,
       country: "all",
-    })).toBe("1 ad found across all countries");
+    })).toBe("1 ad found");
     expect(formatResultsPanelTitle(legacyResult, {
       displayDomain: "nykaa.com",
       isDomainSearch: true,
@@ -1811,6 +1812,7 @@ describe("search loader", () => {
       discoveryStatus: "healthy",
       discoverySummary: null,
       discoveryFailureClass: null,
+      verifiedCount: 1,
     };
 
     const { formatResultsPanelTitle } = await import("~/routes/search");

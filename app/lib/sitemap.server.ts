@@ -9,30 +9,63 @@
  *   1. Only rows that WOULD RENDER the indexable brand-page state qualify:
  *      - public_search route context (scheduled scan/warmup entries are
  *        shallow and never back a public page),
+ *      - written by the RESOLVED commercial discovery provider — the page's
+ *        loader reads only that provider's rows, so a row from any other
+ *        provider would render the noindex shell while the sitemap claimed
+ *        an indexable page,
  *      - non-demo provider AND payload (sample data is never presented as a
  *        brand's real ads on a public page),
  *      - ads present in the payload (a zero-row would render the honest
  *        "haven't checked recently" shell, which self-noindexes),
  *      - fetched_at within the 7-day freshness window
  *        (BRAND_PAGE_FRESH_FOR_INDEXING_MS) — older captures render with an
- *        honest freshness line but must not rank.
+ *        honest freshness line but must not rank,
+ *      - the capture's Ad Aggression Score would render (at least one
+ *        verified-linked ad AND an observed window clearing the 14-day
+ *        floor) — the score is the page's named differentiator, so a row
+ *        whose page would ship the ad wall without it backs indexable thin
+ *        content. The loader self-noindexes such a page; this gate keeps it
+ *        out of the sitemap so the two agree.
  *   2. Domain recovery is strictly lossless-only: a row maps to a brand page
  *      ONLY when its cache key or payload carries the registrable domain
  *      (search-v2 domain keys embed it; v2 payloads carry searchIntent +
  *      displayDomain). Legacy fingerprint keys are un-mappable and skipped —
  *      we never guess a domain.
- *   3. The emergency brake PUBLIC_BRAND_PAGES_INDEXABLE="0" (noindex on
+ *   3. Lookup parity: the listed domain must be reachable through the EXACT
+ *      cache key the page will read. deriveBrandPageLookupForCountry
+ *      reproduces the loader's own key derivation (search-v2 domain keys or
+ *      legacy fingerprint triples, per the SEARCH_ROLLOUT_MODE posture), and
+ *      only rows whose cache_key matches one of those derived keys qualify.
+ *      This closes the stale-payload hole: a legacy-keyed row is never
+ *      trusted on its payload's displayDomain alone — the key fingerprint
+ *      must actually be the one the page derives for that domain.
+ *   4. Country scopes are restricted to what every visitor lookup tries
+ *      regardless of geo ("all", "United States"): the loader probes
+ *      [visitor-country, all, United States] and cannot know a crawler's
+ *      geo at sitemap time. A domain backed only by other-country captures
+ *      renders the noindex shell for most crawlers, so it stays out of the
+ *      sitemap by design — coverage is traded for the noindex guarantee.
+ *   5. The emergency brake PUBLIC_BRAND_PAGES_INDEXABLE="0" (noindex on
  *      every /ads/* page) suppresses dynamic entries entirely, and demo
  *      provider environments (no real cache to render) are skipped too, so
  *      the sitemap can never list a page that serves noindex.
- *   4. This is a bounded cache read only — sitemap generation never triggers
+ *   6. This is a bounded cache read only — sitemap generation never triggers
  *      live discovery, Browser Rendering, or any paid operation.
  */
 
-import { normalizeBrandPageDomain, BRAND_PAGE_FRESH_FOR_INDEXING_MS } from "~/lib/brand-page.server";
+import {
+  adHasVerifiedDomainLink,
+  computeBrandPageAggressionScore,
+  deriveBrandPageLookupForCountry,
+  normalizeBrandPageDomain,
+  BRAND_PAGE_FRESH_FOR_INDEXING_MS,
+} from "~/lib/brand-page.server";
+import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import { queryAll } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
+import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { renderSitemapXml, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
+import type { AdRecord } from "~/lib/types";
 
 /**
  * Hard bound on dynamic brand-page entries per sitemap render. Keeps the
@@ -41,6 +74,18 @@ import { renderSitemapXml, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/l
  * crawl-budget ceiling for this acquisition channel).
  */
 export const SITEMAP_BRAND_PATH_LIMIT = 500;
+
+/**
+ * Country scopes the brand-page loader probes for EVERY visitor regardless of
+ * geo (candidateCountries always appends "all" and "United States" to the
+ * visitor's own country). Only captures under these scopes can back an
+ * indexable render for an unknown crawler, so only they qualify for the
+ * sitemap — see rule 4 in the module docblock.
+ */
+export const SITEMAP_ALWAYS_TRIED_COUNTRY_SCOPES: readonly string[] = [
+  ALL_COUNTRIES_VALUE,
+  "United States",
+];
 
 /** Subset of discovery_cache_entry columns the sitemap read needs. */
 export interface SitemapCacheRow {
@@ -158,17 +203,87 @@ export function isIndexableBrandPageRow(row: SitemapCacheRow, now: Date): boolea
 }
 
 /**
+ * Mirror of the brand-page loader's aggression-score gate. The page's named
+ * differentiator (the Ad Aggression Score + its four public sub-scores:
+ * Velocity/Testing/Freshness/Persistence) renders ONLY when the capture has
+ * at least one verified-linked ad AND the observed window clears the 14-day
+ * floor — `computeBrandPageAggressionScore` returns null otherwise. A row
+ * whose page would ship the ad wall without the score backs an indexable
+ * thin page; it must stay out of the sitemap so no indexable thin brand
+ * page remains. The wall still renders for a direct visitor (the loader
+ * only withholds indexability) — this gate keeps such pages out of the
+ * sitemap, mirroring the loader's `aggression === null → noindex` rule.
+ *
+ * The ads are read from the cached payload as-is (the cache stores full
+ * AdRecord objects); `computeBrandPageAggressionScore` returns null on any
+ * missing field, so a partial/payload-shape ad degrades to "not listable"
+ * rather than a false positive.
+ */
+export function brandPageRowRendersAggressionScore(
+  row: SitemapCacheRow,
+  domain: string,
+  now: Date,
+): boolean {
+  const payload = parseSitemapCachePayload(row.payload_json);
+  if (!payload) {
+    return false;
+  }
+  const ads = payload.ads.filter((ad) => ad && (ad as { source?: unknown }).source !== "demo");
+  const verifiedLinkedAds = ads.filter((ad) =>
+    adHasVerifiedDomainLink(ad as AdRecord, domain),
+  );
+  if (verifiedLinkedAds.length === 0) {
+    return false;
+  }
+  return computeBrandPageAggressionScore(verifiedLinkedAds as AdRecord[], now) !== null;
+}
+
+/**
+ * The exact discovery-cache keys the /ads/:domain page reads for this domain,
+ * under the given provider and rollout posture, restricted to the
+ * always-tried country scopes. A row qualifies for the sitemap only when its
+ * cache_key is one of these — proof the public page will actually FIND (and
+ * render indexable from) this row, not merely that a row exists.
+ */
+export function brandPageLookupCacheKeysForSitemap(
+  provider: string,
+  domain: string,
+  useDomainV2: boolean,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const country of SITEMAP_ALWAYS_TRIED_COUNTRY_SCOPES) {
+    keys.add(deriveBrandPageLookupForCountry(provider, domain, country, useDomainV2).cacheKey);
+  }
+  return keys;
+}
+
+/**
+ * Options narrowing `indexableBrandPageEntriesFromRows` to rows the public page
+ * can actually reach. Both mirror env-resolved facts at sitemap-render time:
+ * - provider: resolveCommercialDiscoveryProvider(env) — the only provider the
+ *   brand-page loader ever reads.
+ * - useDomainV2: shouldApplySearchV2(env) — decides whether the loader derives
+ *   search-v2 domain keys or legacy fingerprint triples. When omitted, the v2
+ *   key shape is assumed (the pure core stays independently usable).
+ */
+export interface IndexableBrandPageRowOptions {
+  provider?: string;
+  useDomainV2?: boolean;
+}
+
+/**
  * Pure core: reduce cache rows (ordered newest-first) to deduped, bounded
- * /ads/:domain sitemap entries that would render indexable. Each entry
- * carries a `lastmod` derived from the cache row's `fetched_at` (the honest
- * freshness signal — when we last saw real ads for this brand) plus
- * `changefreq=weekly` and `priority=0.6` (brand pages are secondary to the
- * funnel but worth periodic re-crawl). Kept separate from the D1 read so the
- * filtering rules are unit-testable without a database.
+ * /ads/:domain sitemap entries that the brand page would both find and render
+ * indexable. Each entry carries a `lastmod` derived from the cache row's
+ * `fetched_at` (the honest freshness signal — when we last saw real ads for
+ * this brand) plus `changefreq=weekly` and `priority=0.6` (brand pages are
+ * secondary to the funnel but worth periodic re-crawl). Kept separate from
+ * the D1 read so the filtering rules are unit-testable without a database.
  */
 export function indexableBrandPageEntriesFromRows(
   rows: readonly SitemapCacheRow[],
   now: Date = new Date(),
+  options: IndexableBrandPageRowOptions = {},
 ): SitemapEntry[] {
   const seen = new Set<string>();
   const entries: SitemapEntry[] = [];
@@ -176,8 +291,32 @@ export function indexableBrandPageEntriesFromRows(
     if (!isIndexableBrandPageRow(row, now)) {
       continue;
     }
+    // The page reads only the resolved provider's rows; anything else would
+    // render the noindex shell while the sitemap claimed an indexable page.
+    if (options.provider !== undefined && row.provider !== options.provider) {
+      continue;
+    }
     const domain = brandDomainFromSitemapCacheRow(row);
     if (!domain || seen.has(domain)) {
+      continue;
+    }
+    // Lookup parity: the row's key must be exactly what the page derives for
+    // this domain under the current rollout posture and an always-tried
+    // country scope — otherwise the page misses it and serves noindex.
+    const lookupKeys = brandPageLookupCacheKeysForSitemap(
+      options.provider ?? row.provider,
+      domain,
+      options.useDomainV2 ?? true,
+    );
+    if (!lookupKeys.has(row.cache_key)) {
+      continue;
+    }
+    // The page's differentiator (Ad Aggression Score + 4 sub-scores) must
+    // render, or the loader self-noindexes the page — never list a thin
+    // page (ad wall without its score) in the sitemap. Mirrors the loader's
+    // `aggression === null → noindex` rule so the sitemap and the live page
+    // agree on indexability.
+    if (!brandPageRowRendersAggressionScore(row, domain, now)) {
       continue;
     }
     seen.add(domain);
@@ -212,13 +351,19 @@ export async function loadIndexableBrandPageEntries(
   // Mirror the loader's first gate: in demo-provider environments the brand
   // page renders the shell (noindex) regardless of any leftover rows.
   const { resolveCommercialDiscoveryProvider } = await import("~/lib/ad-source.server");
-  if (resolveCommercialDiscoveryProvider(env) === "demo") {
+  const provider = resolveCommercialDiscoveryProvider(env);
+  if (provider === "demo") {
     return [];
   }
   // Emergency brake: every /ads/* page serves noindex — never sitemap it.
   if (env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0") {
     return [];
   }
+
+  // The rollout posture decides which key shape the page derives (search-v2
+  // domain keys vs legacy fingerprint triples); the sitemap must mirror it or
+  // it lists domains whose pages can never find their rows.
+  const useDomainV2 = shouldApplySearchV2(env);
 
   const cutoffIso = new Date(now.getTime() - BRAND_PAGE_FRESH_FOR_INDEXING_MS).toISOString();
   try {
@@ -228,15 +373,16 @@ export async function loadIndexableBrandPageEntries(
         SELECT cache_key, provider, route_context, payload_json, fetched_at
         FROM discovery_cache_entry
         WHERE route_context = 'public_search'
-          AND provider != 'demo'
+          AND provider = ?
           AND fetched_at >= ?
         ORDER BY fetched_at DESC
         LIMIT ?
       `,
+      provider,
       cutoffIso,
       SITEMAP_BRAND_PATH_LIMIT,
     );
-    return indexableBrandPageEntriesFromRows(rows, now);
+    return indexableBrandPageEntriesFromRows(rows, now, { provider, useDomainV2 });
   } catch (error) {
     if (isMissingSitemapTableError(error)) {
       return [];

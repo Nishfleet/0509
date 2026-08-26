@@ -5,9 +5,11 @@ import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
   canonicalLinks,
+  faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
   webPageJsonLd,
+  type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
@@ -78,7 +80,31 @@ const fiveToNineAdds = [
   },
 ] as const;
 
+// FAQ entries answer the "vs" and "alternative" searches buyers type for the
+// Meta Ad Library ("Is the Meta Ad Library enough?", "Do I need a Meta Ad
+// Library alternative?"). Every answer is grounded in this page's own copy —
+// the three comparison sections above — nothing new promised.
+export const metaAdLibraryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
+  {
+    question: "What does the Meta Ad Library give you for free?",
+    answer:
+      "Meta's public Ad Library shows the ads any page is currently running — free, no account, open to everyone. Nothing is filtered through a vendor, and it is the same public archive Five to Nine reads for its checks. It is enough for a one-off look at one competitor today.",
+  },
+  {
+    question: "What are the limits of checking the Meta Ad Library by hand?",
+    answer:
+      "The Ad Library only answers when you visit, so the checks that matter are the ones you forget to run. It shows what is running now, not what changed since Tuesday, so spotting a new hook, a dropped price, or a swapped CTA means keeping the old version in your head. Close the tab and the moment is gone — nothing is saved, timestamped, or alerted.",
+  },
+  {
+    question: "What does Five to Nine add to the Meta Ad Library?",
+    answer:
+      "Paid plans check watched competitors every 3–6 hours, so the visits happen whether or not you remember. Each scan is compared against the last one, so you hear when something actually changed. Confirmed changes are saved with screenshots, page text, and the original source link, and arrive as a digest brief — daily on Starter and Agency, weekly on Scout — with instant alerts available on Starter and Agency.",
+  },
+] as const;
+
 export default function CompareMetaAdLibraryRoute() {
+  const structuredFaq = faqPageJsonLd(metaAdLibraryFaqEntries);
+
   return (
     <main className="f9-home">
       <script
@@ -87,9 +113,11 @@ export default function CompareMetaAdLibraryRoute() {
             name: "Five to Nine vs checking the Meta Ad Library by hand",
             description: pageDescription,
             pathname: "/compare/meta-ad-library",
+            comparedProductName: "Meta Ad Library",
           }),
         )}
       />
+      <script {...jsonLdScriptProps(structuredFaq)} />
       <MarketingNav />
 
       <section className="ld-hero">

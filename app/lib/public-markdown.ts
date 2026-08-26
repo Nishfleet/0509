@@ -54,6 +54,22 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "How Five to Nine extends Meta Ad Library results with monitoring and proof.",
   },
+  "/compare/visualping": {
+    title: "Five to Nine vs Visualping",
+    description: "How Five to Nine compares with Visualping.",
+  },
+  "/compare/spyland": {
+    title: "Five to Nine vs Spyland",
+    description: "How Five to Nine compares with Spyland.",
+  },
+  "/compare/pulzifi": {
+    title: "Five to Nine vs Pulzifi",
+    description: "How Five to Nine compares with Pulzifi.",
+  },
+  "/compare/foreplay": {
+    title: "Five to Nine vs Foreplay",
+    description: "How Five to Nine compares with Foreplay.",
+  },
   "/competitor-monitoring": {
     title: "Competitor monitoring",
     description:

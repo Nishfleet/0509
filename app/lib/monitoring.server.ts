@@ -63,6 +63,14 @@ import {
 import { compensateUncommittedProofArtifacts } from "~/lib/proof-artifact-retention.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
 import {
+  createLandingPagePipelineCounters,
+  flushLandingPagePipelineCounters,
+  recordDiffStage,
+  recordExtractStage,
+  recordFetchStage,
+  type LandingPagePipelineCounters,
+} from "~/lib/landing-page-pipeline-instrumentation.server";
+import {
   CommercialDiscoveryError,
   resolveCommercialDiscoveryProvider,
   searchAdsViaSourceResolver,
@@ -3629,6 +3637,13 @@ async function evaluateSelectiveProofCandidates(
       return finalized;
     };
 
+    const pipelineCounters = createLandingPagePipelineCounters({
+      scanId: proofRequestKey,
+      watchlistId: input.watchlist.id,
+      adId: observation.ad_id,
+      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    });
+
     try {
       const replayedSnapshot = proofCaptureToLandingPageSnapshot(
         replayedProofCapture,
@@ -3638,6 +3653,15 @@ async function evaluateSelectiveProofCandidates(
       const freshSnapshot = replayedSnapshot
         ? null
         : await captureLandingPageSnapshot(env, observation.landing_page_url!, {
+            // Proof captures must save a screenshot (the homepage promises
+            // "saves the screenshots"). preferRendered runs the Browser
+            // Rendering → Browserless chain first so the snapshot carries a
+            // screenshotArtifactKey; requireScreenshot guarantees the capture
+            // is not considered successful without one. The direct-website
+            // proof path already does this (see
+            // evaluateDirectWebsiteProofCandidate); this matches it.
+            preferRendered: true,
+            requireScreenshot: true,
             onFailure: (detail) => {
               captureFailureDetail = detail;
             },
@@ -3646,11 +3670,20 @@ async function evaluateSelectiveProofCandidates(
             // Real request ExecutionContext when the caller has one (see
             // `evaluateSelectiveProofCandidates` input).
             executionContext: input.executionContext ?? null,
+            instrumentation: pipelineCounters,
           });
       const snapshot = replayedSnapshot ?? freshSnapshot;
       const failureDetail =
         captureFailureDetail as LandingPageCaptureFailureDetail | null;
       freshSnapshotForCompensation = freshSnapshot;
+
+      // Issue #949: record the fetch-stage outcome so the per-check bail-out
+      // counter shows whether the capture reached extraction or bailed here.
+      recordFetchStageForCapture(pipelineCounters, {
+        replayed: Boolean(replayedSnapshot),
+        snapshot,
+        failureDetail,
+      });
 
       if (!snapshot) {
         if (!(await finalizeEvidence("failed"))) {
@@ -3688,12 +3721,32 @@ async function evaluateSelectiveProofCandidates(
           lastSuccessfulProofAt: proofTarget.lastSuccessfulProofAt,
           lastSuccessfulCaptureId: proofTarget.lastSuccessfulCaptureId,
         });
+        // Issue #949: the fetch bailed out — the diff stage never ran.
+        recordDiffStage(pipelineCounters, {
+          status: "skipped_no_snapshot",
+          fieldBails: {
+            headline: "fetch_bailed_no_snapshot",
+            offer: "fetch_bailed_no_snapshot",
+            cta: "fetch_bailed_no_snapshot",
+            form: "fetch_bailed_no_snapshot",
+          },
+        });
         continue;
       }
 
       const extractedFields = snapshotToExtractedFields(snapshot);
       const fieldConfidence = readSnapshotConfidence(snapshot);
       const extractionWarnings = readSnapshotWarnings(snapshot);
+      // Issue #949: record which fields the extract stage found vs. left
+      // empty, so the bail-out counter shows when extraction silently
+      // dropped a field the diff would have needed.
+      recordExtractStage(pipelineCounters, {
+        ctaText: snapshot.ctaText ?? null,
+        priceText: snapshot.priceText ?? null,
+        formPresent: snapshot.formPresent ?? null,
+        headline: snapshot.rawHeadline ?? null,
+        warnings: extractionWarnings,
+      });
       const finalCanonicalPageIdentity =
         buildCanonicalPageIdentity(snapshot.canonicalUrl) ??
         canonicalPageIdentity;
@@ -3788,7 +3841,13 @@ async function evaluateSelectiveProofCandidates(
         sensitivityMode: "balanced",
         burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
         currentCapturedAt: snapshot.capturedAt,
+        screenshotCorroborates:
+          readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
+          false,
       });
+      // Issue #949: record the diff-stage outcome and per-field bail
+      // reasons, so the counter shows which gate dropped the event.
+      recordDiffStageForEvaluation(pipelineCounters, evaluated, lastSuccessfulProof);
 
       for (const event of evaluated.events) {
         await assertOrchestratedWatchlistRunLease(env, input.runId, {
@@ -3877,6 +3936,11 @@ async function evaluateSelectiveProofCandidates(
         await finalizeEvidence("failed");
       }
       throw error;
+    } finally {
+      // Issue #949: emit the per-check stage counter on every path through
+      // the loop (success, bail-out continue, or thrown error) so no bail-out
+      // goes unlogged.
+      flushLandingPagePipelineCounters(pipelineCounters);
     }
   }
 
@@ -4120,6 +4184,13 @@ async function evaluateDirectWebsiteProofCandidate(
     return finalized;
   };
 
+  const pipelineCounters = createLandingPagePipelineCounters({
+    scanId: proofRequestKey,
+    watchlistId: input.watchlist.id,
+    adId: null,
+    extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+  });
+
   try {
     const replayedSnapshot = proofCaptureToLandingPageSnapshot(
       replayedProofCapture,
@@ -4130,6 +4201,7 @@ async function evaluateDirectWebsiteProofCandidate(
       ? null
       : await captureLandingPageSnapshot(env, websiteUrl, {
           preferRendered: true,
+          requireScreenshot: true,
           onFailure: (detail) => {
             captureFailureDetail = detail;
           },
@@ -4138,11 +4210,19 @@ async function evaluateDirectWebsiteProofCandidate(
           // Real request ExecutionContext when the caller has one (see
           // `evaluateDirectWebsiteProofCandidate` input).
           executionContext: input.executionContext ?? null,
+          instrumentation: pipelineCounters,
         });
     const snapshot = replayedSnapshot ?? freshSnapshot;
     const failureDetail =
       captureFailureDetail as LandingPageCaptureFailureDetail | null;
     freshSnapshotForCompensation = freshSnapshot;
+
+    // Issue #949: record the fetch-stage outcome for the direct-website path.
+    recordFetchStageForCapture(pipelineCounters, {
+      replayed: Boolean(replayedSnapshot),
+      snapshot,
+      failureDetail,
+    });
 
     if (!snapshot) {
       if (!(await finalizeEvidence("failed"))) {
@@ -4170,6 +4250,16 @@ async function evaluateDirectWebsiteProofCandidate(
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         idempotencyKey: proofRequestKey,
       });
+      // Issue #949: the fetch bailed out — the diff stage never ran.
+      recordDiffStage(pipelineCounters, {
+        status: "skipped_no_snapshot",
+        fieldBails: {
+          headline: "fetch_bailed_no_snapshot",
+          offer: "fetch_bailed_no_snapshot",
+          cta: "fetch_bailed_no_snapshot",
+          form: "fetch_bailed_no_snapshot",
+        },
+      });
       return {
         ...emptyProofEvaluation(websiteUrl),
         proofAttemptCount: 1,
@@ -4177,6 +4267,15 @@ async function evaluateDirectWebsiteProofCandidate(
     }
 
     const extractedFields = snapshotToExtractedFields(snapshot);
+    // Issue #949: record the extract-stage field presence for the
+    // direct-website path.
+    recordExtractStage(pipelineCounters, {
+      ctaText: snapshot.ctaText ?? null,
+      priceText: snapshot.priceText ?? null,
+      formPresent: snapshot.formPresent ?? null,
+      headline: snapshot.rawHeadline ?? null,
+      warnings: readSnapshotWarnings(snapshot),
+    });
     const finalCanonicalPageIdentity =
       buildCanonicalPageIdentity(snapshot.canonicalUrl) ??
       canonicalPageIdentity;
@@ -4303,7 +4402,12 @@ async function evaluateDirectWebsiteProofCandidate(
       sensitivityMode: "balanced",
       burstCount: 1,
       currentCapturedAt: snapshot.capturedAt,
+      screenshotCorroborates:
+        readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
+        false,
     });
+    // Issue #949: record the diff-stage outcome for the direct-website path.
+    recordDiffStageForEvaluation(pipelineCounters, evaluated, finalLastSuccessfulProof);
 
     const proofEvents: WatchEventRecord[] = [];
     let candidateCount = 0;
@@ -4415,6 +4519,10 @@ async function evaluateDirectWebsiteProofCandidate(
       await finalizeEvidence("failed");
     }
     throw error;
+  } finally {
+    // Issue #949: emit the per-check stage counter on every path (success,
+    // early return, or thrown error) so no bail-out goes unlogged.
+    flushLandingPagePipelineCounters(pipelineCounters);
   }
 }
 
@@ -4875,6 +4983,14 @@ function readSnapshotString(
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+function readSnapshotBoolean(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  return typeof value === "boolean" ? value : null;
+}
+
 function readSnapshotConfidence(snapshot: {
   metadata?: Record<string, unknown>;
 }) {
@@ -5047,4 +5163,98 @@ export function shouldAttemptFreeActivationResult(
   // definite failed first-result attempt gets another owner. The claim's
   // idempotency key prevents a second provider call after acceptance.
   return Boolean(baselineRunId) || hasBaselineEvent || adsSeen === 0;
+}
+
+// ---------------------------------------------------------------------------
+// Issue #949: landing-page detector pipeline instrumentation helpers.
+//
+// These translate the pipeline's existing outcomes into the stage-counter
+// records the instrumentation module emits. They are pure mapping functions
+// with no side effects beyond mutating the counter they are handed.
+// ---------------------------------------------------------------------------
+
+function recordFetchStageForCapture(
+  counters: LandingPagePipelineCounters,
+  input: {
+    replayed: boolean;
+    snapshot: LandingPageSnapshotData | null;
+    failureDetail: LandingPageCaptureFailureDetail | null;
+  },
+) {
+  if (input.replayed) {
+    recordFetchStage(counters, "replayed");
+    return;
+  }
+  if (!input.snapshot) {
+    recordFetchStage(
+      counters,
+      "failed",
+      input.failureDetail?.reasonCode ?? "proof_capture_failed",
+    );
+    return;
+  }
+  // A snapshot that arrived via browser_render means the plain-http leg
+  // bailed out and the rendered fallback rescued it — the fetch stage
+  // failed, the render stage succeeded.
+  if (input.snapshot.captureMethod === "browser_render") {
+    recordFetchStage(counters, "failed", "landing_plain_http_bailed_to_render");
+    return;
+  }
+  const unreadable = readSnapshotString(
+    input.snapshot.metadata,
+    "unreadableReasonCode",
+  );
+  if (unreadable === "landing_signals_not_detected") {
+    recordFetchStage(counters, "empty_shell", unreadable);
+    return;
+  }
+  recordFetchStage(counters, "succeeded");
+}
+
+function recordDiffStageForEvaluation(
+  counters: LandingPagePipelineCounters,
+  evaluated: {
+    status: "baseline_established" | "confirmed" | "suppressed" | "invalidated";
+    events: { eventType: WatchEventType; status: string }[];
+  },
+  lastSuccessfulProof: ProofCaptureRecord | null,
+) {
+  const confirmedEventTypes = evaluated.events
+    .filter((event) => event.status === "confirmed")
+    .map((event) => event.eventType);
+
+  // Per-field bail reasons: explain why each landing_page_* field produced no
+  // confirmed event. This is the diagnostic the issue asks for — "how many
+  // checks bail out at each gate and why".
+  const fieldBails: Record<string, string> = {};
+  if (evaluated.status === "baseline_established" || !lastSuccessfulProof) {
+    fieldBails_all(fieldBails, "no_baseline_first_scan");
+  } else if (evaluated.status === "invalidated") {
+    // All four field drafts returned null — either both sides matched, or a
+    // field was missing on one side (null stays missing, by design). The
+    // extract-stage counter distinguishes those two cases.
+    fieldBails_all(fieldBails, "no_field_change_detected");
+  } else if (evaluated.status === "suppressed") {
+    fieldBails_all(fieldBails, "duplicate_within_suppression_window");
+  }
+
+  recordDiffStage(counters, {
+    status: evaluated.status,
+    fieldBails,
+    confirmedEventTypes,
+  });
+}
+
+function fieldBails_all(
+  fieldBails: Record<string, string>,
+  reason: string,
+) {
+  for (const field of [
+    "headline",
+    "offer",
+    "cta",
+    "form",
+  ]) {
+    fieldBails[field] = reason;
+  }
 }
