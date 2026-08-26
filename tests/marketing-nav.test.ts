@@ -84,6 +84,15 @@ describe("MarketingNav (shared public nav)", () => {
 		expect(compact).toMatch(/\.ld-nav-actions\s*\{[^}]*flex-wrap:\s*nowrap;/s);
 	});
 
+	it("wraps the compact primary nav on legal pages so six public links cannot overflow 375px (#1172)", () => {
+		const css = readFileSync("app/app.css", "utf8");
+		const compact = css.split("@media (max-width: 860px)")[1] ?? "";
+		expect(compact).toMatch(/\.ld-nav-links\s*\{[^}]*flex-wrap:\s*nowrap/s);
+		expect(compact).toMatch(/\.f9-legal-page \.ld-nav-links\s*\{[^}]*flex-wrap:\s*wrap/s);
+		expect(compact).toMatch(/\.f9-home \.ld-nav-links\s*\{[^}]*overflow-x:\s*auto/s);
+		expect(compact).toMatch(/\.f9-home \.ld-nav-links\s*\{[^}]*scrollbar-width:\s*none/s);
+	});
+
 	it("is the header used by landing, all compare pages, switch pages, and the legal doc shell", async () => {
 		const marketing = readFileSync("app/routes/marketing.tsx", "utf8");
 		const magicbrief = readFileSync("app/routes/compare.magicbrief.tsx", "utf8");

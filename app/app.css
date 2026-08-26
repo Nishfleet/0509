@@ -2108,7 +2108,7 @@ button[aria-busy="true"] {
 
 .f9-legal-page .f9-doc-toc ul {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: 2px 24px;
   margin: 0;
   padding: 0;
@@ -2118,9 +2118,11 @@ button[aria-busy="true"] {
 .f9-legal-page .f9-doc-toc a {
   display: flex;
   align-items: center;
+  min-width: 0;
   min-height: 44px;
   padding: 4px 0;
   color: var(--ld-ink-soft, #55524a);
+  overflow-wrap: anywhere;
   text-decoration: none;
   border: 0;
 }
@@ -2556,6 +2558,8 @@ one signal-green accent.
 
 .ld-nav-links {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: clamp(14px, 2.5vw, 30px);
   font-size: 0.92rem;
   font-weight: 500;
@@ -2629,10 +2633,6 @@ one signal-green accent.
 }
 
 .ld-case {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
   font-family: var(--ld-mono);
   font-size: 0.78rem;
   letter-spacing: 0.13em;
@@ -2648,9 +2648,8 @@ one signal-green accent.
 .ld-rec {
   color: var(--ld-red);
   font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
+  display: inline;
+  margin-right: 14px;
 }
 
 /* Homepage `.f9-home a` is more specific and would otherwise wash the kicker
@@ -2663,10 +2662,13 @@ one signal-green accent.
 
 .ld-rec::before {
   content: "";
+  display: inline-block;
   width: 8px;
   height: 8px;
+  margin-right: 7px;
   border-radius: 50%;
   background: var(--ld-red);
+  vertical-align: 0.1em;
   animation: ld-blink 1.4s infinite;
 }
 
@@ -2906,6 +2908,8 @@ one signal-green accent.
 
 .ld-proof-actions {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 18px;
   margin-bottom: clamp(24px, 3vw, 36px);
   font-family: var(--ld-mono);
@@ -3714,12 +3718,31 @@ one signal-green accent.
 
   .ld-nav-links {
     display: flex;
+    flex-wrap: nowrap;
     grid-column: 1 / -1;
     justify-content: space-between;
     gap: 4px;
     border-top: 1px solid color-mix(in srgb, var(--ld-ink) 22%, transparent);
     padding-top: 8px;
     font-size: 0.82rem;
+  }
+
+  /* Legal/doc pages have no above-the-fold search CTA, so wrapping the six
+     public links is safe. The homepage must keep this row on one line or the
+     live-search action drops below the Gate-B 375×812 fold. */
+  .f9-legal-page .ld-nav-links {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 4px 8px;
+  }
+
+  .f9-home .ld-nav-links {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .f9-home .ld-nav-links::-webkit-scrollbar {
+    display: none;
   }
 
   /* Every link in the compact nav row stays a real ≥44px touch target
@@ -3729,6 +3752,7 @@ one signal-green accent.
   }
 
   .f9-home .ld-nav-links a {
+    flex: 0 0 auto;
     justify-content: center;
     min-width: 46px;
     padding-inline: 4px;
@@ -3904,6 +3928,8 @@ one signal-green accent.
 .f9-home .ld-hero .f9-announcement {
   display: flex;
   width: fit-content;
+  min-height: 44px;
+  box-sizing: border-box;
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--ld-ink);
   border-radius: 999px;
@@ -16570,7 +16596,7 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
    the nav, the command, or the honest note (journey-1 fold gate). */
 @media (max-width: 600px) {
   .ld-ticker { padding: 6px 0; }
-  .ld-hero { padding-top: 10px; }
+  .ld-hero { padding-top: 0; }
   .ld-hero-grid .ld-wall { font-size: 1.75rem; }
   /* Compact the demoted proof strip so the command still clears the fold. */
   .ld-proof-strip { margin-top: 8px; box-shadow: 4px 4px 0 rgba(14, 13, 10, 0.12); }
@@ -16590,9 +16616,10 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   .ld-proof-strip-foot { display: none; }
   .ld-hero-copy { overflow-x: clip; }
   .ld-deck-copy { font-size: 0.88rem; line-height: 1.35; margin-top: 8px; }
-  .ld-hero-copy .ld-command { margin-top: 10px; }
-  .ld-case { margin-bottom: 6px; gap: 8px; font-size: 0.7rem; }
+  .ld-hero-copy .ld-command { margin-top: 0; }
+  .ld-case { margin-bottom: 6px; font-size: 0.7rem; }
   .f9-home .ld-hero .ld-case { margin-bottom: 6px; }
+  .f9-home .ld-hero .ld-hero-callouts { margin-bottom: 0; }
 
   /* Beat the 760px column stack so the pill stays one row and the secondary
      line ("Paste a competitor site…") yields vertical room to the command. */
@@ -16600,8 +16627,9 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
     flex-direction: row;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
-    padding: 6px 12px;
+    min-height: 44px;
+    margin-bottom: 0;
+    padding: 0 12px;
   }
   .f9-home .ld-hero .f9-announcement span {
     display: none;
