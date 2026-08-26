@@ -129,6 +129,115 @@ describe("regional brand properties (BET 3 demo /ads pages)", () => {
   });
 });
 
+describe("BET 2 live gaps (issue #1202)", () => {
+  it("verifies ŌURA ads that land on ouraring.com against an oura.com search", () => {
+    const intent = parseSearchInputFromWebsiteField("https://oura.com");
+    const ring = ad({
+      advertiser: "ŌURA",
+      landingPageUrl: "https://ouraring.com/store/rings/oura-ring-4",
+    });
+
+    const exact = classifyDomainMatches([ring], intent, { includeUnverified: false });
+    expect(exact).toHaveLength(1);
+    expect(exact[0]?.match.confidenceCategory).toBe("verified");
+  });
+
+  it("classifies a ŌURA advertiser with no landing page as likely, not unmatched", () => {
+    const intent = parseSearchInputFromWebsiteField("https://oura.com");
+    const ring = ad({
+      advertiser: "ŌURA",
+      body: "Make health a daily practice with Oura Ring 4.",
+      landingPageUrl: null,
+    });
+
+    expect(explainDomainMatch(ring, intent)?.level).toBe("likely_brand_name");
+  });
+
+  it("verifies BOSS ads that land on hugoboss.com against a hugo-boss.com search", () => {
+    const intent = parseSearchInputFromWebsiteField("https://hugo-boss.com");
+    const boss = ad({
+      advertiser: "BOSS",
+      landingPageUrl: "https://www.hugoboss.com/men",
+    });
+
+    const exact = classifyDomainMatches([boss], intent, { includeUnverified: false });
+    expect(exact).toHaveLength(1);
+    expect(exact[0]?.match.confidenceCategory).toBe("verified");
+  });
+
+  it("verifies Notion ads that land on notion.com against a notion.so search", () => {
+    const intent = parseSearchInputFromWebsiteField("https://notion.so");
+    const notion = ad({
+      advertiser: "Notion",
+      landingPageUrl: "https://www.notion.com/product",
+    });
+
+    const exact = classifyDomainMatches([notion], intent, { includeUnverified: false });
+    expect(exact).toHaveLength(1);
+    expect(exact[0]?.match.confidenceCategory).toBe("verified");
+  });
+
+  it("upgrades a Mamaearth brand-name match to verified when website identity confirms the name", () => {
+    const intent = parseSearchInputFromWebsiteField("https://mamaearth.com");
+    const mamaearth = ad({
+      advertiser: "Mamaearth",
+      landingPageUrl: null,
+    });
+
+    const exact = classifyDomainMatches([mamaearth], intent, {
+      includeUnverified: false,
+      identityAliases: ["Mamaearth"],
+    });
+    expect(exact).toHaveLength(1);
+    expect(exact[0]?.match.level).toBe("verified_entity");
+    expect(exact[0]?.match.confidenceCategory).toBe("verified");
+  });
+
+  it("upgrades Allbirds Japan when the site name confirms Allbirds", () => {
+    const intent = parseSearchInputFromWebsiteField("https://allbirds.com");
+    const japan = ad({
+      advertiser: "Allbirds Japan",
+      landingPageUrl: null,
+    });
+
+    const exact = classifyDomainMatches([japan], intent, {
+      includeUnverified: false,
+      identityAliases: ["Allbirds"],
+    });
+    expect(exact).toHaveLength(1);
+    expect(exact[0]?.match.confidenceCategory).toBe("verified");
+  });
+
+  it("does not verify Notion Press Publishing just because notion.so's site name is Notion", () => {
+    const intent = parseSearchInputFromWebsiteField("https://notion.so");
+    const publisher = ad({
+      advertiser: "Notion Press Publishing",
+      landingPageUrl: null,
+    });
+
+    const exact = classifyDomainMatches([publisher], intent, {
+      includeUnverified: true,
+      identityAliases: ["Notion"],
+    });
+    expect(exact[0]?.match.confidenceCategory).not.toBe("verified");
+  });
+
+  it("still rejects the okara.ai clinic even with a matching-looking identity alias", () => {
+    const intent = parseSearchInputFromWebsiteField("https://okara.ai");
+    const clinic = ad({
+      advertiser: "ESHAL HOMEOPATHIC CLINIC OKARA",
+      body: "Visit our clinic in Okara, Pakistan",
+      landingPageUrl: "https://eshal-clinic.example.com",
+    });
+
+    const exact = classifyDomainMatches([clinic], intent, {
+      includeUnverified: false,
+      identityAliases: ["Okara"],
+    });
+    expect(exact).toHaveLength(0);
+  });
+});
+
 describe("domainMatchTier", () => {
   it("maps verified levels to verified, brand-name to likely, and everything else to unmatched", () => {
     expect(domainMatchTier("exact_hostname")).toBe("verified");

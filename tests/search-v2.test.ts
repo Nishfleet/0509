@@ -200,6 +200,35 @@ describe("search v2 proof policy", () => {
     expect(result.verifiedCount).toBe(1);
     expect(result.ads[0]?.domainMatch?.level).toBe("verified_alias");
   });
+
+  it("verifies ŌURA ads landing on ouraring.com against oura.com", async () => {
+    const oura = parseSearchInputFromWebsiteField("https://oura.com");
+    const result = await applySearchV2PostFilter(
+      {},
+      {
+        ads: [
+          ad({
+            metaAdId: "oura-ring",
+            advertiser: "ŌURA",
+            landingPageUrl: "https://ouraring.com/store/rings/oura-ring-4",
+          }),
+        ],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "miss",
+      },
+      {
+        queryIntent: oura,
+        scope: "exact",
+        displayDomain: "oura.com",
+        identityAliases: [],
+        domainAliases: [],
+      },
+    );
+
+    expect(result.verifiedCount).toBe(1);
+    expect(result.ads[0]?.domainMatch?.level).not.toBe("unverified_text_candidate");
+  });
 });
 
 describe("search v2 okara.ai precision regression (BET 2)", () => {
