@@ -494,7 +494,9 @@ export default function MarketingRoute() {
         </Link>
 
         <p className="ld-case">
-          <span className="ld-rec">Proof-backed brief</span>
+          <Link className="ld-rec" to="/proof">
+            Proof-backed brief
+          </Link>
           <span>A rival page changed while your growth team was offline</span>
         </p>
 
@@ -569,6 +571,7 @@ export default function MarketingRoute() {
           <div className="ld-proof-actions">
             <Link to={publicSearchTrialPath}>Try the search preview</Link>
             <Link to="/competitor-monitoring">Read the methodology</Link>
+            <Link to="/proof">What we refuse to alert on</Link>
             <a href="#pricing">See plans</a>
           </div>
         </div>

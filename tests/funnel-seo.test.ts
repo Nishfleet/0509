@@ -164,6 +164,7 @@ describe("shared marketing footer", () => {
       "/status",
       "/changelog",
       "/competitor-monitoring",
+      "/proof",
       "/trust",
       "/privacy",
       "/terms",
