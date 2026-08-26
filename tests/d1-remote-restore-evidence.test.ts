@@ -86,8 +86,7 @@ function aggregateEvidence() {
 // a dead-but-unreaped zombie as alive (kill(pid, 0) succeeds on state "Z"), so
 // a waitFor on !pidAlive(...) can still be followed by a successful kill -0.
 // /proc/<pid>/stat answers the same question the script's own
-// process_identity_is_live() answers (start time + non-zombie state), and
-// matches the choice already locked in by tests/deploy-window-lock.test.ts.
+// process_identity_is_live() answers (start time + non-zombie state).
 function pidAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false;
