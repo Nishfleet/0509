@@ -158,8 +158,21 @@ function addDomainAlias(aliases: Set<string>, hostname: string, originRegistrabl
   }
 }
 
-function extractTagContent(html: string, tagName: string) {
-  const match = html.match(new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i"));
+function tagContentPatternForTag(tagName: string): RegExp | null {
+  switch (tagName) {
+    case "title":
+      return /<title[^>]*>([\s\S]*?)<\/title>/i;
+    default:
+      return null;
+  }
+}
+
+/** Extract inner text of allowlisted HTML tags. Unknown tags, including
+ * those that contain regex metacharacters, return null. */
+export function extractTagContent(html: string, tagName: string) {
+  const pattern = tagContentPatternForTag(tagName);
+  if (pattern === null) return null;
+  const match = html.match(pattern);
   return match?.[1]?.replace(/\s+/g, " ").trim() ?? null;
 }
 
