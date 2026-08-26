@@ -396,6 +396,11 @@ function BrandAdsResults({
   const adWord = totalCount === 1 ? "ad" : "ads";
   const watchLabel = `Watch ${data.domain}`;
   const allBrandOwned = totalCount > 0 && data.brandOwnedAdCount === totalCount;
+  // Headline ownership speaks about the verified-linked capture only.
+  // Unverified wall matches must not flip the H1 into split "X of these Y"
+  // copy when every verified-linked creative is the brand's own.
+  const allVerifiedBrandOwned =
+    data.verifiedLinkCount > 0 && data.brandOwnedAdCount === data.verifiedLinkCount;
   const noneBrandOwned = data.brandOwnedAdCount === 0;
   // Mirror brandPageDescription: "other advertisers" in the closer split means
   // verified-from-other only, so the split sums to verifiedLinkCount and
@@ -420,7 +425,7 @@ function BrandAdsResults({
                 ) : null}
               </p>
               <h1 className="f9-ads-headline" id="brand-ads-title">
-                {brandHeadline(data, totalCount, adWord, allBrandOwned, noneBrandOwned)}
+                {brandHeadline(data, totalCount, adWord, allVerifiedBrandOwned, noneBrandOwned)}
               </h1>
               <p className="f9-ads-subline">
                 {heroDetailSentence(data, teaser, data.freshForLiveClaim, allBrandOwned, noneBrandOwned, data.domain)}
@@ -534,10 +539,12 @@ function BrandAdsResults({
 
 /**
  * The H1 verdict. "{Brand} is running N Meta ads" is an ownership claim —
- * it only applies when every cached creative is the brand's own. "Pointing at
- * {domain}" is a link claim — it only applies when the capture carries
- * verified link evidence. Creatives that merely match the search (text-mention
- * / provider candidates) are "matching {domain}", never "pointing at" it.
+ * it only applies when every verified-linked creative is the brand's own.
+ * Unverified wall matches are named in the subline, never folded into split
+ * "X of these Y" copy. "Pointing at {domain}" is a link claim — it only
+ * applies when the capture carries verified link evidence. Creatives that
+ * merely match the search (text-mention / provider candidates) are
+ * "matching {domain}", never "pointing at" it.
  *
  * This must return a plain string: the page <h1> is the document topic
  * heading and must not contain nested markup.
@@ -560,7 +567,8 @@ function brandHeadline(
 
   // Verified link evidence exists — speak about the verified capture only;
   // unverified matches get their own honest line in the subline.
-  const verifiedPhrase = `${data.verifiedLinkCount} Meta ${adWord}`;
+  const verifiedAdWord = data.verifiedLinkCount === 1 ? "ad" : "ads";
+  const verifiedPhrase = `${data.verifiedLinkCount} Meta ${verifiedAdWord}`;
   if (allBrandOwned) {
     return data.freshForLiveClaim
       ? `${data.brandName} is running ${verifiedPhrase} right now.`
