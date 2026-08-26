@@ -3988,13 +3988,6 @@ async function evaluateDirectWebsiteProofCandidate(
   );
   const userPlan = capacity.userPlan;
   const honorPerWatchlistBudgets = honorV1PerWatchlistBudgets(userPlan);
-
-  if (
-    honorPerWatchlistBudgets &&
-    input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun
-  ) {
-    return emptyProofEvaluation(websiteUrl);
-  }
   const purchasedProofCredits = capacity.purchasedProofCredits;
   const workspaceMonthlyCap = capacity.workspaceMonthlyCap;
   const workspaceDailyCap = capacity.workspaceDailyCap;
@@ -4011,15 +4004,6 @@ async function evaluateDirectWebsiteProofCandidate(
     ),
     Promise.resolve(capacity.includedUsed),
   ]);
-
-  if (
-    (honorPerWatchlistBudgets &&
-      watchlistDailyAttempts >= V1_PROOF_BUDGETS.perWatchlistDay) ||
-    workspaceDailyAttempts >= workspaceDailyCap ||
-    workspaceMonthlyAttempts >= workspaceMonthlyCap
-  ) {
-    return emptyProofEvaluation(websiteUrl);
-  }
 
   const canonicalPageIdentity = buildCanonicalPageIdentity(websiteUrl);
   if (!canonicalPageIdentity) {
@@ -4108,11 +4092,10 @@ async function evaluateDirectWebsiteProofCandidate(
     return emptyProofEvaluation(websiteUrl);
   }
 
-  if (
-    (honorPerWatchlistBudgets &&
-      input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun) ||
-    recentFailureCountForTarget >= 2
-  ) {
+  // Failure cooldown stays rate_limit. Daily/monthly/v1 per-watchlist caps
+  // are budget, same as the ad-proof path (#1184). Do not return empty
+  // before createProofCapture — that swallows the skip from the evidence card.
+  if (recentFailureCountForTarget >= 2) {
     await assertOrchestratedWatchlistRunLease(env, input.runId, {
       orchestrationToken: input.lease?.processingToken,
     });
@@ -4122,13 +4105,36 @@ async function evaluateDirectWebsiteProofCandidate(
       skipReason: "skipped_due_to_rate_limit",
       failureReason: "Direct website evidence policy skipped the attempt.",
       captureMetadata: {
-        unreadableReasonCode:
-          recentFailureCountForTarget >= 2
-            ? "landing_capture_retry_cooldown"
-            : "proof_run_rate_limit",
+        unreadableReasonCode: "landing_capture_retry_cooldown",
       },
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:rate-limit`,
+    });
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  if (
+    directWebsiteProofBudgetExhausted({
+      honorPerWatchlistBudgets,
+      watchlistRunAttemptCount: input.watchlistRunAttemptCount,
+      watchlistDailyAttempts,
+      workspaceDailyAttempts,
+      workspaceDailyCap,
+      workspaceMonthlyAttempts,
+      workspaceMonthlyCap,
+      workspaceMonthlyRemaining: capacity.workspaceMonthlyRemaining,
+    })
+  ) {
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
+    await createProofCapture(env, {
+      proofTargetId: proofTarget.id,
+      status: "skipped_due_to_budget",
+      skipReason: "skipped_due_to_budget",
+      failureReason: "Proof capture allowance exhausted.",
+      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+      idempotencyKey: `${proofRequestKey}:skip:budget`,
     });
     return emptyProofEvaluation(websiteUrl);
   }
@@ -4153,21 +4159,6 @@ async function evaluateDirectWebsiteProofCandidate(
         evidenceReservation.result.reason === "top_up_inactive_plan"
           ? "Purchased proof captures require an active paid plan."
           : "Proof capture allowance exhausted.",
-      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-      idempotencyKey: `${proofRequestKey}:skip:budget`,
-    });
-    return emptyProofEvaluation(websiteUrl);
-  }
-
-  if (capacity.workspaceMonthlyRemaining <= 0 && !evidenceReservation) {
-    await assertOrchestratedWatchlistRunLease(env, input.runId, {
-      orchestrationToken: input.lease?.processingToken,
-    });
-    await createProofCapture(env, {
-      proofTargetId: proofTarget.id,
-      status: "skipped_due_to_budget",
-      skipReason: "skipped_due_to_budget",
-      failureReason: "Proof capture allowance exhausted.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:budget`,
     });
@@ -4548,6 +4539,34 @@ function emptyProofEvaluation(websiteUrl: string | null) {
     websiteUrl,
     proofCaptureSucceeded: false,
   };
+}
+
+function directWebsiteProofBudgetExhausted(input: {
+  honorPerWatchlistBudgets: boolean;
+  watchlistRunAttemptCount: number;
+  watchlistDailyAttempts: number;
+  workspaceDailyAttempts: number;
+  workspaceDailyCap: number;
+  workspaceMonthlyAttempts: number;
+  workspaceMonthlyCap: number;
+  workspaceMonthlyRemaining: number;
+}) {
+  if (input.workspaceMonthlyRemaining <= 0) {
+    return true;
+  }
+  if (input.workspaceMonthlyAttempts >= input.workspaceMonthlyCap) {
+    return true;
+  }
+  if (input.workspaceDailyAttempts >= input.workspaceDailyCap) {
+    return true;
+  }
+  if (!input.honorPerWatchlistBudgets) {
+    return false;
+  }
+  return (
+    input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun ||
+    input.watchlistDailyAttempts >= V1_PROOF_BUDGETS.perWatchlistDay
+  );
 }
 
 function directWebsiteUrlForWatchlist(watchlist: WatchlistRecord) {
