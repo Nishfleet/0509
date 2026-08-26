@@ -11,9 +11,9 @@
  */
 
 /** Matches an HTML comment block. Non-greedy so nested comments unwind over loop passes. */
-const HTML_COMMENT_PATTERN = /<!--[\s\S]*?-->/g;
-/** Orphan comment delimiters left after a block pass (unclosed comments, stray `-->`). */
-const COMMENT_DELIMITER_PATTERN = /<!--|-->|<!>/g;
+const HTML_COMMENT_PATTERN = /<!--[\s\S]*?--!?>/g;
+/** Orphan comment delimiters left after a block pass (unclosed comments, stray `-->` or `--!>`). */
+const COMMENT_DELIMITER_PATTERN = /<!--|--!>|-->|<!>/g;
 
 /** Matches script open or close tags, including attribute-bearing and malformed closers. */
 const SCRIPT_TAG_PATTERN = /<\/?script\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
