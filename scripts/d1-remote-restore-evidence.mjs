@@ -48,6 +48,7 @@ import {
   importSqlite,
   parseCreatedDatabaseUuid,
   parseWranglerJson,
+  planSourceBackupLedgerReconciliation,
   resolveMaxSqlBytes,
   sha256,
   staleScratchDatabaseNames,
@@ -66,8 +67,10 @@ export {
   currentRunScratchDatabaseNames,
   parseCreatedDatabaseUuid,
   parseWranglerJson,
+  planSourceBackupLedgerReconciliation,
   resolveMaxSqlBytes,
   staleScratchDatabaseNames,
+  unappliedForwardMigrationSuffix,
   withScratchCleanup,
 } from "./d1-remote-restore-evidence-core.mjs";
 
@@ -109,6 +112,46 @@ export function rethrowWithMigrationLedgerDiagnostics(
     );
   }
   throw error;
+}
+
+const FORWARD_MIGRATION_NAME_PATTERN = /^\d{4}_[A-Za-z0-9_]+\.sql$/u;
+
+/**
+ * Apply a contiguous unapplied repository suffix so the next backup ledger
+ * can match the repo. Used when push/schedule restore-evidence skips the
+ * dispatch-only apply_and_restore job (#1152).
+ *
+ * @param {string[]} migrations
+ * @param {typeof runCaptured} runCommand
+ * @param {(message: string) => void} write
+ */
+export async function applyForwardMigrationSuffix(
+  migrations,
+  runCommand = runCaptured,
+  write = console.error,
+) {
+  if (
+    !Array.isArray(migrations) ||
+    migrations.length === 0 ||
+    migrations.some((name) => !FORWARD_MIGRATION_NAME_PATTERN.test(name)) ||
+    new Set(migrations).size !== migrations.length
+  ) {
+    throw new Error("forward_migration_catchup_invalid");
+  }
+  write(`forward_migration_catchup:${JSON.stringify(migrations)}`);
+  await runCommand(
+    "npx",
+    [
+      "wrangler",
+      "d1",
+      "migrations",
+      "apply",
+      PRODUCTION_DATABASE_NAME,
+      "--remote",
+    ],
+    { timeoutMs: LONG_COMMAND_TIMEOUT_MS },
+  );
+  return true;
 }
 
 /**
@@ -677,6 +720,7 @@ async function runAutomation(outputPath) {
   const backupManifestPath = join(root, "backup-local-manifest.json");
 
   let primaryError = null;
+  /** @type {string | null} */
   let freshBackupPath = null;
   try {
     const candidateOutput = await runCaptured(
@@ -689,69 +733,120 @@ async function runAutomation(outputPath) {
       throw new Error("remote_restore_candidate_not_clean");
     }
 
-    const beforeBackups = listBackupFiles(backupDirectory);
-    await runCaptured(
-      "npm",
-      ["run", "backup:d1:r2"],
-      {
-        timeoutMs: LONG_COMMAND_TIMEOUT_MS,
-        env: { D1_BACKUP_LOCAL_MANIFEST: backupManifestPath },
-      },
-    );
-    const ownedBackup = readOwnedBackupManifest(
-      backupManifestPath,
-      backupDirectory,
-    );
-    freshBackupPath = ownedBackup.localPath;
-    const afterBackups = listBackupFiles(backupDirectory);
-    if (
-      beforeBackups.has(ownedBackup.fileName) ||
-      !afterBackups.has(ownedBackup.fileName)
-    ) {
-      throw new Error("fresh_backup_identity_ambiguous");
-    }
-    const exportedSql = readSqlFileWithinLimit(
-      freshBackupPath,
-      maxSqlBytes,
-      "fresh_backup_invalid",
-    );
-    const remoteObjectKey = ownedBackup.remoteKey;
-    await runCaptured(
-      "npx",
-      buildR2GetArgs(
-        BACKUP_BUCKET_NAME,
-        remoteObjectKey,
+    /**
+     * @param {Set<string>} knownBackupFiles
+     * @returns {Promise<{
+     *   aggregate: ReturnType<typeof collectDatabaseEvidence>,
+     *   afterBackups: Set<string>,
+     *   ownedBackup: ReturnType<typeof readOwnedBackupManifest>,
+     *   remoteObjectKey: string,
+     *   sourceSql: string,
+     *   transformed: ReturnType<typeof transformD1RestoreSql>,
+     * }>}
+     */
+    const importFreshBackup = async (knownBackupFiles) => {
+      if (existsSync(sourceDatabasePath)) {
+        unlinkSync(sourceDatabasePath);
+      }
+      if (freshBackupPath) {
+        removeOwnedLocalBackup(freshBackupPath);
+        freshBackupPath = null;
+      }
+      await runCaptured(
+        "npm",
+        ["run", "backup:d1:r2"],
+        {
+          timeoutMs: LONG_COMMAND_TIMEOUT_MS,
+          env: { D1_BACKUP_LOCAL_MANIFEST: backupManifestPath },
+        },
+      );
+      const nextOwnedBackup = readOwnedBackupManifest(
+        backupManifestPath,
+        backupDirectory,
+      );
+      freshBackupPath = nextOwnedBackup.localPath;
+      const afterBackups = listBackupFiles(backupDirectory);
+      if (
+        knownBackupFiles.has(nextOwnedBackup.fileName) ||
+        !afterBackups.has(nextOwnedBackup.fileName)
+      ) {
+        throw new Error("fresh_backup_identity_ambiguous");
+      }
+      const exportedSql = readSqlFileWithinLimit(
+        freshBackupPath,
+        maxSqlBytes,
+        "fresh_backup_invalid",
+      );
+      const remoteObjectKey = nextOwnedBackup.remoteKey;
+      await runCaptured(
+        "npx",
+        buildR2GetArgs(
+          BACKUP_BUCKET_NAME,
+          remoteObjectKey,
+          sourcePath,
+        ),
+        { timeoutMs: LONG_COMMAND_TIMEOUT_MS },
+      );
+      const sourceSql = readSqlFileWithinLimit(
         sourcePath,
-      ),
-      { timeoutMs: LONG_COMMAND_TIMEOUT_MS },
-    );
-    const sourceSql = readSqlFileWithinLimit(
-      sourcePath,
-      maxSqlBytes,
-      "fresh_r2_backup_invalid",
-    );
-    assertExactR2Backup(exportedSql, sourceSql);
-    chmodSync(sourcePath, 0o600);
-    const transformed = transformD1RestoreSql(sourceSql, {
-      maxBytes: DEFAULT_MAX_STATEMENT_BYTES,
-    });
-    if (Buffer.byteLength(transformed.sql) > maxSqlBytes) {
-      throw new Error("transformed_backup_too_large");
-    }
-    writeFileSync(transformedPath, transformed.sql, { mode: 0o600 });
-    importSqlite(sourceDatabasePath, sourceSql, {
-      maxBytes: maxSqlBytes,
-    });
-    const sourceAggregate = collectDatabaseEvidence(sourceDatabasePath);
-    if (
-      sourceAggregate.integrity !== "ok" ||
-      sourceAggregate.foreignKeyViolations !== 0
-    ) {
-      throw new Error("source_backup_integrity_failed");
-    }
+        maxSqlBytes,
+        "fresh_r2_backup_invalid",
+      );
+      assertExactR2Backup(exportedSql, sourceSql);
+      chmodSync(sourcePath, 0o600);
+      const transformed = transformD1RestoreSql(sourceSql, {
+        maxBytes: DEFAULT_MAX_STATEMENT_BYTES,
+      });
+      if (Buffer.byteLength(transformed.sql) > maxSqlBytes) {
+        throw new Error("transformed_backup_too_large");
+      }
+      writeFileSync(transformedPath, transformed.sql, { mode: 0o600 });
+      importSqlite(sourceDatabasePath, sourceSql, {
+        maxBytes: maxSqlBytes,
+      });
+      const aggregate = collectDatabaseEvidence(sourceDatabasePath);
+      if (
+        aggregate.integrity !== "ok" ||
+        aggregate.foreignKeyViolations !== 0
+      ) {
+        throw new Error("source_backup_integrity_failed");
+      }
+      return {
+        aggregate,
+        afterBackups,
+        ownedBackup: nextOwnedBackup,
+        remoteObjectKey,
+        sourceSql,
+        transformed,
+      };
+    };
+
+    let backup = await importFreshBackup(listBackupFiles(backupDirectory));
     const migrations = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
+    const ledgerPlan = planSourceBackupLedgerReconciliation(
+      backup.aggregate.migrationLedger,
+      migrations,
+    );
+    if (ledgerPlan.action === "reject") {
+      rethrowWithMigrationLedgerDiagnostics(
+        new Error(ledgerPlan.reason),
+        backup.aggregate.migrationLedger,
+        migrations,
+      );
+    }
+    if (ledgerPlan.action === "apply_forward_suffix") {
+      await applyForwardMigrationSuffix(ledgerPlan.migrations);
+      backup = await importFreshBackup(backup.afterBackups);
+    }
+    const {
+      aggregate: sourceAggregate,
+      ownedBackup,
+      remoteObjectKey,
+      sourceSql,
+      transformed,
+    } = backup;
     try {
       assertMigrationLedgerMatchesRepository(
         sourceAggregate.migrationLedger,

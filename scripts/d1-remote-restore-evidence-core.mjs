@@ -279,6 +279,93 @@ export function assertMigrationLedgerMatchesRepository(
 }
 
 /**
+ * If the backup ledger is a proper prefix of an allowed production ledger,
+ * return the missing contiguous repository suffix so restore-evidence can
+ * apply those forward migrations and re-backup. A hole, extra name, or
+ * reorder is not catch-up — return null so the stale-ledger gate still fires.
+ *
+ * Empty array means the backup already matches an allowed ledger.
+ *
+ * @param {string[]} ledgerNames
+ * @param {string[]} repositoryMigrations
+ * @param {Set<string>} cleanupMigrations
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
+ * @returns {string[] | null}
+ */
+export function unappliedForwardMigrationSuffix(
+  ledgerNames,
+  repositoryMigrations,
+  cleanupMigrations = POST_DEPLOY_CLEANUP_MIGRATIONS,
+  options = {},
+) {
+  if (!Array.isArray(ledgerNames) || ledgerNames.length === 0) {
+    return null;
+  }
+  const allowedLedgers = allowedProductionMigrationLedgers(
+    repositoryMigrations,
+    cleanupMigrations,
+    options.baseline,
+    options.retiredMigrations,
+  );
+  if (
+    allowedLedgers.some(
+      (allowedLedger) =>
+        JSON.stringify(ledgerNames) === JSON.stringify(allowedLedger),
+    )
+  ) {
+    return [];
+  }
+  /** @type {string[] | null} */
+  let found = null;
+  for (const allowedLedger of allowedLedgers) {
+    if (ledgerNames.length >= allowedLedger.length) continue;
+    const prefix = allowedLedger.slice(0, ledgerNames.length);
+    if (JSON.stringify(prefix) !== JSON.stringify(ledgerNames)) continue;
+    const suffix = allowedLedger.slice(ledgerNames.length);
+    if (
+      suffix.length === 0 ||
+      suffix.some((name) => cleanupMigrations.has(name)) ||
+      suffix.some((name) => !repositoryMigrations.includes(name))
+    ) {
+      continue;
+    }
+    if (found !== null && JSON.stringify(found) !== JSON.stringify(suffix)) {
+      return null;
+    }
+    found = suffix;
+  }
+  return found;
+}
+
+/**
+ * @param {DatabaseEvidence["migrationLedger"]} ledger
+ * @param {string[]} repositoryMigrations
+ * @param {Set<string>} cleanupMigrations
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
+ * @returns {{ action: "ok" } | { action: "apply_forward_suffix", migrations: string[] } | { action: "reject", reason: "source_backup_migration_ledger_stale" }}
+ */
+export function planSourceBackupLedgerReconciliation(
+  ledger,
+  repositoryMigrations,
+  cleanupMigrations = POST_DEPLOY_CLEANUP_MIGRATIONS,
+  options = {},
+) {
+  const suffix = unappliedForwardMigrationSuffix(
+    ledger.map((entry) => entry.name),
+    repositoryMigrations,
+    cleanupMigrations,
+    options,
+  );
+  if (Array.isArray(suffix) && suffix.length === 0) {
+    return { action: "ok" };
+  }
+  if (Array.isArray(suffix) && suffix.length > 0) {
+    return { action: "apply_forward_suffix", migrations: suffix };
+  }
+  return { action: "reject", reason: "source_backup_migration_ledger_stale" };
+}
+
+/**
  * @param {{ binding?: string, name?: string, uuid?: string } | null | undefined} configuredDatabase
  * @param {{ name?: string, uuid?: string } | null | undefined} productionDatabase
  */
