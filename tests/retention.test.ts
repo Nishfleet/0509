@@ -52,6 +52,7 @@ describe("runRetentionSweep", () => {
       "browser_job_telemetry",
       "discovery_cache_entry",
       "better_auth_magic_link_ticket",
+      "signup_source_pending",
       "meta_integration_log",
       "watchlist_run",
       "delivery_attempt",
@@ -136,7 +137,7 @@ describe("runRetentionSweep", () => {
 
     const result = await runRetentionSweep({ DB: db } as never);
 
-    expect(statements.length).toBe(9);
+    expect(statements.length).toBe(10);
     expect(result.deleted.discovery_cache_entry).toBeUndefined();
     expect(result.deleted.delivery_attempt).toBe(1);
     expect(result.failedSteps).toEqual(["discovery_cache_entry"]);
