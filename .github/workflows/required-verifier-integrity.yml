@@ -165,13 +165,7 @@ jobs:
           reviews_json="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews?per_page=100" \
             --jq '.[] | {state, submitted_at, user: (.user.login // ""), commit_id}' | jq -s .)"
           # Head commit date proves an approval is current, not stale.
-          # Pusher is the GitHub login on that commit (author, else committer),
-          # used with PR author as implementers for identity separation
-          # (0509#1140 / fleet-ops#413).
-          head_meta="$(gh api "repos/$REPO/commits/$HEAD_SHA" \
-            --jq '{date: (.commit.committer.date // ""), pusher: (.author.login // .committer.login // "")}')"
-          head_date="$(printf '%s' "$head_meta" | jq -r .date)"
-          pusher="$(printf '%s' "$head_meta" | jq -r .pusher)"
+          head_date="$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq '.commit.committer.date // ""')"
           # Sole-admin attestation comments (paginated). Only comments whose
           # ENTIRE body (after trimming surrounding whitespace and CRs) is
           # exactly `verifier-attest: <40-hex>` are considered candidates;
@@ -204,7 +198,6 @@ jobs:
             '[inputs | split("\t") | select(length==2) | {key: .[0], value: .[1]}] | from_entries')"
           jq -n \
             --arg author "$AUTHOR" \
-            --arg pusher "${pusher:-}" \
             --arg head_commit_date "$head_date" \
             --arg head_sha "$HEAD_SHA" \
             --argjson files "$files_json" \
@@ -222,7 +215,7 @@ jobs:
               "scripts/ci-verify-production-candidate.sh",
               "scripts/ci-verify-provider-main-cas.sh"
             ]' \
-            '{author: $author, pusher: $pusher, head_commit_date: $head_commit_date, head_sha: $head_sha,
+            '{author: $author, head_commit_date: $head_commit_date, head_sha: $head_sha,
               files: $files, reviews: $reviews, attestations: $attestations,
               permissions: $permissions, protected_files: $protected}' \
             > "$RUNNER_TEMP/context-bundle.json"
