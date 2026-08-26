@@ -79,12 +79,12 @@ const differences = [
   {
     title: "We monitor changes, not just creatives",
     detail:
-      "Five to Nine is built around what changed: offers, prices, CTAs, and landing-page copy — each change saved with screenshots, text, and links. If you mainly browsed creative inspiration, our library is narrower and our change evidence is deeper.",
+      "Five to Nine is built around what changed: offers, prices, CTAs, and landing-page copy — each change saved with page text, the source link, and a screenshot when the capture includes one. If you mainly browsed creative inspiration, our library is narrower and our change evidence is deeper.",
   },
   {
     title: "Receipts for every move",
     detail:
-      "Every alert includes the screenshot, page text, and original link, so your team can decide the next move without guessing.",
+      "Every alert includes the page text and original link, plus a screenshot when the capture includes one, so your team can decide the next move without guessing.",
   },
   {
     title: "Honest limits",
@@ -105,7 +105,7 @@ export const magicBriefFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "Is Five to Nine a MagicBrief alternative?",
     answer:
-      "For competitor-list migration and change monitoring, yes: your tracked brands import as watchlists, and paid plans check them every 3–6 hours with screenshot evidence. For browsing saved creative collections and boards, no — that saved work does not transfer, and Five to Nine's library is narrower and change-focused.",
+      "For competitor-list migration and change monitoring, yes: your tracked brands import as watchlists, and paid plans check them every 3–6 hours with source-linked proof. For browsing saved creative collections and boards, no — that saved work does not transfer, and Five to Nine's library is narrower and change-focused.",
   },
   {
     question: "What actually moves from MagicBrief?",

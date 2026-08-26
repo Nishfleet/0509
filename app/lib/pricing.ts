@@ -81,7 +81,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   if (plan === "starter" || plan === "agency") {
     features.push("Email Notifications");
     features.push("Exports");
-    features.push("Landing-page change history with screenshots");
+    features.push("Landing-page change history as scheduled watches complete");
   }
   if (plan === "agency") {
     features.push("Team workspace");
@@ -163,7 +163,7 @@ export function freeWeeklyDigestUpgradeNote(): string {
 }
 
 export const EVIDENCE_USAGE_CUSTOMER_COPY =
-  "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with screenshots, page text, and the original link. Included caps are generous and reset monthly; purchased proof captures never expire and carry over until you use them.";
+  "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with page text, the original link, and a screenshot when the capture includes one. Included caps are generous and reset monthly; purchased proof captures never expire and carry over until you use them.";
 
 export const TOP_UP_INACTIVE_PLAN_COPY =
   "Your purchased proof captures are saved and will be available when a paid plan is active.";

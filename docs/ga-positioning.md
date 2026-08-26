@@ -34,7 +34,7 @@ fixed.
 - Live search results labeled fresh/recent/sample.
 - No WhatsApp or Slack delivery claims in GA copy — both are dormant, non-GA channels barred from customer truth until a provider is configured and Nish un-gates them.
 - No unlimited monitoring claims — evidence checks are metered.
-- Screenshot and landing-page-change-history claims are data-gated; see `docs/customer-claim-audit-table.json` (AUDIT-SAVES-SCREENSHOTS, AUDIT-LANDING-PAGE-CHANGE-HISTORY).
+- Screenshot and landing-page-change-history copy matches live capture coverage: source-linked proof always, a screenshot only when the capture includes one, and change history that fills as scheduled watches complete. See `docs/customer-claim-audit-table.json` (AUDIT-SAVES-SCREENSHOTS, AUDIT-LANDING-PAGE-CHANGE-HISTORY).
 
 ## Source of truth
 

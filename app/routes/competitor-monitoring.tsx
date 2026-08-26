@@ -93,10 +93,11 @@ function proofTimeLabel(iso: string | null | undefined): string {
   });
 }
 
-// Kept under ~155 characters so search results show the whole line instead of
-// truncating mid-sentence. Same claims as the homepage, scoped to the category.
+// Kept under ~160 characters so search results show the whole line instead of
+// truncating mid-sentence. Same honest claims as the homepage (BET 10 / 977):
+// source-linked proof, not a screenshot on every change.
 const pageDescription =
-  "Competitor monitoring software that watches Meta ads and landing pages, then sends screenshot evidence when something changes. Free preview, no account.";
+  "Competitor monitoring software that watches Meta ads and landing pages, then files source-linked proof when something changes. Free preview, no account.";
 
 export const links: LinksFunction = () => canonicalLinks("/competitor-monitoring");
 
@@ -180,7 +181,7 @@ const wedgePoints = [
     step: "01",
     title: "Built around what changed",
     detail:
-      "Offers, prices, CTAs, and landing-page copy. Each confirmed change is saved with screenshots, page text, and links, then summarized in a brief. If you mainly want a large creative library spanning many platforms, ours is narrower — the change evidence is deeper.",
+      "Offers, prices, CTAs, and landing-page copy. Each confirmed change is saved with page text, the source link, and a screenshot when the capture includes one, then summarized in a brief. If you mainly want a large creative library spanning many platforms, ours is narrower — the change evidence is deeper.",
   },
   {
     step: "02",
@@ -204,7 +205,7 @@ export const categoryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "What is competitor monitoring software?",
     answer:
-      "Software that checks your competitors' public surfaces on a schedule and tells you when something changed. Five to Nine watches Meta ads and the landing pages they link to, and sends a brief when a change is confirmed — with the screenshot, page text, and source link.",
+      "Software that checks your competitors' public surfaces on a schedule and tells you when something changed. Five to Nine watches Meta ads and the landing pages they link to, and sends a brief when a change is confirmed — with the page text, source link, and a screenshot when the capture includes one.",
   },
   {
     question: "Where does the data come from?",
@@ -214,7 +215,7 @@ export const categoryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "How is this different from ad-spy tools?",
     answer:
-      "Ad-spy tools are built for browsing creatives, and some search many platforms’ ad libraries at once. Five to Nine monitors the Meta Ad Library only — other platforms’ ad libraries are out of scope — and is built around what changed: offers, prices, CTAs, and landing-page copy, each confirmed change saved with screenshots, page text, and links, then summarized in a brief. If you mainly want a large multi-platform creative library, ours is narrower; the change evidence is deeper.",
+      "Ad-spy tools are built for browsing creatives, and some search many platforms’ ad libraries at once. Five to Nine monitors the Meta Ad Library only — other platforms’ ad libraries are out of scope — and is built around what changed: offers, prices, CTAs, and landing-page copy, each confirmed change saved with page text, the source link, and a screenshot when the capture includes one, then summarized in a brief. If you mainly want a large multi-platform creative library, ours is narrower; the change evidence is deeper.",
   },
   {
     question: "How fast will I hear about changes?",
@@ -257,7 +258,8 @@ export default function CompetitorMonitoringCategoryRoute() {
         <p className="ld-deck-copy">
           Most competitor monitoring tools alert you when something appears. Five to Nine
           watches competitors&rsquo; Meta ads and landing pages on a schedule, and when something
-          changes it saves the screenshot, the page text, and the link — then files the brief.
+          changes it saves the page text and the link — plus a screenshot when the capture includes
+          one — then files the brief.
         </p>
 
         <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
@@ -440,7 +442,7 @@ export default function CompetitorMonitoringCategoryRoute() {
               </ul>
               <p className="ld-trail-note" role="note">
                 Every row above is a real capture. Open the source link and check it yourself —
-                saved watches attach screenshots, page text, and original links.
+                saved watches attach page text and original links, plus a screenshot when the capture includes one.
               </p>
             </article>
 

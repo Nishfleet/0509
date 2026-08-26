@@ -56,7 +56,7 @@ describe("competitor monitoring category page", () => {
 
     // Description is scoped to what the product actually does and stays under
     // ~155 characters so search results do not truncate mid-sentence.
-    const description = "Competitor monitoring software that watches Meta ads and landing pages, then sends screenshot evidence when something changes. Free preview, no account.";
+    const description = "Competitor monitoring software that watches Meta ads and landing pages, then files source-linked proof when something changes. Free preview, no account.";
     expect(description.length).toBeLessThanOrEqual(160);
     expect(source).toContain(description);
     expect(source).not.toMatch(/trusted by|#1|best competitor monitoring software/i);
@@ -71,7 +71,7 @@ describe("competitor monitoring category page", () => {
         webPageJsonLd({
           name: "Competitor monitoring software | Five to Nine",
           description:
-            "Competitor monitoring software that watches Meta ads and landing pages, then sends screenshot evidence when something changes. Free preview, no account.",
+            "Competitor monitoring software that watches Meta ads and landing pages, then files source-linked proof when something changes. Free preview, no account.",
           pathname: "/competitor-monitoring",
           dateModified: "2026-08-21",
         }),
