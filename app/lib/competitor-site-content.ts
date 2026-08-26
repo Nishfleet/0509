@@ -1,6 +1,6 @@
 import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { sha256Base64Url } from "~/lib/presence-hash";
-import { stripScriptAndStyle } from "~/lib/sanitize-text.server";
+import { stripAllTags, stripScriptAndStyle } from "~/lib/sanitize-text.server";
 
 /**
  * Pure, deterministic core for competitor website content: URL canonicalization,
@@ -453,7 +453,7 @@ function extractVisibleText(html: string): string {
 	text = text.replace(new RegExp(`</(?:${tags})>`, "gi"), "\n");
 	text = text.replace(new RegExp(`<(?:${tags})\\s[^>]*?>|<(?:${tags})>`, "gi"), "\n");
 	text = text.replace(/<(?:br|hr)\s*\/?>/gi, "\n");
-	text = text.replace(/<[^>]+>/g, "");
+	text = stripAllTags(text);
 	text = decodeHtmlEntities(text);
 	text = text.replace(/\u00a0/g, " ");
 	text = text.replace(/[\t\r\n\f ]+/g, " ").trim();
