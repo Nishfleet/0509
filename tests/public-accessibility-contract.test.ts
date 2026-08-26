@@ -39,4 +39,37 @@ describe("public accessibility source contract", () => {
   max-width: min(100%, 32rem);`);
     expect(css).not.toContain("max-width: 10.6ch;");
   });
+
+  it("lets the docs TOC shrink below 220px so nested links cannot overflow 375px (#1172)", () => {
+    expect(css).toMatch(
+      /\.f9-legal-page \.f9-doc-toc ul \{\s*display: grid;\s*grid-template-columns: repeat\(auto-fit, minmax\(min\(220px, 100%\), 1fr\)\);/s,
+    );
+    expect(css).not.toMatch(
+      /\.f9-legal-page \.f9-doc-toc ul \{[^}]*minmax\(220px, 1fr\)/s,
+    );
+    expect(css).toContain(`.f9-legal-page .f9-doc-toc a {
+  display: flex;
+  align-items: center;
+  min-width: 0;`);
+  });
+
+  it("wraps homepage proof-action links so they cannot overflow 375px (#1172)", () => {
+    expect(css).toMatch(/\.ld-proof-actions \{\s*display: flex;\s*flex-wrap: wrap;/s);
+  });
+
+  it("keeps homepage hero announcement pills at least 44px tall (#1172)", () => {
+    expect(css).toMatch(
+      /\.f9-home \.ld-hero \.f9-announcement \{\s*display: flex;[^}]*min-height: 44px;/s,
+    );
+  });
+
+  it("treats the homepage proof-backed kicker as inline prose so Gate-B does not demand a 44px chip (#1172)", () => {
+    expect(css).toMatch(
+      /\.ld-case \{\s*font-family: var\(--ld-mono\);/,
+    );
+    expect(css).not.toMatch(/\.ld-case \{\s*display:\s*flex/s);
+    expect(css).toMatch(
+      /\.ld-rec \{\s*color: var\(--ld-red\);\s*font-weight: 600;\s*display: inline;/,
+    );
+  });
 });

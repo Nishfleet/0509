@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -65,6 +67,35 @@ describe("formatProofCaptureLabel", () => {
         landingPage: null,
       } as AdRecord),
     ).toBe("Landing page check did not finish");
+  });
+
+  it("keeps Gate-B journeys on the live Nykaa proof-capture label (#1172)", () => {
+    // Deploy Gate-B used to keep asserting "Landing page not captured yet"
+    // after the formatter moved to gap copy, so the suite only failed at
+    // deploy. Pin the journeys to whatever this helper actually returns for
+    // the seeded Nykaa fixture (URL present, no capturedAt).
+    const label = formatProofCaptureLabel({
+      landingPageUrl: "https://nykaa.com/festive-glow",
+      landingPage: null,
+    } as AdRecord);
+    expect(label).toBe(formatLandingPageCaptureGap().proofLabel);
+    expect(label).not.toBe("Landing page not captured yet");
+    const fixture = readFileSync("e2e/fixtures/e2e-local.sql", "utf8");
+    expect(fixture).toContain("'metaAdId','e2e-nykaa-live-1'");
+    expect(fixture).toContain("'landingPageUrl','https://nykaa.com/festive-glow'");
+    for (const spec of [
+      "e2e/journey-1-release.spec.ts",
+      "e2e/journey-2-release.spec.ts",
+    ]) {
+      const source = readFileSync(spec, "utf8");
+      expect(source).toContain(
+        `proofSummary.locator(".f9-wk-prov").getByText("${label}")`,
+      );
+      expect(source).not.toContain("Landing page not captured yet");
+    }
+    const prodPublic = readFileSync("e2e/prod-public.spec.ts", "utf8");
+    expect(prodPublic).toContain(`page.getByText("${label}").first()`);
+    expect(prodPublic).not.toContain("Landing page not captured yet");
   });
 
   it("names a blocked page instead of a generic not-captured label", () => {

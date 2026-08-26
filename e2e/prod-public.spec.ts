@@ -270,7 +270,7 @@ test.describe("public production-safe E2E smoke", () => {
     await expect(
       page.locator("#selected-proof").getByRole("heading", { name: "Nykaa summer beauty event" }),
     ).toBeVisible();
-    await expect(page.getByText("Landing page not captured yet").first()).toBeVisible();
+    await expect(page.getByText("Landing page check did not finish").first()).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     // BL-031: the evidence is a peek pane beside the results list, not a
