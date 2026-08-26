@@ -47,8 +47,10 @@ Nish 2026-08-08) made the v4 landing language — the `--wk-*` token layer and
 the product's ONLY design system. The Evidence Desk (`f9-ed-*`) and every
 earlier era are being wiped, report documents included (their proof
 semantics survive verbatim; their skin does not). Enforcement is
-mechanical: `scripts/design-system-ratchet.mjs` holds exact-match ceilings
-on every legacy marker in CI, and the ceilings only go down.
+mechanical: `scripts/design-system-ratchet.mjs` fails CI when any
+legacy-marker count exceeds its ceiling; counts at or below pass, so two
+legal sweeps cannot collide in the merge queue. Ceilings only go down,
+tightened on main by `.github/workflows/ratchet-auto-tighten.yml`.
 
 `f9-evidence-*` is the system's evidence-document vocabulary — the
 full-volume proof surfaces (report cover, plates, diff panes) named for

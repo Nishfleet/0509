@@ -31,9 +31,10 @@ Ratified by Nish, non-negotiable:
    (gate-visibility); member pages keep URLs with owning-row active state.
 3. Free plan = weekly watch (implemented behavior wins; all copy derives).
 4. `scripts/design-system-ratchet.mjs` + `docs/design-system-ratchet.json`
-   enforce exact-match legacy-marker ceilings in CI — the program's
-   terminal condition is every ceiling at zero, plus a zero-S1/S2 fresh
-   tri-audit. A fourth design era cannot ship while the gate exists.
+   fail CI only when a count exceeds its ceiling (never exact-match) —
+   the program's terminal condition is every ceiling at zero, plus a
+   zero-S1/S2 fresh tri-audit. A fourth design era cannot ship while
+   the gate exists.
 5. Dual review (Sol + Grok) before merge for every program PR; tri-council
    (Sol + Grok + Fable) resolves splits; drafts until verdicts land.
 
