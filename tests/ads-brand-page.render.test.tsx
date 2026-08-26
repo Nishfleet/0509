@@ -119,6 +119,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     teaser,
     aggression,
     changeEvents,
+    offerTimelineEntries: [],
     adLibraryCountry: "India",
     noindex: false,
     canonicalPath: "/ads/nike.com",
@@ -280,6 +281,44 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).toContain("All 6 ads, on the wall");
   });
 
+  it("hides Offer timeline entirely when there are no stored offer states", async () => {
+    const markup = await render(populated({ offerTimelineEntries: [] }));
+
+    expect(markup).not.toContain("brand-offer-timeline-title");
+    expect(markup).not.toContain("Full offer timeline");
+  });
+
+  it("renders a non-empty Offer Timeline with the honest no-screenshot label", async () => {
+    const markup = await render(
+      populated({
+        offerTimelineEntries: [
+          {
+            id: "backfill-nike-20260825",
+            capturedAt: "2026-08-25T00:00:00.000Z",
+            dateLabel: "25 Aug 2026",
+            canonicalUrl: "https://www.nike.com/",
+            headline: "Nike. Just Do It.",
+            ctaText: null,
+            priceText: null,
+            formPresent: null,
+            screenshotHref: null,
+            pageTextHref: null,
+            evidenceNote: "Captured on 25 Aug 2026, no screenshot",
+            transition: null,
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("brand-offer-timeline-title");
+    expect(markup).toContain("Offer timeline");
+    expect(markup).toContain("Nike. Just Do It.");
+    expect(markup).toContain("Captured on 25 Aug 2026, no screenshot");
+    expect(markup).toContain("/timeline/nike.com");
+    expect(markup).not.toContain("Screenshot ·");
+    expect(markup).not.toContain("Page text ·");
+  });
+
   it("renders the teaching shell (not a dotted apology) on a cache miss", async () => {
     const markup = await render(
       populated({
@@ -302,6 +341,41 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("ld-ticker");
     // The signup CTA still carries the domain.
     expect(markup).toContain("website%3Dnike.com");
+  });
+
+  it("still shows the real Offer Timeline on the cache-miss shell", async () => {
+    const markup = await render(
+      populated({
+        hasCachedAds: false,
+        ads: [],
+        checkedAgo: null,
+        teaser: null,
+        aggression: null,
+        changeEvents: [],
+        noindex: true,
+        offerTimelineEntries: [
+          {
+            id: "backfill-nike-20260825",
+            capturedAt: "2026-08-25T00:00:00.000Z",
+            dateLabel: "25 Aug 2026",
+            canonicalUrl: "https://www.nike.com/",
+            headline: "Nike. Just Do It.",
+            ctaText: null,
+            priceText: null,
+            formPresent: null,
+            screenshotHref: null,
+            pageTextHref: null,
+            evidenceNote: "Captured on 25 Aug 2026, no screenshot",
+            transition: null,
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("Offer timeline");
+    expect(markup).toContain("Nike. Just Do It.");
+    expect(markup).toContain("Captured on 25 Aug 2026, no screenshot");
+    expect(markup).toContain("/timeline/nike.com");
   });
 
   it("claims right now/live only while the capture is fresh, and flips to past-tense honesty when it is hours old", async () => {

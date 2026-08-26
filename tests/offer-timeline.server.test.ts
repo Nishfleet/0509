@@ -102,4 +102,56 @@ describe("loadOfferTimeline", () => {
     });
     expect(loaded.entries).toEqual([]);
   });
+
+  it("labels a backfill row with the honest no-screenshot evidence note", async () => {
+    queryAll.mockResolvedValue([
+      {
+        id: "backfill-nike-20260825",
+        canonical_url: "https://www.nike.com/",
+        raw_headline: "Nike. Just Do It.",
+        cta_text: "Shop Now",
+        price_text: null,
+        form_present: 0,
+        artifact_key: null,
+        metadata_json: JSON.stringify({ backfill: true, source: "demo_brand_seed" }),
+        captured_at: "2026-08-25T00:00:00.000Z",
+      },
+    ]);
+
+    const loaded = await loadOfferTimeline({ DB: {} } as never, {
+      domain: "nike.com",
+      asOf: null,
+    });
+
+    expect(loaded.entries).toHaveLength(1);
+    const entry = loaded.entries[0];
+    expect(entry?.screenshotHref).toBeNull();
+    expect(entry?.pageTextHref).toBeNull();
+    expect(entry?.evidenceNote).toContain("no screenshot");
+    expect(entry?.evidenceNote).toContain("25 Aug 2026");
+  });
+
+  it("does not label a real capture row that happens to lack artifacts", async () => {
+    queryAll.mockResolvedValue([
+      {
+        id: "real-1",
+        canonical_url: "https://nykaa.com/glow",
+        raw_headline: "Glow serum",
+        cta_text: "Shop now",
+        price_text: "₹499",
+        form_present: 1,
+        artifact_key: null,
+        metadata_json: JSON.stringify({ captureMethod: "landing_page_fetch" }),
+        captured_at: "2026-08-01T10:00:00.000Z",
+      },
+    ]);
+
+    const loaded = await loadOfferTimeline({ DB: {} } as never, {
+      domain: "nykaa.com",
+      asOf: null,
+    });
+
+    expect(loaded.entries).toHaveLength(1);
+    expect(loaded.entries[0]?.evidenceNote).toBeNull();
+  });
 });
