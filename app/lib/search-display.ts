@@ -40,8 +40,10 @@ export function buildIdleSearchResult(): SearchResponse {
 /**
  * Page-level H1 for the public /search route. When the visitor lands from a
  * shared keyword link (`?q=` or `?query=`) with a country scope, the heading
- * names the brand and market so the page is immediately readable. The idle
- * page keeps the generic "Find competitor ads" title.
+ * names the brand and the market the search actually ran in. The idle page
+ * keeps the generic "Find competitor ads" title. The all-countries value is
+ * a single Meta Ad Library `country=ALL` query, not worldwide coverage, so
+ * that heading names the query rather than claiming every market.
  */
 export function formatSearchCommandTitle(
   query: string,
@@ -56,6 +58,12 @@ export function formatSearchCommandTitle(
   return scope ? `${brand} ads ${scope}` : `${brand} ads`;
 }
 
+/**
+ * H1 scope phrase for a shared `/search` URL. Named markets stay "in India"
+ * / "in United States". `country=all` names the Meta Ad Library's single
+ * all-countries query — the same honesty rule as `/ads/:domain` — and must
+ * never say "in all countries" or "across all countries".
+ */
 export function formatSearchPageScope(
   country: string | null | undefined,
 ): string | null {
@@ -64,7 +72,7 @@ export function formatSearchPageScope(
     return null;
   }
   if (trimmed.toLowerCase() === ALL_COUNTRIES_VALUE) {
-    return "in all countries";
+    return "from the Meta Ad Library's all-countries query";
   }
   return formatSearchMarketScope(country);
 }
