@@ -84,6 +84,48 @@ describe("the ratchet cannot be gamed", () => {
     expect(result.stdout).toContain("Ratchet clean");
   });
 
+  it("raising a ceiling fails — gate-integrity.sh ratchet_weakened rejects the diff", () => {
+    // Required change #4 of Nishfleet/0509#1056: the "cannot be gamed"
+    // block must prove a raised ceiling fails. The scanner itself is
+    // monotonic (count > ceiling), so the fail lives on the DIFF, in
+    // gate-integrity.sh. This test drives the real decision script,
+    // not a copy of the regex.
+    const decision = join(root, ".github", "scripts", "gate-integrity.sh");
+    const bundle = {
+      head_sha: "1111111111111111111111111111111111111111",
+      gate_globs: ["docs/design-system-ratchet.json"],
+      files: [
+        {
+          filename: "docs/design-system-ratchet.json",
+          status: "modified",
+          patch: '-  "raw-hex-color": 258,\n+  "raw-hex-color": 400,',
+        },
+      ],
+      commit_messages: [],
+      pr_body: "",
+      attestations: [],
+      permissions: {},
+    };
+    const result = spawnSync("bash", [decision], {
+      encoding: "utf8",
+      input: JSON.stringify(bundle),
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("raised 258 -> 400");
+  });
+
+  it("contract docs describe exceeds-ceiling, not exact-match", () => {
+    // #1056's merge-queue failures came from exact equality. DESIGN.md
+    // and BACKLOG.md are what the next agent reads first; if they still
+    // say exact-match, someone will "fix" the ratchet back.
+    const design = readFileSync(join(root, "DESIGN.md"), "utf8");
+    const backlog = readFileSync(join(root, "docs", "BACKLOG.md"), "utf8");
+    expect(design).not.toMatch(/holds exact-match ceilings/);
+    expect(backlog).not.toMatch(/enforce exact-match legacy-marker ceilings/);
+    expect(design).toMatch(/exceeds its ceiling/);
+    expect(backlog).toMatch(/exceeds its ceiling/);
+  });
+
   it("deleting a marker's ceiling key fails — no exemption by omission", () => {
     const { [Object.keys(realCeilings)[0]]: _dropped, ...rest } = realCeilings;
     const result = runWithCeilings(rest);
