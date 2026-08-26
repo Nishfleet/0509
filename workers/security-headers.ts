@@ -19,6 +19,51 @@ export const CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC = "https://static.cloudflareins
 const BASE_SCRIPT_SRC = `script-src 'self' 'unsafe-inline' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC}`;
 const SITE_REP_WIDGET_SCRIPT_SRC = `${BASE_SCRIPT_SRC} https://siterep.net`;
 
+// React Router lazy route discovery fetches this same-origin path (see
+// react-router fog-of-war). connect-src 'self' is what allows it. Keep the
+// path named so a later connect-src tightening cannot drop the loader by
+// accident — Firefox logged a Report-Only connect-src warning for it on
+// /app/billing and /trust (issue #1051).
+export const REACT_ROUTER_MANIFEST_PATH = "/__manifest";
+export const CONNECT_SRC = "connect-src 'self' https:";
+
+function cspDirectiveSources(csp: string, name: string): string[] | null {
+  const directive = csp
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part === name || part.startsWith(`${name} `));
+  if (!directive) return null;
+  if (directive === name) return [];
+  return directive
+    .slice(name.length)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * Whether a CSP header allows the same-origin React Router `__manifest` fetch.
+ * connect-src wins when present; otherwise default-src; if neither exists the
+ * policy does not constrain connects.
+ */
+export function cspAllowsReactRouterManifest(csp: string): boolean {
+  const sources =
+    cspDirectiveSources(csp, "connect-src") ?? cspDirectiveSources(csp, "default-src");
+  if (sources === null) return true;
+  const withoutNoneIfOthers = sources.filter(
+    (source) => source !== "'none'" || sources.length === 1,
+  );
+  if (withoutNoneIfOthers.length === 1 && withoutNoneIfOthers[0] === "'none'") {
+    return false;
+  }
+  return (
+    withoutNoneIfOthers.includes("'self'") ||
+    withoutNoneIfOthers.includes("https:") ||
+    withoutNoneIfOthers.includes("*") ||
+    withoutNoneIfOthers.some((source) => source.includes(REACT_ROUTER_MANIFEST_PATH))
+  );
+}
+
 export const SECURITY_HEADERS: Record<string, string> = {
   "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
   "x-content-type-options": "nosniff",
@@ -32,7 +77,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https:",
-    "connect-src 'self' https:",
+    CONNECT_SRC,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
