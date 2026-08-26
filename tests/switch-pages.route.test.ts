@@ -170,4 +170,40 @@ describe("BET 8 switch pages", () => {
     expect(markup).toContain("Canva Business");
     expect(markup).not.toContain("$250");
   });
+
+  it("does not promise a screenshot on every new watch (#1182)", async () => {
+    // Live D1 on 2026-08-27: 0 of 34 succeeded proof_capture rows in 48h
+    // carried a screenshot key. Switch copy must match that coverage, same
+    // BET 10 wording as homepage/category/pricing (#977): source-linked
+    // proof always, a screenshot only when the capture includes one.
+    const copy = JSON.stringify(SWITCH_PAGES);
+    const banned = [
+      "save fresh screenshots",
+      "saves the screenshots",
+      "sends screenshot evidence",
+      "save screenshot, page text, and the source link when the page actually renders",
+      "when the page actually renders",
+    ];
+    for (const phrase of banned) {
+      expect(copy.includes(phrase), `switch copy still contains ${JSON.stringify(phrase)}`).toBe(
+        false,
+      );
+    }
+
+    expect(SWITCH_PAGES.magicbrief.doesNotTransfer.map((row) => row.detail).join("\n")).toMatch(
+      /screenshot when the capture includes one/i,
+    );
+    expect(SWITCH_PAGES.panoramata.transfers.map((row) => row.detail).join("\n")).toMatch(
+      /screenshot when the capture includes one/i,
+    );
+
+    const { default: MagicBriefRoute } = await import("~/routes/switch.magicbrief");
+    const { default: PanoramataRoute } = await import("~/routes/switch.panoramata");
+    const magicbrief = visibleText(renderToStaticMarkup(createElement(MagicBriefRoute)));
+    const panoramata = visibleText(renderToStaticMarkup(createElement(PanoramataRoute)));
+    expect(magicbrief).toContain("screenshot when the capture includes one");
+    expect(panoramata).toContain("screenshot when the capture includes one");
+    expect(magicbrief).not.toContain("save fresh screenshots");
+    expect(panoramata).not.toContain("when the page actually renders");
+  });
 });

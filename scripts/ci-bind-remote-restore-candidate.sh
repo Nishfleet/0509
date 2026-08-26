@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Bind an exact-main remote-restore candidate manifest for deploy prepare.
-# Invoked as argv to deploy-window-lock.sh run — never via stdin/heredoc
-# (backgrounded verification lanes redirect stdin to /dev/null).
+# Called directly as a `run:` step from deploy-production.yml.
 set -euo pipefail
 umask 077
 

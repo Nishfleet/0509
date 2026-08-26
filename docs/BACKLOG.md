@@ -14,8 +14,11 @@ state is this repo:
 
 - **What remains / what landed:** this section + the per-phase entries below.
 - **The mechanical terminal gate:** `docs/design-system-ratchet.json` +
-  `scripts/design-system-ratchet.mjs` (every legacy-marker ceiling is at 0 as
-  of 2026-08-25, satisfying the program's terminal condition).
+  `scripts/design-system-ratchet.mjs`. The JSON is the live source of
+  truth for every ceiling. Legacy-marker keys (`BANNED_MARKERS`) are at
+  0. Pattern ceilings (`raw-hex-color`, `non-token-border-radius`,
+  `css-gradient`, `css-important`, `non-token-font-family`) remain
+  above zero, so the program's terminal condition is not yet satisfied.
 - **The design system spec:** `DESIGN.md`.
 
 Do not resurrect the external ledger path. If program state needs a single

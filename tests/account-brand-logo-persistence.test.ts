@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -9,6 +6,7 @@ import {
   upsertWorkspaceBranding,
   WORKSPACE_BRAND_LOGO_MAX_LENGTH,
 } from "~/lib/data.server";
+import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 function createCapturingDb(rows: unknown[] = []) {
   const statements: Array<{ sql: string; bindings: unknown[] }> = [];
@@ -32,41 +30,6 @@ function createCapturingDb(rows: unknown[] = []) {
       },
     },
   };
-}
-
-function createSqliteD1() {
-  const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec("PRAGMA foreign_keys = ON;");
-  type SqliteBindings = Parameters<ReturnType<DatabaseSync["prepare"]>["run"]>;
-  const toSqliteBindings = (bindings: unknown[]) => bindings as SqliteBindings;
-
-  return {
-    close: () => sqlite.close(),
-    sqlite,
-    db: {
-      prepare(sql: string) {
-        return {
-          bind(...bindings: unknown[]) {
-            return {
-              async run() {
-                sqlite.prepare(sql).run(...toSqliteBindings(bindings));
-                return { success: true };
-              },
-              async all<T>() {
-                return {
-                  results: sqlite.prepare(sql).all(...toSqliteBindings(bindings)) as T[],
-                };
-              },
-            };
-          },
-        };
-      },
-    },
-  };
-}
-
-function applyMigration(sqlite: DatabaseSync, path: string) {
-  sqlite.exec(readFileSync(path, "utf8"));
 }
 
 beforeEach(() => {

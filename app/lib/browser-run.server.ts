@@ -12,6 +12,7 @@ import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import {
   extractLandingPageSignals,
+  extractorSuppressionMetadata,
   LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
 } from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
@@ -1002,6 +1003,7 @@ async function buildBrowserRenderedSnapshot(
           priceText: signals.priceText,
           formPresent: signals.formPresent,
         }),
+        ...extractorSuppressionMetadata(signals.suppressionFingerprints),
         extractedFieldConfidence: {
           headline: 0.95,
           ctaText: signals.ctaText ? 0.9 : 0.3,

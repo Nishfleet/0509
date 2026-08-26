@@ -90,14 +90,17 @@ async function renderMarketing(): Promise<string> {
   return renderToStaticMarkup(createElement(MarketingRoute));
 }
 
-function heroFlagText(markup: string): string | null {
-  // The H1's date pill is the first <i class="ld-flag"> inside <h1 class="ld-wall">.
-  const h1 = markup.match(/<h1[^>]*ld-wall[^>]*>[\s\S]*?<\/h1>/)?.[0] ?? "";
-  return h1.match(/<i class="ld-flag">(.*?)<\/i>/)?.[1]?.trim() ?? null;
-}
-
 function heroH1(markup: string): string {
   return markup.match(/<h1[^>]*ld-wall[^>]*>[\s\S]*?<\/h1>/)?.[0] ?? "";
+}
+
+function proofStrip(markup: string): string {
+  return markup.match(/<aside class="ld-proof-strip"[^>]*>[\s\S]*?<\/aside>/)?.[0] ?? "";
+}
+
+function stripTimeText(markup: string): string | null {
+  const strip = proofStrip(markup);
+  return strip.match(/<span class="ld-proof-time">([\s\S]*?)<\/span>/)?.[1]?.trim() ?? null;
 }
 
 /** The proof-trail card stamp carries the capture date (e.g. "Ad hook · Sep 4,
@@ -131,10 +134,14 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     mockReactRouter(proofBriefWithCapturedAt("2025-09-04"));
     const markup = await renderMarketing();
 
-    // Hero swaps to "on record" copy and drops the date pill entirely.
-    expect(heroFlagText(markup)).toBeNull();
-    expect(heroH1(markup)).toContain("is a hook on record across 12 Meta ads");
+    // Proof strip swaps to "on record" copy and drops the capture date.
+    // The H1 is the chosen Safe buyer-job wall and never carries a date (#1173).
+    expect(heroH1(markup)).toContain("Growth teams");
+    expect(heroH1(markup)).not.toContain("is a hook on record across 12 Meta ads");
     expect(heroH1(markup)).not.toContain("Sep 4");
+    expect(proofStrip(markup)).toContain("is a hook on record across 12 Meta ads");
+    expect(proofStrip(markup)).not.toContain("Sep 4");
+    expect(stripTimeText(markup)).toContain("On record");
 
     // The year-formatted date still appears in the proof-trail card stamp.
     const stamp = proofTrailStampText(markup);
@@ -148,9 +155,13 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     mockReactRouter(proofBriefWithCapturedAt("2026-08-22"));
     const markup = await renderMarketing();
 
-    const flag = heroFlagText(markup);
-    expect(flag).toBe("Aug 22");
-    expect(flag).not.toContain("2026");
+    const h1 = heroH1(markup);
+    expect(h1).toContain("Growth teams");
+    expect(h1).not.toContain("Aug 22");
+    const time = stripTimeText(markup);
+    expect(time).toContain("Aug 22");
+    expect(time).not.toContain("2026");
+    expect(proofStrip(markup)).toContain("was the hook on 12 Meta ads");
   });
 
   it("does not surface any capture date in the hero for a year-old capture (#1076)", async () => {
@@ -158,9 +169,9 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     const markup = await renderMarketing();
 
     const h1 = heroH1(markup);
-    // The hero no longer carries a date pill, so "Sep 4" cannot appear in any
-    // form — year-bearing or otherwise — inside the H1.
+    // The H1 is the buyer-job wall, so "Sep 4" cannot appear in any form.
     expect(h1).not.toMatch(/Sep 4/);
-    expect(h1).not.toMatch(/<i class="ld-flag">/);
+    expect(h1).toContain("Growth teams");
+    expect(proofStrip(markup)).not.toMatch(/Sep 4/);
   });
 });
