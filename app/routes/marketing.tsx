@@ -189,26 +189,6 @@ export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   },
 ];
 
-/** A capture older than this is not "the hook on" a current ad — surfacing
- *  its date in the hero next to the "checked N hours ago" freshness stamp
- *  reads as a contradiction (a year-old date beside a 2-hour-old check). The
- *  hero swaps to non-date-bearing "on record" copy past this age. See #1076. */
-const PROOF_CAPTURE_FRESH_DAYS = 30;
-
-/** Days between a capture timestamp and `now`. Returns Infinity for an
- *  unparseable or missing timestamp so a bad date can never read as fresh. */
-function captureAgeDays(iso: string | null | undefined, now: Date = new Date()): number {
-  const raw = iso?.trim();
-  if (!raw) return Infinity;
-  // Date-only Meta Ad Library captures (YYYY-MM-DD) are UTC midnight; a full
-  // ISO timestamp carries its own offset. Both parse the same way here.
-  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(raw)
-    ? new Date(`${raw}T00:00:00.000Z`)
-    : new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return Infinity;
-  return Math.floor((now.getTime() - parsed.getTime()) / 86_400_000);
-}
-
 /** "03:47 AM" style clock for a real capture timestamp; date-only captures
  *  (YYYY-MM-DD, no time of day) render as a calendar date instead of a
  *  fabricated "12:00 AM". */
@@ -364,46 +344,28 @@ export default function MarketingRoute() {
     ...billingFaqJsonLdEntries(commercialLaunch.agencySaleOpen),
   ]);
 
-  const heroTopHook = proofBrief?.insights.topHooks[0]?.trim() ?? null;
-  const heroCaptureIso = proofBrief
-    ? proofBrief.proofTrail[0]?.capturedAt ?? proofBrief.fetchedAt
-    : null;
-  const heroProofTime = proofBrief ? proofTimeLabel(heroCaptureIso) : null;
-  // A capture older than PROOF_CAPTURE_FRESH_DAYS is not "the hook on" a
-  // current ad. Surfacing its date in the hero next to the "checked N hours
-  // ago" freshness stamp reads as a contradiction, so the hero drops the date
-  // pill and reframes to "on record" copy that matches the capture's age.
-  // See #1076.
-  const heroCaptureStale = proofBrief
-    ? captureAgeDays(heroCaptureIso) > PROOF_CAPTURE_FRESH_DAYS
-    : false;
-  const heroWall = proofBrief && heroTopHook ? (
+  // The "Caught in the act" typographic diff hero (#188), restored by Nish on
+  // 2026-08-26 over the real-data proof-brief H1 that replaced it.
+  //
+  // The numbers are an illustration, not a capture. That is a deliberate,
+  // owner-level reversal of the "kill sample/illustrative demos" decision for
+  // this element and this element only: it is the headline's job to show what
+  // the product catches, and every proof claim under it — the shot cards, the
+  // ticker, the brief strip — still comes from the real cache-only loader and
+  // is unchanged. Do not "fix" this back to a data-driven H1 without Nish.
+  const heroWall = (
     <h1 className="ld-wall">
-      <span className="ld-row">“{truncateHook(heroTopHook, 30)}”</span>
+      <span className="ld-row">They cut</span>
       <span className="ld-row">
-        {heroCaptureStale ? (
-          <>is a hook on record across {proofBrief.adCount} Meta ads</>
-        ) : (
-          <>
-            {proofBrief.freshForLiveClaim ? "is the hook on" : "was the hook on"} {proofBrief.adCount}{" "}
-            Meta ads <i className="ld-flag">{heroProofTime}</i>
-          </>
-        )}
+        the price <s className="ld-del">$159</s>
       </span>
-      <span className="ld-row ld-row-indent">linking to {proofBrief.website}.</span>
-      <span className="ld-row">We saved the proof.</span>
-    </h1>
-  ) : (
-    <h1 className="ld-wall">
-      <span className="ld-row">Know when</span>
-      <span className="ld-row">competitors change</span>
       <span className="ld-row ld-row-indent">
         <ins className="ld-ins">
-          the offer<i className="ld-flag">proof</i>
+          $129<i className="ld-flag">03:47 AM</i>
         </ins>{" "}
-        before
+        last
       </span>
-      <span className="ld-row">the call.</span>
+      <span className="ld-row">night.</span>
     </h1>
   );
 
