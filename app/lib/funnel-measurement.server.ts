@@ -26,7 +26,8 @@ export type FunnelEventKind =
   | "search_preview_error"
   | "migration_view"
   | "signup_start"
-  | "signup_start_magicbrief";
+  | "signup_start_magicbrief"
+  | "first_brief_viewed";
 
 export type FunnelRoute =
   | "home"
@@ -59,6 +60,7 @@ const FUNNEL_ROUTES: Record<FunnelEventKind, FunnelRoute> = {
   migration_view: "magicbrief_migration",
   signup_start: "signup",
   signup_start_magicbrief: "signup",
+  first_brief_viewed: "activation",
 };
 
 const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
@@ -69,6 +71,7 @@ const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
   migration_view: "funnel_migration_view",
   signup_start: "funnel_signup_start",
   signup_start_magicbrief: "funnel_signup_start_magicbrief",
+  first_brief_viewed: "funnel_first_brief_viewed",
 };
 
 const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
@@ -79,6 +82,7 @@ const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
   migration_view: "Anonymous MagicBrief migration page view",
   signup_start: "Anonymous signup started",
   signup_start_magicbrief: "Anonymous signup started from the MagicBrief migration page",
+  first_brief_viewed: "First brief viewed in session",
 };
 
 export function funnelMeasurementEnabled(env: AppEnv): boolean {
@@ -162,7 +166,7 @@ function emitFunnelEvent(env: AppEnv, request: Request, kind: FunnelEventKind, e
   const details: Record<string, string> = {
     event_id: crypto.randomUUID(),
     route: FUNNEL_ROUTES[kind],
-    account_scope: "anonymous",
+    account_scope: kind === "first_brief_viewed" ? "workspace" : "anonymous",
   };
   if (extra.resultCount !== undefined) {
     details.result_count_bucket = bucketForResultCount(extra.resultCount);
@@ -216,4 +220,8 @@ export function emitFunnelSignupStartFromMigrationReferrer(
     request,
     fromMigrationReferrer ? "signup_start_magicbrief" : "signup_start",
   );
+}
+
+export function emitFunnelFirstBriefViewed(env: AppEnv, request: Request) {
+  emitFunnelEvent(env, request, "first_brief_viewed");
 }
