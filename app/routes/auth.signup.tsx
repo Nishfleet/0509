@@ -42,6 +42,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       : magicbriefMigrationMessage(url.searchParams.get("source"));
   const error = signupErrorMessage(url.searchParams.get("error"));
   const oauthProviders = enabledBetterAuthOAuthProviders(env);
+  const { allowlistedSignupSource } = await import("~/lib/signup-source");
+  const signupSource = allowlistedSignupSource(url.searchParams.get("source"));
 
   return {
     redirectTo,
@@ -51,6 +53,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ...(oauthProviders.length > 0 ? { oauthProviders } : {}),
     ...(message ? { message } : {}),
     ...(error ? { error } : {}),
+    ...(signupSource ? { signupSource } : {}),
   };
 }
 
@@ -124,11 +127,30 @@ export async function action({ context, request }: ActionFunctionArgs) {
     new URL(request.url).searchParams.get("source") === MAGICBRIEF_MIGRATION_SOURCE;
   emitFunnelSignupStartFromMigrationReferrer(env, request, fromMigrationReferrer);
 
+  const {
+    rememberAllowlistedSignupSource,
+    signupSourceCookieHeader,
+    signupSourceFromRequest,
+  } = await import("~/lib/signup-source");
+  const signupSource = await rememberAllowlistedSignupSource(env, {
+    email,
+    source:
+      signupSourceFromRequest(request, String(formData.get("signupSource") ?? "")) ??
+      new URL(request.url).searchParams.get("source"),
+  });
+
   const next = new URL("/auth/signup", request.url);
   next.searchParams.set("sent", "1");
   next.searchParams.set("email", email);
   next.searchParams.set("redirectTo", redirectTo);
-  throw redirect(`${next.pathname}${next.search}`);
+  if (signupSource) {
+    next.searchParams.set("source", signupSource);
+  }
+  const headers = new Headers();
+  if (signupSource) {
+    headers.set("Set-Cookie", signupSourceCookieHeader(request, signupSource));
+  }
+  throw redirect(`${next.pathname}${next.search}`, { headers });
 }
 
 export default function SignupRoute() {
@@ -215,6 +237,7 @@ export default function SignupRoute() {
           mode="signup"
           oauthProviders={loaderData.oauthProviders}
           redirectTo={actionData?.redirectTo ?? loaderData.redirectTo}
+          signupSource={loaderData.signupSource}
         />
       </div>
     </main>
