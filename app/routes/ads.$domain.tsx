@@ -32,7 +32,6 @@
 
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import type { ReactNode } from "react";
 
 import { AdCreative } from "~/components/ads/ad-creative";
 import { BrandAdWall } from "~/components/ads/brand-ad-wall";
@@ -539,6 +538,9 @@ function BrandAdsResults({
  * {domain}" is a link claim — it only applies when the capture carries
  * verified link evidence. Creatives that merely match the search (text-mention
  * / provider candidates) are "matching {domain}", never "pointing at" it.
+ *
+ * This must return a plain string: the page <h1> is the document topic
+ * heading and must not contain nested markup.
  */
 function brandHeadline(
   data: BrandPageLoaderData,
@@ -546,16 +548,14 @@ function brandHeadline(
   adWord: string,
   allBrandOwned: boolean,
   noneBrandOwned: boolean,
-): ReactNode {
-  const hl = (node: ReactNode) => <span className="f9-ads-hl">{node}</span>;
-
+): string {
   // No verified link evidence: the wall is real creatives matching the search.
   // The page must not claim they point at, link to, or run for the domain.
   if (data.verifiedLinkCount === 0) {
     const matchPhrase = `${totalCount} Meta ${adWord}`;
     return data.freshForLiveClaim
-      ? <>{hl(matchPhrase)}{` ${totalCount === 1 ? "is" : "are"} matching ${data.domain} right now.`}</>
-      : <>{`The last check found `}{hl(matchPhrase)}{` matching ${data.domain}.`}</>;
+      ? `${matchPhrase} ${totalCount === 1 ? "is" : "are"} matching ${data.domain} right now.`
+      : `The last check found ${matchPhrase} matching ${data.domain}.`;
   }
 
   // Verified link evidence exists — speak about the verified capture only;
@@ -563,20 +563,20 @@ function brandHeadline(
   const verifiedPhrase = `${data.verifiedLinkCount} Meta ${adWord}`;
   if (allBrandOwned) {
     return data.freshForLiveClaim
-      ? <>{`${data.brandName} is running `}{hl(verifiedPhrase)}{" right now."}</>
-      : <>{`${data.brandName} was running `}{hl(verifiedPhrase)}{" at the last check."}</>;
+      ? `${data.brandName} is running ${verifiedPhrase} right now.`
+      : `${data.brandName} was running ${verifiedPhrase} at the last check.`;
   }
 
   if (noneBrandOwned) {
     return data.freshForLiveClaim
-      ? <>{hl(verifiedPhrase)}{` ${data.verifiedLinkCount === 1 ? "is" : "are"} pointing at ${data.domain} right now.`}</>
-      : <>{`The last check found `}{hl(verifiedPhrase)}{` pointing at ${data.domain}.`}</>;
+      ? `${verifiedPhrase} ${data.verifiedLinkCount === 1 ? "is" : "are"} pointing at ${data.domain} right now.`
+      : `The last check found ${verifiedPhrase} pointing at ${data.domain}.`;
   }
 
   const splitPhrase = `${data.brandOwnedAdCount} of these ${verifiedPhrase}`;
   return data.freshForLiveClaim
-    ? <>{`${data.brandName} is running `}{hl(splitPhrase)}{" right now."}</>
-    : <>{`${data.brandName} was running `}{hl(splitPhrase)}{" at the last check."}</>;
+    ? `${data.brandName} is running ${splitPhrase} right now.`
+    : `${data.brandName} was running ${splitPhrase} at the last check.`;
 }
 
 /**
@@ -761,8 +761,7 @@ function BrandAdsShell({
           {`Not watching ${data.domain} yet`}
         </p>
         <h1 className="f9-ads-headline f9-ads-shell-head" id="brand-ads-title">
-          {`We haven't watched ${data.domain} yet — `}
-          <span className="f9-ads-hl">here's what you'd wake up to.</span>
+          {`We haven't watched ${data.domain} yet — here's what you'd wake up to.`}
         </h1>
         <p className="f9-ads-subline">
           Run a free live search and we'll pull their Meta ads right now. Then start watching, and
