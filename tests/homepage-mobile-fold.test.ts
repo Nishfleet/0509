@@ -52,4 +52,17 @@ describe("homepage mobile first viewport (#971)", () => {
     expect(budget).not.toMatch(/\.ld-command\s*\{[^}]*display:\s*none/);
     expect(budget).not.toMatch(/\.ld-honest\s*\{[^}]*display:\s*none/);
   });
+
+  it("compacts the demoted proof strip instead of hiding it", () => {
+    const budget = lastMedia(600, ".ld-proof-strip");
+    expect(budget).toMatch(/\.ld-proof-trail,\s*\n\s*\.ld-proof-strip-foot \{ display: none; \}/);
+    expect(budget).toMatch(/\.ld-proof-strip-body \{ grid-template-columns: 1fr; \}/);
+    expect(budget).not.toMatch(/\.ld-proof-strip\s*\{[^}]*display:\s*none/);
+  });
+
+  it("caps the desktop wall so a proof strip can still leave the command in 1440x900", () => {
+    const wall = ruleBody(".ld-hero-grid .ld-wall");
+    expect(wall).toMatch(/font-size:\s*clamp\(2\.2rem, 3\.6vw, 3\.2rem\)/);
+    expect(wall).not.toMatch(/font-size:\s*clamp\([^)]*4\.5rem\)/);
+  });
 });
