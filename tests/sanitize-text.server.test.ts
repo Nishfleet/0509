@@ -57,6 +57,12 @@ describe("stripScriptAndStyle", () => {
     expect(stripScriptAndStyle("<!--<script>alert(1)</script>-->safe")).toBe("safe");
   });
 
+  it("removes HTML comments with malformed end tags (--!>) that hide scripts and styles", () => {
+    expect(stripScriptAndStyle("<!--<script>alert(1)</script>--!>safe")).toBe("safe");
+    expect(stripScriptAndStyle("<!--<style>body{color:red}</style>--!>safe")).toBe("safe");
+    expect(stripScriptAndStyle("<!-- text --!>safe")).toBe("safe");
+  });
+
   it("removes a bare unclosed comment opener (<!--)", () => {
     const result = stripped("safe<!-- text");
     expect(hasCommentOpenToken(result)).toBe(false);
