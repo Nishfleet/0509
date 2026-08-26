@@ -6,9 +6,12 @@ import {
   buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
+  isPublicSearchFamily,
   isStaleZeroResultDiscoveryCacheEntry,
   resolveDiscoveryCacheTtlMs,
   resolveScheduledScanCacheMaxAgeMs,
+  toPersistedDiscoveryRouteContext,
+  toTelemetryRouteContext,
 } from "~/lib/discovery-cache.server";
 
 describe("buildDiscoveryCacheKey", () => {
@@ -32,6 +35,7 @@ describe("resolveDiscoveryCacheTtlMs", () => {
     expect(resolveDiscoveryCacheTtlMs("public_search")).toBe(15 * 60 * 1000);
     expect(resolveDiscoveryCacheTtlMs("watchlist_scan")).toBe(24 * 60 * 60 * 1000);
     expect(resolveDiscoveryCacheTtlMs("scheduled_warmup")).toBe(24 * 60 * 60 * 1000);
+    expect(resolveDiscoveryCacheTtlMs("public_search_warmup")).toBe(24 * 60 * 60 * 1000);
   });
 });
 
@@ -160,5 +164,32 @@ describe("isDiscoveryCacheRouteCompatible (FIX-1)", () => {
     expect(isDiscoveryCacheRouteCompatible("public_search", "watchlist_scan")).toBe(false);
     expect(isDiscoveryCacheRouteCompatible("public_search", "scheduled_warmup")).toBe(false);
     expect(isDiscoveryCacheRouteCompatible("public_search", "public_search")).toBe(true);
+  });
+
+  it("lets public search read panel-warmup entries and vice versa", () => {
+    expect(isDiscoveryCacheRouteCompatible("public_search", "public_search_warmup")).toBe(true);
+    expect(isDiscoveryCacheRouteCompatible("public_search_warmup", "public_search")).toBe(true);
+    expect(isDiscoveryCacheRouteCompatible("public_search_warmup", "public_search_warmup")).toBe(true);
+    expect(isDiscoveryCacheRouteCompatible("watchlist_scan", "public_search_warmup")).toBe(false);
+    expect(isDiscoveryCacheRouteCompatible("public_search_warmup", "scheduled_warmup")).toBe(false);
+  });
+});
+
+describe("public_search_warmup persist and telemetry mapping", () => {
+  it("stores warmup as public_search so D1 CHECKs and readers accept it", () => {
+    expect(toPersistedDiscoveryRouteContext("public_search_warmup")).toBe("public_search");
+    expect(toPersistedDiscoveryRouteContext("public_search")).toBe("public_search");
+    expect(toPersistedDiscoveryRouteContext("scheduled_warmup")).toBe("scheduled_warmup");
+  });
+
+  it("records warmup telemetry as scheduled_warmup", () => {
+    expect(toTelemetryRouteContext("public_search_warmup")).toBe("scheduled_warmup");
+    expect(toTelemetryRouteContext("public_search")).toBe("public_search");
+  });
+
+  it("groups public search and panel warmup as one cache family", () => {
+    expect(isPublicSearchFamily("public_search")).toBe(true);
+    expect(isPublicSearchFamily("public_search_warmup")).toBe(true);
+    expect(isPublicSearchFamily("scheduled_warmup")).toBe(false);
   });
 });

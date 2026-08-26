@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-08-26T00:00:00.000Z",
+  "note": "Sample fixture for the coverage script inner-loop. Not a production probe.",
+  "domains": [
+    { "domain": "allbirds.com", "adCount": 9 },
+    { "domain": "notion.so", "adCount": 2 },
+    { "domain": "ouraring.com", "adCount": 4 },
+    { "domain": "nykaa.com", "adCount": 6 },
+    { "domain": "gymshark.com", "adCount": 3 },
+    { "domain": "hubspot.com", "adCount": 1 },
+    { "domain": "ridgewallet.com", "adCount": 2 },
+    { "domain": "bombayshavingcompany.com", "adCount": 5 },
+    { "domain": "curofy.com", "adCount": 0 },
+    { "domain": "mailchimp.com", "adCount": 0 },
+    { "domain": "canva.com", "adCount": 0 },
+    { "domain": "plausible.io", "adCount": 0 }
+  ]
+}
