@@ -178,6 +178,77 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     expect(nonDnsFetchCalls(fetch)).toHaveLength(0);
   });
 
+  it("refuses an HTML-only HTTP fallback when requireScreenshot is true", async () => {
+    const fetch = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          "<html><head><title>Offer</title></head><body><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>",
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue(null);
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const onFailure = vi.fn();
+    const snapshot = await captureLandingPageSnapshot(
+      {},
+      "https://example.com/glow",
+      { preferRendered: true, requireScreenshot: true, onFailure },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://example.com/glow",
+      expect.objectContaining({ requireScreenshot: true }),
+    );
+    expect(onFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ reasonCode: "screenshot_required" }),
+    );
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(0);
+  });
+
+  it("refuses a rendered snapshot that has HTML but no screenshot artifact", async () => {
+    mockFetchWithDns(vi.fn(async () => new Response("ok", { status: 200 })) as never);
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://example.com/glow",
+      canonicalUrl: "https://example.com/glow",
+      rawHeadline: "Rendered offer",
+      normalizedHeadline: "rendered offer",
+      normalizedHeadlineHash: "hash",
+      ctaText: "Shop now",
+      priceText: "$10",
+      formPresent: false,
+      captureMethod: "browser_render",
+      capturedAt: "2026-06-05T00:00:00.000Z",
+      artifactKey: "landing-pages/rendered.html",
+      metadata: {
+        htmlArtifactKey: "landing-pages/rendered.html",
+        screenshotArtifactKey: null,
+      },
+    });
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const onFailure = vi.fn();
+    const snapshot = await captureLandingPageSnapshot(
+      {},
+      "https://example.com/glow",
+      { preferRendered: true, requireScreenshot: true, onFailure },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(onFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ reasonCode: "screenshot_required" }),
+    );
+  });
+
   it("does not repeat a failed rendered-first attempt after a blocked static fetch", async () => {
     mockFetchWithDns(
       vi.fn(async () => new Response("blocked", { status: 403 })) as never,

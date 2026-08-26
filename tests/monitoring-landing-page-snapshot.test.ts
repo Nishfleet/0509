@@ -284,6 +284,8 @@ function installMocks(options: {
       updatedAt: "2026-04-18T10:00:15.000Z",
     }),
   }));
+
+  return { createProofCapture, captureLandingPageSnapshot: options.captureLandingPageSnapshot };
 }
 
 describe("landing_page_snapshot persistence on monitoring capture", () => {
@@ -313,6 +315,40 @@ describe("landing_page_snapshot persistence on monitoring capture", () => {
         priceText: "Starting at ₹499",
         formPresent: true,
         artifactKey: "landing-pages/page.html",
+      }),
+    );
+  });
+
+  it("succeeded proof captures carry a non-null screenshot artifact key", async () => {
+    const createLandingPageSnapshot = vi.fn().mockResolvedValue("snapshot-1");
+    const captureLandingPageSnapshot = vi.fn().mockResolvedValue(freshSnapshot);
+
+    const { createProofCapture } = installMocks({
+      createLandingPageSnapshot,
+      captureLandingPageSnapshot,
+    });
+
+    const { runWatchlistManual } = await import("~/lib/monitoring.server");
+
+    await runWatchlistManual(
+      { ALLOW_PLATFORM_META_API_FALLBACK: "true", META_AD_LIBRARY_TOKEN: "token" } as never,
+      watchlist,
+    );
+
+    expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://example.com/glow",
+      expect.objectContaining({
+        routeContext: "proof_capture",
+        preferRendered: true,
+        requireScreenshot: true,
+      }),
+    );
+    expect(createProofCapture).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "succeeded",
+        screenshotArtifactKey: "landing-pages/page.jpeg",
       }),
     );
   });
