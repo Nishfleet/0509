@@ -10,6 +10,8 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { CompetitorImportForm } from "~/components/competitor-import-form";
+import type { CompetitorImportFormActionData } from "~/components/competitor-import-form";
 import { CopyButton } from "~/components/copy-button";
 import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
@@ -42,7 +44,7 @@ import {
   isTeamsWebhookDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
-import { canUsePlanFeature } from "~/lib/plan-entitlements";
+import { canUsePlanFeature, getPlanLimit } from "~/lib/plan-entitlements";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import type {
   EventCandidateRecord,
@@ -219,6 +221,11 @@ export async function action(args: ActionFunctionArgs) {
 export default function WatchlistsRoute() {
   const data = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
+  const importedCountParam = searchParams.get("imported");
+  const importedCount =
+    importedCountParam && /^\d+$/.test(importedCountParam)
+      ? Number.parseInt(importedCountParam, 10)
+      : null;
   // Tabs are navigation, not state (brief §6.4/§11): the active panel is read
   // off the URL, so deep links, the back button and SSR all agree.
   const activeTab = resolveWatchlistDetailTab(searchParams.get(WATCHLIST_DETAIL_TAB_PARAM));
@@ -242,6 +249,7 @@ export default function WatchlistsRoute() {
   const renderedAt = new Date(data.renderedAt);
   const discoveryStatus = toCustomerDiscoveryStatus(data.discoveryStatus);
   const routeActionData = useActionData<typeof action>();
+  const importActionData = routeActionData as CompetitorImportFormActionData | undefined;
   // WP-42: pause/resume runs through a fetcher so the row shows its own
   // pending state instead of lighting up the global route progress bar.
   const pauseResumeFetcher = useFetcher<typeof action>();
@@ -364,6 +372,9 @@ export default function WatchlistsRoute() {
     ? rows
     : filterCompetitorRows(rows, activeFilter);
   const hasCompetitors = rows.length > 0;
+  const activeWatchlistCount = data.watchlists.filter((watchlist) => watchlist.isActive).length;
+  const watchlistPlanLimit = getPlanLimit(data.plan, "watchlists");
+  const hasWatchlistCapacity = activeWatchlistCount < watchlistPlanLimit;
   const nextScanLabel = formatNextScanLabel(
     data.plan,
     renderedAt,
@@ -583,6 +594,12 @@ export default function WatchlistsRoute() {
         </FeedbackStrip>
       ) : null}
 
+      {importedCount ? (
+        <FeedbackStrip label="Done" tone="ok">
+          Imported {importedCount} {importedCount === 1 ? "competitor" : "competitors"}.
+        </FeedbackStrip>
+      ) : null}
+
       {selectedWatchlist ? (
         // A failed capture-window rollup must not read as a believable zero.
         // The record stays mounted and keeps every control; the degraded flag
@@ -730,6 +747,18 @@ export default function WatchlistsRoute() {
           </div>
         </section>
       )}
+
+      {/* Q5: bulk competitor import lives on the board, not only in onboarding.
+          One click to expand the paste/CSV details, a second to preview — the
+          import path itself is the existing `app/lib/competitor-import.ts`. */}
+      {!selectedWatchlist ? (
+        <CompetitorImportForm
+          actionData={importActionData}
+          hasWatchlistCapacity={hasWatchlistCapacity}
+          importSurface="watchlists"
+          upgradePath="/app/billing?source=watchlists#plans"
+        />
+      ) : null}
 
       {/* PR-5a: Presence lives inside Watch — an entity is a tracked thing,
           not a parallel product. The deep merge lands with the Watch
