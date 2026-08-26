@@ -7,6 +7,7 @@ import {
   formatSearchCaptureAgeLabel,
   formatSearchCommandTitle,
   formatSearchMarketScope,
+  formatSearchPageScope,
   formatSelectedLandingFactValue,
   formatSelectedLandingHeadline,
 } from "~/lib/search-display";
@@ -314,9 +315,42 @@ describe("formatSearchMarketScope", () => {
   });
 });
 
+describe("formatSearchPageScope", () => {
+  it("names the Meta Ad Library all-countries query, never worldwide coverage", () => {
+    expect(formatSearchPageScope("all")).toBe(
+      "from the Meta Ad Library's all-countries query",
+    );
+    expect(formatSearchPageScope("ALL")).toBe(
+      "from the Meta Ad Library's all-countries query",
+    );
+    expect(formatSearchPageScope("all")).not.toContain("in all countries");
+    expect(formatSearchPageScope("all")).not.toContain("across all countries");
+    expect(formatSearchPageScope("ALL")).not.toContain("in all countries");
+    expect(formatSearchPageScope("ALL")).not.toContain("across all countries");
+  });
+
+  it("names the market for a specific country", () => {
+    expect(formatSearchPageScope("India")).toBe("in India");
+    expect(formatSearchPageScope("IN")).toBe("in India");
+    expect(formatSearchPageScope("usa")).toBe("in United States");
+  });
+
+  it("returns null when no country is supplied", () => {
+    expect(formatSearchPageScope(null)).toBeNull();
+    expect(formatSearchPageScope(undefined)).toBeNull();
+    expect(formatSearchPageScope("")).toBeNull();
+    expect(formatSearchPageScope("   ")).toBeNull();
+  });
+});
+
 describe("formatSearchCommandTitle", () => {
-  it("title-cases the brand and names all countries on a shared search URL", () => {
-    expect(formatSearchCommandTitle("nike", "all")).toBe("Nike ads in all countries");
+  it("title-cases the brand and names the Meta Ad Library all-countries query", () => {
+    const title = formatSearchCommandTitle("nike", "all");
+    expect(title).toBe(
+      "Nike ads from the Meta Ad Library's all-countries query",
+    );
+    expect(title).not.toContain("in all countries");
+    expect(title).not.toContain("across all countries");
   });
 
   it("resolves country names from the catalog", () => {
