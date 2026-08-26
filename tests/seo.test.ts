@@ -18,7 +18,7 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain("https://0509.io/privacy");
     expect(sitemap?.body).toContain("https://0509.io/terms");
     // Funnel entry points (feat/funnel-seo): the public search preview and
-    // both compare pages are deliberately crawlable. /auth/signup is NOT in
+    // all six compare pages are deliberately crawlable. /auth/signup is NOT in
     // the sitemap — auth/action surfaces carry noindex and stay out so Google
     // does not index the signup entry (see NOINDEX_ACTION_SURFACES in seo.ts).
     expect(sitemap?.body).toContain("<loc>https://0509.io/search</loc>");
@@ -27,6 +27,10 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain(
       "<loc>https://0509.io/compare/meta-ad-library</loc>",
     );
+    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/visualping</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/spyland</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/pulzifi</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/foreplay</loc>");
     // Metadata: static entries carry changefreq and priority.
     expect(sitemap?.body).toContain("<changefreq>daily</changefreq>");
     expect(sitemap?.body).toContain("<priority>1.0</priority>");
