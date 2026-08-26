@@ -80,4 +80,91 @@ describe("captureBrowserRunSnapshot decode wiring", () => {
 
     expect(snapshot?.rawHeadline).toBe("a & b already decoded");
   });
+
+  it("fails the rendered capture when screenshot is missing and requireScreenshot is true", async () => {
+    const page = createPage(
+      `<html><head><title>Readable render</title></head><body><main>rendered offer body copy with enough text to count as meaningful body content for the landing page signal extractor gate</main></body></html>`,
+      "https://example.com/offer",
+    );
+    page.screenshot = vi.fn().mockRejectedValue(new Error("screenshot failed"));
+    const browser = {
+      close: vi.fn().mockResolvedValue(undefined),
+      newPage: vi.fn().mockResolvedValue(page),
+    };
+    const launch = vi.fn().mockResolvedValue(browser);
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: { launch } }));
+
+    const { captureBrowserRunSnapshot } = await import("~/lib/browser-run.server");
+    const snapshot = await captureBrowserRunSnapshot(
+      { BROWSER: {} as never } as never,
+      "https://example.com/offer",
+      { requireScreenshot: true },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(page.screenshot).toHaveBeenCalledTimes(2);
+  });
+
+  it("persists a screenshot artifact when requireScreenshot is true", async () => {
+    const page = createPage(
+      `<html><head><title>Readable render</title></head><body><main>rendered offer body copy with enough text to count as meaningful body content for the landing page signal extractor gate</main></body></html>`,
+      "https://example.com/offer",
+    );
+    const put = vi.fn().mockResolvedValue(undefined);
+    const browser = {
+      close: vi.fn().mockResolvedValue(undefined),
+      newPage: vi.fn().mockResolvedValue(page),
+    };
+    const launch = vi.fn().mockResolvedValue(browser);
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: { launch } }));
+
+    const { captureBrowserRunSnapshot } = await import("~/lib/browser-run.server");
+    const snapshot = await captureBrowserRunSnapshot(
+      {
+        BROWSER: {} as never,
+        LANDING_PAGE_ARTIFACTS: { put } as never,
+      } as never,
+      "https://example.com/offer",
+      { requireScreenshot: true },
+    );
+
+    expect(snapshot).not.toBeNull();
+    expect(snapshot?.metadata?.screenshotArtifactKey).toEqual(
+      expect.stringMatching(/\.jpeg$/u),
+    );
+    expect(put).toHaveBeenCalled();
+  });
+
+  it("retries a failed screenshot once and keeps the second capture", async () => {
+    const page = createPage(
+      `<html><head><title>Readable render</title></head><body><main>rendered offer body copy with enough text to count as meaningful body content for the landing page signal extractor gate</main></body></html>`,
+      "https://example.com/offer",
+    );
+    page.screenshot = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("screenshot failed"))
+      .mockResolvedValueOnce(new Uint8Array([1, 2, 3]));
+    const put = vi.fn().mockResolvedValue(undefined);
+    const browser = {
+      close: vi.fn().mockResolvedValue(undefined),
+      newPage: vi.fn().mockResolvedValue(page),
+    };
+    const launch = vi.fn().mockResolvedValue(browser);
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: { launch } }));
+
+    const { captureBrowserRunSnapshot } = await import("~/lib/browser-run.server");
+    const snapshot = await captureBrowserRunSnapshot(
+      {
+        BROWSER: {} as never,
+        LANDING_PAGE_ARTIFACTS: { put } as never,
+      } as never,
+      "https://example.com/offer",
+      { requireScreenshot: true },
+    );
+
+    expect(page.screenshot).toHaveBeenCalledTimes(2);
+    expect(snapshot?.metadata?.screenshotArtifactKey).toEqual(
+      expect.stringMatching(/\.jpeg$/u),
+    );
+  });
 });

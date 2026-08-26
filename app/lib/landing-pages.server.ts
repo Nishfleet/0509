@@ -61,6 +61,7 @@ export type LandingPageCaptureFailureReasonCode =
   | "landing_http_error"
   | "landing_fetch_failed"
   | "landing_content_empty_or_oversized"
+  | "screenshot_required"
   | CaptureValidityReasonCode;
 
 export interface LandingPageCaptureFailureDetail {
@@ -73,6 +74,12 @@ interface CaptureLandingPageSnapshotOptions {
   onFailure?: (detail: LandingPageCaptureFailureDetail) => void;
   /** Persist only when the caller will create an owner-addressable D1 reference. */
   persistArtifacts?: boolean;
+  /**
+   * When true, the capture is only considered successful if it carries a
+   * persisted screenshotArtifactKey. This makes the screenshot step mandatory
+   * and prevents HTML-only proof captures (issue #1103).
+   */
+  requireScreenshot?: boolean;
   preferRendered?: boolean;
   /** Attribution context recorded in `browser_job_telemetry` (optional).
    * Never carries URLs, tokens, or content. Defaults derive from existing
@@ -259,6 +266,11 @@ async function captureLandingPageSnapshotAt(
       if (renderedSnapshot) {
         return renderedSnapshot;
       }
+      if (options.requireScreenshot) {
+        return failLandingCapture(options, "screenshot_required", {
+          renderedFallbackFailed: true,
+        });
+      }
       captureWarningCodes.push("rendered_fallback_failed");
     }
 
@@ -426,6 +438,11 @@ async function captureLandingPageSnapshotAt(
       }
       captureWarningCodes.push("signal_empty_render_failed");
     }
+    if (options.requireScreenshot) {
+      return failLandingCapture(options, "screenshot_required", {
+        captureMethod: "landing_page_fetch",
+      });
+    }
     let artifactKey: string | null = null;
     if (options.persistArtifacts !== false && env.LANDING_PAGE_ARTIFACTS) {
       try {
@@ -529,14 +546,29 @@ async function captureRenderedSnapshot(
     telemetryAttempts: { used: telemetry.attemptUsed },
     executionContext: telemetry.executionContext,
   };
+  const renderOptions = {
+    ...attribution,
+    persistArtifacts: options.persistArtifacts,
+    requireScreenshot: options.requireScreenshot,
+  };
   try {
     const snapshot = await (options.persistArtifacts === false
       ? captureRenderedLandingPageSnapshot(env, url, {
+          ...renderOptions,
           persistArtifacts: false,
-          ...attribution,
         })
-      : captureRenderedLandingPageSnapshot(env, url, attribution));
+      : captureRenderedLandingPageSnapshot(env, url, renderOptions));
     telemetry.attemptUsed = attribution.telemetryAttempts.used;
+    if (
+      snapshot &&
+      options.requireScreenshot &&
+      !snapshotHasScreenshotArtifact(snapshot)
+    ) {
+      if (options.instrumentation) {
+        recordRenderStage(options.instrumentation, "failed", "screenshot_required");
+      }
+      return null;
+    }
     if (options.instrumentation) {
       recordRenderStage(options.instrumentation, snapshot ? "succeeded" : "failed");
     }
@@ -640,6 +672,11 @@ function failLandingCapture(
 ) {
   options.onFailure?.({ reasonCode, metadata });
   return null;
+}
+
+function snapshotHasScreenshotArtifact(snapshot: LandingPageSnapshotData): boolean {
+  const key = snapshot.metadata?.screenshotArtifactKey;
+  return typeof key === "string" && key.length > 0;
 }
 
 function buildExtractionWarnings(input: {
