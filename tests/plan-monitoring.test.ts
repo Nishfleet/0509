@@ -105,14 +105,14 @@ function failedDirectWebsiteCapture(id: string) {
   };
 }
 
-async function runDirectWebsiteWatchlist(options: {
+const runDirectWebsiteWatchlist = async (options: {
   plan?: string;
   watchlistDailyAttempts?: number;
   workspaceDailyAttempts?: number;
   proofCapturesPerMonth?: number;
   lastSuccessfulProofAt?: string | null;
   recentTargetCaptures?: ReturnType<typeof failedDirectWebsiteCapture>[];
-}) {
+}) => {
   const createProofCapture = vi.fn().mockResolvedValue("proof-direct-skip");
   const captureLandingPageSnapshot = vi.fn();
   const plan = options.plan ?? "starter";
@@ -235,7 +235,7 @@ async function runDirectWebsiteWatchlist(options: {
   });
 
   return { createProofCapture, captureLandingPageSnapshot };
-}
+};
 
 function digestScheduleDataMocks() {
   let jobs: Array<{
