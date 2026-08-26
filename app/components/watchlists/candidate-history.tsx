@@ -3,14 +3,21 @@ import {
   formatImportanceBandLabel,
   formatWatchEventStatusLabel,
 } from "~/lib/landing-page-display";
+import { resolveSuppressedCandidateRefusal } from "~/lib/run-history-capture-visibility";
 import type { EventCandidateRecord } from "~/lib/types";
 
 export function CandidateHistory({ candidates }: { candidates: EventCandidateRecord[] }) {
-  const rows: FactRow[] = candidates.map((candidate) => ({
-    key: formatWatchEventStatusLabel(candidate.status),
-    value: `${candidate.title} · ${formatImportanceBandLabel(candidate.importanceScore)}`,
-    missingLabel: "not recorded",
-  }));
+  const rows: FactRow[] = candidates.map((candidate) => {
+    const refusal = resolveSuppressedCandidateRefusal(candidate);
+    const detail = refusal
+      ? `${candidate.title} · ${refusal.explanation}. No alert sent.`
+      : `${candidate.title} · ${formatImportanceBandLabel(candidate.importanceScore)}`;
+    return {
+      key: formatWatchEventStatusLabel(candidate.status),
+      value: detail,
+      missingLabel: "not recorded",
+    };
+  });
 
   return (
     <details className="f9-evidence-candidate-history">
