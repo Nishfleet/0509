@@ -20,6 +20,7 @@ import {
   assertAutomationContext,
   assertConfiguredProductionDatabase,
   assertExactR2Backup,
+  applyForwardMigrationSuffix,
   assertMigrationLedgerMatchesRepository,
   assertRestoreRoundTrip,
   buildRemoteRestoreEvidence,
@@ -28,6 +29,7 @@ import {
   cleanupLocalRestoreTempDirectories,
   parseCreatedDatabaseUuid,
   parseWranglerJson,
+  planSourceBackupLedgerReconciliation,
   readOwnedBackupManifest,
   removeScratchDatabase,
   rethrowWithMigrationLedgerDiagnostics,
@@ -43,6 +45,11 @@ import {
   importSqlite,
 } from "../scripts/d1-remote-restore-evidence-core.mjs";
 import { selectRecentRemoteRestoreArtifact } from "../scripts/find-recent-remote-restore-artifact.mjs";
+import {
+  allowedProductionMigrationLedgers,
+  PRODUCTION_MIGRATION_LEDGER_BASELINE,
+  RETIRED_PRODUCTION_MIGRATIONS,
+} from "../scripts/d1-migration-sync-check.lib.mjs";
 
 const fingerprint = "a".repeat(64);
 const wranglerHash = "b".repeat(64);
@@ -353,10 +360,11 @@ describe("D1 remote restore evidence automation", () => {
     expect(apply?.needs).toBe("authorize_release");
     expect(apply?.environment).toBe("production");
     // Schedule or push to main both bypass apply_and_restore, which only runs
-    // on an explicit manual dispatch. The gate's exact-commit check then
-    // matches the resulting evidence against whichever commit the deploy is
-    // pinning. Pinned exactly: any silent drift of the restore gate should
-    // fail here.
+    // on an explicit manual dispatch. Push of a new migration therefore used
+    // to fail restore-evidence with source_backup_migration_ledger_stale
+    // (#1152) until a human dispatched apply_and_restore. The script catch-up
+    // applies that trailing suffix and re-backups, so this job stays
+    // dispatch-only.
     const exactApplyRestoreGate =
       "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'push' || needs.apply_and_restore.result == 'success')";
     expect(workflow.jobs?.restore?.if).toBe(exactApplyRestoreGate);
@@ -1390,6 +1398,127 @@ describe("D1 remote restore evidence automation", () => {
         contentDigestSha256: "4".repeat(64),
       }),
     ).toThrow("scratch_restore_content_mismatch");
+  });
+
+  it("plans forward catch-up when the backup lags the repo by a trailing suffix", () => {
+    const repositoryBaseline = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter(
+      (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
+    );
+    const suffixThrough0077 = [
+      "0071_release_observation_redispatch_failures.sql",
+      "0072_scheduled_observation_health_state.sql",
+      "0073_cron_failure_alert_attempt_evidence.sql",
+      "0074_provider_neutral_discovery_failures.sql",
+      "0075_teams_delivery.sql",
+      "0076_browser_job_telemetry.sql",
+      "0077_competitor_site_monitoring.sql",
+    ];
+    const next = "0078_landing_page_snapshot_canonical_index.sql";
+    const repository = [...repositoryBaseline, ...suffixThrough0077, next];
+    const backupNames = [
+      ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      ...suffixThrough0077,
+    ];
+    const backupLedger = backupNames.map((name, index) => ({
+      id: index + 1,
+      name,
+      appliedAt: "2026-08-25 20:40:00",
+    }));
+    expect(
+      planSourceBackupLedgerReconciliation(backupLedger, repository),
+    ).toEqual({
+      action: "apply_forward_suffix",
+      migrations: [next],
+    });
+    expect(
+      planSourceBackupLedgerReconciliation(
+        [
+          ...backupLedger,
+          {
+            id: backupLedger.length + 1,
+            name: next,
+            appliedAt: "2026-08-26 18:52:00",
+          },
+        ],
+        repository,
+      ),
+    ).toEqual({ action: "ok" });
+    expect(
+      planSourceBackupLedgerReconciliation(
+        [backupLedger[backupLedger.length - 1]],
+        repository,
+      ),
+    ).toEqual({
+      action: "reject",
+      reason: "source_backup_migration_ledger_stale",
+    });
+  });
+
+  it("plans catch-up for the live repository when the backup is a trailing suffix behind", () => {
+    const repository = readdirSync(resolve("migrations"))
+      .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
+      .sort();
+    const allowed = allowedProductionMigrationLedgers(repository)[0];
+    const last = allowed.at(-1);
+    expect(last).toMatch(/^\d{4}_[A-Za-z0-9_]+\.sql$/u);
+    const namedLedger = (names: string[]) =>
+      names.map((name, index) => ({
+        id: index + 1,
+        name,
+        appliedAt: "2026-08-26 18:52:00",
+      }));
+    expect(
+      planSourceBackupLedgerReconciliation(
+        namedLedger(allowed.slice(0, -1)),
+        repository,
+      ),
+    ).toEqual({
+      action: "apply_forward_suffix",
+      migrations: [last],
+    });
+    expect(
+      planSourceBackupLedgerReconciliation(namedLedger(allowed), repository),
+    ).toEqual({ action: "ok" });
+  });
+
+  it("applies the planned forward suffix through wrangler and rejects a bad list", async () => {
+    const runCommand = vi.fn(async () => ({ stdout: "", stderr: "" }));
+    const write = vi.fn();
+    await expect(
+      applyForwardMigrationSuffix(
+        ["0078_landing_page_snapshot_canonical_index.sql"],
+        runCommand,
+        write,
+      ),
+    ).resolves.toBe(true);
+    expect(write).toHaveBeenCalledWith(
+      'forward_migration_catchup:["0078_landing_page_snapshot_canonical_index.sql"]',
+    );
+    expect(runCommand).toHaveBeenCalledWith(
+      "npx",
+      ["wrangler", "d1", "migrations", "apply", "0509", "--remote"],
+      expect.objectContaining({ timeoutMs: expect.any(Number) }),
+    );
+    await expect(applyForwardMigrationSuffix([], runCommand, write)).rejects
+      .toThrow("forward_migration_catchup_invalid");
+    await expect(
+      applyForwardMigrationSuffix(["not-a-migration"], runCommand, write),
+    ).rejects.toThrow("forward_migration_catchup_invalid");
+  });
+
+  it("wires forward catch-up before the exact ledger assert", () => {
+    const source = readFileSync(
+      "scripts/d1-remote-restore-evidence.mjs",
+      "utf8",
+    );
+    const planAt = source.lastIndexOf("planSourceBackupLedgerReconciliation(");
+    const applyAt = source.lastIndexOf("await applyForwardMigrationSuffix(");
+    const assertAt = source.lastIndexOf(
+      "assertMigrationLedgerMatchesRepository(",
+    );
+    expect(planAt).toBeGreaterThan(0);
+    expect(applyAt).toBeGreaterThan(planAt);
+    expect(assertAt).toBeGreaterThan(applyAt);
   });
 
   it("requires the complete ordered migration ledger, not only the latest name", () => {
