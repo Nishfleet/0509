@@ -37,7 +37,6 @@ describe("watchlists route test file size ratchet", () => {
     const files = listWatchlistsRouteTestFiles(root);
     expect(files.map((file) => file.relativePath)).toEqual([
       "tests/watchlists.route.actions.test.ts",
-      "tests/watchlists.route.loader.test.ts",
       "tests/watchlists.route.test.ts",
     ]);
     expect(findOversizedWatchlistsRouteTests(files), JSON.stringify(files, null, 2)).toEqual(
