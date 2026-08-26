@@ -3651,6 +3651,197 @@ describe("searchAdsViaSourceResolver", () => {
     expect(heartbeatUpdates).toHaveLength(1);
   });
 
+  it("writes a partial discovery cache entry mid-capture so the poll paints the first card before the scroll finishes (BET 2, #951)", async () => {
+    // The browser mock captures the onPartialResults callback and fires it
+    // with the first batch of ads BEFORE resolving the final (complete) result
+    // — mirroring the real capture, which extracts the initial surface, emits
+    // partials, then runs the scroll-and-collect passes.
+    let resolveSearch!: (value: SearchResponse) => void;
+    let capturedPartialAds: unknown[] | null = null;
+    const browserSearch = vi.fn().mockImplementation(
+      (_env: unknown, _query: unknown, opts: { onPartialResults?: (ads: unknown[]) => void }) =>
+        new Promise<SearchResponse>((resolve) => {
+          resolveSearch = resolve;
+          if (opts?.onPartialResults) {
+            // Fire the partial callback synchronously with the first batch.
+            opts.onPartialResults(buildLiveBrowserResult().ads);
+            capturedPartialAds = buildLiveBrowserResult().ads;
+          }
+        }),
+    );
+    const upsertDiscoveryCacheEntry = vi.fn();
+    const createDiscoveryFetchLog = vi.fn();
+    const upsertDiscoveryProviderState = vi.fn();
+    let insertedLeaseValues: unknown[] = [];
+    const prepare = vi.fn((sql: string) => ({
+      bind: vi.fn((...values: unknown[]) => {
+        if (sql.includes("INSERT OR IGNORE INTO discovery_query_lease")) {
+          insertedLeaseValues = values;
+        }
+        return {
+          run: vi.fn().mockResolvedValue({ success: true }),
+          first: vi.fn().mockImplementation(async () =>
+            sql.includes("SELECT holder_id, lease_expires_at")
+              ? {
+                  holder_id: insertedLeaseValues[3],
+                  lease_expires_at: insertedLeaseValues[4],
+                }
+              : null,
+          ),
+        };
+      }),
+    }));
+    const db = { prepare } as unknown as D1Database;
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog,
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const waitUntil = vi.fn();
+    const query: NormalizedSavedQuery = {
+      mode: "keyword" as const,
+      filters: {
+        query: "cold-path-partial",
+        country: "India",
+        platform: "all",
+        creativeType: "all",
+        status: "all",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+    };
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      query,
+      null,
+      { purpose: "public_search", executionContext: { waitUntil } },
+    );
+
+    // The cold-path response is still the warming state — the partial write
+    // happens in the background, not on the response path.
+    expect(result).toMatchObject({
+      ads: [],
+      discoveryProgress: "warming",
+    });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    const background = waitUntil.mock.calls[0]?.[0];
+    // The partial callback fired during the browser call (before resolve), so
+    // the partial cache write should already be registered. Await the
+    // background promise to let any pending microtasks settle.
+    resolveSearch(buildLiveBrowserResult());
+    await background;
+
+    // TWO cache writes: the PARTIAL entry (mid-capture) then the FINAL entry
+    // (after the scroll). The partial write carries discoveryPartial + warming.
+    expect(upsertDiscoveryCacheEntry).toHaveBeenCalledTimes(2);
+    const partialWrite = upsertDiscoveryCacheEntry.mock.calls[0]?.[1];
+    expect(partialWrite.payload).toMatchObject({
+      discoveryPartial: true,
+      discoveryProgress: "warming",
+      ads: [{ metaAdId: "meta-nykaa-1" }],
+    });
+    // The partial TTL is short (2 min) so a crashed background run expires.
+    const partialExpiresAtMs = Date.parse(String(partialWrite.expiresAt));
+    expect(partialExpiresAtMs - Date.now()).toBeGreaterThan(100_000);
+    expect(partialExpiresAtMs - Date.now()).toBeLessThanOrEqual(130_000);
+    // The final write is NOT partial — it clears the partial/warming flags
+    // so the next poll swaps in the complete set and stops polling.
+    const finalWrite = upsertDiscoveryCacheEntry.mock.calls[1]?.[1];
+    expect(finalWrite.payload.discoveryPartial).not.toBe(true);
+    expect(finalWrite.payload.discoveryProgress).not.toBe("warming");
+    expect(capturedPartialAds).toHaveLength(1);
+  });
+
+  it("serves a partial cache entry as warming with its ads so the poll paints the first card and keeps polling (BET 2, #951)", async () => {
+    const browserSearch = vi.fn();
+    const future = new Date(Date.now() + 60_000).toISOString();
+    const fetchedAt = new Date().toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_library_browser:fp-partial-serve:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-partial-serve",
+      country: "India",
+      cursor: null,
+      payload: {
+        ...buildLiveBrowserResult(),
+        discoveryEmptyReason: null,
+        discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+        discoveryPartial: true,
+        discoveryProgress: "warming",
+        discoverySummary: "Showing the first ads while we load more from the Ad Library.",
+      },
+      fetchedAt,
+      expiresAt: future,
+      browserMsUsed: null,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const query: NormalizedSavedQuery = {
+      mode: "keyword" as const,
+      filters: {
+        query: "partial-serve",
+        country: "India",
+        platform: "all",
+        creativeType: "all",
+        status: "all",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+    };
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: { prepare: vi.fn() } as unknown as D1Database,
+      } as never,
+      query,
+      null,
+      { purpose: "public_search" },
+    );
+
+    // The partial entry is served as a cache HIT (so the poll is cheap) but
+    // PRESERVES the warming + partial flags so the client keeps polling for
+    // the final write and renders a real progress state, not a "healthy" stop.
+    expect(result).toMatchObject({
+      cacheStatus: "hit",
+      discoveryStatus: "degraded",
+      discoveryProgress: "warming",
+      discoveryPartial: true,
+      ads: [{ metaAdId: "meta-nykaa-1" }],
+    });
+    // The browser capture must NOT run — this is a cache hit, not a scrape.
+    expect(browserSearch).not.toHaveBeenCalled();
+  });
+
   it("returns an expired-but-usable entry immediately and refreshes it in the background when this request owns the lease", async () => {
     let resolveSearch!: (value: SearchResponse) => void;
     const browserSearch = vi.fn().mockImplementation(

@@ -28,6 +28,7 @@ import {
 } from "~/lib/competitor-website";
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import {
+  buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
   readDiscoveryCacheEntryCacheOnly,
 } from "~/lib/discovery-cache.server";
@@ -638,6 +639,64 @@ function candidateCountries(visitorCountry: string): string[] {
 }
 
 /**
+ * Pure core of `deriveCacheLookup`: reproduce, for one domain + country, the
+ * EXACT discovery-cache lookup the /ads/:domain page performs — the search-v2
+ * domain key when `useDomainV2` mirrors the rollout posture, else the legacy
+ * fingerprint triple (see the env-aware wrapper below). Returned as the final
+ * cache key string so callers (the dynamic sitemap) can prove row-level parity
+ * with what the public page actually reads, without re-deriving internals.
+ */
+export function deriveBrandPageLookupForCountry(
+  provider: string,
+  domain: string,
+  country: string,
+  useDomainV2: boolean,
+): { fingerprint: string; country: string; cacheKey: string; usedDomainKey: boolean } {
+  const website = normalizeCompetitorWebsiteInput(domain);
+  const parsedInput = parseSearchParams(new URLSearchParams(), { country });
+  const parsed = applyWebsiteSearchFallback(parsedInput, website);
+  const queryIntent = useDomainV2 ? parseSearchInputFromWebsiteField(domain) : null;
+  const useDomainKey = Boolean(
+    queryIntent && queryIntent.intent === "domain" && queryIntent.registrableDomain,
+  );
+
+  if (queryIntent && useDomainKey) {
+    const v2Query = buildSearchV2SavedQuery(queryIntent, "exact", parsed.filters);
+    const v2Country = v2Query.filters.country || ALL_COUNTRIES_VALUE;
+    return {
+      fingerprint: parsed.fingerprint,
+      country: v2Country,
+      cacheKey: buildSearchV2CacheKey({
+        provider,
+        intent: queryIntent,
+        scope: "exact",
+        country: v2Country,
+        cursor: null,
+      }),
+      usedDomainKey: true,
+    };
+  }
+
+  // Recompute the fingerprint from the exact NormalizedSavedQuery shape the
+  // resolver caches under (searchAdsViaSourceResolver fingerprints the
+  // normalized query, not the parsed route input) so the two never drift.
+  const legacyQuery = normalizeSavedQuery(parsed.mode, parsed.filters);
+  const legacyFingerprint = fingerprintSavedQuery(legacyQuery);
+  const legacyCountry = legacyQuery.filters.country || ALL_COUNTRIES_VALUE;
+  return {
+    fingerprint: legacyFingerprint,
+    country: legacyCountry,
+    cacheKey: buildDiscoveryCacheKey({
+      provider,
+      fingerprint: legacyFingerprint,
+      country: legacyCountry,
+      cursor: null,
+    }),
+    usedDomainKey: false,
+  };
+}
+
+/**
  * Reproduce the exact cache key the /search execution path would have written
  * for this domain + country (see `hasWarmSearchCacheEntry`): the search-v2
  * domain key when the v2 rollout applies, else the legacy fingerprint triple.
@@ -649,37 +708,14 @@ function deriveCacheLookup(
   domain: string,
   country: string,
 ): { fingerprint: string; country: string; cacheKeyOverride: string | null } {
-  const website = normalizeCompetitorWebsiteInput(domain);
-  const parsedInput = parseSearchParams(new URLSearchParams(), { country });
-  const parsed = applyWebsiteSearchFallback(parsedInput, website);
-  const queryIntent = shouldApplySearchV2(env) ? parseSearchInputFromWebsiteField(domain) : null;
-  const useDomainV2 = Boolean(
-    queryIntent && queryIntent.intent === "domain" && queryIntent.registrableDomain,
-  );
-
-  if (useDomainV2 && queryIntent) {
-    const v2Query = buildSearchV2SavedQuery(queryIntent, "exact", parsed.filters);
-    return {
-      fingerprint: parsed.fingerprint,
-      country: v2Query.filters.country || ALL_COUNTRIES_VALUE,
-      cacheKeyOverride: buildSearchV2CacheKey({
-        provider,
-        intent: queryIntent,
-        scope: "exact",
-        country: v2Query.filters.country || ALL_COUNTRIES_VALUE,
-        cursor: null,
-      }),
-    };
-  }
-
-  // Recompute the fingerprint from the exact NormalizedSavedQuery shape the
-  // resolver caches under (searchAdsViaSourceResolver fingerprints the
-  // normalized query, not the parsed route input) so the two never drift.
-  const legacyQuery = normalizeSavedQuery(parsed.mode, parsed.filters);
+  const useDomainV2 = shouldApplySearchV2(env);
+  const derived = deriveBrandPageLookupForCountry(provider, domain, country, useDomainV2);
+  // The override is the authoritative lookup key only when the v2 domain key
+  // actually applied; legacy/shadow lookups go through the plain triple.
   return {
-    fingerprint: fingerprintSavedQuery(legacyQuery),
-    country: legacyQuery.filters.country || ALL_COUNTRIES_VALUE,
-    cacheKeyOverride: null,
+    fingerprint: derived.fingerprint,
+    country: derived.country,
+    cacheKeyOverride: derived.usedDomainKey ? derived.cacheKey : null,
   };
 }
 

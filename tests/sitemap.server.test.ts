@@ -1,12 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  applyWebsiteSearchFallback,
+  normalizeCompetitorWebsiteInput,
+} from "~/lib/competitor-website";
+import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
+import { buildDiscoveryCacheKey } from "~/lib/discovery-cache.server";
+import {
   BRAND_PAGE_FRESH_FOR_INDEXING_MS,
+  deriveBrandPageLookupForCountry,
 } from "~/lib/brand-page.server";
+import { fingerprintSavedQuery, normalizeSavedQuery, parseSearchParams } from "~/lib/normalize";
+import { buildSearchV2CacheKey } from "~/lib/search-v2.server";
+import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
 import { SITEMAP_PATHS } from "~/lib/seo";
 import routes from "~/routes";
 import {
   brandDomainFromSitemapCacheRow,
+  brandPageLookupCacheKeysForSitemap,
+  brandPageRowRendersAggressionScore,
   buildSitemapXml,
   indexableBrandPageEntriesFromRows,
   isIndexableBrandPageRow,
@@ -20,8 +32,28 @@ function isoAgo(ms: number) {
   return new Date(Date.now() - ms).toISOString();
 }
 
+// A cached ad that carries VERIFIED link evidence (a registrable_domain
+// domainMatch verdict) AND enough history (30-day first-seen) for the Ad
+// Aggression Score to render. Sitemap rows backed by this ad qualify for the
+// sitemap; rows whose ads lack verified-link evidence or history back thin
+// pages and must stay out.
+const verifiedAd = {
+  metaAdId: "meta-nykaa-1",
+  source: "meta_library_browser",
+  landingPageUrl: "https://nykaa.com/shop",
+  domainMatch: {
+    level: "registrable_domain",
+    reason: "Landing page matches nykaa.com",
+    matchedDomain: "nykaa.com",
+  },
+  firstSeenAt: isoAgo(30 * DAY_MS),
+  lastSeenAt: null,
+  active: true,
+  variantCount: 1,
+};
+
 const basePayload = {
-  ads: [{ metaAdId: "meta-nykaa-1", source: "meta_library_browser" }],
+  ads: [verifiedAd],
   nextCursor: null,
   source: "meta_library_browser",
   provider: "meta_library_browser",
@@ -226,6 +258,267 @@ describe("indexableBrandPageEntriesFromRows", () => {
   });
 });
 
+describe("lookup parity — never list a page that would serve noindex", () => {
+  const now = new Date();
+
+  it("excludes a fresh capture stored only under a country scope unknown-geo crawlers never probe (the /ads/myntra.com regression)", () => {
+    // Passes every pre-parity rule (public_search, non-demo, ads, fresh), but
+    // the page probes [visitor-country, all, United States] — never "india" —
+    // so a US crawler got the noindex shell while the sitemap listed it.
+    const row = cacheRow({
+      cache_key: "search-v2:domain:myntra.com:exact:meta_library_browser:india:page-1",
+      payload: { ...basePayload, displayDomain: "myntra.com" },
+    });
+
+    expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([]);
+  });
+
+  it("lists the same domain once captured under an always-tried country scope", () => {
+    const row = cacheRow({
+      cache_key:
+        "search-v2:domain:myntra.com:exact:meta_library_browser:united-states:page-1",
+      payload: { ...basePayload, displayDomain: "myntra.com" },
+    });
+
+    expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([
+      "/ads/myntra.com",
+    ]);
+  });
+
+  it("excludes rows written by a provider other than the resolved commercial provider", () => {
+    const row = cacheRow({ provider: "meta_api" });
+
+    expect(
+      indexableBrandPageEntriesFromRows([row], now, { provider: "meta_library_browser" }).map(
+        (e) => e.path,
+      ),
+    ).toEqual([]);
+  });
+
+  it("under a legacy rollout posture, only rows keyed exactly like the page's legacy lookups qualify", () => {
+    const provider = "meta_library_browser";
+    const legacyKey = deriveBrandPageLookupForCountry(provider, "nykaa.com", "all", false).cacheKey;
+
+    // A v2-keyed row is unreachable when the page derives legacy fingerprint
+    // keys (shadow/legacy mode) — listing it would promise an indexable page
+    // that serves noindex.
+    expect(
+      indexableBrandPageEntriesFromRows([cacheRow()], now, { useDomainV2: false }).map(
+        (e) => e.path,
+      ),
+    ).toEqual([]);
+
+    // A v2-payload row stored under the exact legacy-derived key IS reachable.
+    expect(
+      indexableBrandPageEntriesFromRows(
+        [cacheRow({ cache_key: legacyKey })],
+        now,
+        { useDomainV2: false },
+      ).map((e) => e.path),
+    ).toEqual(["/ads/nykaa.com"]);
+  });
+});
+
+describe("aggression-score gate — never list a thin page (ad wall without its score)", () => {
+  const now = new Date();
+
+  it("lists a row whose verified-linked ad clears the 14-day score floor", () => {
+    expect(indexableBrandPageEntriesFromRows([cacheRow()], now).map((e) => e.path)).toEqual([
+      "/ads/nykaa.com",
+    ]);
+  });
+
+  it("excludes a row whose ads have NO verified link evidence (the 0-verified-ads thin-page defect)", () => {
+    // 24 unverified text-mention matches: the provider returned them for the
+    // domain, but none carries a landing-page or domainMatch verdict linking
+    // them to it. The page would render the ad wall without the score, so it
+    // self-noindexes — the sitemap must not list it.
+    const unverifiedOnlyPayload = {
+      ...basePayload,
+      ads: [
+        {
+          metaAdId: "meta-text-1",
+          source: "meta_library_browser",
+          landingPageUrl: null,
+          domainMatch: undefined,
+          firstSeenAt: isoAgo(30 * DAY_MS),
+          active: true,
+          variantCount: 1,
+        },
+      ],
+    };
+
+    expect(
+      indexableBrandPageEntriesFromRows([cacheRow({ payload: unverifiedOnlyPayload })], now).map(
+        (e) => e.path,
+      ),
+    ).toEqual([]);
+  });
+
+  it("excludes a row whose verified-linked ad is too recent to clear the 14-day floor", () => {
+    // A verified link exists, but the only first-seen is 2 days ago — the
+    // score cannot render (window < MIN_AGGRESSION_WINDOW_DAYS), so the page
+    // is thin and must stay out of the sitemap.
+    const tooRecentPayload = {
+      ...basePayload,
+      ads: [{ ...verifiedAd, firstSeenAt: isoAgo(2 * DAY_MS) }],
+    };
+
+    expect(
+      indexableBrandPageEntriesFromRows([cacheRow({ payload: tooRecentPayload })], now).map(
+        (e) => e.path,
+      ),
+    ).toEqual([]);
+  });
+
+  it("excludes a row whose verified-linked ad carries no first-seen date", () => {
+    const noFirstSeenPayload = {
+      ...basePayload,
+      ads: [{ ...verifiedAd, firstSeenAt: null }],
+    };
+
+    expect(
+      indexableBrandPageEntriesFromRows([cacheRow({ payload: noFirstSeenPayload })], now).map(
+        (e) => e.path,
+      ),
+    ).toEqual([]);
+  });
+
+  it("lists a row when at least one verified-linked ad clears the floor even if other ads do not", () => {
+    const mixedPayload = {
+      ...basePayload,
+      ads: [
+        // An unverified text-mention match — renders on the wall, never feeds
+        // the score.
+        {
+          metaAdId: "meta-text-1",
+          source: "meta_library_browser",
+          landingPageUrl: null,
+          domainMatch: undefined,
+          firstSeenAt: isoAgo(30 * DAY_MS),
+          active: true,
+          variantCount: 1,
+        },
+        // The verified-linked ad with enough history — the score renders.
+        verifiedAd,
+      ],
+    };
+
+    expect(
+      indexableBrandPageEntriesFromRows([cacheRow({ payload: mixedPayload })], now).map(
+        (e) => e.path,
+      ),
+    ).toEqual(["/ads/nykaa.com"]);
+  });
+
+  it("brandPageRowRendersAggressionScore mirrors the gate for a verified, scoreable row", () => {
+    expect(brandPageRowRendersAggressionScore(cacheRow(), "nykaa.com", now)).toBe(true);
+  });
+
+  it("brandPageRowRendersAggressionScore is false for a 0-verified-ads row", () => {
+    const unverifiedOnlyPayload = {
+      ...basePayload,
+      ads: [
+        {
+          metaAdId: "meta-text-1",
+          source: "meta_library_browser",
+          landingPageUrl: null,
+          domainMatch: undefined,
+          firstSeenAt: isoAgo(30 * DAY_MS),
+          active: true,
+          variantCount: 1,
+        },
+      ],
+    };
+    expect(
+      brandPageRowRendersAggressionScore(
+        cacheRow({ payload: unverifiedOnlyPayload }),
+        "nykaa.com",
+        now,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("brandPageLookupCacheKeysForSitemap", () => {
+  it("returns exactly the always-tried scopes' keys in the page's key format", () => {
+    const keys = brandPageLookupCacheKeysForSitemap(
+      "meta_library_browser",
+      "nykaa.com",
+      true,
+    );
+
+    expect([...keys].sort()).toEqual(
+      [
+        "search-v2:domain:nykaa.com:exact:meta_library_browser:all:page-1",
+        "search-v2:domain:nykaa.com:exact:meta_library_browser:united-states:page-1",
+      ].sort(),
+    );
+  });
+
+  it("derives legacy-shaped keys outside the v2 posture", () => {
+    const keys = brandPageLookupCacheKeysForSitemap("meta_library_browser", "nykaa.com", false);
+
+    expect(keys.size).toBe(2);
+    for (const key of keys) {
+      expect(key.startsWith("search-v2:")).toBe(false);
+      expect(key.startsWith("meta_library_browser:")).toBe(true);
+      expect(key.endsWith(":page-1")).toBe(true);
+    }
+  });
+});
+
+describe("deriveBrandPageLookupForCountry", () => {
+  it("reproduces the exact search-v2 domain key the page reads under v2 posture", () => {
+    const derived = deriveBrandPageLookupForCountry(
+      "meta_library_browser",
+      "nykaa.com",
+      "United States",
+      true,
+    );
+    const intent = parseSearchInputFromWebsiteField("nykaa.com");
+
+    expect(derived.usedDomainKey).toBe(true);
+    expect(derived.cacheKey).toBe(
+      buildSearchV2CacheKey({
+        provider: "meta_library_browser",
+        intent,
+        scope: "exact",
+        country: "United States",
+        cursor: null,
+      }),
+    );
+  });
+
+  it("falls back to the legacy fingerprint triple outside v2 posture (shadow serves legacy)", () => {
+    const derived = deriveBrandPageLookupForCountry(
+      "meta_library_browser",
+      "nykaa.com",
+      "all",
+      false,
+    );
+
+    // Mirror the original deriveCacheLookup chain through independent
+    // primitives so composition order cannot drift from the page's lookups.
+    const website = normalizeCompetitorWebsiteInput("nykaa.com");
+    const parsedInput = parseSearchParams(new URLSearchParams(), { country: "all" });
+    const parsed = applyWebsiteSearchFallback(parsedInput, website);
+    const legacyQuery = normalizeSavedQuery(parsed.mode, parsed.filters);
+
+    expect(derived.usedDomainKey).toBe(false);
+    expect(derived.fingerprint).toBe(fingerprintSavedQuery(legacyQuery));
+    expect(derived.country).toBe(legacyQuery.filters.country || ALL_COUNTRIES_VALUE);
+    expect(derived.cacheKey).toBe(
+      buildDiscoveryCacheKey({
+        provider: "meta_library_browser",
+        fingerprint: fingerprintSavedQuery(legacyQuery),
+        country: legacyQuery.filters.country || ALL_COUNTRIES_VALUE,
+        cursor: null,
+      }),
+    );
+  });
+});
+
 describe("buildSitemapXml", () => {
   it("keeps the static funnel paths first, then appends dynamic brand pages", () => {
     const xml = buildSitemapXml([
@@ -294,7 +587,7 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
     expect(queryAll).not.toHaveBeenCalled();
   });
 
-  it("queries only indexable public_search rows and maps them to /ads entries", async () => {
+  it("queries only the resolved provider's indexable public_search rows and maps them to /ads entries", async () => {
     queryAll.mockResolvedValue([
       cacheRow(),
       cacheRow({
@@ -304,12 +597,20 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
       cacheRow({ route_context: "watchlist_scan" }),
     ]);
 
-    const entries = await runLoader({ DB: {}, BROWSER: {} });
+    // Production posture (wrangler.jsonc): SEARCH_ROLLOUT_MODE="v2".
+    const entries = await runLoader({ DB: {}, BROWSER: {}, SEARCH_ROLLOUT_MODE: "v2" });
 
     expect(queryAll).toHaveBeenCalledTimes(1);
-    const [, sql, cutoffIso, limit] = queryAll.mock.calls[0] as [unknown, string, string, number];
+    const [, sql, providerParam, cutoffIso, limit] = queryAll.mock.calls[0] as [
+      unknown,
+      string,
+      string,
+      string,
+      number,
+    ];
     expect(sql).toContain("route_context = 'public_search'");
-    expect(sql).toContain("provider != 'demo'");
+    expect(sql).toContain("provider = ?");
+    expect(providerParam).toBe("meta_library_browser");
     expect(sql).toContain("fetched_at >= ?");
     expect(new Date(cutoffIso).getTime()).toBeCloseTo(
       Date.now() - BRAND_PAGE_FRESH_FOR_INDEXING_MS,
@@ -323,6 +624,25 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
       expect(entry.changefreq).toBe("weekly");
       expect(entry.priority).toBe("0.6");
     }
+  });
+
+  it("mirrors the SEARCH_ROLLOUT_MODE posture when matching row keys", async () => {
+    // v2 posture: the page derives search-v2 domain keys, so the v2-keyed row
+    // is reachable and listable.
+    queryAll.mockResolvedValue([cacheRow()]);
+    await expect(
+      runLoader({ DB: {}, BROWSER: {}, SEARCH_ROLLOUT_MODE: "v2" }),
+    ).resolves.toEqual([
+      expect.objectContaining({ path: "/ads/nykaa.com" }),
+    ]);
+
+    // Legacy/shadow posture: the same v2-keyed row would render the noindex
+    // shell (the page derives legacy fingerprint keys), so it must not be
+    // listed.
+    queryAll.mockResolvedValue([cacheRow()]);
+    await expect(
+      runLoader({ DB: {}, BROWSER: {}, SEARCH_ROLLOUT_MODE: "legacy" }),
+    ).resolves.toEqual([]);
   });
 
   it("degrades to the static-only set when the discovery cache table is missing", async () => {

@@ -71,11 +71,11 @@
     {
       "claimId": "AUDIT-PRICING-DODO-LOCALIZED",
       "registryClaim": "BILLING-PORTAL-PLAN-CHANGE",
-      "text": "Display prices load from Dodo Payments in your local currency at preview time. We never hardcode checkout amounts in the app.",
+      "text": "Published plan prices are shown on this page. Checkout shows the exact amount in your local currency, loaded from Dodo Payments at preview time.",
       "surface": "pricing billing FAQ, pricing section",
-      "liveQueryOrTest": "tests/pricing.test.ts → 'keeps visible fallback pricing neutral until live prices return' (monthlyLabel='Localized at checkout'), 'does not branch copy by India versus rest of world anymore'; tests/dodo-pricing.server.test.ts, tests/pricing.route.test.ts",
+      "liveQueryOrTest": "tests/pricing.test.ts → 'publishes the real per-plan USD prices on the plan labels', 'publishes real per-pack USD prices on the bundle labels'; tests/dodo-pricing.server.test.ts, tests/pricing.route.test.ts, tests/marketing-pricing-latency.test.ts",
       "currentResult": "pass",
-      "resultDetail": "All plan monthlyLabel/yearlyLabel are 'Localized at checkout' / 'Billed annually — 4 months free'. No hardcoded monetary amounts. Region pricing dropped in migration 0016.",
+      "resultDetail": "Plan monthlyLabel/yearlyLabel publish USD list prices ($11/$59/$199 monthly, 8x annual; proof packs $59/$179/$599) via PUBLISHED_PLAN_PRICES_USD/PUBLISHED_BUNDLE_PRICES_USD. Checkout amounts are never hardcoded — the live Dodo preview overrides the anchors in the buyer's currency. Region pricing dropped in migration 0016.",
       "betOrCopyChange": "bet 4 (the plan-gated feature catalog)",
       "nishReserved": false
     },
@@ -215,11 +215,11 @@
       "claimId": "AUDIT-FUNNEL-MEASUREMENT",
       "registryClaim": "CUSTOMER-ROUTE-CATALOG",
       "text": "(implicit) The homepage → search → signup funnel is measured to prove the public copy converts honestly.",
-      "surface": "homepage loader (emitFunnelHomeView), docs/funnel-measurement-spec.md",
-      "liveQueryOrTest": "docs/funnel-measurement-spec.md (specification only, no collection enabled); app/lib/funnel-measurement.server.ts (emitFunnelHomeView stub)",
+      "surface": "homepage loader (emitFunnelHomeView), docs/funnel-measurement-spec.md, docs/ga-metrics.md",
+      "liveQueryOrTest": "wrangler.jsonc → FUNNEL_MEASUREMENT_ENABLED is \"1\" (live in production config); docs/ga-metrics.md → 'Funnel measurement status' says 'Collection is NOT live' and lists an uncleared privacy/legal review (spec §8 gates); docs/funnel-measurement-spec.md (specification); app/lib/funnel-measurement.server.ts (emitFunnelHomeView gated on the env var)",
       "currentResult": "nish_reserved",
-      "resultDetail": "funnel-measurement-spec.md is explicitly 'Specification only. No collection is enabled by this document.' The decision to enable first-party funnel measurement is Nish-reserved (privacy + product direction). The audit flags this without resolving it: the public copy's conversion claims cannot be reconciled against live funnel data until Nish approves collection.",
-      "betOrCopyChange": "nish-reserved — funnel-measurement enablement is Nish's decision; flagged, not resolved",
+      "resultDetail": "CONTRADICTION DOCUMENTED [NISH]: the production config (wrangler.jsonc FUNNEL_MEASUREMENT_ENABLED=1) has the gate ON, while docs/ga-metrics.md states collection is NOT live and that privacy/legal review, owner approval, policy-surface copy, and a post-enable canary are still required before enablement (spec §8). The flag is NOT touched by this audit — turning it on or off is Nish-reserved (privacy + product direction). The audit flags the contradiction without resolving it: the docs and the live config disagree, and only Nish can decide whether the flag should be on (and the §8 gates cleared) or off (and the config corrected).",
+      "betOrCopyChange": "nish-reserved — the FUNNEL_MEASUREMENT_ENABLED=1 vs. docs/ga-metrics.md 'NOT live' contradiction is Nish's decision; flagged, not resolved; the flag is untouched",
       "nishReserved": true
     },
     {
@@ -245,7 +245,7 @@
       "AUDIT-LANDING-PAGE-CHANGE-HISTORY — mark 'Landing-page change history with screenshots' as forward-looking until landing_page_snapshot has ≥1 row from a real scheduled watch (currently empty)."
     ],
     "nishReservedOpen": [
-      "AUDIT-FUNNEL-MEASUREMENT — first-party funnel measurement enablement is Nish's decision (privacy + product direction); the spec exists but no collection is enabled."
+      "AUDIT-FUNNEL-MEASUREMENT — the FUNNEL_MEASUREMENT_ENABLED=1 (wrangler.jsonc) vs. docs/ga-metrics.md 'Collection is NOT live' contradiction is Nish's decision (privacy + product direction); the flag is untouched."
     ]
   }
 }

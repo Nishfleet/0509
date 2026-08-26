@@ -17,7 +17,12 @@
  *   - demo-sourced cache entries (they render the shell anyway — sample data
  *     is never presented as a brand's real ads on a public page),
  *   - cache entries older than 7 days (stale pages still render with an
- *     honest freshness line but must not rank).
+ *     honest freshness line but must not rank),
+ *   - a capture whose Ad Aggression Score cannot render (0 verified-linked
+ *     ads, no first-seen date, or an observed window shorter than the 14-day
+ *     floor) — the score is the page's named differentiator, so a page that
+ *     ships the ad wall without it is indexable thin content. The wall still
+ *     renders for a direct visitor; only indexability is withheld.
  *
  * DESIGN: the "Case File" system (see docs/ADS-PAGE-DIRECTIONS-2026-07-21.md).
  * Every number traces to a real loader field; sections render only when their
@@ -32,7 +37,6 @@
 
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import type { ReactNode } from "react";
 
 import { AdCreative } from "~/components/ads/ad-creative";
 import { BrandAdWall } from "~/components/ads/brand-ad-wall";
@@ -168,7 +172,6 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     ? resolveBrandPageFreshness(snapshot.fetchedAt, now)
     : null;
   const emergencyNoindex = env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0";
-  const noindex = emergencyNoindex || !snapshot || !snapshot.freshForIndexing;
 
   // Attribution analytics (score, teaser, change feed, ownership) derive ONLY
   // from creatives with verified link evidence. Ads the provider returned as
@@ -179,6 +182,20 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   const verifiedLinkedAds = snapshot
     ? snapshotAds.filter((ad) => adHasVerifiedDomainLink(ad, brand.domain))
     : [];
+
+  // The Ad Aggression Score (0–100, four public sub-scores) is the page's
+  // named differentiator (category-research §1.2). It renders ONLY when the
+  // capture has at least one verified-linked ad AND the observed window
+  // clears the 14-day floor — `computeBrandPageAggressionScore` returns null
+  // otherwise (0 verified-linked ads, no first-seen date, or a window shorter
+  // than MIN_AGGRESSION_WINDOW_DAYS). A page that ships the ad wall without
+  // its proprietary score is indexable thin content, so it self-noindexes:
+  // no indexable thin brand page remains in the sitemap. The wall still
+  // renders for a human who navigated directly — this is about indexability,
+  // not hiding the page.
+  const aggression = snapshot ? computeBrandPageAggressionScore(verifiedLinkedAds, now) : null;
+  const noindex =
+    emergencyNoindex || !snapshot || !snapshot.freshForIndexing || aggression === null;
 
   return {
     domain: brand.domain,
@@ -193,7 +210,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     verifiedLinkCount: verifiedLinkedAds.length,
     unverifiedMatchCount: snapshotAds.length - verifiedLinkedAds.length,
     teaser: snapshot ? buildBrandIntelTeaser(verifiedLinkedAds, now) : null,
-    aggression: snapshot ? computeBrandPageAggressionScore(verifiedLinkedAds, now) : null,
+    aggression,
     changeEvents: snapshot ? buildBrandChangeFeed(verifiedLinkedAds, now) : [],
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
@@ -278,7 +295,11 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
   }
   const totalCount = data.ads.length;
   const adWord = totalCount === 1 ? "ad" : "ads";
-  const otherCount = totalCount - data.brandOwnedAdCount;
+  // Only verified-from-other advertisers count as "other advertisers" in the
+  // breakdown — unverified text-matches get their own labelled tail, never
+  // the "from other advertisers" clause. The prefix already names
+  // verifiedLinkCount, so the breakdown must sum to it (X + Y == V).
+  const otherCount = data.verifiedLinkCount - data.brandOwnedAdCount;
   const linkWord = data.verifiedLinkCount === 1 ? "ad" : "ads";
   const unverifiedWord = data.unverifiedMatchCount === 1 ? "ad" : "ads";
   const check = `a public check of ${adLibrarySourcePhrase(data.adLibraryCountry)} ${data.checkedAgo}`;
@@ -295,7 +316,12 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
   if (data.brandOwnedAdCount === 0) {
     return `See ${data.verifiedLinkCount} Meta ${linkWord} from other advertisers linking to ${data.domain}, from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
   }
-  return `See ${data.verifiedLinkCount} Meta ${linkWord} linking to ${data.domain} — ${data.brandOwnedAdCount} from ${data.brandName} and ${otherCount} from other advertisers — from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
+  // When every verified linking creative is the brand's own (no
+  // verified-from-other), drop the "and Y from other advertisers" clause —
+  // the unverified matches appear only in the tail.
+  const otherClause =
+    otherCount > 0 ? ` and ${otherCount} from other advertisers` : "";
+  return `See ${data.verifiedLinkCount} Meta ${linkWord} linking to ${data.domain} — ${data.brandOwnedAdCount} from ${data.brandName}${otherClause} — from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
@@ -388,8 +414,16 @@ function BrandAdsResults({
   const adWord = totalCount === 1 ? "ad" : "ads";
   const watchLabel = `Watch ${data.domain}`;
   const allBrandOwned = totalCount > 0 && data.brandOwnedAdCount === totalCount;
+  // Headline ownership speaks about the verified-linked capture only.
+  // Unverified wall matches must not flip the H1 into split "X of these Y"
+  // copy when every verified-linked creative is the brand's own.
+  const allVerifiedBrandOwned =
+    data.verifiedLinkCount > 0 && data.brandOwnedAdCount === data.verifiedLinkCount;
   const noneBrandOwned = data.brandOwnedAdCount === 0;
-  const otherCount = totalCount - data.brandOwnedAdCount;
+  // Mirror brandPageDescription: "other advertisers" in the closer split means
+  // verified-from-other only, so the split sums to verifiedLinkCount and
+  // unverified text-matches stay in their own labelled note.
+  const otherCount = data.verifiedLinkCount - data.brandOwnedAdCount;
 
   return (
     <>
@@ -409,7 +443,7 @@ function BrandAdsResults({
                 ) : null}
               </p>
               <h1 className="f9-ads-headline" id="brand-ads-title">
-                {brandHeadline(data, totalCount, adWord, allBrandOwned, noneBrandOwned)}
+                {brandHeadline(data, totalCount, adWord, allVerifiedBrandOwned, noneBrandOwned)}
               </h1>
               <p className="f9-ads-subline">
                 {heroDetailSentence(data, teaser, data.freshForLiveClaim, allBrandOwned, noneBrandOwned, data.domain)}
@@ -523,10 +557,15 @@ function BrandAdsResults({
 
 /**
  * The H1 verdict. "{Brand} is running N Meta ads" is an ownership claim —
- * it only applies when every cached creative is the brand's own. "Pointing at
- * {domain}" is a link claim — it only applies when the capture carries
- * verified link evidence. Creatives that merely match the search (text-mention
- * / provider candidates) are "matching {domain}", never "pointing at" it.
+ * it only applies when every verified-linked creative is the brand's own.
+ * Unverified wall matches are named in the subline, never folded into split
+ * "X of these Y" copy. "Pointing at {domain}" is a link claim — it only
+ * applies when the capture carries verified link evidence. Creatives that
+ * merely match the search (text-mention / provider candidates) are
+ * "matching {domain}", never "pointing at" it.
+ *
+ * This must return a plain string: the page <h1> is the document topic
+ * heading and must not contain nested markup.
  */
 function brandHeadline(
   data: BrandPageLoaderData,
@@ -534,37 +573,36 @@ function brandHeadline(
   adWord: string,
   allBrandOwned: boolean,
   noneBrandOwned: boolean,
-): ReactNode {
-  const hl = (node: ReactNode) => <span className="f9-ads-hl">{node}</span>;
-
+): string {
   // No verified link evidence: the wall is real creatives matching the search.
   // The page must not claim they point at, link to, or run for the domain.
   if (data.verifiedLinkCount === 0) {
     const matchPhrase = `${totalCount} Meta ${adWord}`;
     return data.freshForLiveClaim
-      ? <>{hl(matchPhrase)}{` ${totalCount === 1 ? "is" : "are"} matching ${data.domain} right now.`}</>
-      : <>{`The last check found `}{hl(matchPhrase)}{` matching ${data.domain}.`}</>;
+      ? `${matchPhrase} ${totalCount === 1 ? "is" : "are"} matching ${data.domain} right now.`
+      : `The last check found ${matchPhrase} matching ${data.domain}.`;
   }
 
   // Verified link evidence exists — speak about the verified capture only;
   // unverified matches get their own honest line in the subline.
-  const verifiedPhrase = `${data.verifiedLinkCount} Meta ${adWord}`;
+  const verifiedAdWord = data.verifiedLinkCount === 1 ? "ad" : "ads";
+  const verifiedPhrase = `${data.verifiedLinkCount} Meta ${verifiedAdWord}`;
   if (allBrandOwned) {
     return data.freshForLiveClaim
-      ? <>{`${data.brandName} is running `}{hl(verifiedPhrase)}{" right now."}</>
-      : <>{`${data.brandName} was running `}{hl(verifiedPhrase)}{" at the last check."}</>;
+      ? `${data.brandName} is running ${verifiedPhrase} right now.`
+      : `${data.brandName} was running ${verifiedPhrase} at the last check.`;
   }
 
   if (noneBrandOwned) {
     return data.freshForLiveClaim
-      ? <>{hl(verifiedPhrase)}{` ${data.verifiedLinkCount === 1 ? "is" : "are"} pointing at ${data.domain} right now.`}</>
-      : <>{`The last check found `}{hl(verifiedPhrase)}{` pointing at ${data.domain}.`}</>;
+      ? `${verifiedPhrase} ${data.verifiedLinkCount === 1 ? "is" : "are"} pointing at ${data.domain} right now.`
+      : `The last check found ${verifiedPhrase} pointing at ${data.domain}.`;
   }
 
   const splitPhrase = `${data.brandOwnedAdCount} of these ${verifiedPhrase}`;
   return data.freshForLiveClaim
-    ? <>{`${data.brandName} is running `}{hl(splitPhrase)}{" right now."}</>
-    : <>{`${data.brandName} was running `}{hl(splitPhrase)}{" at the last check."}</>;
+    ? `${data.brandName} is running ${splitPhrase} right now.`
+    : `${data.brandName} was running ${splitPhrase} at the last check.`;
 }
 
 /**
@@ -697,7 +735,10 @@ function closerHonestyLine(
   if (noneBrandOwned) {
     return `Ad creatives are real ads from ${source}, run by other advertisers linking to ${data.domain}${cached}.${tail}${unverifiedNote}`;
   }
-  return `Ad creatives are real ads from ${source} linking to ${data.domain}${cached} — ${data.brandOwnedAdCount} run by ${data.brandName} and ${otherCount} by other advertisers.${tail}${unverifiedNote}`;
+  // Drop the "and Y by other advertisers" clause when there are no
+  // verified-from-other creatives — unverified matches live in unverifiedNote.
+  const otherClause = otherCount > 0 ? ` and ${otherCount} by other advertisers` : "";
+  return `Ad creatives are real ads from ${source} linking to ${data.domain}${cached} — ${data.brandOwnedAdCount} run by ${data.brandName}${otherClause}.${tail}${unverifiedNote}`;
 }
 
 /**
@@ -746,8 +787,7 @@ function BrandAdsShell({
           {`Not watching ${data.domain} yet`}
         </p>
         <h1 className="f9-ads-headline f9-ads-shell-head" id="brand-ads-title">
-          {`We haven't watched ${data.domain} yet — `}
-          <span className="f9-ads-hl">here's what you'd wake up to.</span>
+          {`We haven't watched ${data.domain} yet — here's what you'd wake up to.`}
         </h1>
         <p className="f9-ads-subline">
           Run a free live search and we'll pull their Meta ads right now. Then start watching, and

@@ -801,7 +801,7 @@ describe("captureLandingPageSnapshot", () => {
               </head>
               <body>
                 <button>Shop now</button>
-                <p>Starting at ₹499 only today</p>
+                <p>Starting at ₹499 only today. Our best-selling vitamin C serum is on launch sale with free shipping on all orders above the free-shipping threshold.</p>
               </body>
             </html>
           `,
@@ -848,7 +848,7 @@ describe("captureLandingPageSnapshot", () => {
     mockFetchWithDns(
       vi.fn(async () =>
         new Response(
-          "<html><head><title>Readable offer</title></head><body><button>Buy now</button></body></html>",
+          "<html><head><title>Readable offer</title></head><body><button>Buy now</button><p>Our best-selling vitamin C serum is on launch sale with free shipping on all orders above the free-shipping threshold.</p></body></html>",
           { status: 200 },
         ),
       ) as never,
@@ -952,6 +952,114 @@ describe("captureLandingPageSnapshot", () => {
     expect(onFailure).toHaveBeenCalledWith({
       reasonCode: "landing_blocked",
       metadata: { fetchStatus: 403 },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #949: CTA detector bail-out fix — v5 button-text fallback.
+//
+// Before v5, a page whose CTA verb was not in the priority list (e.g.
+// "Build my report", "Send my brief") returned ctaText: null. The CTA diff
+// was permanently blind to that page — a real CTA change could never fire.
+// v5 adds a button-text fallback that picks the first non-chrome button.
+// ---------------------------------------------------------------------------
+
+describe("CTA button-text fallback (v5, issue #949)", () => {
+  it("returns the button text when no priority verb matches", () => {
+    const html = `<button>Build my report</button>`;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Build my report",
+    });
+  });
+
+  it("still prefers a priority verb over a non-priority button", () => {
+    const html = `
+      <button>Build my report</button>
+      <button>Buy now</button>
+    `;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+    });
+  });
+
+  it("skips chrome buttons (menu, close, search) in the fallback", () => {
+    const html = `
+      <button>Menu</button>
+      <button>Close</button>
+      <button>Search</button>
+    `;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: null,
+    });
+  });
+
+  it("picks the first non-chrome button when chrome buttons precede it", () => {
+    const html = `
+      <button>Menu</button>
+      <button>Send my brief</button>
+    `;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Send my brief",
+    });
+  });
+
+  it("detects 'Sign up free' via the v5 priority pattern", () => {
+    const html = `<button>Sign up free</button>`;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Sign up free",
+    });
+  });
+
+  it("detects 'Contact sales' via the v5 priority pattern", () => {
+    const html = `<button>Contact sales</button>`;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Contact sales",
+    });
+  });
+
+  it("detects 'Start free trial' via the v5 priority pattern", () => {
+    const html = `<button>Start free trial</button>`;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Start free trial",
+    });
+  });
+
+  it("detects 'Get a quote' via the v5 priority pattern", () => {
+    const html = `<button>Get a quote</button>`;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get a quote",
+    });
+  });
+
+  it("detects 'Subscribe' via the v5 priority pattern", () => {
+    const html = `<button>Subscribe</button>`;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Subscribe",
+    });
+  });
+
+  it("detects 'View pricing' via the v5 priority pattern", () => {
+    const html = `<button>View pricing</button>`;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "View pricing",
+    });
+  });
+
+  it("returns null when only chrome buttons are present and no priority verb matches", () => {
+    const html = `
+      <button>OK</button>
+      <button>Cancel</button>
+    `;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: null,
+    });
+  });
+
+  it("does not use action links for the fallback (links are navigation, not CTAs)", () => {
+    const html = `<a href="/about">About us</a>`;
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: null,
     });
   });
 });

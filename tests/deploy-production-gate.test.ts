@@ -1512,9 +1512,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       verifySecretsIndex,
       workflow.indexOf("- uses: actions/setup-node@", verifySecretsIndex),
     );
-    const materializeStep = workflow.slice(materializeIndex, synchronizeCanaryIndex);
-    const synchronizeCanaryStep = workflow.slice(synchronizeCanaryIndex, deployIndex);
-    const deployStep = workflow.slice(deployIndex, verifyEvidenceIndex);
+    const materializeStep = workflow.slice(materializeIndex, deployIndex);
+    const synchronizeCanaryStep = workflow.slice(synchronizeCanaryIndex, verifyEvidenceIndex);
+    const deployStep = workflow.slice(deployIndex, synchronizeCanaryIndex);
     const parsedWorkflow = parse(workflow) as any;
     const deploySteps = parsedWorkflow.jobs.deploy.steps as Array<{
       name?: string;
@@ -1526,9 +1526,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(verifySecretsIndex).toBeGreaterThan(checkoutIndex);
     expect(testIndex).toBeGreaterThan(verifySecretsIndex);
     expect(materializeIndex).toBeGreaterThan(testIndex);
-    expect(synchronizeCanaryIndex).toBeGreaterThan(materializeIndex);
-    expect(deployIndex).toBeGreaterThan(synchronizeCanaryIndex);
-    expect(verifyEvidenceIndex).toBeGreaterThan(deployIndex);
+    expect(deployIndex).toBeGreaterThan(materializeIndex);
+    expect(synchronizeCanaryIndex).toBeGreaterThan(deployIndex);
+    expect(verifyEvidenceIndex).toBeGreaterThan(synchronizeCanaryIndex);
     expect(workflow).toContain("timeout-minutes: 270");
     expect(verifySecretsStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",

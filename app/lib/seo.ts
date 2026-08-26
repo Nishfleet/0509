@@ -134,6 +134,9 @@ export function faqPageJsonLd(entries: ReadonlyArray<FaqJsonLdEntry>) {
  *   the page has no such stamp — never invented.
  * - `aboutName`: the subject of the page when it is about a specific brand
  *   (e.g. the /ads/:domain brand pages). Must match a name the page shows.
+ * - `comparedProductName`: the competitor product a `/compare/*` page is
+ *   about. Emitted as `SoftwareApplication` `mainEntity` with only the name
+ *   the page already shows — never ratings, prices, or review counts.
  */
 export function webPageJsonLd(input: {
   name: string;
@@ -141,6 +144,7 @@ export function webPageJsonLd(input: {
   pathname: string;
   dateModified?: string;
   aboutName?: string;
+  comparedProductName?: string;
 }) {
   return {
     "@context": "https://schema.org",
@@ -151,6 +155,14 @@ export function webPageJsonLd(input: {
     ...(input.dateModified ? { dateModified: input.dateModified } : {}),
     ...(input.aboutName
       ? { about: { "@type": "Organization", name: input.aboutName } }
+      : {}),
+    ...(input.comparedProductName
+      ? {
+          mainEntity: {
+            "@type": "SoftwareApplication",
+            name: input.comparedProductName,
+          },
+        }
       : {}),
     isPartOf: { "@type": "WebSite", name: SITE_NAME, url: SITE_ORIGIN },
     publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
@@ -175,6 +187,10 @@ export const SITEMAP_PATHS = [
   "/search",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
+  "/compare/visualping",
+  "/compare/spyland",
+  "/compare/pulzifi",
+  "/compare/foreplay",
   "/competitor-monitoring",
   "/pricing",
   "/help",
@@ -228,6 +244,10 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/pricing": { changefreq: "weekly", priority: "0.8" },
   "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/compare/meta-ad-library": { changefreq: "weekly", priority: "0.7" },
+  "/compare/visualping": { changefreq: "weekly", priority: "0.7" },
+  "/compare/spyland": { changefreq: "weekly", priority: "0.7" },
+  "/compare/pulzifi": { changefreq: "weekly", priority: "0.7" },
+  "/compare/foreplay": { changefreq: "weekly", priority: "0.7" },
   "/changelog": { changefreq: "weekly", priority: "0.6" },
   "/help": { changefreq: "monthly", priority: "0.5" },
   "/docs": { changefreq: "monthly", priority: "0.5" },

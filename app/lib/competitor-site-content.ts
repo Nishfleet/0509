@@ -1,5 +1,6 @@
 import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { sha256Base64Url } from "~/lib/presence-hash";
+import { stripAllTags, stripScriptAndStyle } from "~/lib/sanitize-text.server";
 
 /**
  * Pure, deterministic core for competitor website content: URL canonicalization,
@@ -387,8 +388,6 @@ export function classifyCompetitorSitePage(
 
 /** Markup whose entire content is noise and must be dropped before text extraction. */
 const UNWANTED_MARKUP_PATTERNS: RegExp[] = [
-	/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,
-	/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi,
 	/<noscript\b[^>]*>[\s\S]*?<\/noscript\s*>/gi,
 	/<svg\b[^>]*>[\s\S]*?<\/svg\s*>/gi,
 	/<template\b[^>]*>[\s\S]*?<\/template\s*>/gi,
@@ -396,7 +395,7 @@ const UNWANTED_MARKUP_PATTERNS: RegExp[] = [
 ];
 
 function stripUnwantedMarkup(html: string): string {
-	let cleaned = html.replace(/<!--[\s\S]*?-->/g, "");
+	let cleaned = stripScriptAndStyle(html);
 	for (const pattern of UNWANTED_MARKUP_PATTERNS) {
 		cleaned = cleaned.replace(pattern, "");
 	}
@@ -448,13 +447,13 @@ const BLOCK_TAG_ENDINGS = [
 ];
 
 function extractVisibleText(html: string): string {
-	let text = html;
+	let text = stripScriptAndStyle(html);
 	const tags = BLOCK_TAG_ENDINGS.join("|");
 	// Block boundaries become newlines so inline text never merges across blocks.
 	text = text.replace(new RegExp(`</(?:${tags})>`, "gi"), "\n");
 	text = text.replace(new RegExp(`<(?:${tags})\\s[^>]*?>|<(?:${tags})>`, "gi"), "\n");
 	text = text.replace(/<(?:br|hr)\s*\/?>/gi, "\n");
-	text = text.replace(/<[^>]+>/g, "");
+	text = stripAllTags(text);
 	text = decodeHtmlEntities(text);
 	text = text.replace(/\u00a0/g, " ");
 	text = text.replace(/[\t\r\n\f ]+/g, " ").trim();

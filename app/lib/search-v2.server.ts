@@ -25,6 +25,8 @@ export interface SearchV2Result extends SearchResponse {
   searchScope: SearchScope;
   displayDomain: string | null;
   verifiedCount: number;
+  likelyCount: number;
+  unmatchedCount: number;
   rawCandidateCount: number;
   broaderCandidateCount: number;
   missingVerificationCount: number;
@@ -122,47 +124,47 @@ export async function applySearchV2PostFilter(
 ): Promise<SearchV2Result> {
   void env;
 
-  const includeUnverified = context.scope === "broader";
   const aliases = [...context.identityAliases];
   const rawCandidateCount = result.ads.length;
 
-  const allClassified = classifyDomainMatches(result.ads, context.queryIntent, {
+  // BET 2: the free preview never dead-ends. Every provider candidate is kept
+  // and labelled by tier (verified / likely / unmatched). The exact scope used
+  // to drop non-verified candidates to an empty page; it now keeps them so a
+  // brand with 11–24 unverified candidates renders those rows instead of "No
+  // verified ads found." The precision fix is preserved by the tier labels:
+  // an unmatched candidate is shown AS unmatched, never as verified.
+  const classified = classifyDomainMatches(result.ads, context.queryIntent, {
     aliases,
     identityAliases: context.identityAliases,
     includeUnverified: true,
   });
-  const rejectedKeywordOnlyCount = allClassified.filter(
+  const classifiedIds = new Set(classified.map((entry) => entry.ad.metaAdId));
+  const providerLabel = result.source === "demo" ? "sample source" : "Meta source";
+  const providerCandidates: DomainMatchedAd[] = result.ads
+    .filter((ad) => !classifiedIds.has(ad.metaAdId))
+    .map((ad) => ({
+      ad,
+      match: {
+        level: "unverified_provider_candidate" as const,
+        matchedDomain: null,
+        matchedSignal: "provider_query",
+        confidenceCategory: "unverified" as const,
+        providerSource: ad.source,
+        customerReason: `Returned for “${buildBroaderProviderQuery(context.queryIntent) ?? context.displayDomain}” by the ${providerLabel}; website connection not verified`,
+      },
+    }));
+
+  const ranked = dedupeDomainMatches(rankDomainMatches([...classified, ...providerCandidates]));
+  const verifiedCount = ranked.filter((entry) => entry.match.confidenceCategory === "verified").length;
+  const likelyCount = ranked.filter((entry) => entry.match.confidenceCategory === "likely").length;
+  const unmatchedCount = ranked.filter((entry) => entry.match.confidenceCategory === "unverified").length;
+  const rejectedKeywordOnlyCount = ranked.filter(
     (entry) => entry.match.level === "unverified_text_candidate",
   ).length;
-
-  const scopedMatches = classifyDomainMatches(result.ads, context.queryIntent, {
-    aliases,
-    identityAliases: context.identityAliases,
-    includeUnverified,
-  });
-  const matchedIds = new Set(scopedMatches.map((entry) => entry.ad.metaAdId));
-  const providerLabel = result.source === "demo" ? "sample source" : "Meta source";
-  const providerCandidates: DomainMatchedAd[] = includeUnverified
-    ? result.ads
-        .filter((ad) => !matchedIds.has(ad.metaAdId))
-        .map((ad) => ({
-          ad,
-          match: {
-            level: "unverified_provider_candidate" as const,
-            matchedDomain: null,
-            matchedSignal: "provider_query",
-            confidenceCategory: "unverified" as const,
-            providerSource: ad.source,
-            customerReason: `Returned for “${buildBroaderProviderQuery(context.queryIntent) ?? context.displayDomain}” by the ${providerLabel}; website connection not verified`,
-          },
-        }))
-    : [];
-  const ranked = dedupeDomainMatches(rankDomainMatches([...scopedMatches, ...providerCandidates]));
-  const verifiedCount = ranked.filter((entry) => entry.match.confidenceCategory === "verified").length;
   const broaderCandidateCount = Math.max(0, rawCandidateCount - verifiedCount);
-  const missingVerificationCount = allClassified.length >= rawCandidateCount
+  const missingVerificationCount = classified.length >= rawCandidateCount
     ? 0
-    : rawCandidateCount - allClassified.length;
+    : rawCandidateCount - classified.length;
   const ads = ranked.map((entry) => ({
     ...entry.ad,
     domainMatch: {
@@ -180,6 +182,8 @@ export async function applySearchV2PostFilter(
     searchScope: context.scope,
     displayDomain: context.displayDomain,
     verifiedCount,
+    likelyCount,
+    unmatchedCount,
     rawCandidateCount,
     broaderCandidateCount,
     missingVerificationCount,
