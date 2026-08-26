@@ -168,7 +168,7 @@ const PROOF_CAPTURE_STATUS_LABELS: Record<string, string> = {
   pending: "Proof capture pending",
   succeeded: "Evidence captured",
   failed: "Proof capture failed",
-  skipped_due_to_budget: "Skipped — evidence budget reached",
+  skipped_due_to_budget: "Skipped — plan allowance reached",
   skipped_due_to_rate_limit: "Skipped — provider rate limited",
   skipped_due_to_dedupe: "Skipped — duplicate change",
 };

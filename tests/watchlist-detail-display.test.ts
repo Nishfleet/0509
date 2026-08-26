@@ -26,6 +26,9 @@ const emptyProof: WatchlistProofSummary = {
   successfulAttempts: 0,
   failedAttempts: 0,
   skippedAttempts: 0,
+  skippedDueToBudget: 0,
+  skippedDueToRateLimit: 0,
+  skippedDueToDedupe: 0,
   lastAttemptAt: null,
   lastSuccessfulProofAt: null,
 };
@@ -197,6 +200,31 @@ describe("fact rail rows (brief §6.6)", () => {
         skippedAttempts: 1,
       }),
     ).toBe("2 good · 1 failed · 1 skipped");
+  });
+
+  it("calls out budget skips separately so a paid-tier customer sees the reason (Q3 #958)", () => {
+    expect(
+      formatEvidenceAttempts({
+        ...emptyProof,
+        totalAttempts: 75,
+        successfulAttempts: 3,
+        failedAttempts: 2,
+        skippedAttempts: 70,
+        skippedDueToBudget: 70,
+      }),
+    ).toBe("3 good · 2 failed · 70 skipped (plan allowance)");
+    // A mix: budget skips are named, the rest stay generic.
+    expect(
+      formatEvidenceAttempts({
+        ...emptyProof,
+        totalAttempts: 10,
+        successfulAttempts: 3,
+        failedAttempts: 1,
+        skippedAttempts: 6,
+        skippedDueToBudget: 4,
+        skippedDueToRateLimit: 2,
+      }),
+    ).toBe("3 good · 1 failed · 4 skipped (plan allowance) · 2 skipped");
   });
 });
 

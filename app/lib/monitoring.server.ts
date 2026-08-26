@@ -84,6 +84,7 @@ import { resolveScheduledScanCacheMaxAgeMs } from "~/lib/discovery-cache.server"
 import {
   getPlanEntitlements,
   getScheduledMonitoringPolicy,
+  isPaidPlanFamily,
   parsePlanFamily,
   shouldSchedulePlanInRegularScan,
   shouldScheduleWatchlistInRegularScan,
@@ -3559,6 +3560,7 @@ async function evaluateSelectiveProofCandidates(
       burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
       proofRequestDuplicate,
       recentFailureCountForTarget,
+      applyPerWatchlistBudgets: honorV1PerWatchlistBudgets(userPlan),
     });
 
     if (!proofDecision.shouldCapture) {
@@ -3977,10 +3979,6 @@ async function evaluateDirectWebsiteProofCandidate(
     return emptyProofEvaluation(null);
   }
 
-  if (input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun) {
-    return emptyProofEvaluation(websiteUrl);
-  }
-
   const now = new Date().toISOString();
   const todayStart = startOfUtcDayIso();
   const capacity = await resolveWorkspaceEvidenceCapacity(
@@ -3988,6 +3986,14 @@ async function evaluateDirectWebsiteProofCandidate(
     input.watchlist.userId,
   );
   const userPlan = capacity.userPlan;
+  const honorPerWatchlistBudgets = honorV1PerWatchlistBudgets(userPlan);
+
+  if (
+    honorPerWatchlistBudgets &&
+    input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun
+  ) {
+    return emptyProofEvaluation(websiteUrl);
+  }
   const purchasedProofCredits = capacity.purchasedProofCredits;
   const workspaceMonthlyCap = capacity.workspaceMonthlyCap;
   const workspaceDailyCap = capacity.workspaceDailyCap;
@@ -4006,7 +4012,8 @@ async function evaluateDirectWebsiteProofCandidate(
   ]);
 
   if (
-    watchlistDailyAttempts >= V1_PROOF_BUDGETS.perWatchlistDay ||
+    (honorPerWatchlistBudgets &&
+      watchlistDailyAttempts >= V1_PROOF_BUDGETS.perWatchlistDay) ||
     workspaceDailyAttempts >= workspaceDailyCap ||
     workspaceMonthlyAttempts >= workspaceMonthlyCap
   ) {
@@ -4101,7 +4108,8 @@ async function evaluateDirectWebsiteProofCandidate(
   }
 
   if (
-    input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun ||
+    (honorPerWatchlistBudgets &&
+      input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun) ||
     recentFailureCountForTarget >= 2
   ) {
     await assertOrchestratedWatchlistRunLease(env, input.runId, {
@@ -4820,6 +4828,10 @@ const DAILY_PROOF_CAP_BY_PLAN: Record<string, number> = {
   starter: 40,
   agency: 120,
 };
+
+function honorV1PerWatchlistBudgets(plan: string) {
+  return !isPaidPlanFamily(parsePlanFamily(plan));
+}
 
 export function dailyProofCapForPlan(plan: string, purchasedCredits: number) {
   const base =
