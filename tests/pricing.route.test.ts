@@ -6,6 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pricingPlans, usageBundles } from "~/lib/pricing";
 
+const commercialLaunch = {
+  scoutSaleOpen: true,
+  starterSaleOpen: true,
+  agencySaleOpen: false,
+};
+
 describe("pricing route", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -16,12 +22,6 @@ describe("pricing route", () => {
     vi.restoreAllMocks();
     vi.resetModules();
   });
-
-  const commercialLaunch = {
-    scoutSaleOpen: true,
-    starterSaleOpen: true,
-    agencySaleOpen: false,
-  };
 
   const availablePreview = {
     available: true,
@@ -129,6 +129,11 @@ describe("pricing section render smoke", () => {
     usageBundles: usageBundles(),
   };
 
+  const routeData = {
+    pricingPreview: { available: false },
+    commercialLaunch,
+  };
+
   beforeEach(() => {
     vi.resetModules();
     vi.doMock("react-router", async () => {
@@ -137,6 +142,7 @@ describe("pricing section render smoke", () => {
       return {
         ...actual,
         useRouteLoaderData: () => rootData,
+        useLoaderData: () => routeData,
         Link: ({ children, to, ...props }: MockLinkProps) =>
           React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       };
@@ -144,6 +150,7 @@ describe("pricing section render smoke", () => {
   });
 
   afterEach(() => {
+    vi.doUnmock("react-router");
     vi.restoreAllMocks();
     vi.resetModules();
   });
@@ -173,5 +180,19 @@ describe("pricing section render smoke", () => {
     expect(markup).toContain("$179 USD");
     expect(markup).toContain("$599 USD");
     expect(markup).toContain("Common billing questions");
+    // Homepage reuses this section and already has its own hero h1.
+    expect(markup).toContain("<h2>Choose the monitoring rhythm your team needs.</h2>");
+    expect(markup).not.toMatch(/<h1\b/);
+  });
+
+  it("renders a single plain-text h1 in the route SSR output", async () => {
+    const { default: PricingRoute } = await import("~/routes/pricing");
+    const markup = renderToStaticMarkup(createElement(PricingRoute));
+
+    const h1Matches = markup.match(/<h1\b[^>]*>[^<]+<\/h1>/g) ?? [];
+    expect(h1Matches).toHaveLength(1);
+    expect(h1Matches[0]).toBe(
+      "<h1>Choose the monitoring rhythm your team needs.</h1>",
+    );
   });
 });
