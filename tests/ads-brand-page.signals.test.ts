@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  adHasVerifiedDomainLink,
   adIsBrandOwned,
   brandPageAdLibraryCountryLabel,
   buildBrandChangeFeed,
@@ -241,5 +242,39 @@ describe("resolveBrandPageFreshness", () => {
       const pair = resolveBrandPageFreshness(fetchedAt, now);
       expect(pair.freshForLiveClaim).toBe(pair.checkedAgo === "moments ago");
     }
+  });
+});
+
+describe("adHasVerifiedDomainLink — regional brand properties", () => {
+  it("counts an allbirds.co.uk landing as a verified link to allbirds.com even when the cache still labels it unverified", () => {
+    const cached = ad({
+      landingPageUrl: "https://www.allbirds.co.uk/products/womens-dasher",
+      domainMatch: {
+        level: "unverified_provider_candidate",
+        reason: "Returned by the Meta source; website connection not verified",
+        matchedDomain: null,
+      },
+    });
+    expect(adHasVerifiedDomainLink(cached, "allbirds.com")).toBe(true);
+  });
+
+  it("counts a mamaearth.in landing as a verified link to mamaearth.com even when the cache still labels it unverified", () => {
+    const cached = ad({
+      landingPageUrl: "https://mamaearth.in/product/ubtan-face-wash",
+      domainMatch: {
+        level: "unverified_text_candidate",
+        reason: "Mentions “mamaearth” in ad text only",
+        matchedDomain: null,
+      },
+    });
+    expect(adHasVerifiedDomainLink(cached, "mamaearth.com")).toBe(true);
+  });
+
+  it("still refuses a text-mention with no landing page", () => {
+    const cached = ad({
+      landingPageUrl: null,
+      domainMatch: undefined,
+    });
+    expect(adHasVerifiedDomainLink(cached, "allbirds.com")).toBe(false);
   });
 });

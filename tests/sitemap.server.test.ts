@@ -438,6 +438,62 @@ describe("aggression-score gate — never list a thin page (ad wall without its 
       ),
     ).toBe(false);
   });
+
+  it("lists allbirds.com when the capture lands on allbirds.co.uk with enough history", () => {
+    const row = cacheRow({
+      cache_key: "search-v2:domain:allbirds.com:exact:meta_library_browser:all:page-1",
+      payload: {
+        ...basePayload,
+        displayDomain: "allbirds.com",
+        ads: [
+          {
+            metaAdId: "meta-allbirds-uk",
+            source: "meta_library_browser",
+            landingPageUrl: "https://www.allbirds.co.uk/products/womens-dasher",
+            domainMatch: {
+              level: "unverified_provider_candidate",
+              reason: "Returned by the Meta source; website connection not verified",
+              matchedDomain: null,
+            },
+            firstSeenAt: isoAgo(131 * DAY_MS),
+            active: true,
+            variantCount: 1,
+          },
+        ],
+      },
+    });
+    expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([
+      "/ads/allbirds.com",
+    ]);
+  });
+
+  it("lists mamaearth.com when the capture lands on mamaearth.in with enough history", () => {
+    const row = cacheRow({
+      cache_key: "search-v2:domain:mamaearth.com:exact:meta_library_browser:all:page-1",
+      payload: {
+        ...basePayload,
+        displayDomain: "mamaearth.com",
+        ads: [
+          {
+            metaAdId: "meta-mamaearth-in",
+            source: "meta_library_browser",
+            landingPageUrl: "https://mamaearth.in/product/ubtan-face-wash",
+            domainMatch: {
+              level: "unverified_text_candidate",
+              reason: "Mentions “mamaearth” in ad text only",
+              matchedDomain: null,
+            },
+            firstSeenAt: isoAgo(120 * DAY_MS),
+            active: true,
+            variantCount: 1,
+          },
+        ],
+      },
+    });
+    expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([
+      "/ads/mamaearth.com",
+    ]);
+  });
 });
 
 describe("brandPageLookupCacheKeysForSitemap", () => {
