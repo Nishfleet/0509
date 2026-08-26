@@ -25,30 +25,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (!auth.ok) {
     return auth.response;
   }
-  if (!auth.apiKey.actionsWriteEnabled) {
-    return actionResponse(
-      {
-        ok: false,
-        error: "actions_write_not_enabled",
-        message: "Create a write-enabled API key before running account actions.",
-      },
-      403,
-    );
-  }
   const workspaceUserId = await resolveWorkspaceDataUserId(env, auth.apiKey.userId);
   const apiLimit = createAuthenticatedApiLimitContext(env, {
     workspaceUserId,
     actorUserId: auth.apiKey.userId,
     apiKeyId: auth.apiKey.id,
   });
-  const apiGate = await requireWorkspacePlanFeature(env, workspaceUserId, "api_access");
-  if (!apiGate.ok) {
-    return apiGate.response;
-  }
-  const actionsGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_account_actions");
-  if (!actionsGate.ok) {
-    return actionsGate.response;
-  }
 
   const payloadResult = await readJsonObject(request);
   if (!payloadResult.ok) return payloadResult.response;
@@ -74,6 +56,33 @@ export async function action({ context, request }: ActionFunctionArgs) {
       },
       404,
     );
+  }
+
+  const { changeHistoryPlanFeature, isChangeHistoryActionName } = await import("~/lib/change-history-access");
+  const isChangeHistory = isChangeHistoryActionName(actionName);
+  if (!isChangeHistory && !auth.apiKey.actionsWriteEnabled) {
+    return actionResponse(
+      {
+        ok: false,
+        error: "actions_write_not_enabled",
+        message: "Create a write-enabled API key before running account actions.",
+      },
+      403,
+    );
+  }
+  const apiGate = await requireWorkspacePlanFeature(
+    env,
+    workspaceUserId,
+    isChangeHistory ? changeHistoryPlanFeature(env, "api") : "api_access",
+  );
+  if (!apiGate.ok) {
+    return apiGate.response;
+  }
+  if (!isChangeHistory) {
+    const actionsGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_account_actions");
+    if (!actionsGate.ok) {
+      return actionsGate.response;
+    }
   }
 
   const limitResponse = await enforceAuthenticatedApiLimit({

@@ -4,9 +4,11 @@ import {
   backfillEvidenceNote,
   buildOfferLedger,
   canonicalUrlBelongsToDomain,
+  diffOfferStates,
   formatOfferDate,
   offerStateAsOf,
   parseAsOfDate,
+  parseSinceInstant,
   type OfferSnapshotInput,
 } from "~/lib/offer-timeline";
 
@@ -150,5 +152,29 @@ describe("offerStateAsOf", () => {
 
   it("returns null when nothing had been captured yet", () => {
     expect(offerStateAsOf(ledger, "2026-07-31")).toBeNull();
+  });
+});
+
+describe("parseSinceInstant", () => {
+  it("treats a calendar date as the start of that UTC day", () => {
+    expect(parseSinceInstant("2026-06-01")).toBe("2026-06-01T00:00:00.000Z");
+  });
+
+  it("keeps a valid ISO timestamp", () => {
+    expect(parseSinceInstant("2026-06-15T10:00:00.000Z")).toBe("2026-06-15T10:00:00.000Z");
+  });
+});
+
+describe("diffOfferStates", () => {
+  it("returns only fields that changed", () => {
+    expect(diffOfferStates(
+      { headline: "A", ctaText: "Shop", priceText: "₹499", formPresent: true },
+      { headline: "B", ctaText: "Shop", priceText: "₹799", formPresent: true },
+    )).toEqual({
+      headline: { before: "A", after: "B" },
+      ctaText: null,
+      priceText: { before: "₹499", after: "₹799" },
+      formPresent: null,
+    });
   });
 });

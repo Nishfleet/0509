@@ -90,6 +90,10 @@ const TOOL_ACTION_NAMES: Readonly<Record<string, CustomerAgentActionName>> = {
   create_support_case: "support_case.create",
   list_support_cases: "support_case.list",
   list_web_mentions: "web_mentions.list",
+  get_change_history: "get_change_history",
+  get_offer_state_at: "get_offer_state_at",
+  diff_offer: "diff_offer",
+  list_suppressed: "list_suppressed",
 };
 const MCP_TOOLS = [
   {
@@ -133,6 +137,38 @@ const MCP_TOOLS = [
     description:
       "Read an account-owned Five to Nine digest with priority, recommendation, source trail, and insight-depth summaries.",
     inputSchema: resourceInputSchema("digestId"),
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "get_change_history",
+    title: "Get Change History",
+    description:
+      "Read dated offer and landing-page changes for a competitor domain, each with an evidence link and capture timestamp.",
+    inputSchema: changeHistoryDomainInputSchema(["since"]),
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "get_offer_state_at",
+    title: "Get Offer State At Date",
+    description:
+      "Read the competitor's stored offer (headline, CTA, price, form) as of a UTC calendar date, with evidence links.",
+    inputSchema: changeHistoryDomainInputSchema(["date"]),
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "diff_offer",
+    title: "Diff Offer Between Dates",
+    description:
+      "Compare stored offer states for a competitor domain between two UTC calendar dates, with evidence links.",
+    inputSchema: changeHistoryDomainInputSchema(["dateA", "dateB"]),
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "list_suppressed",
+    title: "List Suppressed Changes",
+    description:
+      "List suppressed watch events for a competitor domain in this account, with evidence links and capture timestamps.",
+    inputSchema: changeHistoryDomainInputSchema([]),
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
   {
@@ -715,6 +751,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       "Account support case summaries created by this account",
       "Redacted delivery settings and delivery target state owned by this account",
       "Existing source-backed website, blog, and Substack mention observations tied to watchlists",
+      "Dated landing-page offer states, diffs, change history, and suppressed events with evidence links",
     ],
     agentActivation: {
       firstWorkflow: AGENT_FIRST_WORKFLOW,
@@ -752,11 +789,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     actorUserId: auth.apiKey.userId,
     apiKeyId: auth.apiKey.id,
   });
-  const mcpGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_access");
-  if (!mcpGate.ok) {
-    return mcpGate.response;
-  }
-
   const rpcRequest = await readJsonRpcRequest(request);
   if (!rpcRequest.ok) {
     if (rpcRequest.response) return rpcRequest.response;
@@ -771,6 +803,25 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const actionName = message.method === "tools/call"
     ? toolActionNameFromParams(message.params)
     : null;
+  const {
+    changeHistoryPlanFeature,
+    isChangeHistoryActionName,
+    isChangeHistoryReadOpen,
+  } = await import("~/lib/change-history-access");
+  const toolName = message.method === "tools/call" ? mcpToolNameFromParams(message.params) : null;
+  const openChangeHistoryRead = isChangeHistoryReadOpen(env) && (
+    message.method === "initialize"
+    || message.method === "tools/list"
+    || (message.method === "tools/call" && isChangeHistoryActionName(toolName))
+  );
+  const mcpGate = await requireWorkspacePlanFeature(
+    env,
+    workspaceUserId,
+    openChangeHistoryRead ? changeHistoryPlanFeature(env, "mcp") : "mcp_access",
+  );
+  if (!mcpGate.ok) {
+    return mcpGate.response;
+  }
   const limitResponse = await enforceAuthenticatedApiLimit({
     env,
     ...apiLimit,
@@ -993,6 +1044,22 @@ async function callTool(
 
   if (name === "list_web_mentions") {
     return buildAgentActionToolResult(env, apiKey, "web_mentions.list", args, origin, executionContext, apiLimit);
+  }
+
+  if (name === "get_change_history") {
+    return buildAgentActionToolResult(env, apiKey, "get_change_history", args, origin, executionContext, apiLimit);
+  }
+
+  if (name === "get_offer_state_at") {
+    return buildAgentActionToolResult(env, apiKey, "get_offer_state_at", args, origin, executionContext, apiLimit);
+  }
+
+  if (name === "diff_offer") {
+    return buildAgentActionToolResult(env, apiKey, "diff_offer", args, origin, executionContext, apiLimit);
+  }
+
+  if (name === "list_suppressed") {
+    return buildAgentActionToolResult(env, apiKey, "list_suppressed", args, origin, executionContext, apiLimit);
   }
 
   return { ok: false, message: `Unknown tool: ${name}` };
@@ -1389,6 +1456,50 @@ function objectField(value: object, field: string) {
 function stringField(value: object, field: string) {
   const candidate = (value as Record<string, unknown>)[field];
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
+}
+
+function mcpToolNameFromParams(params: unknown) {
+  if (!params || typeof params !== "object") return null;
+  return stringField(params, "name");
+}
+
+function changeHistoryDomainInputSchema(requiredFields: string[]) {
+  const properties: Record<string, unknown> = {
+    domain: {
+      type: "string",
+      description: "Competitor domain such as gymshark.com.",
+    },
+  };
+  if (requiredFields.includes("since")) {
+    properties.since = {
+      type: "string",
+      description: "UTC calendar date (YYYY-MM-DD) or ISO timestamp. History starts at this instant.",
+    };
+  }
+  if (requiredFields.includes("date")) {
+    properties.date = {
+      type: "string",
+      description: "UTC calendar date (YYYY-MM-DD).",
+    };
+  }
+  if (requiredFields.includes("dateA")) {
+    properties.dateA = {
+      type: "string",
+      description: "First UTC calendar date (YYYY-MM-DD).",
+    };
+  }
+  if (requiredFields.includes("dateB")) {
+    properties.dateB = {
+      type: "string",
+      description: "Second UTC calendar date (YYYY-MM-DD).",
+    };
+  }
+  return {
+    type: "object",
+    properties,
+    required: ["domain", ...requiredFields],
+    additionalProperties: false,
+  };
 }
 
 function resourceInputSchema(idName: string, options: { paginated?: boolean } = {}) {
