@@ -17,7 +17,12 @@
  *   - demo-sourced cache entries (they render the shell anyway — sample data
  *     is never presented as a brand's real ads on a public page),
  *   - cache entries older than 7 days (stale pages still render with an
- *     honest freshness line but must not rank).
+ *     honest freshness line but must not rank),
+ *   - a capture whose Ad Aggression Score cannot render (0 verified-linked
+ *     ads, no first-seen date, or an observed window shorter than the 14-day
+ *     floor) — the score is the page's named differentiator, so a page that
+ *     ships the ad wall without it is indexable thin content. The wall still
+ *     renders for a direct visitor; only indexability is withheld.
  *
  * DESIGN: the "Case File" system (see docs/ADS-PAGE-DIRECTIONS-2026-07-21.md).
  * Every number traces to a real loader field; sections render only when their
@@ -167,7 +172,6 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     ? resolveBrandPageFreshness(snapshot.fetchedAt, now)
     : null;
   const emergencyNoindex = env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0";
-  const noindex = emergencyNoindex || !snapshot || !snapshot.freshForIndexing;
 
   // Attribution analytics (score, teaser, change feed, ownership) derive ONLY
   // from creatives with verified link evidence. Ads the provider returned as
@@ -178,6 +182,20 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   const verifiedLinkedAds = snapshot
     ? snapshotAds.filter((ad) => adHasVerifiedDomainLink(ad, brand.domain))
     : [];
+
+  // The Ad Aggression Score (0–100, four public sub-scores) is the page's
+  // named differentiator (category-research §1.2). It renders ONLY when the
+  // capture has at least one verified-linked ad AND the observed window
+  // clears the 14-day floor — `computeBrandPageAggressionScore` returns null
+  // otherwise (0 verified-linked ads, no first-seen date, or a window shorter
+  // than MIN_AGGRESSION_WINDOW_DAYS). A page that ships the ad wall without
+  // its proprietary score is indexable thin content, so it self-noindexes:
+  // no indexable thin brand page remains in the sitemap. The wall still
+  // renders for a human who navigated directly — this is about indexability,
+  // not hiding the page.
+  const aggression = snapshot ? computeBrandPageAggressionScore(verifiedLinkedAds, now) : null;
+  const noindex =
+    emergencyNoindex || !snapshot || !snapshot.freshForIndexing || aggression === null;
 
   return {
     domain: brand.domain,
@@ -192,7 +210,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     verifiedLinkCount: verifiedLinkedAds.length,
     unverifiedMatchCount: snapshotAds.length - verifiedLinkedAds.length,
     teaser: snapshot ? buildBrandIntelTeaser(verifiedLinkedAds, now) : null,
-    aggression: snapshot ? computeBrandPageAggressionScore(verifiedLinkedAds, now) : null,
+    aggression,
     changeEvents: snapshot ? buildBrandChangeFeed(verifiedLinkedAds, now) : [],
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
