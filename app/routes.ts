@@ -64,6 +64,7 @@ export default [
   route("app/onboard", "routes/app.onboard.tsx"),
   route("ops", "routes/ops.tsx"),
   route("ads/:domain", "routes/ads.$domain.tsx"),
+  route("timeline/:domain", "routes/timeline.$domain.tsx"),
   route("compare/magicbrief", "routes/compare.magicbrief.tsx"),
   route("compare/meta-ad-library", "routes/compare.meta-ad-library.tsx"),
   route("compare/visualping", "routes/compare.visualping.tsx"),
