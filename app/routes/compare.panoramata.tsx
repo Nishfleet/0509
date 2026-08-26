@@ -69,7 +69,7 @@ const fiveToNineAdds = [
   },
   {
     theirs: "Diffs on the commercial fields",
-    ours: "We look for offer, price, CTA, and hook changes, then save the screenshot, the page text, and the original source link. Panoramata diffs pages; we try to name the commercial change.",
+    ours: "We look for offer, price, CTA, and hook changes, then save the page text, the original source link, and a screenshot when the capture includes one. Panoramata diffs pages; we try to name the commercial change.",
   },
   {
     theirs: "Honest status labels",
@@ -91,7 +91,7 @@ export const faqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "What does Five to Nine add?",
     answer:
-      "Paid plans check watched competitors every 3–6 hours, diff offer, price, CTA, and hook fields, and save screenshots with the original source link. Status is labeled live, recent, delayed, or sample.",
+      "Paid plans check watched competitors every 3–6 hours, diff offer, price, CTA, and hook fields, and save page text, the original source link, and a screenshot when the capture includes one. Status is labeled live, recent, delayed, or sample.",
   },
 ] as const;
 

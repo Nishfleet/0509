@@ -62,7 +62,7 @@ const pulzifiCosts = [
 const fiveToNineAdds = [
   {
     theirs: "Source-first competitor evidence",
-    ours: "We save the screenshot, the page text, and the source link, so every claim is traceable.",
+    ours: "We save the page text, the source link, and a screenshot when the capture includes one, so every claim is traceable.",
   },
   {
     theirs: "Ad-to-landing-page continuity",

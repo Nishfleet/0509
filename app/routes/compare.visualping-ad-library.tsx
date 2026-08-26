@@ -69,7 +69,7 @@ const fiveToNineAdds = [
   },
   {
     theirs: "Semantic diff on the commercial fields",
-    ours: "We look for offer, price, CTA, and hook changes — not a pixel box turning green. Each confirmed change is saved with the screenshot, the page text, and the original source link.",
+    ours: "We look for offer, price, CTA, and hook changes — not a pixel box turning green. Each confirmed change is saved with the page text, the original source link, and a screenshot when the capture includes one.",
   },
   {
     theirs: "No phantom-change theatre",

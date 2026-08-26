@@ -66,7 +66,7 @@ const fiveToNineAdds = [
   },
   {
     theirs: "Scheduled checks with timestamps",
-    ours: "Paid plans check every 3–6 hours and store before/after screenshots and text.",
+    ours: "Paid plans check every 3–6 hours and store before/after page text, plus a screenshot when the capture includes one.",
   },
   {
     theirs: "Email briefs, not dashboards",
