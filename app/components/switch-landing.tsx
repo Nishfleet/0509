@@ -1,0 +1,187 @@
+import { Form, Link } from "react-router";
+import type { LinksFunction, MetaFunction } from "react-router";
+
+import { MarketingFooter } from "~/components/marketing-footer";
+import { MarketingNav } from "~/components/marketing-nav";
+import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import type { SwitchPage, SwitchSource } from "~/lib/switch-pages";
+
+export function switchPageLinks(page: SwitchPage): LinksFunction {
+  return () => canonicalLinks(page.pathname);
+}
+
+export function switchPageMeta(page: SwitchPage): MetaFunction {
+  return () =>
+    publicSeoMeta({
+      title: page.title,
+      description: page.description,
+      pathname: page.pathname,
+    });
+}
+
+function SourceLink({ source }: { source: SwitchSource }) {
+  return (
+    <a href={source.href} rel="noreferrer" target="_blank">
+      {source.label}
+    </a>
+  );
+}
+
+function SearchPreviewForm() {
+  return (
+    <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
+      <input
+        aria-label="Competitor website"
+        name="website"
+        placeholder="paste-a-competitor-website.com…"
+        type="text"
+        inputMode="url"
+        autoComplete="url"
+        spellCheck={false}
+      />
+      <button type="submit">
+        Try it free, no account <span aria-hidden="true">→</span>
+      </button>
+    </Form>
+  );
+}
+
+function SwitchHero({ page }: { page: SwitchPage }) {
+  return (
+    <section className="ld-hero">
+      <p className="ld-case">
+        <span>{page.kicker}</span>
+      </p>
+      <h1 className="ld-wall ld-wall-compact">{page.headline}</h1>
+      <p className="ld-deck-copy">{page.deck}</p>
+      <SearchPreviewForm />
+    </section>
+  );
+}
+
+function SwitchComplaint({ page }: { page: SwitchPage }) {
+  return (
+    <section className="ld-quiet">
+      <div className="ld-section-head">
+        <span className="ld-kicker">{page.complaint.kicker}</span>
+        <h2>{page.complaint.heading}</h2>
+      </div>
+      <div className="ld-quiet-grid">
+        <article>
+          <h3>Quoted source</h3>
+          <p>
+            {page.complaint.quote} Source: <SourceLink source={page.complaint.source} />
+          </p>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function SwitchBoundary({ page }: { page: SwitchPage }) {
+  return (
+    <>
+      <section className="ld-how">
+        <h2>What transfers.</h2>
+        <div className="ld-how-grid">
+          {page.transfers.map((row, index) => (
+            <article key={row.title}>
+              <span className="ld-step">{String(index + 1).padStart(2, "0")}</span>
+              <h3>{row.title}</h3>
+              <p>{row.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="ld-quiet">
+        <div className="ld-section-head">
+          <span className="ld-kicker">Not imported</span>
+          <h2>What does not transfer.</h2>
+        </div>
+        <div className="ld-quiet-grid">
+          {page.doesNotTransfer.map((item) => (
+            <article key={item.title}>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      {page.extraSection ? (
+        <section className="ld-quiet">
+          <div className="ld-section-head">
+            <span className="ld-kicker">{page.extraSection.kicker}</span>
+            <h2>{page.extraSection.heading}</h2>
+          </div>
+          <div className="ld-quiet-grid">
+            {page.extraSection.items.map((item) => (
+              <article key={item.title}>
+                <h3>{item.title}</h3>
+                <p>{item.detail}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
+function SwitchClose({ page }: { page: SwitchPage }) {
+  const sources = [page.complaint.source, ...page.furtherSources];
+  return (
+    <>
+      <section className="ld-quiet">
+        <div className="ld-section-head">
+          <span className="ld-kicker">Sources</span>
+          <h2>Every claim on this page has a link.</h2>
+        </div>
+        <ul>
+          {sources.map((source) => (
+            <li key={source.href}>
+              <SourceLink source={source} />
+            </li>
+          ))}
+          {page.relatedComparePath ? (
+            <li>
+              Full product comparison: <Link to={page.relatedComparePath}>{page.relatedComparePath}</Link>
+            </li>
+          ) : null}
+        </ul>
+      </section>
+      <section className="ld-final">
+        <h2>
+          Start with the free preview <span aria-hidden="true">→</span>
+        </h2>
+        <p className="ld-pricing-note">
+          Paste a competitor website into the <Link to="/search">search preview</Link>. No account,
+          no demo form. See what is publicly available before you decide anything.
+        </p>
+        <SearchPreviewForm />
+      </section>
+    </>
+  );
+}
+
+export function SwitchLanding({ page }: { page: SwitchPage }) {
+  return (
+    <main className="f9-home">
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: page.title,
+            description: page.description,
+            pathname: page.pathname,
+            comparedProductName: page.productName,
+          }),
+        )}
+      />
+      <MarketingNav />
+      <SwitchHero page={page} />
+      <SwitchComplaint page={page} />
+      <SwitchBoundary page={page} />
+      <SwitchClose page={page} />
+      <MarketingFooter />
+    </main>
+  );
+}

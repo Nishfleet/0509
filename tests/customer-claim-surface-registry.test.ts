@@ -334,7 +334,8 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // live Worker bundle is ready to serve it (see issue #945).
   // 2026-08-26: four restored compare pages joined the sitemap (issue #1090).
   // 2026-08-26: /proof joined the sitemap — public capture-validity rules page (issue #970).
-  sitemapPaths: ["/", "/search", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/competitor-monitoring", "/proof", "/pricing", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  // 2026-08-26: BET 8 switch pages joined the sitemap (issue #1117).
+  sitemapPaths: ["/", "/search", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/switch/magicbrief", "/switch/panoramata", "/switch/visualping", "/competitor-monitoring", "/proof", "/pricing", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",
