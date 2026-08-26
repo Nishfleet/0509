@@ -110,7 +110,7 @@ describe("pricingPlans", () => {
   it("states the customer-facing proof capture accounting contract", () => {
     expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("Scheduled scans are included with your plan");
     expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("never touch your cap");
-    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("confirmed change with screenshots, page text, and the original link");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("confirmed change with page text, the original link, and a screenshot when the capture includes one");
     expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("Included caps are generous and reset monthly");
     expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("purchased proof captures never expire");
     expect(EVIDENCE_USAGE_CUSTOMER_COPY).not.toContain("saved change records");
