@@ -19,6 +19,7 @@ vi.mock("~/lib/public-url.server", () => ({
 
 import {
   clearWebsiteIdentityCacheForTests,
+  extractTagContent,
   resolveWebsiteIdentity,
 } from "~/lib/website-identity.server";
 
@@ -102,5 +103,24 @@ describe("website-identity decode wiring", () => {
 
     expect(identity?.registrableDomain).toBe("mamaearth.com");
     expect(identity?.domainAliases).toContain("mamaearth.in");
+  });
+});
+
+describe("extractTagContent tag allowlist", () => {
+  const titleHtml = "<html><head><title>Acme  Labs</title></head></html>";
+
+  it("extracts allowlisted title tags", () => {
+    expect(extractTagContent(titleHtml, "title")).toBe("Acme Labs");
+  });
+
+  it("rejects tags that contain regex metacharacters instead of interpolating them", () => {
+    expect(extractTagContent(titleHtml, ".*")).toBeNull();
+    expect(extractTagContent(titleHtml, "(")).toBeNull();
+    expect(extractTagContent(titleHtml, "title.*")).toBeNull();
+  });
+
+  it("rejects unknown HTML tags even when they are valid names", () => {
+    const html = "<html><head><h1>Not the title</h1><title>Acme</title></head></html>";
+    expect(extractTagContent(html, "h1")).toBeNull();
   });
 });
