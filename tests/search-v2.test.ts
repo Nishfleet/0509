@@ -124,6 +124,7 @@ describe("search v2 proof policy", () => {
       scope: "exact",
       displayDomain: "nykaa.com",
       identityAliases: [],
+      domainAliases: [],
     });
 
     // Exact scope no longer drops non-verified candidates to an empty page.
@@ -157,6 +158,7 @@ describe("search v2 proof policy", () => {
       scope: "broader",
       displayDomain: "nykaa.com",
       identityAliases: [],
+      domainAliases: [],
     });
 
     expect(result.ads.map((item) => item.metaAdId)).toEqual(["verified", "keyword", "sparse"]);
@@ -168,6 +170,35 @@ describe("search v2 proof policy", () => {
     expect(result.likelyCount).toBe(1);
     expect(result.unmatchedCount).toBe(1);
     expect(result.broaderCandidateCount).toBe(2);
+  });
+
+  it("verifies Mamaearth ads landing on mamaearth.in against mamaearth.com", async () => {
+    const mamaearth = parseSearchInputFromWebsiteField("https://mamaearth.com");
+    const result = await applySearchV2PostFilter(
+      {},
+      {
+        ads: [
+          ad({
+            metaAdId: "mamaearth-in",
+            advertiser: "Mamaearth",
+            landingPageUrl: "https://mamaearth.in/product/ubtan-face-wash",
+          }),
+        ],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "miss",
+      },
+      {
+        queryIntent: mamaearth,
+        scope: "exact",
+        displayDomain: "mamaearth.com",
+        identityAliases: [],
+        domainAliases: ["mamaearth.in"],
+      },
+    );
+
+    expect(result.verifiedCount).toBe(1);
+    expect(result.ads[0]?.domainMatch?.level).toBe("verified_alias");
   });
 });
 
@@ -193,6 +224,7 @@ describe("search v2 okara.ai precision regression (BET 2)", () => {
         scope: "exact",
         displayDomain: "okara.ai",
         identityAliases: [],
+        domainAliases: [],
       },
     );
 
@@ -217,6 +249,7 @@ describe("search v2 okara.ai precision regression (BET 2)", () => {
         scope: "exact",
         displayDomain: "okara.ai",
         identityAliases: [],
+        domainAliases: [],
       },
     );
 
@@ -251,6 +284,7 @@ describe("verified advertiser page-id scoping", () => {
       scope: "exact",
       displayDomain: "nykaa.com",
       identityAliases: [],
+      domainAliases: [],
     });
 
     expect(result.verifiedAdvertiserPageId).toBe("112233445566");

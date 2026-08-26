@@ -18,6 +18,7 @@ export interface SearchV2Context {
   scope: SearchScope;
   displayDomain: string;
   identityAliases: string[];
+  domainAliases: string[];
 }
 
 export interface SearchV2Result extends SearchResponse {
@@ -124,7 +125,7 @@ export async function applySearchV2PostFilter(
 ): Promise<SearchV2Result> {
   void env;
 
-  const aliases = [...context.identityAliases];
+  const aliases = [...context.domainAliases, ...context.identityAliases];
   const rawCandidateCount = result.ads.length;
 
   // BET 2: the free preview never dead-ends. Every provider candidate is kept
@@ -211,6 +212,7 @@ export async function buildSearchV2Context(
     scope,
     displayDomain: queryIntent.registrableDomain,
     identityAliases: identity?.aliases ?? [],
+    domainAliases: identity?.domainAliases ?? [],
   };
 }
 
