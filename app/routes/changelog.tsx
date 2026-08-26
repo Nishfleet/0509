@@ -36,6 +36,24 @@ export default function ChangelogRoute() {
           }),
         )}
       />
+      <PublicDocBlock title="2026-08-26">
+        <ul className="f9-doc-list">
+          <li>Brand pages at /ads/:domain now headline the verified ad count, so leftover unverified matches no longer rewrite a fully brand-owned title into a split count.</li>
+          <li>Restored compare pages reappear in the sitemap and llms.txt index, so search engines and AI answer engines can find them again.</li>
+          <li>Shared search result pages now show the brand name and country, so recipients see which market the snapshot covers before they open it.</li>
+          <li>The /pricing and /ads public pages now carry a single plain-text h1 heading, so screen readers and search engines read one clear page title.</li>
+          <li>The homepage proof wall no longer shows stale capture dates, so the freshness signal stays honest.</li>
+        </ul>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="2026-08-25">
+        <ul className="f9-doc-list">
+          <li>The public pricing page now displays real plan prices and keeps the annual toggle working, so visitors can switch between monthly and yearly billing and see the matching price.</li>
+          <li>The landing-page proof flag now stays inside its row on desktop and on phones, instead of poking past the edge of the page.</li>
+          <li>On phones, sign-in and sign-up now keep the brand name and headline beside the form, and the Search footer no longer clips Help.</li>
+        </ul>
+      </PublicDocBlock>
+
       <PublicDocBlock title="2026-08-22">
         <ul className="f9-doc-list">
           <li>Full-site watch discovery now finds and classifies pages across a competitor&apos;s whole site — not just the landing page — with a bounded crawl and per-page-type cadence, so you see changes on pricing pages, product pages, and blog posts alongside the ads you already tracked.</li>
