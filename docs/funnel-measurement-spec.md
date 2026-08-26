@@ -59,6 +59,8 @@ The account/workspace measures in §3.2 are **derived metrics, not emitted event
 | `funnel_signup_start` | Visitor begins signup (email magic link or OAuth) | Measure signup initiation | `event_id`, `timestamp`, `route` | Email, name, OAuth provider tokens |
 | `funnel_migration_view` | The MagicBrief migration page (`/compare/magicbrief`) renders for a visitor | Count wind-down-intent reach for the migration blitz (`docs/magicbrief-blitz-capture.md`) | `event_id`, `timestamp`, `route` | All §4 forbidden fields |
 | `funnel_signup_start_magicbrief` | Signup begins from a request whose URL carries the exact migration marker (`source=magicbrief-migration`), recognized server-side by exact string comparison against the allowlisted constant; the marker value itself is never stored | Measure wind-down capture at signup initiation | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
+| `funnel_locale_segment_view_en` / `_de` / `_ja` / `_pt_br` | A sneaker-resale locale landing page renders | Count organic reach per locale page (issue 1154) | `event_id`, `timestamp`, `route` | Pathname, language headers, IP/geo, the raw URL |
+| `funnel_signup_start_locale_en` / `_de` / `_ja` / `_pt_br` | Signup begins from a request whose URL carries the exact locale marker (`source=locale-<id>-sneaker-resale`), recognized server-side against allowlisted constants; the marker value itself is never stored | Measure locale-page capture at signup initiation | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
 | `funnel_first_brief_viewed` | Authenticated Overview or Briefs renders a first brief with ≥1 evidence-linked item | Measure same-session activation (signup → first brief on screen) | `event_id`, `timestamp`, `route` | Watchlist names, ad URLs, proof content, `workspace_id` |
 
 All v1 emitted events are request-scoped: they carry no identifier that
@@ -106,7 +108,7 @@ is forbidden.
 | `event_id` | Opaque server-generated event identifier | Generated server-side per event; unique; not derived from user input |
 | `workspace_id` | Opaque server-generated workspace identifier | Only on account/workspace-scoped derived measures; never on anonymous events |
 | `timestamp` | ISO-8601 UTC time of event | Server clock, never client-supplied |
-| `route` | Coarse route label from an allowlist (`home`, `search_preview`, `magicbrief_migration`, `signup`, `activation`) | Never a full URL |
+| `route` | Coarse route label from an allowlist (`home`, `search_preview`, `magicbrief_migration`, `sneaker_resale`, `signup`, `activation`) | Never a full URL |
 | `result_count_bucket` | Coarse bucket of search-preview result count (`0`, `1-10`, `11-50`, `51+`) | Never exact counts |
 | `error_kind` | Coarse error class from an allowlist | Never error text or stack traces |
 | `referrer_domain` | Coarse eTLD+1 of the referring site | Optional; never a full referrer URL |
