@@ -135,3 +135,62 @@ describe("internal /ads/:domain links on public funnel pages", () => {
     expect(markup).toContain('href="/search"');
   });
 });
+
+describe("public funnel loaders reuse the sitemap indexability filter", () => {
+  const commercialLaunch = {
+    scoutSaleOpen: true,
+    starterSaleOpen: true,
+    agencySaleOpen: false,
+  };
+
+  beforeEach(() => {
+    vi.doMock("~/lib/dodo-pricing.server", () => ({
+      previewDodo0509PlanPrices: vi.fn().mockResolvedValue({ available: false }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({
+      publicCommercialLaunchSummary: vi.fn(() => commercialLaunch),
+    }));
+    vi.doMock("~/lib/public-proof.server", () => ({
+      loadPublicProofBrief: vi.fn().mockResolvedValue(null),
+      PUBLIC_PROOF_FEATURED_WEBSITE: "nykaa.com",
+    }));
+    vi.doMock("~/lib/sitemap.server", () => ({
+      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
+        { path: "/ads/nykaa.com" },
+        { path: "/ads/glossier.com" },
+        { path: "/ads/nykaa.com/extra" },
+      ]),
+    }));
+  });
+
+  it("puts only bare /ads/:domain sitemap paths on the homepage loader", async () => {
+    const { loader } = await import("~/routes/marketing");
+    const result = await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/"),
+    } as never);
+
+    expect(result).toEqual({
+      pricingPreview: { available: false },
+      commercialLaunch,
+      proofBrief: null,
+      indexableAdsLinks: [nykaa, glossier],
+    });
+  });
+
+  it("puts the same indexable set on /competitor-monitoring", async () => {
+    const { loader } = await import("~/routes/competitor-monitoring");
+    const result = await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/competitor-monitoring"),
+    } as never);
+
+    expect(result).toEqual({
+      proofBrief: null,
+      indexableAdsLinks: [nykaa, glossier],
+    });
+  });
+});
