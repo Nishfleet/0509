@@ -3840,6 +3840,7 @@ async function evaluateSelectiveProofCandidates(
           extractorVersion:
             readSnapshotString(snapshot.metadata, "extractorVersion") ??
             LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+          ...extractorFingerprintsFromSnapshot(snapshot),
         },
         lastSuccessfulProof,
         recentWatchEvents: proofAwareRecentEvents,
@@ -4407,6 +4408,7 @@ async function evaluateDirectWebsiteProofCandidate(
         extractorVersion:
           readSnapshotString(snapshot.metadata, "extractorVersion") ??
           LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+        ...extractorFingerprintsFromSnapshot(snapshot),
       },
       lastSuccessfulProof: finalLastSuccessfulProof,
       recentWatchEvents: input.recentWatchEvents,
@@ -4911,6 +4913,7 @@ function snapshotToExtractedFields(snapshot: {
   priceText?: string | null;
   formPresent?: boolean | null;
   canonicalUrl: string;
+  metadata?: Record<string, unknown>;
 }) {
   return {
     rawHeadline: snapshot.rawHeadline,
@@ -4920,6 +4923,36 @@ function snapshotToExtractedFields(snapshot: {
     priceText: snapshot.priceText ?? null,
     formPresent: snapshot.formPresent ?? null,
     canonicalUrl: snapshot.canonicalUrl,
+    ...extractorFingerprintsFromSnapshot(snapshot),
+  };
+}
+
+function extractorFingerprintsFromSnapshot(snapshot: {
+  metadata?: Record<string, unknown>;
+}) {
+  const extractorRawTextHash = readSnapshotString(
+    snapshot.metadata,
+    "extractorRawTextHash",
+  );
+  const extractorAdSlotStrippedTextHash = readSnapshotString(
+    snapshot.metadata,
+    "extractorAdSlotStrippedTextHash",
+  );
+  const extractorChurnStableTextHash = readSnapshotString(
+    snapshot.metadata,
+    "extractorChurnStableTextHash",
+  );
+  if (
+    !extractorRawTextHash ||
+    !extractorAdSlotStrippedTextHash ||
+    !extractorChurnStableTextHash
+  ) {
+    return {};
+  }
+  return {
+    extractorRawTextHash,
+    extractorAdSlotStrippedTextHash,
+    extractorChurnStableTextHash,
   };
 }
 
@@ -5230,7 +5263,11 @@ function recordDiffStageForEvaluation(
   counters: LandingPagePipelineCounters,
   evaluated: {
     status: "baseline_established" | "confirmed" | "suppressed" | "invalidated";
-    events: { eventType: WatchEventType; status: string }[];
+    events: {
+      eventType: WatchEventType;
+      status: string;
+      metadata?: Record<string, unknown>;
+    }[];
   },
   lastSuccessfulProof: ProofCaptureRecord | null,
 ) {
@@ -5250,7 +5287,12 @@ function recordDiffStageForEvaluation(
     // extract-stage counter distinguishes those two cases.
     fieldBails_all(fieldBails, "no_field_change_detected");
   } else if (evaluated.status === "suppressed") {
-    fieldBails_all(fieldBails, "duplicate_within_suppression_window");
+    const suppression = evaluated.events[0]?.metadata?.suppression;
+    if (suppression === "churn_stable" || suppression === "ad_slot_strip") {
+      fieldBails_all(fieldBails, `extractor_${suppression}`);
+    } else {
+      fieldBails_all(fieldBails, "duplicate_within_suppression_window");
+    }
   }
 
   recordDiffStage(counters, {

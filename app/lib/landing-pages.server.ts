@@ -20,6 +20,7 @@ import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import {
   extractLandingPageSignals,
+  extractorSuppressionMetadata,
   hasMeaningfulLandingPageBodyText,
   LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
 } from "~/lib/landing-page-signals.server";
@@ -481,6 +482,7 @@ async function captureLandingPageSnapshotAt(
         }),
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         fetchStatus: response.status,
+        ...extractorSuppressionMetadata(signals.suppressionFingerprints),
       },
     };
     const outcome = looksLikeSignalEmptyShell ? "empty" : "succeeded";
