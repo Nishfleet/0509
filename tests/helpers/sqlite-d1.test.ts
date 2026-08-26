@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createSqliteD1 } from "./sqlite-d1";
@@ -76,5 +79,34 @@ describe("sqlite-d1 numbered D1 placeholders", () => {
       .bind("row-3")
       .first<{ email: string }>();
     expect(row).toEqual({ email: "c@x.com" });
+  });
+});
+
+const SHARED_HELPER = "tests/helpers/sqlite-d1.ts";
+const PRIVATE_HELPER = /\bfunction createSqliteD1\s*\(/;
+const ANONYMOUS_NUMBERED_BIND = /toSqliteBindings\s*=\s*\(\s*bindings/;
+
+function testSourceFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((entry) => {
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory()) return testSourceFiles(path);
+    return path.endsWith(".ts") || path.endsWith(".tsx") ? [path] : [];
+  });
+}
+
+describe("sqlite-d1 helper is the only D1 sqlite harness", () => {
+  it("rejects private createSqliteD1 copies that spread numbered placeholders as anonymous binds", () => {
+    const offenders = testSourceFiles("tests").flatMap((file) => {
+      if (file === SHARED_HELPER) return [];
+      const source = readFileSync(file, "utf8");
+      const hits: string[] = [];
+      if (PRIVATE_HELPER.test(source)) hits.push(`${file}: private createSqliteD1`);
+      if (ANONYMOUS_NUMBERED_BIND.test(source)) {
+        hits.push(`${file}: identity toSqliteBindings (numbered ?N will SQLITE_RANGE)`);
+      }
+      return hits;
+    });
+
+    expect(offenders).toEqual([]);
   });
 });
