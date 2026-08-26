@@ -692,6 +692,79 @@ describe("/ads/:domain indexing flag", () => {
     expect(result.aggression).not.toBeNull();
     expect(result.noindex).toBe(false);
   });
+
+  it("indexes allbirds.com when the warmed cache lands on allbirds.co.uk (production 2026-08-26 shape)", async () => {
+    // Live /ads/allbirds.com served 17 ads landing on allbirds.co.uk / .ae /
+    // .co.nz / .com.kw with 0 verified allbirds.com links, so the score hid
+    // and the page self-noindexed. Repair: a regional Allbirds store is a
+    // verified link to the brand, even if the cached domainMatch is still
+    // unverified from the pre-repair capture.
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [
+            {
+              ...baseAd,
+              metaAdId: "meta-allbirds-uk",
+              advertiser: "Allbirds",
+              landingPageUrl: "https://www.allbirds.co.uk/products/womens-dasher",
+              domainMatch: {
+                level: "unverified_provider_candidate",
+                reason: "Returned by the Meta source; website connection not verified",
+                matchedDomain: null,
+              },
+              firstSeenAt: isoAgo(131 * DAY_MS),
+            },
+          ],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("allbirds.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.verifiedLinkCount).toBe(1);
+    expect(result.aggression).not.toBeNull();
+    expect(result.noindex).toBe(false);
+  });
+
+  it("indexes mamaearth.com when the warmed cache lands on mamaearth.in (production 2026-08-26 shape)", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [
+            {
+              ...baseAd,
+              metaAdId: "meta-mamaearth-in",
+              advertiser: "Mamaearth",
+              landingPageUrl: "https://mamaearth.in/product/ubtan-face-wash",
+              domainMatch: {
+                level: "unverified_text_candidate",
+                reason: "Mentions “mamaearth” in ad text only",
+                matchedDomain: null,
+              },
+              firstSeenAt: isoAgo(120 * DAY_MS),
+            },
+          ],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("mamaearth.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.verifiedLinkCount).toBe(1);
+    expect(result.aggression).not.toBeNull();
+    expect(result.noindex).toBe(false);
+  });
 });
 
 describe("/ads/:domain meta", () => {
