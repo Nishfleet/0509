@@ -66,7 +66,7 @@ const fiveToNineAdds = [
   },
   {
     theirs: "Proof, not just alerts",
-    ours: "Every change is saved with the screenshot, the page text, and the original source link, so the claim does not depend on a dashboard.",
+    ours: "Every change is saved with the page text, the original source link, and a screenshot when the capture includes one, so the claim does not depend on a dashboard.",
   },
   {
     theirs: "Scheduled, source-backed briefs",

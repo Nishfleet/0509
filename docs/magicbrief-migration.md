@@ -34,7 +34,7 @@ Every row scans in the visitor's geo country, and import limits (200 KB, 250 row
 
 - **MagicBrief analytics/report history** — spend, impressions, reach, charts, and report dates — is **not imported**. Keep the original export and recreate any numbers you need in your own reports.
 - **MagicBrief collections and boards** — saved ad libraries, boards, and saved creative evidence (screenshots, saved ads, links) — are not portable through the generic competitor import. Five to Nine does not migrate them.
-- **Historical screenshot/evidence preservation** from MagicBrief does not exist in the generic importer. Going forward, watchlist scans save fresh screenshots, page text, and links as evidence inside Five to Nine.
+- **Historical screenshot/evidence preservation** from MagicBrief does not exist in the generic importer. Going forward, watchlist scans save page text and links as evidence inside Five to Nine, plus a screenshot when the capture includes one.
 - **No full MagicBrief export contract is verified.** MagicBrief has announced wind-down with partial export options: per its public FAQ, analytics reports can export CSV while other saved work may require manual recreation. Verify current export options at magicbrief.com, since that surface is not under our control. Until a real export fixture is supplied, full-field-parity migration is not claimed.
 
 ## Manual fallback
