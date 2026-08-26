@@ -1,11 +1,12 @@
 /**
  * /ads/:domain — public programmatic brand pages (SEO acquisition engine).
  *
- * ZERO-COST CONSTRAINT: this page renders ONLY from the existing discovery
- * cache (`loadBrandPageCacheSnapshot` → bounded D1 reads). A public request
- * must NEVER trigger live scraping, Browser Rendering, Meta API calls, or any
- * other paid operation, for any input. Live refresh happens only when the
- * visitor explicitly follows the "Run a live search" CTA to /search.
+ * ZERO-COST CONSTRAINT: this page renders ONLY from bounded D1 reads
+ * (`loadBrandPageCacheSnapshot` for the ad wall, `loadOfferTimeline` for
+ * the Offer Timeline). A public request must NEVER trigger live scraping,
+ * Browser Rendering, Meta API calls, or any other paid operation, for any
+ * input. Live refresh happens only when the visitor explicitly follows the
+ * "Run a live search" CTA to /search.
  *
  * INDEXING FLAG (PUBLIC_BRAND_PAGES_INDEXABLE):
  *   - unset or "1" (the default posture): pages are indexable — fresh cached
@@ -27,7 +28,8 @@
  * DESIGN: the "Case File" system (see docs/ADS-PAGE-DIRECTIONS-2026-07-21.md).
  * Every number traces to a real loader field; sections render only when their
  * data exists (the score hides below the evidence floor, "What changed" hides
- * with no change events). Honesty is the brand — no invented figures.
+ * with no change events, Offer Timeline hides with no stored snapshots).
+ * Honesty is the brand — no invented figures.
  *
  * SITEMAP: /ads/* is NOT in the static sitemap list — the live sitemap
  * appends dynamic entries generated from cached-fresh indexable pages only —
@@ -46,6 +48,7 @@ import { BrandStatLine } from "~/components/ads/brand-stat-line";
 import { BrandTicker } from "~/components/ads/brand-ticker";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
+import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import type {
   BrandChangeEvent,
@@ -53,6 +56,7 @@ import type {
   BrandPageAggression,
 } from "~/lib/brand-page.server";
 import { countBrandOwnedAds } from "~/lib/brand-page.server";
+import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 import { canonicalUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
@@ -106,6 +110,12 @@ export interface BrandPageLoaderData {
   aggression: BrandPageAggression | null;
   changeEvents: BrandChangeEvent[];
   /**
+   * Dated landing-page offer states for this domain. Empty when nothing is
+   * stored yet — the Offer Timeline section hides in that case (never an
+   * empty card). Seeded by migration 0079 for the five BET 3 demo brands.
+   */
+  offerTimelineEntries: OfferLedgerEntry[];
+  /**
    * Country of the Ad Library the cached creatives came from ("India",
    * "United States", …) — or "all countries" for the all-countries view.
    * The Meta Ad Library is country-scoped, so this always names the library
@@ -147,6 +157,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     resolveBrandPageFreshness,
   } = await import("~/lib/brand-page.server");
   const { defaultCountryForVisitor } = await import("~/lib/countries");
+  const { loadOfferTimeline } = await import("~/lib/offer-timeline.server");
   const visitorCountry = defaultCountryForVisitor(
     cloudflare?.country ??
       request.headers.get("cf-ipcountry"),
@@ -165,6 +176,18 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
       errorName: error instanceof Error ? error.name : typeof error,
     });
     snapshot = null;
+  }
+
+  let offerTimelineEntries: OfferLedgerEntry[] = [];
+  try {
+    const loaded = await loadOfferTimeline(env, { domain: brand.domain, asOf: null });
+    offerTimelineEntries = loaded.entries;
+  } catch (error) {
+    // Timeline is a secondary surface. A D1 hiccup must hide the section,
+    // never 500 the ads page or trigger a live capture.
+    console.warn("Brand page offer timeline read failed; hiding the section.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
   }
 
   const now = new Date();
@@ -212,6 +235,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     teaser: snapshot ? buildBrandIntelTeaser(verifiedLinkedAds, now) : null,
     aggression,
     changeEvents: snapshot ? buildBrandChangeFeed(verifiedLinkedAds, now) : [],
+    offerTimelineEntries,
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
     canonicalPath: `/ads/${brand.domain}`,
@@ -398,6 +422,44 @@ export default function BrandAdsRoute() {
   );
 }
 
+/**
+ * Offer Timeline on the public `/ads/:domain` page. Hidden when nothing is
+ * stored (never an empty card). Seeded rows carry the honest
+ * "Captured on <date>, no screenshot" label instead of a fake screenshot.
+ */
+function BrandOfferTimeline({
+  domain,
+  entries,
+}: {
+  domain: string;
+  entries: OfferLedgerEntry[];
+}) {
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const stateWord = entries.length === 1 ? "dated state" : "dated states";
+  return (
+    <section className="f9-ads-sec" aria-labelledby="brand-offer-timeline-title">
+      <div className="f9-container">
+        <div className="f9-ads-sec-head">
+          <div className="f9-ads-sec-head-left">
+            <span className="f9-ads-sec-eyebrow">Landing-page offers</span>
+            <h2 id="brand-offer-timeline-title">Offer timeline</h2>
+          </div>
+          <span className="f9-ads-sec-meta">
+            {`${entries.length} ${stateWord} on record`}
+          </span>
+        </div>
+        <OfferTimelineLedger entries={entries} />
+        <p className="f9-timeline-also">
+          <Link to={`/timeline/${encodeURIComponent(domain)}`}>{`Full offer timeline for ${domain}`}</Link>
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function BrandAdsResults({
   data,
   liveSearchPath,
@@ -503,6 +565,8 @@ function BrandAdsResults({
           </div>
         </section>
       ) : null}
+
+      <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} />
 
       {/* 5. THE ADS — the wall of real creatives */}
       <section className="f9-ads-sec" aria-labelledby="brand-wall-title">
@@ -802,6 +866,8 @@ function BrandAdsShell({
             {`or watch ${data.domain} ›`}
           </Link>
         </div>
+
+        <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} />
 
         <div className="f9-ads-example" aria-hidden="true">
           <span className="f9-ads-example-tag">Example — this is what a watched brand looks like</span>
