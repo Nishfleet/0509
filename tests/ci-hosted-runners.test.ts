@@ -23,6 +23,13 @@ const NO_LOCK_WRAPPER_DOCS = [
   "docs/undici-dependabot-ci-root-cause.md",
 ] as const;
 
+// Issue #1198: after #1155, ci-vitest-run.sh still described the gone
+// deploy-window lane. The lock wrapper check above looks for
+// "deploy-window-lock" and would miss "deploy-window lane".
+const NO_DEPLOY_WINDOW_LANE_COMMENTS = [
+  "scripts/ci-vitest-run.sh",
+] as const;
+
 const hostedRunner = "ubuntu-latest";
 
 type WorkflowJob = {
@@ -36,6 +43,12 @@ type Workflow = {
 function lockWrapperDocViolations(source: string): string[] {
   return source.includes("deploy-window-lock")
     ? ["deploy-window-lock wrapper"]
+    : [];
+}
+
+function deployWindowLaneCommentViolations(source: string): string[] {
+  return source.includes("deploy-window lane")
+    ? ["deploy-window lane leftover"]
     : [];
 }
 
@@ -110,6 +123,25 @@ jobs:
     for (const docPath of NO_LOCK_WRAPPER_DOCS) {
       const source = readFileSync(docPath, "utf8");
       expect(lockWrapperDocViolations(source), docPath).toEqual([]);
+    }
+  });
+
+  it("keeps ci-vitest-run.sh from teaching the deleted deploy-window lane", () => {
+    expect(
+      deployWindowLaneCommentViolations(
+        "When invoked through the deploy-window lane, the retry happens inside the lane already acquired",
+      ),
+    ).toEqual(["deploy-window lane leftover"]);
+    expect(
+      deployWindowLaneCommentViolations(
+        "The retry is purely internal to this wrapper",
+      ),
+    ).toEqual([]);
+    for (const commentPath of NO_DEPLOY_WINDOW_LANE_COMMENTS) {
+      const source = readFileSync(commentPath, "utf8");
+      expect(deployWindowLaneCommentViolations(source), commentPath).toEqual(
+        [],
+      );
     }
   });
 });
