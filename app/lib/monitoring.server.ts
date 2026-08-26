@@ -75,6 +75,7 @@ import {
   resolveCommercialDiscoveryProvider,
   searchAdsViaSourceResolver,
 } from "~/lib/ad-source.server";
+import { warmDiscoveryEvalPanel } from "~/lib/discovery-panel.server";
 import { bindD1Named } from "~/lib/d1-bind.server";
 import { reportConsecutiveWatchlistFailure } from "~/lib/watchlist-failure-alert.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
@@ -1002,11 +1003,13 @@ export async function runScheduledDiscoveryWarmup(
     }
   }
 
+  const panel = await warmDiscoveryEvalPanel(env, ctx);
+
   return {
-    attempted,
-    succeeded,
-    failed,
-    skipped,
+    attempted: attempted + panel.attempted,
+    succeeded: succeeded + panel.succeeded,
+    failed: failed + panel.failed,
+    skipped: skipped + panel.skipped,
   };
 }
 

@@ -3609,6 +3609,39 @@ describe("discovery state persistence", () => {
     expect(statement?.bindings).toContain(2500);
   });
 
+  it("persists public_search_warmup cache rows as public_search so D1 CHECKs accept them", async () => {
+    const mock = createMockDb();
+
+    await upsertDiscoveryCacheEntry(
+      { DB: mock.db } as never,
+      {
+        cacheKey: "search-v2:domain:allbirds.com:exact:meta_library_browser:all:page-1",
+        provider: "meta_library_browser",
+        routeContext: "public_search_warmup",
+        queryFingerprint: "fp-allbirds",
+        country: "all",
+        cursor: null,
+        payload: {
+          ads: [],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "miss",
+        },
+        fetchedAt: "2026-08-26T00:00:00.000Z",
+        expiresAt: "2026-08-27T00:00:00.000Z",
+        browserMsUsed: 1800,
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO discovery_cache_entry"),
+    );
+
+    expect(statement?.bindings).toContain("public_search");
+    expect(statement?.bindings).not.toContain("public_search_warmup");
+  });
+
   it("persists provider health and fetch logs for discovery runs", async () => {
     const mock = createMockDb();
 
