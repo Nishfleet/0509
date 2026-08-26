@@ -80,4 +80,27 @@ describe("website-identity decode wiring", () => {
     const identity = await resolveWebsiteIdentity("https://example.com");
     expect(identity).toBeNull();
   });
+
+  it("records mamaearth.in as a domain alias when mamaearth.com redirects there", async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 301,
+          headers: { location: "https://mamaearth.in/" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        htmlResponse(
+          `<html><head>
+            <title>Mamaearth</title>
+            <link rel="canonical" href="https://mamaearth.in/"/>
+          </head><body></body></html>`,
+        ),
+      );
+
+    const identity = await resolveWebsiteIdentity("https://mamaearth.com");
+
+    expect(identity?.registrableDomain).toBe("mamaearth.com");
+    expect(identity?.domainAliases).toContain("mamaearth.in");
+  });
 });

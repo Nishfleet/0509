@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { parseSearchInput, parseSearchInputFromWebsiteField, registrableDomainFromHostname } from "~/lib/search-query";
+import {
+  hostnamesMatchBrandRegionalProperty,
+  parseSearchInput,
+  parseSearchInputFromWebsiteField,
+  registrableDomainFromHostname,
+} from "~/lib/search-query";
 
 describe("parseSearchInput domain normalization", () => {
   const domainCases: Array<[string, string, string]> = [
@@ -88,5 +93,44 @@ describe("registrableDomainFromHostname", () => {
   it("keeps multi-part public suffixes intact", () => {
     expect(registrableDomainFromHostname("shop.company.co.uk")).toBe("company.co.uk");
     expect(registrableDomainFromHostname("company.co.uk")).toBe("company.co.uk");
+  });
+});
+
+describe("hostnamesMatchBrandRegionalProperty", () => {
+  const allbirds = parseSearchInputFromWebsiteField("allbirds.com");
+  const mamaearth = parseSearchInputFromWebsiteField("mamaearth.com");
+  const okara = parseSearchInputFromWebsiteField("okara.ai");
+
+  it("treats Allbirds ccTLD stores as the same brand property as allbirds.com", () => {
+    expect(hostnamesMatchBrandRegionalProperty("www.allbirds.co.uk", allbirds)).toBe(true);
+    expect(hostnamesMatchBrandRegionalProperty("allbirds.co.nz", allbirds)).toBe(true);
+    expect(hostnamesMatchBrandRegionalProperty("allbirds.ae", allbirds)).toBe(true);
+    expect(hostnamesMatchBrandRegionalProperty("allbirds.sa", allbirds)).toBe(true);
+    expect(hostnamesMatchBrandRegionalProperty("allbirds.com.kw", allbirds)).toBe(true);
+  });
+
+  it("treats mamaearth.in as the regional property of mamaearth.com", () => {
+    expect(hostnamesMatchBrandRegionalProperty("mamaearth.in", mamaearth)).toBe(true);
+    expect(hostnamesMatchBrandRegionalProperty("www.mamaearth.in", mamaearth)).toBe(true);
+  });
+
+  it("does not treat the searched domain itself as a regional sibling", () => {
+    expect(hostnamesMatchBrandRegionalProperty("allbirds.com", allbirds)).toBe(false);
+    expect(hostnamesMatchBrandRegionalProperty("www.allbirds.com", allbirds)).toBe(false);
+  });
+
+  it("does not treat open ccTLDs used as generic brands as regional siblings", () => {
+    const analytics = parseSearchInputFromWebsiteField("analytics.com");
+    expect(hostnamesMatchBrandRegionalProperty("analytics.io", analytics)).toBe(false);
+    expect(hostnamesMatchBrandRegionalProperty("analytics.ai", analytics)).toBe(false);
+  });
+
+  it("does not treat an unrelated host as a regional property", () => {
+    expect(hostnamesMatchBrandRegionalProperty("eshal-clinic.example.com", okara)).toBe(false);
+    expect(hostnamesMatchBrandRegionalProperty("nike.com", allbirds)).toBe(false);
+  });
+
+  it("does not widen okara.ai to okara.pk (the geography-keyword precision case)", () => {
+    expect(hostnamesMatchBrandRegionalProperty("okara.pk", okara)).toBe(false);
   });
 });
