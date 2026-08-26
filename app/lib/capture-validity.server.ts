@@ -19,12 +19,15 @@ import { hasMeaningfulLandingPageBodyText } from "~/lib/landing-page-signals.ser
  * drop is observable, not silent.
  */
 
-export type CaptureValidityReasonCode =
-  | "landing_challenge_page"
-  | "landing_cookie_wall"
-  | "landing_partial_spa"
-  | "landing_error_page"
-  | "landing_content_signature_too_small";
+export const CAPTURE_VALIDITY_REASON_CODES = [
+  "landing_challenge_page",
+  "landing_cookie_wall",
+  "landing_partial_spa",
+  "landing_error_page",
+  "landing_content_signature_too_small",
+] as const;
+
+export type CaptureValidityReasonCode = (typeof CAPTURE_VALIDITY_REASON_CODES)[number];
 
 export interface CaptureValidityAssessment {
   valid: boolean;
