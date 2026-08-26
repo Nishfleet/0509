@@ -5,6 +5,7 @@
     "playwright.config.ts",
     "vite.config.ts",
     "scripts/prod-canary*.mjs",
+    "scripts/bet2-live-verification.mjs",
     "scripts/monitoring-fanout-canary*.mjs",
     "scripts/provider-bakeoff*.mjs",
     "scripts/dodo-pricing-canary.mjs",
