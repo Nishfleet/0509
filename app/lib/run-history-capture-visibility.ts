@@ -171,6 +171,10 @@ function suppressedReasonFromCandidate(
 }
 
 function suppressedReasonFromMetadata(metadata: Record<string, unknown> | null | undefined): string {
+  const suppression = metadata?.suppression;
+  if (suppression === "churn_stable" || suppression === "ad_slot_strip") {
+    return suppression;
+  }
   if (metadata?.corroboration === "unconfirmed_by_screenshot") {
     return "unconfirmed_by_screenshot";
   }

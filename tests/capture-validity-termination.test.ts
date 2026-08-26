@@ -19,6 +19,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { assessCaptureValidity } from "~/lib/capture-validity.server";
+import { extractLandingPageSignals } from "~/lib/landing-page-signals.server";
+import { resolveSuppressedCandidateRefusal } from "~/lib/run-history-capture-visibility";
 import { evaluateProofBackedEvents } from "~/lib/watch-event-evaluator.server";
 import type { ProofCaptureRecord } from "~/lib/types";
 
@@ -49,6 +51,8 @@ type Fixture = {
   html: string;
   fetchStatus: number;
   expectedReasonCode: string | null;
+  baselineHtml?: string;
+  extractorSuppression?: "churn_stable" | "ad_slot_strip";
 };
 
 const ADVERSARIAL_FIXTURES: Fixture[] = [
@@ -95,7 +99,8 @@ const ADVERSARIAL_FIXTURES: Fixture[] = [
     // timestamp — no real copy change. The churn-stable comparison in
     // landing-page-signals already filters this on the extractor side, so
     // the gate accepts the body (it is a real page) but the extractor
-    // produces no field-level diff. The test asserts zero events.
+    // produces no field-level diff. Issue #1159 records that drop as a
+    // suppressed_churn_stable candidate so run history can show it.
     html: `<html><head><title>Glow Serum — Save 20% Today</title>
 <meta name="generated-at" content="2026-08-25T13:50:00Z"/></head>
 <body><header><nav>Shop About Reviews Contact</nav></header>
@@ -110,14 +115,27 @@ const ADVERSARIAL_FIXTURES: Fixture[] = [
 <footer>© 2026 Glow Co. All rights reserved. Terms · Privacy · Support</footer></body></html>`,
     fetchStatus: 200,
     expectedReasonCode: null, // gate accepts; churn filter is what suppresses
+    extractorSuppression: "churn_stable",
+    baselineHtml: `<html><head><title>Glow Serum — Save 20% Today</title>
+<meta name="generated-at" content="2026-08-25T12:00:00Z"/></head>
+<body><header><nav>Shop About Reviews Contact</nav></header>
+<main><h1>Glow Serum — Save 20% Today</h1>
+<p>Our best-selling vitamin C serum, now at 20% off for the launch week.</p>
+<p>Starting at ₹499. Free shipping on orders over ₹999.</p>
+<a href="/buy" class="cta">Buy now</a>
+<form action="/checkout" method="post">
+<input name="email" type="email" placeholder="Email"/>
+<button type="submit">Get offer</button>
+</form></main>
+<footer>© 2026 Glow Co. All rights reserved. Terms · Privacy · Support</footer></body></html>`,
   },
   {
     label: "rotating banner (ad-slot churn, no real change)",
     // A body where the only delta is a rotating third-party ad creative in
     // a known ad-slot div. landing-page-signals strips ad-slot regions
     // before the diff (since lp-signals-v4), so the diff is empty and zero
-    // events fire. The gate accepts the body; the extractor is what
-    // suppresses the event.
+    // confirmed events fire. Issue #1159 records that drop as a
+    // suppressed_ad_slot_strip candidate.
     html: `<html><head><title>Glow Serum — Save 20% Today</title></head>
 <body><header><nav>Shop About Reviews Contact</nav></header>
 <main><h1>Glow Serum — Save 20% Today</h1>
@@ -134,6 +152,21 @@ const ADVERSARIAL_FIXTURES: Fixture[] = [
 <footer>© 2026 Glow Co. All rights reserved. Terms · Privacy · Support</footer></body></html>`,
     fetchStatus: 200,
     expectedReasonCode: null, // gate accepts; ad-slot strip is what suppresses
+    extractorSuppression: "ad_slot_strip",
+    baselineHtml: `<html><head><title>Glow Serum — Save 20% Today</title></head>
+<body><header><nav>Shop About Reviews Contact</nav></header>
+<main><h1>Glow Serum — Save 20% Today</h1>
+<p>Our best-selling vitamin C serum, now at 20% off for the launch week.</p>
+<p>Starting at ₹499. Free shipping on orders over ₹999.</p>
+<div class="ad-slot" data-slot-id="home-top-728x90">
+  <a href="/click/abc-123"><img src="https://ad-network.example/creative-11111.jpg" alt=""/></a>
+</div>
+<a href="/buy" class="cta">Buy now</a>
+<form action="/checkout" method="post">
+<input name="email" type="email" placeholder="Email"/>
+<button type="submit">Get offer</button>
+</form></main>
+<footer>© 2026 Glow Co. All rights reserved. Terms · Privacy · Support</footer></body></html>`,
   },
 ];
 
@@ -326,19 +359,31 @@ describe("capture-validity gate — §3.4 BET 4 termination proof", () => {
           expect(typeof detail.reasonCode).toBe("string");
           expect(detail.reasonCode.length).toBeGreaterThan(0);
         } else {
-          // The gate accepts this body (real page with churn-only delta);
-          // the suppression happens at the extractor / ad-slot-strip side.
-          // We assert that the diff→event evaluator returns zero events
-          // for the same baseline + current pair the extractor would
-          // produce, regardless of the visual churn.
-          const baseline = baselineProof();
-          const churnOnlyCurrent = {
-            ...BASELINE_EXTRACTED,
-            extractorVersion: "lp-signals-v1",
-          };
-
+          // The gate accepts this body (real page with churn-only delta).
+          // Issue #1159: record the extractor drop as a suppressed candidate
+          // so run history can show why nothing was alerted.
+          const currentFp = extractLandingPageSignals(fixture.html).suppressionFingerprints;
+          const baselineFp = extractLandingPageSignals(
+            fixture.baselineHtml ?? fixture.html,
+          ).suppressionFingerprints;
+          const fingerprintFields = (fp: typeof currentFp) => ({
+            extractorRawTextHash: fp.rawTextHash,
+            extractorAdSlotStrippedTextHash: fp.adSlotStrippedTextHash,
+            extractorChurnStableTextHash: fp.churnStableTextHash,
+          });
+          const baseline = baselineProof({
+            extractorVersion: "lp-signals-v5",
+            extractedFields: {
+              ...BASELINE_EXTRACTED,
+              ...fingerprintFields(baselineFp),
+            },
+          });
           const result = evaluateProofBackedEvents({
-            currentProof: churnOnlyCurrent,
+            currentProof: {
+              ...BASELINE_EXTRACTED,
+              extractorVersion: "lp-signals-v5",
+              ...fingerprintFields(currentFp),
+            },
             lastSuccessfulProof: baseline,
             sensitivityMode: "balanced",
             burstCount: 1,
@@ -346,7 +391,23 @@ describe("capture-validity gate — §3.4 BET 4 termination proof", () => {
             proofTargetIdentity: PROOF_TARGET_IDENTITY,
             screenshotCorroborates: true,
           });
-          expect(result.events).toHaveLength(0);
+          expect(result.status).toBe("suppressed");
+          expect(result.events).toHaveLength(1);
+          expect(result.events[0]?.status).toBe("suppressed");
+          expect(result.events[0]?.importanceScore).toBe(0);
+          expect(result.events[0]?.metadata.suppression).toBe(
+            fixture.extractorSuppression,
+          );
+          const row = resolveSuppressedCandidateRefusal({
+            id: `candidate-${fixture.extractorSuppression}`,
+            status: "suppressed",
+            skipReason: null,
+            dedupeReason: null,
+            metadata: result.events[0]!.metadata,
+            detectedAt: "2026-08-25T13:50:00.000Z",
+          });
+          expect(row?.kind).toBe(`suppressed_${fixture.extractorSuppression}`);
+          expect(row?.generatesAlert).toBe(false);
         }
       });
     }
