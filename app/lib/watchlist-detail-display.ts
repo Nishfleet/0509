@@ -120,7 +120,12 @@ export function formatEvidenceAttempts(summary: WatchlistProofSummary): string |
   if (summary.totalAttempts === 0) return null;
   const parts = [`${summary.successfulAttempts} good`];
   if (summary.failedAttempts > 0) parts.push(`${summary.failedAttempts} failed`);
-  if (summary.skippedAttempts > 0) parts.push(`${summary.skippedAttempts} skipped`);
+  if (summary.skippedDueToBudget > 0) {
+    parts.push(`${summary.skippedDueToBudget} skipped (plan allowance)`);
+  }
+  const otherSkipped =
+    summary.skippedAttempts - summary.skippedDueToBudget;
+  if (otherSkipped > 0) parts.push(`${otherSkipped} skipped`);
   return parts.join(" · ");
 }
 

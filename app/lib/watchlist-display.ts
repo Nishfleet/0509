@@ -24,6 +24,9 @@ export function emptyProofSummary(): WatchlistProofSummary {
     successfulAttempts: 0,
     failedAttempts: 0,
     skippedAttempts: 0,
+    skippedDueToBudget: 0,
+    skippedDueToRateLimit: 0,
+    skippedDueToDedupe: 0,
     lastAttemptAt: null,
     lastSuccessfulProofAt: null,
   };
@@ -68,15 +71,48 @@ export function buildProofSummary(captures: ProofCaptureRecord[]): WatchlistProo
   const successful = captures.filter((capture) => capture.status === "succeeded");
   const failed = captures.filter((capture) => capture.status === "failed");
   const skipped = captures.filter((capture) => capture.status.startsWith("skipped_"));
+  const skippedDueToBudget = countSkippedByReason(captures, "skipped_due_to_budget");
+  const skippedDueToRateLimit = countSkippedByReason(captures, "skipped_due_to_rate_limit");
+  const skippedDueToDedupe = countSkippedByReason(captures, "skipped_due_to_dedupe");
 
   return {
     totalAttempts: captures.length,
     successfulAttempts: successful.length,
     failedAttempts: failed.length,
     skippedAttempts: skipped.length,
+    skippedDueToBudget,
+    skippedDueToRateLimit,
+    skippedDueToDedupe,
     lastAttemptAt: captures[0]?.attemptedAt ?? null,
     lastSuccessfulProofAt: successful[0]?.succeededAt ?? null,
   };
+}
+
+function countSkippedByReason(
+  captures: ProofCaptureRecord[],
+  reason: ProofCaptureRecord["status"],
+) {
+  return captures.filter((capture) => capture.status === reason).length;
+}
+
+/**
+ * A user-visible reason for a proof-capture skip, so a paid-tier customer can
+ * see WHY a check did not run instead of a silent "Skipped: N". Returns null
+ * for non-skip statuses so callers can gate on it.
+ */
+export function formatProofSkipReason(
+  status: ProofCaptureRecord["status"],
+): string | null {
+  switch (status) {
+    case "skipped_due_to_budget":
+      return "Skipped — plan allowance reached. Checks resume when your allowance resets.";
+    case "skipped_due_to_rate_limit":
+      return "Skipped — source rate limited. The next scheduled run retries.";
+    case "skipped_due_to_dedupe":
+      return "Skipped — duplicate of a recent check.";
+    default:
+      return null;
+  }
 }
 
 export function isVisibleDeliveryChannel(

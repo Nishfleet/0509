@@ -158,7 +158,7 @@ describe("machine token labels", () => {
 
     expect(formatProofCaptureStatusLabel("succeeded")).toBe("Evidence captured");
     expect(formatProofCaptureStatusLabel("skipped_due_to_budget")).toBe(
-      "Skipped — evidence budget reached",
+      "Skipped — plan allowance reached",
     );
     expect(formatProofCaptureStatusLabel("odd_capture_state")).toBe("Odd capture state");
 
