@@ -230,6 +230,10 @@ export interface SitemapEntry {
   lastmod?: string;
   changefreq?: string;
   priority?: string;
+  /** Number of non-demo ads backing an /ads/:domain entry; used by llms.txt. */
+  adCount?: number;
+  /** ISO timestamp of the underlying cache fetch; used by llms.txt. */
+  fetchedAt?: string;
 }
 
 /**
