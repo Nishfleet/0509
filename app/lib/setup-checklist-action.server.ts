@@ -50,6 +50,7 @@ export async function handleSetupChecklistAction(
 
   const formData = parsedFormData ?? await request.formData();
   const intent = String(formData.get("intent") ?? "");
+  const importSurface = String(formData.get("importSurface") ?? "onboarding");
   const websiteInput = String(formData.get("website") ?? "").trim();
   const queryInput = String(formData.get("query") ?? "").trim();
   const brandWebsiteInput = String(formData.get("brandWebsite") ?? "").trim();
@@ -99,7 +100,10 @@ export async function handleSetupChecklistAction(
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
         message: "Competitor monitoring isn't included on this plan. Upgrade to create watchlists.",
-        upgradePath: "/app/billing?source=onboarding#plans",
+        upgradePath:
+          importSurface === "watchlists"
+            ? "/app/billing?source=watchlists#plans"
+            : "/app/billing?source=onboarding#plans",
         rawText,
         brandWebsiteInput,
       };
@@ -256,6 +260,10 @@ export async function handleSetupChecklistAction(
         rawText,
         brandWebsiteInput,
       };
+    }
+
+    if (importSurface === "watchlists") {
+      throw redirect(`/app/watchlists?imported=${createdCount}`);
     }
 
     await saveOptionalBrandWebsite();
