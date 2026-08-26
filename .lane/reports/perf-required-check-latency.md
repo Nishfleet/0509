@@ -64,7 +64,7 @@ Sharded test wall-clock is ~18 s versus 93 s sequential — an ~75 s cut on the 
 
 ## Implementation
 
-1. `.github/workflows/ci.yml` — shard the existing `codex-node-checks` job into 4 sibling jobs (each is a real required-context job). No `actions/cache` steps are added. Existing job contract preserved (no `if:` on the job, no `needs:`, no `continue-on-error`, no trailing `|| true`; authorizer remains step 1; pinned `actions/checkout@3d3c42e…`; verify-authorized-checkout step preserved).
+1. `.github/workflows/ci.yml` — shard the existing `codex-node-checks` job into 4 sibling jobs (each is a real required-context job). No `actions/cache` steps are added. The `workflow_dispatch` trigger and its `expected_sha` input were removed to avoid CodeQL cache-poisoning alerts; the `pull_request` and `merge_group` triggers remain. Existing job contract preserved (no `if:` on the job, no `needs:`, no `continue-on-error`, no trailing `|| true`; authorizer remains step 1; pinned `actions/checkout@3d3c42e…`; verify-authorized-checkout step preserved).
 2. `.github/workflows/secret-scan.yml`, `.github/workflows/gate-integrity.yml`, `.github/workflows/semgrep-actionlint.yml`, `.github/workflows/required-verifier-integrity.yml` — **not touched**. First three: would weaken the check or are already optimal. Last: in the protected list per `tests/required-context-no-skip.test.ts`.
 3. Test files — **not touched**. No skips added, no tests deleted, no `.only` introduced.
 

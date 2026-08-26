@@ -3,12 +3,6 @@ name: CI
 on:
   pull_request:
   merge_group:
-  workflow_dispatch:
-    inputs:
-      expected_sha:
-        description: Exact main commit authorized for verification
-        required: true
-        type: string
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -44,7 +38,6 @@ jobs:
         id: authorize
         shell: bash
         env:
-          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
         run: |
           set -euo pipefail
@@ -53,18 +46,10 @@ jobs:
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
           case "$GITHUB_EVENT_NAME" in
             pull_request)
-              test -z "$EXPECTED_SHA"
               test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
               [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
               ;;
-            workflow_dispatch)
-              test "$GITHUB_REF" = "refs/heads/main"
-              test "$GITHUB_RUN_ATTEMPT" = "1"
-              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
-              test "$EXPECTED_SHA" = "$GITHUB_SHA"
-              ;;
             merge_group)
-              test -z "$EXPECTED_SHA"
               [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
               ;;
             *)
@@ -133,7 +118,6 @@ jobs:
         id: authorize
         shell: bash
         env:
-          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
         run: |
           set -euo pipefail
@@ -142,18 +126,10 @@ jobs:
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
           case "$GITHUB_EVENT_NAME" in
             pull_request)
-              test -z "$EXPECTED_SHA"
               test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
               [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
               ;;
-            workflow_dispatch)
-              test "$GITHUB_REF" = "refs/heads/main"
-              test "$GITHUB_RUN_ATTEMPT" = "1"
-              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
-              test "$EXPECTED_SHA" = "$GITHUB_SHA"
-              ;;
             merge_group)
-              test -z "$EXPECTED_SHA"
               [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
               ;;
             *)
@@ -210,7 +186,6 @@ jobs:
         id: authorize
         shell: bash
         env:
-          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
         run: |
           set -euo pipefail
@@ -219,18 +194,10 @@ jobs:
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
           case "$GITHUB_EVENT_NAME" in
             pull_request)
-              test -z "$EXPECTED_SHA"
               test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
               [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
               ;;
-            workflow_dispatch)
-              test "$GITHUB_REF" = "refs/heads/main"
-              test "$GITHUB_RUN_ATTEMPT" = "1"
-              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
-              test "$EXPECTED_SHA" = "$GITHUB_SHA"
-              ;;
             merge_group)
-              test -z "$EXPECTED_SHA"
               [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
               ;;
             *)
@@ -287,7 +254,6 @@ jobs:
         id: authorize
         shell: bash
         env:
-          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
         run: |
           set -euo pipefail
@@ -296,18 +262,10 @@ jobs:
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
           case "$GITHUB_EVENT_NAME" in
             pull_request)
-              test -z "$EXPECTED_SHA"
               test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
               [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
               ;;
-            workflow_dispatch)
-              test "$GITHUB_REF" = "refs/heads/main"
-              test "$GITHUB_RUN_ATTEMPT" = "1"
-              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
-              test "$EXPECTED_SHA" = "$GITHUB_SHA"
-              ;;
             merge_group)
-              test -z "$EXPECTED_SHA"
               [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
               ;;
             *)
