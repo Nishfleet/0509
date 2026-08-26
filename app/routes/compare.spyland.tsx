@@ -70,7 +70,7 @@ const fiveToNineAdds = [
   },
   {
     theirs: "Source-linked evidence",
-    ours: "Every saved change carries the screenshot, page text, and the original URL, so you can cite it in a report.",
+    ours: "Every saved change carries the page text, the original URL, and a screenshot when the capture includes one, so you can cite it in a report.",
   },
   {
     theirs: "Email digests and alerts",

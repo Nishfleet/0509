@@ -65,7 +65,7 @@ const spyderCosts = [
 const fiveToNineAdds = [
   {
     theirs: "Before/after on the commercial fields",
-    ours: "We compare each scan to the last one and look for offer, price, CTA, and hook changes, then save the screenshot, the page text, and the original source link.",
+    ours: "We compare each scan to the last one and look for offer, price, CTA, and hook changes, then save the page text, the original source link, and a screenshot when the capture includes one.",
   },
   {
     theirs: "Scheduled checks you do not configure per URL",
