@@ -305,3 +305,4 @@ export function wantsPublicMarkdown(request: Request): boolean {
 export function isPublicMarkdownPage(pathname: string): boolean {
   return PUBLIC_MARKDOWN_PATH_SET.has(pathname);
 }
+
