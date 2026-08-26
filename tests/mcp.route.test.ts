@@ -351,6 +351,10 @@ describe("MCP route", () => {
       "get_collection_export",
       "get_watchlist_export",
       "get_digest_export",
+      "get_change_history",
+      "get_offer_state_at",
+      "diff_offer",
+      "list_suppressed",
       "retest_meta_source",
       "create_watchlist",
       "update_watchlist",
@@ -611,6 +615,10 @@ describe("MCP route", () => {
       "get_collection_export",
       "get_watchlist_export",
       "get_digest_export",
+      "get_change_history",
+      "get_offer_state_at",
+      "diff_offer",
+      "list_suppressed",
     ]);
     expect(body.result.tools.every((tool) => !tool.requiresWriteEnabled)).toBe(true);
     expect(body.result.tools.every((tool) => tool.credentialRequirement === "Requires an active Agency customer API key.")).toBe(true);

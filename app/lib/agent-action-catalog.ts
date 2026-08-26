@@ -102,6 +102,19 @@ export const AGENT_ACTION_GROUPS = [
     requiresWriteEnabled: true,
     credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
   },
+  {
+    id: "change_history",
+    label: "Offer change history",
+    detail: "Read dated offer states, diffs, change history, and suppressed events with evidence links.",
+    actions: [
+      "get_change_history",
+      "get_offer_state_at",
+      "diff_offer",
+      "list_suppressed",
+    ],
+    requiresWriteEnabled: false,
+    credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
+  },
 ] as const satisfies readonly AgentActionGroup[];
 
 export type AgentCatalogActionName = (typeof AGENT_ACTION_GROUPS)[number]["actions"][number];
@@ -176,6 +189,10 @@ export function apiActionNames() {
 
 export function auditedAgentActionGroups() {
   return AGENT_ACTION_GROUPS.filter((group) => group.requiresWriteEnabled);
+}
+
+export function customerAgentActionGroups() {
+  return AGENT_ACTION_GROUPS.filter((group) => group.actions.some(isAuditedCatalogActionName));
 }
 
 export function blockedCapabilityLabels() {
