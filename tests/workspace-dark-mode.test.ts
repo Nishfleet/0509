@@ -50,7 +50,8 @@ describe("workspace dark mode (tokens + boot)", () => {
 
   it("boots the theme before paint from root.tsx and follows theme-color", () => {
     expect(rootTsx).toContain("THEME_BOOT_SCRIPT");
-    expect(rootTsx).toContain('<html lang="en" suppressHydrationWarning>');
+    expect(rootTsx).toContain("htmlLangForPathname");
+    expect(rootTsx).toContain("suppressHydrationWarning");
     expect(rootTsx).toContain("THEME_COLOR_LIGHT");
     expect(rootTsx).toContain("<ThemeSync />");
   });

@@ -1,3 +1,5 @@
+import { SNEAKER_RESALE_MARKETS } from "~/lib/locale-markets";
+
 const SITE_ORIGIN = "https://0509.io";
 const SITE_NAME = "Five to Nine";
 // PNG, not SVG: most social scrapers (WhatsApp, Slack, X, iMessage) refuse
@@ -20,16 +22,38 @@ export function canonicalLinks(pathname: string) {
   return [{ rel: "canonical", href: canonicalUrl(pathname) }];
 }
 
+/**
+ * Reciprocal hreflang set for the sneaker-resale cluster, including self and
+ * x-default (English). Google ignores one-way annotations.
+ * https://developers.google.com/search/docs/specialty/international/localized-versions
+ */
+export function sneakerResaleHreflangLinks() {
+  return [
+    ...SNEAKER_RESALE_MARKETS.map((market) => ({
+      rel: "alternate" as const,
+      hrefLang: market.hreflang,
+      href: canonicalUrl(market.pathname),
+    })),
+    {
+      rel: "alternate" as const,
+      hrefLang: "x-default",
+      href: canonicalUrl("/sneaker-resale"),
+    },
+  ];
+}
+
 export function publicSeoMeta(input: {
   title: string;
   description: string;
   pathname: string;
+  ogLocale?: string;
 }) {
   const url = canonicalUrl(input.pathname);
 
   return [
     { title: input.title },
     { name: "description", content: input.description },
+    ...(input.ogLocale ? [{ property: "og:locale", content: input.ogLocale }] : []),
     { property: "og:site_name", content: SITE_NAME },
     { property: "og:type", content: "website" },
     { property: "og:title", content: input.title },
@@ -227,6 +251,10 @@ export const SITEMAP_PATHS = [
   "/switch/panoramata",
   "/switch/visualping",
   "/competitor-monitoring",
+  "/sneaker-resale",
+  "/de/sneaker-resale",
+  "/ja/sneaker-resale",
+  "/pt-br/sneaker-resale",
   "/proof",
   "/pricing",
   "/help",
@@ -281,6 +309,10 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/": { changefreq: "daily", priority: "1.0" },
   "/search": { changefreq: "weekly", priority: "0.9" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
+  "/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
+  "/de/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
+  "/ja/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
+  "/pt-br/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
   "/proof": { changefreq: "monthly", priority: "0.5" },
   "/pricing": { changefreq: "weekly", priority: "0.8" },
   "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },
