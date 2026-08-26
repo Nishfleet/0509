@@ -117,15 +117,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return signupActionError("send_failed", { email, name, redirectTo });
   }
 
-  // The migration page's CTA links here with ?source=magicbrief-migration, and
-  // the page's form posts back to the same URL — so the marker rides the
-  // action request too. It resolves to a typed boolean here and selects which
-  // allowlisted funnel event fires; the raw value itself is never recorded.
-  const { emitFunnelSignupStartFromMigrationReferrer, MAGICBRIEF_MIGRATION_SOURCE } =
+  // CTA markers (`source=`) select an allowlisted funnel kind. MagicBrief
+  // wind-down and locale sneaker-resale pages both use this path. The raw
+  // query value is compared to constants and never recorded.
+  const { emitFunnelSignupStartFromAllowlistedSource } =
     await import("~/lib/funnel-measurement.server");
-  const fromMigrationReferrer =
-    new URL(request.url).searchParams.get("source") === MAGICBRIEF_MIGRATION_SOURCE;
-  emitFunnelSignupStartFromMigrationReferrer(env, request, fromMigrationReferrer);
+  emitFunnelSignupStartFromAllowlistedSource(
+    env,
+    request,
+    new URL(request.url).searchParams.get("source"),
+  );
 
   const {
     rememberAllowlistedSignupSource,

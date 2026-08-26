@@ -111,6 +111,26 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "Product overview: scans, digests, alerts, and proof captures.",
   },
+  "/sneaker-resale": {
+    title: "Sneaker resale competitor ads",
+    description:
+      "English default in the sneaker-resale locale cluster: watch Meta ads and landing-page changes with saved screenshots.",
+  },
+  "/de/sneaker-resale": {
+    title: "Sneaker-Reseller Konkurrenzanzeigen (Deutsch)",
+    description:
+      "German sneaker-resale landing page. Product UI stays English; checkout currency follows the buyer.",
+  },
+  "/ja/sneaker-resale": {
+    title: "Sneaker resale competitor ads (Japanese)",
+    description:
+      "Japanese sneaker-resale landing page. Product UI stays English; checkout currency follows the buyer.",
+  },
+  "/pt-br/sneaker-resale": {
+    title: "Sneaker resale competitor ads (Portuguese, Brazil)",
+    description:
+      "Brazilian Portuguese sneaker-resale landing page. Product UI stays English; checkout currency follows the buyer.",
+  },
   "/proof": {
     title: "What we refuse to alert on",
     description:
