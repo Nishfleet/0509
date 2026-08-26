@@ -26,6 +26,7 @@ function entry(overrides: Partial<OfferLedgerEntry> = {}): OfferLedgerEntry {
     formPresent: true,
     screenshotHref: `/artifacts/proof/${encodeURIComponent(SCREENSHOT)}`,
     pageTextHref: `/artifacts/page-text/${encodeURIComponent(HTML)}`,
+    evidenceNote: null,
     transition: null,
     ...overrides,
   };

@@ -28,6 +28,13 @@ export interface OfferSnapshotInput {
   formPresent: boolean | null;
   screenshotKey: string | null;
   pageTextKey: string | null;
+  /**
+   * Honest evidence label shown when a snapshot has no screenshot and no
+   * page-text link (e.g. a seeded backfill row). Null when the snapshot
+   * carries real artifact receipts. The data layer sets this from stored
+   * metadata; the pure ledger only passes it through.
+   */
+  evidenceNote: string | null;
 }
 
 export interface OfferFieldChange<T> {
@@ -53,6 +60,12 @@ export interface OfferLedgerEntry {
   formPresent: boolean | null;
   screenshotHref: string | null;
   pageTextHref: string | null;
+  /**
+   * Honest evidence label shown when a snapshot has no screenshot and no
+   * page-text link (e.g. a seeded backfill row). Null when real artifact
+   * receipts are present.
+   */
+  evidenceNote: string | null;
   /** Null on the first dated state — there is no prior offer to diff. */
   transition: OfferTransition | null;
 }
@@ -81,6 +94,17 @@ export function parseAsOfDate(value: string | null | undefined): string | null {
 
 export function asOfEndUtc(asOf: string): string {
   return `${asOf}T23:59:59.999Z`;
+}
+
+/**
+ * Honest evidence label for a snapshot that carries no screenshot and no
+ * page-text link — the backfill case (issue #968). The label names the real
+ * capture date so a reader can tell a seeded state from a real monitoring
+ * capture that would link a screenshot. Never fabricated: it states the
+ * absence of a screenshot plainly.
+ */
+export function backfillEvidenceNote(capturedAt: string): string {
+  return `Captured on ${formatOfferDate(capturedAt)}, no screenshot`;
 }
 
 export function formatOfferDate(iso: string): string {
@@ -121,6 +145,7 @@ export function buildOfferLedger(snapshots: readonly OfferSnapshotInput[]): Offe
       formPresent: snapshot.formPresent,
       screenshotHref: proofScreenshotSrc(snapshot.screenshotKey),
       pageTextHref: proofPageTextSrc(snapshot.pageTextKey),
+      evidenceNote: snapshot.evidenceNote ?? null,
       transition: previous ? diffOffer(previous, snapshot) : null,
     };
   });
