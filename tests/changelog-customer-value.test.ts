@@ -37,6 +37,11 @@ describe("customer changelog", () => {
     expect(markup).toContain("Slack notifications are not generally available yet");
     expect(markup).toContain("Workspace navigation now has five destinations");
     expect(markup).toContain("Brand pages at /ads/:domain now attribute every ad to its real advertiser");
+    expect(markup).toContain("<h2>2026-08-26</h2>");
+    expect(markup).toContain("<h2>2026-08-25</h2>");
+    expect(markup).toContain("headline the verified ad count");
+    expect(markup).toContain("real plan prices");
+    expect(markup).toContain("Search footer no longer clips Help");
     expect(markup).not.toMatch(/(?:Slack|WhatsApp) (?:delivery|notifications?) (?:is|are) (?:available|live|enabled)/i);
     expect(markup).not.toMatch(/live provider|provider availability/i);
   });
