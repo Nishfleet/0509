@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { extractTag, websiteConnector } from "~/lib/presence-connectors/website.server";
+import { websiteConnector } from "~/lib/presence-connectors/website.server";
 
 import type { AppEnv } from "~/lib/env.server";
 
@@ -90,28 +90,5 @@ describe("presence website connector decode wiring", () => {
 
     expect(poll.ok).toBe(true);
     expect(poll.items[0]?.bodyExcerpt).toBe("a & b already decoded");
-  });
-});
-
-describe("extractTag tag allowlist", () => {
-  const titleXml = "<title>Hello</title>";
-
-  it("extracts allowlisted feed tags", () => {
-    expect(extractTag(titleXml, "title")).toBe("Hello");
-    expect(extractTag("<TITLE>Hello</TITLE>", "title")).toBe("Hello");
-    expect(extractTag("<pubDate>Mon, 01 Jan 2024</pubDate>", "pubDate")).toBe("Mon, 01 Jan 2024");
-    expect(extractTag("<description><p>Text</p></description>", "description")).toBe("<p>Text</p>");
-    expect(extractTag("<link>https://example.com</link>", "link")).toBe("https://example.com");
-  });
-
-  it("rejects tags that contain regex metacharacters instead of interpolating them", () => {
-    expect(extractTag(titleXml, ".*")).toBeNull();
-    expect(extractTag(titleXml, "(")).toBeNull();
-    expect(extractTag(titleXml, "title.*")).toBeNull();
-  });
-
-  it("rejects unknown tags even when they are valid names", () => {
-    const xml = "<custom>foo</custom><title>Hello</title>";
-    expect(extractTag(xml, "custom")).toBeNull();
   });
 });

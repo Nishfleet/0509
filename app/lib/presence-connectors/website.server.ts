@@ -405,41 +405,8 @@ function extractTitle(html: string) {
   ) || null;
 }
 
-function extractTagPatternForTag(tag: string): RegExp | null {
-  switch (tag) {
-    case "author":
-      return /<author[^>]*>([\s\S]*?)<\/author>/i;
-    case "content":
-      return /<content[^>]*>([\s\S]*?)<\/content>/i;
-    case "description":
-      return /<description[^>]*>([\s\S]*?)<\/description>/i;
-    case "guid":
-      return /<guid[^>]*>([\s\S]*?)<\/guid>/i;
-    case "id":
-      return /<id[^>]*>([\s\S]*?)<\/id>/i;
-    case "link":
-      return /<link[^>]*>([\s\S]*?)<\/link>/i;
-    case "pubDate":
-      return /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i;
-    case "published":
-      return /<published[^>]*>([\s\S]*?)<\/published>/i;
-    case "summary":
-      return /<summary[^>]*>([\s\S]*?)<\/summary>/i;
-    case "title":
-      return /<title[^>]*>([\s\S]*?)<\/title>/i;
-    case "updated":
-      return /<updated[^>]*>([\s\S]*?)<\/updated>/i;
-    default:
-      return null;
-  }
-}
-
-/** Extract inner text of allowlisted feed tags. Unknown tags, including
- * those that contain regex metacharacters, return null. */
-export function extractTag(block: string, tag: string): string | null {
-  const pattern = extractTagPatternForTag(tag);
-  if (pattern === null) return null;
-  const match = block.match(pattern);
+function extractTag(block: string, tag: string) {
+  const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
   return match?.[1]?.trim() ?? null;
 }
 
