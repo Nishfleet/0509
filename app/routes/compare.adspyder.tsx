@@ -58,7 +58,7 @@ const adspyderCosts = [
   {
     title: "No saved proof trail you can hand a client",
     detail:
-      "If you need a timestamped screenshot, the page text, and the original source URL for a named change, that is the Five to Nine job. AdSpyder's listed price does not, by itself, prove that trail exists.",
+      "If you need timestamped page text, the original source URL, and a screenshot when the capture includes one, that is the Five to Nine job. AdSpyder's listed price does not, by itself, prove that trail exists.",
   },
 ] as const;
 
@@ -69,7 +69,7 @@ const fiveToNineAdds = [
   },
   {
     theirs: "Saved evidence",
-    ours: "Confirmed changes are saved with the screenshot, the page text, and the original source link, so the claim survives a closed tab.",
+    ours: "Confirmed changes are saved with the page text, the original source link, and a screenshot when the capture includes one, so the claim survives a closed tab.",
   },
   {
     theirs: "Honest labels",
@@ -123,7 +123,7 @@ export default function CompareAdspyderRoute() {
         <p className="ld-deck-copy">
           AdSpyder's public plans run from $10 to $99 a month and promise alerts when competitors
           launch new ads. That can be enough. Five to Nine is for the scheduled before and after,
-          with a screenshot and a source link. Competitor prices on this page are public list prices
+          with a source link and a screenshot when the capture includes one. Competitor prices on this page are public list prices
           as of August 2026 — check the vendor's site for current plans.
         </p>
 
