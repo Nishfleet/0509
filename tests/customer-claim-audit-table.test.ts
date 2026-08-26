@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
   getPlanEntitlements,
-  PLAN_FAMILIES,
 } from "~/lib/plan-entitlements";
 import { pricingPlans, usageBundles, EVIDENCE_USAGE_CUSTOMER_COPY } from "~/lib/pricing";
 
@@ -159,22 +158,23 @@ describe("BET 10 claim-by-claim audit table", () => {
       expect(plan.yearlyLabel).toMatch(/^\$\d+ USD\/year$/);
     }
 
-    // Sample 5: AUDIT-SAVES-SCREENSHOTS — the data-outruns-copy claim.
-    // Recorded as fail_copy_change_needed. The code path exists (the unit test
-    // in monitoring-landing-page-snapshot.test.ts proves screenshotArtifactKey
-    // is persisted on a successful capture), but the live data shows only 19%
-    // of succeeded proof_capture rows carry a screenshot key. The audit table
-    // records the copy change needed; this sample confirms the recorded result.
+    // Sample 5: AUDIT-SAVES-SCREENSHOTS — copy now matches live coverage.
+    // Live D1 on 2026-08-27: 115/631 succeeded rows carry a screenshot key
+    // (18%), 0/34 in the last 48h. Public copy promises source-linked proof
+    // always and a screenshot only when the capture includes one.
     const screenshots = audit.claims.find((c) => c.claimId === "AUDIT-SAVES-SCREENSHOTS");
     expect(screenshots).toBeTruthy();
-    expect(screenshots!.currentResult).toBe("fail_copy_change_needed");
-    expect(screenshots!.betOrCopyChange).toMatch(/copy change needed/iu);
+    expect(screenshots!.currentResult).toBe("pass");
+    expect(screenshots!.text).toMatch(/screenshot when the capture includes one/iu);
+    expect(screenshots!.text).not.toMatch(/saves the screenshots/iu);
+    expect(screenshots!.text).not.toMatch(/sends screenshot evidence/iu);
 
-    // Sample 6: AUDIT-LANDING-PAGE-CHANGE-HISTORY — the empty-table claim.
+    // Sample 6: AUDIT-LANDING-PAGE-CHANGE-HISTORY — empty table, honest label.
     const history = audit.claims.find((c) => c.claimId === "AUDIT-LANDING-PAGE-CHANGE-HISTORY");
     expect(history).toBeTruthy();
-    expect(history!.currentResult).toBe("fail_copy_change_needed");
-    expect(history!.betOrCopyChange).toMatch(/copy change needed/iu);
+    expect(history!.currentResult).toBe("pass");
+    expect(history!.text).toMatch(/as scheduled watches complete/iu);
+    expect(history!.text).not.toMatch(/with screenshots/iu);
 
     // Sample 7: AUDIT-FUNNEL-MEASUREMENT — the Nish-reserved claim.
     const funnel = audit.claims.find((c) => c.claimId === "AUDIT-FUNNEL-MEASUREMENT");
@@ -207,5 +207,66 @@ describe("BET 10 claim-by-claim audit table", () => {
     // The two data-outruns-copy claims from the issue evidence must be present.
     expect(audit.claims.some((c) => c.claimId === "AUDIT-SAVES-SCREENSHOTS")).toBe(true);
     expect(audit.claims.some((c) => c.claimId === "AUDIT-LANDING-PAGE-CHANGE-HISTORY")).toBe(true);
+  });
+
+  it("every non-Nish-reserved claim currently passes", () => {
+    for (const claim of audit.claims) {
+      if (claim.nishReserved) continue;
+      expect(claim.currentResult, `${claim.claimId} must pass after BET 10 part 3`).toBe("pass");
+    }
+    expect(audit.summary.failCopyChangeNeeded).toBe(0);
+    expect(audit.summary.pass).toBe(audit.claims.filter((c) => c.currentResult === "pass").length);
+  });
+
+  it("public copy no longer overclaims screenshots or a populated landing-page history", () => {
+    const surfaces = [
+      "app/routes/marketing.tsx",
+      "app/routes/competitor-monitoring.tsx",
+      "app/routes/compare.magicbrief.tsx",
+      "app/routes/compare.meta-ad-library.tsx",
+      "app/lib/pricing.ts",
+    ];
+    const banned = [
+      "saves the screenshots",
+      "sends screenshot evidence",
+      "Landing-page change history with screenshots",
+      "Every change keeps a screenshot",
+      "Every alert includes the screenshot",
+      "with screenshot evidence",
+      "saved with screenshots, page text",
+      "saved watches attach screenshots",
+    ];
+    for (const surface of surfaces) {
+      const source = readFileSync(resolve(surface), "utf8");
+      for (const phrase of banned) {
+        expect(source.includes(phrase), `${surface} still contains ${JSON.stringify(phrase)}`).toBe(false);
+      }
+    }
+
+    const starter = pricingPlans().find((plan) => plan.slug === "starter");
+    expect(starter).toBeTruthy();
+    expect(starter!.features).toContain("Landing-page change history as scheduled watches complete");
+    expect(starter!.features).not.toContain("Landing-page change history with screenshots");
+  });
+
+  it("ga-positioning status header does not say NOT LIVE for now-true claims", () => {
+    const header = readFileSync(resolve("docs/ga-positioning.md"), "utf8")
+      .split("\n")
+      .slice(0, 12)
+      .join("\n");
+    expect(header).not.toMatch(/NOT LIVE/);
+    expect(header).toMatch(/\*\*Status:\*\* LIVE/);
+  });
+
+  it("every mapped liveQueryOrTest names at least one existing test file", () => {
+    const testPath = /\b(tests\/[A-Za-z0-9._/-]+\.test\.tsx?)\b/g;
+    for (const claim of audit.claims) {
+      if (claim.nishReserved) continue;
+      const named = [...claim.liveQueryOrTest.matchAll(testPath)].map((match) => match[1]);
+      expect(named.length, `${claim.claimId} liveQueryOrTest must name a tests/*.test.ts file`).toBeGreaterThan(0);
+      for (const filePath of named) {
+        expect(existsSync(resolve(filePath)), `${claim.claimId} missing ${filePath}`).toBe(true);
+      }
+    }
   });
 });

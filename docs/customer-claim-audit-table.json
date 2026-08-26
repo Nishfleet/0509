@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "auditId": "BET10-CLAIM-AUDIT-2026-08-25",
-  "generatedAt": "2026-08-25T14:15:00Z",
+  "generatedAt": "2026-08-27T00:45:00Z",
   "bet": "BET 10 — Say only what is true (claim/reality reconciliation)",
-  "part": "1 of 3 — claim-by-claim audit table (unblocked)",
+  "part": "3 of 3 — audit registry verification",
   "siblingRegistry": "docs/customer-claim-surface-registry.json",
   "auditBasis": "Every public sentence maps to a live query or test that passes, or to a copy change that brings the sentence back in line with the data. Claims that depend on a Nish-reserved decision are flagged without being resolved.",
   "resultLegend": {
@@ -38,7 +38,7 @@
     {
       "claimId": "AUDIT-DIGEST-CADENCE",
       "registryClaim": "PLAN-CADENCE",
-      "text": "Your brief groups meaningful changes with screenshots, links, and one next review — daily on Starter and Agency, weekly on Scout.",
+      "text": "Your brief groups meaningful changes with source-linked proof and one next review — daily on Starter and Agency, weekly on Scout.",
       "surface": "homepage how-step 03",
       "liveQueryOrTest": "tests/plan-entitlements.test.ts → 'gives Starter daily and weekly digests'; tests/pricing.test.ts → 'keeps plan caps generous but finite' (Weekly Brief on Scout, Daily + weekly Briefs on Starter/Agency)",
       "currentResult": "pass",
@@ -82,7 +82,7 @@
     {
       "claimId": "AUDIT-PROOF-CAPTURE-ACCOUNTING",
       "registryClaim": "CHECK-PACK-SEMANTICS",
-      "text": "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with screenshots, page text, and the original link. Included proof captures reset every month and do not roll over. Purchased proof captures never expire and carry over until you use them.",
+      "text": "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with page text, the original link, and a screenshot when the capture includes one. Included proof captures reset every month and do not roll over. Purchased proof captures never expire and carry over until you use them.",
       "surface": "pricing evidence-usage note, billing FAQ",
       "liveQueryOrTest": "tests/pricing.test.ts → 'states the customer-facing proof capture accounting contract', 'offers paid proof capture packs for temporary spikes'; tests/billing-policy-copy.test.ts",
       "currentResult": "pass",
@@ -115,7 +115,7 @@
     {
       "claimId": "AUDIT-PROOF-BRIEF-REAL",
       "registryClaim": "SEO-CANONICAL-INDEXING",
-      "text": "Every row above is a real capture. Open the source link and check it yourself — saved watches attach screenshots, page text, and original links.",
+      "text": "Every row above is a real capture. Open the source link and check it yourself — saved watches attach page text and original links, plus a screenshot when the capture includes one.",
       "surface": "homepage proof brief trail note, competitor-monitoring proof brief trail note",
       "liveQueryOrTest": "tests/marketing-proof-brief.test.tsx → 'renders a truthful non-empty value for every decision-summary field from real captures', 'never labels the brief or its evidence as sample or illustrative', 'links every source-trail row to a real public source page', 'renders the honest no-live-proof state when no real capture exists'; tests/public-routes-no-sample-proof.test.ts",
       "currentResult": "pass",
@@ -148,23 +148,23 @@
     {
       "claimId": "AUDIT-SAVES-SCREENSHOTS",
       "registryClaim": "PLAN-FEATURE-CATALOG",
-      "text": "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then sends screenshot evidence and change alerts before your next meeting. ... saves the screenshots, and files the brief.",
+      "text": "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then files source-linked proof and change alerts before your next meeting. ... saves page text and the source link — plus a screenshot when the capture includes one — and files the brief.",
       "surface": "homepage meta description, homepage hero deck, competitor-monitoring meta description, competitor-monitoring hero deck, pricing evidence-usage copy, compare/magicbrief migration FAQ",
-      "liveQueryOrTest": "Live D1 query: SELECT COUNT(*) FROM proof_capture WHERE screenshot_artifact_key IS NOT NULL AND status='succeeded'; vs total succeeded proof_capture rows. Code test: tests/proof-screenshot.server.test.ts (key shape validation), tests/monitoring-landing-page-snapshot.test.ts (snapshot+artifact persistence on capture).",
-      "currentResult": "fail_copy_change_needed",
-      "resultDetail": "category-research.md §1.5b: 115/598 proof_capture carry screenshot_artifact_key (19%). The code path persists screenshotArtifactKey on a successful browser-render capture (monitoring-landing-page-snapshot.test.ts proves the path), but the live data shows only ~19% of succeeded captures actually carry a screenshot key. The public sentence 'saves the screenshots' outruns the data: it implies every confirmed change gets a screenshot, while 81% do not. Copy change needed: scope 'saves the screenshots' to 'saves the screenshot when the page renders' or 'saves page text and the source link, and a screenshot when the page renders', so the claim matches the 19% reality until capture coverage closes.",
-      "betOrCopyChange": "copy change needed — scope the screenshot claim to render-dependent until screenshot_artifact_key coverage reaches 100% of succeeded proof_capture rows",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts → honest screenshot copy (no unconditional 'saves the screenshots' / 'sends screenshot evidence'); tests/proof-screenshot.server.test.ts (key shape); tests/monitoring-landing-page-snapshot.test.ts (snapshot+artifact persistence). Live D1 (2026-08-27): 115/631 succeeded proof_capture rows carry screenshot_artifact_key (18%); 0/34 succeeded in the rolling 48h window. Copy matches that coverage.",
+      "currentResult": "pass",
+      "resultDetail": "Public copy no longer promises a screenshot on every confirmed change. Live production D1 on 2026-08-27 still shows 115/631 succeeded rows with a screenshot key (18%) and 0/34 in the last 48h, so the sentence now says source-linked proof always and a screenshot only when the capture includes one. Code path tests still prove screenshotArtifactKey is persisted when the renderer produces one.",
+      "betOrCopyChange": "copy changed 2026-08-27 — scoped the screenshot promise to capture-includes-one until screenshot_artifact_key coverage is proven on new succeeded rows",
       "nishReserved": false
     },
     {
       "claimId": "AUDIT-LANDING-PAGE-CHANGE-HISTORY",
       "registryClaim": "PLAN-FEATURE-CATALOG",
-      "text": "Landing-page change history with screenshots.",
+      "text": "Landing-page change history as scheduled watches complete.",
       "surface": "pricing Starter/Agency feature list",
-      "liveQueryOrTest": "Live D1 query: SELECT COUNT(*) FROM landing_page_snapshot; (snapshot table population). Code test: tests/monitoring-landing-page-snapshot.test.ts → 'persists a fresh capture as a versioned landing_page_snapshot row with all fields'.",
-      "currentResult": "fail_copy_change_needed",
-      "resultDetail": "category-research.md §1.5c: the landing_page_snapshot table is empty. The code path persists a versioned snapshot row on every fresh capture (monitoring-landing-page-snapshot.test.ts proves the path), but the live table has zero rows — no scheduled watch has produced a snapshot yet. The Starter/Agency feature 'Landing-page change history with screenshots' promises a populated change history that does not exist in the live data. Copy change needed: either (a) reword to 'Landing-page change history with screenshots (populated once your first scheduled watch completes a change)' or (b) keep the feature label but record that the live table is empty and the claim is forward-looking until the first scheduled scan lands a snapshot.",
-      "betOrCopyChange": "copy change needed — mark the change-history feature as forward-looking until landing_page_snapshot has ≥1 row from a real scheduled watch",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts → pricing feature string is forward-looking (no 'with screenshots' promise); tests/monitoring-landing-page-snapshot.test.ts → 'persists a fresh capture as a versioned landing_page_snapshot row with all fields'. Live D1 (2026-08-27): SELECT COUNT(*) FROM landing_page_snapshot = 0.",
+      "currentResult": "pass",
+      "resultDetail": "Live production D1 on 2026-08-27 still has 0 landing_page_snapshot rows. The Starter/Agency feature list no longer promises a populated screenshot history; it says the trail fills as scheduled watches complete, which matches an empty table plus a working persist path.",
+      "betOrCopyChange": "copy changed 2026-08-27 — feature label is forward-looking until landing_page_snapshot has ≥1 row from a real scheduled watch",
       "nishReserved": false
     },
     {
@@ -181,7 +181,7 @@
     {
       "claimId": "AUDIT-MIGRATION-SELF-SERVE",
       "registryClaim": "COMPARE-MIGRATION-AFTERNOON",
-      "text": "For competitor-list migration and change monitoring, yes: your tracked brands import as watchlists, and paid plans check them every 3–6 hours with screenshot evidence. For browsing saved creative collections and boards, no — that saved work does not transfer, and Five to Nine's library is narrower and change-focused.",
+      "text": "For competitor-list migration and change monitoring, yes: your tracked brands import as watchlists, and paid plans check them every 3–6 hours with source-linked proof. For browsing saved creative collections and boards, no — that saved work does not transfer, and Five to Nine's library is narrower and change-focused.",
       "surface": "compare/magicbrief migration FAQ",
       "liveQueryOrTest": "tests/marketing-magicbrief-cta.test.ts; tests/customer-claim-surface-registry.test.ts → COMPARE-MIGRATION-AFTERNOON removedTextCheck (no 'in an afternoon' promise); app/routes/compare.magicbrief.tsx (MIGRATION_SIGNUP_PATH self-serve, no time promise)",
       "currentResult": "pass",
@@ -203,12 +203,12 @@
     {
       "claimId": "AUDIT-COMPETITOR-MONITORING-CATEGORY",
       "registryClaim": "SEO-CANONICAL-INDEXING",
-      "text": "Competitor monitoring software that watches Meta ads and landing pages, then sends screenshot evidence when something changes. Free preview, no account.",
+      "text": "Competitor monitoring software that watches Meta ads and landing pages, then files source-linked proof when something changes. Free preview, no account.",
       "surface": "competitor-monitoring meta description, competitor-monitoring hero",
       "liveQueryOrTest": "tests/competitor-monitoring-category.test.ts → 'carries a truthful title, description, and canonical', 'emits WebPage JSON-LD matching the visible title and description', 'is included in the public sitemap'; tests/seo.test.ts → 'publishes the public funnel surfaces in the sitemap'",
       "currentResult": "pass",
-      "resultDetail": "Category page is in SITEMAP_PATHS, carries canonical + WebPage JSON-LD matching visible copy. 12/12 competitor-monitoring-category tests green. The 'sends screenshot evidence' portion inherits the AUDIT-SAVES-SCREENSHOTS data gap and is tracked there.",
-      "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract); the screenshot portion is copy-change-needed per AUDIT-SAVES-SCREENSHOTS",
+      "resultDetail": "Category page is in SITEMAP_PATHS, carries canonical + WebPage JSON-LD matching visible copy. The description now files source-linked proof rather than promising screenshot evidence on every change (AUDIT-SAVES-SCREENSHOTS).",
+      "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract); screenshot wording scoped with AUDIT-SAVES-SCREENSHOTS on 2026-08-27",
       "nishReserved": false
     },
     {
@@ -236,14 +236,11 @@
   ],
   "summary": {
     "totalClaims": 20,
-    "pass": 17,
-    "failCopyChangeNeeded": 2,
+    "pass": 19,
+    "failCopyChangeNeeded": 0,
     "nishReserved": 1,
     "passCodeDataPending": 0,
-    "copyChangesNeeded": [
-      "AUDIT-SAVES-SCREENSHOTS — scope 'saves the screenshots' to render-dependent until screenshot_artifact_key coverage reaches 100% of succeeded proof_capture rows (currently 19%, 115/598).",
-      "AUDIT-LANDING-PAGE-CHANGE-HISTORY — mark 'Landing-page change history with screenshots' as forward-looking until landing_page_snapshot has ≥1 row from a real scheduled watch (currently empty)."
-    ],
+    "copyChangesNeeded": [],
     "nishReservedOpen": [
       "AUDIT-FUNNEL-MEASUREMENT — the FUNNEL_MEASUREMENT_ENABLED=1 (wrangler.jsonc) vs. docs/ga-metrics.md 'Collection is NOT live' contradiction is Nish's decision (privacy + product direction); the flag is untouched."
     ]
