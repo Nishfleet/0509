@@ -13,6 +13,7 @@ export default [
   route("status", "routes/status.tsx"),
   route("changelog", "routes/changelog.tsx"),
   route("trust", "routes/trust.tsx"),
+  route("proof", "routes/proof.tsx"),
   route("bots/presence", "routes/bots.presence.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),

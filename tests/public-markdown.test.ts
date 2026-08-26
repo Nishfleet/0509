@@ -19,6 +19,7 @@ describe("public markdown", () => {
     expect(isPublicMarkdownPage("/status")).toBe(true);
     expect(isPublicMarkdownPage("/changelog")).toBe(true);
     expect(isPublicMarkdownPage("/trust")).toBe(true);
+    expect(isPublicMarkdownPage("/proof")).toBe(true);
     expect(isPublicMarkdownPage("/search")).toBe(false);
     expect(isPublicMarkdownPage("/privacy")).toBe(true);
     expect(isPublicMarkdownPage("/terms")).toBe(true);
@@ -63,7 +64,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("customer API key creation, rotation, and revocation");
     expect(PUBLIC_MARKDOWN).toContain("Signed-in support cases cover paid-customer account help");
     expect(PUBLIC_MARKDOWN).toContain("Paid customer support paths cover");
-    expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, and trust pages are available");
+    expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, trust, and proof-rules pages are available");
     expect(PUBLIC_MARKDOWN).toContain("summarizes customer-facing surfaces without exposing private account activity");
     expect(PUBLIC_MARKDOWN).toContain("Email delivery is in product scope for eligible accounts");
     expect(PUBLIC_MARKDOWN).toContain("Public Markdown separates local capability, configured paths, and live proof");

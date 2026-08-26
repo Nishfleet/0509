@@ -15,6 +15,7 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain("https://0509.io/status");
     expect(sitemap?.body).toContain("https://0509.io/changelog");
     expect(sitemap?.body).toContain("https://0509.io/trust");
+    expect(sitemap?.body).toContain("https://0509.io/proof");
     expect(sitemap?.body).toContain("https://0509.io/privacy");
     expect(sitemap?.body).toContain("https://0509.io/terms");
     // Funnel entry points (feat/funnel-seo): the public search preview and
