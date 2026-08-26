@@ -52,6 +52,11 @@ const EXPECTED_MCP_ACTION_GROUPS = [
     requiresWriteEnabled: true,
     actions: ["list_web_mentions"],
   },
+  {
+    label: "Offer change history",
+    requiresWriteEnabled: false,
+    actions: ["get_change_history", "get_offer_state_at", "diff_offer", "list_suppressed"],
+  },
 ] as const;
 
 const READ_EXPORT_TOOL_NAMES = [
