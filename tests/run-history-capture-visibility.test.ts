@@ -155,7 +155,7 @@ describe("run-history capture visibility (#969)", () => {
       expect(row).not.toBeNull();
       expect(row!.kind).toBe("skipped_due_to_budget");
       expect(row!.reasonCode).toBe("skipped_due_to_budget");
-      expect(row!.explanation).toMatch(/evidence budget reached/i);
+      expect(row!.explanation).toMatch(/plan allowance reached/i);
       expectNoAlert(row!);
     });
 
@@ -270,7 +270,7 @@ describe("run-history capture visibility (#969)", () => {
     for (const fixture of GATE_FAILURE_MODES) {
       expect(markup).toContain(formatLandingPageCaptureGap(fixture.reasonCode).proofLabel);
     }
-    expect(markup).toContain("evidence budget reached");
+    expect(markup).toContain("plan allowance reached");
     expect(markup).toContain("Same change already recorded");
     expect(markup).not.toMatch(/capture_failed|skipped_due_to_budget|suppressed_proof_duplicate/);
   });

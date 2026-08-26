@@ -49,6 +49,13 @@ export interface ProofPolicyInput {
   burstCount: number;
   proofRequestDuplicate: boolean;
   recentFailureCountForTarget: number;
+  /**
+   * V1 fairness caps: 3 captures per watchlist run, 12 per watchlist day.
+   * Paid plans pass false (#958) so those caps cannot starve a plan that
+   * still has remaining checks. Workspace daily/monthly remaining still
+   * apply. Default true (free / unspecified).
+   */
+  applyPerWatchlistBudgets?: boolean;
   now?: string;
 }
 
@@ -168,10 +175,13 @@ export function evaluateProofPolicy(input: ProofPolicyInput): ProofPolicyDecisio
       return buildSkippedDecision(threshold, score, bucket, false, "skipped_due_to_rate_limit");
     }
 
+    const honorPerWatchlistBudgets = input.applyPerWatchlistBudgets !== false;
     if (
-      input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun ||
-      input.watchlistDailyAttemptCount >= V1_PROOF_BUDGETS.perWatchlistDay ||
-      input.workspaceDailyAttemptCount >= (input.workspaceDailyCap ?? V1_PROOF_BUDGETS.perWorkspaceDay)
+      (honorPerWatchlistBudgets &&
+        (input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun ||
+          input.watchlistDailyAttemptCount >= V1_PROOF_BUDGETS.perWatchlistDay)) ||
+      input.workspaceDailyAttemptCount >=
+        (input.workspaceDailyCap ?? V1_PROOF_BUDGETS.perWorkspaceDay)
     ) {
       return buildSkippedDecision(threshold, score, bucket, false, "skipped_due_to_budget");
     }

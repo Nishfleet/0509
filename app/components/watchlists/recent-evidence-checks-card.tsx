@@ -31,6 +31,8 @@ export function RecentEvidenceChecksCard({
   watchlistId?: string;
   checksExpanded?: boolean;
 }) {
+  const otherSkipped =
+    data.proofSummary.skippedAttempts - data.proofSummary.skippedDueToBudget;
   const refusalRows = buildRunHistoryRefusalRows({
     captures: data.recentProofCaptures,
     candidates: data.eventCandidates,
@@ -47,11 +49,19 @@ export function RecentEvidenceChecksCard({
       value: String(data.proofSummary.failedAttempts),
       missingLabel: "none yet",
     },
-    ...(data.proofSummary.skippedAttempts > 0
+    ...(data.proofSummary.skippedDueToBudget > 0
       ? [
           {
-            key: "Skipped",
-            value: String(data.proofSummary.skippedAttempts),
+            key: "Skipped (plan allowance)",
+            value: String(data.proofSummary.skippedDueToBudget),
+          } satisfies FactRow,
+        ]
+      : []),
+    ...(otherSkipped > 0
+      ? [
+          {
+            key: "Skipped (other)",
+            value: String(otherSkipped),
           } satisfies FactRow,
         ]
       : []),
@@ -89,6 +99,14 @@ export function RecentEvidenceChecksCard({
       <p className="f9-evidence-micro">Recent proof captures</p>
       <h3 className="f9-evidence-panel-title">Evidence freshness</h3>
       <FactRail rows={rows} title="Summary" />
+      {data.proofSummary.skippedDueToBudget > 0 ? (
+        <p className="f9-wk-dim">
+          {data.proofSummary.skippedDueToBudget} check
+          {data.proofSummary.skippedDueToBudget === 1 ? "" : "s"} skipped because the
+          plan allowance was reached. Checks resume when the allowance resets — add a
+          credit pack or upgrade the plan to capture more now.
+        </p>
+      ) : null}
       {refusalRows.length > 0 ? (
         <section aria-label="What we did not alert on">
           <p className="f9-evidence-micro">What we did not alert on</p>
