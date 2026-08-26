@@ -299,7 +299,11 @@ const PROOF_CAPTURE_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
 });
 
-export function formatProofCaptureLabel(ad: AdRecord) {
+export function formatProofCaptureLabel(
+  ad: AdRecord,
+  options?: { pending?: boolean; failureReason?: string | null },
+) {
+  if (options?.pending) return "Checking the landing page now";
   if (ad.landingPage?.capturedAt) {
     const capturedAt = new Date(ad.landingPage.capturedAt);
     if (!Number.isNaN(capturedAt.getTime())) {
@@ -308,9 +312,8 @@ export function formatProofCaptureLabel(ad: AdRecord) {
       )} UTC`;
     }
   }
-  return ad.landingPageUrl
-    ? "Landing page not captured yet"
-    : "No landing-page destination available";
+  if (!ad.landingPageUrl) return "No landing-page destination available";
+  return formatLandingPageCaptureGap(options?.failureReason).proofLabel;
 }
 
 export function formatSelectedLandingHeadline(input: {
@@ -318,12 +321,13 @@ export function formatSelectedLandingHeadline(input: {
   landingPageUrl: string | null | undefined;
   hasLandingPage: boolean;
   pending: boolean;
+  failureReason?: string | null;
 }): string {
   const headline = input.rawHeadline?.trim();
   if (headline) return headline;
   if (input.pending) return "Analyzing creative…";
   if (input.landingPageUrl?.trim() && !input.hasLandingPage) {
-    return "Couldn't capture this page";
+    return formatLandingPageCaptureGap(input.failureReason).headline;
   }
   return "Headline not captured yet";
 }
@@ -334,13 +338,121 @@ export function formatSelectedLandingFactValue(input: {
   hasLandingPage: boolean;
   pending: boolean;
   failedPageCheck?: boolean;
+  failureReason?: string | null;
 }): string {
   if (input.hasLandingPage) return input.capturedLabel;
   if (input.pending) return "Analyzing creative…";
   if (input.landingPageUrl?.trim() && !input.hasLandingPage) {
-    return input.failedPageCheck ? "Couldn't check this page" : "Unavailable";
+    const gap = formatLandingPageCaptureGap(input.failureReason);
+    return input.failedPageCheck ? gap.proofLabel : gap.factValue;
   }
   return input.capturedLabel;
+}
+
+/**
+ * Honest, actionable copy when a landing-page check did not produce a
+ * snapshot. "Couldn't capture this page" / "Unavailable" named the miss
+ * without a reason or a next step.
+ */
+const LANDING_PAGE_CAPTURE_GAPS: Record<
+  string,
+  { headline: string; detail: string; factValue: string; proofLabel: string }
+> = {
+  landing_blocked: {
+    headline: "This page blocked the automated check",
+    detail: "Open the landing-page link below to read the offer yourself.",
+    factValue: "Blocked by the site",
+    proofLabel: "Landing page blocked the check",
+  },
+  landing_challenge_page: {
+    headline: "This page blocked the automated check",
+    detail: "Open the landing-page link below to read the offer yourself.",
+    factValue: "Blocked by the site",
+    proofLabel: "Landing page blocked the check",
+  },
+  landing_cookie_wall: {
+    headline: "This page asked for cookies first",
+    detail: "Open the link below to continue past the cookie prompt.",
+    factValue: "Cookie prompt",
+    proofLabel: "Landing page asked for cookies first",
+  },
+  landing_partial_spa: {
+    headline: "This page needs a full browser to finish loading",
+    detail: "Open the link below to see the live offer.",
+    factValue: "Needs a browser",
+    proofLabel: "Landing page needs a full browser",
+  },
+  landing_rate_limited: {
+    headline: "The site asked us to wait",
+    detail: "Try this ad again in a minute, or open the link below.",
+    factValue: "Asked us to wait",
+    proofLabel: "Landing page asked us to wait",
+  },
+  landing_url_invalid: {
+    headline: "This ad has no usable landing-page link",
+    detail: "The ad creative is still above if you want to read that.",
+    factValue: "No usable link",
+    proofLabel: "No usable landing-page link",
+  },
+  landing_redirect_blocked: {
+    headline: "This landing-page link redirected somewhere we cannot follow",
+    detail: "Open the link below to continue on the live site.",
+    factValue: "Redirect blocked",
+    proofLabel: "Landing-page redirect was blocked",
+  },
+  landing_redirect_limit: {
+    headline: "This landing-page link redirected too many times",
+    detail: "Open the link below to continue on the live site.",
+    factValue: "Too many redirects",
+    proofLabel: "Landing-page redirect did not finish",
+  },
+  landing_http_error: {
+    headline: "The live site returned an error for this page",
+    detail: "Open the link below, or try this ad again in a minute.",
+    factValue: "Site returned an error",
+    proofLabel: "Landing page returned an error",
+  },
+  landing_fetch_failed: {
+    headline: "We could not reach this landing page just now",
+    detail: "Try this ad again in a minute, or open the link below.",
+    factValue: "Could not reach the page",
+    proofLabel: "Landing page could not be reached",
+  },
+  landing_error_page: {
+    headline: "This page loaded as an error screen",
+    detail: "Open the link below to see whether the live offer is up.",
+    factValue: "Error screen",
+    proofLabel: "Landing page loaded as an error screen",
+  },
+  landing_content_empty_or_oversized: {
+    headline: "This page did not return usable text",
+    detail: "Open the link below to read the live offer.",
+    factValue: "No usable text",
+    proofLabel: "Landing page had no usable text",
+  },
+  landing_content_signature_too_small: {
+    headline: "This page did not return enough text to read the offer",
+    detail: "Open the link below to read the live offer.",
+    factValue: "Too little text",
+    proofLabel: "Landing page had too little text",
+  },
+};
+
+const DEFAULT_LANDING_PAGE_CAPTURE_GAP = {
+  headline: "This landing page didn't yield a usable snapshot",
+  detail: "Open the link below to read the live offer, or try the ad again.",
+  factValue: "No usable snapshot",
+  proofLabel: "Landing page check did not finish",
+};
+
+export function formatLandingPageCaptureGap(reason?: string | null): {
+  headline: string;
+  detail: string;
+  factValue: string;
+  proofLabel: string;
+} {
+  if (!reason) return DEFAULT_LANDING_PAGE_CAPTURE_GAP;
+  return LANDING_PAGE_CAPTURE_GAPS[reason] ?? DEFAULT_LANDING_PAGE_CAPTURE_GAP;
 }
 
 export function formatHookLabel(hook: string) {

@@ -301,7 +301,7 @@ describe("search loader", () => {
     const { loader } = await import("~/routes/search");
     const result = await loader({
       context: createContext(env),
-      request: new Request("http://localhost/search?query=nykaa"),
+      request: new Request("http://localhost/search?q=nike&country=all"),
     } as never);
 
     expect(listCollections).not.toHaveBeenCalled();
@@ -315,7 +315,7 @@ describe("search loader", () => {
       expect.objectContaining({
         mode: "advertiser",
         filters: expect.objectContaining({
-          query: "nykaa",
+          query: "nike",
           country: "all",
         }),
       }),
@@ -326,7 +326,7 @@ describe("search loader", () => {
       env,
       sourceResult,
       null,
-      { enrichSelected: false, hydratePersisted: false },
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
     );
     expect(result).toMatchObject({
       session: null,
@@ -646,7 +646,7 @@ describe("search loader", () => {
       env,
       sourceResult,
       null,
-      { enrichSelected: false, hydratePersisted: false },
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
     );
     expect(result).toMatchObject({
       session: null,
@@ -1713,7 +1713,7 @@ describe("search loader", () => {
       env,
       legacyResult,
       null,
-      { enrichSelected: false, hydratePersisted: false },
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
     );
     expect(result.result).toBe(legacyResult);
     expect(result.relevanceApplied).toBe(false);
@@ -1942,7 +1942,7 @@ describe("search loader", () => {
       env,
       sourceResult,
       null,
-      { enrichSelected: false, hydratePersisted: false },
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
     );
   });
 });
