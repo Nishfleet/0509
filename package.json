@@ -8,6 +8,7 @@
   },
   "scripts": {
     "audit:contrast": "node e2e/contrast-audit.mjs",
+    "audit:surface": "node e2e/surface-audit.mjs",
     "backup:d1": "node scripts/d1-backup.mjs",
     "backup:d1:r2": "node scripts/d1-backup-to-r2.mjs",
     "restore:d1:transform": "node scripts/d1-restore-transform.mjs",
