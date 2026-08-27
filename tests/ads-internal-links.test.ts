@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  displayNameFromDomain,
   indexableAdsLinkFromPath,
   pickFeaturedAdsInternalLink,
   type IndexableAdsLink,
@@ -59,6 +60,24 @@ describe("indexable ads link helpers", () => {
     expect(indexableAdsLinkFromPath("/ads/nykaa.com/extra")).toBeNull();
     expect(indexableAdsLinkFromPath("/search")).toBeNull();
     expect(indexableAdsLinkFromPath("/ads/")).toBeNull();
+  });
+
+  it("uses public brand names for stylised registrable domains", () => {
+    expect(displayNameFromDomain("hm.com")).toBe("H&M");
+    expect(displayNameFromDomain("ouraring.com")).toBe("Oura");
+    expect(displayNameFromDomain("bombayshavingcompany.com")).toBe("Bombay Shaving Company");
+    expect(displayNameFromDomain("mcaffeine.com")).toBe("mCaffeine");
+    expect(displayNameFromDomain("sugarcosmetics.com")).toBe("Sugar Cosmetics");
+    expect(displayNameFromDomain("asos.com")).toBe("ASOS");
+    expect(displayNameFromDomain("hubspot.com")).toBe("HubSpot");
+    expect(displayNameFromDomain("ridgewallet.com")).toBe("Ridge Wallet");
+    // Simple one-word host labels keep the existing first-label title case.
+    expect(displayNameFromDomain("nykaa.com")).toBe("Nykaa");
+    expect(indexableAdsLinkFromPath("/ads/hm.com")).toEqual({
+      domain: "hm.com",
+      path: "/ads/hm.com",
+      name: "H&M",
+    });
   });
 
   it("prefers the featured domain when it is in the indexable set", () => {

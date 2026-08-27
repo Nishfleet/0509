@@ -3,6 +3,7 @@ import {
   hashString,
   stableStringify,
 } from "~/lib/normalize";
+import { publicBrandNameFromDomain } from "~/lib/public-brand-name";
 import {
   parseSearchInputFromWebsiteField,
   registrableDomainFromHostname,
@@ -51,12 +52,14 @@ export function normalizeCompetitorWebsiteInput(value: string): CompetitorWebsit
       parsedDomain.intent === "domain"
         ? inferSearchTermFromHost(host) || parsedDomain.registrableDomain?.split(".")[0] || host
         : searchTerm;
+    const publicBrandName = publicBrandNameFromDomain(host);
+    const displayName = publicBrandName ?? (brandLabel ? titleCase(brandLabel) : host);
 
     return {
       raw,
       normalizedUrl: `${url.protocol}//${host}${path}`,
       host,
-      displayName: brandLabel ? titleCase(brandLabel) : host,
+      displayName,
       searchTerm: searchTerm || host,
       error: null,
     };
