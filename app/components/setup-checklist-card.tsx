@@ -155,10 +155,10 @@ export function SetupChecklistCard({
               type="text"
               value={website}
             />
-            <small id="setup-competitor-hint">
-              {normalizedWebsite.error ?? "We create the watchlist and start its first scan immediately."}
-            </small>
           </label>
+          <small className="f9-evidence-setup-hint" id="setup-competitor-hint">
+            {normalizedWebsite.error ?? "We create the watchlist and start its first scan immediately."}
+          </small>
           <SubmitButton
             className="f9-evidence-cta f9-evidence-cta--rank1"
             disabled={!canSubmitWebsite}
