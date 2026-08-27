@@ -413,7 +413,9 @@ export default function MarketingRoute() {
     proofBrief && heroTopHook ? (
       <aside className="ld-proof-strip" aria-label="Live proof brief">
         <div className="ld-proof-strip-head">
-          <span className="ld-proof-live">Live proof</span>
+          <span className="ld-proof-live">
+            {heroCaptureStale ? "On record" : "Live proof"}
+          </span>
           <b>We saved the proof — {proofBrief.website}</b>
           <span className="ld-proof-time">
             {heroCaptureStale
