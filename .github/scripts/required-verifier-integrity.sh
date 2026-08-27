@@ -50,14 +50,12 @@
 #      admin/maintainer exists on this repository it is the only path that
 #      should ever be used.
 #
-#   3. SOLE-ADMIN ATTESTATION PATH (owner decision, Nish, 2026-08-20).
-#      Nishfleet/0509 has exactly one collaborator, and GitHub forbids
-#      approving your own pull request, so rule 2 is structurally
-#      unsatisfiable here: every protected change would be permanently
-#      blocked. Rather than silently allowing self-approval (which would
-#      destroy the audit trail), the gate accepts an explicit, loud, recorded
-#      attestation: PASS when the PR carries a comment whose entire body is
-#      exactly
+#   3. SOLE-ADMIN ATTESTATION PATH (owner decision, Nish, 2026-08-20,
+#      tightened by 0509#1140 / fleet-ops#413). Nishfleet/0509 has exactly
+#      one collaborator, and GitHub forbids approving your own pull request,
+#      so rule 2 is structurally unsatisfiable here. The gate accepts an
+#      explicit, loud, recorded attestation: PASS when the PR carries a
+#      comment whose entire body is exactly
 #
 #          verifier-attest: <40-hex sha>
 #
@@ -67,11 +65,15 @@
 #      workflow, never from author_association (which an outside contributor
 #      can carry as OWNER/MEMBER-looking values) and never from a candidate
 #      file. The attester MAY be the PR author — that is the entire point of
-#      this path. Currency is proven by sha equality rather than by
-#      timestamps, so pushing any new commit invalidates every prior
-#      attestation automatically, exactly as a new commit dismisses a stale
-#      approval in rule 2. Taking this path is never quiet: the gate prints a
-#      GitHub ::warning:: annotation and writes a job-summary entry naming the
+#      this path WHEN the PR has no worker implementer. When a worker login
+#      is among the implementers, the attester MUST be a different GitHub
+#      login (identity separation, 0509#1140): nishfleet-worker[bot] can
+#      never attest, and an admin's self-attest of a worker PR is rejected.
+#      Currency is proven by sha equality rather than by timestamps, so
+#      pushing any new commit invalidates every prior attestation
+#      automatically, exactly as a new commit dismisses a stale approval in
+#      rule 2. Taking this path is never quiet: the gate prints a GitHub
+#      ::warning:: annotation and writes a job-summary entry naming the
 #      attesting admin, the attested sha, and the fact that no independent
 #      reviewer was involved.
 #
@@ -96,6 +98,96 @@ from datetime import datetime, timezone
 
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 
+# GitHub App login(s) that implement fleet PRs. A member of this set can never
+# attest, and its presence among implementers forbids owner self-attest.
+# Mirrors fleet-ops#413 / lib/attest-identity-gate.py:DEFAULT_WORKER_IDENTITIES.
+DEFAULT_WORKER_IDENTITIES = ("nishfleet-worker[bot]",)
+
+
+def norm_login(value):
+    """Lowercase + strip; non-strings become the empty string."""
+    if not isinstance(value, str):
+        return ""
+    return value.strip().lower()
+
+
+def collect_implementers(bundle):
+    """PR author + pusher (+ optional implementers list) as GitHub logins.
+
+    Implementers are GitHub ACTOR logins (PR author, head-commit author or
+    committer), not git author names. The git author can be anyone; the
+    actor is what bound the push. Mirrors fleet-ops lib/attest-identity-gate.py.
+    """
+    out = set()
+    for key in ("author", "pusher"):
+        n = norm_login(bundle.get(key) or "")
+        if n:
+            out.add(n)
+    extra = bundle.get("implementers")
+    if isinstance(extra, list):
+        for item in extra:
+            n = norm_login(item)
+            if n:
+                out.add(n)
+    return out
+
+
+def apply_actions_event_implementers(bundle):
+    """Fill a missing bundle `author` from the Actions event payload.
+
+    Defensive: required-verifier-integrity.yml already passes `author` from
+    `github.event.pull_request.user.login`, so this fallback only matters
+    when a bundle reaches the decision script without one. The same shape
+    is implemented in gate-integrity.sh, which cannot pass author today
+    (nishfleet-worker has no Workflows permission; 0509#1176). On real CI,
+    pull_request_target writes GITHUB_EVENT_PATH; reading that local file
+    is not a network call, so the decision script stays hermetic and the
+    fixture regression is unaffected (GITHUB_ACTIONS != "true" is a no-op).
+    Bundle author always wins when already set.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    if norm_login(bundle.get("author") or ""):
+        return
+    path = os.environ.get("GITHUB_EVENT_PATH") or ""
+    if not path or not os.path.isfile(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as fh:
+            event = json.load(fh)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return
+    if not isinstance(event, dict):
+        return
+    pr = event.get("pull_request")
+    if not isinstance(pr, dict):
+        return
+    user = pr.get("user")
+    if not isinstance(user, dict):
+        return
+    login = user.get("login")
+    if isinstance(login, str) and login.strip():
+        bundle["author"] = login.strip()
+
+
+def identity_rejects_attestor(user, implementers):
+    """Reason this attestor is forbidden, or None.
+
+    Same rules as fleet-ops#413 / lib/attest-identity-gate.py:
+      1. A worker identity can never attest.
+      2. Overlap + a worker login among implementers -> same-identity REJECT.
+      3. Overlap with no worker implementer -> owner self-attest, allowed.
+    """
+    attestor = norm_login(user)
+    if not attestor:
+        return None
+    workers = {norm_login(x) for x in DEFAULT_WORKER_IDENTITIES}
+    if attestor in workers:
+        return f"worker identity cannot attest: {user}"
+    if attestor in implementers and (implementers & workers):
+        return f"same identity implemented and attested: {user}"
+    return None
+
 REMEDIES = """
 Two remedies unblock this PR. Either one is sufficient.
 
@@ -114,9 +206,13 @@ Two remedies unblock this PR. Either one is sufficient.
      then re-runs this check. Admin permission is verified through the
      collaborator-permission API, not from the comment itself. The sha must
      equal the PR's current head sha, so pushing any new commit invalidates
-     the attestation and a fresh one is required. Using this path emits a
-     loud warning annotation and a job-summary entry naming the admin and the
-     sha, because no independent reviewer saw the change.
+     the attestation and a fresh one is required. The attestor must be a
+     different GitHub login from the implementers (PR author + pusher) when
+     a worker identity is among them; nishfleet-worker[bot] can never attest.
+     Owner self-attest of a human-only PR is the only same-identity case
+     that still passes. Using this path emits a loud warning annotation and
+     a job-summary entry naming the admin and the sha, because no
+     independent reviewer saw the change.
 """.rstrip()
 
 
@@ -246,6 +342,17 @@ def main():
     if not isinstance(files, list) or not isinstance(reviews, list):
         return fail(["context bundle files/reviews are not arrays"])
 
+    # Fill a missing bundle `author` from the Actions event payload when this
+    # is running on GitHub Actions. The workflow already passes author, so
+    # this is a defensive fallback for any caller that omits it (matches
+    # gate-integrity.sh, which cannot pass author today). Tests are no-ops
+    # here (GITHUB_ACTIONS unset).
+    apply_actions_event_implementers(bundle)
+    # Recompute author from the (possibly filled) bundle so the
+    # identity-separation check below sees the right value.
+    author = bundle.get("author") or ""
+    implementers = collect_implementers(bundle)
+
     protected_changed = []
     for f in files:
         if not isinstance(f, dict):
@@ -304,9 +411,22 @@ def main():
     attested = find_attestation(attestations, permissions, head_sha, reasons)
     if attested is not None:
         user, sha = attested
-        print("PASS: protected verifier change accepted via the sole-admin attestation path")
-        announce_sole_admin(user, sha, protected_changed)
-        return 0
+        # 0509#1140 / fleet-ops#413: even when an admin attestation passes
+        # currency + permission, the attestor must be a different login
+        # from the implementers when a worker identity is among them. A
+        # worker can never attest. Owner self-attest of a human-only PR
+        # is the only same-identity case that still passes.
+        identity_reason = identity_rejects_attestor(user, implementers)
+        if identity_reason is not None:
+            reasons.append(identity_reason)
+            reasons.append(
+                "admin attestation was posted by an implementer of this PR; "
+                "a different repository admin must post `verifier-attest: <head sha>`"
+            )
+        else:
+            print("PASS: protected verifier change accepted via the sole-admin attestation path")
+            announce_sole_admin(user, sha, protected_changed)
+            return 0
 
     if not reasons:
         reasons.append("no review in the reviews list and no attestation comment on the pull request")

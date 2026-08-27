@@ -498,6 +498,149 @@ run_fixture "failure documents the independent-review remedy" FAIL "$WORK_DIR/30
 run_fixture "failure documents the attestation remedy" FAIL "$WORK_DIR/30-no-remedy.json" \
   "verifier-attest: <40-hex current head sha>"
 
+# 31-35. Identity separation (0509#1140 / fleet-ops#413). Implementer (PR
+#        author + pusher) and attestor must be DIFFERENT GitHub logins, and
+#        a worker identity (nishfleet-worker[bot]) can never attest. Owner
+#        self-attest of a human-only PR still passes — that is the
+#        sole-admin path, not a worker hole. Mirrors
+#        test-gate-integrity.sh's identity-separation fixtures.
+WORKER_BOT="nishfleet-worker[bot]"
+WORKER_ADMIN='{"nish3451": "admin", "'"$WORKER_BOT"'": "admin"}'
+
+# 31. Worker implements and self-attests -> REJECT (worker cannot attest).
+FIXTURE_SRC='{
+  "author": "'"$WORKER_BOT"'",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "'"$WORKER_BOT"'", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "31-identity-worker-self-attest"
+run_fixture "worker implements and self-attests fails" FAIL "$WORK_DIR/31-identity-worker-self-attest.json" \
+  "worker identity cannot attest"
+
+# 32. Worker implements, human admin attests -> PASS (cross-identity happy
+#     path; the sole-admin warning annotation is NOT expected because the
+#     attestor is a different login from the implementer).
+FIXTURE_SRC='{
+  "author": "'"$WORKER_BOT"'",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "nish3451", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "32-identity-worker-human-attest"
+run_fixture "worker implements, human attests passes" PASS "$WORK_DIR/32-identity-worker-human-attest.json"
+
+# 33. Human implements, worker attests -> REJECT (worker can never attest).
+FIXTURE_SRC='{
+  "author": "nish3451",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "'"$WORKER_BOT"'", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "33-identity-human-worker-attest"
+run_fixture "human implements, worker attests fails" FAIL "$WORK_DIR/33-identity-human-worker-attest.json" \
+  "worker identity cannot attest"
+
+# 34. Owner self-attest of a human-only PR -> PASS (sole-admin regression).
+#     The annotation is loud — the warning is the whole point of the path.
+FIXTURE_SRC='{
+  "author": "nish3451",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "nish3451", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": {"nish3451": "admin"},
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "34-identity-human-only-self-attest"
+run_fixture "human-only owner self-attest passes" PASS "$WORK_DIR/34-identity-human-only-self-attest.json" \
+  "::warning title=Verifier integrity: sole-admin attestation"
+
+# 35. Overlap (author == attestor) when a worker is in the implementers list
+#     -> REJECT. The `implementers` field is additive: a worker mention
+#     counts the same as the author being a worker.
+FIXTURE_SRC='{
+  "author": "nish3451",
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "nish3451", "sha": "'"$ATTEST_HEAD"'"}],
+  "implementers": ["'"$WORKER_BOT"'"],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "35-identity-overlap-worker-implementers"
+run_fixture "overlap with worker in implementers fails" FAIL "$WORK_DIR/35-identity-overlap-worker-implementers.json" \
+  "same identity implemented and attested"
+
+# 36. GITHUB_EVENT_PATH fallback: bundle omits author, the event payload
+#     names the worker, worker self-attests -> REJECT. The workflow already
+#     passes author today, so this is the defensive fallback.
+WORKER_EVENT='{"pull_request":{"user":{"login":"nishfleet-worker[bot]"}}}'
+
+FIXTURE_SRC='{
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "'"$WORKER_BOT"'", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "36-identity-actions-event-worker-self"
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/36-identity-actions-event-worker-self.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/36-identity-actions-event-worker-self.event.json" \
+  run_fixture "actions event worker self-attest fails" FAIL "$WORK_DIR/36-identity-actions-event-worker-self.json" \
+  "worker identity cannot attest"
+
+# 37. GITHUB_EVENT_PATH fallback: bundle omits author, event names worker,
+#     human attests -> PASS. Cross-identity happy path through the fallback.
+FIXTURE_SRC='{
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "nish3451", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": '"$WORKER_ADMIN"',
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "37-identity-actions-event-worker-human"
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/37-identity-actions-event-worker-human.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/37-identity-actions-event-worker-human.event.json" \
+  run_fixture "actions event worker+human passes" PASS "$WORK_DIR/37-identity-actions-event-worker-human.json"
+
+# 38. Malformed event file: bundle has no author, event is not parseable,
+#     human self-attests on a human-only PR -> PASS (the sole-admin
+#     regression: no worker to trip the identity split).
+FIXTURE_SRC='{
+  "head_commit_date": "2026-08-13T17:00:00Z",
+  "head_sha": "'"$ATTEST_HEAD"'",
+  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
+  "reviews": [],
+  "attestations": [{"user": "nish3451", "sha": "'"$ATTEST_HEAD"'"}],
+  "permissions": {"nish3451": "admin"},
+  "protected_files": '"$ATTEST_PROTECTED"'
+}'
+build_bundle "38-identity-actions-event-malformed"
+printf 'not json' > "$WORK_DIR/38-identity-actions-event-malformed.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/38-identity-actions-event-malformed.event.json" \
+  run_fixture "actions event malformed falls through" PASS "$WORK_DIR/38-identity-actions-event-malformed.json" \
+  "::warning title=Verifier integrity: sole-admin attestation"
+
 echo ""
 if [[ $FAIL_COUNT -eq 0 ]]; then
   echo "ALL FIXTURES PASS ($PASS_COUNT/$PASS_COUNT)"
