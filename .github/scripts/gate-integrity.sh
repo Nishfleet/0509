@@ -33,7 +33,7 @@
 #                     runner scripts), a ratchet ceiling raised or dropped, or a
 #                     CI step softened with `|| true` / `continue-on-error`.
 #                     Remedy: a repository ADMIN posts a pull-request comment
-#                     whose ENTIRE body is exactly
+#                     containing a line that is exactly
 #
 #                         gate-integrity-attest: <40-hex current head sha>
 #
@@ -73,7 +73,7 @@
 #   2. Every commit in the PR carries git's standard `Revert "<subject>"`
 #      subject line. A PR that deletes tests but whose commits are NOT git
 #      reverts gets no exemption, even if its body was paraphrased.
-#   3. A pull-request comment whose entire body is exactly
+#   3. A pull-request comment containing a line that is exactly
 #      `gate-integrity-auto-revert: <40-hex current head sha>` exists on the
 #      PR. The sha binding is what makes a force-push invalidate the waiver,
 #      same currency property as the admin attestation. The comment author
@@ -122,6 +122,21 @@ import sys
 
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 
+# Attestation marker lines. A comment attests when ANY of its lines (after
+# stripping per-line whitespace and CRs) is EXACTLY the marker line. The
+# whole-body exact match the workflow originally used rejected every
+# multi-line attest comment — the real-world shape, where the attest line
+# is followed by `verifier-attest:` and review prose (fleet-ops#828,
+# 0509#1273) — so every valid admin attestation was silently dropped and
+# the gate reported "no current attest" against a comment that matched the
+# head sha exactly. Line-anchored matching keeps the security property
+# (prose merely mentioning the marker does not attest: the line must be the
+# marker and nothing else) while accepting the multi-line shape.
+ADMIN_ATTEST_LINE = re.compile(r"^gate-integrity-attest: ([0-9a-fA-F]{40})$")
+AUTO_REVERT_ATTEST_LINE = re.compile(
+    r"^gate-integrity-auto-revert: ([0-9a-fA-F]{40})$"
+)
+
 TEST_PATH = re.compile(
     r"(?:^|/)(?:tests?|__tests__|e2e)/|"
     r"[^/]+\.(?:test|spec)\.(?:ts|tsx|js|jsx|mjs|cjs)$"
@@ -168,8 +183,8 @@ Remedies (each violation class needs its own; neither one waives the other).
      `git log` next to the removal. Amend and force-push, or add an empty
      commit carrying the trailer.
 
-  gate-path — a repository ADMIN posts a pull-request comment whose ENTIRE
-     body is exactly
+  gate-path — a repository ADMIN posts a pull-request comment containing a
+     line that is exactly
 
          gate-integrity-attest: <40-hex current head sha>
 
@@ -276,6 +291,33 @@ def ratchet_weakened(patch):
         elif after[key] > old:
             findings.append(f"ratchet ceiling {key!r} raised {old} -> {after[key]}")
     return findings
+
+
+def extract_attestations_from_comments(comments, line_re, notes):
+    """Line-anchored attestation extraction from raw PR comments.
+
+    A comment attests when any of its lines (CR-stripped, whitespace-trimmed)
+    is EXACTLY `marker: <40-hex>`. The first matching line in a comment wins;
+    the rest of the body (prose, other markers) is ignored. Returns a list of
+    `{"user", "sha"}` objects (sha lowercased), or None when `comments` is not
+    a list — the caller decides whether that is fatal.
+    """
+    if not isinstance(comments, list):
+        return None
+    out = []
+    for c in comments:
+        if not isinstance(c, dict):
+            continue
+        body = c.get("body")
+        if not isinstance(body, str):
+            continue
+        user = c.get("user") or ""
+        for raw in body.replace("\r", "").split("\n"):
+            m = line_re.match(raw.strip())
+            if m:
+                out.append({"user": user, "sha": m.group(1).lower()})
+                break
+    return out
 
 
 def find_attestation(attestations, permissions, head_sha, notes):
@@ -433,12 +475,31 @@ def main():
         return fail(["context bundle commit_messages is not an array"])
     pr_body = bundle.get("pr_body") or ""
     attestations = bundle.get("attestations") or []
+    if not isinstance(attestations, list):
+        return fail(["context bundle attestations is not an array"])
     permissions = bundle.get("permissions") or {}
     if not isinstance(permissions, dict):
         return fail(["context bundle permissions is not an object"])
     auto_revert_attestations = bundle.get("auto_revert_attestations") or []
     if not isinstance(auto_revert_attestations, list):
         return fail(["context bundle auto_revert_attestations is not an array"])
+    # When the workflow ships raw PR comments, extract attestations from them
+    # line-anchored (see extract_attestations_from_comments). Pre-extracted
+    # `attestations`/`auto_revert_attestations` are still honored when
+    # `comments` is absent, so existing fixtures that build bundles directly
+    # keep working.
+    comments = bundle.get("comments")
+    if isinstance(comments, list):
+        extracted = extract_attestations_from_comments(
+            comments, ADMIN_ATTEST_LINE, notes=[]
+        )
+        if extracted is not None:
+            attestations = extracted
+        extracted_ar = extract_attestations_from_comments(
+            comments, AUTO_REVERT_ATTEST_LINE, notes=[]
+        )
+        if extracted_ar is not None:
+            auto_revert_attestations = extracted_ar
     gate_globs = bundle.get("gate_globs") or []
     if not isinstance(gate_globs, list):
         return fail(["context bundle gate_globs is not an array"])
