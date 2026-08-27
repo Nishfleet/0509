@@ -10,7 +10,9 @@
 > and growing daily; a share link to the timeline renders correctly logged
 > out. Proof = the live URL plus the row-count delta.
 
-The detector is `npm run canary:bet3` (`scripts/bet3-live-verification.mjs`).
+The detector is `npm run canary:bet3` (`scripts/bet3-live-verification.mjs --from-sitemap`).
+It probes every `/ads/:domain` brand in `https://0509.io/sitemap.xml` so a sitemap
+brand with an empty `/timeline/:domain` soft-404 cannot go undetected (issue #1309).
 Exit 1 unless every check PASSes. A D1 SKIP is not a pass.
 
 ## Live runs against https://0509.io
