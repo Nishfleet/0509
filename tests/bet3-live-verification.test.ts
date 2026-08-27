@@ -793,7 +793,7 @@ describe("module exports", () => {
       scripts?: Record<string, string>;
     };
     expect(packageJson.scripts?.["canary:bet3"]).toBe(
-      "node scripts/bet3-live-verification.mjs --json",
+      "node scripts/bet3-live-verification.mjs --from-sitemap --json",
     );
   });
 
