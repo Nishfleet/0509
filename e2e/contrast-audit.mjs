@@ -14,6 +14,11 @@
 import { chromium } from "@playwright/test";
 
 const args = process.argv.slice(2);
+/**
+ * @param {string} name
+ * @param {string} [fallback]
+ * @returns {string | undefined}
+ */
 const argOf = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i === -1 ? fallback : args[i + 1];
@@ -25,6 +30,10 @@ const ROUTES = (argOf("routes", "/app,/app/billing,/app/watchlists,/app/settings
 const THEMES = ["light", "dark"];
 
 /** WCAG relative luminance from an `rgb()` / `rgba()` string. */
+/**
+ * @param {string} color
+ * @returns {number | null}
+ */
 export function luminance(color) {
   const parts = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
   if (parts.length < 3) return null;
@@ -35,6 +44,11 @@ export function luminance(color) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/**
+ * @param {string} fg
+ * @param {string} bg
+ * @returns {number | null}
+ */
 export function contrast(fg, bg) {
   const a = luminance(fg);
   const b = luminance(bg);
@@ -43,13 +57,18 @@ export function contrast(fg, bg) {
 }
 
 /** AA: 3.0 for large text (>=24px, or >=18.66px bold), 4.5 for the rest. */
+/**
+ * @param {number} fontSizePx
+ * @param {string | number} fontWeight
+ * @returns {number}
+ */
 export function threshold(fontSizePx, fontWeight) {
   const bold = Number(fontWeight) >= 700;
   if (fontSizePx >= 24 || (bold && fontSizePx >= 18.66)) return 3;
   return 4.5;
 }
 
-const collect = () =>
+export const collectContrastLabels = () =>
   [...document.querySelectorAll("button, a, [role='button']")].flatMap((el) => {
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return [];
@@ -82,16 +101,16 @@ async function main() {
   for (const theme of THEMES) {
     for (const route of ROUTES) {
       const context = await browser.newContext({
-        colorScheme: theme,
+        colorScheme: /** @type {"light" | "dark"} */ (theme),
         viewport: { width: 1440, height: 1000 },
       });
       await context.setExtraHTTPHeaders({ "x-0509-e2e-test-mode": "1" });
       await context.addCookies([
-        { name: "f9_e2e_fixture", value: FIXTURE, url: BASE, sameSite: "Lax" },
+        { name: "f9_e2e_fixture", value: FIXTURE ?? "e2e-starter", url: BASE, sameSite: "Lax" },
       ]);
       const page = await context.newPage();
       await page.goto(`${BASE}${route}`, { waitUntil: "networkidle" });
-      for (const label of await page.evaluate(collect)) {
+      for (const label of await page.evaluate(collectContrastLabels)) {
         // A disabled control is exempt from AA by design; opacity is how
         // this codebase draws that state.
         if (label.opacity < 1) continue;
