@@ -188,9 +188,12 @@ describe("public /search H1 with a valid competitor website", () => {
       /<h1[^>]*id="search-command-title"[^>]*>([\s\S]*?)<\/h1>/,
     );
     expect(h1Match?.[1]).toBeDefined();
+    // WorkingHeader renders `title` as a plain string child of <h1>, so
+    // React escapes it — the captured group is text with HTML entities,
+    // not nested markup. Decode the apostrophe entity React emits for `'`.
     const h1Text = (h1Match?.[1] ?? "")
-      .replace(/<[^>]+>/g, "")
       .replace(/&#x27;/g, "'")
+      .replace(/&amp;/g, "&")
       .trim();
 
     expect(h1Text).toContain("Nike");
@@ -214,9 +217,9 @@ describe("public /search H1 with a valid competitor website", () => {
     const h1Match = markup.match(
       /<h1[^>]*id="search-command-title"[^>]*>([\s\S]*?)<\/h1>/,
     );
-    const h1Text = (h1Match?.[1] ?? "")
-      .replace(/<[^>]+>/g, "")
-      .trim();
+    // WorkingHeader renders the title as a plain escaped string — no nested
+    // markup to strip. See the branded-title case above for the rationale.
+    const h1Text = (h1Match?.[1] ?? "").trim();
     expect(h1Text).toBe("Find competitor ads");
   });
 });
