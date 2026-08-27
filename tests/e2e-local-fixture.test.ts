@@ -1,8 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 // @ts-ignore JavaScript fixture helper is intentionally imported as a runtime module.
 import {
+  E2E_FIXTURE_EXPECTATIONS,
   assertReleaseState,
   assertFixtureInvariants,
   fixtureInvariantQuery,
@@ -64,7 +66,7 @@ const validRow = {
   foreign_key_violation_count: 0,
   monitoring_recovery_pair_count: 1,
   obsolete_sku_count: 0,
-  persona_count: 25,
+  persona_count: 26,
   support_recovery_case_count: 1,
   unexpected_no_cache_count: 0,
   unlinked_paid_persona_count: 0,
@@ -185,6 +187,13 @@ describe("isolated local E2E fixture", () => {
       /cross_workspace_proof_count:1/,
     );
     expect(() => assertFixtureInvariants({ ...validRow, persona_count: 15 })).toThrow(/persona_count:15/);
+  });
+
+  it("seeds an expired paid persona so viewer-state audits can sign in as that account", () => {
+    const sql = readFileSync("e2e/fixtures/e2e-local.sql", "utf8");
+    expect(sql).toContain("('e2e-expired'");
+    expect(sql).toMatch(/'e2e-expired', 'starter'[\s\S]*?'subscription\.expired'/);
+    expect(E2E_FIXTURE_EXPECTATIONS.personas).toBe(26);
   });
 
   it("distinguishes pristine seed invariants from Journey 5 terminal lifecycle state", () => {
