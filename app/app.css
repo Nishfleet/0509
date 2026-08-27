@@ -9544,6 +9544,9 @@ reds soften --- */
 
   --wk-rail-w: 218px;
   --wk-pad: 36px;
+  /* Longest line the working page is allowed to draw. Past this the
+     label/value pairs stop reading as pairs — see .f9-wk-dl below. */
+  --wk-measure: 1240px;
 
   /* Motion DNA — a page turning, not a jelly. */
   --wk-snap: 120ms cubic-bezier(0.2, 0, 0.2, 1);
@@ -9985,6 +9988,16 @@ a.f9-wk-btn {
   min-width: 0;
 }
 
+/* On a wide window the working page used to stretch to the full main
+   column (1710px at a 2000px viewport), which pulled every term away
+   from its value and left section rules running over empty space. The
+   cap is app-shell-only: the public find page keeps its own width. */
+.f9-dash-page-app .f9-wk-page {
+  width: 100%;
+  max-width: var(--wk-measure);
+  margin-inline: auto;
+}
+
 .f9-wk-head {
   padding: 26px var(--wk-pad) 20px;
   border-bottom: 1px solid var(--wk-rule);
@@ -10310,6 +10323,7 @@ a.f9-wk-btn {
   margin: 0;
   font-size: 13px;
   grid-template-columns: 1fr auto;
+  max-width: 720px;
 }
 
 .f9-wk-dl dt {
@@ -10322,6 +10336,17 @@ a.f9-wk-btn {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+/* The overview's retention values are sentences, not figures, so they
+   read left-to-right off a fixed label column instead of being flushed
+   right against the far edge of the block. */
+.f9-overview .f9-wk-dl {
+  grid-template-columns: minmax(0, 190px) minmax(0, 1fr);
+}
+
+.f9-overview .f9-wk-dl dd {
+  text-align: left;
 }
 
 .f9-wk-tabs {
