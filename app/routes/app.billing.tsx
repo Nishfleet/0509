@@ -27,7 +27,6 @@ import {
   type PricingPlanSlug,
   type UsageBundleSlug,
 } from "~/lib/pricing";
-import { isPlanUpgrade, parsePlanFamily } from "~/lib/plan-entitlements";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { UserPlanBillingInfo } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -515,15 +514,9 @@ export default function BillingRoute() {
               Boolean(checkoutSku) &&
               !annualBlocked;
             const selected = selectedPlan === plan.slug;
-            // "Recommended" is advice, so it only holds while the plan is a
-            // step UP for the person reading it. Pinned to Starter, it told an
-            // Agency customer to downgrade.
-            const recommendedForViewer =
-              plan.slug === "starter" &&
-              isPlanUpgrade(parsePlanFamily(billing.plan), parsePlanFamily(plan.slug));
             return (
               <section
-                className={`f9-wk-plan-card${recommendedForViewer ? " is-recommended" : ""}${selected ? " is-selected" : ""}`}
+                className={`f9-wk-plan-card${plan.slug === "starter" ? " is-recommended" : ""}${selected ? " is-selected" : ""}`}
                 key={plan.slug}
               >
                 <div className="f9-wk-plan-card-head">
@@ -543,7 +536,7 @@ export default function BillingRoute() {
                     <Pill state="healthy">Current plan</Pill>
                   ) : isCurrentPlan ? (
                     <Pill state="healthy">Current tier</Pill>
-                  ) : recommendedForViewer ? (
+                  ) : plan.slug === "starter" ? (
                     <Pill state="recommended">Recommended</Pill>
                   ) : null}
                 </div>
@@ -647,9 +640,7 @@ export default function BillingRoute() {
                       className="f9-wk-lnk"
                       to={billingPickerPath(plan.slug, selectedCycle, selectedSource)}
                     >
-                      {/* On a paid plan every other card is a move off the
-                          current one, not a first choice. */}
-                      {billing.plan === "free" ? "Select" : "Switch"}
+                      Select
                     </Link>
                   ) : null}
                 </div>
