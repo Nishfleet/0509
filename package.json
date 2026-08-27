@@ -24,7 +24,7 @@
     "test:presence-load": "node scripts/presence-load-test.mjs",
     "canary:prod": "node scripts/prod-canary.mjs",
     "canary:bet2": "node scripts/bet2-live-verification.mjs --json",
-    "canary:bet3": "node scripts/bet3-live-verification.mjs --json",
+    "canary:bet3": "node scripts/bet3-live-verification.mjs --from-sitemap --json",
     "canary:bet9": "node scripts/bet9-first-viewport-verification.mjs --json",
     "gate-c:soak:start": "node scripts/gate-c-soak.mjs start",
     "gate-c:soak:finalize": "node scripts/gate-c-soak.mjs finalize",
