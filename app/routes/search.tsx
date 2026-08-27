@@ -1106,15 +1106,8 @@ export default function SearchRoute() {
   );
   const selectedAdAngle = selectedAd ? classifyAdRecordAngle(selectedAd) : null;
   const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
-  // Idle `/search` with no query keeps the generic "Find competitor ads"
-  // title. A valid `?website=` (e.g. `/ads/nike.com` live search) now names
-  // the brand in the H1 via `formatSearchCommandTitle` + `displayName`, so a
-  // first-time visitor sees whose ads they are looking at instead of an
-  // idle-looking page. A invalid `?website=` (the incomplete-website form
-  // error) keeps the generic title — the validation message already names
-  // the miss.
-  const commandTitle = competitorWebsite.displayName
-    ? formatSearchCommandTitle(competitorWebsite.displayName, data.filters.country)
+  const commandTitle = competitorWebsite.raw
+    ? "Find competitor ads"
     : formatSearchCommandTitle(data.filters.query, data.filters.country);
   const websiteInputValue = competitorWebsite.raw || data.filters.query;
   const trackingRole: WatchlistTrackingRole = "competitor";
