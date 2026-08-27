@@ -740,4 +740,127 @@ describe("buildSearchAnswer market scope", () => {
 
     expect(answer.title).toBe("1 verified ad linked to boat-lifestyle.com");
   });
+
+  // BET 2 — goat.com mandatory regression. A bare `?q=goat` keyword search
+  // returns the thegoatco.au mouth-tape ad (an unrelated AU brand whose name
+  // and copy contain the stem "goat"). The verdict must NOT label those ads
+  // as verified; it must call them unverified keyword matches and offer a
+  // next-action link to a verified goat.com search.
+  describe("keyword verdict — goat.com wrong-brand wall", () => {
+    const goatMouthTapeAds = (): AdRecord[] => [
+      ad({
+        metaAdId: "goat-mouth-tape",
+        advertiser: "The GOAT",
+        body: "THE NEW GOAT MOUTH TAPE IS HERE. Kirsten K., Verified Buyer",
+        previewHeadline: "THE NEW GOAT MOUTH TAPE IS HERE",
+        landingPageUrl: "https://thegoatco.au/products/mouth-tape",
+        countries: ["Australia"],
+      }),
+    ];
+
+    it("labels keyword matches as unverified, not as 'N ads found'", () => {
+      const answer = buildSearchAnswer({
+        result: response({ ads: goatMouthTapeAds() }),
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "goat",
+        country: "all",
+      });
+
+      expect(answer.state).toBe("keyword");
+      expect(answer.title).toContain("unverified keyword match");
+      expect(answer.title).toContain("goat");
+      expect(answer.title).not.toContain("verified ad");
+      expect(answer.title).not.toMatch(/^\d+ ad[s]? found$/);
+    });
+
+    it("reports zero verified ads and names the keyword match count", () => {
+      const answer = buildSearchAnswer({
+        result: response({ ads: goatMouthTapeAds() }),
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "goat",
+        country: "all",
+      });
+
+      const verifiedFact = answer.facts.find((f) => f.label === "Verified ads");
+      const keywordFact = answer.facts.find((f) => f.label === "Keyword matches");
+      expect(verifiedFact?.value).toBe("0");
+      expect(keywordFact?.value).toBe("1");
+    });
+
+    it("offers a next-action link to a verified goat.com search", () => {
+      const answer = buildSearchAnswer({
+        result: response({ ads: goatMouthTapeAds() }),
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "goat",
+        country: "all",
+      });
+
+      expect(answer.nextAction).not.toBeNull();
+      expect(answer.nextAction?.label).toContain("goat.com");
+      expect(answer.nextAction?.href).toContain("website=goat.com");
+    });
+
+    it("preserves the searched country in the next-action href", () => {
+      const answer = buildSearchAnswer({
+        result: response({ ads: goatMouthTapeAds() }),
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "goat",
+        country: "Australia",
+      });
+
+      expect(answer.nextAction?.href).toContain("country=Australia");
+      expect(answer.nextAction?.href).toContain("website=goat.com");
+    });
+
+    it("does not offer a next-action guess for multi-word keyword queries", () => {
+      const answer = buildSearchAnswer({
+        result: response({ ads: [ad({ advertiser: "Goat Sneakers" })] }),
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "goat sneakers",
+        country: "all",
+      });
+
+      expect(answer.state).toBe("keyword");
+      expect(answer.nextAction).toBeNull();
+    });
+
+    it("still names the market in the keyword verdict title", () => {
+      const answer = buildSearchAnswer({
+        result: response({ ads: goatMouthTapeAds() }),
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "goat",
+        country: "India",
+      });
+
+      expect(answer.title).toContain("in India");
+    });
+
+    it("does not fire for a domain search (goat.com with ?website=)", () => {
+      const answer = buildSearchAnswer({
+        result: response({ ads: goatMouthTapeAds(), verifiedCount: 0 }),
+        displayDomain: "goat.com",
+        isDomainSearch: true,
+        isBroaderScope: false,
+        query: "goat.com",
+        country: "all",
+      });
+
+      // Domain search with 0 verified → no_verified state, not keyword.
+      expect(answer.state).toBe("no_verified");
+      expect(answer.title).toContain("No verified ads found for goat.com");
+      expect(answer.nextAction).toBeNull();
+    });
+  });
 });
