@@ -26,6 +26,11 @@ import {
 } from "./contrast-audit.mjs";
 
 const args = process.argv.slice(2);
+/**
+ * @param {string} name
+ * @param {string} [fallback]
+ * @returns {string | undefined}
+ */
 const argOf = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i === -1 ? fallback : args[i + 1];
@@ -59,6 +64,102 @@ export const SURFACE_AUDIT_RULES = Object.freeze([
   "focus",
 ]);
 
+/**
+ * @typedef {Object} ContrastLabel
+ * @property {string} text
+ * @property {string} className
+ * @property {string} color
+ * @property {string} background
+ * @property {number} fontSize
+ * @property {string} fontWeight
+ * @property {number} opacity
+ */
+
+/**
+ * @typedef {Object} ControlItem
+ * @property {string} text
+ * @property {number} bottom
+ * @property {number} left
+ * @property {string} tag
+ */
+
+/**
+ * @typedef {Object} ControlGroup
+ * @property {string} selector
+ * @property {string} [gridRow]
+ * @property {ControlItem[]} controls
+ */
+
+/**
+ * @typedef {Object} GutterEdge
+ * @property {string} className
+ * @property {string} tag
+ * @property {number} left
+ */
+
+/**
+ * @typedef {Object} GutterSection
+ * @property {string} selector
+ * @property {GutterEdge[]} edges
+ */
+
+/**
+ * @typedef {Object} TapTarget
+ * @property {string} text
+ * @property {number} width
+ * @property {number} height
+ */
+
+/**
+ * @typedef {Object} FocusCheck
+ * @property {string} text
+ * @property {string} tag
+ * @property {string} outline
+ * @property {boolean} ok
+ */
+
+/**
+ * @typedef {Object} AuditCell
+ * @property {string} user
+ * @property {string} theme
+ * @property {string} viewport
+ * @property {number} viewportWidth
+ * @property {string} route
+ */
+
+/**
+ * @typedef {Object} Viewport
+ * @property {string} name
+ * @property {number} width
+ * @property {number} height
+ */
+
+/**
+ * @typedef {Object} SurfaceAuditOptions
+ * @property {string} [base]
+ * @property {readonly string[]} [users]
+ * @property {readonly string[]} [routes]
+ * @property {readonly string[]} [themes]
+ * @property {readonly Viewport[]} [viewports]
+ * @property {readonly string[]} [rules]
+ * @property {import("@playwright/test").Browser} [browser]
+ */
+
+/**
+ * @typedef {Object} SurfaceAuditResult
+ * @property {number} checked
+ * @property {Array<Record<string, unknown>>} failures
+ * @property {readonly string[]} users
+ * @property {readonly string[]} routes
+ * @property {readonly string[]} themes
+ * @property {readonly Viewport[]} viewports
+ * @property {readonly string[]} rules
+ */
+
+/**
+ * @param {ContrastLabel[]} labels
+ * @returns {Array<Record<string, unknown>>}
+ */
 export function contrastFailuresFromLabels(labels) {
   const failures = [];
   for (const label of labels) {
@@ -81,6 +182,10 @@ export function contrastFailuresFromLabels(labels) {
   return failures;
 }
 
+/**
+ * @param {ControlGroup[]} groups
+ * @returns {Array<Record<string, unknown>>}
+ */
 export function controlRowFailuresFromGroups(groups) {
   const failures = [];
   for (const group of groups) {
@@ -104,6 +209,11 @@ export function controlRowFailuresFromGroups(groups) {
   return failures;
 }
 
+/**
+ * @param {GutterSection[]} sections
+ * @param {number} [viewportWidth]
+ * @returns {Array<Record<string, unknown>>}
+ */
 export function gutterFailuresFromEdges(sections, viewportWidth = 1440) {
   if (viewportWidth <= 640) return [];
   const failures = [];
@@ -124,6 +234,11 @@ export function gutterFailuresFromEdges(sections, viewportWidth = 1440) {
   return failures;
 }
 
+/**
+ * @param {number} scrollWidth
+ * @param {number} innerWidth
+ * @returns {Array<Record<string, unknown>>}
+ */
 export function overflowFailuresFromWidth(scrollWidth, innerWidth) {
   const overflow = Math.max(0, scrollWidth - innerWidth);
   return overflow > 1
@@ -131,6 +246,11 @@ export function overflowFailuresFromWidth(scrollWidth, innerWidth) {
     : [];
 }
 
+/**
+ * @param {TapTarget[]} targets
+ * @param {number} viewportWidth
+ * @returns {Array<Record<string, unknown>>}
+ */
 export function tapTargetFailuresFromRects(targets, viewportWidth) {
   if (viewportWidth > 640) return [];
   return targets
@@ -138,6 +258,10 @@ export function tapTargetFailuresFromRects(targets, viewportWidth) {
     .map((target) => ({ rule: "tap", ...target }));
 }
 
+/**
+ * @param {FocusCheck[]} checks
+ * @returns {Array<Record<string, unknown>>}
+ */
 export function focusRingFailuresFromChecks(checks) {
   return checks
     .filter((check) => !check.ok)
@@ -145,6 +269,10 @@ export function focusRingFailuresFromChecks(checks) {
 }
 
 export function collectControlRowMisalignments() {
+  /**
+   * @param {Element} el
+   * @returns {boolean}
+   */
   const isVisible = (el) => {
     const rect = el.getBoundingClientRect();
     const style = getComputedStyle(el);
@@ -194,24 +322,36 @@ export function collectControlRowMisalignments() {
 }
 
 export function collectGutterSections() {
+  /**
+   * @param {Element} el
+   * @returns {boolean}
+   */
   const isVisible = (el) => {
     const rect = el.getBoundingClientRect();
     const style = getComputedStyle(el);
     return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
   };
+  /**
+   * @param {Element} root
+   * @returns {number}
+   */
   const contentLeft = (root) => {
     let left = Infinity;
     for (const el of [root, ...root.querySelectorAll("*")]) {
       if (!isVisible(el)) continue;
       const style = getComputedStyle(el);
       if (style.position === "absolute" || style.position === "fixed") continue;
-      const hasText = [...el.childNodes].some((node) => node.nodeType === 3 && node.textContent.trim());
+      const hasText = [...el.childNodes].some((node) => node.nodeType === 3 && (node.textContent ?? "").trim());
       const isControl = /^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.getAttribute("role") === "button";
       if (!hasText && !isControl && el !== root) continue;
       left = Math.min(left, el.getBoundingClientRect().left);
     }
     return left;
   };
+  /**
+   * @param {Element} el
+   * @returns {boolean}
+   */
   const stacked = (el) => {
     const style = getComputedStyle(el);
     if (style.display === "flex" || style.display === "inline-flex") {
@@ -277,7 +417,7 @@ export function collectTapTargets() {
     const rect = el.getBoundingClientRect();
     const style = getComputedStyle(el);
     if (rect.width === 0 || rect.height === 0 || style.display === "none" || style.visibility === "hidden") continue;
-    if (el.disabled || el.getAttribute("aria-disabled") === "true") continue;
+    if (/** @type {HTMLElement & { disabled?: boolean }} */ (el).disabled || el.getAttribute("aria-disabled") === "true") continue;
     if (el.tagName === "INPUT") {
       const type = (el.getAttribute("type") || "text").toLowerCase();
       if (type === "checkbox" || type === "radio" || type === "file") continue;
@@ -300,11 +440,11 @@ export function collectFocusRingChecks() {
     const rect = el.getBoundingClientRect();
     const vis = getComputedStyle(el);
     if (rect.width === 0 || rect.height === 0 || vis.display === "none" || vis.visibility === "hidden") continue;
-    if (el.disabled) continue;
+    if (/** @type {HTMLElement & { disabled?: boolean }} */ (el).disabled) continue;
     if (el.closest("details:not([open])")) continue;
     if (el.tagName === "INPUT" && el.getAttribute("type") === "file") continue;
     el.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-    el.focus({ preventScroll: true });
+    /** @type {HTMLElement} */ (el).focus({ preventScroll: true });
     const style = getComputedStyle(el);
     const focusVisible = typeof el.matches === "function" && el.matches(":focus-visible");
     // Script focus does not set :focus-visible in Chromium. Skip those so
@@ -319,18 +459,28 @@ export function collectFocusRingChecks() {
       ok: outlineOk || shadowOk,
     });
   }
-  if (previous && typeof previous.focus === "function") previous.focus({ preventScroll: true });
-  else if (document.activeElement && typeof document.activeElement.blur === "function") {
-    document.activeElement.blur();
+  if (previous && typeof /** @type {HTMLElement} */ (previous).focus === "function") {
+    /** @type {HTMLElement} */ (previous).focus({ preventScroll: true });
+  } else if (document.activeElement && typeof /** @type {HTMLElement} */ (document.activeElement).blur === "function") {
+    /** @type {HTMLElement} */ (document.activeElement).blur();
   }
   return checks;
 }
 
+/**
+ * @param {string | undefined} value
+ * @param {readonly string[]} fallback
+ * @returns {string[]}
+ */
 function parseList(value, fallback) {
   if (value == null || value === "") return [...fallback];
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+/**
+ * @param {string | undefined} value
+ * @returns {Viewport[]}
+ */
 function parseViewports(value) {
   if (value == null || value === "") return SURFACE_AUDIT_VIEWPORTS.map((item) => ({ ...item }));
   return parseList(value, []).map((name) => {
@@ -340,6 +490,10 @@ function parseViewports(value) {
   });
 }
 
+/**
+ * @param {string | undefined} value
+ * @returns {string[]}
+ */
 function parseRules(value) {
   const rules = parseList(value, SURFACE_AUDIT_RULES);
   for (const rule of rules) {
@@ -348,10 +502,20 @@ function parseRules(value) {
   return rules;
 }
 
+/**
+ * @param {AuditCell} cell
+ * @returns {string}
+ */
 function cellLabel(cell) {
   return `${cell.user} ${cell.theme} ${cell.viewport} ${cell.route}`;
 }
 
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {AuditCell} cell
+ * @param {readonly string[]} rules
+ * @returns {Promise<Array<Record<string, unknown>>>}
+ */
 export async function auditPage(page, cell, rules) {
   const failures = [];
   const pathname = new URL(page.url()).pathname;
@@ -390,6 +554,10 @@ export async function auditPage(page, cell, rules) {
   return failures;
 }
 
+/**
+ * @param {SurfaceAuditOptions} [options]
+ * @returns {Promise<SurfaceAuditResult>}
+ */
 export async function runSurfaceAudit(options = {}) {
   const base = options.base ?? process.env.E2E_BASE_URL ?? "http://127.0.0.1:4179";
   const users = options.users ?? SURFACE_AUDIT_USERS;
@@ -407,14 +575,14 @@ export async function runSurfaceAudit(options = {}) {
       for (const theme of themes) {
         for (const viewport of viewports) {
           const context = await browser.newContext({
-            colorScheme: theme,
+            colorScheme: /** @type {"light" | "dark"} */ (theme),
             viewport: { width: viewport.width, height: viewport.height },
           });
           await context.setExtraHTTPHeaders({ "x-0509-e2e-test-mode": "1" });
           await context.addCookies([
             { name: "f9_e2e_fixture", value: user, url: base, sameSite: "Lax" },
           ]);
-          await context.addInitScript((storedTheme) => {
+          await context.addInitScript((/** @type {string} */ storedTheme) => {
             try {
               localStorage.setItem("f9-theme", storedTheme);
             } catch {
@@ -446,8 +614,12 @@ export async function runSurfaceAudit(options = {}) {
   return { checked, failures, users, routes, themes, viewports, rules };
 }
 
+/**
+ * @param {Record<string, unknown>} failure
+ * @returns {string}
+ */
 function formatFailure(failure) {
-  const head = `  FAIL [${failure.rule}] ${cellLabel(failure)}`;
+  const head = `  FAIL [${failure.rule}] ${cellLabel(/** @type {AuditCell} */ (failure))}`;
   if (failure.rule === "contrast") {
     return `${head} ${String(failure.ratio).padStart(5)}:1 (needs ${failure.min}) "${failure.text}" — ${failure.color} on ${failure.background}`;
   }
