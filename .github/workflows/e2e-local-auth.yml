@@ -1,0 +1,95 @@
+name: E2E local-auth
+
+# The authenticated local E2E suite (`npm run e2e:local`, the
+# `--project=local-auth` Playwright project). It signs in against a local
+# fixture server and walks every authenticated app route, so it is the only
+# harness that renders the app logged in. PR #1313 repaired the 5 failures
+# captured in #1299, but the suite ran in no workflow — so nothing went red
+# when it rotted, and four defects reached a paying account that way (#1302).
+# This workflow runs the suite on every PR and push to main that touches a
+# surface it actually covers, so it cannot rot silently again.
+#
+# It is deliberately NOT a required context and NOT a protected verifier
+# (required-verifier-integrity.yml does not list this file): adding it must
+# stay an ordinary change. The surface-audit (#1302) rides this same trigger
+# in a sibling job once it lands.
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "e2e/**"
+      - "playwright.config.ts"
+      - "scripts/e2e-prepare-local.mjs"
+      - "scripts/e2e-local-fixture.mjs"
+      - "scripts/local-release-server.mjs"
+      - "scripts/run-local-release-proof.mjs"
+      - "scripts/ci-vitest-run.sh"
+      - "vite.config.ts"
+      - "wrangler.e2e.jsonc"
+      - "package.json"
+      - "package-lock.json"
+      - ".node-version"
+      - ".github/workflows/e2e-local-auth.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "e2e/**"
+      - "playwright.config.ts"
+      - "scripts/e2e-prepare-local.mjs"
+      - "scripts/e2e-local-fixture.mjs"
+      - "scripts/local-release-server.mjs"
+      - "scripts/run-local-release-proof.mjs"
+      - "scripts/ci-vitest-run.sh"
+      - "vite.config.ts"
+      - "wrangler.e2e.jsonc"
+      - "package.json"
+      - "package-lock.json"
+      - ".node-version"
+      - ".github/workflows/e2e-local-auth.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-local-auth-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  local-auth:
+    name: local-auth suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
+          else
+            npm install --ignore-scripts
+          fi
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run local-auth E2E suite
+        env:
+          CI: "1"
+        run: npm run e2e:local
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-local-auth-failures
+          path: test-results/
+          retention-days: 7
