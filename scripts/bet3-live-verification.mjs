@@ -75,6 +75,7 @@ const PROOF_SCREENSHOT_MEDIA_TYPES = new Set([
  *   | "verified"
  *   | "dead_end"
  *   | "not_found"
+ *   | "retired"
  *   | "rate_limited"
  *   | "error"
  * )} ProbeOutcome
@@ -104,6 +105,7 @@ const PROOF_SCREENSHOT_MEDIA_TYPES = new Set([
  * @property {number} verified
  * @property {number} deadEnds
  * @property {number} notFound
+ * @property {number} retired
  * @property {number} rateLimited
  * @property {number} errors
  * @property {number} sharePresent
@@ -253,6 +255,38 @@ function buildTimelineUrl({ baseUrl, domain }) {
  */
 function resolveArtifactUrl(baseUrl, href) {
   return new URL(href, baseUrl).toString();
+}
+
+/**
+ * Fetch the live sitemap.xml and extract every /ads/:domain entry. Used by
+ * the --from-sitemap flag so the canary probes the full sitemap brand set,
+ * not just the 5 demo brands (issue #1309: the soft-404 shell ratio is
+ * measured across ALL sitemap brands, not the demo subset).
+ * @param {{ baseUrl?: string, fetchImpl?: typeof fetch, userAgent?: string }} input
+ * @returns {Promise<string[]>}
+ */
+export async function fetchSitemapDomains({
+  baseUrl = DEFAULT_BASE_URL,
+  fetchImpl = fetch,
+  userAgent = DEFAULT_USER_AGENT,
+} = {}) {
+  const sitemapUrl = new URL("/sitemap.xml", baseUrl).toString();
+  const response = await fetchImpl(sitemapUrl, {
+    headers: { "user-agent": userAgent, accept: "application/xml,text/xml,*/*" },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    throw new Error(`sitemap fetch failed: ${response.status} ${sitemapUrl}`);
+  }
+  const xml = await response.text();
+  const domains = [];
+  const re = /<loc>\s*https?:\/\/[^/]+\/ads\/([^<]+?)\s*<\/loc>/gi;
+  for (const match of xml.matchAll(re)) {
+    const domain = match[1]?.trim();
+    if (domain) domains.push(domain);
+  }
+  // De-duplicate while preserving first-seen order.
+  return [...new Set(domains)];
 }
 
 /**
@@ -433,6 +467,29 @@ export async function probeDomain({
     };
   }
 
+  // 410 Gone = the retire path (issue #1309): the timeline exists as a URL
+  // pattern but has no stored snapshots for this domain, so the route
+  // returns 410 instead of 200-ing a soft-404 "not stored yet" shell. This
+  // is an ACCEPTABLE non-soft-404 state — distinct from a genuine error.
+  if (status === 410) {
+    return {
+      domain,
+      url,
+      finalUrl,
+      outcome: "retired",
+      status,
+      elapsedMs: nowImpl() - start,
+      entryCount: 0,
+      entries: [],
+      shareUrl: null,
+      sharePresent: false,
+      receiptChecks: [],
+      workingReceiptCount: 0,
+      brokenReceiptCount: 0,
+      requestError: null,
+    };
+  }
+
   if (status >= 400) {
     return {
       domain,
@@ -538,6 +595,7 @@ export function summarizeResults(results) {
     verified: results.filter((r) => r.outcome === "verified").length,
     deadEnds: results.filter((r) => r.outcome === "dead_end").length,
     notFound: results.filter((r) => r.outcome === "not_found").length,
+    retired: results.filter((r) => r.outcome === "retired").length,
     rateLimited: results.filter((r) => r.outcome === "rate_limited").length,
     errors: results.filter((r) => r.outcome === "error").length,
     sharePresent: results.filter((r) => r.sharePresent).length,
@@ -709,19 +767,42 @@ export function evaluateTermination(
   const snapshotCount = options.snapshotCount;
   const priorSnapshotCount = options.priorSnapshotCount;
 
-  const non200Domains = results
-    .filter((r) => r.status !== 200)
+  // 410 Gone is the retire path (issue #1309) — an acceptable non-200
+  // status for a timeline with no stored snapshots. Only 4xx/5xx other than
+  // 410 (and 404 for demo brands) is a reachability failure.
+  const unreachableDomains = results
+    .filter((r) => r.status !== 200 && r.status !== 410)
     .map((r) => r.domain);
   const timelineReachableCheck = {
     name: "timeline_route_reachable",
-    ok: non200Domains.length === 0,
+    ok: unreachableDomains.length === 0,
     skip: false,
-    observed: non200Domains.length,
+    observed: unreachableDomains.length,
     threshold: 0,
     detail:
-      non200Domains.length === 0
-        ? "all probed domains returned HTTP 200"
-        : `non-200 responses: ${non200Domains.join(", ")}`,
+      unreachableDomains.length === 0
+        ? "all probed domains returned HTTP 200 or 410 (retired)"
+        : `unreachable (non-200, non-410): ${unreachableDomains.join(", ")}`,
+  };
+
+  // Soft-404 shell detector (issue #1309): a timeline that returns 200 with
+  // zero entries is the "We have not stored an offer timeline for X yet"
+  // shell — the dark sibling URL that 83% of sitemap brands used to hit.
+  // The populate path (migration 0081) or the retire path (410) must
+  // eliminate every one. This check fails if ANY probed domain 200s empty.
+  const soft404Domains = results
+    .filter((r) => r.status === 200 && r.entryCount === 0)
+    .map((r) => r.domain);
+  const noSoft404Check = {
+    name: "no_soft_404_shells",
+    ok: soft404Domains.length === 0,
+    skip: false,
+    observed: soft404Domains.length,
+    threshold: 0,
+    detail:
+      soft404Domains.length === 0
+        ? "no probed domain returned a 200 empty-shell timeline"
+        : `soft-404 shells (200 + 0 entries): ${soft404Domains.join(", ")}`,
   };
 
   const demoResults = DEMO_BRAND_PAGE_DOMAINS.map((d) => ({
@@ -854,6 +935,7 @@ export function evaluateTermination(
 
   const checks = [
     timelineReachableCheck,
+    noSoft404Check,
     demoBackfillCheck,
     watchedCompetitorCheck,
     shareCheck,
@@ -880,9 +962,11 @@ export function formatProbeLine(probe, index, total) {
         ? "DE "
         : probe.outcome === "not_found"
           ? "404"
-          : probe.outcome === "rate_limited"
-            ? "429"
-            : "ERR";
+          : probe.outcome === "retired"
+            ? "410"
+            : probe.outcome === "rate_limited"
+              ? "429"
+              : "ERR";
   const totalReceipts = probe.workingReceiptCount + probe.brokenReceiptCount;
   const share = probe.sharePresent ? "yes" : "no";
   return `${tag} [${String(index).padStart(2)}/${total}] ${probe.domain.padEnd(20)} status=${String(probe.status ?? "---").padStart(3)} rows=${String(probe.entryCount).padStart(3)} receipts=${String(probe.workingReceiptCount).padStart(2)}/${String(totalReceipts).padStart(2)} share=${share} elapsed=${probe.elapsedMs.toFixed(0).padStart(5)}ms`;
@@ -898,7 +982,7 @@ export function formatSummary({ run }) {
   lines.push(`BET 3 live verification @ ${run.baseUrl}`);
   lines.push(`Probed ${summary.total} domain(s)`);
   lines.push(
-    `  verified: ${summary.verified} | dead-ends: ${summary.deadEnds} | not_found: ${summary.notFound} | rate-limited: ${summary.rateLimited} | errors: ${summary.errors}`,
+    `  verified: ${summary.verified} | dead-ends: ${summary.deadEnds} | not_found: ${summary.notFound} | retired: ${summary.retired} | rate-limited: ${summary.rateLimited} | errors: ${summary.errors}`,
   );
   lines.push(
     `  share present: ${summary.sharePresent} | receipt links: ${summary.workingReceipts} working / ${summary.brokenReceipts} broken`,
@@ -936,10 +1020,10 @@ export function parseOptionalCount(raw) {
 
 /**
  * @param {string[]} argv
- * @returns {{ baseUrl?: string, domains?: string, spacingMs?: number, json?: boolean }}
+ * @returns {{ baseUrl?: string, domains?: string, fromSitemap?: boolean, spacingMs?: number, json?: boolean }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ baseUrl?: string, domains?: string, spacingMs?: number, json?: boolean }} */
+  /** @type {{ baseUrl?: string, domains?: string, fromSitemap?: boolean, spacingMs?: number, json?: boolean }} */
   const parsed = {};
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -951,6 +1035,10 @@ function parseCliArgs(argv) {
     if (arg === "--domains" && argv[i + 1]) {
       parsed.domains = argv[i + 1];
       i += 1;
+      continue;
+    }
+    if (arg === "--from-sitemap") {
+      parsed.fromSitemap = true;
       continue;
     }
     if (arg === "--spacing-ms" && argv[i + 1]) {
@@ -971,12 +1059,18 @@ async function main() {
   const baseUrl = args.baseUrl ?? DEFAULT_BASE_URL;
   const envDomains = process.env.BET3_TARGET_DOMAINS;
   const rawDomains = args.domains ?? envDomains;
-  const domains = rawDomains
-    ? rawDomains
-        .split(",")
-        .map((d) => d.trim())
-        .filter(Boolean)
-    : DEMO_BRAND_PAGE_DOMAINS;
+  let domains;
+  if (args.fromSitemap) {
+    domains = await fetchSitemapDomains({ baseUrl, fetchImpl: fetch });
+    emitLine(`Fetched ${domains.length} domain(s) from ${baseUrl}/sitemap.xml`);
+  } else if (rawDomains) {
+    domains = rawDomains
+      .split(",")
+      .map((d) => d.trim())
+      .filter(Boolean);
+  } else {
+    domains = [...DEMO_BRAND_PAGE_DOMAINS];
+  }
   const spacingMs = args.spacingMs ?? 0;
 
   emitLine(
