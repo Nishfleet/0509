@@ -6,6 +6,8 @@
  * never links a path the sitemap would refuse.
  */
 
+import { publicBrandNameFromDomain } from "~/lib/public-brand-name";
+
 export interface IndexableAdsLink {
   domain: string;
   path: string;
@@ -13,6 +15,10 @@ export interface IndexableAdsLink {
 }
 
 export function displayNameFromDomain(domain: string): string {
+  const override = publicBrandNameFromDomain(domain);
+  if (override) {
+    return override;
+  }
   const host = domain.replace(/^www\./, "").split(".")[0] ?? "";
   return host ? host.charAt(0).toUpperCase() + host.slice(1) : domain;
 }

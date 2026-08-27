@@ -217,6 +217,16 @@ describe("/ads/:domain loader", () => {
     expect(mocks.searchMetaApiAds).not.toHaveBeenCalled();
   });
 
+  it("uses the public brand name for stylised domains", async () => {
+    const entry = cacheEntry();
+    const mocks = installBrandPageMocks({ entry });
+
+    const result = await runLoader("hm.com", mocks.env);
+
+    expect(result.brandName).toBe("H&M");
+    expect(result.domain).toBe("hm.com");
+  });
+
   it("loads stored offer timeline states without any live capture", async () => {
     const entry: OfferLedgerEntry = {
       id: "backfill-nykaa-20260825",
@@ -973,7 +983,7 @@ describe("/ads/:domain meta", () => {
     const tags = await metaFor({
       ...richData,
       domain: "hubspot.com",
-      brandName: "Hubspot",
+      brandName: "HubSpot",
       ads: [...verifiedAds, ...unverifiedAds],
       brandOwnedAdCount: 4,
       verifiedLinkCount: 4,
@@ -982,7 +992,7 @@ describe("/ads/:domain meta", () => {
 
     const description = tags.find((tag) => tag.name === "description")?.content ?? "";
     expect(description).toContain("See 4 Meta ads linking to hubspot.com");
-    expect(description).toContain("4 from Hubspot");
+    expect(description).toContain("4 from HubSpot");
     // The unverified text-matches must NOT be attributed to other advertisers.
     expect(description).not.toContain("6 from other advertisers");
     expect(description).not.toContain("0 from other advertisers");
