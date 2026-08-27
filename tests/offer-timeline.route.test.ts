@@ -193,6 +193,18 @@ describe("/timeline/:domain loader", () => {
     expect(result.entries).toEqual([]);
     expect(result.noindex).toBe(true);
   });
+
+  it("returns 410 Gone when the D1 read succeeds but no snapshots exist (retire path, #1309)", async () => {
+    const mocks = installMocks({ entries: [] });
+
+    await expect(
+      runLoader(
+        "unseeded-brand.com",
+        "https://0509.io/timeline/unseeded-brand.com",
+        mocks.env,
+      ),
+    ).rejects.toMatchObject({ status: 410 });
+  });
 });
 
 describe("/timeline/:domain source contract", () => {
