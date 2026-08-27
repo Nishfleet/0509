@@ -27,6 +27,7 @@ import {
   buildScratchDatabaseName,
   cleanupScratchDatabaseNames,
   cleanupLocalRestoreTempDirectories,
+  importFreshBackup,
   parseCreatedDatabaseUuid,
   parseWranglerJson,
   planSourceBackupLedgerReconciliation,
@@ -318,7 +319,9 @@ describe("D1 remote restore evidence automation", () => {
     expect(script).not.toContain(
       "importSqlite(sourceDatabasePath, transformed.sql",
     );
-    expect(script).toContain("removeOwnedLocalBackup(freshBackupPath)");
+    expect(script).toContain(
+      "removeOwnedLocalBackup(backupState.freshBackupPath)",
+    );
     expect(script).toContain(
       "remote_restore_local_backup_cleanup_incomplete",
     );
@@ -1699,5 +1702,110 @@ describe("D1 remote restore evidence automation", () => {
     expect(evidence.scratchDatabaseIdentitySha256).toMatch(
       /^[a-f0-9]{64}$/,
     );
+  });
+
+  it("re-imports a fresh backup without EEXIST when reconciliation calls importFreshBackup twice", async () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-reimport-manifest-test-"));
+    const backupDirectory = join(root, "backups", "d1");
+    const sourcePath = join(root, "source.sql");
+    const transformedPath = join(root, "restore-d1.sql");
+    const sourceDatabasePath = join(root, "source.sqlite");
+    const backupManifestPath = join(root, "backup-local-manifest.json");
+    mkdirSync(backupDirectory, { recursive: true });
+
+    // A valid D1 export: d1_migrations + user_plan so collectDatabaseEvidence
+    // reports integrity "ok" with no foreign-key violations.
+    const backupSql = [
+      "CREATE TABLE d1_migrations (",
+      "  id INTEGER PRIMARY KEY,",
+      "  name TEXT NOT NULL,",
+      "  applied_at TEXT NOT NULL",
+      ");",
+      "CREATE TABLE user_plan (",
+      "  id TEXT PRIMARY KEY,",
+      "  dodo_payment_id TEXT,",
+      "  dodo_subscription_id TEXT,",
+      "  dodo_customer_id TEXT",
+      ");",
+      "INSERT INTO d1_migrations VALUES (1, '0001_first.sql', '2026-07-01T00:00:00.000Z');",
+      "INSERT INTO user_plan VALUES ('plan-1', NULL, NULL, NULL);",
+    ].join("\n");
+
+    // Each import must produce a distinct backup file name so the
+    // fresh_backup_identity_ambiguous guard passes on the second call.
+    let backupSequence = 0;
+    const runBackup = vi.fn(async () => {
+      backupSequence += 1;
+      const fileName = `0509-2026-08-28T12-00-0${backupSequence}-000Z.sql`;
+      const localPath = join(backupDirectory, fileName);
+      writeFileSync(localPath, backupSql, { mode: 0o600 });
+      // Mirror d1-backup-to-r2.mjs: the manifest is an exclusive create
+      // (flag "wx"). Without the caller removing the prior manifest, the
+      // second call EEXISTs here — the exact deploy-production gate failure.
+      writeFileSync(
+        backupManifestPath,
+        `${JSON.stringify({
+          schemaVersion: 1,
+          localPath,
+          remoteKey: `backups/d1/${fileName}`,
+        })}\n`,
+        { encoding: "utf8", mode: 0o600, flag: "wx" },
+      );
+    });
+    const runR2Get = vi.fn(async () => {
+      // The R2 object is the same export the backup just wrote.
+      writeFileSync(sourcePath, backupSql, { mode: 0o600 });
+    });
+
+    const backupState = { freshBackupPath: null as string | null };
+    const baseOptions = {
+      backupState,
+      sourceDatabasePath,
+      sourcePath,
+      transformedPath,
+      backupManifestPath,
+      backupDirectory,
+      maxSqlBytes: 256 * 1024 * 1024,
+      runBackup,
+      runR2Get,
+    };
+
+    try {
+      const first = await importFreshBackup({
+        ...baseOptions,
+        knownBackupFiles: new Set<string>(),
+      });
+      expect(first.ownedBackup.fileName).toBe(
+        "0509-2026-08-28T12-00-01-000Z.sql",
+      );
+      expect(backupState.freshBackupPath).toBe(
+        join(backupDirectory, "0509-2026-08-28T12-00-01-000Z.sql"),
+      );
+
+      // The second call reuses the same backupManifestPath. The fix removes
+      // the prior manifest before runBackup, so the exclusive create succeeds.
+      const second = await importFreshBackup({
+        ...baseOptions,
+        knownBackupFiles: first.afterBackups,
+      });
+      expect(second.ownedBackup.fileName).toBe(
+        "0509-2026-08-28T12-00-02-000Z.sql",
+      );
+      expect(backupState.freshBackupPath).toBe(
+        join(backupDirectory, "0509-2026-08-28T12-00-02-000Z.sql"),
+      );
+
+      expect(runBackup).toHaveBeenCalledTimes(2);
+      expect(runR2Get).toHaveBeenCalledTimes(2);
+      // The first backup file was removed by the second import's cleanup.
+      expect(
+        existsSync(join(backupDirectory, "0509-2026-08-28T12-00-01-000Z.sql")),
+      ).toBe(false);
+      expect(
+        existsSync(join(backupDirectory, "0509-2026-08-28T12-00-02-000Z.sql")),
+      ).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

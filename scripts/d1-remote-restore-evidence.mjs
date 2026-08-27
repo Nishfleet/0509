@@ -701,6 +701,128 @@ export function cleanupLocalRestoreTempDirectories({
   return targets.map(({ path }) => path);
 }
 
+/**
+ * The owned fresh-backup path is shared between an import call and the
+ * runAutomation finally block, so a partial failure after the new backup is
+ * created still reaches finally-block cleanup. The state object is mutated in
+ * place, mirroring the closure this was extracted from.
+ *
+ * @typedef {Object} BackupImportState
+ * @property {string | null} freshBackupPath
+ */
+
+/**
+ * Import a fresh D1 backup, verify it round-trips against R2, and collect
+ * source evidence. `backupState.freshBackupPath` is cleared before the backup
+ * run and reset to the new owned backup path as soon as the manifest is read,
+ * so a failure in any later step still lets runAutomation's finally block
+ * remove the new backup.
+ *
+ * The backup script writes the manifest with `flag: "wx"` (exclusive create)
+ * to detect stale manifests from prior runs. A second import reuses the same
+ * manifest path, so the prior manifest is removed before the run — otherwise
+ * the exclusive create throws EEXIST and breaks the deploy-production gate
+ * when migration-ledger reconciliation triggers a re-import (#1319).
+ *
+ * @param {{
+ *   knownBackupFiles: Set<string>,
+ *   backupState: BackupImportState,
+ *   sourceDatabasePath: string,
+ *   sourcePath: string,
+ *   transformedPath: string,
+ *   backupManifestPath: string,
+ *   backupDirectory: string,
+ *   maxSqlBytes: number,
+ *   runBackup: () => Promise<unknown>,
+ *   runR2Get: (remoteObjectKey: string) => Promise<unknown>,
+ * }} options
+ * @returns {Promise<{
+ *   aggregate: ReturnType<typeof collectDatabaseEvidence>,
+ *   afterBackups: Set<string>,
+ *   ownedBackup: ReturnType<typeof readOwnedBackupManifest>,
+ *   remoteObjectKey: string,
+ *   sourceSql: string,
+ *   transformed: ReturnType<typeof transformD1RestoreSql>,
+ * }>}
+ */
+export async function importFreshBackup({
+  knownBackupFiles,
+  backupState,
+  sourceDatabasePath,
+  sourcePath,
+  transformedPath,
+  backupManifestPath,
+  backupDirectory,
+  maxSqlBytes,
+  runBackup,
+  runR2Get,
+}) {
+  if (existsSync(sourceDatabasePath)) {
+    unlinkSync(sourceDatabasePath);
+  }
+  if (backupState.freshBackupPath) {
+    removeOwnedLocalBackup(backupState.freshBackupPath);
+    backupState.freshBackupPath = null;
+  }
+  // The backup script creates the manifest with `flag: "wx"` (exclusive
+  // create) to detect stale manifests from prior runs. A second import reuses
+  // the same manifest path, so the prior manifest must be removed first —
+  // otherwise the exclusive create throws EEXIST (#1319).
+  rmSync(backupManifestPath, { force: true });
+  await runBackup();
+  const nextOwnedBackup = readOwnedBackupManifest(
+    backupManifestPath,
+    backupDirectory,
+  );
+  backupState.freshBackupPath = nextOwnedBackup.localPath;
+  const afterBackups = listBackupFiles(backupDirectory);
+  if (
+    knownBackupFiles.has(nextOwnedBackup.fileName) ||
+    !afterBackups.has(nextOwnedBackup.fileName)
+  ) {
+    throw new Error("fresh_backup_identity_ambiguous");
+  }
+  const exportedSql = readSqlFileWithinLimit(
+    backupState.freshBackupPath,
+    maxSqlBytes,
+    "fresh_backup_invalid",
+  );
+  const remoteObjectKey = nextOwnedBackup.remoteKey;
+  await runR2Get(remoteObjectKey);
+  const sourceSql = readSqlFileWithinLimit(
+    sourcePath,
+    maxSqlBytes,
+    "fresh_r2_backup_invalid",
+  );
+  assertExactR2Backup(exportedSql, sourceSql);
+  chmodSync(sourcePath, 0o600);
+  const transformed = transformD1RestoreSql(sourceSql, {
+    maxBytes: DEFAULT_MAX_STATEMENT_BYTES,
+  });
+  if (Buffer.byteLength(transformed.sql) > maxSqlBytes) {
+    throw new Error("transformed_backup_too_large");
+  }
+  writeFileSync(transformedPath, transformed.sql, { mode: 0o600 });
+  importSqlite(sourceDatabasePath, sourceSql, {
+    maxBytes: maxSqlBytes,
+  });
+  const aggregate = collectDatabaseEvidence(sourceDatabasePath);
+  if (
+    aggregate.integrity !== "ok" ||
+    aggregate.foreignKeyViolations !== 0
+  ) {
+    throw new Error("source_backup_integrity_failed");
+  }
+  return {
+    aggregate,
+    afterBackups,
+    ownedBackup: nextOwnedBackup,
+    remoteObjectKey,
+    sourceSql,
+    transformed,
+  };
+}
+
 /** @param {string} outputPath */
 async function runAutomation(outputPath) {
   const { runId, runAttempt } = assertAutomationContext();
@@ -720,8 +842,8 @@ async function runAutomation(outputPath) {
   const backupManifestPath = join(root, "backup-local-manifest.json");
 
   let primaryError = null;
-  /** @type {string | null} */
-  let freshBackupPath = null;
+  /** @type {{ freshBackupPath: string | null }} */
+  const backupState = { freshBackupPath: null };
   try {
     const candidateOutput = await runCaptured(
       "node",
@@ -733,95 +855,30 @@ async function runAutomation(outputPath) {
       throw new Error("remote_restore_candidate_not_clean");
     }
 
-    /**
-     * @param {Set<string>} knownBackupFiles
-     * @returns {Promise<{
-     *   aggregate: ReturnType<typeof collectDatabaseEvidence>,
-     *   afterBackups: Set<string>,
-     *   ownedBackup: ReturnType<typeof readOwnedBackupManifest>,
-     *   remoteObjectKey: string,
-     *   sourceSql: string,
-     *   transformed: ReturnType<typeof transformD1RestoreSql>,
-     * }>}
-     */
-    const importFreshBackup = async (knownBackupFiles) => {
-      if (existsSync(sourceDatabasePath)) {
-        unlinkSync(sourceDatabasePath);
-      }
-      if (freshBackupPath) {
-        removeOwnedLocalBackup(freshBackupPath);
-        freshBackupPath = null;
-      }
-      await runCaptured(
-        "npm",
-        ["run", "backup:d1:r2"],
-        {
-          timeoutMs: LONG_COMMAND_TIMEOUT_MS,
-          env: { D1_BACKUP_LOCAL_MANIFEST: backupManifestPath },
-        },
-      );
-      const nextOwnedBackup = readOwnedBackupManifest(
-        backupManifestPath,
-        backupDirectory,
-      );
-      freshBackupPath = nextOwnedBackup.localPath;
-      const afterBackups = listBackupFiles(backupDirectory);
-      if (
-        knownBackupFiles.has(nextOwnedBackup.fileName) ||
-        !afterBackups.has(nextOwnedBackup.fileName)
-      ) {
-        throw new Error("fresh_backup_identity_ambiguous");
-      }
-      const exportedSql = readSqlFileWithinLimit(
-        freshBackupPath,
-        maxSqlBytes,
-        "fresh_backup_invalid",
-      );
-      const remoteObjectKey = nextOwnedBackup.remoteKey;
-      await runCaptured(
+    const runFreshBackup = () =>
+      runCaptured("npm", ["run", "backup:d1:r2"], {
+        timeoutMs: LONG_COMMAND_TIMEOUT_MS,
+        env: { D1_BACKUP_LOCAL_MANIFEST: backupManifestPath },
+      });
+    const runFreshR2Get = (/** @type {string} */ remoteObjectKey) =>
+      runCaptured(
         "npx",
-        buildR2GetArgs(
-          BACKUP_BUCKET_NAME,
-          remoteObjectKey,
-          sourcePath,
-        ),
+        buildR2GetArgs(BACKUP_BUCKET_NAME, remoteObjectKey, sourcePath),
         { timeoutMs: LONG_COMMAND_TIMEOUT_MS },
       );
-      const sourceSql = readSqlFileWithinLimit(
-        sourcePath,
-        maxSqlBytes,
-        "fresh_r2_backup_invalid",
-      );
-      assertExactR2Backup(exportedSql, sourceSql);
-      chmodSync(sourcePath, 0o600);
-      const transformed = transformD1RestoreSql(sourceSql, {
-        maxBytes: DEFAULT_MAX_STATEMENT_BYTES,
-      });
-      if (Buffer.byteLength(transformed.sql) > maxSqlBytes) {
-        throw new Error("transformed_backup_too_large");
-      }
-      writeFileSync(transformedPath, transformed.sql, { mode: 0o600 });
-      importSqlite(sourceDatabasePath, sourceSql, {
-        maxBytes: maxSqlBytes,
-      });
-      const aggregate = collectDatabaseEvidence(sourceDatabasePath);
-      if (
-        aggregate.integrity !== "ok" ||
-        aggregate.foreignKeyViolations !== 0
-      ) {
-        throw new Error("source_backup_integrity_failed");
-      }
-      return {
-        aggregate,
-        afterBackups,
-        ownedBackup: nextOwnedBackup,
-        remoteObjectKey,
-        sourceSql,
-        transformed,
-      };
-    };
 
-    let backup = await importFreshBackup(listBackupFiles(backupDirectory));
+    let backup = await importFreshBackup({
+      knownBackupFiles: listBackupFiles(backupDirectory),
+      backupState,
+      sourceDatabasePath,
+      sourcePath,
+      transformedPath,
+      backupManifestPath,
+      backupDirectory,
+      maxSqlBytes,
+      runBackup: runFreshBackup,
+      runR2Get: runFreshR2Get,
+    });
     const migrations = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -838,7 +895,18 @@ async function runAutomation(outputPath) {
     }
     if (ledgerPlan.action === "apply_forward_suffix") {
       await applyForwardMigrationSuffix(ledgerPlan.migrations);
-      backup = await importFreshBackup(backup.afterBackups);
+      backup = await importFreshBackup({
+        knownBackupFiles: backup.afterBackups,
+        backupState,
+        sourceDatabasePath,
+        sourcePath,
+        transformedPath,
+        backupManifestPath,
+        backupDirectory,
+        maxSqlBytes,
+        runBackup: runFreshBackup,
+        runR2Get: runFreshR2Get,
+      });
     }
     const {
       aggregate: sourceAggregate,
@@ -1071,9 +1139,9 @@ async function runAutomation(outputPath) {
   } finally {
     const cleanupErrors = [];
     let preserveOwnershipManifest = false;
-    if (!freshBackupPath && existsSync(backupManifestPath)) {
+    if (!backupState.freshBackupPath && existsSync(backupManifestPath)) {
       try {
-        freshBackupPath = readOwnedBackupManifest(
+        backupState.freshBackupPath = readOwnedBackupManifest(
           backupManifestPath,
           backupDirectory,
         ).localPath;
@@ -1082,9 +1150,9 @@ async function runAutomation(outputPath) {
         preserveOwnershipManifest = true;
       }
     }
-    if (freshBackupPath) {
+    if (backupState.freshBackupPath) {
       try {
-        removeOwnedLocalBackup(freshBackupPath);
+        removeOwnedLocalBackup(backupState.freshBackupPath);
       } catch (error) {
         cleanupErrors.push(error);
         preserveOwnershipManifest = true;
