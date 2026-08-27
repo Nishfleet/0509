@@ -66,6 +66,57 @@ describe("sqlite-d1 numbered D1 placeholders", () => {
     expect(row).toEqual({ owner: "owner-2", email: "b@x.com" });
   });
 
+  it("runs the claimMonitoringConcurrencySlot UPDATE that repeats ?5", async () => {
+    const { db, sqlite } = openHarness();
+
+    sqlite.exec(`
+      CREATE TABLE monitoring_concurrency_slot (
+        slot_index INTEGER PRIMARY KEY,
+        holder_run_id TEXT,
+        holder_token TEXT,
+        leased_at TEXT
+      );
+      INSERT INTO monitoring_concurrency_slot (slot_index) VALUES (1), (2), (3), (4);
+    `);
+
+    const result = await db
+      .prepare(
+        `
+          UPDATE monitoring_concurrency_slot
+          SET holder_run_id = ?1,
+              holder_token = ?2,
+              leased_at = ?3
+          WHERE slot_index = (
+            SELECT slot_index
+            FROM monitoring_concurrency_slot
+            WHERE slot_index < ?4
+              AND (
+                holder_run_id IS NULL
+                OR leased_at < ?5
+              )
+            ORDER BY CASE WHEN holder_run_id IS NULL THEN 0 ELSE 1 END, leased_at ASC
+            LIMIT 1
+          )
+          AND (
+            holder_run_id IS NULL
+            OR leased_at < ?5
+          )
+        `,
+      )
+      .bind("run-1", "token-1", "2026-06-23T00:00:00.000Z", 4, "2020-01-01T00:00:00.000Z")
+      .run();
+
+    expect(result.meta.changes).toBe(1);
+    expect(
+      sqlite
+        .prepare("SELECT holder_run_id, holder_token FROM monitoring_concurrency_slot WHERE slot_index = 1")
+        .get(),
+    ).toEqual({
+      holder_run_id: "run-1",
+      holder_token: "token-1",
+    });
+  });
+
   it("still binds anonymous ? placeholders", async () => {
     const { db } = openHarness();
 
