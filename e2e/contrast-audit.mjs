@@ -49,7 +49,7 @@ export function threshold(fontSizePx, fontWeight) {
   return 4.5;
 }
 
-const collect = () =>
+export const collectContrastLabels = () =>
   [...document.querySelectorAll("button, a, [role='button']")].flatMap((el) => {
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return [];
@@ -91,7 +91,7 @@ async function main() {
       ]);
       const page = await context.newPage();
       await page.goto(`${BASE}${route}`, { waitUntil: "networkidle" });
-      for (const label of await page.evaluate(collect)) {
+      for (const label of await page.evaluate(collectContrastLabels)) {
         // A disabled control is exempt from AA by design; opacity is how
         // this codebase draws that state.
         if (label.opacity < 1) continue;
