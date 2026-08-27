@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { luminance, threshold } from "../e2e/contrast-audit.mjs";
+import { contrast, threshold } from "../e2e/contrast-audit.mjs";
 import {
   SURFACE_AUDIT_RULES,
   SURFACE_AUDIT_USERS,
@@ -38,8 +38,8 @@ describe("authenticated surface audit classifiers", () => {
       fontWeight: "600",
       opacity: 1,
     };
-    const ratio = (Math.max(luminance(inkSoftOnWhite.color), luminance(inkSoftOnWhite.background)) + 0.05)
-      / (Math.min(luminance(inkSoftOnWhite.color), luminance(inkSoftOnWhite.background)) + 0.05);
+    const ratio = contrast(inkSoftOnWhite.color, inkSoftOnWhite.background);
+    expect(ratio).not.toBeNull();
     expect(ratio).toBeLessThan(threshold(14, "600"));
     expect(contrastFailuresFromLabels([inkSoftOnWhite])).toEqual([
       expect.objectContaining({ rule: "contrast", text: "Switch to Starter" }),
