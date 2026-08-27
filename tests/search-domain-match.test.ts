@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { domainMatchTier } from "~/lib/search-domain-match";
+import { domainMatchTier, isVerifiedDomainMatchLevel } from "~/lib/search-domain-match";
 import {
   classifyDomainMatches,
   explainDomainMatch,
@@ -235,6 +235,76 @@ describe("BET 2 live gaps (issue #1202)", () => {
       identityAliases: ["Okara"],
     });
     expect(exact).toHaveLength(0);
+  });
+});
+
+describe("goat.com mandatory regression (BET 2 — wrong-brand wall)", () => {
+  // The sneaker marketplace goat.com is the brand a "goat" / "goat.com" query
+  // is after. "The GOAT" (thegoatco.au) is an unrelated AU mouth-tape brand
+  // whose advertiser name and copy contain the stem "goat". It must never be
+  // classified as a verified match for goat.com — the same homonym class as
+  // the okara.ai clinic. A bare "goat" keyword has no domain intent, so it
+  // cannot be verified either; the live /search?q=goat path labels it
+  // unmatched via the search-answer keyword verdict instead of classifying it
+  // here (see tests/search-answer.test.ts).
+  const mouthTape = (): AdRecord =>
+    ad({
+      metaAdId: "goat-mouth-tape",
+      advertiser: "The GOAT",
+      body: "THE NEW GOAT MOUTH TAPE IS HERE. Kirsten K., Verified Buyer",
+      previewHeadline: "THE NEW GOAT MOUTH TAPE IS HERE",
+      landingPageUrl: "https://thegoatco.au/products/mouth-tape",
+      countries: ["Australia"],
+    });
+
+  it("does NOT verify the thegoatco.au mouth-tape ad for a goat.com query", () => {
+    const intent = parseSearchInputFromWebsiteField("https://goat.com");
+    const explanation = explainDomainMatch(mouthTape(), intent);
+
+    expect(explanation).not.toBeNull();
+    expect(explanation?.confidenceCategory).not.toBe("verified");
+    expect(isVerifiedDomainMatchLevel(explanation!.level)).toBe(false);
+    // Keyword-only homonym: the advertiser name "The GOAT" leads with "the",
+    // not "goat", so it falls through to unverified_text_candidate (unmatched),
+    // never likely_brand_name.
+    expect(explanation?.level).toBe("unverified_text_candidate");
+  });
+
+  it("excludes the thegoatco.au mouth-tape ad from the verified-only set for goat.com", () => {
+    const intent = parseSearchInputFromWebsiteField("goat.com");
+    const exact = classifyDomainMatches([mouthTape()], intent, { includeUnverified: false });
+    expect(exact).toHaveLength(0);
+  });
+
+  it("labels the thegoatco.au mouth-tape ad as unmatched when unverified candidates are kept", () => {
+    const intent = parseSearchInputFromWebsiteField("https://goat.com");
+    const broader = classifyDomainMatches([mouthTape()], intent, { includeUnverified: true });
+    expect(broader).toHaveLength(1);
+    expect(broader[0]?.match.confidenceCategory).toBe("unverified");
+    expect(isVerifiedDomainMatchLevel(broader[0]!.match.level)).toBe(false);
+  });
+
+  it("does not verify the thegoatco.au mouth-tape ad for a bare 'goat' keyword query", () => {
+    // A bare "goat" keyword parses to a text intent with no registrable
+    // domain, so the domain matcher declines to classify it at all — it can
+    // never come back as a verified goat.com result.
+    const intent = parseSearchInputFromWebsiteField("goat");
+    expect(intent.intent).toBe("text");
+    expect(intent.registrableDomain).toBeNull();
+    expect(explainDomainMatch(mouthTape(), intent)).toBeNull();
+  });
+
+  it("still accepts ads that genuinely land on goat.com", () => {
+    const intent = parseSearchInputFromWebsiteField("https://goat.com");
+    const verified = ad({
+      metaAdId: "goat-sneaker-marketplace",
+      advertiser: "GOAT",
+      landingPageUrl: "https://www.goat.com/sneakers",
+    });
+
+    const exact = classifyDomainMatches([verified], intent, { includeUnverified: false });
+    expect(exact).toHaveLength(1);
+    expect(exact[0]?.match.confidenceCategory).toBe("verified");
   });
 });
 

@@ -1,3 +1,5 @@
+import { Link } from "react-router";
+
 import type { SearchAnswer, SearchStealSummary } from "~/lib/search-answer";
 
 export function SearchAnswerPanel({
@@ -52,6 +54,13 @@ export function SearchAnswerPanel({
         </div>
       ) : null}
       {answer.note ? <p className="f9-search-answer-note">{answer.note}</p> : null}
+      {answer.nextAction ? (
+        <p className="f9-search-answer-next-action">
+          <Link className="f9-wk-lnk" to={answer.nextAction.href}>
+            {answer.nextAction.label}
+          </Link>
+        </p>
+      ) : null}
     </section>
   );
 }
