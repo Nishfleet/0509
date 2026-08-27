@@ -16,11 +16,13 @@ import {
   countStatesWithWorkingScreenshots,
   createRateLimiter,
   evaluateTermination,
+  fetchSitemapDomains,
   formatProbeLine,
   formatSummary,
   isQualifyingWatchedCompetitor,
   parseOptionalCount,
   parseTimelineHtml,
+  probeDomain,
   runLiveVerification,
 } from "../scripts/bet3-live-verification.mjs";
 
@@ -433,6 +435,115 @@ describe("evaluateTermination", () => {
     expect(watched?.ok).toBe(false);
     expect(verdict.pass).toBe(false);
   });
+
+  it("passes timeline_route_reachable when a domain returns 410 (retire path, #1309)", () => {
+    const results = [
+      ...DEMO_BRAND_PAGE_DOMAINS.map((d) => makeResult({ domain: d, entryCount: 1 })),
+      makeResult({
+        domain: "unseeded.example",
+        entryCount: 0,
+        status: 410,
+        outcome: "retired",
+      }),
+    ];
+    const verdict = evaluateTermination(results, TEST_BASE_URL, passingOptions());
+    const reach = verdict.checks.find((c) => c.name === "timeline_route_reachable");
+    expect(reach?.ok).toBe(true);
+  });
+
+  it("fails no_soft_404_shells when any domain 200s with zero entries", () => {
+    const results = [
+      ...DEMO_BRAND_PAGE_DOMAINS.map((d, i) =>
+        makeResult({ domain: d, entryCount: i === 1 ? 0 : 1, status: i === 1 ? 200 : 200 }),
+      ),
+      makeResult({
+        domain: "gymshark.com",
+        entryCount: 3,
+        capturedAts: qualifyingCapturedAts,
+        receiptStatuses: qualifyingReceipts,
+      }),
+    ];
+    const verdict = evaluateTermination(results, TEST_BASE_URL, passingOptions());
+    const softCheck = verdict.checks.find((c) => c.name === "no_soft_404_shells");
+    expect(softCheck?.ok).toBe(false);
+    expect(softCheck?.detail).toContain(DEMO_BRAND_PAGE_DOMAINS[1]);
+    expect(verdict.pass).toBe(false);
+  });
+
+  it("passes no_soft_404_shells when empty domains return 410 instead of 200", () => {
+    const results = [
+      ...DEMO_BRAND_PAGE_DOMAINS.map((d) => makeResult({ domain: d, entryCount: 1 })),
+      makeResult({
+        domain: "unseeded.example",
+        entryCount: 0,
+        status: 410,
+        outcome: "retired",
+      }),
+      makeResult({
+        domain: "gymshark.com",
+        entryCount: 3,
+        capturedAts: qualifyingCapturedAts,
+        receiptStatuses: qualifyingReceipts,
+      }),
+    ];
+    const verdict = evaluateTermination(results, TEST_BASE_URL, passingOptions());
+    const softCheck = verdict.checks.find((c) => c.name === "no_soft_404_shells");
+    expect(softCheck?.ok).toBe(true);
+  });
+});
+
+describe("probeDomain 410 retire outcome (#1309)", () => {
+  it("returns outcome=retired for a 410 response", async () => {
+    const fetchMock = (async () =>
+      mockResponse("Gone", { status: 410 })) as unknown as typeof fetch;
+    const result = await probeDomain({
+      domain: "unseeded.example",
+      baseUrl: TEST_BASE_URL,
+      fetchImpl: fetchMock,
+      sleepImpl: async () => {},
+    });
+    expect(result.outcome).toBe("retired");
+    expect(result.status).toBe(410);
+    expect(result.entryCount).toBe(0);
+  });
+});
+
+describe("fetchSitemapDomains (#1309)", () => {
+  it("extracts /ads/:domain entries from sitemap.xml, de-duplicated", async () => {
+    const xml = [
+      `<?xml version="1.0"?>`,
+      `<urlset>`,
+      `<url><loc>https://0509.io/ads/nike.com</loc></url>`,
+      `<url><loc>https://0509.io/ads/gymshark.com</loc></url>`,
+      `<url><loc>https://0509.io/ads/gymshark.com</loc></url>`,
+      `<url><loc>https://0509.io/ads/allbirds.com</loc></url>`,
+      `<url><loc>https://0509.io/</loc></url>`,
+      `<url><loc>https://0509.io/ads/ridgewallet.com</loc></url>`,
+      `</urlset>`,
+    ].join("\n");
+    const fetchMock = (async () =>
+      mockResponse(xml, {
+        headers: { "content-type": "application/xml" },
+      })) as unknown as typeof fetch;
+    const domains = await fetchSitemapDomains({
+      baseUrl: TEST_BASE_URL,
+      fetchImpl: fetchMock,
+    });
+    expect(domains).toEqual([
+      "nike.com",
+      "gymshark.com",
+      "allbirds.com",
+      "ridgewallet.com",
+    ]);
+  });
+
+  it("throws when the sitemap fetch fails", async () => {
+    const fetchMock = (async () =>
+      mockResponse("nope", { status: 500 })) as unknown as typeof fetch;
+    await expect(
+      fetchSitemapDomains({ baseUrl: TEST_BASE_URL, fetchImpl: fetchMock }),
+    ).rejects.toThrow(/sitemap fetch failed/);
+  });
 });
 
 describe("watched-competitor helpers", () => {
@@ -629,6 +740,7 @@ describe("format helpers", () => {
         verified: 3,
         deadEnds: 1,
         notFound: 1,
+        retired: 0,
         rateLimited: 0,
         errors: 0,
         sharePresent: 4,

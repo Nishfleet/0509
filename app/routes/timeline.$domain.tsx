@@ -68,6 +68,7 @@ export async function loader({
     "~/lib/offer-timeline.server"
   );
 
+  let loadFailed = false;
   let loaded: Awaited<ReturnType<typeof loadOfferTimeline>> = {
     entries: [],
     asOfState: null,
@@ -75,7 +76,19 @@ export async function loader({
   try {
     loaded = await loadOfferTimeline(env, { domain: brand.domain, asOf });
   } catch {
+    loadFailed = true;
     loaded = { entries: [], asOfState: null };
+  }
+
+  // Retire path (issue #1309): a timeline with no stored snapshots is a
+  // soft-404 "not stored yet" shell — the moat page that 83% of sitemap
+  // brands used to 200 with brand chrome. When the D1 read SUCCEEDED and
+  // returned zero rows (the table exists, the domain simply has no
+  // captures), return 410 Gone so the shell never 200s. A transient D1
+  // read FAILURE is different — the timeline might have entries once D1
+  // recovers, so that degrades to the noindex shell below, never a 410.
+  if (!loadFailed && loaded.entries.length === 0) {
+    throw new Response("Gone", { status: 410 });
   }
 
   const canonicalPath = `/timeline/${brand.domain}`;
