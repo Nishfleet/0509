@@ -870,6 +870,54 @@ describe("billing page", () => {
     expect(markup).not.toContain("Every plan checkout must validate");
   });
 
+  it("does not recommend a downgrade to a customer already above that plan", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        billing: { plan: "agency", dodoStatus: null, billingInterval: null, planUpdatedAt: null },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).not.toContain(">Recommended<");
+    expect(markup).not.toContain("is-recommended");
+  });
+
+  it("recommends the step up while the customer is below it", async () => {
+    mockReactRouterRender(billingRenderData());
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain(">Recommended<");
+    expect(markup).toContain("is-recommended");
+  });
+
+  it("calls the picker a switch once the customer is on a paid plan", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        billing: { plan: "agency", dodoStatus: null, billingInterval: null, planUpdatedAt: null },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain(">Switch<");
+    expect(markup).not.toContain(">Select<");
+  });
+
+  it("calls the picker a selection while the customer is on free", async () => {
+    mockReactRouterRender(billingRenderData());
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain(">Select<");
+    expect(markup).not.toContain(">Switch<");
+  });
+
   it("keeps plan checkout disabled while a pending Dodo checkout exists", async () => {
     mockReactRouterRender(
       billingRenderData({
