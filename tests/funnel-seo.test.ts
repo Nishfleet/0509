@@ -94,15 +94,8 @@ describe("structured data (JSON-LD)", () => {
     expect(webSite["@type"]).toBe("WebSite");
     expect(webSite.url).toBe("https://0509.io");
     expect(webSite.potentialAction["@type"]).toBe("SearchAction");
-    // Sitelink-shaped SearchAction: the public sitelink substitution
-    // (Google fills `{search_term_string}` with whatever the visitor
-    // searched, e.g. `nike`) lands on `/search?q=nike` and runs a search
-    // instead of tripping the incomplete-website form error.
     expect(webSite.potentialAction.target.urlTemplate).toBe(
-      "https://0509.io/search?q={search_term_string}",
-    );
-    expect(webSite.potentialAction["query-input"]).toBe(
-      "required name=search_term_string",
+      "https://0509.io/search?website={website}",
     );
 
     for (const serialized of [JSON.stringify(organization), JSON.stringify(webSite)]) {

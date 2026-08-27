@@ -106,17 +106,7 @@ export function organizationJsonLd() {
   } as const;
 }
 
-/** schema.org WebSite with the public search preview as the site search action.
- *
- * Uses schema.org `query-input: required name=search_term_string` (the
- * standard `q` template) so a Google sitelink substituting the visible
- * `nike` (or any other brand term) lands on `/search?q=nike` and runs the
- * same first-value search the visitor would get by typing it on the
- * homepage. The earlier `?website={website}` template was rejected as an
- * incomplete domain by `hasInvalidCompetitorWebsite`, so the search never
- * ran and the H1 stayed idle. Watchlist, onboarding, and the website form
- * field keep requiring a real domain — only the public sitelink-shaped
- * sitelink target now uses the search-term slot. */
+/** schema.org WebSite with the public search preview as the site search action. */
 export function webSiteJsonLd() {
   return {
     "@context": "https://schema.org",
@@ -127,9 +117,9 @@ export function webSiteJsonLd() {
       "@type": "SearchAction",
       target: {
         "@type": "EntryPoint",
-        urlTemplate: `${SITE_ORIGIN}/search?q={search_term_string}`,
+        urlTemplate: `${SITE_ORIGIN}/search?website={website}`,
       },
-      "query-input": "required name=search_term_string",
+      "query-input": "required name=website",
     },
   } as const;
 }
