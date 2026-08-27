@@ -48,13 +48,21 @@
 # new commit, and leaves a named, timestamped audit record. Same owner decision,
 # same properties, one fewer concept.
 #
+# IDENTITY SEPARATION (0509#1140 / fleet-ops#413). Implementer and attestor
+# must be DIFFERENT GitHub logins, and a worker identity (nishfleet-worker[bot])
+# can never attest. Mirrors the fleet-ops evaluator lib/attest-identity-gate.py
+# so both repos refuse the same identity combinations. Owner self-attest of a
+# human-only PR still passes until a second admin exists — that is the
+# sole-admin path, not a worker hole.
+#
 # HONEST LIMIT (reported to Nish with this check, P10-B item 5): Nishfleet/0509
-# has exactly ONE collaborator, and the fleet's workers hold that identity's
-# token. Every identity-keyed control on this repository — code-owner review,
-# an approval label, this attestation — is therefore an audit trail, not an
-# authorization boundary, until worker credentials are split from the owner's.
-# The controls that bind mechanically regardless of identity are the ones that
-# do not ask "who": enforce_admins, and the deterministic content rules below.
+# has exactly ONE collaborator. Workers used to hold that identity's token, so
+# every identity-keyed control was an audit trail, not an authorization
+# boundary. Workers now push as nishfleet-worker[bot], so this check is a real
+# boundary on App-authored PRs; the human-token impersonation hole is closed
+# elsewhere (the scream/canary in fleet-ops), not here. The controls that bind
+# mechanically regardless of identity are still the ones that do not ask
+# "who": enforce_admins, and the deterministic content rules below.
 #
 # AUTO-REVERT WAIVER (added 2026-08-25, "the guardrail that fails 12% of the
 # time trains everyone to ignore red"). The reversible-merge invariant says
@@ -90,6 +98,9 @@
 # Context bundle shape:
 # {
 #   "head_sha": "0123...def",              # PR head sha, 40 lowercase hex
+#   "author": "nishfleet-worker[bot]",     # PR author login (implementer)
+#   "pusher": "nishfleet-worker[bot]",     # head-commit GitHub login (implementer)
+#   "implementers": ["..."],               # optional extra implementer logins
 #   "files": [{"filename": "tests/a.test.ts",
 #              "previous_filename": null,
 #              "status": "removed",
@@ -100,6 +111,12 @@
 #   "permissions": {"nish3451": "admin"},
 #   "gate_globs": [".github/workflows/**", ...]
 # }
+#
+# IMPLEMENTER FALLBACK: gate-integrity.yml cannot pass author today (nishfleet-
+# worker has no Workflows permission; 0509#1176). When GITHUB_ACTIONS=true the
+# decision script fills a missing `author` from the Actions event payload at
+# GITHUB_EVENT_PATH so the identity split still fires live. Bundle author wins
+# when already set, and the fallback is a no-op in tests.
 #
 # Rule (fail closed): an unparseable or structurally wrong bundle FAILS. A
 # missing patch never silently excuses a violation — it is recorded and the
@@ -121,6 +138,95 @@ import re
 import sys
 
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
+
+# GitHub App login(s) that implement fleet PRs. A member of this set can never
+# attest, and its presence among implementers forbids owner self-attest.
+# Mirrors fleet-ops#413 / lib/attest-identity-gate.py:DEFAULT_WORKER_IDENTITIES.
+DEFAULT_WORKER_IDENTITIES = ("nishfleet-worker[bot]",)
+
+
+def norm_login(value):
+    """Lowercase + strip; non-strings become the empty string."""
+    if not isinstance(value, str):
+        return ""
+    return value.strip().lower()
+
+
+def collect_implementers(bundle):
+    """PR author + pusher (+ optional implementers list) as GitHub logins.
+
+    Implementers are GitHub ACTOR logins (PR author, head-commit author or
+    committer), not git author names. The git author can be anyone; the actor
+    is what bound the push. Mirrors fleet-ops lib/attest-identity-gate.py.
+    """
+    out = set()
+    for key in ("author", "pusher"):
+        n = norm_login(bundle.get(key) or "")
+        if n:
+            out.add(n)
+    extra = bundle.get("implementers")
+    if isinstance(extra, list):
+        for item in extra:
+            n = norm_login(item)
+            if n:
+                out.add(n)
+    return out
+
+
+def apply_actions_event_implementers(bundle):
+    """Fill a missing bundle `author` from the Actions event payload.
+
+    gate-integrity.yml cannot pass `author` today because nishfleet-worker
+    has no Workflows permission. On real CI, pull_request_target writes
+    GITHUB_EVENT_PATH with the full pull_request JSON; reading that local
+    file is not a network call, so the decision script stays hermetic and
+    the fixture regression is unaffected (GITHUB_ACTIONS != "true" is a
+    no-op). Bundle author always wins when already set. A malformed or
+    absent event file must not crash the gate.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    if norm_login(bundle.get("author") or ""):
+        return
+    path = os.environ.get("GITHUB_EVENT_PATH") or ""
+    if not path or not os.path.isfile(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as fh:
+            event = json.load(fh)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return
+    if not isinstance(event, dict):
+        return
+    pr = event.get("pull_request")
+    if not isinstance(pr, dict):
+        return
+    user = pr.get("user")
+    if not isinstance(user, dict):
+        return
+    login = user.get("login")
+    if isinstance(login, str) and login.strip():
+        bundle["author"] = login.strip()
+
+
+def identity_rejects_attestor(user, implementers):
+    """Reason this attestor is forbidden, or None.
+
+    Same rules as fleet-ops#413 / lib/attest-identity-gate.py:
+      1. A worker identity can never attest.
+      2. Overlap + a worker login among implementers -> same-identity REJECT.
+      3. Overlap with no worker implementer -> owner self-attest, allowed.
+    """
+    attestor = norm_login(user)
+    if not attestor:
+        return None
+    workers = {norm_login(x) for x in DEFAULT_WORKER_IDENTITIES}
+    if attestor in workers:
+        return f"worker identity cannot attest: {user}"
+    if attestor in implementers and (implementers & workers):
+        return f"same identity implemented and attested: {user}"
+    return None
+
 
 # Attestation marker lines. A comment attests when ANY of its lines (after
 # stripping per-line whitespace and CRs) is EXACTLY the marker line. The
@@ -192,8 +298,12 @@ Remedies (each violation class needs its own; neither one waives the other).
      collaborator-permission API by the base-branch-owned workflow, never from
      the comment itself. The sha must equal the PR's current head sha, so
      pushing any new commit invalidates the attestation and a fresh one is
-     required. Taking this path emits a loud warning annotation and a
-     job-summary entry naming the admin and the sha.
+     required. The attestor must be a different GitHub login from the
+     implementers (PR author + pusher) when a worker identity is among them;
+     nishfleet-worker[bot] can never attest. Owner self-attest of a human-only
+     PR is the only same-identity case that still passes. Taking this path
+     emits a loud warning annotation and a job-summary entry naming the admin
+     and the sha.
 """.rstrip()
 
 
@@ -483,6 +593,13 @@ def main():
     auto_revert_attestations = bundle.get("auto_revert_attestations") or []
     if not isinstance(auto_revert_attestations, list):
         return fail(["context bundle auto_revert_attestations is not an array"])
+    # Fill a missing bundle `author` from the Actions event payload when this
+    # is running on GitHub Actions. The workflow cannot pass author today, so
+    # the GITHUB_EVENT_PATH fallback is what makes the identity-separation
+    # rule fire live (0509#1140). In tests GITHUB_ACTIONS is unset and this
+    # is a no-op; tests set `author` directly in the bundle.
+    apply_actions_event_implementers(bundle)
+    implementers = collect_implementers(bundle)
     # When the workflow ships raw PR comments, extract attestations from them
     # line-anchored (see extract_attestations_from_comments). Pre-extracted
     # `attestations`/`auto_revert_attestations` are still honored when
@@ -630,7 +747,22 @@ def main():
             reasons.extend(n for n in notes if "attest" in n)
         else:
             user, sha = attested
-            waived.append(("gate-path", gate_violations, f"admin {user} attested {sha}"))
+            # 0509#1140 / fleet-ops#413: even when an admin attestation passes
+            # currency + permission, the attestor must be a different login
+            # from the implementers when a worker identity is among them. A
+            # worker can never attest. Owner self-attest of a human-only PR
+            # is the only same-identity case that still passes.
+            identity_reason = identity_rejects_attestor(user, implementers)
+            if identity_reason is not None:
+                notes.append(identity_reason)
+                reasons.extend(gate_violations)
+                reasons.append(
+                    "admin attestation was posted by an implementer of this PR; "
+                    "a different repository admin must post `gate-integrity-attest: <head sha>`"
+                )
+                reasons.extend(n for n in notes if "attest" in n)
+            else:
+                waived.append(("gate-path", gate_violations, f"admin {user} attested {sha}"))
 
     if reasons:
         return fail(reasons, remedies=True)
