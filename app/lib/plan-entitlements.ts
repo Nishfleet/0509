@@ -11,6 +11,22 @@ export function isPaidPlanFamily(plan: PlanFamily): plan is PaidPlanFamily {
   return plan !== "free";
 }
 
+/** Position on the ladder: free < scout < starter < agency. */
+export function planFamilyRank(plan: PlanFamily): number {
+  return PLAN_FAMILIES.indexOf(plan);
+}
+
+/**
+ * True when `candidate` is a step UP from `current`.
+ *
+ * The billing page uses this to decide whether a plan is worth recommending
+ * to the person reading it: pinning "Recommended" to Starter told an Agency
+ * customer to downgrade.
+ */
+export function isPlanUpgrade(current: PlanFamily, candidate: PlanFamily): boolean {
+  return planFamilyRank(candidate) > planFamilyRank(current);
+}
+
 export type PlanResource = "watchlists" | "collections";
 
 export type DigestCadencePolicy = "none" | "weekly" | "daily_and_weekly";
