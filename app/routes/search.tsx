@@ -1458,6 +1458,7 @@ export default function SearchRoute() {
           displayDomain,
           isDomainSearch: isDomainSearch && data.relevanceApplied,
           isBroaderScope,
+          query: data.filters.query,
           country: data.filters.country,
         })
       : null;

@@ -8,7 +8,8 @@ export type SearchAnswerState =
   | "no_verified"
   | "degraded"
   | "empty"
-  | "idle";
+  | "idle"
+  | "keyword";
 
 /**
  * AI-generated "What to steal" takeaway rendered inside the search answer
@@ -29,6 +30,13 @@ export interface SearchAnswer {
     detail: string;
   }>;
   note: string | null;
+  /**
+   * Optional next-action link rendered below the note. Used by the keyword
+   * verdict to point a bare `?q=goat` lookup at the most-likely intended
+   * domain (`?website=goat.com`) so the visitor can run a verified search
+   * instead of accepting unverified keyword matches as proof.
+   */
+  nextAction: { label: string; href: string } | null;
 }
 
 export function buildSearchAnswer(input: {
@@ -36,6 +44,13 @@ export function buildSearchAnswer(input: {
   displayDomain: string | null;
   isDomainSearch: boolean;
   isBroaderScope: boolean;
+  /**
+   * The raw search term the visitor typed (`?q=` / `?query=`), used by the
+   * keyword verdict to name the brand stem and to derive a suggested
+   * verified-search domain. Omitted by callers/tests that only exercise the
+   * domain-search verdicts.
+   */
+  query?: string | null;
   /**
    * Searched market scope from the route filters ("India", … or "all").
    * The Meta Ad Library is country-scoped, so a specific-country verdict
@@ -90,6 +105,7 @@ export function buildSearchAnswer(input: {
       // Do not route through customerDiscoverySummary: that helper remaps
       // unknown/partial text into "temporarily delayed" copy.
       note: "Retry to continue loading the remaining results.",
+      nextAction: null,
     };
   }
 
@@ -99,6 +115,7 @@ export function buildSearchAnswer(input: {
     isDomainSearch: input.isDomainSearch,
     isBroaderScope: input.isBroaderScope,
     country: input.country,
+    query: input.query,
     adCount,
     broaderCount,
     verifiedCount,
@@ -224,6 +241,7 @@ function buildCompleteSearchAnswer(input: {
   isDomainSearch: boolean;
   isBroaderScope: boolean;
   country?: string | null;
+  query?: string | null;
   adCount: number;
   broaderCount: number;
   verifiedCount: number;
@@ -259,6 +277,7 @@ function buildCompleteSearchAnswer(input: {
 			note:
 				customerDiscoverySummary(result.discoverySummary) ??
 				"Try again shortly or track this competitor so the next sweep keeps checking.",
+      nextAction: null,
     };
   }
 
@@ -281,6 +300,7 @@ function buildCompleteSearchAnswer(input: {
         { label: "Source", value: sourceLabel, detail: formatCacheDetail(result.cacheStatus) },
       ],
       note: "This is not evidence that the competitor is inactive; it only means this search did not verify a connected ad.",
+      nextAction: null,
     };
   }
 
@@ -297,6 +317,7 @@ function buildCompleteSearchAnswer(input: {
         { label: "Ads found", value: "0", detail: sourceLabel },
       ],
 			note: customerDiscoverySummary(result.discoverySummary),
+      nextAction: null,
     };
   }
 
@@ -317,6 +338,7 @@ function buildCompleteSearchAnswer(input: {
         { label: "Source", value: sourceLabel, detail: formatCacheDetail(result.cacheStatus) },
       ],
       note: landingPageCount === 0 ? "Landing-page signals are not captured on these matches yet." : null,
+      nextAction: null,
     };
   }
 
@@ -349,6 +371,7 @@ function buildCompleteSearchAnswer(input: {
         landingFact,
       ],
       note: "This is not evidence that the competitor is inactive; it only means this search did not verify a connected ad.",
+      nextAction: null,
     };
   }
 
@@ -363,6 +386,45 @@ function buildCompleteSearchAnswer(input: {
         { label: "Source", value: sourceLabel, detail: formatCacheDetail(result.cacheStatus) },
       ],
       note: landingPageCount === 0 ? "Landing-page signals are missing, so treat the ad creative as the current signal." : null,
+      nextAction: null,
+    };
+  }
+
+  // Keyword search (`?q=goat` with no `?website=`): the visitor typed a brand
+  // stem, not a domain, so no ad here is verified to be the brand they meant.
+  // The thegoatco.au mouth-tape ad is the load-bearing wrong-brand case — it
+  // contains the stem "goat" but is a different company from goat.com. These
+  // results are unverified keyword candidates, never verified ads. The
+  // next-action link points at the most-likely intended domain so the visitor
+  // can run a verified search instead of accepting keyword matches as proof.
+  const keywordStem = input.query?.trim() || null;
+  if (!input.isDomainSearch && keywordStem) {
+    const suggestedDomain = suggestVerifiedSearchDomain(keywordStem);
+    const nextAction = suggestedDomain
+      ? {
+          label: `Search verified ads for ${suggestedDomain}`,
+          href: buildVerifiedSearchHref(suggestedDomain, input.country),
+        }
+      : null;
+    return {
+      state: "keyword",
+      title: withMarketScope(
+        `${adCount} unverified keyword match${adCount === 1 ? "" : "es"} for "${keywordStem}"`,
+        input.country,
+        marketScopeOptions,
+      ),
+      summary:
+        "These ads matched the keyword, but none are verified to the brand you meant. A keyword like \u201cgoat\u201d can match unrelated companies (e.g. mouth tape) as well as the marketplace goat.com \u2014 confirm the brand before treating any as proof.",
+      facts: [
+        { label: "Verified ads", value: "0", detail: "No website was searched, so none can be verified" },
+        { label: "Keyword matches", value: String(adCount), detail: "Advertiser name or copy contains the keyword" },
+        landingFact,
+        { label: "Source", value: sourceLabel, detail: formatCacheDetail(result.cacheStatus) },
+      ],
+      note: suggestedDomain
+        ? `Want verified ads? Search by website \u2014 ${suggestedDomain} \u2014 to confirm which ads are actually linked to it.`
+        : "To verify ads for a specific brand, search by website (e.g. goat.com) instead of by keyword.",
+      nextAction,
     };
   }
 
@@ -375,6 +437,7 @@ function buildCompleteSearchAnswer(input: {
       landingFact,
     ],
     note: landingPageCount === 0 ? "Landing-page signals are not captured yet." : null,
+    nextAction: null,
   };
 }
 
@@ -448,4 +511,49 @@ function withMarketScope(
   }
   const scope = formatSearchMarketScope(country);
   return scope ? `${title} ${scope}` : title;
+}
+
+/**
+ * Derive the most-likely intended domain from a bare keyword so the keyword
+ * verdict can offer a verified-search next action. A single bare label with
+ * no dots or spaces (e.g. "goat") maps to `<label>.com` (goat.com). Anything
+ * that already looks like a domain, a path, or a multi-word phrase is left
+ * alone — the caller already has a domain or the intent is too ambiguous to
+ * guess.
+ */
+function suggestVerifiedSearchDomain(keyword: string): string | null {
+  const stem = keyword.trim().toLowerCase();
+  if (!stem) {
+    return null;
+  }
+  // Already a domain-like input — the caller should have used ?website=, so
+  // do not fabricate a second guess.
+  if (stem.includes(".") || stem.includes("/") || stem.includes(" ")) {
+    return null;
+  }
+  // Strip common brand-noise suffixes so "goat app" → "goat" → "goat.com",
+  // not "goatapp.com". Conservative: only trailing "app"/"hq"/"co" when the
+  // remaining stem is at least 3 chars (avoids "co" → "" ).
+  const cleaned = stem.replace(/(app|hq|co)$/, (suffix, _match, offset) =>
+    offset >= 3 ? "" : suffix,
+  );
+  const label = cleaned || stem;
+  if (label.length < 2) {
+    return null;
+  }
+  return `${label}.com`;
+}
+
+/**
+ * Build the `/search?website=…` href for the keyword verdict's next-action
+ * link. Preserves the searched country so the verified search runs in the
+ * same market the visitor was looking at.
+ */
+function buildVerifiedSearchHref(domain: string, country: string | null | undefined): string {
+  const params = new URLSearchParams();
+  params.set("website", domain);
+  if (country && country.trim() && country.trim().toLowerCase() !== "all") {
+    params.set("country", country.trim());
+  }
+  return `/search?${params.toString()}`;
 }
