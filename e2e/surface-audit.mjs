@@ -208,7 +208,13 @@ export function collectGutterSections() {
       const hasText = [...el.childNodes].some((node) => node.nodeType === 3 && node.textContent.trim());
       const isControl = /^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.getAttribute("role") === "button";
       if (!hasText && !isControl && el !== root) continue;
-      left = Math.min(left, el.getBoundingClientRect().left);
+      // Content-box left, not border-box: a bleeding card hands the gutter to
+      // its children via padding, so the header's box sits at the bleed edge
+      // while its text sits one --wk-pad in. Without adding padding-left the
+      // header and the unpadded field read as the same edge and the 36px
+      // gutter defect (field + links 36px outside the section content edge)
+      // is invisible.
+      left = Math.min(left, el.getBoundingClientRect().left + Number.parseFloat(style.paddingLeft) || 0);
     }
     return left;
   };
@@ -390,6 +396,20 @@ export async function auditPage(page, cell, rules) {
   return failures;
 }
 
+/**
+ * @typedef {Object} SurfaceAuditOptions
+ * @property {string} [base]
+ * @property {string[]} [users]
+ * @property {string[]} [routes]
+ * @property {string[]} [themes]
+ * @property {{ name: string; width: number; height: number }[]} [viewports]
+ * @property {string[]} [rules]
+ * @property {import("@playwright/test").Browser} [browser]
+ */
+
+/**
+ * @param {SurfaceAuditOptions} [options]
+ */
 export async function runSurfaceAudit(options = {}) {
   const base = options.base ?? process.env.E2E_BASE_URL ?? "http://127.0.0.1:4179";
   const users = options.users ?? SURFACE_AUDIT_USERS;
@@ -414,7 +434,7 @@ export async function runSurfaceAudit(options = {}) {
           await context.addCookies([
             { name: "f9_e2e_fixture", value: user, url: base, sameSite: "Lax" },
           ]);
-          await context.addInitScript((storedTheme) => {
+          await context.addInitScript(/** @param {string} storedTheme */ (storedTheme) => {
             try {
               localStorage.setItem("f9-theme", storedTheme);
             } catch {
@@ -446,6 +466,9 @@ export async function runSurfaceAudit(options = {}) {
   return { checked, failures, users, routes, themes, viewports, rules };
 }
 
+/**
+ * @param {Record<string, unknown> & { rule: string; user: string; theme: string; viewport: string; route: string }} failure
+ */
 function formatFailure(failure) {
   const head = `  FAIL [${failure.rule}] ${cellLabel(failure)}`;
   if (failure.rule === "contrast") {

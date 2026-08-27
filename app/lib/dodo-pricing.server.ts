@@ -216,6 +216,22 @@ export async function previewDodo0509PlanPrices({
 }): Promise<DodoPricingPreview> {
   const apiKey = dodo0509ApiKey(env);
   const brandId = dodo0509BrandId(env);
+  // E2E fixture short-circuit: the local authenticated harness runs with
+  // E2E_TEST_MODE=1 and E2E_PROVIDER_NETWORK_DENY=1, so the live Dodo preview
+  // call can never succeed and every plan CTA would render "Waiting for the
+  // live price". That hides the whole class of plan-CTA contrast defects
+  // (the 2.14:1 dark-mode CTA shipped on 2026-08-27). When both harness flags
+  // are set AND checkout is configured (api key + brand id present), return
+  // seeded fixture prices instead of touching the network. Neither flag is
+  // ever set in production, and the gate is fail-closed on both.
+  if (
+    isEnabledEnvFlag(env, "E2E_TEST_MODE") &&
+    isEnabledEnvFlag(env, "E2E_PROVIDER_NETWORK_DENY") &&
+    apiKey &&
+    brandId
+  ) {
+    return e2eFixturePricingPreview(env, request, trustProxyHeaders);
+  }
   if (!apiKey) return unavailable("missing_api_key", env, request, trustProxyHeaders);
   if (!brandId) return unavailable("missing_brand_id", env, request, trustProxyHeaders);
 
@@ -798,6 +814,121 @@ function unavailable(
     feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
     reason,
     prices: {},
+    annualValidation: {},
+    usageBundles: {},
+  };
+}
+
+function isEnabledEnvFlag(env: AppEnv, name: keyof AppEnv): boolean {
+  const value = env[name];
+  const raw = typeof value === "string" ? value.trim() : "";
+  return raw === "1" || raw.toLowerCase() === "true";
+}
+
+// Seeded plan prices for the local authenticated surface audit. The display
+// strings only need to be non-empty so `priceReady` flips true and the plan
+// CTA renders — the audit reads contrast/alignment off the rendered button,
+// not the price figure. Amounts are illustrative and never reach a checkout.
+const E2E_FIXTURE_PLAN_PRICES: Record<PricingPlanSlug, Partial<Record<PricingBillingCycle, DodoPlanDisplayPrice>>> = {
+  scout: {
+    monthly: {
+      planId: "scout",
+      cycle: "monthly",
+      amount: 9,
+      validationAmount: null,
+      billingCountry: "US",
+      currency: "USD",
+      display: "$9/mo",
+      feesInclusive: true,
+      isSubscription: true,
+      taxInclusive: true,
+      totalTax: null,
+    },
+    yearly: {
+      planId: "scout",
+      cycle: "yearly",
+      amount: 90,
+      validationAmount: null,
+      billingCountry: "US",
+      currency: "USD",
+      display: "$90/yr",
+      feesInclusive: true,
+      isSubscription: true,
+      taxInclusive: true,
+      totalTax: null,
+    },
+  },
+  starter: {
+    monthly: {
+      planId: "starter",
+      cycle: "monthly",
+      amount: 29,
+      validationAmount: null,
+      billingCountry: "US",
+      currency: "USD",
+      display: "$29/mo",
+      feesInclusive: true,
+      isSubscription: true,
+      taxInclusive: true,
+      totalTax: null,
+    },
+    yearly: {
+      planId: "starter",
+      cycle: "yearly",
+      amount: 290,
+      validationAmount: null,
+      billingCountry: "US",
+      currency: "USD",
+      display: "$290/yr",
+      feesInclusive: true,
+      isSubscription: true,
+      taxInclusive: true,
+      totalTax: null,
+    },
+  },
+  agency: {
+    monthly: {
+      planId: "agency",
+      cycle: "monthly",
+      amount: 99,
+      validationAmount: null,
+      billingCountry: "US",
+      currency: "USD",
+      display: "$99/mo",
+      feesInclusive: true,
+      isSubscription: true,
+      taxInclusive: true,
+      totalTax: null,
+    },
+    yearly: {
+      planId: "agency",
+      cycle: "yearly",
+      amount: 990,
+      validationAmount: null,
+      billingCountry: "US",
+      currency: "USD",
+      display: "$990/yr",
+      feesInclusive: true,
+      isSubscription: true,
+      taxInclusive: true,
+      totalTax: null,
+    },
+  },
+};
+
+function e2eFixturePricingPreview(
+  env: AppEnv,
+  request: Request,
+  trustProxyHeaders: boolean,
+): DodoPricingPreview {
+  return {
+    available: true,
+    provider: "dodo",
+    source: "dodo_checkout_preview",
+    country: countryFromRequest(env, request, { trustProxyHeaders }),
+    adaptiveCurrency: dodo0509AdaptiveCurrencyEnabled(env),
+    feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
+    prices: E2E_FIXTURE_PLAN_PRICES,
     annualValidation: {},
     usageBundles: {},
   };
