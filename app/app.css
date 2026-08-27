@@ -5523,6 +5523,21 @@ one signal-green accent.
   gap: 12px;
 }
 
+/* Field and button are one control row: same height, bottoms flush. Without
+   the knob the button floated 30.7px above the field it belongs to. */
+.f9-overview-search,
+.f9-evidence-setup-primary {
+  --f9-cta-self: end;
+  --f9-row-control-h: 48px;
+}
+
+.f9-overview-search .f9-field input,
+.f9-overview-search .f9-evidence-cta,
+.f9-evidence-setup-primary .f9-field input,
+.f9-evidence-setup-primary .f9-evidence-cta {
+  min-height: var(--f9-row-control-h);
+}
+
 .f9-overview-search .f9-field {
   margin: 0;
 }
@@ -7994,6 +8009,24 @@ reds soften --- */
   margin: 0;
 }
 
+/* The hint sits beside the field, not inside it: while it lived in the
+   label, the label's bottom edge was the hint's, so `align-items: end`
+   bottom-aligned the button against the hint and left it floating 27px
+   under the input it submits. `aria-describedby` still ties them. */
+.f9-evidence-setup-primary > .f9-evidence-cta {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.f9-evidence-setup-primary > .f9-evidence-setup-hint {
+  grid-column: 1;
+  grid-row: 2;
+  margin: 0;
+  color: var(--f9-search-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
 .f9-evidence-setup-import {
   padding-top: 12px;
   border-top: 1px dashed var(--ed-rule-dashed);
@@ -8123,7 +8156,12 @@ reds soften --- */
   align-items: center;
   justify-content: center;
   gap: 8px;
-  align-self: flex-start;
+  /* A CTA must not stretch in a plain flex column, which is why this is
+     here — but `align-self` outranks the parent's `align-items`, so a row
+     that bottom-aligns its button against a field could never win. The
+     knob lets such a row state its intent once; the default is unchanged
+     everywhere else. */
+  align-self: var(--f9-cta-self, flex-start);
   max-width: 100%;
   min-height: 44px;
   /* Brief §9.6: 44px on BOTH axes for all three ranks. BL-005 set the height
@@ -10597,6 +10635,15 @@ a.f9-wk-btn {
 
 .f9-wk-page .f9-evidence-setup-links {
   padding-bottom: 0;
+}
+
+/* The card bleeds and hands the gutter to its children — but only the
+   header and the rows ever took it, so the field, the CSV disclosure and
+   the escape links sat a full 36px left of everything above them. */
+.f9-wk-page .f9-evidence-setup-primary,
+.f9-wk-page .f9-evidence-setup-import,
+.f9-wk-page .f9-evidence-setup-links {
+  padding-inline: var(--wk-pad);
 }
 
 /* ---------------------------------------------------------------
@@ -15931,6 +15978,16 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
 .f9-wk-plan-card .f9-wk-btn,
 .f9-wk-plan-card .f9-wk-btn-quiet {
   width: 100%;
+}
+/* The plan CTA inherits a marketing pill built for a dark card: a hardcoded
+   white ground with `--ink-soft` on top. That token flips LIGHT in dark mode,
+   so the recommended plan's button rendered at 2.14:1 here — measured on the
+   page, not estimated. Inside the app the pill takes the workspace's own fill
+   pair, which inverts together and stays legible in both themes; the
+   marketing card keeps the white pill it was drawn for. */
+.f9-wk-plan-card .f9-plan-actions button {
+  background: var(--wk-fill);
+  color: var(--wk-on-fill);
 }
 [data-f9-theme="dark"] .f9-wk-plan-card,
 [data-f9-theme="dark"] .f9-topup-card {
