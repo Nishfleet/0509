@@ -34,6 +34,24 @@ GATE_GLOBS = json.loads(os.environ["GATE_GLOBS"])
 # Shorthands the fixture expressions below refer to by name.
 ADMIN = {"nish3451": "admin"}
 ATTEST = [{"user": "nish3451", "sha": HEAD}]
+# A multi-line attest comment body in the real-world #1273 shape: the marker
+# line first, then verifier-attest, then review prose. Built with Python
+# string concatenation so HEAD (a Python variable in this eval context) is
+# interpolated, not bash-expanded into broken quoting.
+MULTILINE_ATTEST_BODY = (
+    "gate-integrity-attest: " + HEAD + "\n"
+    "verifier-attest: " + HEAD + "\n\n"
+    "Orchestrator attestation after diff review: SHA-pinned codecov action "
+    "(v7), per-shard tokenless uploads, non-fatal during evaluate phase (a "
+    "Codecov outage cannot block PRs), no check weakened, no required context "
+    "altered. Promotion to required stays gated on 3 consecutive reliable "
+    "reports per the PR body's plan."
+)
+# A comment whose body merely mentions the marker in prose — must NOT attest.
+PROSE_MENTION_BODY = (
+    "I would post gate-integrity-attest: " + HEAD + " here but this sentence "
+    "is prose, not the marker line itself."
+)
 # Deterministic fixture data; eval is safe here (no untrusted input).
 bundle = eval(os.environ["FIXTURE_SRC"])
 bundle.setdefault("head_sha", HEAD)
@@ -168,6 +186,64 @@ fixture workflow_attested_maintainer '{
   "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
   "attestations": [{"user": "m", "sha": HEAD}], "permissions": {"m": "maintain"}}'
 run_fixture workflow_attested_maintainer FAIL "not admin"
+
+# --- #1273 regression: multi-line attest comment -----------------------------
+# The real-world attest shape: the marker line is the FIRST line of a
+# multi-line comment that also carries `verifier-attest:` and review prose.
+# The workflow's old whole-body exact-match jq filter rejected this comment
+# entirely, so the decision script saw an empty attestations array and failed
+# with "no current gate-integrity-attest: <head sha> comment from a repository
+# admin" against a comment whose first line matched the head sha exactly.
+#
+# These fixtures exercise the line-anchored extraction path: the bundle ships
+# raw `comments` (the shape the fixed workflow delivers), and the decision
+# script extracts the attest line itself.
+
+fixture p1273_multiline_attest '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "comments": [{"body": MULTILINE_ATTEST_BODY, "user": "nish3451"}],
+  "permissions": ADMIN}'
+run_fixture p1273_multiline_attest PASS "gate-path waived"
+
+# Same shape but the attest line is NOT the first line — extraction must find
+# it anywhere in the body, not only at the top.
+fixture multiline_attest_not_first_line '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "comments": [{"body": "Reviewing this PR now.\n\ngate-integrity-attest: " + HEAD + "\n\nLooks good.", "user": "nish3451"}],
+  "permissions": ADMIN}'
+run_fixture multiline_attest_not_first_line PASS "gate-path waived"
+
+# Prose that merely MENTIONS the marker does not attest: the line must be the
+# marker and nothing else. This is the security property the line-anchored
+# match preserves.
+fixture prose_mention_does_not_attest '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "comments": [{"body": PROSE_MENTION_BODY, "user": "nish3451"}],
+  "permissions": ADMIN}'
+run_fixture prose_mention_does_not_attest FAIL "no current \`gate-integrity-attest:"
+
+# A multi-line attest whose sha is stale (does not match head) is rejected,
+# exactly like the pre-extracted shape.
+fixture multiline_attest_stale '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "comments": [{"body": "gate-integrity-attest: " + OLD + "\n\nprose", "user": "nish3451"}],
+  "permissions": ADMIN}'
+run_fixture multiline_attest_stale FAIL "stale: a newer commit was pushed after it"
+
+# A multi-line attest by a non-admin is rejected.
+fixture multiline_attest_nonadmin '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "comments": [{"body": "gate-integrity-attest: " + HEAD + "\n\nprose", "user": "worker"}],
+  "permissions": {"worker": "write"}}'
+run_fixture multiline_attest_nonadmin FAIL "not admin"
+
+# CR characters in a multi-line attest body (Windows-style line endings) must
+# not break extraction.
+fixture multiline_attest_crlf '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "comments": [{"body": "gate-integrity-attest: " + HEAD + "\r\nverifier-attest: " + HEAD + "\r\n\r\nprose", "user": "nish3451"}],
+  "permissions": ADMIN}'
+run_fixture multiline_attest_crlf PASS "gate-path waived"
 
 fixture workflow_deleted '{"files": [
   {"filename": ".github/workflows/gate-integrity.yml", "status": "removed", "patch": "-name: gate-integrity"}]}'
@@ -362,6 +438,16 @@ fixture auto_revert_full_waiver '{
   "auto_revert_attestations": '"$AUTO_REVERT_ATTS"',
   "files": [{"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});\n-it(\"b\", () => {});"}]}'
 run_fixture auto_revert_full_waiver PASS "test-integrity waived"
+
+# A multi-line auto-revert attest comment must also be extracted line-anchored
+# so the auto-revert waiver still applies when the workflow's marker comment
+# carries prose after the sha line (the same #1273 shape, different marker).
+fixture auto_revert_multiline_attest '{
+  "pr_body": "'"$AUTO_REVERT_PR_BODY"'",
+  "commit_messages": ['"$AUTO_REVERT_COMMIT_REVERT"'],
+  "comments": [{"body": "gate-integrity-auto-revert: " + HEAD + "\n\nauto-revert marker; do not permission-check the author", "user": "github-actions[bot]"}],
+  "files": [{"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"}]}'
+run_fixture auto_revert_multiline_attest PASS "test-integrity waived"
 
 # A real-world shape: the reverted merge removed an entire test file and
 # dropped assertions across several others — net assertion delta is large
