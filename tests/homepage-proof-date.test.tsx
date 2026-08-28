@@ -45,7 +45,7 @@ function proofBriefWithCapturedAt(capturedAt: string) {
       mediaMix: [
         { channel: "Meta Ad Library", count: 12 },
       ],
-      timeline: ["Creative started running Sep 4, 2025", "Brief generated from 12 real captures"],
+      timeline: ["Creative on record since Sep 4, 2025", "Brief generated from 12 real captures"],
     },
     reportRows: [
       "What is captured: 12 of 12 cached creatives are active",
