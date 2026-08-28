@@ -3103,6 +3103,48 @@ one signal-green accent.
   color: var(--ld-ink-soft);
 }
 
+.ld-brand-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0;
+  border: 2px solid var(--ld-ink);
+  background: var(--ld-card);
+}
+
+.ld-brand-links li {
+  border-right: 2px solid var(--ld-ink);
+}
+
+.ld-brand-links li:last-child { border-right: 0; }
+
+.ld-brand-links a {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: clamp(18px, 2.4vw, 26px);
+  text-decoration: none;
+  color: var(--ld-ink);
+}
+
+.ld-brand-links a:hover { background: var(--ld-ink); color: var(--ld-bone); }
+
+.ld-brand-links strong {
+  font-family: var(--ld-mono);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.ld-brand-links span {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  color: var(--ld-ink-soft);
+}
+
+.ld-brand-links a:hover span { color: var(--ld-bone); }
+
 .ld-stats {
   background: var(--ld-ink);
   color: var(--ld-bone);
