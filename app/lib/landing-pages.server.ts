@@ -470,6 +470,13 @@ async function captureLandingPageSnapshotAt(
         captureMethod: "landing_page_fetch",
         captureWarningCodes,
         captureValidated: true,
+        // Issue #1401: CTA extraction funnel stage + bail reason, stored on
+        // the existing capture_metadata_json column for per-watchlist/per-day
+        // aggregation. No D1 schema change.
+        ctaFunnelStage: signals.ctaFunnel.stage,
+        ...(signals.ctaFunnel.reasonCode
+          ? { ctaFunnelReasonCode: signals.ctaFunnel.reasonCode }
+          : {}),
         ...(fetchAttempts > 1 ? { fetchAttempts } : {}),
         ...(looksLikeSignalEmptyShell
           ? { unreadableReasonCode: "landing_signals_not_detected" }

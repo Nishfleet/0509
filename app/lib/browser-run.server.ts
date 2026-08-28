@@ -983,6 +983,14 @@ async function buildBrowserRenderedSnapshot(
         captureWarningCodes,
         captureValidated: true,
         screenshotCorroborates,
+        // Issue #1401: record the CTA extraction funnel stage + bail reason
+        // on every capture so a per-watchlist, per-day aggregation can show
+        // which pages bail at the CTA stage and why (acceptance 2). Stored on
+        // the existing capture_metadata_json column — no D1 schema change.
+        ctaFunnelStage: signals.ctaFunnel.stage,
+        ...(signals.ctaFunnel.reasonCode
+          ? { ctaFunnelReasonCode: signals.ctaFunnel.reasonCode }
+          : {}),
         ...(headline === "Landing page" &&
         !signals.ctaText &&
         !signals.priceText &&
