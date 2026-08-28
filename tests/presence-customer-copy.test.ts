@@ -134,6 +134,7 @@ describe("Presence detail customer HTML", () => {
       applyEntitySourceTargetsCoverage: vi.fn((entry) => entry),
       applyPresenceSourcePlanGates: vi.fn((entries) => entries),
       evaluatePresenceSourceCoverage: vi.fn(async () => coverage()),
+      listPresenceSourceCoverage: vi.fn(async () => []),
     }));
     vi.doMock("~/lib/presence-access-gates.server", () => ({
       connectorHasCustomerPollPath: vi.fn(() => true),
