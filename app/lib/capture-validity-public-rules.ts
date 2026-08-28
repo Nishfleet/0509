@@ -69,6 +69,16 @@ export const CAPTURE_VALIDITY_PUBLIC_RULES: readonly CaptureValidityPublicRule[]
     issue953Anchor: "partial SPA shell",
   },
   {
+    id: "too-thin-content",
+    title: "Too-thin content",
+    refused:
+      "Pages whose visible body is too small to be a real landing page — the body is too thin to tell a real thin page from a shell or a bot wall.",
+    why:
+      "Below the gate\u2019s minimum body signature, a capture cannot be proven real. A challenge page or SPA shell has only tens of characters of boilerplate; a real landing page has hundreds.",
+    gate: { kind: "reason_code", code: "landing_content_signature_too_small" },
+    issue953Anchor: "partial SPA shell",
+  },
+  {
     id: "takedown-restore",
     title: "Site down, then back",
     refused:
@@ -115,3 +125,9 @@ export const CAPTURE_VALIDITY_PUBLIC_RULES: readonly CaptureValidityPublicRule[]
 ];
 
 export const CAPTURE_VALIDITY_PUBLIC_PATH = "/proof";
+/**
+ * Public alias path for the capture-validity rules page. Shipped alongside
+ * `/proof` (issue #1264) so a buyer searching the category term finds the
+ * checkable rule set at the URL the BET 4 contract names.
+ */
+export const CAPTURE_RULES_PUBLIC_PATH = "/capture-rules";

@@ -238,6 +238,20 @@ export default function CompareVisualpingRoute() {
         </p>
       </section>
 
+      <section className="ld-quiet">
+        <div className="ld-section-head">
+          <span className="ld-kicker">Our noise floor</span>
+          <h2>Phantom changes we refuse to alert on.</h2>
+        </div>
+        <p>
+          Visualping's own published complaint is phantom changes and alert noise. Five to Nine diffs the
+          commercial fields instead of pixels, and a capture that fails the validity gate — error pages,
+          bot walls, cookie walls, partial loads, and churn-only edits — is recorded as failed or
+          suppressed and never becomes an alert. See{" "}
+          <Link to="/capture-rules">the capture rules</Link> for the full checkable list.
+        </p>
+      </section>
+
       <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
