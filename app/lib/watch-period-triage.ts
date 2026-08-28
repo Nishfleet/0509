@@ -12,9 +12,12 @@ import type {
    app watchlist record — reads the same status, label, explanation, and
    suppression reasons from this one vocabulary so a buyer sees the same
    story everywhere and a failed check can never be presented as "all
-   quiet". A skipped proof capture (budget, rate limit, dedupe) is a benign
+   quiet". A skipped proof capture (rate limit, dedupe) is a benign
    no-work decision — it is not proof pending, so it never blocks an honest
-   all-quiet record on its own.
+   all-quiet record on its own. A `skipped_due_to_budget` capture is NOT
+   benign: it means a paid customer's check was dropped because the plan
+   allowance was exhausted, so it surfaces as `evidence_skipped_budget`
+   rather than letting the period read as quiet (#1287).
 
    This module is deliberately NOT `.server`: the app route renders the
    period record in the client bundle, so the classification and its copy
@@ -22,12 +25,13 @@ import type {
    `~/lib/watch-event-evaluator.server`, which re-exports everything here.
 
    Precedence (the strongest honest claim wins):
-     changed            >  confirmed changes exist — show them
-     evidence_failed    >  an evidence check failed and proof did not land
-     evidence_pending   >  a change was seen but proof has not completed
-     routine_only       >  changes were seen but all were suppressed repeats
-     all_quiet          >  checks completed and nothing changed
-     not_run            >  no check completed in the period
+     changed                  >  confirmed changes exist — show them
+     evidence_failed          >  an evidence check failed and proof did not land
+     evidence_pending         >  a change was seen but proof has not completed
+     routine_only             >  changes were seen but all were suppressed repeats
+     evidence_skipped_budget  >  checks were dropped because the plan allowance was reached
+     all_quiet                >  checks completed and nothing changed
+     not_run                  >  no check completed in the period
    ========================================================================== */
 
 export const WATCH_PERIOD_TRIAGE_STATUSES = [
@@ -35,6 +39,7 @@ export const WATCH_PERIOD_TRIAGE_STATUSES = [
   "evidence_failed",
   "evidence_pending",
   "routine_only",
+  "evidence_skipped_budget",
   "all_quiet",
   "not_run",
 ] as const;
@@ -166,6 +171,24 @@ export function classifyWatchPeriodTriage(
   }
 
   if (input.successfulRuns > 0) {
+    const budgetSkipped = countBudgetSkippedCaptures(input.proofCaptures);
+    if (budgetSkipped > 0) {
+      const checkNoun = budgetSkipped === 1 ? "check was" : "checks were";
+      return {
+        ...base,
+        status: "evidence_skipped_budget",
+        label: "Some checks skipped — plan allowance reached",
+        explanation: `${budgetSkipped} ${checkNoun} skipped because your plan's evidence allowance was reached, so those competitors were not re-checked this period.`,
+        sourceStatus: "checked",
+        changesCaptured: 0,
+        suppressedChanges: 0,
+        suppressionReasons: [],
+        nextAction:
+          "Checks resume when the allowance resets. Add a credit pack or upgrade the plan to capture more now.",
+        noActionLine:
+          "Nothing new was confirmed this period, but not every competitor was checked.",
+      };
+    }
     return {
       ...base,
       status: "all_quiet",
@@ -193,6 +216,13 @@ export function classifyWatchPeriodTriage(
       "Open watchlists for status — we retry at the next scheduled check.",
     noActionLine: null,
   };
+}
+
+function countBudgetSkippedCaptures(
+  proofCaptures: readonly Pick<ProofCaptureRecord, "status">[],
+) {
+  return proofCaptures.filter((capture) => capture.status === "skipped_due_to_budget")
+    .length;
 }
 
 function collectSuppressionReasons(

@@ -12,6 +12,7 @@ import {
   resolveSuppressedCandidateRefusal,
   type RunHistoryRefusalRow,
 } from "~/lib/run-history-capture-visibility";
+import { classifyWatchPeriodTriage } from "~/lib/watch-event-evaluator.server";
 import { formatLandingPageCaptureGap } from "~/lib/search-display";
 import type {
   EventCandidateRecord,
@@ -305,5 +306,82 @@ describe("run-history capture visibility (#969)", () => {
     expect(markup).toContain("plan allowance reached");
     expect(markup).toContain("Same change already recorded");
     expect(markup).not.toMatch(/capture_failed|skipped_due_to_budget|suppressed_proof_duplicate/);
+  });
+
+  describe("#1287 regression guard — paid-tier budget skips never silent over 72h", () => {
+    // Simulates a paid-tier watchlist whose monthly evidence allowance was
+    // reached: every check over a 72h window is dropped with
+    // `skipped_due_to_budget`. The guard asserts the two accept-criteria
+    // surfaces: (1) every dropped capture surfaces a run-history refusal row
+    // with its reason, and (2) the period triage reads as
+    // `evidence_skipped_budget`, never `all_quiet`, so the digest and the
+    // watchlist record tell the customer the truth.
+    const WINDOW_START = "2026-08-25T00:00:00.000Z";
+    const HOUR = 60 * 60 * 1000;
+
+    function budgetSkipAt(hoursIntoWindow: number): ProofCaptureRecord {
+      return capture({
+        id: `proof-budget-${hoursIntoWindow}`,
+        status: "skipped_due_to_budget",
+        skipReason: "skipped_due_to_budget",
+        attemptedAt: new Date(Date.parse(WINDOW_START) + hoursIntoWindow * HOUR).toISOString(),
+      });
+    }
+
+    it("surfaces a run-history refusal row for every budget skip in the 72h window", () => {
+      const skips = Array.from({ length: 8 }, (_, index) => budgetSkipAt(index * 9));
+      const rows = buildRunHistoryRefusalRows({ captures: skips });
+
+      expect(rows).toHaveLength(8);
+      for (const row of rows) {
+        expect(row.kind).toBe("skipped_due_to_budget");
+        expect(row.reasonCode).toBe("skipped_due_to_budget");
+        expect(row.generatesAlert).toBe(false);
+        expect(formatRunHistoryRefusalCopy(row)).toContain("plan allowance reached");
+        expect(formatRunHistoryRefusalCopy(row)).toContain("No alert sent.");
+      }
+    });
+
+    it("classifies the 72h paid-tier period as evidence_skipped_budget, never all_quiet", () => {
+      const skips = Array.from({ length: 8 }, (_, index) => budgetSkipAt(index * 9));
+      const triage = classifyWatchPeriodTriage({
+        events: [],
+        candidates: [],
+        proofCaptures: skips,
+        successfulRuns: 8,
+        lastSuccessfulCheckAt: skips[skips.length - 1]!.attemptedAt,
+      });
+
+      expect(triage.status).toBe("evidence_skipped_budget");
+      expect(triage.status).not.toBe("all_quiet");
+      expect(triage.explanation).toContain("8 checks were skipped");
+      expect(triage.explanation).toContain("plan's evidence allowance was reached");
+    });
+
+    it("renders the budget-skip count and reason in the evidence card over the window", () => {
+      const skips = Array.from({ length: 5 }, (_, index) => budgetSkipAt(index * 14));
+      const markup = renderToStaticMarkup(
+        createElement(RecentEvidenceChecksCard, {
+          checksExpanded: true,
+          data: {
+            proofSummary: {
+              ...emptyProofSummary(),
+              totalAttempts: 5,
+              skippedAttempts: 5,
+              skippedDueToBudget: 5,
+            },
+            renderedAt: "2026-08-28T00:00:00.000Z",
+            recentProofCaptures: skips,
+            eventCandidates: [],
+            events: [],
+          },
+          watchlistId: "watch-1",
+        }),
+      );
+
+      expect(markup).toContain("Skipped (plan allowance)");
+      expect(markup).toContain("plan allowance was reached");
+      expect(markup).toContain("What we did not alert on");
+    });
   });
 });
