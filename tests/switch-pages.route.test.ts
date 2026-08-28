@@ -88,8 +88,10 @@ describe("BET 8 switch pages", () => {
     expect(markup).toContain(`href="${page.complaint.source.href}"`);
     expect(markup).toContain("What transfers.");
     expect(markup).toContain("What does not transfer.");
-    expect(markup).toContain('action="/search"');
-    expect(markup).toContain("no demo form");
+    expect(markup).toContain('href="/search?q=');
+    expect(markup).toContain(`href="/search?q=${page.ctaBrand}"`);
+    expect((markup.match(/href="\/search\?q=/g) ?? []).length).toBe(1);
+    expect(markup).toMatch(/no demo form/i);
     expect(markup).not.toContain("source=magicbrief-migration");
     expect(markup).not.toContain("Start migration");
     expect(markup).not.toMatch(/calendly|book a demo/i);
