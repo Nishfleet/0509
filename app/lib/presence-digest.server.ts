@@ -1,5 +1,6 @@
 import type { AppEnv } from "~/lib/env.server";
 import { sendPresenceDigestEmail } from "~/lib/delivery.server";
+import { buildMentionDigestLines } from "~/lib/mention-digest.server";
 import { listPresenceItems, listTrackedEntities } from "~/lib/presence-data.server";
 import { formatCoverageLabel } from "~/lib/presence-display";
 import { getUserPlan } from "~/lib/plan.server";
@@ -29,19 +30,23 @@ export async function deliverPresenceDigestForUser(
 
   const lookbackHours = options.lookbackHours ?? 168;
   const since = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
-  const items = await listPresenceItems(env, userId, { connectorId: "website", since, limit: 25 });
-  if (items.length === 0) {
-    return { delivered: false, reason: "no_items" as const };
-  }
+
+  const websiteItems = await listPresenceItems(env, userId, { connectorId: "website", since, limit: 25 });
+  const mentionLines = await buildMentionDigestLines(env, userId, { since, limit: 25 });
 
   const entities = await listTrackedEntities(env, userId);
   const entityLabels = new Map(entities.map((entity) => [entity.id, entity.label]));
-  const lines = items.map((item) => {
+  const websiteLines = websiteItems.map((item) => {
     const label = entityLabels.get(item.trackedEntityId) ?? "Tracked entity";
     return `${label} — ${item.title} (${formatCoverageLabel(item.connectorId)})`;
   });
 
-  const subject = `Five to Nine presence brief — ${items.length} update${items.length === 1 ? "" : "s"}`;
+  const lines = [...websiteLines, ...mentionLines];
+  if (lines.length === 0) {
+    return { delivered: false, reason: "no_items" as const };
+  }
+
+  const subject = `Five to Nine presence brief — ${lines.length} update${lines.length === 1 ? "" : "s"}`;
   const delivery = await sendPresenceDigestEmail(env, {
     userId,
     email: userEmail,
@@ -51,7 +56,7 @@ export async function deliverPresenceDigestForUser(
   });
 
   return delivery.delivered
-    ? { delivered: true as const, itemCount: items.length }
+    ? { delivered: true as const, itemCount: lines.length }
     : delivery.accepted
       ? { delivered: false, reason: "delivery_unconfirmed" as const }
       : { delivered: false, reason: "send_failed" as const };

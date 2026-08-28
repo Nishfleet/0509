@@ -352,6 +352,7 @@ export default {
       observe("scheduled_monitoring", runScheduledMonitoring(env, {
         includeScans: scheduledTask.includeScans,
         includeDigests: scheduledTask.includeDigests,
+        includeMentionResweep: scheduledTask.includeMentionResweep,
         digestCadence: scheduledTask.digestCadence,
         digestLookbackDays: scheduledTask.digestLookbackDays,
         cron: controller.cron,
