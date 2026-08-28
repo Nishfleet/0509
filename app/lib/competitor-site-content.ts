@@ -20,6 +20,8 @@ export type CompetitorSitePageKind =
 	| "blog"
 	| "docs"
 	| "about"
+	| "careers"
+	| "legal"
 	| "contact"
 	| "other";
 
@@ -41,6 +43,31 @@ export const COMPETITOR_PAGE_FACT_BEFORE_AFTER_LIMIT = 500;
 export const COMPETITOR_PAGE_VISIBLE_TEXT_EXCERPT_LIMIT = 2_000;
 export const COMPETITOR_PAGE_OFFER_TEXT_LIMIT = 200;
 export const COMPETITOR_PAGE_CTA_TEXT_LIMIT = 120;
+
+/**
+ * Human-readable display labels for each page kind. Consumed by the coverage
+ * label and watchlist detail surfaces. Keep this the single source of truth so
+ * the two never disagree about a kind's name.
+ */
+export const WEBSITE_PAGE_KIND_LABELS: Record<CompetitorSitePageKind, string> = {
+	home: "Home",
+	pricing: "Pricing",
+	changelog: "Changelog",
+	landing: "Landing",
+	product: "Product",
+	blog: "Blog",
+	docs: "Docs",
+	about: "About",
+	careers: "Careers",
+	legal: "Legal & Policy",
+	contact: "Contact",
+	other: "Other",
+};
+
+/** Return the display label for a page kind, falling back to the kind itself. */
+export function websitePageKindLabel(kind: CompetitorSitePageKind): string {
+	return WEBSITE_PAGE_KIND_LABELS[kind] ?? kind;
+}
 
 export interface CompetitorSiteCandidate {
 	/** Canonical URL (see canonicalizeCompetitorSiteUrl). */
@@ -257,6 +284,8 @@ const PAGE_KINDS: readonly CompetitorSitePageKind[] = [
 	"blog",
 	"docs",
 	"about",
+	"careers",
+	"legal",
 	"contact",
 	"other",
 ];
@@ -307,8 +336,29 @@ const SEGMENT_KIND_MAP: Record<string, CompetitorSitePageKind> = {
 	"about-us": "about",
 	company: "about",
 	team: "about",
-	careers: "about",
+	careers: "careers",
+	"careers-us": "careers",
+	jobs: "careers",
+	job: "careers",
+	"open-roles": "careers",
+	hiring: "careers",
 	mission: "about",
+	legal: "legal",
+	"privacy-policy": "legal",
+	privacy: "legal",
+	"terms-of-service": "legal",
+	"terms-of-use": "legal",
+	terms: "legal",
+	tos: "legal",
+	imprint: "legal",
+	impressum: "legal",
+	"cookie-policy": "legal",
+	cookies: "legal",
+	gdpr: "legal",
+	compliance: "legal",
+	disclaimer: "legal",
+	"acceptable-use": "legal",
+	"acceptable-use-policy": "legal",
 	contact: "contact",
 	"contact-us": "contact",
 	contactus: "contact",
@@ -318,6 +368,8 @@ const SEGMENT_KIND_MAP: Record<string, CompetitorSitePageKind> = {
 const TITLE_PATTERN_RULES: ReadonlyArray<[CompetitorSitePageKind, RegExp]> = [
 	["changelog", /changelog|release\s*notes|what'?s\s*new/i],
 	["pricing", /\b(pricing|plans?|rate\s*card|prices?)\b/i],
+	["legal", /\b(privacy\s*polic|terms\s*of\s*(service|use)|terms|privacy|cookie\s*polic|gdpr|imprint|impressum|legal|disclaimer|compliance)\b/i],
+	["careers", /\b(careers?|we'?re\s*hiring|join\s*the\s*team|open\s*roles?|job\s*openings?)\b/i],
 	["docs", /\b(docs?|documentation|help\s*center|knowledge\s*base)\b/i],
 	["blog", /\b(blog|articles?|news|insights)\b/i],
 	["product", /\b(products?|features?|solutions?|platform)\b/i],

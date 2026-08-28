@@ -130,11 +130,20 @@ describe("classifyWebsitePageKind", () => {
     expect(classifyWebsitePageKind("https://example.com/contact")).toBe("contact");
   });
 
-  it("maps legal paths to other (schema vocabulary is not extended)", () => {
-    expect(classifyWebsitePageKind("https://example.com/legal")).toBe("other");
-    expect(classifyWebsitePageKind("https://example.com/privacy")).toBe("other");
-    expect(classifyWebsitePageKind("https://example.com/terms")).toBe("other");
-    expect(classifyWebsitePageKind("https://example.com/imprint")).toBe("other");
+  it("classifies careers and legal as first-class kinds", () => {
+    // Q4 (#1385): careers and legal/policy are distinct surfaces.
+    expect(classifyWebsitePageKind("https://example.com/careers")).toBe("careers");
+    expect(classifyWebsitePageKind("https://example.com/careers/engineer")).toBe("careers");
+    expect(classifyWebsitePageKind("https://example.com/jobs")).toBe("careers");
+    expect(classifyWebsitePageKind("https://example.com/hiring")).toBe("careers");
+    expect(classifyWebsitePageKind("https://example.com/legal")).toBe("legal");
+    expect(classifyWebsitePageKind("https://example.com/privacy")).toBe("legal");
+    expect(classifyWebsitePageKind("https://example.com/privacy-policy")).toBe("legal");
+    expect(classifyWebsitePageKind("https://example.com/terms")).toBe("legal");
+    expect(classifyWebsitePageKind("https://example.com/terms-of-service")).toBe("legal");
+    expect(classifyWebsitePageKind("https://example.com/cookies")).toBe("legal");
+    expect(classifyWebsitePageKind("https://example.com/gdpr")).toBe("legal");
+    expect(classifyWebsitePageKind("https://example.com/imprint")).toBe("legal");
   });
 
   it("falls back to other for unparseable and unknown paths", () => {
@@ -150,6 +159,10 @@ describe("classifyWebsitePageKind", () => {
     expect(PAGE_KIND_CADENCE.blog).toBe("daily");
     expect(PAGE_KIND_CADENCE.docs).toBe("daily");
     expect(PAGE_KIND_CADENCE.product).toBe("daily");
+    // Q4 (#1385): careers + legal are daily — hiring and policy changes are
+    // material, high-stakes signals.
+    expect(PAGE_KIND_CADENCE.careers).toBe("daily");
+    expect(PAGE_KIND_CADENCE.legal).toBe("daily");
     expect(PAGE_KIND_CADENCE.about).toBe("weekly");
     expect(PAGE_KIND_CADENCE.contact).toBe("weekly");
     expect(PAGE_KIND_CADENCE.other).toBe("weekly");
@@ -237,8 +250,8 @@ describe("discoverSitemapPages", () => {
     expect(urls).toContain("https://competitor.example/pricing");
     expect(urls).toContain("https://competitor.example/changelog");
     expect(urls).toContain("https://competitor.example/blog/post-1");
-    // legal/privacy classifies as other per the vocabulary mapping.
-    expect(result.pages.find((page) => page.canonicalUrl === "https://competitor.example/legal/privacy")?.pageKind).toBe("other");
+    // legal/privacy classifies as the first-class legal kind (Q4 #1385).
+    expect(result.pages.find((page) => page.canonicalUrl === "https://competitor.example/legal/privacy")?.pageKind).toBe("legal");
     // Conventional-sitemap pages carry the conventional_sitemap source.
     expect(result.pages.every((page) => page.discoverySource === "conventional_sitemap")).toBe(true);
   });
@@ -493,6 +506,8 @@ describe("selectWebsitePagesForRun", () => {
     { canonicalUrl: "https://c.example/blog/1", pageKind: "blog" as const, stableOrder: 3 },
     { canonicalUrl: "https://c.example/docs/1", pageKind: "docs" as const, stableOrder: 4 },
     { canonicalUrl: "https://c.example/about", pageKind: "about" as const, stableOrder: 5 },
+    { canonicalUrl: "https://c.example/careers", pageKind: "careers" as const, stableOrder: 6 },
+    { canonicalUrl: "https://c.example/legal/privacy", pageKind: "legal" as const, stableOrder: 7 },
   ];
 
   it("always includes hot classes and rotates the cool ones", () => {
@@ -503,7 +518,24 @@ describe("selectWebsitePagesForRun", () => {
     expect(urls).toContain("https://c.example/changelog");
     // Blog (daily) is in the daily bucket; about (weekly) may rotate out.
     expect(batch.length).toBeGreaterThanOrEqual(3);
-    expect(batch.length).toBeLessThanOrEqual(6);
+    expect(batch.length).toBeLessThanOrEqual(8);
+  });
+
+  it("rotates careers and legal in the daily bucket (not always-included)", () => {
+    // Q4 (#1385): careers + legal are daily-cadence, so they are NOT in the
+    // always-included hot set. With a tight budget that only fits the hot
+    // classes, they rotate out — proving they did not get accidentally
+    // promoted to hot.
+    const hotOnly = selectWebsitePagesForRun(pages, 0, 3);
+    const hotUrls = hotOnly.map((page) => page.canonicalUrl);
+    expect(hotUrls).not.toContain("https://c.example/careers");
+    expect(hotUrls).not.toContain("https://c.example/legal/privacy");
+
+    // With a generous budget the daily bucket fills and both appear.
+    const full = selectWebsitePagesForRun(pages, 0, 50);
+    const fullUrls = full.map((page) => page.canonicalUrl);
+    expect(fullUrls).toContain("https://c.example/careers");
+    expect(fullUrls).toContain("https://c.example/legal/privacy");
   });
 
   it("never exceeds the budget", () => {
@@ -591,6 +623,7 @@ describe("runWebsiteSiteScan", () => {
     applyMigration(harness.sqlite, "migrations/0047_monitoring_fanout_orchestration.sql");
     harness.sqlite.exec("PRAGMA foreign_keys = ON;");
     applyMigration(harness.sqlite, "migrations/0077_competitor_site_monitoring.sql");
+    applyMigration(harness.sqlite, "migrations/0082_website_page_kind_careers_legal.sql");
     env = { DB: harness.db } as AppEnv;
 
     harness.sqlite
