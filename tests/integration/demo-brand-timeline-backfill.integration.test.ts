@@ -14,14 +14,20 @@ import { appEnv, db } from "./fixtures";
  * local D1.
  */
 describe("demo brand offer timeline backfill (migration 0079)", () => {
-  it("seeds >=1 dated state for every flagship demo brand", async () => {
+  it("seeds >=1 dated backfill row for every flagship demo brand (read directly from D1)", async () => {
     expect(DEMO_BRAND_PAGE_DOMAINS).toHaveLength(5);
+    // The proof gate (issue #1284) filters backfill rows out of the public
+    // ledger, so loadOfferTimeline returns empty. Assert the rows exist by
+    // reading D1 directly — the migration still seeds them.
     for (const domain of DEMO_BRAND_PAGE_DOMAINS) {
-      const loaded = await loadOfferTimeline(appEnv, { domain, asOf: null });
-      expect(
-        loaded.entries.length,
-        `${domain} should have a non-empty timeline`,
-      ).toBeGreaterThanOrEqual(1);
+      const row = await db()
+        .prepare(
+          `SELECT count(*) AS n FROM landing_page_snapshot
+           WHERE capture_method = 'demo_backfill' AND canonical_url LIKE ?`,
+        )
+        .bind(`https://www.${domain}/`)
+        .first<{ n: number }>();
+      expect(row?.n, `${domain} should have a seeded backfill row`).toBeGreaterThanOrEqual(1);
     }
   });
 
@@ -52,28 +58,26 @@ describe("demo brand offer timeline backfill (migration 0079)", () => {
     }
   });
 
-  it("labels each backfilled state with the honest no-screenshot evidence note", async () => {
-    const loaded = await loadOfferTimeline(appEnv, {
-      domain: "nike.com",
-      asOf: null,
-    });
-    expect(loaded.entries.length).toBeGreaterThanOrEqual(1);
-    for (const entry of loaded.entries) {
-      expect(entry.screenshotHref).toBeNull();
-      expect(entry.pageTextHref).toBeNull();
-      expect(entry.evidenceNote).toContain("no screenshot");
-      expect(entry.evidenceNote).toContain("25 Aug 2026");
+  it("filters every backfilled state out of the public timeline (issue #1284 proof gate)", async () => {
+    // The backfill rows carry no screenshot and no page-text artifact. The
+    // proof gate in loadOfferTimeline filters them out so the public
+    // /timeline/:domain page never ships a "no screenshot" string. The
+    // rows still exist in D1 (the backfill migration is additive) — they
+    // are just not public-rendered until a real capture stores both artifacts.
+    for (const domain of DEMO_BRAND_PAGE_DOMAINS) {
+      const loaded = await loadOfferTimeline(appEnv, { domain, asOf: null });
+      expect(loaded.entries, `${domain} should have no public entries`).toEqual([]);
+      expect(loaded.asOfState).toBeNull();
     }
   });
 
-  it("does not invent a before/after transition from a single seeded state", async () => {
-    const loaded = await loadOfferTimeline(appEnv, {
-      domain: "nykaa.com",
-      asOf: null,
-    });
-    expect(loaded.entries.length).toBe(1);
-    expect(loaded.entries[0]?.transition).toBeNull();
-    expect(loaded.entries[0]?.headline).toBe("Nykaa. Beauty and wellness.");
+  it("still seeds the backfill rows in D1 (the proof gate filters at read time, not write time)", async () => {
+    const rows = await db()
+      .prepare(
+        `SELECT count(*) AS n FROM landing_page_snapshot WHERE capture_method = 'demo_backfill'`,
+      )
+      .first<{ n: number }>();
+    expect(rows?.n).toBe(DEMO_BRAND_PAGE_DOMAINS.length);
   });
 
   it("rolls back cleanly: deleting demo_backfill rows empties every demo timeline", async () => {

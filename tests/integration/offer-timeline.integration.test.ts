@@ -132,4 +132,40 @@ describe("offer timeline against real D1", () => {
     });
     expect(loaded).toEqual({ entries: [], asOfState: null });
   });
+
+  it("filters a proof-less backfill row out of the public ledger (issue #1284)", async () => {
+    // Seed a backfill row with no screenshot and no page-text artifact — the
+    // same shape as migrations 0079/0081. The proof gate must filter it out
+    // so the public timeline never ships a "no screenshot" string.
+    const prooflessDomain = `proofless-${uid("dom")}.example`;
+    await db()
+      .prepare(
+        `INSERT INTO landing_page_snapshot (
+          id, raw_url, canonical_url, raw_headline, normalized_headline,
+          normalized_headline_hash, capture_method, artifact_key, metadata_json,
+          cta_text, price_text, form_present, ocr_text, translated_text,
+          captured_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, ?, ?)`,
+      )
+      .bind(
+        `proofless-${prooflessDomain}`,
+        `https://www.${prooflessDomain}/`,
+        `https://www.${prooflessDomain}/`,
+        "Proof-less backfill",
+        "proof-less backfill",
+        `proofless-${prooflessDomain}`,
+        "demo_backfill",
+        JSON.stringify({ backfill: true, source: "demo_brand_seed" }),
+        "2026-08-25T00:00:00.000Z",
+        "2026-08-27T00:00:00.000Z",
+      )
+      .run();
+
+    const loaded = await loadOfferTimeline(appEnv, {
+      domain: prooflessDomain,
+      asOf: null,
+    });
+    expect(loaded.entries).toEqual([]);
+    expect(loaded.asOfState).toBeNull();
+  });
 });

@@ -351,3 +351,28 @@ INSERT INTO digest_item (id, digest_run_id, watchlist_id, watchlist_name, event_
 
 INSERT INTO digest_delivery (id, digest_run_id, provider, status, recipient_email, external_message_id, error_message, delivered_at, created_at, updated_at) VALUES
   ('e2e-digest-delivery-firstbrief', 'e2e-digest-firstbrief', 'cloudflare_email', 'sent', 'e2e-free-firstbrief@example.invalid', 'e2e-message-firstbrief', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'));
+
+-- Issue #1284: a real landing_page_snapshot for nike.com with BOTH a stored
+-- screenshot artifact and a page-text extract, so the e2e timeline render
+-- check can verify the positive path (entry renders, screenshot link 200s).
+-- The migration 0079 backfill row for nike.com has no artifacts and is
+-- filtered out by the proof gate; this row passes the gate. The R2 objects
+-- at the keys below are seeded by scripts/e2e-prepare-local.mjs.
+INSERT INTO landing_page_snapshot (
+  id, raw_url, canonical_url, raw_headline, normalized_headline,
+  normalized_headline_hash, capture_method, artifact_key, metadata_json,
+  cta_text, price_text, form_present, ocr_text, translated_text,
+  captured_at, created_at
+) VALUES (
+  'e2e-timeline-nike-20260825',
+  'https://www.nike.com/',
+  'https://www.nike.com/',
+  'Nike. Just Do It.',
+  'nike. just do it.',
+  'e2e-timeline-nike-20260825',
+  'landing_page_fetch',
+  'landing-pages/2026-08-25/e2e0000000000000000000000000000001.html',
+  '{"screenshotArtifactKey":"landing-pages/2026-08-25/e2e0000000000000000000000000000001.png","htmlArtifactKey":"landing-pages/2026-08-25/e2e0000000000000000000000000000001.html"}',
+  'Shop Now', NULL, 0, NULL, NULL,
+  '2026-08-25T00:00:00.000Z', '2026-08-27T00:00:00.000Z'
+);

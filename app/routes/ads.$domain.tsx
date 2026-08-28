@@ -459,8 +459,9 @@ export default function BrandAdsRoute() {
 
 /**
  * Offer Timeline on the public `/ads/:domain` page. Hidden when nothing is
- * stored (never an empty card). Seeded rows carry the honest
- * "Captured on <date>, no screenshot" label instead of a fake screenshot.
+ * stored (never an empty card). Proof-less backfill rows are filtered out by
+ * loadOfferTimeline (issue #1284) so only states with both a stored screenshot
+ * and page-text extract ever reach this surface.
  */
 function BrandOfferTimeline({
   domain,

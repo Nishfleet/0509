@@ -319,6 +319,38 @@ for (const viewport of viewports) {
     await expectNoHorizontalOverflow(page);
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "proof" });
 
+    // Issue #1284: public /timeline/:domain render check. A non-empty timeline
+    // row must link to a real screenshot artifact and a real page-text extract —
+    // never the "no screenshot" string. The e2e fixture seeds a real
+    // landing_page_snapshot for nike.com with both artifacts in R2, so the
+    // timeline page must render the entry with working receipt links. The
+    // proof-less backfill row (migration 0079) is filtered out by the data
+    // layer and must never appear.
+    const proofPageUrl = page.url();
+    await page.goto("/timeline/nike.com");
+    await expect(page).toHaveURL(/\/timeline\/nike\.com$/);
+    const timelineEntries = page.locator(".f9-timeline-entry");
+    await expect(timelineEntries).toHaveCount(1);
+    const screenshotLink = timelineEntries.first().getByRole("link", { name: /Screenshot ·/ });
+    await expect(screenshotLink).toBeVisible();
+    const screenshotHref = await screenshotLink.getAttribute("href");
+    expect(screenshotHref).toMatch(/\/artifacts\/proof\//);
+    const pageTextLink = timelineEntries.first().getByRole("link", { name: /Page text ·/ });
+    await expect(pageTextLink).toBeVisible();
+    const pageTextHref = await pageTextLink.getAttribute("href");
+    expect(pageTextHref).toMatch(/\/artifacts\/page-text\//);
+    // The screenshot artifact must actually resolve (R2 serves the seeded PNG).
+    const screenshotResponse = await page.request.get(screenshotHref!);
+    expect(screenshotResponse.status()).toBe(200);
+    expect(screenshotResponse.headers()["content-type"] ?? "").toContain("image/");
+    // The "no screenshot" string must never appear on any public timeline page.
+    await expect(page.getByText("no screenshot", { exact: false })).toHaveCount(0);
+    await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "timeline" });
+
+    // Return to the search proof page to continue the value-to-signup flow.
+    await page.goto(proofPageUrl);
+    await expect(proofSummary).toBeVisible();
+
     // Value to signup: preserve the search context in the account handoff.
     const createAccount = page
       .locator(".f9-search-signup-cta")

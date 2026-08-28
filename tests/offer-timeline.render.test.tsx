@@ -160,8 +160,8 @@ describe("/timeline/:domain render", () => {
     expect(markup).not.toContain("Share this timeline");
   });
 
-  it("renders the honest no-screenshot label for a backfill state with no receipts", async () => {
-    const backfillEntry = entry({
+  it("never renders the no-screenshot label for a proof-less state (issue #1284)", async () => {
+    const prooflessEntry = entry({
       id: "backfill-nike-20260715",
       capturedAt: "2026-07-15T09:00:00.000Z",
       dateLabel: "15 Jul 2026",
@@ -183,12 +183,15 @@ describe("/timeline/:domain render", () => {
         canonicalPath: "/timeline/nike.com",
         sharePath: "/timeline/nike.com",
         shareUrl: "https://0509.io/timeline/nike.com",
-        entries: [backfillEntry],
+        entries: [prooflessEntry],
       }),
     );
 
+    // The headline still renders (the data layer is what filters proof-less
+    // rows; the component is defense-in-depth against the string itself).
     expect(markup).toContain("Nike. Just Do It.");
-    expect(markup).toContain("Captured on 15 Jul 2026, no screenshot");
+    // The "no screenshot" string must never appear on a public timeline page.
+    expect(markup).not.toContain("no screenshot");
     expect(markup).not.toContain("Screenshot ·");
     expect(markup).not.toContain("Page text ·");
   });
