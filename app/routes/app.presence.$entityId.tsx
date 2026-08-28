@@ -7,12 +7,14 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { ActionFeedback } from "~/components/action-feedback";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { LocalTime } from "~/components/local-time";
+import { MentionPanel } from "~/components/presence/mention-panel";
 import { SubmitButton } from "~/components/submit-button";
 import {
   formatCoverageLabel,
   formatSourceCoverageStatus,
   formatTrackingMode,
 } from "~/lib/presence-display";
+import { loadMentionPanel } from "~/lib/mention-panel-loader.server";
 import {
   presenceCustomerErrorCopy,
   sanitizePresenceCoverageEntry,
@@ -127,6 +129,18 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     pollCursors,
   }));
 
+  // Mention panel (Phase 2, #1377): read-only composition over the same
+  // presence primitives. Mounted behind the existing presence workspace gate
+  // (requirePresenceWorkspaceAccess above); the loader applies the plan gate
+  // and filters disabled connectors so the panel never fabricates mentions.
+  const mentions = await loadMentionPanel({
+    env,
+    workspaceUserId,
+    trackedEntityId: entityId,
+    trackingMode: entity.trackingMode,
+    planFamily: plan,
+  });
+
   return {
     entity,
     sources,
@@ -135,6 +149,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     compareEntities,
     sourceCoverage,
     brief,
+    mentions,
     websiteSourcesAllowed: sourcePlanGates.modeAllowed && sourcePlanGates.websiteSourcesAllowed,
   };
 }
@@ -201,10 +216,19 @@ export async function action({ context, request, params }: ActionFunctionArgs) {
 }
 
 export default function PresenceEntityRoute() {
-  const { entity, pollableSources, items, compareEntities, sourceCoverage, brief, websiteSourcesAllowed } = useLoaderData<typeof loader>();
+  const { entity, pollableSources, items, compareEntities, sourceCoverage, brief, mentions, websiteSourcesAllowed } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const safeSourceCoverage = sourceCoverage.map(sanitizePresenceCoverageEntry);
   const safeBrief = sanitizePresenceEntityBrief(brief);
+  // The loader always returns `mentions`; the fallback keeps the panel rendering
+  // the honest empty state if a partial/loaderData shape reaches the component.
+  const mentionPanelProps = mentions ?? {
+    state: "empty-no-sources" as const,
+    items: [],
+    enabledConnectorIds: [],
+    pageSize: 25,
+    planGateFeature: null,
+  };
 
   return (
     <DashboardPage>
@@ -278,6 +302,14 @@ export default function PresenceEntityRoute() {
             </div>
           ) : null}
         </article>
+
+        <MentionPanel
+          state={mentionPanelProps.state}
+          items={mentionPanelProps.items}
+          enabledConnectorIds={mentionPanelProps.enabledConnectorIds}
+          pageSize={mentionPanelProps.pageSize}
+          planGateFeature={mentionPanelProps.planGateFeature}
+        />
 
         <div className="f9-wk-grid2">
           <article className="f9-wk-panel">
