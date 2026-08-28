@@ -1,0 +1,20 @@
+{
+  "competitor": "meta-ad-library",
+  "productName": "Meta Ad Library",
+  "sources": [
+    {
+      "id": "meta-ad-library",
+      "href": "https://www.facebook.com/ads/library/",
+      "label": "Meta Ad Library",
+      "checked": "2026-08-28",
+      "claim": "Meta's public Ad Library shows the ads any page is currently running — free, no account, open to everyone. It is the same public archive Five to Nine reads for its checks."
+    },
+    {
+      "id": "meta-ad-library-help",
+      "href": "https://www.facebook.com/help/adslibrary",
+      "label": "Meta Ad Library help",
+      "checked": "2026-08-28",
+      "claim": "Meta's own help documentation describes the Ad Library as the public surface for ads running across its platforms."
+    }
+  ]
+}

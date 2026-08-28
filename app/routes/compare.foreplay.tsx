@@ -4,8 +4,17 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import {
+  Cite,
+  CompareCitationsFooter,
+  type CompareCitations,
+  type CompareClaimCard,
+} from "~/components/compare-citations";
 import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import foreplayCitations from "~/data/compare/foreplay-citations.json";
+
+const citations = foreplayCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
 
@@ -21,30 +30,34 @@ export const meta: MetaFunction = () =>
     pathname: "/compare/foreplay",
   });
 
-const foreplayStrengths = [
+const foreplayStrengths: readonly CompareClaimCard[] = [
   {
     title: "Massive ad creative library",
     detail:
       "Foreplay's Discovery index and community Swipe File cover millions of saved ads across Meta, TikTok, LinkedIn, Google, and other platforms.",
+    sourceId: "foreplay-discovery",
   },
   {
     title: "Creative-first research",
     detail:
       "It is built for creative strategists: save ads, tag them, build swipe files, and share inspiration with a team.",
+    sourceId: "foreplay-home",
   },
   {
     title: "Spyder competitor tracking",
     detail:
       "Foreplay's Spyder product tracks a competitor's Meta ads, landing page screenshots, creative timeline, and top hooks.",
+    sourceId: "foreplay-spyder",
   },
   {
     title: "Briefs and analytics",
     detail:
       "You can turn saved ads into creative briefs, run creative scoring, and see competitor creative tests and media mix.",
+    sourceId: "foreplay-home",
   },
-] as const;
+];
 
-const foreplayCosts = [
+const foreplayCosts: readonly CompareClaimCard[] = [
   {
     title: "Ad intelligence, not page monitoring",
     detail:
@@ -59,8 +72,9 @@ const foreplayCosts = [
     title: "Multi-platform breadth",
     detail:
       "Foreplay covers many platforms. Five to Nine currently reads the Meta Ad Library only, so it is narrower in ad-library breadth.",
+    sourceId: "foreplay-home",
   },
-] as const;
+];
 
 const fiveToNineAdds = [
   {
@@ -135,7 +149,10 @@ export default function CompareForeplayRoute() {
           {foreplayStrengths.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -150,7 +167,10 @@ export default function CompareForeplayRoute() {
           {foreplayCosts.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -181,6 +201,8 @@ export default function CompareForeplayRoute() {
           honestly.
         </p>
       </section>
+
+      <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
     </main>

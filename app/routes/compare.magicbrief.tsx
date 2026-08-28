@@ -5,6 +5,12 @@ import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
+  Cite,
+  CompareCitationsFooter,
+  type CompareCitations,
+  type CompareClaimCard,
+} from "~/components/compare-citations";
+import {
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -13,6 +19,9 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import magicbriefCitations from "~/data/compare/magicbrief-citations.json";
+
+const citations = magicbriefCitations as CompareCitations;
 
 const pageDescription =
   "MagicBrief alternative: your competitor list imports as watchlists; collections, boards, and analytics history do not transfer. See what moves.";
@@ -50,11 +59,12 @@ const imports = [
   },
 ] as const;
 
-const notImported = [
+const notImported: readonly CompareClaimCard[] = [
   {
     title: "Collections and boards",
     detail:
       "MagicBrief's saved ad libraries, boards, and saved creative evidence — screenshots, saved ads, links — do not transfer through the generic import. Five to Nine does not migrate them.",
+    sourceId: "magicbrief-faqs",
   },
   {
     title: "Analytics and report history",
@@ -65,8 +75,9 @@ const notImported = [
     title: "Historical evidence",
     detail:
       "Past screenshots and saved evidence do not carry over, and no full MagicBrief export contract is verified. Keep your original files, and check what MagicBrief lets you export today.",
+    sourceId: "magicbrief-faqs",
   },
-] as const;
+];
 
 // Landing from a MagicBrief wind-down search is the highest-intent moment for
 // this page. The CTA below is the self-serve migration path: sign up, then the
@@ -188,7 +199,10 @@ export default function CompareMagicBriefRoute() {
           {notImported.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -255,6 +269,8 @@ export default function CompareMagicBriefRoute() {
           way.
         </p>
       </section>
+
+      <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
     </main>

@@ -4,6 +4,12 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
+  Cite,
+  CompareCitationsFooter,
+  type CompareCitations,
+  type CompareClaimCard,
+} from "~/components/compare-citations";
+import {
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -12,6 +18,9 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import foreplaySpyderCitations from "~/data/compare/foreplay-spyder-citations.json";
+
+const citations = foreplaySpyderCitations as CompareCitations;
 
 const pageTitle = "Five to Nine vs Foreplay Spyder";
 const pageDescription =
@@ -26,25 +35,28 @@ export const meta: MetaFunction = () =>
     pathname: "/compare/foreplay-spyder",
   });
 
-const spyderStrengths = [
+const spyderStrengths: readonly CompareClaimCard[] = [
   {
     title: "Competitor ads and landing pages, 24/7",
     detail:
       "Foreplay's Spyder product watches a competitor's new Meta ads and landing pages, keeps a desktop and mobile landing-page archive, and sends Slack and email summaries.",
+    sourceId: "foreplay-spyder-product",
   },
   {
     title: "Sits inside a huge creative library",
     detail:
       "Spyder rides on Foreplay's ad index and swipe-file workflow. If your team already lives in Foreplay for creative research, Spyder is the monitoring add-on in the same house.",
+    sourceId: "foreplay-spyder-product",
   },
   {
     title: "Agent access on listed plans",
     detail:
       "Foreplay publishes an MCP connector on all plans. That is table stakes in this category, and they already ship it.",
+    sourceId: "foreplay-spyder-product",
   },
-] as const;
+];
 
-const spyderCosts = [
+const spyderCosts: readonly CompareClaimCard[] = [
   {
     title: "Archives, does not diff",
     detail:
@@ -54,13 +66,14 @@ const spyderCosts = [
     title: "Priced as a creative platform",
     detail:
       "Foreplay's public list prices run from $59 a month (Basic) to $459 (Agency), plus per-user and per-brand add-ons. Spyder is part of that stack, not a $10 monitor. Confirm current plans on Foreplay's site.",
+    sourceId: "foreplay-pricing",
   },
   {
     title: "Creative-first, not proof-first",
     detail:
       "The job Foreplay is best at is swipe files, briefs, and creative research. Source-linked, timestamped evidence of a specific offer or price change is a different job.",
   },
-] as const;
+];
 
 const fiveToNineAdds = [
   {
@@ -153,7 +166,10 @@ export default function CompareForeplaySpyderRoute() {
           {spyderStrengths.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -168,7 +184,10 @@ export default function CompareForeplaySpyderRoute() {
           {spyderCosts.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -197,6 +216,8 @@ export default function CompareForeplaySpyderRoute() {
           Questions? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
         </p>
       </section>
+
+      <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
     </main>

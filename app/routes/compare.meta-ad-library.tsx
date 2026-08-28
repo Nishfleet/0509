@@ -5,6 +5,12 @@ import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
+  Cite,
+  CompareCitationsFooter,
+  type CompareCitations,
+  type CompareClaimCard,
+} from "~/components/compare-citations";
+import {
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -13,6 +19,9 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import metaAdLibraryCitations from "~/data/compare/meta-ad-library-citations.json";
+
+const citations = metaAdLibraryCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
 
@@ -28,25 +37,27 @@ export const meta: MetaFunction = () =>
     pathname: "/compare/meta-ad-library",
   });
 
-const adLibraryStrengths = [
+const adLibraryStrengths: readonly CompareClaimCard[] = [
   {
     title: "Every active ad, free",
     detail:
       "Meta's public Ad Library shows the ads any page is currently running — free, no account, open to everyone. It is a genuinely good research surface.",
+    sourceId: "meta-ad-library",
   },
   {
     title: "Straight from the source",
     detail:
       "Nothing is filtered through a vendor. You see what Meta publishes about active ads, and it is the same public archive Five to Nine reads for its checks.",
+    sourceId: "meta-ad-library-help",
   },
   {
     title: "Enough for a one-off look",
     detail:
       "If you need a single snapshot of one competitor today, open the Ad Library and look. You do not need a tool for that, and we will not pretend you do.",
   },
-] as const;
+];
 
-const manualCosts = [
+const manualCosts: readonly CompareClaimCard[] = [
   {
     title: "You have to remember to check",
     detail:
@@ -62,7 +73,7 @@ const manualCosts = [
     detail:
       "Close the tab and the moment is gone — nothing is saved, nothing is timestamped, and nobody is emailed when something moves. Screenshots live in your downloads folder, if you took them.",
   },
-] as const;
+];
 
 const fiveToNineAdds = [
   {
@@ -161,7 +172,10 @@ export default function CompareMetaAdLibraryRoute() {
           {adLibraryStrengths.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -176,7 +190,10 @@ export default function CompareMetaAdLibraryRoute() {
           {manualCosts.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -208,6 +225,8 @@ export default function CompareMetaAdLibraryRoute() {
           &ldquo;the Ad Library alone is enough for you.&rdquo;
         </p>
       </section>
+
+      <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
     </main>
