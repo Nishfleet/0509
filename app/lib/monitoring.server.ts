@@ -90,6 +90,7 @@ import {
   shouldScheduleWatchlistInRegularScan,
 } from "~/lib/plan-entitlements";
 import type { PlanFamily } from "~/lib/plan-entitlements";
+import type { MentionResweepResult } from "~/lib/mention-resweep.server";
 import type { BrowserJobPlanTier } from "~/lib/browser-job-telemetry.server";
 import { ensureDb } from "~/lib/data/d1.server";
 import {
@@ -239,6 +240,7 @@ import {
 interface RunScheduledMonitoringOptions {
   includeScans?: boolean;
   includeDigests?: boolean;
+  includeMentionResweep?: boolean;
   cron?: string;
   digestCadence?: DigestCadence;
   digestLookbackDays?: number;
@@ -435,6 +437,15 @@ export async function runScheduledMonitoring(
     );
   }
 
+  let mentionResweep: MentionResweepResult | undefined;
+  if (options.includeMentionResweep) {
+    const { runMentionResweep } = await import("~/lib/mention-resweep.server");
+    mentionResweep = await runMentionResweep(env);
+    if (mentionResweep && (mentionResweep.polled > 0 || mentionResweep.errors > 0)) {
+      console.log("mention resweep completed", mentionResweep);
+    }
+  }
+
   return {
     queued,
     duplicates,
@@ -446,6 +457,7 @@ export async function runScheduledMonitoring(
     digests: digestResult.sent,
     digestAttempts: digestResult.attempted,
     digestFailures: digestResult.failed,
+    mentionResweep,
   };
 }
 
