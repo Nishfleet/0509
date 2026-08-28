@@ -16,16 +16,3 @@
 # suppresses the historical scan hit in commit b157f14f so the required
 # Gitleaks check can pass.
 b157f14f3a2989221dc52cc87a3ff1ace8f4327f:ops/netcup-browser/tests/server.test.mjs:generic-api-key:19
-
-# Dummy `acceptFormToken` value in the auto-competitor suggested-panel test
-# fixture. The value is clearly fake (`allbirds-com-123`) and is used only to
-# exercise the form-acceptance path in unit tests. These two historical
-# commits (a salvage and the feature commit) still exist in the object graph
-# and Gitleaks scans them as generic API keys.
-0184894632852b68640ac4fa5c408c11bd01d869:tests/auto-competitor-suggested-panel.test.ts:generic-api-key:121
-1ac4d85cb64d50248848245728772f7278b33972:tests/auto-competitor-suggested-panel.test.ts:generic-api-key:121
-
-# Design-doc line describing the 0509 visual style tokens ("real tokens,
-# Bricolage Grotesque, Inter, IBM Plex Mono, green accent"). The generic-api-key
-# rule matches the word "tokens" in this unrelated doc prose.
-d2adaa81b92a8e52b62fadce5ad21754e87f64ff:docs/FIRSTRUN-DIRECTIONS-2026-07-21.md:generic-api-key:42
