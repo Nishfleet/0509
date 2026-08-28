@@ -143,9 +143,13 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     expect(proofStrip(markup)).not.toContain("Sep 4");
     expect(stripTimeText(markup)).toContain("On record");
 
-    // The year-formatted date still appears in the proof-trail card stamp.
+    // #1286/#1343: the proof-trail card stamp no longer surfaces the stale
+    // first-seen date next to the header's "Captured {today}" — it swaps to
+    // non-date-bearing "On record" copy so the only capture clock on the page
+    // is the honest, header-level one.
     const stamp = proofTrailStampText(markup);
-    expect(stamp).toContain("Sep 4, 2025");
+    expect(stamp).toContain("On record");
+    expect(stamp).not.toContain("Sep 4");
   });
 
   it("keeps the compact rendering for a date-only capture from the current UTC year", async () => {

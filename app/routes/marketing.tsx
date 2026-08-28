@@ -113,10 +113,18 @@ function buildTickerEvents(brief: PublicProofBrief | null) {
     ] as const;
   }
 
-  const firstTime = proofTimeLabel(brief.proofTrail[0]?.capturedAt ?? brief.fetchedAt);
+  const firstCaptureIso = brief.proofTrail[0]?.capturedAt ?? brief.fetchedAt;
+  // The ticker's "New Meta ad captured" line is a freshness claim. When the
+  // first trail row's clock is older than the fresh window (a long-running
+  // ad whose first-seen date is months old), a stale date beside "New …
+  // captured" reads as a contradiction (#1286). Swap to the cache fetch
+  // clock and "on record" copy so the ticker never pairs an old first-seen
+  // date with a "new" claim.
+  const firstStale = proofRowStale(firstCaptureIso);
+  const firstTime = proofTimeLabel(firstStale ? brief.fetchedAt : firstCaptureIso);
   const topHook = brief.insights.topHooks[0]?.trim() ?? "offer";
   return [
-    [`${firstTime}`, `New Meta ad captured — “${truncateHook(topHook)}”`, "ad library"],
+    [`${firstTime}`, firstStale ? `Meta ad on record — “${truncateHook(topHook)}”` : `New Meta ad captured — “${truncateHook(topHook)}”`, "ad library"],
     [`${firstTime}`, `${brief.adCount} creatives on record for ${brief.website}`, "source links"],
     [`${firstTime}`, `Proof brief ready — ${brief.activeAdCount} active`, "brief"],
   ] as const;
@@ -218,6 +226,22 @@ function captureAgeDays(iso: string | null | undefined, now: Date = new Date()):
     : new Date(raw);
   if (Number.isNaN(parsed.getTime())) return Infinity;
   return Math.floor((now.getTime() - parsed.getTime()) / 86_400_000);
+}
+
+/** True when a proof-trail row's capture clock is older than the fresh
+ *  window. The per-row `capturedAt` is the ad's first-seen date (Meta Ad
+ *  Library `ad_creation_time`), NOT the moment we fetched it — so a
+ *  long-running ad carries a year-old first-seen date even when the cache
+ *  was refreshed today. Labelling that old date "Captured {date}" next to
+ *  the header's "Captured {today}" reads as a contradiction (#1343) and
+ *  makes the proof strip look 11 months stale (#1286). When stale, the row
+ *  swaps to non-date-bearing "On record" copy so the only capture clock on
+ *  the page is the honest, header-level one. */
+function proofRowStale(
+  iso: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  return captureAgeDays(iso, now) > PROOF_CAPTURE_FRESH_DAYS;
 }
 
 /** "03:47 AM" style clock for a real capture timestamp; date-only captures
@@ -483,7 +507,9 @@ export default function MarketingRoute() {
         rel="noreferrer"
       >
         <span className="ld-stamp ld-stamp-green">
-          {item.signal} · {proofTimeLabel(item.capturedAt)}
+          {proofRowStale(item.capturedAt)
+            ? `${item.signal} · On record`
+            : `${item.signal} · ${proofTimeLabel(item.capturedAt)}`}
         </span>
         <span className="ld-shot-bar">
           <i />
@@ -731,7 +757,11 @@ export default function MarketingRoute() {
                         item.source
                       )}
                     </em>
-                    <small>Captured {proofTimeLabel(item.capturedAt)}</small>
+                    <small>
+                      {proofRowStale(item.capturedAt)
+                        ? "On record · Meta Ad Library"
+                        : `Captured ${proofTimeLabel(item.capturedAt)}`}
+                    </small>
                   </li>
                 ))}
               </ul>
