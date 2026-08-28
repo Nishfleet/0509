@@ -467,6 +467,20 @@ describe("public search submission settle", () => {
     expect(container.textContent).toContain("Checking the Ad Library now");
     expect(container.textContent).toContain("Usually under a minute");
 
+    // #1269 live proof: a 0-ads warming query (slack.com / tcs.com class)
+    // must not dead-end. The empty state renders an escape hatch — a same-URL
+    // retry link and a "Try another domain" link — so a visitor whose
+    // competitor genuinely has no Meta ads on record can still act. A missing
+    // escape hatch is the original BET 2 dead-end regression, not a styling
+    // change. Driven live on 2026-08-28 against /search?q=slack.com. Asserted
+    // on renderToStaticMarkup because the multi-instance Link mock drops text
+    // children under createRoot (see the file header comment).
+    const warmingMarkup = await renderMarkup();
+    expect(warmingMarkup).toContain("Retry this search");
+    expect(warmingMarkup).toContain("Try another domain");
+    expect(warmingMarkup).toContain('class="f9-wk-acts"');
+    expect(warmingMarkup).toContain("/search");
+
     const { SEARCH_WARMING_POLL_LIMIT } = await import("~/routes/search");
     for (let step = 0; step < SEARCH_WARMING_POLL_LIMIT; step += 1) {
       await act(async () => {

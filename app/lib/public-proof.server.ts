@@ -196,23 +196,62 @@ function buildDecision(
   const sourceUrl = trail.find((item) => item.sourceUrl)?.sourceUrl ?? null;
   const countryPhrase =
     input.country === "all" ? "the Meta Ad Library" : `the ${input.country} Ad Library`;
-  const freshness =
+  // The decision card's "Proof status" / "Freshness" rows used to label the
+  // cache-check clock (`fetchedAt`, today) as "Captured … on {today}", which
+  // contradicts the source trail ("On record · Meta Ad Library") and the
+  // timeline ("Creative on record since Sep 4, 2025") when the underlying
+  // creatives were first captured months ago (#1286/#1343: the strip and
+  // trail were fixed in PR #1406, but the decision card kept the false
+  // "Captured {today}" wording). Detect capture staleness from the real
+  // first-seen dates and swap to "On record" language so every surface on
+  // the page agrees: the only "captured {today}" clock is the honest,
+  // header-level check time, never a re-label of an 11-month-old capture.
+  const earliestCaptureIso = earliestCaptureDate(ads, now);
+  const captureStale =
+    earliestCaptureIso !== null &&
+    captureAgeDays(earliestCaptureIso, now) > PROOF_TIMELINE_FRESH_DAYS;
+  const checkedPrefix =
     input.freshForLiveClaim && input.checkedAgoLabel
-      ? `Checked moments ago — captured ${formatCapturedAt(input.fetchedAt, now)}`
-      : `Last checked ${input.checkedAgoLabel} — captured ${formatCapturedAt(input.fetchedAt, now)}`;
+      ? "Checked moments ago"
+      : `Last checked ${input.checkedAgoLabel}`;
+  const freshness = captureStale
+    ? `${checkedPrefix} — creatives on record since ${formatTimelineFirstSeen(earliestCaptureIso!, now)}`
+    : `${checkedPrefix} — captured ${formatCapturedAt(input.fetchedAt, now)}`;
 
   return {
     subject,
     whatChanged,
     whyItMatters,
     priority: "Review before the next campaign refresh",
-    proofStatus: `Captured from ${countryPhrase} on ${formatCapturedAt(input.fetchedAt, now)}`,
+    proofStatus: captureStale
+      ? `On record from ${countryPhrase} — last checked ${formatCapturedAt(input.fetchedAt, now)}`
+      : `Captured from ${countryPhrase} on ${formatCapturedAt(input.fetchedAt, now)}`,
     source: `Meta Ad Library (public archive) — ${countryPhrase}`,
     freshness,
     nextAction: sourceUrl
       ? `Open the same ad in ${countryPhrase}`
       : `Run the public search preview for ${input.website}`,
   };
+}
+
+/** Earliest (oldest) real capture date across the ads — the first-seen date
+ *  (`ad_creation_time`) when present, falling back to the last-seen date.
+ *  Returns null when no ad carries a capture clock, so the caller can keep
+ *  the fresh-capture wording rather than fabricating an "on record since"
+ *  date from the check time. */
+function earliestCaptureDate(ads: AdRecord[], now: Date): string | null {
+  let earliest: string | null = null;
+  let earliestAge = -Infinity;
+  for (const ad of ads) {
+    const iso = ad.firstSeenAt?.trim() || ad.lastSeenAt?.trim() || null;
+    if (!iso) continue;
+    const age = captureAgeDays(iso, now);
+    if (age > earliestAge) {
+      earliestAge = age;
+      earliest = iso;
+    }
+  }
+  return earliest;
 }
 
 function buildProofTrail(ads: AdRecord[], fetchedAt: string): PublicProofTrailItem[] {
