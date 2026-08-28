@@ -207,6 +207,61 @@ export async function loadDomainCaptureFailures(
   }
 }
 
+/**
+ * A server-rendered summary of a domain's capture failures — the public
+ * `/ads/:domain` page renders this instead of leaking the full
+ * `captureFailures` array into the loader data (issue #1345, accept #3).
+ *
+ * The full per-entry list is lazy-loaded on expand via the
+ * `api.ads.capture-failures.$domain` endpoint; the loader ships only the
+ * count, the date range, and the most recent reason code so a buyer who
+ * opens DevTools sees a dated, accountable summary — not a raw skip list.
+ */
+export interface CaptureFailuresSummary {
+  /** Total number of failed/skipped captures on record for this domain. */
+  count: number;
+  /** Earliest `checkedAt` in the set (ISO 8601), or null for a single entry. */
+  earliestDate: string | null;
+  /** Latest `checkedAt` in the set (ISO 8601). */
+  latestDate: string;
+  /** Reason code of the most recent entry (may be null if unclassifiable). */
+  reasonCode: CaptureAttemptReasonCode | null;
+  /** True when at least one entry is a `skipped_due_to_budget` capture. */
+  hasSkippedDueToBudget: boolean;
+}
+
+/**
+ * Reduce a `DomainCaptureFailure[]` to a `CaptureFailuresSummary`. Returns
+ * `null` when the input is empty (the page hides the section in that case).
+ *
+ * The entries are sorted `DESC` by `checkedAt` by `loadDomainCaptureFailures`,
+ * so `failures[0]` is the most recent — but this function does not rely on
+ * that ordering; it scans the full array to be robust against a caller that
+ * passes an unsorted list.
+ */
+export function summarizeDomainCaptureFailures(
+  failures: DomainCaptureFailure[],
+): CaptureFailuresSummary | null {
+  if (failures.length === 0) return null;
+  let earliest = failures[0]!.checkedAt;
+  let latest = failures[0]!.checkedAt;
+  let hasSkippedDueToBudget = false;
+  for (const failure of failures) {
+    if (failure.checkedAt < earliest) earliest = failure.checkedAt;
+    if (failure.checkedAt > latest) latest = failure.checkedAt;
+    if (failure.status === "skipped_due_to_budget") hasSkippedDueToBudget = true;
+  }
+  // The most recent entry is the one with the latest checkedAt.
+  const mostRecent = failures.find((f) => f.checkedAt === latest) ?? failures[0]!;
+  return {
+    count: failures.length,
+    earliestDate: failures.length > 1 ? earliest : null,
+    latestDate: latest,
+    reasonCode: mostRecent.reasonCode,
+    hasSkippedDueToBudget,
+  };
+}
+
 function domainUrlBindings(domain: string): string[] {
   const host = domain.toLowerCase();
   const www = `www.${host}`;
