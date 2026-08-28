@@ -30,6 +30,7 @@ describe("worker schedule", () => {
       includeScans: true,
       includeDigests: false,
       includeMentionResweep: true,
+      includeAutoCompetitorResweep: false,
       includeRiskAlert: false,
     });
     expect(resolveScheduledTask(DAILY_DIGEST_CRON)).toEqual({
@@ -37,6 +38,7 @@ describe("worker schedule", () => {
       includeScans: false,
       includeDigests: true,
       includeMentionResweep: false,
+      includeAutoCompetitorResweep: true,
       includeRiskAlert: true,
       digestCadence: "daily",
       digestLookbackDays: 1,
@@ -47,6 +49,7 @@ describe("worker schedule", () => {
       includeScans: true,
       includeDigests: false,
       includeMentionResweep: true,
+      includeAutoCompetitorResweep: false,
       includeRiskAlert: false,
     });
   });
@@ -57,6 +60,7 @@ describe("worker schedule", () => {
       includeScans: false,
       includeDigests: true,
       includeMentionResweep: false,
+      includeAutoCompetitorResweep: false,
       includeRiskAlert: false,
       digestCadence: "weekly",
       digestLookbackDays: 7,

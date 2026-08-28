@@ -353,6 +353,7 @@ export default {
         includeScans: scheduledTask.includeScans,
         includeDigests: scheduledTask.includeDigests,
         includeMentionResweep: scheduledTask.includeMentionResweep,
+        includeAutoCompetitorResweep: scheduledTask.includeAutoCompetitorResweep,
         digestCadence: scheduledTask.digestCadence,
         digestLookbackDays: scheduledTask.digestLookbackDays,
         cron: controller.cron,
