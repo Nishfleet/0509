@@ -4,8 +4,17 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import {
+  Cite,
+  CompareCitationsFooter,
+  type CompareCitations,
+  type CompareClaimCard,
+} from "~/components/compare-citations";
 import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import spylandCitations from "~/data/compare/spyland-citations.json";
+
+const citations = spylandCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
 
@@ -21,46 +30,53 @@ export const meta: MetaFunction = () =>
     pathname: "/compare/spyland",
   });
 
-const spylandStrengths = [
+const spylandStrengths: readonly CompareClaimCard[] = [
   {
     title: "Daily competitor page checks",
     detail:
       "Add competitor landing, pricing, or feature pages and Spyland checks them once a day, flagging copy, pricing, and CTA changes.",
+    sourceId: "spyland-home",
   },
   {
     title: "Noise filtering",
     detail:
       "It is designed to ignore CSS, ad, and script noise and surface real copy and structure changes.",
+    sourceId: "spyland-docs",
   },
   {
     title: "Before/after screenshots",
     detail:
       "Side-by-side screenshots show how the page looked before and after each detected change.",
+    sourceId: "spyland-home",
   },
   {
     title: "AI change analysis",
     detail:
       "Each change comes with a short AI read of what changed and what to test on your own page. Treat it as a starting point, not a source citation.",
+    sourceId: "spyland-home",
   },
-] as const;
+];
 
-const spylandCosts = [
+const spylandCosts: readonly CompareClaimCard[] = [
   {
     title: "Landing pages only",
     detail:
       "Spyland focuses on the pages you add. It does not pull from public ad libraries or save ad-creative evidence alongside the page.",
+    sourceId: "spyland-home",
   },
   {
     title: "Daily is the default cadence",
     detail:
-      "Faster or slower check frequencies may be available, but daily is the standard pitch. Confirm current plans on the live source at https://spyland.ing/.",
+      "Faster or slower check frequencies may be available, but daily is the standard pitch. Confirm current plans on the live source.",
+    sourceId: "spyland-about",
   },
   {
     title: "Page insight, not ad source",
     detail:
       "The brief is about the competitor page, not the ad that sent traffic there. You still connect the ad to the landing page yourself.",
+    sourceId: "spyland-home",
   },
-] as const;
+];
 
 const fiveToNineAdds = [
   {
@@ -134,7 +150,10 @@ export default function CompareSpylandRoute() {
           {spylandStrengths.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -149,7 +168,10 @@ export default function CompareSpylandRoute() {
           {spylandCosts.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -180,6 +202,8 @@ export default function CompareSpylandRoute() {
           honestly.
         </p>
       </section>
+
+      <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
     </main>

@@ -1,3 +1,4 @@
+import { readdirSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,16 +26,17 @@ afterEach(() => {
   vi.resetModules();
 });
 
-const COMPARE_PAGES = [
-  { slug: "visualping", module: "~/routes/compare.visualping" },
-  { slug: "visualping-ad-library", module: "~/routes/compare.visualping-ad-library" },
-  { slug: "panoramata", module: "~/routes/compare.panoramata" },
-  { slug: "adspyder", module: "~/routes/compare.adspyder" },
-  { slug: "foreplay", module: "~/routes/compare.foreplay" },
-  { slug: "foreplay-spyder", module: "~/routes/compare.foreplay-spyder" },
-  { slug: "meta-ad-library", module: "~/routes/compare.meta-ad-library" },
-  { slug: "magicbrief", module: "~/routes/compare.magicbrief" },
-] as const;
+// Enumerate EVERY compare route dynamically so a new /compare/<slug> page
+// cannot ship without the citation footer. The previous hardcoded allowlist
+// silently excluded spyland and pulzifi, which let #1342 close with two pages
+// still citing zero competitor first-party sources (fleet-ops #1365 audit).
+const COMPARE_PAGES = readdirSync("app/routes")
+  .filter((name) => /^compare\..+\.tsx$/.test(name))
+  .map((name) => {
+    const slug = name.replace(/^compare\./, "").replace(/\.tsx$/, "");
+    return { slug, module: `~/routes/compare.${slug}` };
+  })
+  .sort((a, b) => a.slug.localeCompare(b.slug));
 
 async function renderPage(modulePath: string) {
   const { default: Route } = await import(modulePath);

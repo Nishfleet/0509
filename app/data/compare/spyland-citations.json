@@ -1,0 +1,27 @@
+{
+  "competitor": "spyland",
+  "productName": "Spyland",
+  "sources": [
+    {
+      "id": "spyland-home",
+      "href": "https://spyland.ing/",
+      "label": "Spyland home",
+      "checked": "2026-08-28",
+      "claim": "Spyland watches competitor landing pages daily and flags copy, pricing, and CTA changes, with before/after screenshots and AI change analysis."
+    },
+    {
+      "id": "spyland-about",
+      "href": "https://spyland.ing/about",
+      "label": "Spyland about",
+      "checked": "2026-08-28",
+      "claim": "Spyland is a focused landing-page change monitor; daily checks are the default cadence."
+    },
+    {
+      "id": "spyland-docs",
+      "href": "https://spyland.ing/docs",
+      "label": "Spyland docs",
+      "checked": "2026-08-28",
+      "claim": "Spyland's detection ignores CSS and script noise and surfaces real copy and structure changes."
+    }
+  ]
+}

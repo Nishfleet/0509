@@ -1,0 +1,20 @@
+{
+  "competitor": "pulzifi",
+  "productName": "Pulzifi",
+  "sources": [
+    {
+      "id": "pulzifi-home",
+      "href": "https://pulzifi.com/",
+      "label": "Pulzifi home",
+      "checked": "2026-08-28",
+      "claim": "Pulzifi monitors public URLs and delivers AI strategy briefs on every change, with visual and text diffs and opportunity scoring."
+    },
+    {
+      "id": "pulzifi-pricing",
+      "href": "https://pulzifi.com/pricing",
+      "label": "Pulzifi pricing",
+      "checked": "2026-08-28",
+      "claim": "Pulzifi pricing is published in tiers; check the live source for current limits and frequency options."
+    }
+  ]
+}
