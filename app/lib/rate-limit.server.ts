@@ -1,5 +1,18 @@
 import type { AppEnv } from "~/lib/env.server";
 
+// E2E test mode bypass: the local fixture server sets E2E_TEST_MODE=1 (never
+// set in production — wrangler.jsonc carries "0"). The Gate-B release suite
+// fires dozens of requests per viewport against the same shared rate-limit
+// bucket (e.g. the 30-domain timeline render check in Journey-1, issue #1284),
+// which would exhaust the 120/10min public-brand-page budget before all
+// viewports complete. Bypassing the limiter in e2e test mode is safe: the
+// fixture server is loopback-only, has no real users, and the rate limiter
+// exists to protect production from real abuse, not to gate deterministic
+// test traffic.
+function isE2ETestMode(env: AppEnv): boolean {
+  return env.E2E_TEST_MODE?.trim() === "1";
+}
+
 type RateLimitPolicy = {
   scope: string;
   limit: number;
@@ -315,6 +328,9 @@ async function enforceRateLimitPolicy(
   policy: RateLimitPolicy,
   ctx?: ExecutionContext,
 ) {
+  if (isE2ETestMode(env)) {
+    return null;
+  }
   if (!env.DB) {
     console.error("[rate-limit] D1 binding missing; request was not rate-limited.");
     return policy.failClosed ? rateLimitUnavailableResponse() : null;

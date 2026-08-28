@@ -168,4 +168,28 @@ describe("offer timeline against real D1", () => {
     expect(loaded.entries).toEqual([]);
     expect(loaded.asOfState).toBeNull();
   });
+
+  it("filters the real migration-seeded backfill rows for every demo-seed domain (issue #1284)", async () => {
+    // Migrations 0079 (5 demo brands) and 0081 (25 sitemap brands) seed one
+    // proof-less backfill row per domain — artifact_key = NULL, no screenshot,
+    // no page text. The proof gate must filter every one of them out of the
+    // public ledger so no /timeline/:domain page can ship the "no screenshot"
+    // string. This is the data-layer guarantee the e2e Journey-1 render check
+    // (which loads every demo-seed domain's rendered output) builds on.
+    const demoSeedDomains = [
+      "nike.com", "nykaa.com", "allbirds.com", "lenskart.com", "mamaearth.com",
+      "adidas.com", "adobe.com", "amazon.com", "asos.com", "atlassian.com",
+      "bombas.com", "bombayshavingcompany.com", "canva.com", "celonis.com",
+      "decathlon.com", "figma.com", "gymshark.com", "hm.com", "hubspot.com",
+      "mcaffeine.com", "ouraring.com", "personio.com", "ridge.com",
+      "ridgewallet.com", "sephora.com", "shopify.com", "sugarcosmetics.com",
+      "ulta.com", "walmart.com", "zoho.com",
+    ];
+    for (const domain of demoSeedDomains) {
+      const loaded = await loadOfferTimeline(appEnv, { domain, asOf: null });
+      // No backfill row may survive the proof gate into the public ledger.
+      expect(loaded.entries).toEqual([]);
+      expect(loaded.asOfState).toBeNull();
+    }
+  });
 });
