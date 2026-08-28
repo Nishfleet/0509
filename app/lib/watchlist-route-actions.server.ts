@@ -687,9 +687,145 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
     };
   }
 
+  if (intent === "accept-suggested-competitor") {
+    return handleAcceptSuggestedCompetitorAction(env, workspaceUserId, formData);
+  }
+
   return {
     ok: false,
     message: "We couldn't complete that action. Refresh the page and try again.",
+  };
+}
+
+// Auto-competitor-watch Phase 2 (#1370): the one-click accept action. A
+// "suggested / unverified" candidate is promoted to a real watchlist
+// through the existing createWatchlistWithinLimit path, with the plan
+// limit re-checked at accept time (the customer may have accepted since
+// the panel rendered). Over-cap returns a named reason — never silent
+// admission, never a fabricated success. Unknown / stale candidate ids
+// are rejected too; the candidate set comes from a loader call, so a
+// stale id means the panel has been re-rendered after a sweep.
+async function handleAcceptSuggestedCompetitorAction(
+  env: AppEnv,
+  workspaceUserId: string,
+  formData: FormData,
+): Promise<{
+  ok: boolean;
+  error?: "plan_limit_exceeded" | "candidate_unknown";
+  message: string;
+  acceptedCandidateId?: string;
+  acceptedAdvertiser?: string;
+  watchlistId?: string;
+}> {
+  const { loadSuggestedCompetitorsPanel } = await import(
+    "~/lib/auto-competitor-suggested-loader.server"
+  );
+  const { createWatchlistWithinLimit } = await import("~/lib/data.server");
+  const { getUserPlan } = await import("~/lib/plan.server");
+  const { checkPlanLimit } = await import("~/lib/plan.server");
+
+  const candidateId = String(formData.get("candidateId") ?? "").trim();
+  if (!candidateId) {
+    return {
+      ok: false,
+      error: "candidate_unknown",
+      message: "That suggestion is no longer available. Refresh and try again.",
+    };
+  }
+
+  const plan = await getUserPlan(env, workspaceUserId);
+  if (plan === "free") {
+    return {
+      ok: false,
+      error: "plan_limit_exceeded",
+      message:
+        "Auto-discovered competitors are a paid feature — upgrade to add this suggestion.",
+    };
+  }
+
+  // Re-validate the candidate against the LIVE seed output. A stale id
+  // (panel rendered with seed A, sweep produced seed B, candidate gone)
+  // must not silently create a watchlist the customer never approved.
+  const panel = await loadSuggestedCompetitorsPanel(env, workspaceUserId, plan);
+  const row = panel
+    ? panel.rows.find((entry) => entry.candidateId === candidateId) ?? null
+    : null;
+  if (!row) {
+    return {
+      ok: false,
+      error: "candidate_unknown",
+      message:
+        "That suggestion isn't in our latest sweep anymore. Refresh and pick another.",
+    };
+  }
+  // Honesty-eval 3.4 guardrail at the action layer too: a candidate row
+  // typed anything other than "candidate" must never create a watchlist.
+  if (row.type !== "candidate") {
+    return {
+      ok: false,
+      error: "candidate_unknown",
+      message:
+        "That suggestion can't be added as a competitor — only unverified candidates can.",
+    };
+  }
+
+  const limit = await checkPlanLimit(env, workspaceUserId, "watchlists");
+  if (!limit.allowed) {
+    return {
+      ok: false,
+      error: "plan_limit_exceeded",
+      message:
+        "You've reached your competitor tracking limit — pause another watchlist before adding this one.",
+    };
+  }
+
+  const targetLabel = row.advertiser.trim() || row.candidateId;
+  const targetId = row.landingPageUrl?.trim() || row.candidateId;
+  // Reuse the existing fingerprint helper so the accept path's dedup
+  // semantics match every other createWatchlist call site.
+  const { fingerprintSavedQuery, normalizeSearchFilters } = await import("~/lib/normalize");
+  const normalizedFilters = normalizeSearchFilters({
+    query: row.advertiser,
+    country: row.targetCountry ?? "all",
+  });
+  const targetFingerprint = fingerprintSavedQuery({
+    mode: "advertiser",
+    filters: normalizedFilters,
+  });
+
+  const result = await createWatchlistWithinLimit(
+    env,
+    workspaceUserId,
+    {
+      name: targetLabel,
+      targetType: "advertiser",
+      targetId,
+      targetFingerprint,
+      targetLabel,
+      targetCountry: row.targetCountry ?? null,
+      trackingRole: "competitor",
+    },
+    limit.limit,
+  );
+
+  if (result.status === "over_cap") {
+    return {
+      ok: false,
+      error: "plan_limit_exceeded",
+      message:
+        "You've reached your competitor tracking limit — pause another watchlist before adding this one.",
+    };
+  }
+
+  return {
+    ok: true,
+    message:
+      result.status === "existing"
+        ? `${row.advertiser} is already on your watchlist.`
+        : `Now watching ${row.advertiser}.`,
+    acceptedCandidateId: row.candidateId,
+    acceptedAdvertiser: row.advertiser,
+    watchlistId: result.watchlist.id,
   };
 }
 
