@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_MAX_STATEMENT_BYTES, transformD1RestoreSql } from "../scripts/d1-restore-transform.mjs";
 
@@ -223,5 +225,153 @@ describe("D1 restore transform", () => {
     const result = transformD1RestoreSql(source, { maxBytes: 8_000, primaryKeys: { ad: "id" } });
     expect(result.transformed).toBe(1);
     expect(Math.max(...result.statementBytes)).toBeLessThanOrEqual(8_000);
+  });
+
+  it("reorders rows across the full production FK graph, not just one edge", () => {
+    // The 2026-08-28 regression test above proves the reorder fixes a single
+    // child->parent edge with a synthetic 2-table schema. This test proves it
+    // against the REAL 0509 schema: every migration applied, a multi-level FK
+    // chain seeded (user -> collection -> collection_item -> ad, and
+    // watch_event -> event_candidate -> watchlist_run -> watchlist -> user),
+    // and a full dump emitted in child-before-parent order across all tables.
+    // node:sqlite autocommits each statement, mirroring D1's per-statement FK
+    // enforcement where defer_foreign_keys cannot bridge across statements.
+    const migrationsDir = join(__dirname, "..", "migrations");
+    const source = new DatabaseSync(":memory:");
+    source.exec("PRAGMA foreign_keys = ON;");
+    for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort()) {
+      source.exec(readFileSync(join(migrationsDir, file), "utf8"));
+    }
+    const allTables = source
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name",
+      )
+      .all()
+      .map((r) => r.name as string);
+    const colsOf = (table: string) => source.prepare(`PRAGMA table_info("${table}")`).all() as { name: string; notnull: number; dflt_value: string | null; pk: number }[];
+    const tableSql = (table: string) =>
+      source.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table) as { sql: string };
+    // Seed a minimal valid row, filling NOT NULL non-PK columns and overriding
+    // FK columns to point at already-seeded parents (parents seeded first).
+    const seed = (table: string, id: string, extra: Record<string, string> = {}) => {
+      const cols = colsOf(table);
+      const pk = cols.find((c) => c.pk === 1);
+      const names: string[] = [];
+      const vals: string[] = [];
+      if (pk) {
+        names.push(`"${pk.name}"`);
+        vals.push(`'${id}'`);
+      }
+      for (const c of cols) {
+        if (pk && c.name === pk.name) continue;
+        if (extra[c.name] !== undefined) {
+          names.push(`"${c.name}"`);
+          vals.push(extra[c.name]);
+          continue;
+        }
+        if (c.notnull && c.dflt_value === null && c.pk === 0) {
+          names.push(`"${c.name}"`);
+          vals.push("'seed'");
+        }
+      }
+      source.exec(`INSERT INTO "${table}" (${names.join(",")}) VALUES (${vals.join(",")})`);
+    };
+    seed("user", "u1", { name: "'n'", email: "'u1@x.com'", createdAt: "'t'", updatedAt: "'t'" });
+    seed("ad", "ad1", {
+      advertiser: "'x'", body: "'x'", preview_headline: "'x'", preview_subhead: "'x'",
+      hook: "'x'", offer_text: "'x'", cta: "'x'", creative_format: "'x'",
+      language_label: "'x'", destination_type: "'x'", countries_json: "'[]'",
+      platforms_json: "'[]'", source: "'x'", research_summary: "'x'", raw_json: "'{}'",
+      created_at: "'t'", updated_at: "'t'",
+    });
+    seed("collection", "col1", { user_id: "'u1'", name: "'c1'", created_at: "'t'", updated_at: "'t'" });
+    seed("collection_item", "ci1", { collection_id: "'col1'", ad_id: "'ad1'", ad_snapshot_json: "'{}'", created_at: "'t'", updated_at: "'t'" });
+    seed("watchlist", "w1", {
+      user_id: "'u1'", name: "'wl'", target_type: "'advertiser'", target_id: "'x'",
+      target_fingerprint: "'x'", target_label: "'x'", created_at: "'t'", updated_at: "'t'",
+    });
+    seed("watchlist_run", "r1", {
+      watchlist_id: "'w1'", trigger_type: "'manual'", status: "'succeeded'",
+      summary_json: "'{}'", started_at: "'t'", created_at: "'t'", updated_at: "'t'",
+    });
+    seed("event_candidate", "ec1", {
+      watchlist_id: "'w1'", run_id: "'r1'", event_type: "'ad_new'", title: "'New ad detected'",
+      summary: "'s'", detected_at: "'t'", created_at: "'t'", updated_at: "'t'",
+    });
+    seed("watch_event", "we1", {
+      watchlist_id: "'w1'", run_id: "'r1'", event_type: "'ad_new'", title: "'t'", summary: "'s'",
+      metadata_json: "'{}'", created_at: "'t'", candidate_id: "'ec1'",
+    });
+    // Emit a full dump (every table's CREATE TABLE; rows only for the seeded
+    // chain) with the seeded chain in child-before-parent order at the front.
+    const seededChildFirst = [
+      "collection_item", "watch_event", "event_candidate", "watchlist_run",
+      "collection", "watchlist", "ad", "user",
+    ];
+    const dumpOrder = [...seededChildFirst, ...allTables.filter((t) => !seededChildFirst.includes(t))];
+    const dumpTable = (table: string) => {
+      const cols = colsOf(table).map((c) => `"${c.name}"`);
+      const lines = [`${tableSql(table).sql};`];
+      for (const r of source.prepare(`SELECT * FROM "${table}"`).all() as Record<string, unknown>[]) {
+        const vs = colsOf(table).map((c) => {
+          const v = r[c.name];
+          if (v === null) return "NULL";
+          if (typeof v === "number") return String(v);
+          return `'${String(v).replaceAll("'", "''")}'`;
+        });
+        lines.push(`INSERT INTO "${table}" (${cols.join(",")}) VALUES (${vs.join(",")});`);
+      }
+      return lines.join("\n");
+    };
+    const dump = ["PRAGMA defer_foreign_keys=TRUE;", ...dumpOrder.map(dumpTable)].join("\n") + "\n";
+
+    // The raw child-first dump must fail to import with FK enforcement —
+    // reproduces the production failure class on the real schema.
+    const rawImport = () => {
+      const db = new DatabaseSync(":memory:");
+      try {
+        db.exec("PRAGMA foreign_keys = ON;");
+        db.exec(dump);
+        db.close();
+      } catch (error) {
+        db.close();
+        throw error;
+      }
+    };
+    expect(rawImport).toThrow();
+
+    // The transform reorders parent rows before child rows and imports cleanly.
+    const result = transformD1RestoreSql(dump);
+    const restored = new DatabaseSync(":memory:");
+    restored.exec("PRAGMA foreign_keys = ON;");
+    restored.exec(result.sql); // throws on failure
+
+    // Parent INSERTs land before their child INSERTs across both chains.
+    const idx = (re: RegExp) => result.statements.findIndex((s) => re.test(s));
+    const userI = idx(/^\s*INSERT INTO "user"/);
+    const collectionI = idx(/^\s*INSERT INTO "collection"/);
+    const collectionItemI = idx(/^\s*INSERT INTO "collection_item"/);
+    const eventCandidateI = idx(/^\s*INSERT INTO "event_candidate"/);
+    const watchEventI = idx(/^\s*INSERT INTO "watch_event"/);
+    expect(userI).toBeGreaterThanOrEqual(0);
+    expect(userI).toBeLessThan(collectionI);
+    expect(collectionI).toBeLessThan(collectionItemI);
+    expect(eventCandidateI).toBeLessThan(watchEventI);
+
+    // Every seeded table's row count matches the source.
+    for (const table of seededChildFirst) {
+      const a = (source.prepare(`SELECT COUNT(*) AS c FROM "${table}"`).get() as { c: number }).c;
+      const b = (restored.prepare(`SELECT COUNT(*) AS c FROM "${table}"`).get() as { c: number }).c;
+      expect(b).toBe(a);
+    }
+    // The child row's FK join resolves to the seeded parent row.
+    const joined = restored
+      .prepare(
+        "SELECT we.id AS we_id, we.candidate_id AS cid, ec.title AS title FROM watch_event we JOIN event_candidate ec ON ec.id = we.candidate_id",
+      )
+      .get() as { we_id: string; cid: string; title: string };
+    expect(joined).toEqual({ we_id: "we1", cid: "ec1", title: "New ad detected" });
+    source.close();
+    restored.close();
   });
 });
