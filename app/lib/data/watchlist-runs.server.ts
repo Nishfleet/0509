@@ -359,6 +359,31 @@ export async function listWatchlistRuns(
 
   return rows.map(toWatchlistRunRecord);
 }
+
+/**
+ * Latest run for a watchlist by `started_at`, regardless of status. Used by
+ * the run-history capture-attempts read path (issue #1289) so the
+ * `/api/v1/watchlists/:id/runs/latest` response and the evidence UI show the
+ * most recent check — including failed, skipped, and in-flight runs, not
+ * only successful ones. Returns `null` when the watchlist has never run.
+ */
+export async function getLatestWatchlistRun(
+  env: AppEnv,
+  watchlistId: string,
+) {
+  const row = await one<WatchlistRunRow>(
+    env,
+    `
+      SELECT *
+      FROM watchlist_run
+      WHERE watchlist_id = ?
+      ORDER BY started_at DESC
+      LIMIT 1
+    `,
+    watchlistId,
+  );
+  return row ? toWatchlistRunRecord(row) : null;
+}
 export async function touchWatchlistScanned(env: AppEnv, watchlistId: string) {
   const timestamp = nowIso();
   const billingCanaryGuard = await billingCanaryMutationGuardSql(env, "watchlist.user_id");

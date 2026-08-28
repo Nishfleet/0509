@@ -110,6 +110,7 @@ function cachedIndexable(overrides: Partial<BrandPageLoaderData> = {}): BrandPag
     noindex: false,
     canonicalPath: "/ads/nike.com",
     offerTimelineEntries: [],
+    captureFailures: [],
     ...overrides,
   };
 }

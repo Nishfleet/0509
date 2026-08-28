@@ -350,6 +350,7 @@ describe("MCP route", () => {
       "get_workspace_readiness",
       "get_collection_export",
       "get_watchlist_export",
+      "watchlist_runs.list",
       "get_digest_export",
       "retest_meta_source",
       "create_watchlist",
@@ -610,6 +611,7 @@ describe("MCP route", () => {
       "get_workspace_readiness",
       "get_collection_export",
       "get_watchlist_export",
+      "watchlist_runs.list",
       "get_digest_export",
     ]);
     expect(body.result.tools.every((tool) => !tool.requiresWriteEnabled)).toBe(true);
