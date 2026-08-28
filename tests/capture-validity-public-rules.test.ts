@@ -86,7 +86,7 @@ describe("public capture-validity rules page (#970)", () => {
     }
   });
 
-  it("maps every listed rule to a #953 gate or suppression", () => {
+  it("maps every listed rule to a #953 gate, suppression, or classifier", () => {
     const reasonCodes: CaptureValidityReasonCode[] = [
       "landing_challenge_page",
       "landing_cookie_wall",
@@ -106,6 +106,8 @@ describe("public capture-validity rules page (#970)", () => {
         expect(reasonCodes).toContain(rule.gate.code);
       } else if (rule.gate.kind === "extractor_suppression") {
         expect(["churn_stable", "ad_slot_strip"]).toContain(rule.gate.code);
+      } else if (rule.gate.kind === "classifier") {
+        expect(rule.gate.code).toBe("maintenance_window");
       } else {
         expect(rule.gate.code).toBe("screenshot_corroboration");
       }
