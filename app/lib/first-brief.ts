@@ -211,6 +211,142 @@ export function shouldEnsureFirstBrief(input: {
   );
 }
 
+/**
+ * BET 7 (issue #1276): the deterministic "what changed" sentence for the
+ * same-session first brief. No LLM text on this surface — the sentence is
+ * derived from the event's field-diff metadata (the same extractor the
+ * watch-event evaluator stores) or, for a baseline capture with nothing to
+ * diff yet, the fixed baseline line.
+ */
+export const FIRST_BRIEF_BASELINE_SENTENCE =
+  "this is your baseline — we'll alert you when it moves";
+
+const FIRST_BRIEF_FIELD_LABEL: Record<string, string> = {
+  landing_page_headline_changed: "Headline",
+  landing_page_offer_changed: "Offer",
+  landing_page_cta_changed: "Call to action",
+  landing_page_form_changed: "Form",
+};
+
+export function firstBriefWhatChangedSentence(input: {
+  kind?: string | null;
+  eventType: string;
+  from?: string | null;
+  to?: string | null;
+  summary?: string | null;
+}): string {
+  if (input.kind === "baseline") {
+    return FIRST_BRIEF_BASELINE_SENTENCE;
+  }
+  const label = FIRST_BRIEF_FIELD_LABEL[input.eventType];
+  const from = trimToSentence(input.from);
+  const to = trimToSentence(input.to);
+  if (label && from && to) {
+    return `${label} changed from “${from}” to “${to}”.`;
+  }
+  if (label && to) {
+    return `${label} changed to “${to}”.`;
+  }
+  if (input.summary && input.summary.trim()) {
+    return input.summary.trim();
+  }
+  return FIRST_BRIEF_BASELINE_SENTENCE;
+}
+
+function trimToSentence(value: string | null | undefined, max = 120): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.replace(/[\r\n\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  if (!trimmed) return null;
+  return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
+}
+
+/** Minimal ad shape the inline first-brief payload needs from the ad record. */
+export interface SignupFirstBriefAd {
+  metaAdId: string;
+  previewHeadline?: string | null;
+  offer?: string | null;
+  cta?: string | null;
+  adSnapshotUrl?: string | null;
+  landingPageUrl?: string | null;
+  evidenceCapturedAt?: string | null;
+}
+
+export interface SignupFirstBriefPayload {
+  digestId: string;
+  eventId: string;
+  watchlistId: string;
+  watchlistName: string;
+  headline: string | null;
+  cta: string | null;
+  price: string | null;
+  evidenceUrl: string | null;
+  screenshotDate: string | null;
+  whatChanged: string;
+}
+
+/**
+ * BET 7 (issue #1276): the loader data for `/app/onboard?step=first-brief`.
+ * Returned as a plain object (not `Response.json`) so React Router's
+ * `useLoaderData<typeof loader>` infers the shape — a `Response` return
+ * contributes `never` to the inferred data type.
+ */
+export type SignupFirstBriefLoaderData =
+  | { step: "first-brief"; status: "waiting"; watchlistName: string | null }
+  | { step: "first-brief"; status: "ready"; brief: SignupFirstBriefPayload };
+
+/**
+ * Assemble the inline first-brief payload from a filed first-brief digest and
+ * the ads its items reference. Picks the first evidence-linked item (the same
+ * `hasEvidenceLinkedItem` gate the dashboard uses) so the surface always shows
+ * one dated, evidence-linked change. Returns null when no item carries an
+ * evidence URL — the caller then renders the waiting state.
+ */
+export function buildSignupFirstBriefPayload(input: {
+  digest: Pick<DigestRecord, "id" | "items">;
+  ads: readonly SignupFirstBriefAd[];
+}): SignupFirstBriefPayload | null {
+  const items = input.digest.items ?? [];
+  for (const item of items) {
+    const evidenceUrl = evidenceUrlFromMetadata(item.metadata ?? undefined);
+    if (!evidenceUrl) continue;
+    const metadata = (item.metadata ?? {}) as Record<string, unknown>;
+    const eventId =
+      typeof metadata.eventId === "string" ? metadata.eventId : "";
+    if (!eventId) continue;
+    const adId =
+      typeof metadata.adId === "string" ? metadata.adId : null;
+    const ad = adId
+      ? input.ads.find((candidate) => candidate.metaAdId === adId) ?? null
+      : null;
+    const headline = trimToSentence(ad?.previewHeadline ?? null) ?? trimToSentence(item.title);
+    const cta = trimToSentence(ad?.cta ?? null);
+    const price = trimToSentence(ad?.offer ?? null);
+    const screenshotDate =
+      trimToSentence(typeof metadata.capturedAt === "string" ? metadata.capturedAt : null) ??
+      trimToSentence(ad?.evidenceCapturedAt ?? null);
+    const whatChanged = firstBriefWhatChangedSentence({
+      kind: typeof metadata.kind === "string" ? metadata.kind : null,
+      eventType: item.eventType,
+      from: typeof metadata.from === "string" ? metadata.from : null,
+      to: typeof metadata.to === "string" ? metadata.to : null,
+      summary: item.summary,
+    });
+    return {
+      digestId: input.digest.id,
+      eventId,
+      watchlistId: item.watchlistId,
+      watchlistName: item.watchlistName,
+      headline,
+      cta,
+      price,
+      evidenceUrl,
+      screenshotDate,
+      whatChanged,
+    };
+  }
+  return null;
+}
+
 function safeHttpUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
   try {

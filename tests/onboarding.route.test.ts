@@ -719,6 +719,7 @@ describe("setup checklist actions", () => {
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
       queueFirstWatchlistScan,
+      queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({
@@ -858,6 +859,7 @@ describe("setup checklist actions", () => {
       }));
       vi.doMock("~/lib/monitoring.server", () => ({
         queueFirstWatchlistScan,
+        queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
       }));
       vi.doMock("~/lib/plan.server", () => ({
         checkPlanLimit: vi.fn().mockResolvedValue({
@@ -919,6 +921,7 @@ describe("setup checklist actions", () => {
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
       queueFirstWatchlistScan,
+      queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({

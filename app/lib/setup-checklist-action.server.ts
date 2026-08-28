@@ -194,7 +194,9 @@ export async function handleSetupChecklistAction(
     }
 
     const { createWatchlistWithinLimit, upsertAgentMemory, upsertClientRoom } = await import("~/lib/data.server");
-    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    const { queueFirstWatchlistScan, queueFirstWatchlistScanForSignupFirstBrief } = await import("~/lib/monitoring.server");
+    const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
+    const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
     const clientRoomContextRequested = rowsToCreate.some((row) => Boolean(row.client));
     let clientRoomEntitled = false;
     if (clientRoomContextRequested) {
@@ -231,7 +233,11 @@ export async function handleSetupChecklistAction(
       if (result.status === "created" && !queuedWatchlistIds.has(watchlist.id)) {
         queuedWatchlistIds.add(watchlist.id);
         createdCount += 1;
-        await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, watchlist);
+        if (signupFirstBriefEnabled) {
+          await queueFirstWatchlistScanForSignupFirstBrief(scanEnv, cloudflare?.ctx, watchlist);
+        } else {
+          await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, watchlist);
+        }
       }
     }
 
@@ -269,6 +275,9 @@ export async function handleSetupChecklistAction(
     await saveOptionalBrandWebsite();
     await completeUserOnboarding(env, session.user.id);
 
+    if (signupFirstBriefEnabled) {
+      throw redirect(`/app/onboard?step=first-brief`);
+    }
     throw redirect(`/app?setup=market-desk&created=${createdCount}`);
   }
 
@@ -350,9 +359,22 @@ export async function handleSetupChecklistAction(
     }
 
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
+    const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
     const watchlist = watchlistResult.watchlist;
     try {
-      await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, watchlist);
+      if (signupFirstBriefEnabled) {
+        const { queueFirstWatchlistScanForSignupFirstBrief } = await import(
+          "~/lib/monitoring.server"
+        );
+        await queueFirstWatchlistScanForSignupFirstBrief(
+          scanEnv,
+          cloudflare?.ctx,
+          watchlist,
+        );
+      } else {
+        await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, watchlist);
+      }
     } catch {
       return {
         ok: false,
@@ -366,6 +388,9 @@ export async function handleSetupChecklistAction(
     await saveOptionalBrandWebsite();
     await completeUserOnboarding(env, session.user.id);
 
+    if (signupFirstBriefEnabled) {
+      throw redirect(`/app/onboard?step=first-brief`);
+    }
     throw redirect(watchlist ? `/app/watchlists?watchlist=${watchlist.id}` : "/app/watchlists");
   }
 
