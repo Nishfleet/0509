@@ -84,7 +84,8 @@
     "PRESENCE_X_ROLLOUT": "disabled",
     "PRESENCE_REDDIT_ROLLOUT": "disabled",
     "PRESENCE_LINKEDIN_ROLLOUT": "disabled",
-    "FUNNEL_MEASUREMENT_ENABLED": "1"
+    "FUNNEL_MEASUREMENT_ENABLED": "1",
+    "SIGNUP_FIRST_BRIEF_ENABLED": "1"
   },
   // Secrets configured outside this file via `wrangler secret put`:
   // - CANARY_BYPASS_TOKEN
