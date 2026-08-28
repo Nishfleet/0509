@@ -350,6 +350,57 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("Page text ·");
   });
 
+  it("renders the /timeline cross-link for a non-demo brand with a stored timeline (not gated to demo brands)", async () => {
+    // Regression for #1296: the /ads -> /timeline cross-link must render for
+    // ANY domain with a stored timeline, not just the original demo brands
+    // (nike, allbirds, mamaearth, nykaa, lenskart). gymshark.com is a
+    // sitemap-scale-out brand that was observed missing the link.
+    const markup = await render(
+      populated({
+        domain: "gymshark.com",
+        brandName: "Gymshark",
+        canonicalPath: "/ads/gymshark.com",
+        offerTimelineEntries: [
+          {
+            id: "snap-gymshark-20260827",
+            capturedAt: "2026-08-27T00:00:00.000Z",
+            dateLabel: "27 Aug 2026",
+            canonicalUrl: "https://www.gymshark.com/",
+            headline: "Train hard. Rest harder.",
+            ctaText: "Shop Now",
+            priceText: null,
+            formPresent: false,
+            screenshotHref: null,
+            pageTextHref: null,
+            evidenceNote: null,
+            transition: null,
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain('href="/timeline/gymshark.com"');
+    expect(markup).toContain("Full offer timeline for gymshark.com");
+  });
+
+  it("renders no /timeline cross-link when the brand has no stored timeline (no broken link)", async () => {
+    // Regression for #1296: a domain with no timeline must not emit a link to
+    // /timeline/:domain — that would point at a 410 Gone page (see
+    // timeline.$domain.tsx). The whole section hides instead.
+    const markup = await render(
+      populated({
+        domain: "gymshark.com",
+        brandName: "Gymshark",
+        canonicalPath: "/ads/gymshark.com",
+        offerTimelineEntries: [],
+      }),
+    );
+
+    expect(markup).not.toContain('href="/timeline/');
+    expect(markup).not.toContain("Full offer timeline");
+    expect(markup).not.toContain("brand-offer-timeline-title");
+  });
+
   it("renders the teaching shell (not a dotted apology) on a cache miss", async () => {
     const markup = await render(
       populated({
