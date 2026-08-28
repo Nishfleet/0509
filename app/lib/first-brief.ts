@@ -285,6 +285,16 @@ export interface SignupFirstBriefPayload {
 }
 
 /**
+ * BET 7 (issue #1276): the loader data for `/app/onboard?step=first-brief`.
+ * Returned as a plain object (not `Response.json`) so React Router's
+ * `useLoaderData<typeof loader>` infers the shape — a `Response` return
+ * contributes `never` to the inferred data type.
+ */
+export type SignupFirstBriefLoaderData =
+  | { step: "first-brief"; status: "waiting"; watchlistName: string | null }
+  | { step: "first-brief"; status: "ready"; brief: SignupFirstBriefPayload };
+
+/**
  * Assemble the inline first-brief payload from a filed first-brief digest and
  * the ads its items reference. Picks the first evidence-linked item (the same
  * `hasEvidenceLinkedItem` gate the dashboard uses) so the surface always shows

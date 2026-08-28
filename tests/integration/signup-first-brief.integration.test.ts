@@ -4,6 +4,7 @@ import { createDigestRun } from "~/lib/data/digests.server";
 import { createWatchEvent } from "~/lib/data/watch-events.server";
 import { listAdsByIds } from "~/lib/data.server";
 import { listDigests } from "~/lib/data/digests.server";
+import type { SignupFirstBriefLoaderData } from "~/lib/first-brief";
 
 import {
   appEnv,
@@ -181,20 +182,21 @@ describe("/app/onboard?step=first-brief against real D1 (issue #1276)", () => {
 
     expect(result.kind).toBe("data");
     if (result.kind !== "data") throw new Error("expected data, not redirect");
-    const data = await (result.data as Response).json();
+    const data = result.data as SignupFirstBriefLoaderData;
     expect(data.step).toBe("first-brief");
     expect(data.status).toBe("ready");
+    if (data.status !== "ready") throw new Error("expected ready brief");
     expect(data.brief).toBeDefined();
     expect(data.brief.watchlistName).toBe("Glowkart");
     expect(data.brief.evidenceUrl).toBe(EVIDENCE_URL);
     expect(data.brief.whatChanged).toContain("baseline");
 
     // The funnel event must be emitted exactly once.
-    const funnelCalls = logSpy.mock.calls
+    const funnelCalls = (logSpy.mock.calls as unknown[][])
       .map((call) => call[0])
       .filter((line): line is string => typeof line === "string")
       .map((line) => {
-        try { return JSON.parse(line); } catch { return null; }
+        try { return JSON.parse(line) as { operation?: string } | null; } catch { return null; }
       })
       .filter((record) => record?.operation === "funnel_first_brief_viewed");
     expect(funnelCalls).toHaveLength(1);
@@ -213,7 +215,7 @@ describe("/app/onboard?step=first-brief against real D1 (issue #1276)", () => {
 
     expect(result.kind).toBe("data");
     if (result.kind !== "data") throw new Error("expected data, not redirect");
-    const data = await (result.data as Response).json();
+    const data = result.data as SignupFirstBriefLoaderData;
     expect(data.step).toBe("first-brief");
     expect(data.status).toBe("waiting");
   });
