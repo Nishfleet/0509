@@ -92,12 +92,27 @@ export async function loadOfferTimeline(
 
   const snapshots = rows
     .filter((row) => canonicalUrlBelongsToDomain(row.canonical_url, input.domain))
-    .map(rowToSnapshot);
+    .map(rowToSnapshot)
+    // Proof gate (issue #1284): a public /timeline/:domain row may only show
+    // a competitor state that carries BOTH a stored screenshot artifact AND a
+    // stored page-text extract. A row with neither — the seeded backfill
+    // (migrations 0079/0081) — used to render the public "Captured on <date>,
+    // no screenshot" string, which contradicts the proof promise on the first
+    // page a visitor saw. Filtering here is the mechanical guard: no consumer
+    // of loadOfferTimeline (the /timeline route, the /ads shared timeline, the
+    // asOf lookup) can ever receive a proof-less entry, so the string can
+    // never ship and a future populate-the-timeline pass cannot reintroduce it
+    // without also storing both artifacts.
+    .filter(snapshotHasCompleteProof);
   const entries = buildOfferLedger(snapshots);
   return {
     entries,
     asOfState: input.asOf ? offerStateAsOf(entries, input.asOf) : null,
   };
+}
+
+function snapshotHasCompleteProof(snapshot: OfferSnapshotInput): boolean {
+  return snapshot.screenshotKey !== null && snapshot.pageTextKey !== null;
 }
 
 export function isOfferTimelineShareEnabled(env: AppEnv): boolean {
@@ -233,9 +248,11 @@ function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
     screenshotKey,
     pageTextKey,
     // A backfill row (issue #968) carries no screenshot and no page text by
-    // design — fabricating either would be dishonest. Instead it gets the
-    // honest "Captured on <date>, no screenshot" label so the timeline never
-    // presents a state without naming its evidence.
+    // design — fabricating either would be dishonest. The proof gate above
+    // (issue #1284) filters these rows out before they reach the ledger, so
+    // the public timeline never presents a state without both artifacts. The
+    // evidenceNote is still set for any non-public audit surface that reads
+    // snapshots directly.
     evidenceNote:
       !screenshotKey && !pageTextKey && isBackfillMetadata(metadata)
         ? backfillEvidenceNote(row.captured_at)

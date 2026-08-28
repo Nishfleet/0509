@@ -13,6 +13,7 @@ export const RELEASE_ARTIFACT_STATES = {
     "empty",
     "degraded",
     "proof",
+    "timeline",
     "signup",
   ],
   "j2-proof": ["onboard", "invalid", "empty", "degraded", "proof"],
