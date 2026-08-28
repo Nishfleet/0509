@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { assessCaptureValidity } from "~/lib/capture-validity.server";
+import {
+  assessCaptureValidity,
+  classifyCaptureValidity,
+} from "~/lib/capture-validity.server";
+import type { LandingPageSnapshotData, ProofCaptureRecord } from "~/lib/types";
 
 // A real landing page with enough visible body copy to clear the gate. Used as
 // the positive control for every adversarial fixture: the same suite that
@@ -222,5 +226,156 @@ describe("assessCaptureValidity — site-down-then-restored", () => {
 
     const restored = REAL_LANDING_PAGE;
     expect(assessCaptureValidity({ html: restored, fetchStatus: 200 }).valid).toBe(true);
+  });
+});
+
+function proofSnapshot(overrides: Partial<LandingPageSnapshotData> = {}): LandingPageSnapshotData {
+  return {
+    rawUrl: "https://example.com/offer",
+    canonicalUrl: "https://example.com/offer",
+    rawHeadline: "Glow Serum Sale",
+    normalizedHeadline: "glow serum sale",
+    normalizedHeadlineHash: "hash-a",
+    ctaText: "Buy now",
+    priceText: "Starting at ₹499",
+    formPresent: true,
+    captureMethod: "landing_page_fetch",
+    capturedAt: "2026-08-25T13:00:00.000Z",
+    metadata: { captureValidated: true, screenshotCorroborates: true },
+    ...overrides,
+  };
+}
+
+function baselineProofRecord(
+  overrides: Partial<ProofCaptureRecord["extractedFields"]> = {},
+): ProofCaptureRecord {
+  return {
+    id: "proof-baseline",
+    proofTargetId: "target-1",
+    status: "succeeded",
+    skipReason: null,
+    failureCode: null,
+    failureReason: null,
+    screenshotArtifactKey: "landing-pages/shot.jpeg",
+    htmlArtifactKey: "landing-pages/page.html",
+    extractedFields: {
+      rawHeadline: "Glow Serum Sale",
+      normalizedHeadline: "glow serum sale",
+      normalizedHeadlineHash: "hash-a",
+      ctaText: "Buy now",
+      priceText: "Starting at ₹499",
+      formPresent: true,
+      ...overrides,
+    },
+    fieldConfidence: {},
+    extractionWarnings: [],
+    captureMetadata: {},
+    renderMode: "mobile",
+    deviceProfile: "mobile_default",
+    extractorVersion: "lp-signals-v1",
+    idempotencyKey: "proof-request:watch-1",
+    attemptedAt: "2026-08-25T10:00:00.000Z",
+    succeededAt: "2026-08-25T10:00:01.000Z",
+    createdAt: "2026-08-25T10:00:01.000Z",
+    updatedAt: "2026-08-25T10:00:01.000Z",
+  };
+}
+
+const PROOF_TARGET_IDENTITY = "watch-1:meta-boat-1:example.com/glow";
+
+describe("classifyCaptureValidity — tri-state classifier (issue #1399)", () => {
+  it("classifies a capture_failed from a null snapshot and failure detail", () => {
+    const classification = classifyCaptureValidity({
+      snapshot: null,
+      failureDetail: { reasonCode: "landing_challenge_page" },
+    });
+
+    expect(classification.status).toBe("capture_failed");
+    expect(classification.reason).toBe("landing_challenge_page");
+    expect(classification.events).toHaveLength(0);
+    expect(classification.evaluation).toBeNull();
+  });
+
+  it("classifies a suppressed capture during a scheduled maintenance window", () => {
+    // The page is valid, but the capture is inside a scheduled maintenance
+    // window — the scheduled maintenance window reason.
+    const classification = classifyCaptureValidity({
+      snapshot: proofSnapshot(),
+      failureDetail: null,
+      maintenanceWindow: true,
+    });
+
+    expect(classification.status).toBe("suppressed");
+    expect(classification.reason).toBe("maintenance_window");
+    expect(classification.events).toHaveLength(0);
+    expect(classification.evaluation?.status).toBe("suppressed");
+  });
+
+  it("classifies a genuine price edit as succeeded", () => {
+    const baseline = baselineProofRecord();
+    const snapshot = proofSnapshot({
+      priceText: "Starting at ₹399",
+    });
+
+    const classification = classifyCaptureValidity({
+      snapshot,
+      failureDetail: null,
+      currentProof: {
+        rawHeadline: snapshot.rawHeadline,
+        normalizedHeadline: snapshot.normalizedHeadline,
+        normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
+        ctaText: snapshot.ctaText ?? null,
+        priceText: snapshot.priceText ?? null,
+        formPresent: snapshot.formPresent ?? null,
+        extractorVersion: "lp-signals-v1",
+      },
+      lastSuccessfulProof: baseline,
+      recentWatchEvents: [],
+      proofTargetIdentity: PROOF_TARGET_IDENTITY,
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      currentCapturedAt: snapshot.capturedAt,
+      screenshotCorroborates: true,
+    });
+
+    expect(classification.status).toBe("succeeded");
+    expect(classification.reason).toBeNull();
+    expect(classification.events).toHaveLength(1);
+    expect(classification.events[0]?.eventType).toBe("landing_page_offer_changed");
+    expect(classification.events[0]?.status).toBe("confirmed");
+  });
+
+  it("classifies an unconfirmed price change as suppressed", () => {
+    const baseline = baselineProofRecord();
+    const snapshot = proofSnapshot({
+      priceText: "Starting at ₹399",
+      metadata: { captureValidated: true, screenshotCorroborates: false },
+    });
+
+    const classification = classifyCaptureValidity({
+      snapshot,
+      failureDetail: null,
+      currentProof: {
+        rawHeadline: snapshot.rawHeadline,
+        normalizedHeadline: snapshot.normalizedHeadline,
+        normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
+        ctaText: snapshot.ctaText ?? null,
+        priceText: snapshot.priceText ?? null,
+        formPresent: snapshot.formPresent ?? null,
+        extractorVersion: "lp-signals-v1",
+      },
+      lastSuccessfulProof: baseline,
+      recentWatchEvents: [],
+      proofTargetIdentity: PROOF_TARGET_IDENTITY,
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      currentCapturedAt: snapshot.capturedAt,
+      screenshotCorroborates: false,
+    });
+
+    expect(classification.status).toBe("suppressed");
+    expect(classification.reason).toBe("unconfirmed_by_screenshot");
+    expect(classification.events).toHaveLength(1);
+    expect(classification.events[0]?.status).toBe("suppressed");
   });
 });

@@ -118,10 +118,13 @@ import type {
   WatchlistRunRecord,
 } from "~/lib/types";
 import {
-  evaluateProofBackedEvents,
   scoreWatchEventImportance,
   selectLastSuccessfulProofCapture,
 } from "~/lib/watch-event-evaluator.server";
+import {
+  classifyCaptureValidity,
+  type CaptureValidityClassification,
+} from "~/lib/capture-validity.server";
 
 const DEFAULT_PAGE_BUDGET = 2;
 const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
@@ -3765,6 +3768,10 @@ async function evaluateSelectiveProofCandidates(
           preservePendingEvidenceReservation = true;
           throw new Error("evidence_usage_pending_reconciliation");
         }
+        const failedClassification = classifyCaptureValidity({
+          snapshot: null,
+          failureDetail,
+        });
         await assertOrchestratedWatchlistRunLease(env, input.runId, {
           orchestrationToken: input.lease?.processingToken,
         });
@@ -3774,12 +3781,12 @@ async function evaluateSelectiveProofCandidates(
           failureCode:
             failureDetail?.reasonCode ?? "proof_capture_failed",
           failureReason: "Landing-page proof capture failed.",
-          captureMetadata: failureDetail
-            ? {
-                ...failureDetail.metadata,
-                unreadableReasonCode: failureDetail.reasonCode,
-              }
-            : { unreadableReasonCode: "proof_capture_failed" },
+          captureMetadata: {
+            ...(failureDetail?.metadata ?? {}),
+            captureValidityStatus: failedClassification.status,
+            captureFailureReason: failedClassification.reason,
+            unreadableReasonCode: failureDetail?.reasonCode ?? "proof_capture_failed",
+          },
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
           idempotencyKey: proofRequestKey,
         });
@@ -3855,6 +3862,40 @@ async function evaluateSelectiveProofCandidates(
       const landingPageSnapshotId = freshSnapshot
         ? await persistLandingPageSnapshotRow(env, freshSnapshot)
         : null;
+
+      const currentProof = {
+        rawHeadline: snapshot.rawHeadline,
+        normalizedHeadline: snapshot.normalizedHeadline,
+        normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
+        ctaText: snapshot.ctaText ?? null,
+        priceText: snapshot.priceText ?? null,
+        formPresent: snapshot.formPresent ?? null,
+        extractorVersion:
+          readSnapshotString(snapshot.metadata, "extractorVersion") ??
+          LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+        ...extractorFingerprintsFromSnapshot(snapshot),
+      };
+
+      // Issue #1399: run the capture-validity classifier before any
+      // landing_page_* event is emitted. The classifier combines the
+      // capture-validity gate, extractor suppressions, and screenshot
+      // corroboration into a single succeeded / capture_failed / suppressed
+      // decision and records the reason on the proof_capture row.
+      const classification = classifyCaptureValidity({
+        snapshot,
+        failureDetail: null,
+        currentProof,
+        lastSuccessfulProof,
+        recentWatchEvents: proofAwareRecentEvents,
+        proofTargetIdentity: finalProofTargetIdentity,
+        sensitivityMode: "balanced",
+        burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
+        currentCapturedAt: snapshot.capturedAt,
+        screenshotCorroborates:
+          readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
+          false,
+      });
+
       const proofCaptureId = await createProofCapture(env, {
         proofTargetId: persistedProofTarget.id,
         status: "succeeded",
@@ -3873,6 +3914,10 @@ async function evaluateSelectiveProofCandidates(
           ...(snapshot.metadata ?? {}),
           ...(landingPageSnapshotId
             ? { landingPageSnapshotId }
+            : {}),
+          captureValidityStatus: classification.status,
+          ...(classification.reason
+            ? { captureFailureReason: classification.reason }
             : {}),
         },
         renderMode: readSnapshotRenderMode(snapshot),
@@ -3903,34 +3948,15 @@ async function evaluateSelectiveProofCandidates(
         lastSuccessfulCaptureId: proofCaptureId,
       });
 
-      const evaluated = evaluateProofBackedEvents({
-        proofTargetIdentity: finalProofTargetIdentity,
-        currentProof: {
-          rawHeadline: snapshot.rawHeadline,
-          normalizedHeadline: snapshot.normalizedHeadline,
-          normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
-          ctaText: snapshot.ctaText ?? null,
-          priceText: snapshot.priceText ?? null,
-          formPresent: snapshot.formPresent ?? null,
-          extractorVersion:
-            readSnapshotString(snapshot.metadata, "extractorVersion") ??
-            LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-          ...extractorFingerprintsFromSnapshot(snapshot),
-        },
-        lastSuccessfulProof,
-        recentWatchEvents: proofAwareRecentEvents,
-        sensitivityMode: "balanced",
-        burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
-        currentCapturedAt: snapshot.capturedAt,
-        screenshotCorroborates:
-          readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
-          false,
-      });
       // Issue #949: record the diff-stage outcome and per-field bail
       // reasons, so the counter shows which gate dropped the event.
-      recordDiffStageForEvaluation(pipelineCounters, evaluated, lastSuccessfulProof);
+      recordDiffStageForEvaluation(
+        pipelineCounters,
+        classification.evaluation ?? { status: "invalidated", events: [] },
+        lastSuccessfulProof,
+      );
 
-      for (const event of evaluated.events) {
+      for (const event of classification.events) {
         await assertOrchestratedWatchlistRunLease(env, input.runId, {
           orchestrationToken: input.lease?.processingToken,
         });
@@ -4307,6 +4333,10 @@ async function evaluateDirectWebsiteProofCandidate(
         preservePendingEvidenceReservation = true;
         throw new Error("evidence_usage_pending_reconciliation");
       }
+      const failedClassification = classifyCaptureValidity({
+        snapshot: null,
+        failureDetail,
+      });
       await assertOrchestratedWatchlistRunLease(env, input.runId, {
         orchestrationToken: input.lease?.processingToken,
       });
@@ -4316,11 +4346,13 @@ async function evaluateDirectWebsiteProofCandidate(
         failureCode:
           failureDetail?.reasonCode ??
           "direct_website_proof_capture_failed",
-          failureReason: "Competitor website proof capture failed.",
+        failureReason: "Competitor website proof capture failed.",
         captureMetadata: {
           ...(failureDetail?.metadata ?? {}),
           source: "direct_competitor_website",
           watchlistTargetId: input.watchlist.targetId,
+          captureValidityStatus: failedClassification.status,
+          captureFailureReason: failedClassification.reason,
           unreadableReasonCode:
             failureDetail?.reasonCode ??
             "direct_website_proof_capture_failed",
@@ -4404,6 +4436,35 @@ async function evaluateDirectWebsiteProofCandidate(
     const landingPageSnapshotId = freshSnapshot
       ? await persistLandingPageSnapshotRow(env, freshSnapshot)
       : null;
+
+    const directWebsiteCurrentProof = {
+      rawHeadline: snapshot.rawHeadline,
+      normalizedHeadline: snapshot.normalizedHeadline,
+      normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
+      ctaText: snapshot.ctaText ?? null,
+      priceText: snapshot.priceText ?? null,
+      formPresent: snapshot.formPresent ?? null,
+      extractorVersion:
+        readSnapshotString(snapshot.metadata, "extractorVersion") ??
+        LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+      ...extractorFingerprintsFromSnapshot(snapshot),
+    };
+
+    const directWebsiteClassification = classifyCaptureValidity({
+      snapshot,
+      failureDetail: null,
+      currentProof: directWebsiteCurrentProof,
+      lastSuccessfulProof: finalLastSuccessfulProof,
+      recentWatchEvents: input.recentWatchEvents,
+      proofTargetIdentity: finalProofTargetIdentity,
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      currentCapturedAt: snapshot.capturedAt,
+      screenshotCorroborates:
+        readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
+        false,
+    });
+
     const proofCaptureId = await createProofCapture(env, {
       proofTargetId: persistedProofTarget.id,
       status: "succeeded",
@@ -4423,6 +4484,10 @@ async function evaluateDirectWebsiteProofCandidate(
         source: "direct_competitor_website",
         watchlistTargetId: input.watchlist.targetId,
         ...(landingPageSnapshotId ? { landingPageSnapshotId } : {}),
+        captureValidityStatus: directWebsiteClassification.status,
+        ...(directWebsiteClassification.reason
+          ? { captureFailureReason: directWebsiteClassification.reason }
+          : {}),
       },
       renderMode: readSnapshotRenderMode(snapshot),
       deviceProfile: readSnapshotDeviceProfile(snapshot),
@@ -4466,37 +4531,18 @@ async function evaluateDirectWebsiteProofCandidate(
       });
     }
 
-    const evaluated = evaluateProofBackedEvents({
-      proofTargetIdentity: finalProofTargetIdentity,
-      currentProof: {
-        rawHeadline: snapshot.rawHeadline,
-        normalizedHeadline: snapshot.normalizedHeadline,
-        normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
-        ctaText: snapshot.ctaText ?? null,
-        priceText: snapshot.priceText ?? null,
-        formPresent: snapshot.formPresent ?? null,
-        extractorVersion:
-          readSnapshotString(snapshot.metadata, "extractorVersion") ??
-          LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-        ...extractorFingerprintsFromSnapshot(snapshot),
-      },
-      lastSuccessfulProof: finalLastSuccessfulProof,
-      recentWatchEvents: input.recentWatchEvents,
-      sensitivityMode: "balanced",
-      burstCount: 1,
-      currentCapturedAt: snapshot.capturedAt,
-      screenshotCorroborates:
-        readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
-        false,
-    });
     // Issue #949: record the diff-stage outcome for the direct-website path.
-    recordDiffStageForEvaluation(pipelineCounters, evaluated, finalLastSuccessfulProof);
+    recordDiffStageForEvaluation(
+      pipelineCounters,
+      directWebsiteClassification.evaluation ?? { status: "invalidated", events: [] },
+      finalLastSuccessfulProof,
+    );
 
     const proofEvents: WatchEventRecord[] = [];
     let candidateCount = 0;
     let confirmedEventCount = 0;
 
-    for (const event of evaluated.events) {
+    for (const event of directWebsiteClassification.events) {
       await assertOrchestratedWatchlistRunLease(env, input.runId, {
         orchestrationToken: input.lease?.processingToken,
       });
