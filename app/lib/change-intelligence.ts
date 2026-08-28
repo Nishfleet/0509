@@ -220,6 +220,9 @@ export function digestConfidenceLevel(
   ) {
     return "low";
   }
+  if (triage?.status === "evidence_skipped_budget") {
+    return "medium";
+  }
   if (triage?.status === "all_quiet" || triage?.status === "routine_only") {
     return "high";
   }
@@ -252,6 +255,9 @@ export function digestConfidenceLabel(input: DigestPeriodTruthInput): string {
   }
   if (triage?.status === "evidence_pending") {
     return "Low confidence — detected changes are still waiting on their evidence check.";
+  }
+  if (triage?.status === "evidence_skipped_budget") {
+    return "Medium confidence — some checks were skipped because the plan's evidence allowance was reached, so not every competitor was re-checked.";
   }
   if (triage?.status === "all_quiet" || triage?.status === "routine_only") {
     return "High confidence — checks completed across the sources that ran.";

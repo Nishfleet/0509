@@ -518,6 +518,8 @@ const TRIAGE_EMAIL_SUBJECTS: Record<WatchPeriodTriageStatus, string> = {
   evidence_failed: "Some competitor checks couldn't finish",
   evidence_pending: "Some competitor changes are still waiting for evidence",
   routine_only: "Routine changes only — nothing new to act on",
+  evidence_skipped_budget:
+    "Some competitor checks were skipped — plan allowance reached",
   all_quiet: "All quiet: no competitor moves worth action",
   not_run: "No competitor checks completed this period",
 };
@@ -527,6 +529,8 @@ const TRIAGE_EMAIL_HEADLINES: Record<WatchPeriodTriageStatus, string> = {
   evidence_failed: "We couldn't finish some competitor checks.",
   evidence_pending: "Evidence is still pending on some changes.",
   routine_only: "Routine changes only — nothing new to act on.",
+  evidence_skipped_budget:
+    "Some competitor checks were skipped — your plan's evidence allowance was reached.",
   all_quiet: "All quiet: no competitor moves worth action.",
   not_run: "No competitor checks completed this period.",
 };
@@ -536,6 +540,7 @@ const TRIAGE_SOURCE_LABELS: Record<WatchPeriodTriageStatus, string> = {
   evidence_failed: "proof capture failed",
   evidence_pending: "evidence pending",
   routine_only: "completed checks",
+  evidence_skipped_budget: "checks skipped — plan allowance reached",
   all_quiet: "completed checks",
   not_run: "no completed checks",
 };
