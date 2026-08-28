@@ -15774,6 +15774,11 @@ textarea.f9-wk-in {
 }
 .f9-wk-btn-quiet:disabled { opacity: 0.55; cursor: default; }
 .f9-wk-dim { color: var(--ink-soft, inherit); line-height: 1.55; }
+.f9-quiet-details { margin-top: 12px; }
+.f9-quiet-details > summary { cursor: pointer; color: var(--ink-soft, inherit); font-size: 0.9rem; }
+.f9-quiet-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.f9-quiet-list-item { color: var(--ink-soft, inherit); font-size: 0.9rem; line-height: 1.5; }
+.f9-quiet-list-copy { display: block; }
 .f9-wk-worklist { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .f9-wk-workrow {
   display: flex;

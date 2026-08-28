@@ -40,6 +40,7 @@
 
 import { Link, redirect, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useState } from "react";
 
 import { AdCreative } from "~/components/ads/ad-creative";
 import { BrandAdWall } from "~/components/ads/brand-ad-wall";
@@ -58,8 +59,9 @@ import type {
 } from "~/lib/brand-page.server";
 import { countBrandOwnedAds } from "~/lib/brand-page.server";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
-import type { DomainCaptureFailure } from "~/lib/offer-timeline.server";
+import type { CaptureFailuresSummary } from "~/lib/offer-timeline.server";
 import { formatCaptureAttemptReasonLabel } from "~/lib/capture-attempt-reason-code";
+import type { CaptureAttemptReasonCode } from "~/lib/capture-attempt-reason-code";
 import {
   adsPageServiceJsonLd,
   canonicalUrl,
@@ -134,12 +136,14 @@ export interface BrandPageLoaderData {
   noindex: boolean;
   canonicalPath: string;
   /**
-   * Recent landing-page captures for this domain that did NOT produce an
-   * alert — failed or skipped checks with a public reason code (issue #1289).
-   * Read-only surface: a failed capture is never an alert, but it is visible
-   * so the silence is provable. Empty when nothing is stored yet.
+   * Server-rendered summary of recent landing-page captures for this domain
+   * that did NOT produce an alert — failed or skipped checks with a public
+   * reason code (issues #1289, #1345). The full per-entry list is NOT leaked
+   * into the loader data; it is lazy-loaded on expand via the
+   * `api.ads.capture-failures.$domain` endpoint. Null when nothing is stored
+   * (the section hides in that case).
    */
-  captureFailures: DomainCaptureFailure[];
+  captureFailuresSummary: CaptureFailuresSummary | null;
 }
 
 export async function loader({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
@@ -233,11 +237,18 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     });
   }
 
-  // Issue #1289: surface failed/suppressed landing-page captures for this
-  // domain so the public page names what we checked and why it did not
-  // become an alert. Bounded D1 read; degrades to empty on any failure.
-  const { loadDomainCaptureFailures } = await import("~/lib/offer-timeline.server");
+  // Issues #1289 / #1345: surface failed/suppressed landing-page captures
+  // for this domain so the public page names what we checked and why it did
+  // not become an alert. The full array is NOT leaked into the loader data —
+  // only a server-rendered summary (count, date range, reason) ships to the
+  // client. The per-entry list is lazy-loaded on expand via the
+  // `api.ads.capture-failures.$domain` endpoint. Bounded D1 read; degrades
+  // to null on any failure.
+  const { loadDomainCaptureFailures, summarizeDomainCaptureFailures } = await import(
+    "~/lib/offer-timeline.server"
+  );
   const captureFailures = await loadDomainCaptureFailures(env, { domain: brand.domain });
+  const captureFailuresSummary = summarizeDomainCaptureFailures(captureFailures);
 
   const now = new Date();
   const freshness = snapshot
@@ -288,7 +299,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
     canonicalPath: `/ads/${brand.domain}`,
-    captureFailures,
+    captureFailuresSummary,
   };
 }
 
@@ -525,21 +536,40 @@ function BrandOfferTimeline({
 }
 
 /**
- * Capture-failure visibility on the public `/ads/:domain` page (issue #1289,
- * accept criterion #3). Lists recent landing-page checks that did NOT
- * produce an alert — failed or skipped captures with a public reason — so a
- * buyer can see what was checked and why the silence is real. Read-only: a
- * failed capture is never an alert, but it is never hidden either. Hidden
- * when nothing is stored (never an empty card).
+ * Capture-failure visibility on the public `/ads/:domain` page (issues
+ * #1289, #1345). Renders a server-rendered summary of recent landing-page
+ * checks that did NOT produce an alert — failed or skipped captures with a
+ * public reason — so a buyer can see what was checked and why the silence
+ * is real. The full per-entry list is NOT in the loader data; it is
+ * lazy-loaded on expand via the `api.ads.capture-failures.$domain` endpoint.
+ * Hidden when nothing is stored (never an empty card).
  */
 function BrandCaptureFailures({
-  failures,
+  summary,
+  domain,
+  signupPath,
 }: {
-  failures: DomainCaptureFailure[];
+  summary: CaptureFailuresSummary | null;
+  domain: string;
+  signupPath: string;
 }) {
-  if (failures.length === 0) {
+  if (!summary) {
     return null;
   }
+  const reasonLabel = formatCaptureAttemptReasonLabel(summary.reasonCode);
+  const latestLabel = formatSkipDate(summary.latestDate);
+  const rangeLabel = summary.earliestDate
+    ? `between ${formatSkipDate(summary.earliestDate)} and ${latestLabel}`
+    : `on ${latestLabel}`;
+  const countWord = summary.count === 1 ? "check" : "checks";
+  // The "because" clause names the most recent reason honestly. Budget
+  // skips get the monthly-reset note; other failure reasons do not.
+  const becauseClause = summary.reasonCode
+    ? `because ${reasonLabel.toLowerCase()}`
+    : "for a reason we could not classify";
+  const resetNote = summary.hasSkippedDueToBudget
+    ? " Free-tier captures reset monthly and skipped ones do not retry."
+    : "";
   return (
     <section className="f9-ads-sec" aria-labelledby="brand-capture-failures-title">
       <div className="f9-container">
@@ -549,23 +579,20 @@ function BrandCaptureFailures({
             <h2 id="brand-capture-failures-title">What we checked, even when it didn’t alert</h2>
           </div>
           <span className="f9-ads-sec-meta">
-            {`${failures.length} ${failures.length === 1 ? "check" : "checks"} on record`}
+            {`${summary.count} ${countWord} on record`}
           </span>
         </div>
-        <ul className="f9-quiet-list">
-          {failures.map((failure) => {
-            const reason = formatCaptureAttemptReasonLabel(failure.reasonCode);
-            const suffix = failure.reasonCode ? ` (${failure.reasonCode})` : "";
-            const where = failure.urlChecked ? ` · ${shortUrl(failure.urlChecked)}` : "";
-            return (
-              <li key={failure.id} className="f9-quiet-list-item">
-                <span className="f9-quiet-list-copy">
-                  {`${reason}${where}.${suffix} No alert sent.`}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <p
+          className="f9-wk-dim"
+          data-testid="skipped-captures-summary"
+        >
+          {`${summary.count} ${countWord} on this brand ${rangeLabel} ${becauseClause}.${resetNote} `}
+          <Link to={signupPath}>See run history</Link>
+          {" or "}
+          <Link to={signupPath}>upgrade to add 50 captures/month</Link>
+          {`.`}
+        </p>
+        <CaptureFailuresDetails domain={domain} />
         <p className="f9-wk-dim">
           Every check we ran is listed — including the ones that didn’t produce an
           alert, with the reason. A failed capture is never an alert, but it is never
@@ -574,6 +601,92 @@ function BrandCaptureFailures({
       </div>
     </section>
   );
+}
+
+/**
+ * A `<details>` element that lazy-loads the full per-entry capture-failure
+ * list from the `api.ads.capture-failures.$domain` endpoint on expand. The
+ * list is never in the loader data (issue #1345, accept #3) — it is fetched
+ * only when a buyer chooses to see it.
+ */
+function CaptureFailuresDetails({ domain }: { domain: string }) {
+  const [entries, setEntries] = useState<DomainCaptureFailureEntry[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  function onToggle(open: boolean) {
+    if (!open || entries !== null || loading) return;
+    setLoading(true);
+    setError(false);
+    fetch(`/api/ads/capture-failures/${encodeURIComponent(domain)}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as { entries?: DomainCaptureFailureEntry[] };
+        setEntries(json.entries ?? []);
+      })
+      .catch(() => {
+        setError(true);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }
+
+  return (
+    <details className="f9-quiet-details" onToggle={(e) => onToggle(e.currentTarget.open)}>
+      <summary>See every check on record</summary>
+      {loading ? (
+        <p className="f9-wk-dim">Loading…</p>
+      ) : error ? (
+        <p className="f9-wk-dim">Could not load the full list right now.</p>
+      ) : entries === null ? null : entries.length === 0 ? (
+        <p className="f9-wk-dim">No entries.</p>
+      ) : (
+        <ul className="f9-quiet-list">
+          {entries.map((entry) => {
+            const reason = formatCaptureAttemptReasonLabel(
+              entry.reasonCode as CaptureAttemptReasonCode | null,
+            );
+            const suffix = entry.reasonCode ? ` (${entry.reasonCode})` : "";
+            const where = entry.urlChecked ? ` · ${shortUrl(entry.urlChecked)}` : "";
+            return (
+              <li key={entry.id} className="f9-quiet-list-item">
+                <span className="f9-quiet-list-copy">
+                  {`${reason}${where}.${suffix} No alert sent.`}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </details>
+  );
+}
+
+/**
+ * The shape of a single entry returned by the
+ * `api.ads.capture-failures.$domain` endpoint — mirrors `DomainCaptureFailure`
+ * without importing the server-only type.
+ */
+interface DomainCaptureFailureEntry {
+  id: string;
+  status: "capture_failed" | "skipped_due_to_budget";
+  reasonCode: string | null;
+  urlChecked: string | null;
+  checkedAt: string;
+}
+
+const SKIP_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeZone: "UTC",
+});
+
+function formatSkipDate(iso: string): string {
+  try {
+    return SKIP_DATE_FORMATTER.format(new Date(iso));
+  } catch {
+    return iso;
+  }
 }
 
 function shortUrl(url: string): string {
@@ -693,7 +806,7 @@ function BrandAdsResults({
       ) : null}
 
       <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} />
-      <BrandCaptureFailures failures={data.captureFailures} />
+      <BrandCaptureFailures summary={data.captureFailuresSummary} domain={data.domain} signupPath={signupPath} />
 
       {/* 5. THE ADS — the wall of real creatives */}
       <section className="f9-ads-sec" aria-labelledby="brand-wall-title">
@@ -1000,7 +1113,7 @@ function BrandAdsShell({
         </div>
 
         <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} />
-        <BrandCaptureFailures failures={data.captureFailures} />
+        <BrandCaptureFailures summary={data.captureFailuresSummary} domain={data.domain} signupPath={signupPath} />
 
         <div className="f9-ads-example" aria-hidden="true">
           <span className="f9-ads-example-tag">Example — this is what a watched brand looks like</span>
