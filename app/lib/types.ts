@@ -37,6 +37,8 @@ export const WEBSITE_PAGE_KINDS = [
   "blog",
   "docs",
   "about",
+  "careers",
+  "legal",
   "contact",
   "other",
 ] as const;
