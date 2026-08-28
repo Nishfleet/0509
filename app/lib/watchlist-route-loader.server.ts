@@ -21,6 +21,7 @@ import {
   sortByUpdatedAtDesc,
   visibleDeliveryChannels,
 } from "~/lib/watchlist-display";
+import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-suggested-loader.server";
 
 /**
  * `/app/watchlists` loader (BL-007 extraction).
@@ -101,6 +102,9 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
   const { computeAggressionScore } = await import("~/lib/aggression-score");
   const { buildCounterBrief } = await import("~/lib/counter-brief.server");
   const { isPaidPlanFamily } = await import("~/lib/plan-entitlements");
+  const { loadSuggestedCompetitorsPanel } = await import(
+    "~/lib/auto-competitor-suggested-loader.server"
+  );
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
@@ -175,7 +179,18 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     workspaceDeliveryConfigRecord ??
     buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email));
 
+  // Auto-competitor-watch Phase 2: the suggested-competitors panel is
+  // paid-tier only. The loader is best-effort — a seed failure degrades to
+  // an empty panel (NOT a 500), and free plans get `null` so the panel
+  // omits itself cleanly. Loaded in parallel with the rest of the page
+  // budget so the panel never blocks the board render.
+  const suggestedCompetitorsPanelPromise: Promise<SuggestedCompetitorsPanelData | null> =
+    loadSuggestedCompetitorsPanel(env, workspaceUserId, plan).catch(
+      () => null,
+    );
+
   if (!selectedWatchlist) {
+    const suggestedCompetitorsPanel = await suggestedCompetitorsPanelPromise;
     return {
       renderedAt,
       captureWindow,
@@ -202,6 +217,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
       recentProofCaptures: [] as ProofCaptureRecord[],
       proofSummary: emptyProofSummary(),
       latestRunCaptureAttempts: [] as LatestRunCaptureAttempt[],
+      suggestedCompetitorsPanel,
       discoveryStatus,
       plan,
       whatsappAvailable,
@@ -304,6 +320,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
   const latestRunCaptureAttempts = latestRunForCaptureAttempts
     ? await loadLatestRunCaptureAttempts(env, latestRunForCaptureAttempts)
     : [];
+  const suggestedCompetitorsPanel = await suggestedCompetitorsPanelPromise;
 
   return {
     renderedAt,
@@ -335,6 +352,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     recentProofCaptures,
     proofSummary: buildProofSummary(recentProofCaptures),
     latestRunCaptureAttempts,
+    suggestedCompetitorsPanel,
     discoveryStatus,
     plan,
     whatsappAvailable,
