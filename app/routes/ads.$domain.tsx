@@ -14,9 +14,10 @@
  *   - "0": emergency brake — every /ads/* page carries
  *     <meta name="robots" content="noindex">.
  *   Regardless of the flag, these states ALWAYS carry noindex:
- *   - the cache-miss honest shell ("We haven't checked {domain} recently"),
- *   - demo-sourced cache entries (they render the shell anyway — sample data
- *     is never presented as a brand's real ads on a public page),
+ *   - the cache-miss case 301-redirects to /search?q=<domain> (issue #1282:
+ *     no page ships empty — see the redirect block in the loader),
+ *   - demo-sourced cache entries (loadBrandPageCacheSnapshot filters them
+ *     out → no snapshot → redirect),
  *   - cache entries older than 7 days (stale pages still render with an
  *     honest freshness line but must not rank),
  *   - a capture whose Ad Aggression Score cannot render (0 verified-linked
@@ -37,7 +38,7 @@
  * app/lib/seo.ts for the exact strategy.
  */
 
-import { Link, useLoaderData } from "react-router";
+import { Link, redirect, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { AdCreative } from "~/components/ads/ad-creative";
@@ -185,12 +186,39 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
       visitorCountry,
     });
   } catch (error) {
-    // A cache-read hiccup must degrade to the honest shell, never a 500 and
+    // A cache-read hiccup must degrade to the redirect below, never a 500 and
     // never a live-provider fallback.
-    console.warn("Brand page cache read failed; rendering the honest shell.", {
+    console.warn("Brand page cache read failed; redirecting to /search.", {
       errorName: error instanceof Error ? error.name : typeof error,
     });
     snapshot = null;
+  }
+
+  // Issue #1282 — "no page ships empty" (transformation roadmap §3.5).
+  //
+  // A cache-miss /ads/:domain used to render a noindex "We haven't watched
+  // {domain} yet" shell — the worst possible first impression for a buyer who
+  // searched "{brand} Facebook ads" and landed here from Google.  Instead,
+  // 301-redirect to /search?q=<domain> so the buyer lands on a page where
+  // they can run a live search immediately.  This removes the noindex empty
+  // shell from the live URL space entirely (the sitemap already excluded it;
+  // the URL-space gap is now closed at the route too).
+  //
+  // The redirect fires ONLY for the true cache-miss case (!snapshot):
+  //   - no cache entry at all (saucony.com, asics.com — the issue's targets),
+  //   - demo-sourced entries (filtered out by loadBrandPageCacheSnapshot),
+  //   - scheduled-scan / warmup entries (filtered out — public_search only),
+  //   - cache older than 30 days (BRAND_PAGE_MAX_CACHE_AGE_MS).
+  //
+  // Pages with a real snapshot that are noindex for OTHER reasons still
+  // render their ad wall — they have real content for a direct visitor, only
+  // indexability is withheld:
+  //   - emergency brake (PUBLIC_BRAND_PAGES_INDEXABLE=0),
+  //   - stale > 7 days but < 30 days (!snapshot.freshForIndexing),
+  //   - aggression score unavailable (aggression === null — sub-14-day window
+  //     or 0 verified-linked ads).
+  if (!snapshot) {
+    throw redirect(`/search?q=${encodeURIComponent(brand.domain)}`, 301);
   }
 
   let offerTimelineEntries: OfferLedgerEntry[] = [];
@@ -908,6 +936,11 @@ function closerHonestyLine(
  * Cache-miss / no-cache teaching shell (per intent audit SF-3): the same
  * poster system with a clearly-labeled EXAMPLE preview — never a dotted
  * apology. Always noindexed by the loader.
+ *
+ * NOTE (issue #1282): the loader now 301-redirects to /search?q=<domain>
+ * when there is no usable cache snapshot, so this shell is no longer
+ * reachable via a live request. It is retained for the component-level
+ * render tests and as a fallback if the redirect is ever reverted.
  */
 function BrandAdsShell({
   data,
