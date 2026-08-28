@@ -118,20 +118,60 @@ describe("every /compare/* page emits schema.org JSON-LD", () => {
     expect(serialized).not.toMatch(/[$₹€£]\s?\d/);
   });
 
-  it.each([
-    "compare.magicbrief",
-    "compare.meta-ad-library",
-    "compare.panoramata",
-    "compare.foreplay-spyder",
-    "compare.adspyder",
-    "compare.visualping-ad-library",
-  ])(
-    "%s keeps a FAQPage block because the page has a visible FAQ",
+  // /compare/spyland and /compare/pulzifi are indexable (in SITEMAP_PATHS)
+  // but their FAQPage is deliberately deferred until #1288 (verify or retire)
+  // resolves — do not invest FAQ content in pages that may be removed. When
+  // #1288 closes, drop the entry here and the suite will force FAQ onto that
+  // route (or fail, which is the correct signal that the page must be retired
+  // or filled in). Every other indexable /compare page must ship FAQPage with
+  // at least 2 Question entries.
+  const FAQ_DEFERRED_PENDING_RETIRE_DECISION: ReadonlySet<string> = new Set([
+    "compare.spyland",
+    "compare.pulzifi",
+  ]);
+
+  it.each(routeIds.filter((id) => !FAQ_DEFERRED_PENDING_RETIRE_DECISION.has(id)))(
+    "%s ships a FAQPage block with at least 2 Question entries",
     async (routeId) => {
       const routeModule = (await import(`~/routes/${routeId}`)) as { default: () => ReactNode };
       const markup = renderToStaticMarkup(createElement(routeModule.default));
       const faqBlocks = parseLdJsonBlocks(markup).filter((block) => block["@type"] === "FAQPage");
-      expect(faqBlocks).toHaveLength(1);
+      expect(faqBlocks, `${routeId} is missing a FAQPage block`).toHaveLength(1);
+
+      const faq = faqBlocks[0] as { mainEntity?: Array<Record<string, unknown>> };
+      const questions = faq.mainEntity ?? [];
+      expect(
+        questions.length,
+        `${routeId} FAQPage must have at least 2 Question entries`,
+      ).toBeGreaterThanOrEqual(2);
+      for (const question of questions) {
+        expect(question["@type"]).toBe("Question");
+        expect(typeof question.name).toBe("string");
+        expect(String(question.name).length).toBeGreaterThan(0);
+        const acceptedAnswer = question.acceptedAnswer as
+          | Record<string, unknown>
+          | undefined;
+        expect(acceptedAnswer, `${routeId} Question is missing acceptedAnswer`).toBeDefined();
+        expect(acceptedAnswer?.["@type"]).toBe("Answer");
+        expect(typeof acceptedAnswer?.text).toBe("string");
+        expect(String(acceptedAnswer?.text).length).toBeGreaterThan(0);
+      }
     },
   );
+
+  it("the deferred FAQ carve-out only names pages that still lack a FAQPage", async () => {
+    // A page that later gains a FAQPage must be removed from the carve-out so
+    // the suite enforces it. This guard fails the moment someone ships FAQ on
+    // spyland or pulzifi but forgets to drop the deferral — which is the
+    // correct nudge to close the carve-out and let the per-route case run.
+    for (const routeId of FAQ_DEFERRED_PENDING_RETIRE_DECISION) {
+      const routeModule = (await import(`~/routes/${routeId}`)) as { default: () => ReactNode };
+      const markup = renderToStaticMarkup(createElement(routeModule.default));
+      const faqBlocks = parseLdJsonBlocks(markup).filter((block) => block["@type"] === "FAQPage");
+      expect(
+        faqBlocks,
+        `${routeId} now ships a FAQPage — remove it from FAQ_DEFERRED_PENDING_RETIRE_DECISION`,
+      ).toHaveLength(0);
+    }
+  });
 });
