@@ -213,5 +213,6 @@ describe("public proof brief — year-aware capture dates (#1032)", () => {
     );
     expect(started).toBeDefined();
     expect(started).toBe("Creative started running Aug 22, 2026");
+    expect(started).toContain("2026");
   });
 });
