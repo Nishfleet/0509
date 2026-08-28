@@ -160,6 +160,26 @@ async function runLoader(domain: string, env: Record<string, unknown>) {
   } as never);
 }
 
+/**
+ * Runs the loader and asserts it threw a redirect Response (issue #1282: the
+ * cache-miss /ads/:domain loader 301-redirects to /search?q=<domain> instead
+ * of rendering a noindex empty shell). Returns the thrown Response so the
+ * caller can assert status and Location.
+ */
+async function runLoaderRedirect(
+  domain: string,
+  env: Record<string, unknown>,
+): Promise<Response> {
+  let thrown: unknown = null;
+  try {
+    await runLoader(domain, env);
+  } catch (error) {
+    thrown = error;
+  }
+  expect(thrown).toBeInstanceOf(Response);
+  return thrown as Response;
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -273,13 +293,13 @@ describe("/ads/:domain loader", () => {
     expect(result.adLibraryCountry).toBe("India");
   });
 
-  it("keeps the Ad Library country honest on the cache-miss shell", async () => {
+  it("301-redirects to /search on a cache miss (issue #1282: no page ships empty)", async () => {
     const mocks = installBrandPageMocks({ entry: null });
 
-    const result = await runLoader("nykaa.com", mocks.env);
+    const response = await runLoaderRedirect("nykaa.com", mocks.env);
 
-    expect(result.hasCachedAds).toBe(false);
-    expect(result.adLibraryCountry).toBeNull();
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/search?q=nykaa.com");
   });
 
   it("marks the capture fresh for a live claim only while the check is still in the moments-ago window", async () => {
@@ -478,26 +498,20 @@ describe("/ads/:domain loader", () => {
     expect(result.brandOwnedAdCount).toBe(0);
   });
 
-  it("renders the honest shell with noindex on a cache miss, with bounded cache lookups and zero provider calls", async () => {
+  it("301-redirects on a cache miss with bounded cache lookups and zero provider calls (issue #1282)", async () => {
     const mocks = installBrandPageMocks({ entry: null });
 
-    const result = await runLoader("nykaa.com", mocks.env);
+    const response = await runLoaderRedirect("nykaa.com", mocks.env);
 
-    expect(result).toMatchObject({
-      hasCachedAds: false,
-      ads: [],
-      checkedAgo: null,
-      lastCheckedAt: null,
-      teaser: null,
-      noindex: true,
-    });
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/search?q=nykaa.com");
     expect(mocks.getDiscoveryCacheEntry.mock.calls.length).toBeLessThanOrEqual(4);
     expect(mocks.searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(mocks.searchMetaLibraryByBrowser).not.toHaveBeenCalled();
     expect(mocks.searchMetaApiAds).not.toHaveBeenCalled();
   });
 
-  it("never presents demo-sourced cache as a brand's real ads", async () => {
+  it("never presents demo-sourced cache as a brand's real ads — redirects instead (issue #1282)", async () => {
     const mocks = installBrandPageMocks({
       entry: cacheEntry({
         payload: {
@@ -510,32 +524,31 @@ describe("/ads/:domain loader", () => {
       }),
     });
 
-    const result = await runLoader("nykaa.com", mocks.env);
+    const response = await runLoaderRedirect("nykaa.com", mocks.env);
 
-    expect(result.hasCachedAds).toBe(false);
-    expect(result.ads).toEqual([]);
-    expect(result.noindex).toBe(true);
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/search?q=nykaa.com");
   });
 
-  it("renders the honest shell when only demo discovery is configured", async () => {
+  it("redirects to /search when only demo discovery is configured (issue #1282)", async () => {
     const mocks = installBrandPageMocks({ entry: cacheEntry(), provider: "demo" });
 
-    const result = await runLoader("nykaa.com", mocks.env);
+    const response = await runLoaderRedirect("nykaa.com", mocks.env);
 
-    expect(result.hasCachedAds).toBe(false);
-    expect(result.noindex).toBe(true);
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/search?q=nykaa.com");
     expect(mocks.getDiscoveryCacheEntry).not.toHaveBeenCalled();
   });
 
-  it("skips scheduled-scan cache entries (interactive public_search cache only)", async () => {
+  it("skips scheduled-scan cache entries — redirects instead (issue #1282)", async () => {
     const mocks = installBrandPageMocks({
       entry: cacheEntry({ routeContext: "watchlist_scan" }),
     });
 
-    const result = await runLoader("nykaa.com", mocks.env);
+    const response = await runLoaderRedirect("nykaa.com", mocks.env);
 
-    expect(result.hasCachedAds).toBe(false);
-    expect(result.noindex).toBe(true);
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/search?q=nykaa.com");
   });
 
   it("404s malformed domains before touching the cache or rate limiter", async () => {
@@ -657,27 +670,27 @@ describe("/ads/:domain indexing flag", () => {
     expect(result.noindex).toBe(true);
   });
 
-  it("treats cache older than 30 days as not checked recently (honest shell)", async () => {
+  it("treats cache older than 30 days as not checked recently — redirects (issue #1282)", async () => {
     const mocks = installBrandPageMocks({
       entry: cacheEntry({ fetchedAt: isoAgo(31 * DAY_MS) }),
     });
 
-    const result = await runLoader("nykaa.com", mocks.env);
+    const response = await runLoaderRedirect("nykaa.com", mocks.env);
 
-    expect(result.hasCachedAds).toBe(false);
-    expect(result.noindex).toBe(true);
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/search?q=nykaa.com");
   });
 
-  it('keeps the shell noindexed even when the flag is "1"', async () => {
+  it('redirects even when the flag is "1" (issue #1282: no page ships empty)', async () => {
     const mocks = installBrandPageMocks({
       env: { DB: {}, PUBLIC_BRAND_PAGES_INDEXABLE: "1" },
       entry: null,
     });
 
-    const result = await runLoader("nykaa.com", mocks.env);
+    const response = await runLoaderRedirect("nykaa.com", mocks.env);
 
-    expect(result.hasCachedAds).toBe(false);
-    expect(result.noindex).toBe(true);
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/search?q=nykaa.com");
   });
 
   it("noindexes a fresh capture with 0 verified-linked ads (thin page: ad wall without the score)", async () => {
