@@ -117,6 +117,25 @@ export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId
         </ul>
       </section>
 
+      <section className="ld-quiet ld-reveal">
+        <div className="ld-section-head">
+          <span className="ld-kicker">{copy.swingKicker}</span>
+          <h2>{copy.swingTitle}</h2>
+          <p className="ld-deck-copy">{copy.swingDeck}</p>
+        </div>
+        <ul className="ld-brand-links ld-swing" aria-label={copy.swingTitle}>
+          {copy.swing.map((item) => (
+            <li key={item.brand}>
+              <strong>{item.brand}</strong>
+              <span>{item.line}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="ld-pricing-note" role="note">
+          {copy.swingSource}
+        </p>
+      </section>
+
       <section className="ld-quiet">
         <div className="ld-section-head">
           <span className="ld-kicker">{copy.honestKicker}</span>
