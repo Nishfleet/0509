@@ -45,7 +45,7 @@ const BASE_IMPORTANCE_BY_EVENT: Record<WatchEventType, number> = {
   website_page_changed: 0,
 };
 
-type ComparableProofFields = {
+export type ComparableProofFields = {
   rawHeadline: string | null;
   normalizedHeadline: string | null;
   normalizedHeadlineHash: string | null;

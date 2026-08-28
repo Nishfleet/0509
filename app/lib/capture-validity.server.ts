@@ -1,4 +1,16 @@
 import { hasMeaningfulLandingPageBodyText } from "~/lib/landing-page-signals.server";
+import {
+  evaluateProofBackedEvents,
+  type EvaluatedWatchEventDraft,
+  type ProofEventEvaluationResult,
+  type ComparableProofFields,
+} from "~/lib/watch-event-evaluator.server";
+import type {
+  LandingPageSnapshotData,
+  ProofCaptureRecord,
+  SensitivityMode,
+  WatchEventRecord,
+} from "~/lib/types";
 
 /**
  * Capture-validity gate (BET 4, Part 1).
@@ -270,4 +282,147 @@ export function assessCaptureValidity(input: CaptureValidityInput): CaptureValid
   }
 
   return { valid: true, reasonCode: null, reason: "", fingerprint: null };
+}
+
+/**
+ * Upstream capture-validity classifier (issue #1399).
+ *
+ * Returns `succeeded`, `capture_failed`, or `suppressed` for every capture
+ * *before* any `landing_page_*` watch event is allowed to emit. The result
+ * carries the evaluator's drafted events so the caller can still create
+ * suppressed candidates for run-history visibility while never creating a
+ * confirmed `landing_page_*` watch event for a failed or suppressed capture.
+ */
+export type CaptureValidityStatus = "succeeded" | "capture_failed" | "suppressed";
+
+export interface CaptureValidityClassification {
+  status: CaptureValidityStatus;
+  /** Internal reason code — the same vocabulary the public rules page lists. */
+  reason: string | null;
+  /** Drafted events from the diff/evaluator stage (empty on capture_failed). */
+  events: EvaluatedWatchEventDraft[];
+  /** Raw evaluator result, `null` when the diff stage never ran. */
+  evaluation: ProofEventEvaluationResult | null;
+}
+
+export interface CaptureValidityFailureDetail {
+  reasonCode: string;
+  metadata?: Record<string, unknown>;
+}
+
+const EMPTY_CURRENT_PROOF: ComparableProofFields & { extractorVersion?: string | null } = {
+  rawHeadline: null,
+  normalizedHeadline: null,
+  normalizedHeadlineHash: null,
+  ctaText: null,
+  priceText: null,
+  formPresent: null,
+  extractorVersion: null,
+};
+
+export interface CaptureValidityClassifierInput {
+  /** The captured snapshot; `null` means the capture failed the gate or fetch. */
+  snapshot: LandingPageSnapshotData | null;
+  /** Failure detail when `snapshot` is `null` or the rendered leg failed. */
+  failureDetail: CaptureValidityFailureDetail | null;
+  /** Current proof fields (the snapshot's extracted signals). */
+  currentProof?: ComparableProofFields & { extractorVersion?: string | null };
+  /** Last successful proof for the same target, or `null` to establish baseline. */
+  lastSuccessfulProof?: ProofCaptureRecord | null;
+  /** Recent confirmed/suppressed watch events for dedupe and corroboration. */
+  recentWatchEvents?: WatchEventRecord[];
+  /** Stable identity for the proof target. */
+  proofTargetIdentity?: string;
+  sensitivityMode?: SensitivityMode;
+  /** Number of native ad events that triggered this proof attempt. */
+  burstCount?: number;
+  currentCapturedAt?: string | null;
+  /** Screenshot cross-check: a price/CTA change must be visible in the screenshot. */
+  screenshotCorroborates?: boolean;
+  /** Optional scheduled maintenance window — capture is suppressed, not failed. */
+  maintenanceWindow?: boolean;
+}
+
+export function classifyCaptureValidity(
+  input: CaptureValidityClassifierInput,
+): CaptureValidityClassification {
+  // Capture failed before we ever reached diff: no snapshot, or the rendered
+  // leg returned a failure detail. The proof pipeline records this as a failed
+  // capture with a machine-readable reason and never emits an event.
+  if (!input.snapshot || input.failureDetail) {
+    const reason = input.failureDetail?.reasonCode ?? "proof_capture_failed";
+    return { status: "capture_failed", reason, events: [], evaluation: null };
+  }
+
+  // Scheduled maintenance window: the page may be fine, but we deliberately
+  // suppress captures during the window so a transient maintenance state is
+  // never diffed against a real page.
+  if (input.maintenanceWindow) {
+    return {
+      status: "suppressed",
+      reason: "maintenance_window",
+      events: [],
+      evaluation: { status: "suppressed", events: [] },
+    };
+  }
+
+  const currentProof = input.currentProof ?? EMPTY_CURRENT_PROOF;
+  const recentWatchEvents = input.recentWatchEvents ?? [];
+
+  const evaluated = evaluateProofBackedEvents({
+    proofTargetIdentity: input.proofTargetIdentity ?? "",
+    currentProof,
+    lastSuccessfulProof: input.lastSuccessfulProof ?? null,
+    recentWatchEvents,
+    sensitivityMode: input.sensitivityMode ?? "balanced",
+    burstCount: input.burstCount ?? 1,
+    currentCapturedAt: input.currentCapturedAt,
+    screenshotCorroborates: input.screenshotCorroborates,
+  });
+
+  if (evaluated.status === "confirmed") {
+    return {
+      status: "succeeded",
+      reason: null,
+      events: evaluated.events,
+      evaluation: evaluated,
+    };
+  }
+
+  if (evaluated.status === "suppressed" && evaluated.events.length > 0) {
+    const reason = suppressionReasonFromEvaluatedEvents(evaluated.events);
+    return {
+      status: "suppressed",
+      reason,
+      events: evaluated.events,
+      evaluation: evaluated,
+    };
+  }
+
+  // Baseline established or no change: a successful capture that produced zero
+  // customer-visible events. Not a failure and not a suppression.
+  return {
+    status: "succeeded",
+    reason: null,
+    events: evaluated.events,
+    evaluation: evaluated,
+  };
+}
+
+function suppressionReasonFromEvaluatedEvents(
+  events: EvaluatedWatchEventDraft[],
+): string {
+  for (const event of events) {
+    const suppression = event.metadata.suppression;
+    if (suppression === "churn_stable" || suppression === "ad_slot_strip") {
+      return suppression as string;
+    }
+    if (event.metadata.corroboration === "unconfirmed_by_screenshot") {
+      return "unconfirmed_by_screenshot";
+    }
+    if (event.dedupeReason) {
+      return event.dedupeReason;
+    }
+  }
+  return "low_signal";
 }
