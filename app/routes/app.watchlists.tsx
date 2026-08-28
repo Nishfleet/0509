@@ -23,6 +23,7 @@ import { TertiaryAction } from "~/components/evidence/cta";
 import { SubmitButton } from "~/components/submit-button";
 import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
 import { CompetitorDetail } from "~/components/watchlists/competitor-detail";
+import { WatchlistsSuggestedCompetitorsSection } from "~/components/watchlists/suggested-competitors-section";
 import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
 import { useFirstCapturePolling } from "~/components/workspace/use-first-capture-polling";
@@ -759,6 +760,8 @@ export default function WatchlistsRoute() {
           upgradePath="/app/billing?source=watchlists#plans"
         />
       ) : null}
+
+      <WatchlistsSuggestedCompetitorsSection panel={data.suggestedCompetitorsPanel ?? null} isBoardView={!selectedWatchlist} routeActionData={routeActionData} navigation={navigation} />
 
       {/* PR-5a: Presence lives inside Watch — an entity is a tracked thing,
           not a parallel product. The deep merge lands with the Watch
