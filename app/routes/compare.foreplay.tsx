@@ -10,7 +10,14 @@ import {
   type CompareCitations,
   type CompareClaimCard,
 } from "~/components/compare-citations";
-import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import {
+  canonicalLinks,
+  faqPageJsonLd,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+  type FaqJsonLdEntry,
+} from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import foreplayCitations from "~/data/compare/foreplay-citations.json";
 
@@ -95,7 +102,32 @@ const fiveToNineAdds = [
   },
 ] as const;
 
+export const faqEntries: ReadonlyArray<FaqJsonLdEntry> = [
+  {
+    question: "How is Five to Nine different from Foreplay?",
+    answer:
+      "Foreplay is an ad intelligence and creative research platform — a large multi-platform ad index, swipe files, creative briefs, and the Spyder competitor tracker. Five to Nine is source-backed competitor change monitoring: it reads the public Meta Ad Library and the live landing page from a domain paste, diffs the commercial fields, and saves each change with the source link and a timestamp.",
+  },
+  {
+    question: "Does Foreplay track competitor landing-page changes?",
+    answer:
+      "Foreplay's Spyder product archives competitor Meta ads and landing-page screenshots, but public Foreplay writing describes that archive without a before/after diff on an existing ad or page. Monitoring specific landing-page copy or price changes on a schedule is not Foreplay's primary job. See the Five to Nine vs Foreplay Spyder page for that tracking case.",
+  },
+  {
+    question: "Which tool is better for ad change alerts?",
+    answer:
+      "Use Foreplay if you need a creative swipe file and a large multi-platform ad index for inspiration. Use Five to Nine if you need scheduled, source-backed proof of Meta ad and landing-page changes. Many teams could use both for different jobs — Foreplay for creative research, Five to Nine for change monitoring with proof.",
+  },
+  {
+    question: "Does Foreplay cover the Meta Ad Library?",
+    answer:
+      "Yes. Foreplay's Discovery index and Spyder competitor tracking read the public Meta Ad Library among other platforms (TikTok, LinkedIn, Google). Five to Nine reads the same public Meta Ad Library but is narrower in ad-library breadth — it focuses on proof-backed Meta Ad Library plus landing-page changes rather than multi-platform creative aggregation.",
+  },
+] as const;
+
 export default function CompareForeplayRoute() {
+  const structuredFaq = faqPageJsonLd(faqEntries);
+
   return (
     <main className="f9-home">
       <script
@@ -108,6 +140,7 @@ export default function CompareForeplayRoute() {
           }),
         )}
       />
+      <script {...jsonLdScriptProps(structuredFaq)} />
       <MarketingNav />
 
       <section className="ld-hero">

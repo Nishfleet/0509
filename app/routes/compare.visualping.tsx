@@ -10,7 +10,14 @@ import {
   type CompareCitations,
   type CompareClaimCard,
 } from "~/components/compare-citations";
-import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import {
+  canonicalLinks,
+  faqPageJsonLd,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+  type FaqJsonLdEntry,
+} from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import visualpingCitations from "~/data/compare/visualping-citations.json";
 
@@ -95,7 +102,32 @@ const fiveToNineAdds = [
   },
 ] as const;
 
+export const faqEntries: ReadonlyArray<FaqJsonLdEntry> = [
+  {
+    question: "How is Five to Nine different from Visualping?",
+    answer:
+      "Visualping is a general-purpose page-change monitor: you paste a URL and it flags visual, text, or element diffs. Five to Nine is built for competitor ad and landing-page moves — it reads the public Meta Ad Library and the live landing page from a domain paste, then diffs the commercial fields (offer, price, CTA, hook) and saves each change with the source link.",
+  },
+  {
+    question: "Does Visualping monitor the Meta Ad Library?",
+    answer:
+      "Visualping can watch a Meta Ad Library URL if you find and paste that URL yourself, with visual diffs on a free or paid plan. It does not start from a competitor domain or name the offer, price, or CTA behind a new ad. For that ad-library case specifically, see the Five to Nine vs Visualping for ad libraries page.",
+  },
+  {
+    question: "Which tool is better for ad change alerts?",
+    answer:
+      "Use Visualping if you already have a specific page URL and want a generic pixel or text diff. Use Five to Nine if you want scheduled, source-backed proof of competitor offer and landing-page changes without hunting each URL. Visualping flags that something changed; Five to Nine captures the commercial move with proof.",
+  },
+  {
+    question: "Does Visualping have false positives?",
+    answer:
+      "Yes. Visualping's own writing says most detected changes are not important and that false positives will never reach zero — banner rotation, cookie popups, timestamps, and layout shift all look like changes. Five to Nine diffs the commercial fields instead of pixels, so a layout shift is not sold as a competitor move.",
+  },
+] as const;
+
 export default function CompareVisualpingRoute() {
+  const structuredFaq = faqPageJsonLd(faqEntries);
+
   return (
     <main className="f9-home">
       <script
@@ -108,6 +140,7 @@ export default function CompareVisualpingRoute() {
           }),
         )}
       />
+      <script {...jsonLdScriptProps(structuredFaq)} />
       <MarketingNav />
 
       <section className="ld-hero">
