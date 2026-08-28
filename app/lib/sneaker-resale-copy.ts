@@ -16,6 +16,9 @@ export interface SneakerResaleCopy {
   productKicker: string;
   productTitle: string;
   products: ReadonlyArray<{ title: string; detail: string }>;
+  brandsKicker: string;
+  brandsTitle: string;
+  brandsDeck: string;
   honestKicker: string;
   honestTitle: string;
   honest: ReadonlyArray<{ title: string; detail: string }>;
@@ -77,6 +80,10 @@ const EN: SneakerResaleCopy = {
         "Confirmed changes keep the screenshot, the page text, and the source URL. Close the tab and the receipt is still there.",
     },
   ],
+  brandsKicker: "Brands we watch",
+  brandsTitle: "Real sneaker-resale advertisers, real ad pages.",
+  brandsDeck:
+    "These brands are running Meta ads right now. Each link opens the live ad page we built from real captures — the same proof a watchlist tracks.",
   honestKicker: "Honest limits",
   honestTitle: "What this page does not pretend.",
   honest: [
@@ -176,6 +183,10 @@ const DE: SneakerResaleCopy = {
         "Bestätigte Änderungen behalten Screenshot, Seitentext und Quell-URL. Tab zu, Beleg da.",
     },
   ],
+  brandsKicker: "Marken, die wir beobachten",
+  brandsTitle: "Echte Sneaker-Resale-Werbetreibende, echte Anzeigenseiten.",
+  brandsDeck:
+    "Diese Marken schalten gerade Meta-Anzeigen. Jeder Link öffnet die Live-Anzeigenseite, die wir aus echten Erfassungen erstellt haben — derselbe Beleg, den eine Watchlist verfolgt.",
   honestKicker: "Ehrliche Grenzen",
   honestTitle: "Was diese Seite nicht behauptet.",
   honest: [
@@ -275,6 +286,10 @@ const JA: SneakerResaleCopy = {
         "確定した変化には、スクショ、ページ本文、出典 URL が付きます。タブを閉じても残ります。",
     },
   ],
+  brandsKicker: "監視しているブランド",
+  brandsTitle: "実在するスニーカーリセール広告主、実物の広告ページ。",
+  brandsDeck:
+    "これらのブランドは現在Meta広告を出しています。各リンクは実キャプチャから作成した広告ページを開きます。ウォッチリストが追跡するのと同じ証拠です。",
   honestKicker: "言わないこと",
   honestTitle: "このページが約束しない範囲。",
   honest: [
@@ -374,6 +389,10 @@ const PT_BR: SneakerResaleCopy = {
         "Mudança confirmada leva print, texto da página e URL da fonte. Fecha a aba, o comprovante continua.",
     },
   ],
+  brandsKicker: "Marcas que observamos",
+  brandsTitle: "Anunciantes reais de revenda de tênis, páginas de anúncio reais.",
+  brandsDeck:
+    "Essas marcas estão rodando anúncios no Meta agora. Cada link abre a página de anúncio ao vivo que montamos com capturas reais — a mesma prova que uma watchlist acompanha.",
   honestKicker: "Limite honesto",
   honestTitle: "O que esta página não vende.",
   honest: [

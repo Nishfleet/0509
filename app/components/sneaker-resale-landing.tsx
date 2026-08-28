@@ -10,6 +10,23 @@ import {
 import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
 import { faqPageJsonLd, jsonLdScriptProps, webPageJsonLd } from "~/lib/seo";
 
+/**
+ * Real sneaker-resale advertisers that have a live, indexable `/ads/:domain`
+ * brand page built from real Meta Ad Library captures. The sneaker-resale
+ * landing page used to name brands in copy only (Jordan / StockX / GOAT in
+ * the FAQ) and link to zero `/ads/` pages — orphaned from the market's #1
+ * swing (#1290). Each entry here is a domain whose `/ads/` page is live and
+ * indexable today (verified against the production sitemap); a domain
+ * without a cached page 301-redirects to `/search` and is intentionally
+ * omitted so this section never ships a dead link.
+ */
+const SNEAKER_RESALE_BRAND_PAGES: ReadonlyArray<{ name: string; domain: string }> = [
+  { name: "Nike", domain: "nike.com" },
+  { name: "Adidas", domain: "adidas.com" },
+  { name: "ASOS", domain: "asos.com" },
+  { name: "Decathlon", domain: "decathlon.com" },
+];
+
 export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId }) {
   const copy = sneakerResaleCopy(locale);
   const market = SNEAKER_RESALE_MARKETS.find((entry) => entry.id === locale);
@@ -80,6 +97,24 @@ export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId
             </article>
           ))}
         </div>
+      </section>
+
+      <section className="ld-quiet ld-reveal">
+        <div className="ld-section-head">
+          <span className="ld-kicker">{copy.brandsKicker}</span>
+          <h2>{copy.brandsTitle}</h2>
+          <p className="ld-deck-copy">{copy.brandsDeck}</p>
+        </div>
+        <ul className="ld-brand-links" aria-label={copy.brandsTitle}>
+          {SNEAKER_RESALE_BRAND_PAGES.map((brand) => (
+            <li key={brand.domain}>
+              <Link to={`/ads/${brand.domain}`}>
+                <strong>{brand.name}</strong>
+                <span>{brand.domain}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="ld-quiet">
