@@ -91,6 +91,7 @@ interface MockOptions {
   rateLimitResponse?: Response | null;
   onCacheRead?: () => void;
   offerTimelineEntries?: OfferLedgerEntry[];
+  captureFailures?: unknown[];
 }
 
 function installBrandPageMocks(options: MockOptions = {}) {
@@ -110,6 +111,7 @@ function installBrandPageMocks(options: MockOptions = {}) {
     entries: options.offerTimelineEntries ?? [],
     asOfState: null,
   });
+  const loadDomainCaptureFailures = vi.fn().mockResolvedValue(options.captureFailures ?? []);
 
   vi.doMock("~/lib/context.server", () => ({
     getEnv: vi.fn(() => env),
@@ -133,6 +135,7 @@ function installBrandPageMocks(options: MockOptions = {}) {
   }));
   vi.doMock("~/lib/offer-timeline.server", () => ({
     loadOfferTimeline,
+    loadDomainCaptureFailures,
     isOfferTimelineShareEnabled: vi.fn(() => true),
   }));
 

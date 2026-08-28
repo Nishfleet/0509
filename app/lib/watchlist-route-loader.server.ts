@@ -36,6 +36,42 @@ const WATCHLIST_DELIVERY_TARGET_DISPLAY_LIMIT = 12;
 const WORKSPACE_DELIVERY_TARGET_DISPLAY_LIMIT = 8;
 const RECENT_DELIVERY_ATTEMPT_DISPLAY_LIMIT = 16;
 
+/**
+ * Capture attempts for the latest run, shaped for the evidence UI (issue
+ * #1289). A serializable subset of `CaptureAttempt` — the component renders
+ * the public reason code and a one-line label, never the internal token.
+ */
+export type LatestRunCaptureAttempt = {
+  id: string;
+  status: "succeeded" | "capture_failed" | "skipped_due_to_budget";
+  reasonCode: string | null;
+  urlChecked: string | null;
+  checkedAt: string;
+};
+
+async function loadLatestRunCaptureAttempts(
+  env: import("~/lib/env.server").AppEnv,
+  run: { watchlistId: string; startedAt: string; finishedAt: string | null },
+): Promise<LatestRunCaptureAttempt[]> {
+  try {
+    const { listCaptureAttemptsForRun } = await import(
+      "~/lib/data/watchlist-run-capture-attempts.server"
+    );
+    const attempts = await listCaptureAttemptsForRun(env, run);
+    return attempts.map((attempt) => ({
+      id: attempt.id,
+      status: attempt.status,
+      reasonCode: attempt.reasonCode,
+      urlChecked: attempt.urlChecked,
+      checkedAt: attempt.checkedAt,
+    }));
+  } catch {
+    // D1 absent or read failure degrades to an empty list — the evidence
+    // tab still renders the run history and refusal rows it already had.
+    return [];
+  }
+}
+
 export async function loadWatchlistsRoute({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
@@ -165,6 +201,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
       recentDeliveryAttempts: [] as PublicDeliveryAttemptSummary[],
       recentProofCaptures: [] as ProofCaptureRecord[],
       proofSummary: emptyProofSummary(),
+      latestRunCaptureAttempts: [] as LatestRunCaptureAttempt[],
       discoveryStatus,
       plan,
       whatsappAvailable,
@@ -259,6 +296,15 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
         .filter((target) => isVisibleDeliveryChannel(target.channel, visibleDelivery))
         .map((target) => toPublicDeliveryTarget(target, { verifiedAccountEmail }));
 
+  // Issue #1289: capture attempts for the latest run, so the evidence tab
+  // can show what the most recent check actually checked — including failed
+  // and skipped captures with a public reason code. Loaded only for the
+  // latest run to keep the page load bounded; older runs stay as quiet lines.
+  const latestRunForCaptureAttempts = runs[0] ?? null;
+  const latestRunCaptureAttempts = latestRunForCaptureAttempts
+    ? await loadLatestRunCaptureAttempts(env, latestRunForCaptureAttempts)
+    : [];
+
   return {
     renderedAt,
     captureWindow,
@@ -288,6 +334,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
       .map(toPublicDeliveryAttemptSummary),
     recentProofCaptures,
     proofSummary: buildProofSummary(recentProofCaptures),
+    latestRunCaptureAttempts,
     discoveryStatus,
     plan,
     whatsappAvailable,

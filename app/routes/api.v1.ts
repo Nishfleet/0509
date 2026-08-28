@@ -83,6 +83,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         {
           method: "GET",
+          path: "/api/v1/watchlists/{watchlistId}/runs/latest",
+          formats: ["json"],
+          planRequirement: API_PLAN_REQUIREMENT,
+          requiresWriteEnabled: false,
+          credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
+        },
+        {
+          method: "GET",
           path: "/api/v1/digests/{digestId}",
           formats: customerExportFormats(),
           planRequirement: API_PLAN_REQUIREMENT,
