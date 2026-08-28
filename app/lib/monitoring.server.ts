@@ -3815,12 +3815,17 @@ async function evaluateSelectiveProofCandidates(
       // Issue #949: record which fields the extract stage found vs. left
       // empty, so the bail-out counter shows when extraction silently
       // dropped a field the diff would have needed.
+      const ctaFunnel = readSnapshotCtaFunnel(snapshot);
       recordExtractStage(pipelineCounters, {
         ctaText: snapshot.ctaText ?? null,
         priceText: snapshot.priceText ?? null,
         formPresent: snapshot.formPresent ?? null,
         headline: snapshot.rawHeadline ?? null,
         warnings: extractionWarnings,
+        // Issue #1401: authoritative funnel stage + bail reason from the
+        // extractor, recorded on the snapshot metadata by the capture path.
+        ctaFunnelStage: ctaFunnel.stage ?? undefined,
+        ctaFunnelReasonCode: ctaFunnel.reasonCode ?? undefined,
       });
       const finalCanonicalPageIdentity =
         buildCanonicalPageIdentity(snapshot.canonicalUrl) ??
@@ -4342,12 +4347,16 @@ async function evaluateDirectWebsiteProofCandidate(
     const extractedFields = snapshotToExtractedFields(snapshot);
     // Issue #949: record the extract-stage field presence for the
     // direct-website path.
+    const directCtaFunnel = readSnapshotCtaFunnel(snapshot);
     recordExtractStage(pipelineCounters, {
       ctaText: snapshot.ctaText ?? null,
       priceText: snapshot.priceText ?? null,
       formPresent: snapshot.formPresent ?? null,
       headline: snapshot.rawHeadline ?? null,
       warnings: readSnapshotWarnings(snapshot),
+      // Issue #1401: CTA funnel stage + bail reason.
+      ctaFunnelStage: directCtaFunnel.stage ?? undefined,
+      ctaFunnelReasonCode: directCtaFunnel.reasonCode ?? undefined,
     });
     const finalCanonicalPageIdentity =
       buildCanonicalPageIdentity(snapshot.canonicalUrl) ??
@@ -5128,6 +5137,24 @@ function readSnapshotBoolean(
   return typeof value === "boolean" ? value : null;
 }
 
+// Issue #1401: read the CTA extraction funnel stage + bail reason that the
+// capture path (browser-run / landing-pages.server) recorded onto the
+// snapshot metadata. Returns nulls when the capture predates the funnel
+// wiring so older snapshots do not break the counter.
+function readSnapshotCtaFunnel(snapshot: {
+  metadata?: Record<string, unknown>;
+}): {
+  stage: "reached" | "bailed" | null;
+  reasonCode: string | null;
+} {
+  const metadata = snapshot.metadata;
+  const rawStage = metadata?.ctaFunnelStage;
+  const stage: "reached" | "bailed" | null =
+    rawStage === "reached" || rawStage === "bailed" ? rawStage : null;
+  const reasonCode = readSnapshotString(metadata, "ctaFunnelReasonCode");
+  return { stage, reasonCode };
+}
+
 function readSnapshotConfidence(snapshot: {
   metadata?: Record<string, unknown>;
 }) {
@@ -5384,10 +5411,31 @@ function recordDiffStageForEvaluation(
     }
   }
 
+  // Issue #1401: the "unchanged" funnel stage. True only when the diff ran
+  // against a prior capture (not baseline), the current capture reached the
+  // CTA stage, the prior capture also had a non-null CTA, and no CTA change
+  // event fired — i.e. the CTA was extracted on both sides and genuinely
+  // matched. Null when there was no prior capture. False when a CTA event
+  // fired (it changed) or the current capture bailed (no CTA to compare).
+  let ctaUnchanged: boolean | null = null;
+  if (lastSuccessfulProof && evaluated.status !== "baseline_established") {
+    const currentCtaReached = counters.extract.ctaFunnelStage === "reached";
+    const previousCtaText = lastSuccessfulProof.extractedFields?.ctaText;
+    const previousCtaReached =
+      typeof previousCtaText === "string" && previousCtaText.length > 0;
+    const ctaEventFired = confirmedEventTypes.includes("landing_page_cta_changed");
+    if (currentCtaReached && previousCtaReached) {
+      ctaUnchanged = !ctaEventFired;
+    } else {
+      ctaUnchanged = false;
+    }
+  }
+
   recordDiffStage(counters, {
     status: evaluated.status,
     fieldBails,
     confirmedEventTypes,
+    ctaUnchanged,
   });
 }
 

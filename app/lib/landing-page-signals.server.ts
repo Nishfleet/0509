@@ -1,8 +1,42 @@
 import { hashString, stripChurnTokens } from "~/lib/normalize";
 
-export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v5";
+export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v6";
 
 export type ExtractorSuppressionReason = "churn_stable" | "ad_slot_strip";
+
+// CTA field-extraction funnel (issue #1401). The CTA detector was silent for
+// 75 days because a bail-out left ctaText null with no recorded reason, so the
+// question "did the check reach CTA extraction vs. bail out, and why?" was not
+// answerable. The funnel makes the bail-out diagnosable:
+//   - "reached": the extractor produced a non-null CTA value.
+//   - "bailed":  the extractor produced null, with a reasonCode naming the gate.
+// "unchanged" is a diff-time concept (both captures reached, values matched),
+// not an extraction concept, so it is classified downstream — see
+// recordDiffStage in landing-page-pipeline-instrumentation.server.ts.
+export type CtaFunnelStage = "reached" | "bailed";
+
+// Reason codes name the exact gate that dropped the CTA. They are stable
+// strings so a backfill / log query can GROUP BY them and surface the dominant
+// bail-out (issue #1401 accept 4).
+//   - no_cta_candidates: no <button>, no submit input, and no <a> at all.
+//   - only_chrome_buttons: buttons existed but every one was UI chrome
+//     (CTA_CHROME_BUTTON_TEXTS), no priority verb matched, and no usable
+//     anchor fallback.
+//   - only_chrome_anchors: action links existed but every one was navigation
+//     chrome (CTA_CHROME_ANCHOR_TEXTS), no priority verb matched, and no
+//     usable button fallback.
+//   - empty_capture: the HTML fed to extraction had no visible text content
+//     (a shell / challenge body that slipped past the capture-validity gate).
+export type CtaFunnelReasonCode =
+  | "no_cta_candidates"
+  | "only_chrome_buttons"
+  | "only_chrome_anchors"
+  | "empty_capture";
+
+export interface CtaFunnel {
+  stage: CtaFunnelStage;
+  reasonCode: CtaFunnelReasonCode | null;
+}
 
 export interface ExtractorSuppressionFingerprints {
   rawTextHash: string;
@@ -64,6 +98,144 @@ const CTA_CHROME_BUTTON_TEXTS = new Set([
   "save",
   "yes",
   "no",
+  // v6 chrome hardening (issue #1401 live backfill): Calendly/cookie/
+  // accordion chrome was winning the button fallback and making the CTA
+  // diff watch a non-CTA label ("Show more", day-of-month digits, cookie
+  // consent). Same for search-command buttons ("Search… Ctrl K").
+  "show more",
+  "show less",
+  "load more",
+  "see more",
+  "read less",
+  "cookie settings",
+  "cookie details",
+  "accept all",
+  "allow all",
+  "reject all",
+  "decline all",
+  "confirm my choices",
+  "apply",
+  "clear",
+  "back button",
+  "filter icon",
+  "try again",
+  "forgotten password?",
+  "forgot password?",
+  "forgot password",
+  "forgotten password",
+  "reset password",
+]);
+
+// v6 anchor-text fallback (issue #1401): #949's button fallback closed the
+// "no priority verb + no <button>" bail for button-bearing pages, but pages
+// whose only CTA is a generic anchor (`<a href="/learn">Learn more</a>`) still
+// bailed — the probe in tests/cta-anchor-probe.test.ts returns null for them,
+// and that is the remaining dominant CTA bail-out. A blind anchor fallback is
+// wrong (the #949 comment deliberately excluded links: "links are often
+// navigation"), so this is a SELECTIVE fallback: the first action link whose
+// text is not navigation chrome. Soft CTAs ("Learn more", "Read more",
+// "Find out more", "Discover", "Explore") are NOT chrome — they are real
+// (if soft) calls to action and flow through. Pure navigation/structural
+// links (About, Home, Login, Blog, Docs, Careers, Terms, …) are blocked so
+// the diff never watches a nav label that rotates on every render.
+//
+// The anchor fallback runs ONLY when no priority verb matched AND no usable
+// button was found — it is the third tier, after the priority list and the
+// button fallback. A page with a real <button> never reaches it.
+const CTA_CHROME_ANCHOR_TEXTS = new Set([
+  "about",
+  "about us",
+  "home",
+  "blog",
+  "news",
+  "press",
+  "events",
+  "webinars",
+  "webinar",
+  "podcast",
+  "podcasts",
+  "services",
+  "products",
+  "product",
+  "features",
+  "solutions",
+  "platform",
+  "integrations",
+  "api",
+  "faq",
+  "faqs",
+  "help",
+  "help center",
+  "support",
+  "docs",
+  "documentation",
+  "resources",
+  "library",
+  "guides",
+  "tutorials",
+  "careers",
+  "jobs",
+  "team",
+  "company",
+  "our team",
+  "our company",
+  "partners",
+  "partner with us",
+  "investors",
+  "investor relations",
+  "contact", // bare "contact"; "contact us"/"contact sales" are priority CTAs
+  "login",
+  "log in",
+  "sign in",
+  "signin",
+  "log out",
+  "logout",
+  "sign up", // priority verb — never reaches fallback, listed for safety
+  "register", // priority verb — listed for safety
+  "terms",
+  "terms of service",
+  "privacy",
+  "privacy policy",
+  "legal",
+  "security",
+  "status",
+  "sitemap",
+  "menu",
+  "close",
+  "back",
+  "next",
+  "previous",
+  "prev",
+  "skip",
+  "skip to content",
+  "skip to main content",
+  "more",
+  "read the docs",
+  "view docs",
+  "github",
+  "twitter",
+  "linkedin",
+  "youtube",
+  "facebook",
+  "instagram",
+  // v6 chrome hardening (issue #1401 live backfill): widget/footer chrome
+  // that is not a commercial CTA.
+  "powered by calendly",
+  "privacy notice",
+  "cookie policy",
+  "cookie preferences",
+  "try again",
+  "forgotten password?",
+  "forgot password?",
+  "forgot password",
+  "forgotten password",
+  "reset password",
+  "cookie details",
+  "cookie settings",
+  "accept all",
+  "allow all",
+  "reject all",
+  "decline all",
 ]);
 
 const PRICE_PATTERNS = [
@@ -192,18 +364,37 @@ export function extractLandingPageSignals(
   // again would double-decode HTML entities (e.g. "&amp;hellip;" →
   // "&hellip;" → "…"), corrupting literal entity text.
   const buttonCandidates = extractButtonText(normalizedHtml).map(cleanText);
+  // Issue #1401: anchor candidates are extracted separately so the v6
+  // anchor-text fallback can filter navigation chrome without re-decoding.
+  const anchorCandidates = extractActionLinks(normalizedHtml).map(cleanText);
   const ctaCandidates = [
     ...buttonCandidates,
     ...extractSubmitValues(normalizedHtml).map(cleanText),
-    ...extractActionLinks(normalizedHtml).map(cleanText),
+    ...anchorCandidates,
   ];
 
-  const ctaText = pickBestCta(ctaCandidates, buttonCandidates);
+  const { ctaText, funnel: ctaFunnel } = pickBestCta(
+    ctaCandidates,
+    buttonCandidates,
+    anchorCandidates,
+  );
   const priceText = pickPrice(normalizedHtml);
   const formPresent = detectFormPresence(normalizedHtml);
 
+  // An empty visible body (shell / challenge that slipped past the capture
+  // gate) means extraction had nothing to work on — record it as the bail
+  // reason instead of the structural no-candidates code so an operator can
+  // tell "the page was blank" from "the page had only nav links".
+  const resolvedFunnel: CtaFunnel =
+    ctaFunnel.stage === "bailed" &&
+    ctaFunnel.reasonCode === "no_cta_candidates" &&
+    !hasVisibleBodyText(normalizedHtml)
+      ? { stage: "bailed", reasonCode: "empty_capture" }
+      : ctaFunnel;
+
   return {
     ctaText,
+    ctaFunnel: resolvedFunnel,
     priceText,
     formPresent,
     extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
@@ -212,6 +403,10 @@ export function extractLandingPageSignals(
       documentMode,
     ),
   };
+}
+
+function hasVisibleBodyText(html: string) {
+  return cleanText(stripTags(html)).length > 0;
 }
 
 export function extractorSuppressionMetadata(
@@ -691,13 +886,17 @@ function extractActionLinks(html: string) {
   return [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)].map((match) => stripTags(match[1] ?? ""));
 }
 
-function pickBestCta(candidates: string[], buttonCandidates: string[] = []) {
+function pickBestCta(
+  candidates: string[],
+  buttonCandidates: string[] = [],
+  anchorCandidates: string[] = [],
+): { ctaText: string | null; funnel: CtaFunnel } {
   const unique = [...new Set(candidates.filter(Boolean))];
 
   for (const pattern of CTA_PRIORITY_PATTERNS) {
     const match = unique.find((candidate) => pattern.test(candidate));
     if (match) {
-      return match;
+      return { ctaText: match, funnel: { stage: "reached", reasonCode: null } };
     }
   }
 
@@ -707,15 +906,103 @@ function pickBestCta(candidates: string[], buttonCandidates: string[] = []) {
   // on such a page could never fire. A `<button>` is an action control, so
   // its text is a real CTA even without a priority verb. Pick the first
   // non-trivial, non-chrome button so the diff can see genuine changes.
-  // Submit inputs and action links are NOT used for the fallback: links are
-  // often navigation, and submit values usually carry priority verbs already.
+  // Submit inputs are NOT used for the fallback: submit values usually carry
+  // priority verbs already.
   for (const candidate of buttonCandidates) {
     if (!candidate) continue;
-    if (CTA_CHROME_BUTTON_TEXTS.has(candidate.toLowerCase())) continue;
-    return candidate;
+    if (isChromeButtonText(candidate)) continue;
+    return { ctaText: candidate, funnel: { stage: "reached", reasonCode: null } };
   }
 
-  return null;
+  // v6 fallback (issue #1401): no priority verb AND no usable button. Before
+  // this tier the detector returned null for every page whose only CTA is a
+  // generic anchor — the dominant remaining bail-out (the CTA detector was
+  // silent for 75 days). A BLIND anchor fallback is wrong (links are often
+  // navigation), so this is selective: the first action link whose text is
+  // not navigation chrome (CTA_CHROME_ANCHOR_TEXTS). Soft CTAs ("Learn more",
+  // "Read more", "Find out more") flow through; pure nav (About, Home, Login)
+  // is blocked so the diff never watches a rotating nav label.
+  const usableAnchor = anchorCandidates.find(
+    (candidate) => Boolean(candidate) && !isChromeAnchorText(candidate),
+  );
+  if (usableAnchor) {
+    return { ctaText: usableAnchor, funnel: { stage: "reached", reasonCode: null } };
+  }
+
+  // Bail-out: name the gate so a backfill / log query can surface the
+  // dominant reason (issue #1401 accept 4). The reason is derived from what
+  // existed upstream of the fallbacks.
+  const reasonCode = classifyCtaBail(
+    buttonCandidates,
+    anchorCandidates,
+  );
+  return { ctaText: null, funnel: { stage: "bailed", reasonCode } };
+}
+
+function classifyCtaBail(
+  buttonCandidates: string[],
+  anchorCandidates: string[],
+): CtaFunnelReasonCode {
+  const hasButton = buttonCandidates.some(Boolean);
+  const hasAnchor = anchorCandidates.some(Boolean);
+  if (!hasButton && !hasAnchor) {
+    return "no_cta_candidates";
+  }
+  // Buttons existed but every one was chrome (else the button fallback would
+  // have returned). Anchors either did not exist or were all chrome.
+  if (hasButton && !hasAnchor) {
+    return "only_chrome_buttons";
+  }
+  if (hasAnchor && !hasButton) {
+    return "only_chrome_anchors";
+  }
+  // Both existed but all were chrome.
+  return "only_chrome_buttons";
+}
+
+// Strip bidi / format marks (e.g. U+200E LEFT-TO-RIGHT MARK that Calendly
+// appends to "Cookie Details") and collapse whitespace so chrome matching
+// is stable across rendered captures.
+function normalizeChromeText(candidate: string): string {
+  return candidate
+    .replace(/[\u200E\u200F\u200B\u200C\u200D\uFEFF]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Chrome matching for the button fallback. Exact set membership is not enough:
+// live captures also carry "Search… Ctrl K", day-of-month digits ("1".."31"),
+// and timezone labels ("UTC Time (12:01am)") that are UI chrome, not CTAs.
+// Prefix/pattern rules keep the blocklist small while covering those shapes
+// without swallowing commercial verbs ("Search our catalog" still flows
+// through because it does not start with bare "search" + punctuation).
+function isChromeButtonText(candidate: string): boolean {
+  const lower = normalizeChromeText(candidate);
+  if (!lower) return true;
+  if (CTA_CHROME_BUTTON_TEXTS.has(lower)) return true;
+  // Digit-only calendar cells.
+  if (/^\d{1,2}$/.test(lower)) return true;
+  // Search affordances: "Search", "Search…", "Search… Ctrl K".
+  if (/^search\b/.test(lower)) return true;
+  // Cookie-consent chrome variants ("Cookie Details", "Cookie settings").
+  if (/^cookie\b/.test(lower)) return true;
+  // Password-recovery chrome on login walls.
+  if (/\bpassword\b/.test(lower)) return true;
+  // Timezone / clock chrome on booking widgets.
+  if (/\btime\b/.test(lower) && /\b(utc|gmt|am|pm)\b/.test(lower)) return true;
+  return false;
+}
+
+function isChromeAnchorText(candidate: string): boolean {
+  const lower = normalizeChromeText(candidate);
+  if (!lower) return true;
+  if (CTA_CHROME_ANCHOR_TEXTS.has(lower)) return true;
+  // Same cookie / password / search chrome that can appear as <a> text.
+  if (/^cookie\b/.test(lower)) return true;
+  if (/\bpassword\b/.test(lower)) return true;
+  if (/^search\b/.test(lower)) return true;
+  return false;
 }
 
 function pickPrice(html: string) {

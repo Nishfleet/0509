@@ -1056,7 +1056,7 @@ describe("CTA button-text fallback (v5, issue #949)", () => {
     });
   });
 
-  it("does not use action links for the fallback (links are navigation, not CTAs)", () => {
+  it("does not use navigation chrome links for the fallback", () => {
     const html = `<a href="/about">About us</a>`;
     expect(extractLandingPageSignals(html)).toMatchObject({
       ctaText: null,
