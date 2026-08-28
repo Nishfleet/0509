@@ -19,6 +19,11 @@ export interface SneakerResaleCopy {
   brandsKicker: string;
   brandsTitle: string;
   brandsDeck: string;
+  swingKicker: string;
+  swingTitle: string;
+  swingDeck: string;
+  swing: ReadonlyArray<{ brand: string; line: string }>;
+  swingSource: string;
   honestKicker: string;
   honestTitle: string;
   honest: ReadonlyArray<{ title: string; detail: string }>;
@@ -84,6 +89,22 @@ const EN: SneakerResaleCopy = {
   brandsTitle: "Real sneaker-resale advertisers, real ad pages.",
   brandsDeck:
     "These brands are running Meta ads right now. Each link opens the live ad page we built from real captures — the same proof a watchlist tracks.",
+  swingKicker: "Who's moving right now",
+  swingTitle: "The value-tier swing: Saucony over ASICS.",
+  swingDeck:
+    "The 30-day market signal is a shift away from £250 trainers toward value-tier running. We name it here so the page cannot read as evergreen while the market moves underneath it.",
+  swing: [
+    {
+      brand: "Saucony",
+      line: "Pulled ahead of ASICS in StockX's 2026 midyear 'Big Facts' — the value-tier brand buyers are switching to, not away from.",
+    },
+    {
+      brand: "ASICS",
+      line: "The incumbent Saucony is dethroning. Still running heavy Meta spend, which makes its offer and CTA moves the ones to watch.",
+    },
+  ],
+  swingSource:
+    "Source: StockX 2026 midyear 'Big Facts' report, via PRNewswire (2026-08-12). We cite the public report; we do not rehost it.",
   honestKicker: "Honest limits",
   honestTitle: "What this page does not pretend.",
   honest: [
@@ -187,6 +208,22 @@ const DE: SneakerResaleCopy = {
   brandsTitle: "Echte Sneaker-Resale-Werbetreibende, echte Anzeigenseiten.",
   brandsDeck:
     "Diese Marken schalten gerade Meta-Anzeigen. Jeder Link öffnet die Live-Anzeigenseite, die wir aus echten Erfassungen erstellt haben — derselbe Beleg, den eine Watchlist verfolgt.",
+  swingKicker: "Wer sich jetzt bewegt",
+  swingTitle: "Der Value-Tier-Swing: Saucony vor ASICS.",
+  swingDeck:
+    "Das 30-Tage-Marktsignal ist eine Wende weg von 250-Pfund-Schuhen hin zu Value-Tier-Laufschuhen. Wir nennen es hier, damit die Seite nicht evergreen wirkt, während sich der Markt darunter bewegt.",
+  swing: [
+    {
+      brand: "Saucony",
+      line: "In StockX' Halbjahres-Big-Facts-2026 an ASICS vorbeigezogen — die Value-Tier-Marke, zu der Käufer wechseln, nicht weg von ihr.",
+    },
+    {
+      brand: "ASICS",
+      line: "Der Platzhirsch, den Saucony verdrängt. Läuft weiterhin mit hohem Meta-Budget, deshalb sind seine Offer- und CTA-Änderungen die Beobachtung wert.",
+    },
+  ],
+  swingSource:
+    "Quelle: StockX Halbjahres-Big-Facts-2026, via PRNewswire (2026-08-12). Wir zitieren den öffentlichen Bericht; wir hosten ihn nicht neu.",
   honestKicker: "Ehrliche Grenzen",
   honestTitle: "Was diese Seite nicht behauptet.",
   honest: [
@@ -290,6 +327,22 @@ const JA: SneakerResaleCopy = {
   brandsTitle: "実在するスニーカーリセール広告主、実物の広告ページ。",
   brandsDeck:
     "これらのブランドは現在Meta広告を出しています。各リンクは実キャプチャから作成した広告ページを開きます。ウォッチリストが追跡するのと同じ証拠です。",
+  swingKicker: "今動いているのは",
+  swingTitle: "バリューティアの潮目：ASICSを抜いたSaucony。",
+  swingDeck:
+    "直近30日の市場シグナルは、250ポンドのスニーカーからバリューティアのランニングシューズへの転換です。市場が動いている間、ページが永遠の定石に見えないよう、ここに明記します。",
+  swing: [
+    {
+      brand: "Saucony",
+      line: "StockXの2026年上半期「Big Facts」でASICSを抜いた。買い手が離れる側ではなく、向かう側のバリューティアブランド。",
+    },
+    {
+      brand: "ASICS",
+      line: "Sauconyが追い落とす現王者。依然としてMeta広告に多額を投じており、だからこそオファーとCTAの変化が注目点になる。",
+    },
+  ],
+  swingSource:
+    "出典：StockX 2026年上半期「Big Facts」レポート、PRNewswire経由（2026-08-12）。公開レポートを引用するだけで、再ホストはしません。",
   honestKicker: "言わないこと",
   honestTitle: "このページが約束しない範囲。",
   honest: [
@@ -393,6 +446,22 @@ const PT_BR: SneakerResaleCopy = {
   brandsTitle: "Anunciantes reais de revenda de tênis, páginas de anúncio reais.",
   brandsDeck:
     "Essas marcas estão rodando anúncios no Meta agora. Cada link abre a página de anúncio ao vivo que montamos com capturas reais — a mesma prova que uma watchlist acompanha.",
+  swingKicker: "Quem está se movendo agora",
+  swingTitle: "A virada do value-tier: Saucony à frente da ASICS.",
+  swingDeck:
+    "O sinal de 30 dias do mercado é uma virada dos tênis de £250 para o value-tier de corrida. Nomeamos aqui para a página não parecer evergreen enquanto o mercado se move embaixo dela.",
+  swing: [
+    {
+      brand: "Saucony",
+      line: "Passou à frente da ASICS no 'Big Facts' de meio de ano 2026 da StockX — a marca value-tier para a qual os compradores estão indo, não saindo.",
+    },
+    {
+      brand: "ASICS",
+      line: "A incumbente que a Saucony está depando. Ainda roda muito orçamento no Meta, por isso os movimentos de oferta e CTA dela são os que valem acompanhar.",
+    },
+  ],
+  swingSource:
+    "Fonte: relatório 'Big Facts' de meio de ano 2026 da StockX, via PRNewswire (2026-08-12). Citar o relatório público; não o rehospedamos.",
   honestKicker: "Limite honesto",
   honestTitle: "O que esta página não vende.",
   honest: [
