@@ -224,11 +224,12 @@ function parseCreateTable(statement) {
   const close = matchingParen(statement, cursor);
   const definitions = splitTopLevel(statement, cursor + 1, close).map((span) => trimSpan(statement, span));
   const keys = [];
+  /** @type {string[]} parent tables this table references via FOREIGN KEY. */
+  const references = [];
   for (const definition of definitions) {
     const text = statement.slice(definition.trimmedStart, definition.trimmedEnd);
     const firstWord = readIdentifier(text, 0);
     if (!firstWord) continue;
-    const upper = text.toUpperCase();
     if (firstWord.normalized === "primary") {
       const match = /\bPRIMARY\s+KEY\s*\(/i.exec(text);
       if (!match) continue;
@@ -238,9 +239,24 @@ function parseCreateTable(statement) {
     } else if (/\bPRIMARY\s+KEY\b/i.test(text)) {
       keys.push(firstWord.normalized);
     }
-    void upper;
+    // Table-level `FOREIGN KEY (...) REFERENCES <parent>(...)` clause. A
+    // column-level `... REFERENCES <parent>(...)` is also matched: the regex
+    // keys on the REFERENCES keyword and reads the parent table name that
+    // follows it. Self-references (a row pointing at another row in the same
+    // table) are dropped — they cannot be satisfied by reordering across
+    // tables and are handled by `PRAGMA defer_foreign_keys=TRUE` within the
+    // table's own row block.
+    const fkMatch = /\bREFERENCES\s+/i.exec(text);
+    if (fkMatch) {
+      const refStart = definition.trimmedStart + fkMatch.index + fkMatch[0].length;
+      const ref = readIdentifier(statement, skipTrivia(statement, refStart));
+      if (ref) {
+        const parent = ref.normalized;
+        if (parent !== table.normalized) references.push(parent);
+      }
+    }
   }
-  return { table: table.normalized, keys: [...new Set(keys)] };
+  return { table: table.normalized, keys: [...new Set(keys)], references: [...new Set(references)] };
 }
 
 function parseInsert(statement) {
@@ -321,8 +337,8 @@ function isPragmaStatement(statement) {
 }
 
 /**
- * Hoist every `CREATE TABLE` ahead of the rows so a restore never inserts into
- * a child table whose parent table has not been created yet.
+ * Hoist every `CREATE TABLE` ahead of the rows, and order the rows so every
+ * parent table's rows load before its child tables' rows.
  *
  * A D1 export walks `sqlite_master` in creation order and emits each table
  * immediately followed by its rows, so the export order is the order the tables
@@ -343,9 +359,21 @@ function isPragmaStatement(statement) {
  * D1). `PRAGMA defer_foreign_keys=TRUE`, which the export emits, defers
  * constraint *violations* to commit; it cannot conjure a missing table.
  *
- * Creating every table first removes the dependency on creation order entirely:
- * indexes, triggers, and rows all land after every table exists. Order within
- * each group is preserved, so nothing else about the restore changes.
+ * Creating every table first removes the dependency on creation order for the
+ * schema. The 2026-08-28 failure showed the rows still had a creation-order
+ * dependency: after the table hoist every table exists, but a child row that
+ * references a parent row which has not been inserted yet still fails with
+ * `FOREIGN KEY constraint failed`. `wrangler d1 execute --file` does not wrap
+ * the file in a single transaction, so `defer_foreign_keys=TRUE` cannot bridge
+ * the gap across statements. Ordering the rows so parent tables load before
+ * their child tables removes that dependency too.
+ *
+ * Row ordering is a stable topological sort over the FK graph: tables with no
+ * FK references keep their original relative order, a child table's row block
+ * lands after all of its parent tables' row blocks, and a cycle (which the
+ * schema's own `PRAGMA defer_foreign_keys=TRUE` is designed to handle) keeps
+ * the original order so the deferred pragma resolves it within the cycle.
+ * INSERT order within a single table is always preserved.
  *
  * @param {string[]} statements
  * @returns {string[]}
@@ -367,7 +395,90 @@ export function orderRestoreStatements(statements) {
     if (parseCreateTable(statement)) tables.push(statement);
     else rest.push(statement);
   }
-  return [...leadingPragmas, ...tables, ...rest];
+  return [...leadingPragmas, ...tables, ...orderRowsByForeignKey(rest, tables)];
+}
+
+/**
+ * Stable topological sort of INSERT statements by foreign-key dependency, so a
+ * parent table's rows load before its child tables' rows. Non-INSERT statements
+ * (indexes, triggers, views) keep their position relative to the row stream and
+ * are never reordered past each other; only INSERT blocks move.
+ *
+ * @param {string[]} rest statements after the leading pragmas and CREATE TABLEs
+ * @param {string[]} tables CREATE TABLE statements, used to recover the FK graph
+ * @returns {string[]}
+ */
+function orderRowsByForeignKey(rest, tables) {
+  // FK graph: child table -> set of parent tables it references.
+  /** @type {Map<string, Set<string>>} */
+  const references = new Map();
+  for (const create of tables) {
+    const schema = parseCreateTable(create);
+    if (!schema) continue;
+    references.set(schema.table, new Set(schema.references));
+  }
+  // Group consecutive INSERTs by target table so each table's rows stay
+  // contiguous and in original order. A non-INSERT statement is its own group
+  // and never merges with an INSERT group, preserving index/trigger order.
+  /** @type {{ kind: "insert" | "other", table: string | null, items: string[] }[]} */
+  const groups = [];
+  for (const statement of rest) {
+    const insert = parseInsert(statement);
+    if (insert) {
+      const last = groups.at(-1);
+      if (last && last.kind === "insert" && last.table === insert.table) {
+        last.items.push(statement);
+      } else {
+        groups.push({ kind: "insert", table: insert.table, items: [statement] });
+      }
+    } else {
+      groups.push({ kind: "other", table: null, items: [statement] });
+    }
+  }
+  if (!groups.some((group) => group.kind === "insert")) return rest;
+  // Stable topo sort over the table names that have INSERT groups. Non-INSERT
+  // groups stay anchored in place; only INSERT groups are reordered.
+  const insertGroups = groups.filter((group) => group.kind === "insert");
+  /** @type {string[]} */ const orderedTables = [];
+  /** @type {Set<string>} */ const placed = new Set();
+  /** @type {Map<string, typeof insertGroups>} */ const groupsByTable = new Map();
+  for (const group of insertGroups) {
+    if (!group.table) continue;
+    const list = groupsByTable.get(group.table);
+    if (list) list.push(group);
+    else groupsByTable.set(group.table, [group]);
+  }
+  const visit = (table) => {
+    if (placed.has(table)) return;
+    placed.add(table);
+    const parents = references.get(table);
+    if (parents) {
+      for (const parent of parents) {
+        if (groupsByTable.has(parent)) visit(parent);
+      }
+    }
+    orderedTables.push(table);
+  };
+  // Visit in original first-appearance order for stability; a cycle leaves the
+  // original order intact for the cycle's members so defer_foreign_keys handles
+  // it within the cycle.
+  for (const group of insertGroups) {
+    if (group.table) visit(group.table);
+  }
+  // Flatten each table's INSERT groups in original order; a table with
+  // non-consecutive row blocks (not produced by a real D1 export, but kept
+  // robust) emits all of them together after its parents.
+  /** @type {string[][]} */ const orderedItems = [];
+  for (const table of orderedTables) {
+    for (const group of groupsByTable.get(table) ?? []) orderedItems.push(group.items);
+  }
+  // Re-emit the group stream: non-INSERT groups keep their slots and original
+  // order; INSERT group slots are replaced in order by the topo-ordered blocks.
+  let nextInsert = 0;
+  return groups.map((group) => {
+    if (group.kind !== "insert") return group.items;
+    return orderedItems[nextInsert++] ?? group.items;
+  }).flat();
 }
 
 function splitStatements(sql) {
