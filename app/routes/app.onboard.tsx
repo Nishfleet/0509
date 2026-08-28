@@ -1,5 +1,9 @@
 import { redirect } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
+
+import { SignupFirstBriefView } from "~/components/signup-first-brief-view";
+import type { SignupFirstBriefLoaderData } from "~/lib/first-brief";
 
 const COMPAT_COOKIE = "f9_onboard_compat";
 
@@ -11,6 +15,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   await requireSession(env, request);
 
   const source = new URL(request.url);
+
+  // BET 7 (issue #1276): the same-session first brief. When the feature flag
+  // is on and the user lands on ?step=first-brief, render the inline brief
+  // instead of redirecting to the dashboard. The flag defaults off; the
+  // redirect below remains the path for everyone else.
+  if (source.searchParams.get("step") === "first-brief") {
+    const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
+    if (isSignupFirstBriefEnabled(env)) {
+      return firstBriefLoader(env, context, request);
+    }
+  }
+
   if (requestHasCompatCookie(request)) {
     const { requireWorkspaceSession } = await import("~/lib/auth.server");
     const { getWorkspaceBranding } = await import("~/lib/data.server");
@@ -77,7 +93,109 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 export default function RetiredOnboardRoute() {
+  const data = useLoaderData<typeof loader>() as
+    | SignupFirstBriefLoaderData
+    | null;
+  if (data && data.step === "first-brief") {
+    return <SignupFirstBriefView data={data} />;
+  }
   return null;
+}
+
+/**
+ * BET 7 (issue #1276): the inline first-brief loader. Loads the filed
+ * first-brief digest (filing it if needed, same as the dashboard), resolves
+ * the ads its items reference, builds the inline payload, and emits the
+ * `funnel_first_brief_viewed` event. Returns a waiting state when no
+ * evidence-linked brief is available yet — the activation scan may still be
+ * in flight.
+ */
+async function firstBriefLoader(
+  env: ReturnType<typeof import("~/lib/context.server").getEnv>,
+  context: LoaderFunctionArgs["context"],
+  request: Request,
+): Promise<SignupFirstBriefLoaderData> {
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
+  const { listDigests, listAdsByIds, listWatchlists } = await import(
+    "~/lib/data.server"
+  );
+  const {
+    findFirstBriefDigest,
+    hasEvidenceLinkedItem,
+    buildSignupFirstBriefPayload,
+  } = await import("~/lib/first-brief");
+  const { emitFunnelFirstBriefViewed } = await import(
+    "~/lib/funnel-measurement.server"
+  );
+  const { shouldEnsureFirstBrief } = await import("~/lib/first-brief");
+
+  const { workspaceUserId } = await requireWorkspaceSession(env, request);
+
+  const watchlists = await listWatchlists(env, workspaceUserId);
+  let digests = await listDigests(env, workspaceUserId);
+
+  // File the first brief if the activation scan has completed but no digest
+  // exists yet — same gate the dashboard uses.
+  if (shouldEnsureFirstBrief({ watchlists, digests })) {
+    try {
+      const { ensureFirstBriefForWorkspace } = await import(
+        "~/lib/first-brief.server"
+      );
+      await ensureFirstBriefForWorkspace(env, workspaceUserId);
+      digests = await listDigests(env, workspaceUserId);
+    } catch {
+      // The waiting state below handles a missing brief; a filing failure
+      // must never 500 the inline surface.
+    }
+  }
+
+  const firstBrief = findFirstBriefDigest(digests);
+  const hasEvidence = firstBrief && hasEvidenceLinkedItem(firstBrief.items);
+
+  if (hasEvidence && firstBrief) {
+    emitFunnelFirstBriefViewed(env, request);
+  }
+
+  if (!firstBrief || !hasEvidence) {
+    // The activation scan is still in flight. Render the waiting state — the
+    // client polls the dashboard's first-scan status endpoint.
+    return {
+      step: "first-brief",
+      status: "waiting",
+      watchlistName:
+        watchlists.find((w) => w.isActive)?.targetLabel ?? null,
+    };
+  }
+
+  // Collect ad ids from the digest items so we can enrich the payload with
+  // headline / CTA / offer text.
+  const adIds: string[] = [];
+  for (const item of firstBrief.items) {
+    const metadata = (item.metadata ?? {}) as Record<string, unknown>;
+    if (typeof metadata.adId === "string" && metadata.adId) {
+      adIds.push(metadata.adId);
+    }
+  }
+  const ads = await listAdsByIds(env, adIds);
+  const payload = buildSignupFirstBriefPayload({
+    digest: firstBrief,
+    ads: ads as never,
+  });
+
+  if (!payload) {
+    return {
+      step: "first-brief",
+      status: "waiting",
+      watchlistName:
+        watchlists.find((w) => w.isActive)?.targetLabel ?? null,
+    };
+  }
+
+  return {
+    step: "first-brief",
+    status: "ready",
+    brief: payload,
+  };
 }
 
 function requestHasCompatCookie(request: Request) {

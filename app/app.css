@@ -16749,3 +16749,77 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
     padding: 8px 0 12px;
   }
 }
+
+/* BET 7 (issue #1276) — Signup first brief inline surface
+   (/app/onboard?step=first-brief). Reuses the .f9-wk-brief card chrome
+   from BL-032 and adds the inline layout for the same-session brief. */
+.f9-signup-first-brief {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.f9-signup-first-brief h1 {
+  font-size: 1.5rem;
+  line-height: 1.3;
+  margin: 0 0 4px;
+}
+
+.f9-signup-first-brief-waiting {
+  padding: 32px 0;
+  text-align: center;
+}
+
+.f9-signup-first-brief-waiting p {
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+
+.f9-signup-first-brief-body {
+  padding: 16px 0;
+}
+
+.f9-signup-first-brief-headline {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
+.f9-signup-first-brief-fields {
+  margin: 0 0 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.f9-signup-first-brief-field dt {
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+  margin: 0 0 2px;
+}
+
+.f9-signup-first-brief-field dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.f9-signup-first-brief-what-changed {
+  font-style: italic;
+  color: var(--ink-soft);
+  margin: 0 0 16px;
+}
+
+.f9-signup-first-brief-evidence a {
+  font-weight: 600;
+}
+
+.f9-signup-first-brief-footer {
+  border-top: 1px solid var(--rule);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+.f9-signup-first-brief-footer p {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  margin: 0 0 12px;
+}
