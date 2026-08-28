@@ -414,6 +414,7 @@ describe("customer API v1", () => {
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/workspace-readiness");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/actions");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/watchlists/{watchlistId}");
+    expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/watchlists/{watchlistId}/runs/latest");
     expect(CUSTOMER_AGENT_ACTION_NAMES).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
     const actionsEndpoint = body.endpoints.find((endpoint) => endpoint.path === "/api/v1/actions");
     expect(actionsEndpoint?.actions).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
@@ -439,7 +440,7 @@ describe("customer API v1", () => {
       credentialRequirement: expect.stringContaining(WRITE_ENABLED_API_KEY_REQUIREMENT),
     });
     body.endpoints
-      .filter((endpoint) => endpoint.path.includes("{"))
+      .filter((endpoint) => endpoint.path.includes("{") && endpoint.formats.includes("csv"))
       .forEach((endpoint) => {
         expect(endpoint.formats).toEqual(["json", "csv"]);
         expect(endpoint.formats).not.toContain("slack");

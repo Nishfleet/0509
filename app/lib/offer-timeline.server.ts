@@ -7,8 +7,9 @@
  */
 
 import { queryAll } from "~/lib/data/d1.server";
-import { parseJson } from "~/lib/data/helpers.server";
+import { parseJson, type JsonRecord } from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
+import type { CaptureAttemptReasonCode } from "~/lib/capture-attempt-reason-code";
 import {
   backfillEvidenceNote,
   buildOfferLedger,
@@ -101,6 +102,94 @@ export async function loadOfferTimeline(
 
 export function isOfferTimelineShareEnabled(env: AppEnv): boolean {
   return env.PUBLIC_OFFER_TIMELINE_SHARE?.trim() !== "0";
+}
+
+/**
+ * Public capture-failure visibility for `/ads/:domain` (issue #1289, accept
+ * criterion #3). Loads recent non-succeeded proof captures for landing-page
+ * URLs that belong to `domain`, so the public page can show "we checked this
+ * URL and it did not produce an alert, here is why" — read-only, no alert.
+ *
+ * Bounded D1 read only; never triggers a live capture. Returns an empty list
+ * when D1 is absent or the read fails (the page never 500s on this surface).
+ */
+export interface DomainCaptureFailure {
+  id: string;
+  status: "capture_failed" | "skipped_due_to_budget";
+  reasonCode: CaptureAttemptReasonCode | null;
+  urlChecked: string | null;
+  checkedAt: string;
+}
+
+export async function loadDomainCaptureFailures(
+  env: AppEnv,
+  input: { domain: string; limit?: number },
+): Promise<DomainCaptureFailure[]> {
+  if (!env.DB) return [];
+  const limit = Math.min(Math.max(input.limit ?? 8, 1), 20);
+  const bindings = domainUrlBindings(input.domain);
+  // Match proof_target.landing_page_url against the domain's URL shapes.
+  // 12 LIKE/equality predicates + LIMIT = 14 bound params, well under D1's
+  // 100-param cap.
+  const predicates = bindings.map(() => "proof_target.landing_page_url LIKE ? ESCAPE '\\'").join(" OR ");
+  try {
+    const rows = await queryAll<{
+      id: string;
+      status: string;
+      failure_code: string | null;
+      skip_reason: string | null;
+      capture_metadata_json: string;
+      attempted_at: string;
+      landing_page_url: string | null;
+    }>(
+      env,
+      `
+        SELECT
+          proof_capture.id,
+          proof_capture.status,
+          proof_capture.failure_code,
+          proof_capture.skip_reason,
+          proof_capture.capture_metadata_json,
+          proof_capture.attempted_at,
+          proof_target.landing_page_url
+        FROM proof_capture
+        INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+        WHERE (${predicates})
+          AND proof_capture.status != 'succeeded'
+          AND proof_capture.status != 'pending'
+        ORDER BY proof_capture.attempted_at DESC
+        LIMIT ?
+      `,
+      ...bindings,
+      limit,
+    );
+    const { toPublicCaptureStatus, toPublicReasonCode } = await import(
+      "~/lib/capture-attempt-reason-code"
+    );
+    return rows
+      .map((row) => {
+        const metadata = parseJson<JsonRecord>(row.capture_metadata_json, {});
+        const internalCode =
+          row.failure_code ??
+          (typeof metadata.unreadableReasonCode === "string"
+            ? metadata.unreadableReasonCode
+            : null) ??
+          row.skip_reason ??
+          null;
+        const status = toPublicCaptureStatus(row.status);
+        if (status === "succeeded") return null;
+        return {
+          id: row.id,
+          status,
+          reasonCode: toPublicReasonCode(internalCode),
+          urlChecked: row.landing_page_url,
+          checkedAt: row.attempted_at,
+        } satisfies DomainCaptureFailure;
+      })
+      .filter((row): row is DomainCaptureFailure => row !== null);
+  } catch {
+    return [];
+  }
 }
 
 function domainUrlBindings(domain: string): string[] {

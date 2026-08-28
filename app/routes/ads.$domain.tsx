@@ -57,6 +57,8 @@ import type {
 } from "~/lib/brand-page.server";
 import { countBrandOwnedAds } from "~/lib/brand-page.server";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
+import type { DomainCaptureFailure } from "~/lib/offer-timeline.server";
+import { formatCaptureAttemptReasonLabel } from "~/lib/capture-attempt-reason-code";
 import {
   adsPageServiceJsonLd,
   canonicalUrl,
@@ -130,6 +132,13 @@ export interface BrandPageLoaderData {
   adLibraryCountry: string | null;
   noindex: boolean;
   canonicalPath: string;
+  /**
+   * Recent landing-page captures for this domain that did NOT produce an
+   * alert — failed or skipped checks with a public reason code (issue #1289).
+   * Read-only surface: a failed capture is never an alert, but it is visible
+   * so the silence is provable. Empty when nothing is stored yet.
+   */
+  captureFailures: DomainCaptureFailure[];
 }
 
 export async function loader({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
@@ -196,6 +205,12 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     });
   }
 
+  // Issue #1289: surface failed/suppressed landing-page captures for this
+  // domain so the public page names what we checked and why it did not
+  // become an alert. Bounded D1 read; degrades to empty on any failure.
+  const { loadDomainCaptureFailures } = await import("~/lib/offer-timeline.server");
+  const captureFailures = await loadDomainCaptureFailures(env, { domain: brand.domain });
+
   const now = new Date();
   const freshness = snapshot
     ? resolveBrandPageFreshness(snapshot.fetchedAt, now)
@@ -245,6 +260,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
     canonicalPath: `/ads/${brand.domain}`,
+    captureFailures,
   };
 }
 
@@ -479,6 +495,68 @@ function BrandOfferTimeline({
   );
 }
 
+/**
+ * Capture-failure visibility on the public `/ads/:domain` page (issue #1289,
+ * accept criterion #3). Lists recent landing-page checks that did NOT
+ * produce an alert — failed or skipped captures with a public reason — so a
+ * buyer can see what was checked and why the silence is real. Read-only: a
+ * failed capture is never an alert, but it is never hidden either. Hidden
+ * when nothing is stored (never an empty card).
+ */
+function BrandCaptureFailures({
+  failures,
+}: {
+  failures: DomainCaptureFailure[];
+}) {
+  if (failures.length === 0) {
+    return null;
+  }
+  return (
+    <section className="f9-ads-sec" aria-labelledby="brand-capture-failures-title">
+      <div className="f9-container">
+        <div className="f9-ads-sec-head">
+          <div className="f9-ads-sec-head-left">
+            <span className="f9-ads-sec-eyebrow">Checks that did not become an alert</span>
+            <h2 id="brand-capture-failures-title">What we checked, even when it didn’t alert</h2>
+          </div>
+          <span className="f9-ads-sec-meta">
+            {`${failures.length} ${failures.length === 1 ? "check" : "checks"} on record`}
+          </span>
+        </div>
+        <ul className="f9-quiet-list">
+          {failures.map((failure) => {
+            const reason = formatCaptureAttemptReasonLabel(failure.reasonCode);
+            const suffix = failure.reasonCode ? ` (${failure.reasonCode})` : "";
+            const where = failure.urlChecked ? ` · ${shortUrl(failure.urlChecked)}` : "";
+            return (
+              <li key={failure.id} className="f9-quiet-list-item">
+                <span className="f9-quiet-list-copy">
+                  {`${reason}${where}.${suffix} No alert sent.`}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="f9-wk-dim">
+          Every check we ran is listed — including the ones that didn’t produce an
+          alert, with the reason. A failed capture is never an alert, but it is never
+          hidden either.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function shortUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname === "/" ? "" : parsed.pathname;
+    return `${parsed.host}${path}`;
+  } catch {
+    return url.length > 60 ? `${url.slice(0, 57)}…` : url;
+  }
+}
+
 function BrandAdsResults({
   data,
   liveSearchPath,
@@ -586,6 +664,7 @@ function BrandAdsResults({
       ) : null}
 
       <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} />
+      <BrandCaptureFailures failures={data.captureFailures} />
 
       {/* 5. THE ADS — the wall of real creatives */}
       <section className="f9-ads-sec" aria-labelledby="brand-wall-title">
@@ -887,6 +966,7 @@ function BrandAdsShell({
         </div>
 
         <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} />
+        <BrandCaptureFailures failures={data.captureFailures} />
 
         <div className="f9-ads-example" aria-hidden="true">
           <span className="f9-ads-example-tag">Example — this is what a watched brand looks like</span>
