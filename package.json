@@ -22,6 +22,7 @@
     "canary:fanout": "node scripts/monitoring-fanout-canary.mjs",
     "canary:presence": "node scripts/presence-website-canary.mjs",
     "canary:presence-pilot": "node scripts/presence-pilot-canary.mjs",
+    "canary:proof-budget-skip-surface": "node scripts/canary-proof-budget-skip-surface.mjs",
     "test:presence-load": "node scripts/presence-load-test.mjs",
     "canary:prod": "node scripts/prod-canary.mjs",
     "canary:bet2": "node scripts/bet2-live-verification.mjs --json",
