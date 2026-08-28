@@ -9,6 +9,8 @@ import {
 	evaluateWebsitePageChanges,
 	normalizeCompetitorPageContent,
 	selectCompetitorSiteRunBatch,
+	WEBSITE_PAGE_KIND_LABELS,
+	websitePageKindLabel,
 } from "~/lib/competitor-site-content";
 import type {
 	CompetitorPageInventory,
@@ -188,6 +190,23 @@ describe("classifyCompetitorSitePage", () => {
 		expect(classifyCompetitorSitePage("https://example.com/weird-page")).toBe("other");
 	});
 
+	it("classifies careers and legal as first-class kinds by path segment", () => {
+		// Q4 (#1385): careers and legal/policy are distinct surfaces, not
+		// folded into about/other.
+		expect(classifyCompetitorSitePage("https://example.com/careers")).toBe("careers");
+		expect(classifyCompetitorSitePage("https://example.com/careers/engineer")).toBe("careers");
+		expect(classifyCompetitorSitePage("https://example.com/jobs")).toBe("careers");
+		expect(classifyCompetitorSitePage("https://example.com/hiring")).toBe("careers");
+		expect(classifyCompetitorSitePage("https://example.com/legal")).toBe("legal");
+		expect(classifyCompetitorSitePage("https://example.com/privacy")).toBe("legal");
+		expect(classifyCompetitorSitePage("https://example.com/privacy-policy")).toBe("legal");
+		expect(classifyCompetitorSitePage("https://example.com/terms")).toBe("legal");
+		expect(classifyCompetitorSitePage("https://example.com/terms-of-service")).toBe("legal");
+		expect(classifyCompetitorSitePage("https://example.com/cookies")).toBe("legal");
+		expect(classifyCompetitorSitePage("https://example.com/gdpr")).toBe("legal");
+		expect(classifyCompetitorSitePage("https://example.com/imprint")).toBe("legal");
+	});
+
 	it("uses first-segment-wins deterministically", () => {
 		expect(classifyCompetitorSitePage("https://example.com/pricing/changelog")).toBe("pricing");
 		expect(classifyCompetitorSitePage("https://example.com/changelog/pricing")).toBe("changelog");
@@ -201,6 +220,18 @@ describe("classifyCompetitorSitePage", () => {
 		expect(classifyCompetitorSitePage("https://example.com/x", { title: "What's new" })).toBe(
 			"changelog",
 		);
+		expect(classifyCompetitorSitePage("https://example.com/x", { title: "Privacy Policy" })).toBe(
+			"legal",
+		);
+		expect(classifyCompetitorSitePage("https://example.com/x", { title: "Terms of Service" })).toBe(
+			"legal",
+		);
+		expect(classifyCompetitorSitePage("https://example.com/x", { title: "We're hiring" })).toBe(
+			"careers",
+		);
+		expect(classifyCompetitorSitePage("https://example.com/x", { title: "Open roles" })).toBe(
+			"careers",
+		);
 		expect(
 			classifyCompetitorSitePage("https://example.com/x", { title: "Some random page" }),
 		).toBe("other");
@@ -212,6 +243,38 @@ describe("classifyCompetitorSitePage", () => {
 		);
 		expect(classifyCompetitorSitePage("not a url", { path: "/pricing" })).toBe("pricing");
 		expect(classifyCompetitorSitePage("not a url")).toBe("other");
+	});
+});
+
+describe("WEBSITE_PAGE_KIND_LABELS / websitePageKindLabel", () => {
+	it("provides a display label for every kind in the vocabulary", () => {
+		const kinds: CompetitorSitePageKind[] = [
+			"home",
+			"pricing",
+			"changelog",
+			"landing",
+			"product",
+			"blog",
+			"docs",
+			"about",
+			"careers",
+			"legal",
+			"contact",
+			"other",
+		];
+		for (const kind of kinds) {
+			expect(WEBSITE_PAGE_KIND_LABELS[kind]).toEqual(expect.any(String));
+			expect(WEBSITE_PAGE_KIND_LABELS[kind].length).toBeGreaterThan(0);
+			expect(websitePageKindLabel(kind)).toBe(WEBSITE_PAGE_KIND_LABELS[kind]);
+		}
+	});
+
+	it("labels the new first-class kinds distinctly", () => {
+		expect(WEBSITE_PAGE_KIND_LABELS.careers).toBe("Careers");
+		expect(WEBSITE_PAGE_KIND_LABELS.legal).toBe("Legal & Policy");
+		// Distinct from the kinds they used to fold into.
+		expect(WEBSITE_PAGE_KIND_LABELS.careers).not.toBe(WEBSITE_PAGE_KIND_LABELS.about);
+		expect(WEBSITE_PAGE_KIND_LABELS.legal).not.toBe(WEBSITE_PAGE_KIND_LABELS.other);
 	});
 });
 

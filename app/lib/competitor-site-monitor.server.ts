@@ -104,6 +104,8 @@ export const PAGE_KIND_CADENCE: Record<WebsitePageKind, WebsitePageCadence> = {
   product: "daily",
   blog: "daily",
   docs: "daily",
+  careers: "daily",
+  legal: "daily",
   about: "weekly",
   contact: "weekly",
   other: "weekly",
@@ -181,7 +183,7 @@ export function selectWebsitePagesForRun(
 
 // ==== Classification ====
 
-/** Legal path segments map to `other` in the schema vocabulary (packet step 2). */
+/** Legal path segments map to the `legal` page kind (first-class Q4). */
 const LEGAL_PATH_SEGMENTS = new Set([
   "legal",
   "privacy",
@@ -218,9 +220,9 @@ const LANDING_PATH_SEGMENTS = new Set([
 
 /**
  * Classify a page URL into the schema's page_kind vocabulary, honoring the
- * packet's mapping: `/updates` → changelog, legal paths → `other`, offer-ish
+ * packet's mapping: `/updates` → changelog, legal paths → `legal`, offer-ish
  * paths → `landing`. Reuses the content core's deterministic classification
- * for everything else.
+ * for everything else (careers now maps to its own kind there).
  */
 export function classifyWebsitePageKind(url: string): WebsitePageKind {
   let pathname: string;
@@ -234,7 +236,7 @@ export function classifyWebsitePageKind(url: string): WebsitePageKind {
     .map((segment) => segment.trim())
     .filter(Boolean);
   if (segments.length > 0 && LEGAL_PATH_SEGMENTS.has(segments[0]!)) {
-    return "other";
+    return "legal";
   }
   if (segments.some((segment) => segment === "updates")) {
     return "changelog";
