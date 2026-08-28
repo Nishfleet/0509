@@ -1122,6 +1122,13 @@ export interface FirstWatchlistScanRunDescriptor {
   executionKey: string;
   workflowInstanceId: string;
   queuedAt: string;
+  /**
+   * Optional activation reason carried through to the Workflow payload for
+   * observability. `signup_first_brief` marks the BET 7 same-session capture
+   * queued from onboarding (issue #1276). Absent for the default activation
+   * path. No D1 column carries this — it is a Workflow-param-only signal.
+   */
+  reason?: "signup_first_brief";
 }
 
 export interface FirstWatchlistScanWorkflowParams {
@@ -1131,6 +1138,8 @@ export interface FirstWatchlistScanWorkflowParams {
   executionKey: string;
   workflowInstanceId: string;
   queuedAt: string;
+  /** See {@link FirstWatchlistScanRunDescriptor.reason}. */
+  reason?: "signup_first_brief";
 }
 
 async function requeueClaimedFirstWatchlistScan(
@@ -1320,6 +1329,7 @@ async function finishDeniedFirstWatchlistScan(
 export async function prepareFirstWatchlistScanRun(
   env: AppEnv,
   watchlist: WatchlistRecord,
+  options?: { reason?: "signup_first_brief" },
 ) {
   const executionKey = firstWatchlistScanExecutionKey(watchlist.id);
   const activeRun = await bindD1Named(
@@ -1367,6 +1377,7 @@ export async function prepareFirstWatchlistScanRun(
     executionKey,
     workflowInstanceId: await buildMonitoringWorkflowInstanceId(executionKey),
     queuedAt: row?.queued_at ?? new Date().toISOString(),
+    ...(options?.reason ? { reason: options.reason } : {}),
   } satisfies FirstWatchlistScanRunDescriptor;
 }
 
@@ -1509,8 +1520,9 @@ export async function runFirstWatchlistScanWorkflowJob(
 export async function processFirstWatchlistScanQueue(
   env: AppEnv,
   watchlist: WatchlistRecord,
+  options?: { reason?: "signup_first_brief" },
 ) {
-  const descriptor = await prepareFirstWatchlistScanRun(env, watchlist);
+  const descriptor = await prepareFirstWatchlistScanRun(env, watchlist, options);
   await markOrchestratedRunDispatched(env, {
     runId: descriptor.runId,
     workflowInstanceId: descriptor.workflowInstanceId,
@@ -1547,6 +1559,64 @@ export function queueFirstWatchlistScan(
   }
   // Non-D1 test/demo environments retain the request-lifetime compatibility
   // path. Production and release-proof environments must use the durable path.
+  const work = runFirstWatchlistScanWithPlanCap(env, watchlist);
+  ctx.waitUntil(
+    work.catch((error) => {
+      console.error(
+        `First scan failed for watchlist ${watchlist.id}; the scheduled scan will retry.`,
+        error,
+      );
+    }),
+  );
+
+  return Promise.resolve(true);
+}
+
+/**
+ * BET 7 (issue #1276): the same-session first-brief activation path. Queues
+ * the existing activation scan with a `signup_first_brief` reason so the
+ * Workflow payload and the `first_brief_signup_capture_queued` log line carry
+ * the activation origin. The scan itself, the first-brief filing, and the
+ * email delivery are unchanged — this only adds the reason and the gate.
+ *
+ * Returns true when a scan was queued (or already in flight), false when the
+ * watchlist was already scanned or missing. The gate (`SIGNUP_FIRST_BRIEF_ENABLED`,
+ * default off) is checked by the caller before reaching here so the redirect
+ * target stays the caller's decision.
+ */
+export async function queueFirstWatchlistScanForSignupFirstBrief(
+  env: AppEnv,
+  ctx: ExecutionContext | undefined,
+  watchlist: WatchlistRecord | null | undefined,
+) {
+  if (!watchlist || watchlist.lastScannedAt) {
+    return Promise.resolve(false);
+  }
+
+  try {
+    const { logAppEvent } = await import("~/lib/log.server");
+    logAppEvent(
+      "info",
+      "first_brief_signup_capture_queued",
+      "Activation scan queued for the same-session first brief",
+      { details: { watchlistId: watchlist.id, reason: "signup_first_brief" } },
+    );
+  } catch {
+    // Observability must never block the activation dispatch.
+  }
+
+  if (env.DB) {
+    return prepareFirstWatchlistScanRun(env, watchlist, {
+      reason: "signup_first_brief",
+    }).then(async (descriptor) => {
+      const dispatch = await dispatchFirstWatchlistScanWorkflow(env, descriptor);
+      return dispatch.status !== "terminal";
+    });
+  }
+
+  if (!ctx) {
+    return Promise.resolve(false);
+  }
   const work = runFirstWatchlistScanWithPlanCap(env, watchlist);
   ctx.waitUntil(
     work.catch((error) => {

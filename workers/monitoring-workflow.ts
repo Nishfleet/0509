@@ -43,6 +43,16 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
   async run(event: WorkflowEvent<MonitoringWorkflowParams>, step: WorkflowStep) {
     if (event.payload.kind === "first_scan") {
       const firstScanPayload = event.payload as FirstWatchlistScanWorkflowParams;
+      if (firstScanPayload.reason === "signup_first_brief") {
+        console.log(
+          JSON.stringify({
+            level: "info",
+            operation: "first_brief_signup_capture_started",
+            message: "Activation scan started for the same-session first brief",
+            details: { watchlistId: firstScanPayload.watchlistId },
+          }),
+        );
+      }
       return step.do(
         "run-first-watchlist-scan",
         {
