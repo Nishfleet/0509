@@ -277,6 +277,49 @@ function trailCapturedAt(ad: AdRecord, fetchedAt: string): string | null {
   return ad.lastSeenAt?.trim() || ad.firstSeenAt?.trim() || fetchedAt;
 }
 
+/** Fresh window for the proof-brief timeline. Mirrors the proof-strip
+ *  `PROOF_CAPTURE_FRESH_DAYS` in marketing.tsx: a creative whose first-seen
+ *  date (Meta Ad Library `ad_creation_time`) is older than this is a
+ *  long-running ad, not a freshly captured one. */
+const PROOF_TIMELINE_FRESH_DAYS = 30;
+
+function captureAgeDays(iso: string, now: Date): number {
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    ? new Date(`${iso}T00:00:00.000Z`)
+    : new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return Infinity;
+  return Math.floor((now.getTime() - parsed.getTime()) / 86_400_000);
+}
+
+/** Format a timeline first-seen date with the year ALWAYS shown. A timeline
+ *  spans capture dates that can cross UTC years; omitting the year on a
+ *  same-year entry ("Jul 16") next to a prior-year sibling ("Sep 4, 2025")
+ *  is ambiguous — a reader cannot tell which year "Jul 16" belongs to
+ *  (#1286/#1343 live regression on the proof brief). */
+function formatTimelineFirstSeen(iso: string, now: Date): string {
+  void now;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const parsed = new Date(`${iso}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) return "a recent check";
+    return parsed.toLocaleString("en", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  }
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "a recent check";
+  return parsed.toLocaleString("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
+}
+
 function buildInsights(ads: AdRecord[], fetchedAt: string, now: Date) {
   const topHooks = uniqueTexts(ads.map((ad) => ad.hook || ad.previewHeadline)).slice(0, 3);
   const landingCount = ads.filter((ad) => ad.landingPageUrl?.trim()).length;
@@ -293,7 +336,19 @@ function buildInsights(ads: AdRecord[], fetchedAt: string, now: Date) {
     const dateKey = firstSeen.slice(0, 10);
     if (seenDates.has(dateKey)) continue;
     seenDates.add(dateKey);
-    timeline.push(`Creative started running ${formatCapturedAt(firstSeen, now)}`);
+    const label = formatTimelineFirstSeen(firstSeen, now);
+    // The per-row first-seen date is the Meta Ad Library ad_creation_time,
+    // not the moment we fetched the cache. Framing a year-old first-seen
+    // date as "Creative started running <old date>" next to the header's
+    // "Captured <today>" reads as an 11-month contradiction (#1286/#1343,
+    // which the proof-strip fix left live on the proof-brief timeline).
+    // "On record since" keeps the honest first-seen fact while matching the
+    // strip's "On record" language so the only capture CLOCK on the page is
+    // the header-level fetch date.
+    const stale = captureAgeDays(firstSeen, now) > PROOF_TIMELINE_FRESH_DAYS;
+    timeline.push(
+      stale ? `Creative on record since ${label}` : `Creative started running ${label}`,
+    );
     if (timeline.length >= 3) break;
   }
   if (timeline.length === 0) {
