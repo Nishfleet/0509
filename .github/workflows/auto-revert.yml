@@ -84,48 +84,59 @@ jobs:
               gh issue create --repo "$REPO" --title "$title" --body "$body" --label auto-revert-halt
             fi
           }
+          # A halt is a designed, successful outcome: the guard detected a
+          # situation a blind revert would worsen (a red revert, a moved main,
+          # or an infra fault across consecutive commits) and filed an issue so
+          # a human can decide. The filed issue is the signal — the workflow
+          # run must stay green so it does not double a deploy-failure storm
+          # with its own GitHub failure email (0509#1355). halt exits 0 only
+          # AFTER the issue is filed; if `gh issue create`/`comment` fails,
+          # `set -euo pipefail` aborts non-zero before `exit 0` is reached, so
+          # a halt that could not record itself still fails loud.
+          halt_and_exit () {
+            halt "$1" "$2"
+            exit 0
+          }
           case "$subject" in
             revert:*|Revert*)
-              halt "AUTO-REVERT HALT: revert commit itself is red on main" "The failing run's head commit is itself a revert, so an automatic revert would loop.
+              halt_and_exit "AUTO-REVERT HALT: revert commit itself is red on main" "The failing run's head commit is itself a revert, so an automatic revert would loop.
 
           - Failing run: $RUN_NAME — $RUN_URL
           - Red commit: \`$HEAD_SHA\` — \`$subject\`
 
           One level of automatic undo only. A red revert is a structural stop; a human must look."
-              exit 1
               ;;
           esac
           main_head="$(git rev-parse HEAD)"
           if [ "$main_head" != "$HEAD_SHA" ]; then
-            halt "AUTO-REVERT HALT: main moved after the red commit" "main's HEAD no longer matches the failing commit, so a blind revert could restore the wrong state.
+            halt_and_exit "AUTO-REVERT HALT: main moved after the red commit" "main's HEAD no longer matches the failing commit, so a blind revert could restore the wrong state.
 
           - Failing run: $RUN_NAME — $RUN_URL
           - Red commit: \`$HEAD_SHA\` — \`$subject\`
           - main HEAD now: \`$main_head\`
 
           Human-order problem; a human must decide the revert order."
-            exit 1
           fi
           # Repeated-failure guard (Nish, 2026-08-25): if the SAME workflow
           # also concluded failure for the parent of the red commit, the fault
           # is infrastructural (deploy pipeline, secrets, provider) rather than
           # this commit — reverting would just re-trigger the same failure and
           # the next red run would revert the revert, looping. Halt instead.
-          # Mirrors the loop/freshness guards' style: halt issue + exit 1.
+          # Mirrors the loop/freshness guards' style: halt issue + exit 0
+          # (halt is a designed success; the filed issue is the signal).
           parent_sha="$(git rev-parse --verify "${HEAD_SHA}^" 2>/dev/null || true)"
           if [ -n "$parent_sha" ]; then
             parent_failed="$(gh api "repos/$REPO/actions/runs?branch=main&head_sha=$parent_sha" \
               --paginate --jq '.workflow_runs[]? | select(.name=="'"$RUN_NAME"'") | select(.conclusion=="failure") | .id' 2>/dev/null \
               | head -n1 || true)"
             if [ -n "$parent_failed" ]; then
-              halt "AUTO-REVERT HALT: $RUN_NAME failing across consecutive commits — infra fault, not this commit" "The same workflow (\`$RUN_NAME\`) also failed on the parent commit, so the failure is infrastructural and reverting this commit would loop.
+              halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failing across consecutive commits — infra fault, not this commit" "The same workflow (\`$RUN_NAME\`) also failed on the parent commit, so the failure is infrastructural and reverting this commit would loop.
 
           - Failing run: $RUN_NAME — $RUN_URL
           - Red commit: \`$HEAD_SHA\` — \`$subject\`
           - Parent commit: \`$parent_sha\` (also failed \`$RUN_NAME\`)
 
           A repeated failure across consecutive commits is an infra fault (deploy pipeline, secrets, provider), not a regression in this commit. A human must look."
-              exit 1
             fi
           fi
           failing="$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs" --paginate \
