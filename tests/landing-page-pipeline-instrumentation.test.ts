@@ -197,4 +197,157 @@ describe("landing-page pipeline instrumentation (issue #949)", () => {
 
     logSpy.mockRestore();
   });
+
+  // Issue #1401: CTA field-extraction funnel (stage + bail reason + unchanged).
+  it("records the CTA funnel reached stage from the extractor", () => {
+    const counters = createLandingPagePipelineCounters({
+      scanId: "scan-1",
+      watchlistId: "watch-1",
+      adId: null,
+      extractorVersion: "lp-signals-v6",
+    });
+
+    recordExtractStage(counters, {
+      ctaText: "Learn more",
+      priceText: null,
+      formPresent: false,
+      headline: "Glow Serum Sale",
+      ctaFunnelStage: "reached",
+      ctaFunnelReasonCode: null,
+    });
+
+    expect(counters.extract.ctaFunnelStage).toBe("reached");
+    expect(counters.extract.ctaFunnelReasonCode).toBeNull();
+  });
+
+  it("records the CTA funnel bail reason from the extractor", () => {
+    const counters = createLandingPagePipelineCounters({
+      scanId: "scan-1",
+      watchlistId: "watch-1",
+      adId: null,
+      extractorVersion: "lp-signals-v6",
+    });
+
+    recordExtractStage(counters, {
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+      headline: "Acme Pricing",
+      ctaFunnelStage: "bailed",
+      ctaFunnelReasonCode: "only_chrome_anchors",
+    });
+
+    expect(counters.extract.ctaFunnelStage).toBe("bailed");
+    expect(counters.extract.ctaFunnelReasonCode).toBe("only_chrome_anchors");
+  });
+
+  it("infers the funnel stage from ctaText when the extractor omits it", () => {
+    const counters = createLandingPagePipelineCounters({
+      scanId: "scan-1",
+      watchlistId: "watch-1",
+      adId: null,
+      extractorVersion: "lp-signals-v6",
+    });
+
+    recordExtractStage(counters, {
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+      headline: "Acme Pricing",
+    });
+
+    // Legacy call site: stage inferred as bailed, reason defaulted.
+    expect(counters.extract.ctaFunnelStage).toBe("bailed");
+    expect(counters.extract.ctaFunnelReasonCode).toBe("no_cta_candidates");
+  });
+
+  it("records the ctaUnchanged diff stage", () => {
+    const counters = createLandingPagePipelineCounters({
+      scanId: "scan-1",
+      watchlistId: "watch-1",
+      adId: null,
+      extractorVersion: "lp-signals-v6",
+    });
+
+    recordDiffStage(counters, {
+      status: "invalidated",
+      confirmedEventTypes: [],
+      ctaUnchanged: true,
+    });
+
+    expect(counters.diff.ctaUnchanged).toBe(true);
+  });
+
+  it("flush emits the CTA funnel stage, reason, and unchanged flag", () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const counters = createLandingPagePipelineCounters({
+      scanId: "scan-1",
+      watchlistId: "watch-1",
+      adId: null,
+      extractorVersion: "lp-signals-v6",
+    });
+
+    recordExtractStage(counters, {
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+      headline: "Acme Pricing",
+      ctaFunnelStage: "bailed",
+      ctaFunnelReasonCode: "only_chrome_anchors",
+    });
+    recordDiffStage(counters, {
+      status: "invalidated",
+      confirmedEventTypes: [],
+      ctaUnchanged: false,
+    });
+
+    flushLandingPagePipelineCounters(counters);
+
+    const logged = JSON.parse(logSpy.mock.calls[0][0] as string);
+    expect(logged.extract.ctaFunnelStage).toBe("bailed");
+    expect(logged.extract.ctaFunnelReasonCode).toBe("only_chrome_anchors");
+    expect(logged.diff.ctaUnchanged).toBe(false);
+    // Accept-criteria aliases (issue #1401 verify step 1).
+    expect(logged.extract.cta_field_reached).toBe(false);
+    expect(logged.extract.cta_field_bailed).toBe(true);
+    expect(logged.diff.cta_field_unchanged).toBe(false);
+    expect(logged.cta_field_extraction_funnel).toBe("cta_field_bailed");
+
+    logSpy.mockRestore();
+  });
+
+  it("flush prefers cta_field_unchanged when the diff stage matched", () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const counters = createLandingPagePipelineCounters({
+      scanId: "scan-1",
+      watchlistId: "watch-1",
+      adId: null,
+      extractorVersion: "lp-signals-v6",
+    });
+
+    recordExtractStage(counters, {
+      ctaText: "Sign up",
+      priceText: null,
+      formPresent: false,
+      headline: "Five to Nine",
+      ctaFunnelStage: "reached",
+      ctaFunnelReasonCode: null,
+    });
+    recordDiffStage(counters, {
+      status: "invalidated",
+      confirmedEventTypes: [],
+      ctaUnchanged: true,
+    });
+
+    flushLandingPagePipelineCounters(counters);
+
+    const logged = JSON.parse(logSpy.mock.calls[0][0] as string);
+    expect(logged.extract.cta_field_reached).toBe(true);
+    expect(logged.diff.cta_field_unchanged).toBe(true);
+    expect(logged.cta_field_extraction_funnel).toBe("cta_field_unchanged");
+
+    logSpy.mockRestore();
+  });
 });
