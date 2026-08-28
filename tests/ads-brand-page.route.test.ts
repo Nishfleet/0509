@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AdRecord } from "~/lib/types";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
+import { summarizeDomainCaptureFailures } from "~/lib/offer-timeline.server";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -92,6 +93,7 @@ interface MockOptions {
   onCacheRead?: () => void;
   offerTimelineEntries?: OfferLedgerEntry[];
   captureFailures?: unknown[];
+  captureFailuresSummary?: unknown;
 }
 
 function installBrandPageMocks(options: MockOptions = {}) {
@@ -136,6 +138,7 @@ function installBrandPageMocks(options: MockOptions = {}) {
   vi.doMock("~/lib/offer-timeline.server", () => ({
     loadOfferTimeline,
     loadDomainCaptureFailures,
+    summarizeDomainCaptureFailures,
     isOfferTimelineShareEnabled: vi.fn(() => true),
   }));
 
