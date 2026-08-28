@@ -145,21 +145,25 @@ describe("adsPageServiceJsonLd", () => {
   });
 });
 
-describe("/ads/:domain Service JSON-LD", () => {
-  it("emits Service alongside WebPage on a cached, indexable brand page", async () => {
+describe("/ads/:domain JSON-LD", () => {
+  it("emits FAQPage, Service and WebPage on a cached, indexable brand page", async () => {
     const data = cachedIndexable();
     const markup = await render(data);
 
     expect(markup).toContain("Tracking nike.com");
     expect(markup).toContain("Watch nike.com →");
+    expect(markup).toContain("Common questions about Nike&#x27;s ads");
+    expect(markup).toContain("How is Nike's Ad Aggression Score calculated?");
 
     const blocks = parseLdJsonBlocks(markup);
-    expect(blocks).toHaveLength(2);
+    expect(blocks).toHaveLength(3);
 
     const webPages = blocks.filter((block) => block["@type"] === "WebPage");
     const services = blocks.filter((block) => block["@type"] === "Service");
+    const faqPages = blocks.filter((block) => block["@type"] === "FAQPage");
     expect(webPages).toHaveLength(1);
     expect(services).toHaveLength(1);
+    expect(faqPages).toHaveLength(1);
 
     const service = services[0] ?? {};
     expect(service["@context"]).toBe("https://schema.org");
@@ -175,6 +179,16 @@ describe("/ads/:domain Service JSON-LD", () => {
     expect(service.description).toBe(
       "See 6 Meta ads from Nike (nike.com), from a public check of the India Ad Library about 2 hours ago. Get an email when their ads or offer change.",
     );
+
+    const faq = faqPages[0] as Record<string, unknown>;
+    const mainEntity = (faq.mainEntity as Array<Record<string, unknown>>) ?? [];
+    expect(mainEntity.length).toBeGreaterThanOrEqual(3);
+    expect(mainEntity.every((entry) => entry["@type"] === "Question")).toBe(true);
+    const questions = mainEntity.map((entry) => entry.name as string);
+    expect(questions).toContain("How is Nike's Ad Aggression Score calculated?");
+    expect(questions).toContain("How often are Nike's ads checked?");
+    expect(questions).toContain('What does "verified" mean on these ads?');
+    expect(questions).toContain("Can I get an email when Nike's ads or offer change?");
 
     const serialized = JSON.stringify(blocks);
     expect(serialized).not.toMatch(/aggregateRating|reviewCount|ratingValue/i);
@@ -203,13 +217,16 @@ describe("/ads/:domain Service JSON-LD", () => {
     expect(parseLdJsonBlocks(markup)).toHaveLength(0);
     expect(markup).not.toContain("application/ld+json");
     expect(markup).not.toContain('"@type":"Service"');
+    expect(markup).not.toContain("Common questions about Nike&#x27;s ads");
   }, 20_000);
 
-  it("omits Service JSON-LD when the emergency noindex brake is on", async () => {
+  it("omits Service and FAQPage JSON-LD when the emergency noindex brake is on", async () => {
     const markup = await render(cachedIndexable({ noindex: true }));
 
     expect(parseLdJsonBlocks(markup)).toHaveLength(0);
     expect(markup).not.toContain("application/ld+json");
     expect(markup).not.toContain('"@type":"Service"');
+    expect(markup).not.toContain('"@type":"FAQPage"');
+    expect(markup).not.toContain("Common questions about Nike&#x27;s ads");
   }, 20_000);
 });

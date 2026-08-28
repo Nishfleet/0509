@@ -150,7 +150,7 @@ describe("/ads/:domain — Case File render", () => {
     const order = [
       "ld-ticker",
       "Nike was running",
-      "Ad Aggression Score",
+      "Ad Aggression Score · last",
       "f9-ads-watch-strip",
       "f9-ads-statline",
       "What changed this week",
