@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 // @ts-ignore JavaScript reporter module is intentionally exercised through Vitest.
 const {
   GateBManifestReporter,
+  RELEASE_ARTIFACT_STATE_MATRIX,
   RELEASE_COVERAGE_MATRIX,
   buildManifest,
   expectedReleaseArtifacts,
@@ -16,6 +17,15 @@ const {
   validateReleaseArtifacts,
   writePreflightManifest,
 } = await import("../scripts/playwright-release-manifest-reporter.mjs");
+
+// The release-artifact state list the E2E specs attach (source of truth for
+// what screenshots/ARIA snapshots a release run produces) is kept in a
+// separate TypeScript helper. The reporter's RELEASE_ARTIFACT_STATE_MATRIX is
+// the gate that validates those attachments. A state added to the spec helper
+// but not the reporter matrix silently fails every production deploy with
+// artifact_count/artifact_extra (issue #1354). This import pins the two
+// together so the drift is caught by `npm test`, not by a halted deploy train.
+const { RELEASE_ARTIFACT_STATES } = await import("../e2e/helpers/release-artifacts");
 
 const fingerprint = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 const runOrigin = "http://127.0.0.1:43127";
@@ -131,6 +141,29 @@ function readManifest(path: string) {
 }
 
 describe("Gate-B Playwright release manifest reporter", () => {
+  it("keeps the reporter artifact state matrix in sync with the E2E spec helper (issue #1354)", () => {
+    // The spec helper (e2e/helpers/release-artifacts.ts RELEASE_ARTIFACT_STATES)
+    // is keyed by prefix; the reporter matrix is keyed by scenario with a
+    // `prefix` field. Re-key the reporter by prefix and assert every prefix
+    // carries the exact same ordered state list. A drift here is the class
+    // that halted every production deploy on 2026-08-27/28.
+    const reporterByPrefix = new Map<string, string[]>();
+    for (const [scenario, definition] of Object.entries(RELEASE_ARTIFACT_STATE_MATRIX)) {
+      const { prefix, states } = definition as { prefix: string; states: readonly string[] };
+      expect(reporterByPrefix.has(prefix)).toBe(false);
+      reporterByPrefix.set(prefix, [...states]);
+    }
+
+    const specPrefixes = Object.keys(RELEASE_ARTIFACT_STATES);
+    expect(specPrefixes.sort()).toEqual([...reporterByPrefix.keys()].sort());
+
+    for (const prefix of specPrefixes) {
+      const specStates = [...(RELEASE_ARTIFACT_STATES as Record<string, readonly string[]>)[prefix]];
+      const reporterStates = reporterByPrefix.get(prefix) ?? [];
+      expect(specStates).toEqual(reporterStates);
+    }
+  });
+
   it("requires the exact Journey 1-2 three-width identity matrix", () => {
     expect(supportsReleaseCoverage([1, 2])).toBe(true);
     expect(supportsReleaseCoverage([1, 3])).toBe(true);
@@ -315,7 +348,7 @@ describe("Gate-B Playwright release manifest reporter", () => {
     expect(manifest.strictIssues).toBeUndefined();
     expect(validateReleaseArtifacts(manifest.entries)).toEqual([]);
     expect(manifest.entries).toHaveLength(10);
-    expect(manifest.entries.flatMap((entry: { artifacts: unknown[] }) => entry.artifacts)).toHaveLength(116);
+    expect(manifest.entries.flatMap((entry: { artifacts: unknown[] }) => entry.artifacts)).toHaveLength(122);
     for (const artifact of manifest.entries.flatMap((entry: { artifacts: Array<{ name: string; bytes: number; sha256: string }> }) => entry.artifacts)) {
       expect(artifact.name).toMatch(/(?:^|\/)gate-b-artifacts\//u);
       expect(artifact.name).not.toContain(process.cwd());
@@ -359,7 +392,7 @@ describe("Gate-B Playwright release manifest reporter", () => {
     const manifest = readManifest(outputPath);
     expect(manifest.strictIssues).toContain("artifact_invalid");
     expect(manifest.strictIssues).toContain("artifact_missing");
-    expect(manifest.entries.flatMap((entry: { artifacts: unknown[] }) => entry.artifacts)).toHaveLength(114);
+    expect(manifest.entries.flatMap((entry: { artifacts: unknown[] }) => entry.artifacts)).toHaveLength(120);
     expect(JSON.stringify(manifest)).not.toContain("/tmp/unsafe.png");
     expect(JSON.stringify(manifest)).not.toContain("unterminated");
     rmSync(directory, { recursive: true, force: true });
