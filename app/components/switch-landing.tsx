@@ -1,4 +1,4 @@
-import { Form, Link } from "react-router";
+import { Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingFooter } from "~/components/marketing-footer";
@@ -27,25 +27,6 @@ function SourceLink({ source }: { source: SwitchSource }) {
   );
 }
 
-function SearchPreviewForm() {
-  return (
-    <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
-      <input
-        aria-label="Competitor website"
-        name="website"
-        placeholder="paste-a-competitor-website.com…"
-        type="text"
-        inputMode="url"
-        autoComplete="url"
-        spellCheck={false}
-      />
-      <button type="submit">
-        Try it free, no account <span aria-hidden="true">→</span>
-      </button>
-    </Form>
-  );
-}
-
 function SwitchHero({ page }: { page: SwitchPage }) {
   return (
     <section className="ld-hero">
@@ -54,7 +35,6 @@ function SwitchHero({ page }: { page: SwitchPage }) {
       </p>
       <h1 className="ld-wall ld-wall-compact">{page.headline}</h1>
       <p className="ld-deck-copy">{page.deck}</p>
-      <SearchPreviewForm />
     </section>
   );
 }
@@ -150,14 +130,14 @@ function SwitchClose({ page }: { page: SwitchPage }) {
         </ul>
       </section>
       <section className="ld-final">
-        <h2>
-          Start with the free preview <span aria-hidden="true">→</span>
-        </h2>
+        <h2>Start with the free preview</h2>
         <p className="ld-pricing-note">
-          Paste a competitor website into the <Link to="/search">search preview</Link>. No account,
-          no demo form. See what is publicly available before you decide anything.
+          No demo form, no email gate. Try the public search preview and see what is publicly
+          available before you decide anything.
         </p>
-        <SearchPreviewForm />
+        <Link className="ld-cta-button" to={`/search?q=${encodeURIComponent(page.ctaBrand)}`}>
+          Try the free preview <span aria-hidden="true">→</span>
+        </Link>
       </section>
     </>
   );

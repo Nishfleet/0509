@@ -92,19 +92,19 @@ const LLMS_PAGE_DETAILS: Record<
     description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
   },
   "/switch/magicbrief": {
-    title: "Switch from MagicBrief",
+    title: "MagicBrief alternative",
     description:
-      "MagicBrief closed 31 July 2026. What transfers into Five to Nine, what does not, and the free search preview.",
+      "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
   },
   "/switch/panoramata": {
-    title: "Switch from Panoramata",
+    title: "Panoramata alternative",
     description:
-      "Same competitor ads and pages job from a pasted domain. What transfers, what does not, and the free search preview.",
+      "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job.",
   },
   "/switch/visualping": {
-    title: "Switch from Visualping",
+    title: "Visualping alternative for ad libraries",
     description:
-      "Paste a domain instead of an Ad Library URL and a condition prompt. Published no-phantom-change rules and the free search preview.",
+      "Visualping's own blog says 83% of detected changes are not important. Paste a domain for the same ad and landing-page job.",
   },
   "/competitor-monitoring": {
     title: "Competitor monitoring",

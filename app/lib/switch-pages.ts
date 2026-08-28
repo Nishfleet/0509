@@ -24,6 +24,7 @@ export interface SwitchPage {
   pathname: `/switch/${SwitchSlug}`;
   title: string;
   description: string;
+  ctaBrand: string;
   kicker: string;
   headline: string;
   deck: string;
@@ -84,9 +85,10 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
     slug: "magicbrief",
     productName: "MagicBrief",
     pathname: "/switch/magicbrief",
-    title: "Switch from MagicBrief | Five to Nine",
+    title: "MagicBrief alternative | Five to Nine",
     description:
       "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not transfer. Try the free preview.",
+    ctaBrand: "magicbrief.com",
     kicker: "Switch from MagicBrief",
     headline: "MagicBrief closed. Here is what actually moves.",
     deck: "MagicBrief's own FAQ says the platform closed on 31 July 2026 at 8 PM EST. The successor is Canva Grow, sold inside Canva Business. Paste your competitor list here. Collections, boards, and analytics history stay behind.",
@@ -149,24 +151,30 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
     slug: "panoramata",
     productName: "Panoramata",
     pathname: "/switch/panoramata",
-    title: "Switch from Panoramata | Five to Nine",
+    title: "Panoramata alternative | Five to Nine",
     description:
-      "Panoramata watches competitor ads and pages. Paste a domain into Five to Nine for the same job. Screenshot archives and email captures do not transfer.",
+      "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job. Try the free preview.",
+    ctaBrand: "panoramata.co",
     kicker: "Switch from Panoramata",
     headline: "Same ads and pages job. Paste a domain.",
-    deck: "Panoramata's own site sells competitor Meta-ad tracking and automatic website-change monitoring as one job. Five to Nine watches public Meta ads and landing pages from a pasted domain. Their screenshot archive, email, SMS, and flow captures do not transfer.",
+    deck: "A verified GetApp reviewer says Panoramata's price feels a bit high for a solo marketer. Five to Nine does the same public Meta ads and landing-page job from a pasted domain.",
     complaint: {
       kicker: "The public record",
       heading: "Same ads and pages job.",
       quote:
-        "Track and Monitor Your Competitors' Website Changes automatically, with benchmarks.",
+        "Price feels a bit high if you're a solo marketer but you have a very strong tool for ads benchmark and you save lot a time.",
       source: {
+        href: "https://www.getapp.co.uk/software/2073744/panoramata",
+        label: "Verified GetApp review, checked 2026-08-28",
+        checked: "2026-08-28",
+      },
+    },
+    furtherSources: [
+      {
         href: "https://www.panoramata.co/track/website-changes",
         label: "Panoramata website-change tracking, checked 2026-08-08",
         checked: "2026-08-08",
       },
-    },
-    furtherSources: [
       {
         href: "https://www.panoramata.co/track/meta-ads",
         label: "Panoramata Meta ads tracking",
@@ -209,17 +217,18 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
     slug: "visualping",
     productName: "Visualping",
     pathname: "/switch/visualping",
-    title: "Switch from Visualping | Five to Nine",
+    title: "Visualping alternative for ad libraries | Five to Nine",
     description:
-      "Visualping needs an Ad Library URL and a condition prompt. Paste a domain here instead. Failed renders are not alerts. Try the free preview.",
+      "Visualping's own blog says 83% of detected changes are not important. Paste a domain for the same ad and landing-page job. Try the free preview.",
+    ctaBrand: "visualping.io",
     kicker: "Switch from Visualping",
     headline: "Skip the Ad Library URL hunt and the condition prompt.",
-    deck: "Visualping's own Meta Ad Library playbook is find the library URL, wait about 90 seconds per competitor, and write an AI condition. Five to Nine takes a domain. Visualping also publishes that its AI marks most detections as not important, and that false positives will never reach zero.",
+    deck: "Visualping's own blog says the AI classifies 83% of detected changes as not important. Its Meta Ad Library playbook still asks you to find the library URL and write a condition prompt. Five to Nine takes a domain.",
     complaint: {
       kicker: "The public complaint",
       heading: "Cited, not invented.",
       quote:
-        "False positives in website monitoring will never reach zero.",
+        "Across Visualping's platform, the AI classifies 83% of detected changes as not important.",
       source: {
         href: "https://visualping.io/blog/how-visualping-cuts-false-positives",
         label: "Visualping on false positives, checked 2026-08-08",
