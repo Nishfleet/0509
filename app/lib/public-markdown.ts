@@ -21,6 +21,7 @@ export const PUBLIC_MARKDOWN_PATHS = [
   "/changelog",
   "/trust",
   "/proof",
+  "/capture-rules",
   "/privacy",
   "/terms",
 ] as const;
@@ -132,6 +133,11 @@ const LLMS_PAGE_DETAILS: Record<
       "Brazilian Portuguese sneaker-resale landing page. Product UI stays English; checkout currency follows the buyer.",
   },
   "/proof": {
+    title: "What we refuse to alert on",
+    description:
+      "Public capture-validity rules: the landing-page captures that never become alerts.",
+  },
+  "/capture-rules": {
     title: "What we refuse to alert on",
     description:
       "Public capture-validity rules: the landing-page captures that never become alerts.",
@@ -262,7 +268,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 - Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Signed-in support cases cover paid-customer account help, with email fallback for users who cannot sign in.
 - Paid customer support paths cover: ${CUSTOMER_SUPPORT_PATHS.map((path) => path.label).join(", ")}.
-- Public help, docs, API docs, status, changelog, trust, and proof-rules pages are available at /help, /docs, /api/docs, /status, /changelog, /trust, and /proof.
+- Public help, docs, API docs, status, changelog, trust, and proof-rules pages are available at /help, /docs, /api/docs, /status, /changelog, /trust, /proof, and /capture-rules.
 - The public status page summarizes customer-facing surfaces without exposing private account activity.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric evidence, creative timeline, and landing-page history from saved evidence, watch events, and digest items.
