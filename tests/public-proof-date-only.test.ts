@@ -108,9 +108,10 @@ describe("public proof brief — date-only captures", () => {
 
     // Full-ISO captures keep the clock — the date-only guard must not suppress
     // the time for real timestamps that actually have one. firstSeenAt lands
-    // in the insight timeline via formatCapturedAt, not in proofStatus.
+    // in the insight timeline; a >30-day first-seen reads as "on record since"
+    // (#1286/#1343 proof-brief regression) so the entry leads with that prefix.
     const started = brief.insights.timeline.find((entry) =>
-      entry.startsWith("Creative started running"),
+      entry.startsWith("Creative on record since"),
     );
     expect(started).toBeDefined();
     expect(started).toContain("Mar 1");
@@ -126,7 +127,7 @@ describe("public proof brief — year-aware capture dates (#1032)", () => {
   const PRIOR_YEAR_NOW = new Date("2026-08-25T17:27:13.848Z");
   const PRIOR_YEAR_FETCHED = "2026-08-25T14:27:13.848Z";
 
-  it("appends the year to a date-only capture from a prior UTC year in the timeline", () => {
+  it("frames a prior-year, >30-day first-seen as 'on record since' with the year in the timeline", () => {
     const ad = makeDateOnlyAd({ firstSeenAt: "2025-09-04" });
     const brief = buildPublicProofBrief([ad], {
       fetchedAt: PRIOR_YEAR_FETCHED,
@@ -139,14 +140,19 @@ describe("public proof brief — year-aware capture dates (#1032)", () => {
     expect(brief).not.toBeNull();
     if (!brief) return;
 
+    // 2025-09-04 is 355 days old on 2026-08-25 — past the 30-day fresh
+    // window, so the timeline entry swaps from "Creative started running
+    // <old date>" (which reads as a stale capture next to the header's
+    // "Captured <today>") to "Creative on record since <date>", matching
+    // the proof strip's "On record" language (#1286/#1343).
     const started = brief.insights.timeline.find((entry) =>
-      entry.startsWith("Creative started running"),
+      entry.startsWith("Creative on record since"),
     );
     expect(started).toBeDefined();
-    expect(started).toBe("Creative started running Sep 4, 2025");
+    expect(started).toBe("Creative on record since Sep 4, 2025");
   });
 
-  it("appends the year to a full-ISO capture from a prior UTC year in the timeline", () => {
+  it("frames a prior-year full-ISO first-seen as 'on record since' with year + time", () => {
     const ad = makeDateOnlyAd({ firstSeenAt: "2025-09-04T09:47:00.000Z" });
     const brief = buildPublicProofBrief([ad], {
       fetchedAt: PRIOR_YEAR_FETCHED,
@@ -160,7 +166,7 @@ describe("public proof brief — year-aware capture dates (#1032)", () => {
     if (!brief) return;
 
     const started = brief.insights.timeline.find((entry) =>
-      entry.startsWith("Creative started running"),
+      entry.startsWith("Creative on record since"),
     );
     expect(started).toBeDefined();
     expect(started).toContain("Sep 4, 2025");
@@ -185,7 +191,7 @@ describe("public proof brief — year-aware capture dates (#1032)", () => {
     expect(brief.decision.freshness).toContain("Sep 4, 2025");
   });
 
-  it("keeps the compact rendering for a same-year date-only capture", () => {
+  it("keeps 'started running' for a fresh same-year capture but always shows the year", () => {
     const ad = makeDateOnlyAd({ firstSeenAt: "2026-08-22" });
     const brief = buildPublicProofBrief([ad], {
       fetchedAt: PRIOR_YEAR_FETCHED,
@@ -198,11 +204,15 @@ describe("public proof brief — year-aware capture dates (#1032)", () => {
     expect(brief).not.toBeNull();
     if (!brief) return;
 
+    // 2026-08-22 is 3 days old — inside the 30-day fresh window, so the
+    // entry keeps "Creative started running". The timeline always carries
+    // the year now so a same-year "Aug 22" cannot read as the same year as
+    // a prior-year sibling ("Sep 4, 2025") on the same timeline.
     const started = brief.insights.timeline.find((entry) =>
       entry.startsWith("Creative started running"),
     );
     expect(started).toBeDefined();
-    expect(started).toBe("Creative started running Aug 22");
-    expect(started).not.toContain("2026");
+    expect(started).toBe("Creative started running Aug 22, 2026");
+    expect(started).toContain("2026");
   });
 });
