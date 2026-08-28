@@ -15,6 +15,7 @@ export type ScheduledTask =
       includeScans: boolean;
       includeDigests: boolean;
       includeMentionResweep: boolean;
+      includeAutoCompetitorResweep: boolean;
       includeRiskAlert: boolean;
       digestCadence?: "daily" | "weekly";
       digestLookbackDays?: number;
@@ -33,6 +34,7 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
       includeScans: false,
       includeDigests: true,
       includeMentionResweep: false,
+      includeAutoCompetitorResweep: false,
       includeRiskAlert: false,
       digestCadence: "weekly",
       digestLookbackDays: 7,
@@ -45,6 +47,7 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
       includeScans: false,
       includeDigests: true,
       includeMentionResweep: false,
+      includeAutoCompetitorResweep: true,
       includeRiskAlert: true,
       digestCadence: "daily",
       digestLookbackDays: 1,
@@ -57,6 +60,7 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
       includeScans: true,
       includeDigests: false,
       includeMentionResweep: true,
+      includeAutoCompetitorResweep: false,
       includeRiskAlert: false,
     };
   }
@@ -66,6 +70,7 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
     includeScans: true,
     includeDigests: false,
     includeMentionResweep: true,
+    includeAutoCompetitorResweep: false,
     includeRiskAlert: false,
   };
 }
