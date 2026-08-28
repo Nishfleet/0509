@@ -36,5 +36,11 @@
       "binding": "MONITORING_WORKFLOW",
       "class_name": "MonitoringWorkflow"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "LANDING_PAGE_ARTIFACTS",
+      "bucket_name": "0509-landing-page-artifacts"
+    }
   ]
 }

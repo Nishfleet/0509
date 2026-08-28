@@ -103,7 +103,7 @@ describe("loadOfferTimeline", () => {
     expect(loaded.entries).toEqual([]);
   });
 
-  it("labels a backfill row with the honest no-screenshot evidence note", async () => {
+  it("filters a backfill row with no screenshot or page text out of the public ledger (issue #1284)", async () => {
     queryAll.mockResolvedValue([
       {
         id: "backfill-nike-20260825",
@@ -123,15 +123,14 @@ describe("loadOfferTimeline", () => {
       asOf: null,
     });
 
-    expect(loaded.entries).toHaveLength(1);
-    const entry = loaded.entries[0];
-    expect(entry?.screenshotHref).toBeNull();
-    expect(entry?.pageTextHref).toBeNull();
-    expect(entry?.evidenceNote).toContain("no screenshot");
-    expect(entry?.evidenceNote).toContain("25 Aug 2026");
+    // A proof-less backfill row must never reach the public timeline — the
+    // "Captured on <date>, no screenshot" string contradicts the proof
+    // promise. The ledger is empty until a real capture stores both artifacts.
+    expect(loaded.entries).toEqual([]);
+    expect(loaded.asOfState).toBeNull();
   });
 
-  it("does not label a real capture row that happens to lack artifacts", async () => {
+  it("filters a real capture row that lacks both artifacts out of the public ledger (issue #1284)", async () => {
     queryAll.mockResolvedValue([
       {
         id: "real-1",
@@ -151,7 +150,33 @@ describe("loadOfferTimeline", () => {
       asOf: null,
     });
 
+    expect(loaded.entries).toEqual([]);
+  });
+
+  it("keeps a row that has both a screenshot and page-text artifact", async () => {
+    queryAll.mockResolvedValue([
+      {
+        id: "real-1",
+        canonical_url: "https://nykaa.com/glow",
+        raw_headline: "Glow serum",
+        cta_text: "Shop now",
+        price_text: "₹499",
+        form_present: 1,
+        artifact_key: "landing-pages/2026-08-01/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.html",
+        metadata_json: JSON.stringify({
+          screenshotArtifactKey: "landing-pages/2026-08-01/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpeg",
+        }),
+        captured_at: "2026-08-01T10:00:00.000Z",
+      },
+    ]);
+
+    const loaded = await loadOfferTimeline({ DB: {} } as never, {
+      domain: "nykaa.com",
+      asOf: null,
+    });
+
     expect(loaded.entries).toHaveLength(1);
-    expect(loaded.entries[0]?.evidenceNote).toBeNull();
+    expect(loaded.entries[0]?.screenshotHref).toContain("/artifacts/proof/");
+    expect(loaded.entries[0]?.pageTextHref).toContain("/artifacts/page-text/");
   });
 });

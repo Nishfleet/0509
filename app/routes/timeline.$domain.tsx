@@ -206,11 +206,6 @@ export default function OfferTimelineRoute() {
                         Page text
                       </a>
                     ) : null}
-                    {!data.asOfState.screenshotHref &&
-                    !data.asOfState.pageTextHref &&
-                    data.asOfState.evidenceNote
-                      ? data.asOfState.evidenceNote
-                      : null}
                   </p>
                 </>
               ) : (

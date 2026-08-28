@@ -40,14 +40,20 @@ const SITEMAP_BRAND_DOMAINS = [
 ] as const;
 
 describe("sitemap brand offer timeline backfill (migration 0081)", () => {
-  it("seeds >=1 dated state for every sitemap brand domain", async () => {
+  it("seeds >=1 dated backfill row for every sitemap brand domain (read directly from D1)", async () => {
     expect(SITEMAP_BRAND_DOMAINS).toHaveLength(25);
+    // The proof gate (issue #1284) filters backfill rows out of the public
+    // ledger, so loadOfferTimeline returns empty. Assert the rows exist by
+    // reading D1 directly — the migration still seeds them.
     for (const domain of SITEMAP_BRAND_DOMAINS) {
-      const loaded = await loadOfferTimeline(appEnv, { domain, asOf: null });
-      expect(
-        loaded.entries.length,
-        `${domain} should have a non-empty timeline`,
-      ).toBeGreaterThanOrEqual(1);
+      const row = await db()
+        .prepare(
+          `SELECT count(*) AS n FROM landing_page_snapshot
+           WHERE capture_method = 'sitemap_brand_seed' AND canonical_url LIKE ?`,
+        )
+        .bind(`https://www.${domain}/`)
+        .first<{ n: number }>();
+      expect(row?.n, `${domain} should have a seeded backfill row`).toBeGreaterThanOrEqual(1);
     }
   });
 
@@ -77,28 +83,12 @@ describe("sitemap brand offer timeline backfill (migration 0081)", () => {
     }
   });
 
-  it("labels each sitemap-brand state with the honest no-screenshot evidence note", async () => {
-    const loaded = await loadOfferTimeline(appEnv, {
-      domain: "gymshark.com",
-      asOf: null,
-    });
-    expect(loaded.entries.length).toBeGreaterThanOrEqual(1);
-    for (const entry of loaded.entries) {
-      expect(entry.screenshotHref).toBeNull();
-      expect(entry.pageTextHref).toBeNull();
-      expect(entry.evidenceNote).toContain("no screenshot");
-      expect(entry.evidenceNote).toContain("25 Aug 2026");
+  it("filters every sitemap-brand backfill state out of the public timeline (issue #1284 proof gate)", async () => {
+    for (const domain of SITEMAP_BRAND_DOMAINS) {
+      const loaded = await loadOfferTimeline(appEnv, { domain, asOf: null });
+      expect(loaded.entries, `${domain} should have no public entries`).toEqual([]);
+      expect(loaded.asOfState).toBeNull();
     }
-  });
-
-  it("does not invent a before/after transition from a single seeded state", async () => {
-    const loaded = await loadOfferTimeline(appEnv, {
-      domain: "adidas.com",
-      asOf: null,
-    });
-    expect(loaded.entries.length).toBe(1);
-    expect(loaded.entries[0]?.transition).toBeNull();
-    expect(loaded.entries[0]?.headline).toBe("adidas. Athletic footwear and apparel.");
   });
 
   it("does not collide with the 5 demo-brand rows from migration 0079", async () => {
