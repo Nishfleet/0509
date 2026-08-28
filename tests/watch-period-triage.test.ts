@@ -15,9 +15,11 @@ import type {
  * Zero-noise proof triage (2026-08-06, sealed packet acceptance): the five
  * fixtures — unchanged page, routine-only mutation, meaningful price/CTA
  * mutation, failed evidence, proof pending — classify truthfully, and a
- * failed or pending check can never come back as all quiet. A skipped proof
- * capture is a benign no-work decision and does not by itself force evidence
- * pending (2026-08-06 Grok repair packet).
+ * failed or pending check can never come back as all quiet. A rate-limit or
+ * dedupe skip is a benign no-work decision and does not by itself force
+ * evidence pending (2026-08-06 Grok repair packet). A `skipped_due_to_budget`
+ * capture is NOT benign — it surfaces as `evidence_skipped_budget` so a paid
+ * customer's dropped check is never read as a quiet day (#1287).
  */
 
 const CHECKED_AT = "2026-08-06T04:00:00.000Z";
@@ -119,12 +121,46 @@ describe("classifyWatchPeriodTriage", () => {
     expect(triage.nextAction).toContain("We'll retry at the next scheduled check");
   });
 
-  it("skipped proof captures alone do not force evidence pending — all quiet stays quiet", () => {
+  it("skipped_due_to_budget captures surface as evidence_skipped_budget, never all quiet (#1287)", () => {
+    const triage = classifyWatchPeriodTriage({
+      events: [],
+      candidates: [],
+      proofCaptures: [proofCapture("skipped_due_to_budget")],
+      successfulRuns: 2,
+      lastSuccessfulCheckAt: CHECKED_AT,
+    });
+
+    expect(triage.status).toBe("evidence_skipped_budget");
+    expect(triage.sourceStatus).toBe("checked");
+    expect(triage.label).toBe("Some checks skipped — plan allowance reached");
+    expect(triage.explanation).toContain("plan's evidence allowance was reached");
+    expect(triage.explanation).toContain("1 check was skipped");
+    expect(triage.nextAction).toContain("credit pack");
+    expect(triage.noActionLine).toContain("not every competitor was checked");
+  });
+
+  it("reports the budget-skip count in the explanation for multiple skips (#1287)", () => {
     const triage = classifyWatchPeriodTriage({
       events: [],
       candidates: [],
       proofCaptures: [
         proofCapture("skipped_due_to_budget"),
+        proofCapture("skipped_due_to_budget"),
+        proofCapture("skipped_due_to_budget"),
+      ],
+      successfulRuns: 2,
+      lastSuccessfulCheckAt: CHECKED_AT,
+    });
+
+    expect(triage.status).toBe("evidence_skipped_budget");
+    expect(triage.explanation).toContain("3 checks were skipped");
+  });
+
+  it("rate-limit and dedupe skips alone stay all quiet — they are benign no-work (#1287)", () => {
+    const triage = classifyWatchPeriodTriage({
+      events: [],
+      candidates: [],
+      proofCaptures: [
         proofCapture("skipped_due_to_rate_limit"),
         proofCapture("skipped_due_to_dedupe"),
       ],
@@ -137,6 +173,45 @@ describe("classifyWatchPeriodTriage", () => {
     expect(triage.explanation).toBe(
       "Checks completed and nothing changed across the sources that ran.",
     );
+  });
+
+  it("a budget skip does not override a stronger signal — confirmed changes win (#1287)", () => {
+    const triage = classifyWatchPeriodTriage({
+      events: [event("confirmed")],
+      candidates: [],
+      proofCaptures: [proofCapture("skipped_due_to_budget")],
+      successfulRuns: 2,
+      lastSuccessfulCheckAt: CHECKED_AT,
+    });
+
+    expect(triage.status).toBe("changed");
+  });
+
+  it("a budget skip does not override a failed capture — evidence_failed wins (#1287)", () => {
+    const triage = classifyWatchPeriodTriage({
+      events: [],
+      candidates: [],
+      proofCaptures: [
+        proofCapture("failed"),
+        proofCapture("skipped_due_to_budget"),
+      ],
+      successfulRuns: 2,
+      lastSuccessfulCheckAt: CHECKED_AT,
+    });
+
+    expect(triage.status).toBe("evidence_failed");
+  });
+
+  it("a budget skip does not override routine-only suppressions (#1287)", () => {
+    const triage = classifyWatchPeriodTriage({
+      events: [],
+      candidates: [candidate("suppressed", "proof_duplicate")],
+      proofCaptures: [proofCapture("skipped_due_to_budget")],
+      successfulRuns: 2,
+      lastSuccessfulCheckAt: CHECKED_AT,
+    });
+
+    expect(triage.status).toBe("routine_only");
   });
 
   it("skipped captures still surface the correct non-quiet status from a real signal", () => {
