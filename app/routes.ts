@@ -14,6 +14,7 @@ export default [
   route("changelog", "routes/changelog.tsx"),
   route("trust", "routes/trust.tsx"),
   route("proof", "routes/proof.tsx"),
+  route("capture-rules", "routes/capture-rules.tsx"),
   route("bots/presence", "routes/bots.presence.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),

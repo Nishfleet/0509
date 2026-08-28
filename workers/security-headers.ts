@@ -117,6 +117,7 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/privacy",
   "/changelog",
   "/trust",
+  "/capture-rules",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
   "/compare/visualping",

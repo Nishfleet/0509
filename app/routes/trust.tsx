@@ -86,6 +86,15 @@ export default function TrustRoute() {
         </ul>
       </PublicDocBlock>
 
+      <PublicDocBlock title="Capture validity — what we refuse to alert on">
+        <p>
+          Alerts are backed by captured page text, source links, and screenshots. The capture-validity
+          gate refuses to turn some captures into alerts at all: error pages, anti-bot challenge walls,
+          cookie walls, partial SPA shells, and churn that is not a real change. See the{" "}
+          <Link to="/capture-rules">capture rules</Link> for the full, checkable list.
+        </p>
+      </PublicDocBlock>
+
       <PublicDocBlock title="Honest non-claims">
         <p>
           Five to Nine does not currently claim SOC 2, HIPAA, GDPR compliance, zero retention,

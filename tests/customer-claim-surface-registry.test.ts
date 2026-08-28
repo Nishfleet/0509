@@ -320,7 +320,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/app/shares", "/app/source-access", "/app/support", "/app/team",
     "/app/watchlists", "/help", "/search",
   ],
-  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/proof", "/privacy", "/terms"],
+  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/proof", "/capture-rules", "/privacy", "/terms"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
   // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
   // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
@@ -338,7 +338,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // 2026-08-26: /methodology/ad-aggression-score joined the sitemap (issue #960).
   // 2026-08-27: sneaker-resale locale cluster joined the sitemap (issue #1154).
   // Product UI stays English; these are indexable marketing surfaces only.
-  sitemapPaths: ["/", "/search", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping", "/compare/visualping-ad-library", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief", "/switch/panoramata", "/switch/visualping", "/competitor-monitoring", "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale", "/pt-br/sneaker-resale", "/proof", "/methodology/ad-aggression-score", "/pricing", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  sitemapPaths: ["/", "/search", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping", "/compare/visualping-ad-library", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief", "/switch/panoramata", "/switch/visualping", "/competitor-monitoring", "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale", "/pt-br/sneaker-resale", "/proof", "/capture-rules", "/methodology/ad-aggression-score", "/pricing", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",
