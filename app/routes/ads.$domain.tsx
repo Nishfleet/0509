@@ -452,7 +452,7 @@ export function brandPageFaqEntries(data: BrandPageLoaderData): ReadonlyArray<Fa
     },
     {
       question: `Can I get an email when ${brandName}'s ads or offer change?`,
-      answer: `Yes. The "Watch ${domain} — free" button on this page starts a free account, and the first scan runs the moment you land. After that, every ad, offer, CTA, and form change hits your inbox with the screenshot, the page text, and the source link. Quiet periods still send a heartbeat so silence always means we looked.`,
+      answer: `Yes. The "Watch ${domain} — free" button on this page starts a free account, and the first scan runs the moment you land. After that, every ad, offer, CTA, and form change hits your inbox with a screenshot when the capture includes one, the page text, and the source link. Quiet periods still send a heartbeat so silence always means we looked.`,
     },
   ];
 }
@@ -819,7 +819,7 @@ function BrandAdsResults({
               </h2>
               <p>
                 Create a free account and the first scan runs the moment you land. Every ad, offer,
-                CTA and form change hits your inbox with the screenshot, the page text, and the link.
+                CTA and form change hits your inbox with a screenshot when the capture includes one, the page text, and the link.
               </p>
             </div>
             <Link className="f9-ads-watch-btn" to={signupPath}>
@@ -1185,7 +1185,7 @@ function BrandAdsShell({
         </h1>
         <p className="f9-ads-subline">
           Run a free live search and we'll pull their Meta ads right now. Then start watching, and
-          every change lands in your inbox with the screenshot, the page text, and the link.
+          every change lands in your inbox with a screenshot when the capture includes one, the page text, and the link.
         </p>
 
         <div className="f9-ads-shell-cta">
