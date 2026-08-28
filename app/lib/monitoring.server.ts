@@ -91,6 +91,7 @@ import {
 } from "~/lib/plan-entitlements";
 import type { PlanFamily } from "~/lib/plan-entitlements";
 import type { MentionResweepResult } from "~/lib/mention-resweep.server";
+import type { AutoCompetitorResweepResult } from "~/lib/auto-competitor-resweep.server";
 import type { BrowserJobPlanTier } from "~/lib/browser-job-telemetry.server";
 import { ensureDb } from "~/lib/data/d1.server";
 import {
@@ -241,6 +242,7 @@ interface RunScheduledMonitoringOptions {
   includeScans?: boolean;
   includeDigests?: boolean;
   includeMentionResweep?: boolean;
+  includeAutoCompetitorResweep?: boolean;
   cron?: string;
   digestCadence?: DigestCadence;
   digestLookbackDays?: number;
@@ -446,6 +448,18 @@ export async function runScheduledMonitoring(
     }
   }
 
+  let autoCompetitorResweep: AutoCompetitorResweepResult | undefined;
+  if (options.includeAutoCompetitorResweep) {
+    const { runAutoCompetitorResweep } = await import("~/lib/auto-competitor-resweep.server");
+    autoCompetitorResweep = await runAutoCompetitorResweep(env);
+    if (
+      autoCompetitorResweep &&
+      (autoCompetitorResweep.newlyAppeared > 0 || autoCompetitorResweep.errors > 0)
+    ) {
+      console.log("auto competitor resweep completed", autoCompetitorResweep);
+    }
+  }
+
   return {
     queued,
     duplicates,
@@ -458,6 +472,7 @@ export async function runScheduledMonitoring(
     digestAttempts: digestResult.attempted,
     digestFailures: digestResult.failed,
     mentionResweep,
+    autoCompetitorResweep,
   };
 }
 
