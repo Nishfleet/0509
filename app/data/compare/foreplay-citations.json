@@ -1,0 +1,27 @@
+{
+  "competitor": "foreplay",
+  "productName": "Foreplay",
+  "sources": [
+    {
+      "id": "foreplay-home",
+      "href": "https://www.foreplay.co/",
+      "label": "Foreplay home",
+      "checked": "2026-08-28",
+      "claim": "Foreplay's Discovery index and community Swipe File cover millions of saved ads across Meta, TikTok, LinkedIn, Google, and other platforms; it is built for creative strategists to save ads, tag them, build swipe files, and share with a team."
+    },
+    {
+      "id": "foreplay-discovery",
+      "href": "https://www.foreplay.co/discovery",
+      "label": "Foreplay Discovery",
+      "checked": "2026-08-28",
+      "claim": "Foreplay's Discovery ad index is the creative-research library that the rest of the platform is built around."
+    },
+    {
+      "id": "foreplay-spyder",
+      "href": "https://www.foreplay.co/spyder",
+      "label": "Foreplay Spyder",
+      "checked": "2026-08-28",
+      "claim": "Foreplay's Spyder product tracks a competitor's Meta ads, landing page screenshots, creative timeline, and top hooks."
+    }
+  ]
+}
