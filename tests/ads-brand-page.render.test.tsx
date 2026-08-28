@@ -320,7 +320,7 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("Full offer timeline");
   });
 
-  it("renders a non-empty Offer Timeline with the honest no-screenshot label", async () => {
+  it("renders a non-empty Offer Timeline without the no-screenshot string (issue #1284)", async () => {
     const markup = await render(
       populated({
         offerTimelineEntries: [
@@ -345,7 +345,8 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).toContain("brand-offer-timeline-title");
     expect(markup).toContain("Offer timeline");
     expect(markup).toContain("Nike. Just Do It.");
-    expect(markup).toContain("Captured on 25 Aug 2026, no screenshot");
+    // The "no screenshot" string must never appear on a public surface.
+    expect(markup).not.toContain("no screenshot");
     expect(markup).toContain("/timeline/nike.com");
     expect(markup).not.toContain("Screenshot ·");
     expect(markup).not.toContain("Page text ·");
@@ -458,7 +459,7 @@ describe("/ads/:domain — Case File render", () => {
 
     expect(markup).toContain("Offer timeline");
     expect(markup).toContain("Nike. Just Do It.");
-    expect(markup).toContain("Captured on 25 Aug 2026, no screenshot");
+    expect(markup).not.toContain("no screenshot");
     expect(markup).toContain("/timeline/nike.com");
   });
 
