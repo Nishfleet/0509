@@ -52,6 +52,7 @@ import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type {
   BrandChangeEvent,
   BrandIntelTeaser,
@@ -65,10 +66,12 @@ import type { CaptureAttemptReasonCode } from "~/lib/capture-attempt-reason-code
 import {
   adsPageServiceJsonLd,
   canonicalUrl,
+  faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
+import type { FaqJsonLdEntry } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
 
@@ -409,6 +412,51 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
   return `See ${data.verifiedLinkCount} Meta ${linkWord} linking to ${data.domain} — ${data.brandOwnedAdCount} from ${data.brandName}${otherClause} — from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
 }
 
+/**
+ * Brand-specific FAQ for the /ads/:domain page. Rendered on the page AND
+ * emitted as FAQPage JSON-LD from this same array, so the structured data can
+ * never drift from the visible copy. Every answer is grounded in content the
+ * page already shows: the Ad Aggression Score card (public formula at
+ * /methodology/ad-aggression-score, four sub-scores Velocity/Testing/
+ * Freshness/Persistence), the visible "Last checked …" stamp and the
+ * scheduled-scan cadence (Scout every 6h, Starter/Agency every 3h), the
+ * verified-link vs matching-only distinction the page already labels, and
+ * the "Watch {domain}" CTA. The brand name and domain are interpolated from
+ * the loader so each /ads/:domain page ships its own brand-specific FAQ.
+ *
+ * Returns null when the page has no cached ads or no verified-link evidence
+ * — the FAQ is grounded in on-page content that only exists for a real,
+ * verified capture, so a cache-miss shell (which 301-redirects anyway) or a
+ * page of unverified text-mention matches never ships one.
+ */
+export function brandPageFaqEntries(data: BrandPageLoaderData): ReadonlyArray<FaqJsonLdEntry> | null {
+  if (!data.hasCachedAds || data.verifiedLinkCount === 0) {
+    return null;
+  }
+  const { brandName, domain } = data;
+  const checkedPhrase = data.checkedAgo
+    ? `The page's "Last checked ${data.checkedAgo}" stamp is the most recent one.`
+    : "The most recent check is stamped on the page.";
+  return [
+    {
+      question: `How is ${brandName}'s Ad Aggression Score calculated?`,
+      answer: `The Ad Aggression Score is a 0–100 number from a public formula at ${AD_AGGRESSION_METHODOLOGY_PATH}. It is the sum of four sub-scores, 0–25 each — Velocity (new ads per week), Testing (share of ads with more than one creative variant), Freshness (how recent the creatives are), and Persistence (how long ads stay live). They add up to the score with no hidden weighting, and the score card on this page shows each one. The score only renders once ${brandName} has at least 14 days of watching and at least one ad with a verified link to ${domain}.`,
+    },
+    {
+      question: `How often are ${brandName}'s ads checked?`,
+      answer: `${checkedPhrase} Five to Nine runs scheduled checks of the public Meta Ad Library on a plan cadence: Scout every 6 hours, Starter every 3 hours, and Agency every 3 hours for its first 25 watchlists with the rest every 6 hours. Starter and Agency can also turn on instant alerts. This page shows the result of the most recent scheduled check, cached — it never runs a live scrape on a public visit.`,
+    },
+    {
+      question: `What does "verified" mean on these ads?`,
+      answer: `An ad is labeled as linking to ${domain} only when it carries verified link evidence — the ad's landing page or advertiser domain actually matches ${domain}. Ads the provider returned that merely match the search text, without a verified link, are still shown on the wall but are described as "matching the search", never as linking to or running for ${brandName}. The Ad Aggression Score and the "what changed" feed are built only from the verified-link subset, so attribution never rests on an unproven connection.`,
+    },
+    {
+      question: `Can I get an email when ${brandName}'s ads or offer change?`,
+      answer: `Yes. The "Watch ${domain} — free" button on this page starts a free account, and the first scan runs the moment you land. After that, every ad, offer, CTA, and form change hits your inbox with the screenshot, the page text, and the source link. Quiet periods still send a heartbeat so silence always means we looked.`,
+    },
+  ];
+}
+
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   if (!loaderData) {
     return [
@@ -437,17 +485,20 @@ export default function BrandAdsRoute() {
   const allBrandOwned =
     data.ads.length > 0 && data.brandOwnedAdCount === data.ads.length;
 
+  const faqEntries = brandPageFaqEntries(data);
+
   return (
     <main className="f9-home f9-ads-page">
       {/*
-       * Truthful WebPage + Service JSON-LD, and ONLY on indexable pages: the
-       * honest shell, demo-sourced entries, stale (> 7 days) captures, and
-       * the emergency-brake flag all carry noindex — structured data on
-       * those states would be dead weight at best and a freshness lie at
-       * worst. Every field mirrors the visible page: the meta
+       * Truthful WebPage + Service + FAQPage JSON-LD, and ONLY on indexable
+       * pages: the honest shell, demo-sourced entries, stale (> 7 days)
+       * captures, and the emergency-brake flag all carry noindex — structured
+       * data on those states would be dead weight at best and a freshness lie
+       * at worst. Every field mirrors the visible page: the meta
        * title/description, the canonical URL, the on-screen "Last checked"
-       * stamp (dateModified), the brand the page is about, and the Watch
-       * {domain} offer with Five to Nine as the provider.
+       * stamp (dateModified), the brand the page is about, the Watch
+       * {domain} offer with Five to Nine as the provider, and the brand-
+       * specific FAQ rendered from the same array further down the page.
        */}
       {!data.noindex ? (
         <>
@@ -472,6 +523,9 @@ export default function BrandAdsRoute() {
               }),
             )}
           />
+          {faqEntries ? (
+            <script {...jsonLdScriptProps(faqPageJsonLd(faqEntries))} />
+          ) : null}
         </>
       ) : null}
       {data.hasCachedAds ? (
@@ -834,7 +888,38 @@ function BrandAdsResults({
         </div>
       </section>
 
-      {/* 6. CLOSER */}
+      {/* 6. BRAND FAQ — rendered from the same array as the FAQPage JSON-LD
+          so the visible copy can never drift from the structured data. Every
+          answer is grounded in content the page already shows (the Ad
+          Aggression Score card, the "Last checked" stamp, the verified-link
+          labels, the Watch CTA). Hidden on noindex pages and the cache-miss
+          shell, which 301-redirects and never reaches this component. */}
+      {(() => {
+        const faq = data.noindex ? null : brandPageFaqEntries(data);
+        if (!faq) return null;
+        return (
+          <section className="f9-ads-sec" aria-labelledby="brand-ads-faq-title">
+            <div className="f9-container">
+              <div className="f9-ads-sec-head">
+                <div className="f9-ads-sec-head-left">
+                  <span className="f9-ads-sec-eyebrow">FAQ</span>
+                  <h2 id="brand-ads-faq-title">{`Common questions about ${data.brandName}'s ads`}</h2>
+                </div>
+              </div>
+              <dl className="proof-trail-list">
+                {faq.map((entry) => (
+                  <div key={entry.question}>
+                    <dt>{entry.question}</dt>
+                    <dd>{entry.answer}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* 7. CLOSER */}
       <section className="f9-ads-closer">
         <div className="f9-container">
           <h2 className="f9-ads-closer-head">
