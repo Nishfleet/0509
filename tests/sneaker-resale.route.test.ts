@@ -62,6 +62,26 @@ describe("sneaker-resale locale landing pages", () => {
     }
   });
 
+  // #1290 live proof: the sneaker-resale category page used to name brands in
+  // copy only and link to zero /ads/ pages. Each brand tile must now link to a
+  // real /ads/:domain brand page so the market's #1 swing is not orphaned.
+  // A domain without a cached /ads/ page 301-redirects to /search, so a
+  // missing link here is a dead-end regression, not a styling change.
+  it("links every brand tile to a real /ads/:domain brand page (#1290)", async () => {
+    const { SneakerResaleLanding } = await import("~/components/sneaker-resale-landing");
+    const markup = renderToStaticMarkup(
+      createElement(SneakerResaleLanding, { locale: "en" }),
+    );
+    for (const domain of ["nike.com", "adidas.com", "asos.com", "decathlon.com"]) {
+      expect(markup).toContain(`href="/ads/${domain}"`);
+    }
+    // The brand-links section must not be empty or copy-only: at least four
+    // /ads/ links ship, matching the live sneaker-resale page driven on
+    // 2026-08-28.
+    const adsLinkCount = (markup.match(/href="\/ads\/[^"]+"/g) ?? []).length;
+    expect(adsLinkCount).toBeGreaterThanOrEqual(4);
+  });
+
   it("emits reciprocal hreflang from no-arg links() and a locale canonical from loaderData", async () => {
     const { links, meta } = await import("~/routes/$locale.sneaker-resale");
 
