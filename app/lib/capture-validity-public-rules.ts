@@ -18,7 +18,8 @@ export type CaptureValidityPublicGate =
         | "landing_content_signature_too_small";
     }
   | { kind: "extractor_suppression"; code: "churn_stable" | "ad_slot_strip" }
-  | { kind: "corroboration"; code: "screenshot_corroboration" };
+  | { kind: "corroboration"; code: "screenshot_corroboration" }
+  | { kind: "classifier"; code: "maintenance_window" };
 
 export interface CaptureValidityPublicRule {
   id: string;
@@ -92,6 +93,15 @@ export const CAPTURE_VALIDITY_PUBLIC_RULES: readonly CaptureValidityPublicRule[]
     why: "An ad network swapping a banner is not a competitor offer change. Ad-slot regions are stripped before the diff.",
     gate: { kind: "extractor_suppression", code: "ad_slot_strip" },
     issue953Anchor: "rotating banner",
+  },
+  {
+    id: "scheduled-maintenance-window",
+    title: "Scheduled maintenance window",
+    refused:
+      "Captures taken during a scheduled maintenance window when the page state is intentionally unstable.",
+    why: "We suppress the diff until the window passes so a transient maintenance state does not become a phantom change.",
+    gate: { kind: "classifier", code: "maintenance_window" },
+    issue953Anchor: "scheduled maintenance window",
   },
   {
     id: "screenshot-corroboration",

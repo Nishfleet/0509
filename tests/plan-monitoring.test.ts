@@ -1162,10 +1162,12 @@ describe("runWatchlistManual cheap scan path", () => {
       expect.objectContaining({
         status: "failed",
         failureCode: "landing_blocked",
-        captureMetadata: {
+        captureMetadata: expect.objectContaining({
+          captureValidityStatus: "capture_failed",
+          captureFailureReason: "landing_blocked",
           fetchStatus: 403,
           unreadableReasonCode: "landing_blocked",
-        },
+        }),
       }),
     );
   });

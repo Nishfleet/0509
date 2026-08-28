@@ -41,6 +41,7 @@ const SUPPRESSED_REASON_EXPLANATIONS: Record<string, string> = {
   unconfirmed_by_screenshot: "Screenshot did not match the extracted change",
   churn_stable: "Only a timestamp changed",
   ad_slot_strip: "Only a rotating banner changed",
+  maintenance_window: "Captured during scheduled maintenance window",
 };
 
 export function formatRunHistoryRefusalCopy(row: RunHistoryRefusalRow): string {
@@ -50,7 +51,7 @@ export function formatRunHistoryRefusalCopy(row: RunHistoryRefusalRow): string {
 export function resolveProofCaptureRefusal(
   capture: Pick<
     ProofCaptureRecord,
-    "id" | "status" | "skipReason" | "failureCode" | "failureReason" | "attemptedAt"
+    "id" | "status" | "skipReason" | "failureCode" | "failureReason" | "attemptedAt" | "captureMetadata"
   >,
 ): RunHistoryRefusalRow | null {
   if (capture.status === "failed") {
@@ -64,6 +65,24 @@ export function resolveProofCaptureRefusal(
       attemptedAt: capture.attemptedAt,
       generatesAlert: false,
     };
+  }
+
+  // Issue #1399: a succeeded capture can still be classified as suppressed
+  // (timestamp-only, rotating banner, unconfirmed by screenshot, or scheduled
+  // maintenance window) and must surface in run history as a refusal.
+  const captureValidityStatus = capture.captureMetadata?.captureValidityStatus;
+  const captureFailureReason = capture.captureMetadata?.captureFailureReason;
+  if (
+    capture.status === "succeeded" &&
+    captureValidityStatus === "suppressed" &&
+    typeof captureFailureReason === "string" &&
+    captureFailureReason.trim()
+  ) {
+    return suppressedRow({
+      id: capture.id,
+      reason: captureFailureReason.trim(),
+      attemptedAt: capture.attemptedAt,
+    });
   }
 
   if (
