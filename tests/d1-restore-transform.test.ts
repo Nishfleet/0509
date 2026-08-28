@@ -128,6 +128,95 @@ describe("D1 restore transform", () => {
     expect(enforced(result.sql)).toEqual({ count: 1 });
   });
 
+  it("restores an export whose child rows reference parent rows that load later", () => {
+    // The 2026-08-28 production failure: the table hoist (commit 1b5095dc)
+    // creates every table before any row, so `no such table` is gone, but the
+    // rows still land in sqlite_master creation order. When a child table was
+    // rebuilt before its parent, the child's rows are emitted first and reference
+    // parent rows that have not been inserted yet. D1 enforces foreign keys on
+    // import per statement, so the child INSERT fails with
+    // `FOREIGN KEY constraint failed` even though the final state is consistent
+    // (the parent row exists by commit). `PRAGMA defer_foreign_keys=TRUE` only
+    // defers within a transaction, and `wrangler d1 execute --file` does not wrap
+    // the file in one, so the deferred pragma cannot help. Ordering the rows so
+    // every parent row loads before its child rows removes the dependency on
+    // creation order entirely.
+    const source = [
+      "PRAGMA defer_foreign_keys=TRUE;",
+      'CREATE TABLE IF NOT EXISTS "watch_event" (',
+      "  id TEXT PRIMARY KEY NOT NULL,",
+      "  candidate_id TEXT,",
+      "  FOREIGN KEY (candidate_id) REFERENCES event_candidate(id) ON DELETE SET NULL",
+      ");",
+      "INSERT INTO \"watch_event\" (\"id\",\"candidate_id\") VALUES('we-1','ec-1');",
+      'CREATE TABLE IF NOT EXISTS "event_candidate" (',
+      "  id TEXT PRIMARY KEY NOT NULL,",
+      "  title TEXT NOT NULL",
+      ");",
+      "INSERT INTO \"event_candidate\" (\"id\",\"title\") VALUES('ec-1','New ad detected');",
+      "CREATE INDEX idx_watch_event_candidate ON watch_event(candidate_id);",
+      "",
+    ].join("\n");
+
+    const enforced = (sql: string) => {
+      const database = new DatabaseSync(":memory:");
+      try {
+        // node:sqlite exec autocommits each statement, mirroring D1's
+        // per-statement enforcement where defer_foreign_keys cannot bridge
+        // across statements.
+        database.exec("PRAGMA foreign_keys = ON;");
+        database.exec(sql);
+        return database
+          .prepare("SELECT we.id AS we_id, we.candidate_id AS cid, ec.title AS title FROM watch_event we JOIN event_candidate ec ON ec.id = we.candidate_id")
+          .get() as { we_id: string; cid: string; title: string };
+      } finally {
+        database.close();
+      }
+    };
+
+    // The pre-hoist raw export fails because the child table is created before
+    // its parent table exists at all (the original 2026-08-25 bug, fixed by
+    // the CREATE TABLE hoist in 1b5095dc).
+    expect(() => enforced(source)).toThrow(/no such table: main\.event_candidate/u);
+
+    // After the table hoist but WITHOUT row ordering, every table exists so
+    // `no such table` is gone, but the child row still loads before the parent
+    // row it references. D1 enforces the FK per statement and the restore dies
+    // with `FOREIGN KEY constraint failed` — the 2026-08-28 production failure.
+    const hoistedButRowUnordered = [
+      "PRAGMA defer_foreign_keys=TRUE;",
+      'CREATE TABLE IF NOT EXISTS "watch_event" (',
+      "  id TEXT PRIMARY KEY NOT NULL,",
+      "  candidate_id TEXT,",
+      "  FOREIGN KEY (candidate_id) REFERENCES event_candidate(id) ON DELETE SET NULL",
+      ");",
+      'CREATE TABLE IF NOT EXISTS "event_candidate" (',
+      "  id TEXT PRIMARY KEY NOT NULL,",
+      "  title TEXT NOT NULL",
+      ");",
+      "INSERT INTO \"watch_event\" (\"id\",\"candidate_id\") VALUES('we-1','ec-1');",
+      "INSERT INTO \"event_candidate\" (\"id\",\"title\") VALUES('ec-1','New ad detected');",
+      "CREATE INDEX idx_watch_event_candidate ON watch_event(candidate_id);",
+      "",
+    ].join("\n");
+    expect(() => enforced(hoistedButRowUnordered)).toThrow(/FOREIGN KEY constraint failed/u);
+
+    const result = transformD1RestoreSql(source);
+    expect(result.transformed).toBe(0);
+    const eventCandidateInsert = result.statements.findIndex((statement) =>
+      /^\s*INSERT\s+INTO\s+"event_candidate"/iu.test(statement),
+    );
+    const watchEventInsert = result.statements.findIndex((statement) =>
+      /^\s*INSERT\s+INTO\s+"watch_event"/iu.test(statement),
+    );
+    expect(eventCandidateInsert).toBeGreaterThanOrEqual(0);
+    expect(watchEventInsert).toBeGreaterThanOrEqual(0);
+    // Parent rows must load before child rows.
+    expect(eventCandidateInsert).toBeLessThan(watchEventInsert);
+    expect(isPragmaFirst(result.statements)).toBe(true);
+    expect(enforced(result.sql)).toEqual({ we_id: "we-1", cid: "ec-1", title: "New ad detected" });
+  });
+
   it("allows an explicit key map when a data-only export omits schema", () => {
     const value = "v".repeat(20_000);
     const source = `INSERT INTO ad (id, raw_json) VALUES ('ad-1', ${sqlString(value)});`;
