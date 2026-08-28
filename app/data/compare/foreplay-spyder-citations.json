@@ -1,0 +1,20 @@
+{
+  "competitor": "foreplay-spyder",
+  "productName": "Foreplay Spyder",
+  "sources": [
+    {
+      "id": "foreplay-spyder-product",
+      "href": "https://www.foreplay.co/spyder",
+      "label": "Foreplay Spyder product page",
+      "checked": "2026-08-28",
+      "claim": "Foreplay's Spyder product watches a competitor's new Meta ads and landing pages, keeps a desktop and mobile landing-page archive, sends Slack and email summaries, and publishes an MCP connector on all plans."
+    },
+    {
+      "id": "foreplay-pricing",
+      "href": "https://www.foreplay.co/pricing",
+      "label": "Foreplay pricing page",
+      "checked": "2026-08-28",
+      "claim": "Foreplay's public list prices run from $59 a month (Basic) to $459 (Agency), plus per-user and per-brand add-ons; Spyder is part of that stack."
+    }
+  ]
+}

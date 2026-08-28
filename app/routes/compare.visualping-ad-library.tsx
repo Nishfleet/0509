@@ -4,6 +4,12 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
+  Cite,
+  CompareCitationsFooter,
+  type CompareCitations,
+  type CompareClaimCard,
+} from "~/components/compare-citations";
+import {
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -12,6 +18,9 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import visualpingAdLibraryCitations from "~/data/compare/visualping-ad-library-citations.json";
+
+const citations = visualpingAdLibraryCitations as CompareCitations;
 
 const pageTitle = "Five to Nine vs Visualping for ad libraries";
 const pageDescription =
@@ -26,41 +35,46 @@ export const meta: MetaFunction = () =>
     pathname: "/compare/visualping-ad-library",
   });
 
-const visualpingStrengths = [
+const visualpingStrengths: readonly CompareClaimCard[] = [
   {
     title: "A published Meta Ad Library playbook",
     detail:
       "Visualping has a public guide for monitoring a competitor's Meta Ad Library page: paste the library URL, pick a cadence, and get visual diffs when new ads appear. That playbook is real and well documented.",
+    sourceId: "visualping-playbook",
   },
   {
     title: "Free to start, then metered checks",
     detail:
       "Visualping publishes a free plan and paid plans up to $350. Checks are metered and expire monthly. Confirm current limits on Visualping's pricing page.",
+    sourceId: "visualping-pricing",
   },
   {
     title: "Visual, text, and element diffs",
     detail:
       "You can watch pixels, copy, or a selected box on the page, with email and other alerts on paid plans. For a single known URL, that is a solid general-purpose monitor.",
+    sourceId: "visualping-home",
   },
-] as const;
+];
 
-const visualpingCosts = [
+const visualpingCosts: readonly CompareClaimCard[] = [
   {
     title: "You hunt the Ad Library URL yourself",
     detail:
       "The playbook starts by finding and pasting each competitor's Meta Ad Library URL, then writing a condition prompt. Five to Nine starts from a domain paste.",
+    sourceId: "visualping-playbook",
   },
   {
     title: "Pixel diffs fire on noise",
     detail:
       "Visualping is a generic URL differ. Banner rotation, cookie popups, timestamps, and layout shift all look like changes. Visualping's own writing says most detected changes are not important, and that false positives will never reach zero.",
+    sourceId: "visualping-false-positives",
   },
   {
     title: "The interpretation is on you",
     detail:
       "A green highlight on a new ad is useful. It does not name the offer, the price, or the CTA, and it does not store a source-linked commercial-field trail.",
   },
-] as const;
+];
 
 const fiveToNineAdds = [
   {
@@ -154,7 +168,10 @@ export default function CompareVisualpingAdLibraryRoute() {
           {visualpingStrengths.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -169,7 +186,10 @@ export default function CompareVisualpingAdLibraryRoute() {
           {visualpingCosts.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -200,6 +220,8 @@ export default function CompareVisualpingAdLibraryRoute() {
           &ldquo;Visualping's playbook is enough for you.&rdquo;
         </p>
       </section>
+
+      <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
     </main>

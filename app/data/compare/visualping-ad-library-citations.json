@@ -1,0 +1,34 @@
+{
+  "competitor": "visualping-ad-library",
+  "productName": "Visualping",
+  "sources": [
+    {
+      "id": "visualping-home",
+      "href": "https://visualping.io/",
+      "label": "Visualping home",
+      "checked": "2026-08-28",
+      "claim": "Visualping watches pixels, copy, or a selected box on the page, with email and other alerts on paid plans."
+    },
+    {
+      "id": "visualping-playbook",
+      "href": "https://visualping.io/blog/monitor-competitors-meta-ad-libraries",
+      "label": "Visualping Meta Ad Library playbook",
+      "checked": "2026-08-28",
+      "claim": "Visualping has a public guide for monitoring a competitor's Meta Ad Library page: paste the library URL, pick a cadence, and get visual diffs when new ads appear."
+    },
+    {
+      "id": "visualping-pricing",
+      "href": "https://visualping.io/pricing",
+      "label": "Visualping pricing page",
+      "checked": "2026-08-28",
+      "claim": "Visualping publishes a free plan and paid plans up to $350; checks are metered and expire monthly."
+    },
+    {
+      "id": "visualping-false-positives",
+      "href": "https://visualping.io/blog/how-visualping-cuts-false-positives",
+      "label": "Visualping on false positives",
+      "checked": "2026-08-28",
+      "claim": "Visualping's own writing says most detected changes are not important, and that false positives will never reach zero."
+    }
+  ]
+}

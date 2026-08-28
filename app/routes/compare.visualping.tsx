@@ -4,8 +4,17 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import {
+  Cite,
+  CompareCitationsFooter,
+  type CompareCitations,
+  type CompareClaimCard,
+} from "~/components/compare-citations";
 import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import visualpingCitations from "~/data/compare/visualping-citations.json";
+
+const citations = visualpingCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
 
@@ -21,34 +30,39 @@ export const meta: MetaFunction = () =>
     pathname: "/compare/visualping",
   });
 
-const visualpingStrengths = [
+const visualpingStrengths: readonly CompareClaimCard[] = [
   {
     title: "Works on any public URL",
     detail:
       "Paste a page and monitor the whole thing or a selected area. Visualping is not tied to any ad library, so any public page is a valid target.",
+    sourceId: "visualping-home",
   },
   {
     title: "Free tier and flexible paid plans",
     detail:
       "Visualping publishes a free plan with limited checks and pages, plus paid plans that add frequency, volume, and team features. Check its pricing page for current limits.",
+    sourceId: "visualping-pricing",
   },
   {
     title: "Multiple change modes",
     detail:
       "Visual, text, element, and all-in modes let you decide whether to watch pixels, copy, or a specific box on the page.",
+    sourceId: "visualping-home",
   },
   {
     title: "Broad alert stack",
     detail:
       "Email, Slack, Microsoft Teams, webhooks, SMS, and API alerts are available on paid plans; the free plan still gets core notifications.",
+    sourceId: "visualping-integrations",
   },
-] as const;
+];
 
-const visualpingCosts = [
+const visualpingCosts: readonly CompareClaimCard[] = [
   {
     title: "You configure every page and frequency",
     detail:
       "Monitoring cadence and page volume are priced by checks and pages. Watching many competitor pages at high frequency moves you up the plans.",
+    sourceId: "visualping-pricing",
   },
   {
     title: "General-purpose, not competitor-specific",
@@ -60,7 +74,7 @@ const visualpingCosts = [
     detail:
       "Screenshots and diffs are available, but building a shared, timestamped, source-linked trail for a team takes manual work outside the tool.",
   },
-] as const;
+];
 
 const fiveToNineAdds = [
   {
@@ -138,7 +152,10 @@ export default function CompareVisualpingRoute() {
           {visualpingStrengths.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -153,7 +170,10 @@ export default function CompareVisualpingRoute() {
           {visualpingCosts.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -184,6 +204,8 @@ export default function CompareVisualpingRoute() {
           honestly, including &ldquo;Visualping alone is enough for you.&rdquo;
         </p>
       </section>
+
+      <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
     </main>
