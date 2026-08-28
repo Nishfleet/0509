@@ -233,12 +233,6 @@ export async function resweepAutoCompetitorsForCustomer(
     country,
     userId: input.userId,
   });
-  console.log("DEBUG seedCandidates", {
-    count: seedCandidates.length,
-    candidates: seedCandidates.map((c) => ({ advertiser: c.advertiser, domain: c.registrableDomain })),
-    domain: input.domain,
-    country,
-  });
 
   const watchlists = await listWatchlists(env, input.userId);
   const watchedDomains = new Set<string>();

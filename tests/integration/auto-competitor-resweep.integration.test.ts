@@ -4,6 +4,7 @@ import { resolveCommercialDiscoveryProvider } from "~/lib/ad-source.server";
 import {
   buildKeywordProbeCacheKey,
   buildOwnDomainCacheKey,
+  extractProbeKeywords,
   seedAutoCompetitors,
 } from "~/lib/auto-competitor-seed.server";
 import {
@@ -189,7 +190,7 @@ describe("resweepAutoCompetitors — Phase 3 (auto-competitor-watch #1371)", () 
       domain: "allbirds.com",
       country: "all",
     })!;
-    await seedCacheEntry(ownKey, [
+    const ownAds = [
       fixtureAd({
         metaAdId: "ad-allbirds-own-1",
         advertiser: "Allbirds",
@@ -200,17 +201,26 @@ describe("resweepAutoCompetitors — Phase 3 (auto-competitor-watch #1371)", () 
         landingPageUrl: "https://allbirds.com",
         countries: ["United States"],
       }),
-    ]);
+    ];
+    await seedCacheEntry(ownKey, ownAds);
 
     // Brand B has already been surfaced in a previous resweep.
     await seedAutoCompetitorSurfacedCache(userId, [
       candidate("Brand B", "brandb.com"),
     ]);
 
-    // The probe returns A, B, and C. Only C is net-new.
+    // The probe returns A, B, and C. Only C is net-new. Use the EXACT
+    // extracted keyword the seed function will probe, so the cache key
+    // matches what the seed function reads. extractProbeKeywords returns the
+    // hook with sentence punctuation, so the keyword is "wool runners." not
+    // "wool runners" — seeding with the wrong string would yield zero
+    // candidates (and the diff would not be tested).
+    const probeKeywords = extractProbeKeywords(ownAds, 8);
+    expect(probeKeywords.length).toBeGreaterThan(0);
+    const probeKeyword = probeKeywords[0];
     const probeKey = buildKeywordProbeCacheKey({
       provider: PROVIDER,
-      keyword: "wool runners",
+      keyword: probeKeyword,
       country: "United States",
     });
     await seedCacheEntry(probeKey, [
@@ -246,25 +256,16 @@ describe("resweepAutoCompetitors — Phase 3 (auto-competitor-watch #1371)", () 
       }),
     ]);
 
-    const direct = await seedAutoCompetitors(appEnv, {
-      domain: "allbirds.com",
-      country: "all",
-      userId,
-    });
-    console.log("DEBUG direct seed", {
-      count: direct.length,
-      advertisers: direct.map((c) => c.advertiser),
-      ownKey,
-      probeKey,
-    });
-
     const result = await resweepAutoCompetitorsForCustomer(appEnv, {
       userId,
       domain: "allbirds.com",
       country: "all",
     });
 
-    expect(result.scanned).toBe(3);
+    // The probe returned 3 advertisers (A, B, C). A is already watched and
+    // deduped inside seedAutoCompetitors, so the resweep sees 2. B is in the
+    // previously-surfaced set and is dropped by the diff. Only C is net-new.
+    expect(result.scanned).toBe(2);
     expect(result.newlyAppeared.map((c) => c.advertiser)).toEqual(["Brand C"]);
     expect(result.newlyAppeared[0].provenance).toContain("newly_appeared");
     expect(result.newlyAppeared[0].registrableDomain).toBe("brandc.com");
