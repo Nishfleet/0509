@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { SignupFirstBriefView } from "~/components/signup-first-brief-view";
+import type { SignupFirstBriefLoaderData } from "~/lib/first-brief";
 
 const COMPAT_COOKIE = "f9_onboard_compat";
 
@@ -92,8 +93,10 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 export default function RetiredOnboardRoute() {
-  const data = useLoaderData<typeof loader>();
-  if (data && typeof data === "object" && "step" in data && data.step === "first-brief") {
+  const data = useLoaderData<typeof loader>() as
+    | SignupFirstBriefLoaderData
+    | null;
+  if (data && data.step === "first-brief") {
     return <SignupFirstBriefView data={data} />;
   }
   return null;
@@ -111,7 +114,7 @@ async function firstBriefLoader(
   env: ReturnType<typeof import("~/lib/context.server").getEnv>,
   context: LoaderFunctionArgs["context"],
   request: Request,
-) {
+): Promise<SignupFirstBriefLoaderData> {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { listDigests, listAdsByIds, listWatchlists } = await import(
     "~/lib/data.server"
@@ -156,12 +159,12 @@ async function firstBriefLoader(
   if (!firstBrief || !hasEvidence) {
     // The activation scan is still in flight. Render the waiting state — the
     // client polls the dashboard's first-scan status endpoint.
-    return Response.json({
+    return {
       step: "first-brief",
-      status: "waiting" as const,
+      status: "waiting",
       watchlistName:
         watchlists.find((w) => w.isActive)?.targetLabel ?? null,
-    });
+    };
   }
 
   // Collect ad ids from the digest items so we can enrich the payload with
@@ -180,19 +183,19 @@ async function firstBriefLoader(
   });
 
   if (!payload) {
-    return Response.json({
+    return {
       step: "first-brief",
-      status: "waiting" as const,
+      status: "waiting",
       watchlistName:
         watchlists.find((w) => w.isActive)?.targetLabel ?? null,
-    });
+    };
   }
 
-  return Response.json({
+  return {
     step: "first-brief",
-    status: "ready" as const,
+    status: "ready",
     brief: payload,
-  });
+  };
 }
 
 function requestHasCompatCookie(request: Request) {
