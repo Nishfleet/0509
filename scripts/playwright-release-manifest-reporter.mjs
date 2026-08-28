@@ -31,6 +31,7 @@ export const RELEASE_ARTIFACT_STATE_MATRIX = Object.freeze({
       "empty",
       "degraded",
       "proof",
+      "timeline",
       "signup",
     ]),
   }),
