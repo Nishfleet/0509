@@ -319,14 +319,43 @@ for (const viewport of viewports) {
     await expectNoHorizontalOverflow(page);
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "proof" });
 
-    // Issue #1284: public /timeline/:domain render check. A non-empty timeline
-    // row must link to a real screenshot artifact and a real page-text extract —
-    // never the "no screenshot" string. The e2e fixture seeds a real
-    // landing_page_snapshot for nike.com with both artifacts in R2, so the
-    // timeline page must render the entry with working receipt links. The
-    // proof-less backfill row (migration 0079) is filtered out by the data
-    // layer and must never appear.
+    // Issue #1284: public /timeline/:domain render check across EVERY demo-seed
+    // brand. A non-empty timeline row must link to a real screenshot artifact
+    // and a real page-text extract — never the "no screenshot" string. The
+    // proof gate in loadOfferTimeline filters proof-less backfill rows
+    // (migrations 0079/0081), so every demo-seed domain except nike.com (seeded
+    // with both artifacts in the e2e R2 fixture) renders an empty/410 timeline.
+    // The prevention loop loads every demo-seed domain's server-rendered output
+    // and asserts the "no screenshot" string never ships on any of them; nike.com
+    // additionally gets a full browser render proving the entry links to a real,
+    // resolving screenshot and page-text artifact. The domain set is the full
+    // backfill seed (5 demo brands from migration 0079 + 25 sitemap brands from
+    // migration 0081) — the exact rows that could reintroduce the string if a
+    // future populate pass bypasses the gate.
     const proofPageUrl = page.url();
+    const demoSeedTimelineDomains = [
+      "nike.com", "nykaa.com", "allbirds.com", "lenskart.com", "mamaearth.com",
+      "adidas.com", "adobe.com", "amazon.com", "asos.com", "atlassian.com",
+      "bombas.com", "bombayshavingcompany.com", "canva.com", "celonis.com",
+      "decathlon.com", "figma.com", "gymshark.com", "hm.com", "hubspot.com",
+      "mcaffeine.com", "ouraring.com", "personio.com", "ridge.com",
+      "ridgewallet.com", "sephora.com", "shopify.com", "sugarcosmetics.com",
+      "ulta.com", "walmart.com", "zoho.com",
+    ] as const;
+    for (const domain of demoSeedTimelineDomains) {
+      // Pull the same server-rendered body a visitor's curl would. A
+      // proof-less-only timeline 410s (issue #1309 retire path); a populated
+      // one 200s. Either way the body must never contain the "no screenshot"
+      // string — the exact proof-betrayal this gate prevents.
+      const timelineResponse = await page.request.get(`/timeline/${domain}`);
+      const timelineBody = await timelineResponse.text();
+      expect(timelineBody.toLowerCase()).not.toContain("no screenshot");
+    }
+    // nike.com is the one demo-seed domain the e2e fixture seeds with a real
+    // landing_page_snapshot carrying both artifacts, so it must render exactly
+    // one entry with working receipt links and a resolving screenshot. The
+    // migration 0079 backfill row for nike.com has no artifacts and is filtered
+    // out by the proof gate, so it must never appear alongside the real entry.
     await page.goto("/timeline/nike.com");
     await expect(page).toHaveURL(/\/timeline\/nike\.com$/);
     const timelineEntries = page.locator(".f9-timeline-entry");
