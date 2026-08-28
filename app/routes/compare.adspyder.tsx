@@ -4,6 +4,12 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
+  Cite,
+  CompareCitationsFooter,
+  type CompareCitations,
+  type CompareClaimCard,
+} from "~/components/compare-citations";
+import {
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -12,6 +18,9 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import adspyderCitations from "~/data/compare/adspyder-citations.json";
+
+const citations = adspyderCitations as CompareCitations;
 
 const pageTitle = "Five to Nine vs AdSpyder";
 const pageDescription =
@@ -26,25 +35,28 @@ export const meta: MetaFunction = () =>
     pathname: "/compare/adspyder",
   });
 
-const adspyderStrengths = [
+const adspyderStrengths: readonly CompareClaimCard[] = [
   {
     title: "A low listed price",
     detail:
       "AdSpyder's public plans are listed from $10 to $99 a month. That is a cheap way to get alerts when a competitor launches a new ad. Confirm current plans on AdSpyder's site.",
+    sourceId: "adspyder-pricing",
   },
   {
     title: "New-ad alerts",
     detail:
       "Public copy says it alerts when competitors launch new ads, update creatives, or shift messaging, and that detections can land within hours.",
+    sourceId: "adspyder-home",
   },
   {
     title: "Landing-page CTA and offer read",
     detail:
       "AdSpyder also advertises landing-page CTA and offer analysis. Treat that as a vendor claim until you have checked a real capture on your competitors.",
+    sourceId: "adspyder-features",
   },
-] as const;
+];
 
-const adspyderCosts = [
+const adspyderCosts: readonly CompareClaimCard[] = [
   {
     title: "Diffs are unverified",
     detail:
@@ -60,7 +72,7 @@ const adspyderCosts = [
     detail:
       "If you need timestamped page text, the original source URL, and a screenshot when the capture includes one, that is the Five to Nine job. AdSpyder's listed price does not, by itself, prove that trail exists.",
   },
-] as const;
+];
 
 const fiveToNineAdds = [
   {
@@ -152,7 +164,10 @@ export default function CompareAdspyderRoute() {
           {adspyderStrengths.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -167,7 +182,10 @@ export default function CompareAdspyderRoute() {
           {adspyderCosts.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -197,6 +215,8 @@ export default function CompareAdspyderRoute() {
           Questions? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
         </p>
       </section>
+
+      <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
     </main>

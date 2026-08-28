@@ -4,6 +4,12 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
+  Cite,
+  CompareCitationsFooter,
+  type CompareCitations,
+  type CompareClaimCard,
+} from "~/components/compare-citations";
+import {
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -12,6 +18,9 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import panoramataCitations from "~/data/compare/panoramata-citations.json";
+
+const citations = panoramataCitations as CompareCitations;
 
 const pageTitle = "Five to Nine vs Panoramata";
 const pageDescription =
@@ -26,29 +35,33 @@ export const meta: MetaFunction = () =>
     pathname: "/compare/panoramata",
   });
 
-const panoramataStrengths = [
+const panoramataStrengths: readonly CompareClaimCard[] = [
   {
     title: "Ads and pages in one product",
     detail:
       "Panoramata combines competitor ads, landing pages (desktop and mobile), website changes, and a versioned screenshot archive. That is a real ads-plus-pages product, not a generic URL watcher.",
+    sourceId: "panoramata-website-changes",
   },
   {
     title: "History you can scroll",
     detail:
       "Public plans list a 6-month archive on Startup and unlimited history on Professional. Side-by-side screenshot comparison is part of the product.",
+    sourceId: "panoramata-pricing",
   },
   {
     title: "Broader than ads",
     detail:
       "Panoramata also tracks marketing emails, SMS, and flows on higher tiers. Five to Nine does not cover those channels.",
+    sourceId: "panoramata-home",
   },
-] as const;
+];
 
-const panoramataCosts = [
+const panoramataCosts: readonly CompareClaimCard[] = [
   {
     title: "A high floor for a solo operator",
     detail:
       "Public list prices run from €99 a month (Startup, 20 competitors) to €379 (Advanced). Professional is listed at €149. Confirm current plans on Panoramata's site.",
+    sourceId: "panoramata-pricing",
   },
   {
     title: "Weekly-first alerts",
@@ -60,7 +73,7 @@ const panoramataCosts = [
     detail:
       "Panoramata's public materials put API access on Enterprise. Five to Nine's customer API and MCP exist on Agency; they are not claimed as a free-tier feature here.",
   },
-] as const;
+];
 
 const fiveToNineAdds = [
   {
@@ -152,7 +165,10 @@ export default function ComparePanoramataRoute() {
           {panoramataStrengths.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -167,7 +183,10 @@ export default function ComparePanoramataRoute() {
           {panoramataCosts.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -198,6 +217,8 @@ export default function ComparePanoramataRoute() {
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
         </p>
       </section>
+
+      <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
     </main>

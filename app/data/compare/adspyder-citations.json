@@ -1,0 +1,27 @@
+{
+  "competitor": "adspyder",
+  "productName": "AdSpyder",
+  "sources": [
+    {
+      "id": "adspyder-pricing",
+      "href": "https://adspyder.io/pricing",
+      "label": "AdSpyder pricing page",
+      "checked": "2026-08-28",
+      "claim": "AdSpyder's public plans are listed from $10 to $99 a month."
+    },
+    {
+      "id": "adspyder-home",
+      "href": "https://adspyder.io/",
+      "label": "AdSpyder home",
+      "checked": "2026-08-28",
+      "claim": "Public copy says AdSpyder alerts when competitors launch new ads, update creatives, or shift messaging, and that detections can land within hours."
+    },
+    {
+      "id": "adspyder-features",
+      "href": "https://adspyder.io/features",
+      "label": "AdSpyder features",
+      "checked": "2026-08-28",
+      "claim": "AdSpyder advertises landing-page CTA and offer analysis."
+    }
+  ]
+}
