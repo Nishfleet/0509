@@ -1,5 +1,6 @@
 import { linkedinConnector } from "~/lib/presence-connectors/linkedin.server";
 import { redditConnector } from "~/lib/presence-connectors/reddit.server";
+import { rssConnector } from "~/lib/presence-connectors/rss.server";
 import { websiteConnector } from "~/lib/presence-connectors/website.server";
 import { xConnector } from "~/lib/presence-connectors/x.server";
 import { connectorOperationalForPolling, evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
@@ -18,6 +19,7 @@ const CONNECTORS = {
   x: xConnector,
   reddit: redditConnector,
   linkedin: linkedinConnector,
+  rss: rssConnector,
 } as const;
 
 export function getPresenceConnector(connectorId: PresenceConnectorId) {
@@ -82,6 +84,9 @@ export async function pollPresenceTarget(
   if (target.connectorId === "website") {
     return websiteConnector.poll(ctx, target, options.cursor);
   }
+  if (target.connectorId === "rss") {
+    return rssConnector.poll(ctx, target, options.cursor);
+  }
   if (target.connectorId === "x") {
     return xConnector.poll(ctx);
   }
@@ -101,6 +106,9 @@ export function coverageLabelForConnector(
   }
   if (connectorId === "website") {
     return "PUBLIC_WEB_BEST_EFFORT" as const;
+  }
+  if (connectorId === "rss") {
+    return "VERIFIED_PUBLIC_FEED" as const;
   }
   if (connectorId === "linkedin" && trackingMode === "competitor") {
     return "LIMITED_COVERAGE" as const;
