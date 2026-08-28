@@ -124,6 +124,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     adLibraryCountry: "India",
     noindex: false,
     canonicalPath: "/ads/nike.com",
+    captureFailures: [],
     ...overrides,
   };
 }

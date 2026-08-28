@@ -58,6 +58,7 @@ const READ_EXPORT_TOOL_NAMES = [
   "get_collection_export",
   "get_watchlist_export",
   "get_digest_export",
+  "watchlist_runs.list",
 ] as const;
 const READ_EXPORT_TOOL_NAME_SET = new Set<string>(READ_EXPORT_TOOL_NAMES);
 const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
@@ -142,6 +143,7 @@ describe("MCP route discovery", () => {
     );
     body.tools
       .filter((tool) => tool.name === "get_workspace_readiness" || READ_EXPORT_TOOL_NAME_SET.has(tool.name))
+      .filter((tool) => tool.name !== "watchlist_runs.list")
       .forEach((tool) => {
         expect(JSON.stringify(tool.inputSchema)).toContain('"json"');
       });

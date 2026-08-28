@@ -74,6 +74,7 @@ type DetailData = ComponentProps<typeof EventChangesSection>["data"] &
     counterBriefLocked: boolean;
     recentDeliveryAttempts: PublicDeliveryAttemptSummary[];
     showPresenceNav: boolean;
+    latestRunCaptureAttempts?: ComponentProps<typeof RecentChecksSection>["latestRunCaptureAttempts"];
   };
 
 export interface CompetitorDetailProps {
@@ -367,6 +368,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           checksExpanded={props.checksExpanded}
           runs={data.runs}
           watchlistId={watchlist.id}
+          latestRunCaptureAttempts={data.latestRunCaptureAttempts}
         />
         <CandidateHistory candidates={data.eventCandidates} />
         <details className="f9-evidence-report-glossary">

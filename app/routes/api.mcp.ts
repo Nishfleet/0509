@@ -128,6 +128,24 @@ const MCP_TOOLS = [
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
   {
+    name: "watchlist_runs.list",
+    title: "List Watchlist Run History",
+    description:
+      "Read the latest monitoring run for an account-owned watchlist, including every capture attempt — succeeded, failed, and skipped — with a public reason code for each non-success capture. A failed capture is never an alert, but it is always visible here so the silence is provable.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        watchlistId: {
+          type: "string",
+          description: "Five to Nine watchlist owned by the API-key account.",
+        },
+      },
+      required: ["watchlistId"],
+      additionalProperties: false,
+    },
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
     name: "get_digest_export",
     title: "Get Digest Export",
     description:
@@ -903,6 +921,10 @@ async function callTool(
     return buildWatchlistToolResult(env, apiKey.userId, args, format);
   }
 
+  if (name === "watchlist_runs.list") {
+    return buildWatchlistRunsToolResult(env, apiKey.userId, args);
+  }
+
   if (name === "get_digest_export") {
     return buildDigestToolResult(env, apiKey.userId, stringField(args, "digestId"), format);
   }
@@ -1161,6 +1183,63 @@ async function buildWatchlistToolResult(
   return structuredToolResult({
     ...buildWatchlistExportPayload(watchlist, page.items),
     pagination: { limit: pageInput.value.limit, nextCursor: page.nextCursor },
+  });
+}
+
+async function buildWatchlistRunsToolResult(
+  env: AppEnv,
+  userId: string,
+  args: object,
+) {
+  const watchlistId = stringField(args, "watchlistId");
+  if (!watchlistId) {
+    return { ok: false as const, message: "watchlistId is required." };
+  }
+
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, userId);
+  const { getWatchlist } = await import("~/lib/data.server");
+  const { getLatestWatchlistRun } = await import("~/lib/data/watchlist-runs.server");
+  const { listCaptureAttemptsForRun } = await import("~/lib/data/watchlist-run-capture-attempts.server");
+
+  const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
+  if (!watchlist) {
+    return toolNotFound("No account-owned watchlist was found for this API key.");
+  }
+
+  const run = await getLatestWatchlistRun(env, watchlist.id);
+  if (!run) {
+    return structuredToolResult({
+      watchlist_id: watchlist.id,
+      run: null,
+      capture_attempts: [],
+    });
+  }
+
+  const captureAttempts = await listCaptureAttemptsForRun(env, run);
+
+  return structuredToolResult({
+    watchlist_id: watchlist.id,
+    run: {
+      id: run.id,
+      status: run.status,
+      trigger_type: run.triggerType,
+      started_at: run.startedAt,
+      finished_at: run.finishedAt,
+      pages_scanned: run.pagesScanned,
+      page_budget: run.pageBudget,
+      error_code: run.errorCode,
+      error_message: run.errorMessage,
+    },
+    capture_attempts: captureAttempts.map((attempt) => ({
+      id: attempt.id,
+      status: attempt.status,
+      reason_code: attempt.reasonCode,
+      screenshot_artifact_key: attempt.screenshotArtifactKey,
+      error_message: attempt.errorMessage,
+      url_checked: attempt.urlChecked,
+      checked_at: attempt.checkedAt,
+    })),
   });
 }
 
