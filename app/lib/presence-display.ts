@@ -19,6 +19,7 @@ const CONNECTOR_COPY: Record<PresenceConnectorId, string> = {
   x: "X",
   reddit: "Reddit",
   linkedin: "LinkedIn",
+  rss: "RSS / Atom / JSON Feed",
 };
 
 const SOURCE_COVERAGE_STATUS_COPY: Record<PresenceSourceCoverageStatus, string> = {

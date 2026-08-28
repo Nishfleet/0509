@@ -33,6 +33,8 @@ function connectorRolloutFromEnv(env: AppEnv, connectorId: PresenceConnectorId):
       return parseRolloutState(env.PRESENCE_REDDIT_ROLLOUT, "disabled");
     case "linkedin":
       return parseRolloutState(env.PRESENCE_LINKEDIN_ROLLOUT, "disabled");
+    case "rss":
+      return parseRolloutState(env.PRESENCE_RSS_ROLLOUT, "disabled");
     default:
       return "disabled";
   }
@@ -48,13 +50,17 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
       return Boolean(env.REDDIT_CLIENT_ID?.trim() && env.REDDIT_CLIENT_SECRET?.trim());
     case "linkedin":
       return Boolean(env.LINKEDIN_CLIENT_ID?.trim() && env.LINKEDIN_CLIENT_SECRET?.trim());
+    case "rss":
+      // RSS/Atom/JSON Feed polling is public-web: no account or API credentials.
+      // The rollout gate (PRESENCE_RSS_ROLLOUT) is still required to activate it.
+      return true;
     default:
       return false;
   }
 }
 
 export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
-  return connectorId === "website";
+  return connectorId === "website" || connectorId === "rss";
 }
 
 export async function evaluateConnectorAccessGate(

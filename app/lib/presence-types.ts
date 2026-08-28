@@ -1,4 +1,4 @@
-export const PRESENCE_CONNECTOR_IDS = ["website", "x", "reddit", "linkedin"] as const;
+export const PRESENCE_CONNECTOR_IDS = ["website", "x", "reddit", "linkedin", "rss"] as const;
 export type PresenceConnectorId = (typeof PRESENCE_CONNECTOR_IDS)[number];
 
 /** Catalog sources include live connectors plus planned/manual-only entries. */
@@ -7,6 +7,7 @@ export const PRESENCE_SOURCE_IDS = [
   "x",
   "reddit",
   "linkedin",
+  "rss",
   "youtube",
   "amazon",
   "context_dev",
