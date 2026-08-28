@@ -1,6 +1,6 @@
 import { resolveCommercialDiscoveryProvider } from "~/lib/ad-source.server";
+import type { AutoCompetitorCandidate } from "~/lib/auto-competitor-seed.server";
 import {
-  AutoCompetitorCandidate,
   resolveRegistrableDomainFromUrl,
   seedAutoCompetitors,
 } from "~/lib/auto-competitor-seed.server";
