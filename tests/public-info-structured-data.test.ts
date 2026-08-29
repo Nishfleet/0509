@@ -43,7 +43,7 @@ describe("public info and comparison pages emit WebPage JSON-LD", () => {
     { path: "~/routes/terms", title: "Terms | Five to Nine" },
     { path: "~/routes/changelog", title: "Changelog | Five to Nine" },
     { path: "~/routes/trust", title: "Trust | Five to Nine" },
-    { path: "~/routes/proof", title: "What we refuse to alert on | Five to Nine" },
+    { path: "~/routes/capture-rules", title: "What we refuse to alert on | Five to Nine" },
     { path: "~/routes/methodology.ad-aggression-score", title: "Ad Aggression Score methodology | Five to Nine" },
     { path: "~/routes/compare.meta-ad-library", title: "Five to Nine vs checking the Meta Ad Library by hand" },
   ];

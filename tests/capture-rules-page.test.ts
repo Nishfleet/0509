@@ -12,6 +12,10 @@ import {
 } from "~/lib/capture-validity-public-rules";
 import { SITEMAP_PATHS } from "~/lib/seo";
 
+const captureRulesHitsInSitemap = [...SITEMAP_PATHS].filter(
+  (path) => path === "/capture-rules",
+);
+
 /**
  * Lock test for issue #1264: the /capture-rules page must list, in plain
  * language, each current CaptureValidityReasonCode so a new reason code
@@ -80,5 +84,14 @@ describe("capture-rules page lock (#1264)", () => {
 
     expect(trustSource).toContain("/capture-rules");
     expect(compareSource).toContain("/capture-rules");
+  });
+
+  it("has exactly one canonical capture-rules entry in the sitemap and a 301 from /proof (#1432)", () => {
+    const redirectSource = readFileSync("app/routes/proof.tsx", "utf8");
+
+    expect(captureRulesHitsInSitemap).toEqual(["/capture-rules"]);
+    expect(redirectSource).toContain("redirect(");
+    expect(redirectSource).toContain("301");
+    expect(redirectSource).toContain("/capture-rules");
   });
 });
