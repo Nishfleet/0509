@@ -21,7 +21,8 @@ describe("public markdown", () => {
     expect(isPublicMarkdownPage("/status")).toBe(true);
     expect(isPublicMarkdownPage("/changelog")).toBe(true);
     expect(isPublicMarkdownPage("/trust")).toBe(true);
-    expect(isPublicMarkdownPage("/proof")).toBe(true);
+    expect(isPublicMarkdownPage("/capture-rules")).toBe(true);
+    expect(isPublicMarkdownPage("/proof")).toBe(false);
     expect(isPublicMarkdownPage("/search")).toBe(false);
     expect(isPublicMarkdownPage("/privacy")).toBe(true);
     expect(isPublicMarkdownPage("/terms")).toBe(true);
