@@ -157,8 +157,13 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   }
 
   const { getEnv } = await import("~/lib/context.server");
-  const env = getEnv(context);
+  let env = getEnv(context);
   const cloudflare = getOptionalCloudflareContext(context);
+
+  // Local release proofs use isolated D1 fixtures; mirror the /search route's
+  // E2E env resolution so brand pages can serve them without live providers.
+  const { resolveE2ELocalSearchEnv } = await import("~/lib/e2e-search.server");
+  env = await resolveE2ELocalSearchEnv(env, request);
 
   const { enforcePublicBrandPageRateLimit } = await import("~/lib/rate-limit.server");
   const rateLimitResponse = await enforcePublicBrandPageRateLimit(
