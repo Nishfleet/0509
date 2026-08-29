@@ -94,7 +94,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Growth teams");
     expect(marketingRoute).toContain("who track competitors");
     expect(marketingRoute).toContain("Proof-backed brief");
-    expect(marketingRoute).toContain('to="/proof"');
+    expect(marketingRoute).toContain('to="/capture-rules"');
     expect(marketingRoute).toContain("What we refuse to alert on");
     expect(marketingRoute).toContain("For growth teams who track competitors");
     expect(marketingRoute).toContain("Your growth team would&rsquo;ve found out from a client.");
