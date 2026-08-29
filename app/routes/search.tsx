@@ -572,12 +572,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           // contract that existing callers assert stays unchanged.
           ...(plan ? { planTier: plan } : {}),
         })
-      : {
-          result: await (
+      : await (async () => {
+          const legacyQuery = normalizeSavedQuery(parsed.mode, parsed.filters);
+          const legacyResult = await (
             await import("~/lib/ad-source.server")
           ).searchAdsViaSourceResolver(
             env,
-            normalizeSavedQuery(parsed.mode, parsed.filters),
+            legacyQuery,
             url.searchParams.get("after"),
             {
               purpose: "public_search",
@@ -591,12 +592,34 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
                 ? { customerMetaAdLibraryToken }
                 : {}),
             },
-          ),
-          query: normalizeSavedQuery(parsed.mode, parsed.filters),
-          searchScope,
-          displayDomain: competitorWebsite.host,
-          relevanceApplied: false,
-        };
+          );
+          // BET 2: a bare `q=` keyword search has no `website=`, so it used
+          // to render with no per-row confidence marker. Attach a
+          // `domainMatch` object to every keyword row so each one states its
+          // tier (verified / likely / unmatched). A `website=` search that
+          // fell through to v1 because rollout is off keeps its existing
+          // unlabelled behaviour — extending v2 to that path is a rollout
+          // decision, not this change.
+          const isKeywordSearch =
+            !competitorWebsite.raw && Boolean(parsed.filters.query);
+          const tieredResult = isKeywordSearch
+            ? await (
+                await import("~/lib/search-execution.server")
+              ).attachKeywordSearchDomainMatch(
+                env,
+                legacyResult,
+                parsed.filters.query,
+                searchScope,
+              )
+            : legacyResult;
+          return {
+            result: tieredResult,
+            query: legacyQuery,
+            searchScope,
+            displayDomain: competitorWebsite.host,
+            relevanceApplied: false,
+          };
+        })();
   } catch (error) {
     // Coarse request-scoped failure record only; the search failure itself is
     // rethrown unchanged so the existing error UX owns the response.
