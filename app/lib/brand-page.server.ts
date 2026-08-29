@@ -41,7 +41,11 @@ import {
   parseSearchInputFromWebsiteField,
   registrableDomainFromHostname,
 } from "~/lib/search-query";
-import { isVerifiedDomainMatchLevel, type DomainMatchLevel } from "~/lib/search-domain-match.server";
+import {
+  advertiserNameMatchesBrandStem,
+  isVerifiedDomainMatchLevel,
+  type DomainMatchLevel,
+} from "~/lib/search-domain-match.server";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { buildSearchV2CacheKey, buildSearchV2SavedQuery } from "~/lib/search-v2.server";
 import type { AdRecord } from "~/lib/types";
@@ -267,6 +271,13 @@ const MS_PER_DAY = 86_400_000;
  *     Outlet") counts as the brand's, matching the ad-card display and the
  *     search product's advertiser-alias convention; advertisers with
  *     unrelated names never count.
+ *  4. The advertiser page name folds to the brand's stem after dropping
+ *     spaces/punctuation (e.g. "Sugar Cosmetics" → "sugarcosmetics",
+ *     "Bombay Shaving Company" → "bombayshavingcompany", "Ridge Wallet" →
+ *     "ridgewallet", "H&M" → "hm"). Meta page names are space-separated while
+ *     the domain label is the concatenated stem, so the whole-word check
+ *     above misses them. The fold is EXACT equality, never a substring, so
+ *     "Nykaam" does not count as "Nykaa" (issue #1428).
  *
  * Anything else (unrelated advertiser pages that merely link to the brand,
  * text-only matches, blank advertiser names) is NOT counted, so the page never
@@ -286,6 +297,18 @@ export function adIsBrandOwned(ad: AdRecord, brandDomain: string): boolean {
 
   const registrable = registrableDomainFromHostname(brandDomain);
   if (registrable && wordBoundaryMatch(normalized, registrable)) {
+    return true;
+  }
+
+  // Meta advertiser page names are space-separated ("Sugar Cosmetics",
+  // "Bombay Shaving Company", "Ridge Wallet", "H&M") while the domain label
+  // is the concatenated stem. The whole-word check below misses these because
+  // the stem is not a contiguous token in the spaced name. A fold-based exact
+  // match (both sides stripped of spaces/punctuation) recognizes the brand's
+  // own page without over-matching substrings ("Nykaam" → "nykaam" ≠ "nykaa").
+  // Issue #1428: without this, a brand's own ads frame as "other advertisers"
+  // on the indexed /ads/:domain surface.
+  if (advertiserNameMatchesBrandStem(advertiser, brandDomain)) {
     return true;
   }
 

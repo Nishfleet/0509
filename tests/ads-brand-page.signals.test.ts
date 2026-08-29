@@ -185,6 +185,33 @@ describe("adIsBrandOwned / countBrandOwnedAds", () => {
     ];
     expect(countBrandOwnedAds(ads, "nykaa.com")).toBe(2);
   });
+
+  it("verifies a brand whose Meta page name is space-separated but folds to the domain stem (issue #1428)", () => {
+    // Meta advertiser page names are space-separated while the domain label
+    // is the concatenated stem. The whole-word check misses these; a
+    // fold-based exact match recognizes the brand's own page.
+    expect(adIsBrandOwned(ad({ advertiser: "Sugar Cosmetics" }), "sugarcosmetics.com")).toBe(true);
+    expect(adIsBrandOwned(ad({ advertiser: "Bombay Shaving Company" }), "bombayshavingcompany.com")).toBe(true);
+    expect(adIsBrandOwned(ad({ advertiser: "Ridge Wallet" }), "ridgewallet.com")).toBe(true);
+    // 2-char stem: "H&M" folds to "hm" — exact full-name fold is safe where
+    // substring matching would not be.
+    expect(adIsBrandOwned(ad({ advertiser: "H&M" }), "hm.com")).toBe(true);
+    // A regional/corporate variant with a known suffix still verifies when
+    // the stem is long enough to gate the suffix-stripped path.
+    expect(adIsBrandOwned(ad({ advertiser: "Sugar Cosmetics Official" }), "sugarcosmetics.com")).toBe(true);
+    expect(adIsBrandOwned(ad({ advertiser: "Bombay Shaving Company India" }), "bombayshavingcompany.com")).toBe(true);
+  });
+
+  it("does not over-match a fold that is not exactly the brand stem (issue #1428 precision)", () => {
+    // Exact fold equality only — never a substring — so look-alikes and
+    // co-branded resellers stay unowned.
+    expect(adIsBrandOwned(ad({ advertiser: "Nykaam" }), "nykaa.com")).toBe(false);
+    expect(adIsBrandOwned(ad({ advertiser: "Vrindasurii with H&M" }), "hm.com")).toBe(false);
+    expect(adIsBrandOwned(ad({ advertiser: "Ridge Wallet Reseller" }), "ridgewallet.com")).toBe(false);
+    // An unrelated advertiser whose name folds to a different string stays
+    // unowned even when the ad links to the brand domain.
+    expect(adIsBrandOwned(ad({ advertiser: "BeautyDeals Hub" }), "sugarcosmetics.com")).toBe(false);
+  });
 });
 
 describe("brandPageAdLibraryCountryLabel", () => {
