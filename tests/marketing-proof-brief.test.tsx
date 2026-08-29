@@ -214,7 +214,7 @@ describe("anonymous homepage proof brief (real proof)", () => {
     const markup = await renderMarketing();
 
     expect(markup).toContain("Proof-backed brief");
-    expect(markup).toContain('href="/proof"');
+    expect(markup).toContain('href="/capture-rules"');
     expect(markup).toContain("What we refuse to alert on");
     expect(markup).toContain("Proof brief");
     expect(markup).toContain("We saved the proof");

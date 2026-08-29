@@ -600,7 +600,7 @@ export default function MarketingRoute() {
         </div>
 
         <p className="ld-case">
-          <Link className="ld-rec" to="/proof">
+          <Link className="ld-rec" to="/capture-rules">
             Proof-backed brief
           </Link>
           <span>For growth teams who track competitors</span>
@@ -680,7 +680,7 @@ export default function MarketingRoute() {
             <Link to={publicSearchTrialPath}>Try the search preview</Link>
             <Link to="/competitor-monitoring">Read the methodology</Link>
             {featuredAdsLink ? <Link to={featuredAdsLink.path}>See a live example</Link> : null}
-            <Link to="/proof">What we refuse to alert on</Link>
+            <Link to="/capture-rules">What we refuse to alert on</Link>
             <a href="#pricing">See plans</a>
           </div>
         </div>

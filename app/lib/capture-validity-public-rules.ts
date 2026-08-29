@@ -1,11 +1,12 @@
 /**
- * Public copy for the capture-validity rules page (`/proof`).
+ * Public copy for the capture-validity rules page (`/capture-rules`).
  *
- * Every entry maps to a gate shipped in BET 4 Part 1 (issue #953): either a
- * `assessCaptureValidity` reason code, an extractor suppression that produces
- * zero events, or the screenshot corroboration cross-check. The page is the
- * checkable public list; this module is the single source so the route and
- * the tests cannot drift.
+ * `/proof` is a 301 redirect to `/capture-rules` (issue #1432); the canonical
+ * public path is `/capture-rules`. Every entry maps to a gate shipped in BET 4
+ * Part 1 (issue #953): either an `assessCaptureValidity` reason code, an
+ * extractor suppression that produces zero events, or the screenshot
+ * corroboration cross-check. The page is the checkable public list; this module
+ * is the single source so the route and the tests cannot drift.
  */
 export type CaptureValidityPublicGate =
   | {
@@ -124,10 +125,10 @@ export const CAPTURE_VALIDITY_PUBLIC_RULES: readonly CaptureValidityPublicRule[]
   },
 ];
 
-export const CAPTURE_VALIDITY_PUBLIC_PATH = "/proof";
+export const CAPTURE_VALIDITY_PUBLIC_PATH = "/capture-rules";
 /**
- * Public alias path for the capture-validity rules page. Shipped alongside
- * `/proof` (issue #1264) so a buyer searching the category term finds the
- * checkable rule set at the URL the BET 4 contract names.
+ * Public alias path for the capture-validity rules page. `/proof` is a 301
+ * redirect to this path (issue #1432); the canonical and BET 4 contract path is
+ * `/capture-rules`.
  */
 export const CAPTURE_RULES_PUBLIC_PATH = "/capture-rules";
