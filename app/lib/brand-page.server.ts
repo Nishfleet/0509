@@ -36,6 +36,7 @@ import type { AppEnv } from "~/lib/env.server";
 import { fingerprintSavedQuery, normalizeSavedQuery, parseSearchParams } from "~/lib/normalize";
 import {
   comparableHostname,
+  hostnamesMatchBrandRegionalProperty,
   hostnamesMatchBrandVerifiedProperty,
   hostnamesMatchDomainIntent,
   parseSearchInputFromWebsiteField,
@@ -278,6 +279,15 @@ const MS_PER_DAY = 86_400_000;
  *     the domain label is the concatenated stem, so the whole-word check
  *     above misses them. The fold is EXACT equality, never a substring, so
  *     "Nykaam" does not count as "Nykaa" (issue #1428).
+ *  5. The creative lands on the brand's own regional domain — same stem,
+ *     geographic ccTLD, main site on .com/.net/.org (e.g. ridgewallet.ca /
+ *     .eu / .co.uk for ridgewallet.com). A page that sends traffic to a
+ *     domain only the brand controls IS the brand's own ad, even when the
+ *     Meta page name does not fold to the stem ("The Ridge" → ridgewallet.ca
+ *     for ridgewallet.com, issue #1428). This is the same evidence
+ *     `adHasVerifiedDomainLink` already trusts for the "links to" claim,
+ *     narrowed to the regional-property helper so a collapsed-label or
+ *     open-ccTLD variant alone does not prove the advertiser IS the brand.
  *
  * Anything else (unrelated advertiser pages that merely link to the brand,
  * text-only matches, blank advertiser names) is NOT counted, so the page never
@@ -287,6 +297,21 @@ export function adIsBrandOwned(ad: AdRecord, brandDomain: string): boolean {
   const matchLevel = ad.domainMatch?.level;
   if (matchLevel === "verified_advertiser_domain" || matchLevel === "verified_entity") {
     return true;
+  }
+
+  // An ad whose landing page is the brand's own regional domain (same stem,
+  // geographic ccTLD) is the brand's own ad — the advertiser sends traffic to
+  // a domain only the brand controls. Covers brands whose Meta page name does
+  // not fold to the domain stem (e.g. "The Ridge" landing on ridgewallet.ca
+  // for ridgewallet.com, issue #1428). Reuses the same regional-property
+  // helper adHasVerifiedDomainLink trusts for the "links to" claim, so a
+  // deploy repairs pre-classified cache rows without a recrawl.
+  const regionalHost = extractHostname(ad.landingPageUrl);
+  if (regionalHost) {
+    const regionalRegistrable = registrableDomainFromHostname(brandDomain);
+    if (hostnamesMatchBrandRegionalProperty(regionalHost, { registrableDomain: regionalRegistrable })) {
+      return true;
+    }
   }
 
   const advertiser = (ad.advertiser ?? "").trim();

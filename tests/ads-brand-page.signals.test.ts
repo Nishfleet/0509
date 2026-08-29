@@ -212,6 +212,70 @@ describe("adIsBrandOwned / countBrandOwnedAds", () => {
     // unowned even when the ad links to the brand domain.
     expect(adIsBrandOwned(ad({ advertiser: "BeautyDeals Hub" }), "sugarcosmetics.com")).toBe(false);
   });
+
+  it("counts an ad as the brand's own when it lands on the brand's regional domain, even if the Meta page name does not fold to the stem (issue #1428)", () => {
+    // Ridge Wallet's Meta advertiser page is "The Ridge" — it does not fold to
+    // "ridgewallet", so the name checks miss it. But the ads land on the
+    // brand's own regional domains (ridgewallet.ca / .eu / .co.uk), which only
+    // the brand controls. An ad sending traffic to the brand's own regional
+    // site IS the brand's own ad — the same evidence adHasVerifiedDomainLink
+    // already trusts for the "links to" claim.
+    expect(
+      adIsBrandOwned(
+        ad({ advertiser: "The Ridge", landingPageUrl: "https://www.ridgewallet.ca/products/wallet" }),
+        "ridgewallet.com",
+      ),
+    ).toBe(true);
+    expect(
+      adIsBrandOwned(
+        ad({ advertiser: "Ridge EU", landingPageUrl: "https://ridgewallet.eu/shop" }),
+        "ridgewallet.com",
+      ),
+    ).toBe(true);
+    expect(
+      adIsBrandOwned(
+        ad({ advertiser: "Ridge UK", landingPageUrl: "https://ridgewallet.co.uk/buy" }),
+        "ridgewallet.com",
+      ),
+    ).toBe(true);
+    // A regional landing repairs a pre-classified cache row whose domainMatch
+    // is still unverified, without needing a recrawl.
+    expect(
+      adIsBrandOwned(
+        ad({
+          advertiser: "The Ridge",
+          landingPageUrl: "https://ridgewallet.ca/",
+          domainMatch: {
+            level: "unverified_provider_candidate",
+            reason: "Returned by the Meta source; website connection not verified",
+            matchedDomain: null,
+          },
+        }),
+        "ridgewallet.com",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not count a regional-domain landing as brand-owned when the landing stem is a different brand (issue #1428 precision)", () => {
+    // allbirds.co.uk is a regional property of allbirds.com, NOT of nykaa.com.
+    // An unrelated advertiser landing there must not flip to brand-owned for a
+    // different brand's page.
+    expect(
+      adIsBrandOwned(
+        ad({ advertiser: "BeautyDeals Hub", landingPageUrl: "https://www.allbirds.co.uk/x" }),
+        "nykaa.com",
+      ),
+    ).toBe(false);
+    // A same-suffix landing (nykaa.com for nykaa.com) is not a regional
+    // property — the helper requires a different geographic suffix — so it
+    // does not trigger this path; ownership still rests on the name check.
+    expect(
+      adIsBrandOwned(
+        ad({ advertiser: "BeautyDeals Hub", landingPageUrl: "https://nykaa.com/x" }),
+        "nykaa.com",
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("brandPageAdLibraryCountryLabel", () => {
