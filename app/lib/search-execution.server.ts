@@ -203,6 +203,78 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
   };
 }
 
+/**
+ * BET 2 — keyword (`q=`) search tier labels.
+ *
+ * The v2 domain-match pipeline is gated on `website=`. A bare `q=` keyword
+ * search fell through to the v1 pipeline, so every row rendered with no
+ * `Verified`/`Likely`/`Unmatched` confidence marker — a buyer searching
+ * "goat" saw mouth-tape ads with no way to tell they were unrelated, and a
+ * buyer searching "notion" saw 11 ads with no way to tell which 2 were from
+ * Notion.
+ *
+ * This attaches a `domainMatch` object to every keyword-search row so each
+ * one renders its tier label (BET 2 never dead-ends; an unmatched row is
+ * still a row, labelled as such):
+ * - When the keyword resolves to a recognizable brand/domain
+ *   (`q=notion.com`), the existing v2 post-filter classifies rows against
+ *   that domain (verified / likely / unmatched), matching `/ads/:domain`.
+ * - When it is a genuine text keyword (`q=notion`, `q=goat`), every row is
+ *   labelled `unmatched` (a provider candidate with no brand connection) so
+ *   the row still states its confidence instead of hiding it.
+ *
+ * Reuses `search-v2.server` and `search-domain-match.server` only; no new
+ * classifier, no D1 schema change. A failed identity resolution for a
+ * domain-like keyword falls back to the unmatched labelling so the search
+ * never breaks on a network hiccup.
+ */
+export async function attachKeywordSearchDomainMatch(
+  env: AppEnv,
+  result: SearchResponse,
+  queryText: string,
+  scope: SearchScope,
+): Promise<SearchResponse> {
+  if (result.ads.length === 0) {
+    return result;
+  }
+
+  const queryIntent = parseSearchInputFromWebsiteField(queryText);
+  if (queryIntent.intent === "domain" && queryIntent.registrableDomain) {
+    try {
+      const context = await buildSearchV2Context(queryText, scope);
+      if (context) {
+        return await applySearchV2PostFilter(env, result, context);
+      }
+    } catch (error) {
+      console.warn("Keyword search V2 classification failed; labelling rows unmatched.", {
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
+  }
+
+  // Bare keyword (or a domain-like keyword whose context could not be built):
+  // no brand website was searched, so nothing connects a provider row to a
+  // brand. Every row is an unmatched candidate — still a row, labelled as
+  // such, never a silent unlabelled list.
+  const providerLabel = result.source === "demo" ? "sample source" : "Meta source";
+  const ads = result.ads.map((ad) => ({
+    ...ad,
+    domainMatch: {
+      level: "unverified_provider_candidate",
+      reason: `Returned for “${queryText}” by the ${providerLabel}; no brand website was searched, so the connection is unverified`,
+      matchedDomain: null,
+    },
+  }));
+  return {
+    ...result,
+    ads,
+    searchIntent: "text",
+    verifiedCount: 0,
+    likelyCount: 0,
+    unmatchedCount: ads.length,
+  };
+}
+
 export type SearchCacheProbeOptions = Omit<ExecuteSearchOptions, "forceLive">;
 
 // Answers "would this loader request be served from the discovery cache?"
