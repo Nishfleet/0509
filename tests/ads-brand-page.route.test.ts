@@ -921,7 +921,13 @@ describe("/ads/:domain meta", () => {
       title: "Nykaa: Meta ads linking to nykaa.com — checked about 2 hours ago | Five to Nine",
     });
     const description = tags.find((tag) => tag.name === "description")?.content ?? "";
-    expect(description).toContain("from other advertisers linking to nykaa.com");
+    // Issue #1428: when no creative could be attributed to the brand, the
+    // description must NOT frame them as "from other advertisers" (that
+    // disclaims the page's own subject on the indexed surface). It keeps the
+    // brand as the subject and says ownership could not be verified.
+    expect(description).toContain("linking to nykaa.com");
+    expect(description).toContain("We could not verify from the cached capture that Nykaa runs these ads");
+    expect(description).not.toContain("from other advertisers");
     expect(description).not.toContain("ads from Nykaa");
     expect(tags.some((tag) => tag.title?.includes("Nykaa Facebook & Instagram ads"))).toBe(false);
   });
