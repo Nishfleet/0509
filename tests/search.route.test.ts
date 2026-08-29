@@ -31,6 +31,10 @@ const baseAd: AdRecord = {
   analysisFields: [],
 };
 
+const attachKeywordSearchDomainMatch = vi
+  .fn()
+  .mockImplementation(async (_env: unknown, result: SearchResponse) => result);
+
 const appSession = {
   user: {
     id: "user-1",
@@ -324,7 +328,19 @@ describe("search loader", () => {
     );
     expect(prepareSearchResultSelection).toHaveBeenCalledWith(
       env,
-      sourceResult,
+      expect.objectContaining({
+        ads: [
+          expect.objectContaining({
+            domainMatch: expect.objectContaining({
+              level: "unverified_provider_candidate",
+            }),
+          }),
+        ],
+        searchIntent: "text",
+        verifiedCount: 0,
+        likelyCount: 0,
+        unmatchedCount: 1,
+      }),
       null,
       { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
     );
@@ -644,7 +660,19 @@ describe("search loader", () => {
     );
     expect(prepareSearchResultSelection).toHaveBeenCalledWith(
       env,
-      sourceResult,
+      expect.objectContaining({
+        ads: [
+          expect.objectContaining({
+            domainMatch: expect.objectContaining({
+              level: "unverified_provider_candidate",
+            }),
+          }),
+        ],
+        searchIntent: "text",
+        verifiedCount: 0,
+        likelyCount: 0,
+        unmatchedCount: 1,
+      }),
       null,
       { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
     );
@@ -945,6 +973,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/search-execution.server", () => ({
       executeSearchWithRelevance: vi.fn(),
       hasWarmSearchCacheEntry,
+      attachKeywordSearchDomainMatch,
     }));
     vi.doMock("~/lib/search-selection.server", () => ({
       prepareSearchResultSelection,
@@ -1018,6 +1047,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/search-execution.server", () => ({
       executeSearchWithRelevance: vi.fn(),
       hasWarmSearchCacheEntry: vi.fn().mockResolvedValue(true),
+      attachKeywordSearchDomainMatch,
     }));
     vi.doMock("~/lib/search-selection.server", () => ({
       prepareSearchResultSelection,
@@ -1083,6 +1113,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/search-execution.server", () => ({
       executeSearchWithRelevance: vi.fn(),
       hasWarmSearchCacheEntry,
+      attachKeywordSearchDomainMatch,
     }));
     vi.doMock("~/lib/search-selection.server", () => ({
       prepareSearchResultSelection: vi.fn().mockResolvedValue({
@@ -1161,6 +1192,7 @@ describe("search loader", () => {
         relevanceApplied: false,
       }),
       hasWarmSearchCacheEntry,
+      attachKeywordSearchDomainMatch,
     }));
     vi.doMock("~/lib/search-selection.server", () => ({
       prepareSearchResultSelection: vi.fn().mockResolvedValue({
@@ -1231,6 +1263,7 @@ describe("search loader", () => {
         relevanceApplied: false,
       }),
       hasWarmSearchCacheEntry,
+      attachKeywordSearchDomainMatch,
     }));
     vi.doMock("~/lib/search-selection.server", () => ({
       prepareSearchResultSelection: vi.fn().mockResolvedValue({
@@ -1299,6 +1332,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/search-execution.server", () => ({
       executeSearchWithRelevance: vi.fn(),
       hasWarmSearchCacheEntry,
+      attachKeywordSearchDomainMatch,
     }));
     vi.doMock("~/lib/search-selection.server", () => ({
       prepareSearchResultSelection,
@@ -1386,6 +1420,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/search-execution.server", () => ({
       executeSearchWithRelevance: vi.fn(),
       hasWarmSearchCacheEntry,
+      attachKeywordSearchDomainMatch,
     }));
     vi.doMock("~/lib/search-selection.server", () => ({
       prepareSearchResultSelection,
@@ -1690,6 +1725,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/search-execution.server", () => ({
       executeSearchWithRelevance,
       hasWarmSearchCacheEntry: vi.fn().mockResolvedValue(false),
+      attachKeywordSearchDomainMatch,
     }));
     vi.doMock("~/lib/search-selection.server", () => ({
       prepareSearchResultSelection,
