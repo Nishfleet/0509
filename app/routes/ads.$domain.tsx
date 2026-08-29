@@ -402,7 +402,13 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
     return `See ${totalCount} Meta ${adWord} from ${data.brandName} (${data.domain}), from ${check}. Get an email when their ads or offer change.${unverifiedTail}`;
   }
   if (data.brandOwnedAdCount === 0) {
-    return `See ${data.verifiedLinkCount} Meta ${linkWord} from other advertisers linking to ${data.domain}, from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
+    // The ads link to the domain but none could be attributed to the brand
+    // itself (no verified advertiser-domain/entity level, and the advertiser
+    // page name does not match the brand). The page must not frame them as
+    // "from other advertisers" — that disclaims the page's own subject on the
+    // indexed surface. Say explicitly that ownership could not be verified
+    // from the cached capture, keeping the brand as the subject (issue #1428).
+    return `See ${data.verifiedLinkCount} Meta ${linkWord} linking to ${data.domain}, from ${check}. We could not verify from the cached capture that ${data.brandName} runs these ads. Get an email when the ads or offers change.${unverifiedTail}`;
   }
   // When every verified linking creative is the brand's own (no
   // verified-from-other), drop the "and Y from other advertisers" clause —

@@ -327,6 +327,45 @@ function advertiserIsBrandStem(ad: AdRecord, intent: ParsedSearchQuery) {
 }
 
 /**
+ * Cache-only advertiser-name → brand-stem match for the public /ads/:domain
+ * page (issue #1428). Meta advertiser page names are space-separated
+ * ("Sugar Cosmetics", "Bombay Shaving Company", "Ridge Wallet", "H&M") while
+ * the domain label is the concatenated stem. `wordBoundaryMatch` on the raw
+ * name misses these because the stem is not a contiguous token in the spaced
+ * name; `foldDomainLabel` removes spaces/punctuation on both sides, so
+ * "Sugar Cosmetics" → "sugarcosmetics" === stem. This is the cache-only twin
+ * of the search pipeline's `advertiserIsBrandStem`, used by `adIsBrandOwned`
+ * so a brand's own ads are not framed as "other advertisers" on the indexed
+ * /ads/:domain surface.
+ *
+ * Two paths, both EXACT fold equality (never substring), so "Nykaam" →
+ * "nykaam" ≠ "nykaa" stays false:
+ *  1. The full advertiser name folds exactly to the stem. Allowed down to a
+ *     2-char stem (e.g. "H&M" → "hm") because an exact full-name fold is safe
+ *     where substring matching would not be — the whole page name must fold to
+ *     the stem, nothing more.
+ *  2. The advertiser name with common brand suffixes stripped ("Official",
+ *     "India", "Inc", …) folds exactly to the stem, gated at stem length ≥ 3
+ *     so a 2-char stem cannot over-match a suffix-stripped phrase.
+ */
+export function advertiserNameMatchesBrandStem(advertiser: string, brandDomain: string): boolean {
+  const stem = foldDomainLabel(stemFromDomain(brandDomain));
+  if (!stem) {
+    return false;
+  }
+  if (foldDomainLabel(advertiser) === stem) {
+    return true;
+  }
+  if (stem.length >= 3) {
+    const stripped = foldDomainLabel(stripBrandSuffixes(foldForMatch(advertiser)));
+    if (stripped === stem) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Brand-name match (BET 2 "likely" tier). The advertiser IS the brand — its
  * name is the brand stem, optionally followed by common corporate/geo
  * suffixes ("Allbirds", "Allbirds Official", "Allbirds Japan") — but no landing
