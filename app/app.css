@@ -2904,6 +2904,36 @@ one signal-green accent.
   max-width: 620px;
 }
 
+.ld-compare-hub {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.f9-home .ld-compare-hub a {
+  display: block;
+  padding: 16px 18px;
+  background: var(--ld-card);
+  border: 1.5px solid var(--ld-ink);
+  text-decoration: none;
+  color: var(--ld-ink);
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.f9-home .ld-compare-hub a:hover {
+  background: var(--ld-ink-soft);
+  color: var(--ld-ink);
+  border-color: var(--ld-ink);
+}
+
 .ld-proof { border-top: 1px solid var(--ld-line); }
 
 .ld-proof-actions {
