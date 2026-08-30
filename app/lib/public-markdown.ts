@@ -47,6 +47,11 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
   },
+  "/compare": {
+    title: "Compare Five to Nine vs the alternatives",
+    description:
+      "Index of side-by-side comparisons of Five to Nine's competitor ad and landing-page change monitoring against Visualping, MagicBrief, Panoramata, Foreplay, Spyland, Pulzifi and more.",
+  },
   "/compare/magicbrief": {
     title: "Five to Nine vs MagicBrief",
     description: "How Five to Nine compares with MagicBrief.",
