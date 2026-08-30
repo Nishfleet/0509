@@ -108,6 +108,7 @@ import {
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
   formatSearchSourceLabel,
+  formatSearchTierProgressRow,
   formatLandingPageCaptureGap,
   formatSelectedLandingFactValue,
   formatSelectedLandingHeadline,
@@ -115,6 +116,7 @@ import {
   isDelayedDiscoveryStatus,
   mergeSearchAccumulationState,
   resolveRecoveredSearchKey,
+  resolveResultTierCounts,
   type SearchAccumulationState,
   shouldShowApproximateFormatNotice,
   withSearchScope,
@@ -1200,6 +1202,13 @@ export default function SearchRoute() {
   const discoverySummary = formatDiscoverySummary(visibleResult);
   const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
   const isSearchWarming = visibleResult.discoveryProgress === "warming";
+  // BET 2 progressive first card (issue 1471): the synchronous tier the first
+  // payload already has. Verified/likely/unmatched counts drive the
+  // tier-progress row — "N verified · M checking…" — instead of a spinner-only
+  // body on a cold search, so the first visible result content always renders
+  // inside the <5s budget while the cold verify pass keeps running in the
+  // background.
+  const tierCounts = resolveResultTierCounts(visibleResult);
   // When the check outlives the 5s x 12 = 60s warming poll budget, the
   // promised auto-refresh stops silently: the page must say so and hand the
   // visitor a working retry instead of leaving "we'll refresh automatically"
@@ -2000,9 +2009,10 @@ export default function SearchRoute() {
                     role="status"
                   >
                     <p className="f9-wk-lede">
-                      {warmingPollExhausted
-                        ? `${visibleAds.length} ad${visibleAds.length === 1 ? "" : "s"} so far — the rest is taking longer than a minute`
-                        : `${visibleAds.length} ad${visibleAds.length === 1 ? "" : "s"} so far — loading more…`}
+                      {formatSearchTierProgressRow(visibleResult, {
+                        totalVisible: visibleAds.length,
+                        exhausted: warmingPollExhausted,
+                      })}
                     </p>
                     <p className="f9-wk-note">
                       {warmingPollExhausted
@@ -2056,7 +2066,16 @@ export default function SearchRoute() {
                             <p className="f9-wk-lede">
                               Checking the Ad Library now
                             </p>
+                            {/* BET 2 progressive first card (issue 1471): the
+                                tier-progress row for a truly cold search — the
+                                count of verified rows so far follows the lead, so
+                                a first payload with no cached rows says "0
+                                verified" and one that landed a synchronous tier
+                                says "N verified" instead of a spinner-only body.
+                                The cold verify pass still runs in the background
+                                and the poll merges the rest in place. */}
                             <p className="f9-wk-note">
+                              {tierCounts.verified} verified · still checking —
                               Usually under a minute — we&rsquo;ll refresh
                               automatically.
                             </p>
