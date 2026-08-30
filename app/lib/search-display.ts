@@ -767,6 +767,41 @@ export function resolveResultTierCounts(
 }
 
 /**
+ * BET 2 progressive first card (issue 1471): the tier-progress row for a
+ * warming search that has already painted its first batch. The first payload
+ * renders the synchronous tier the search already has — verified rows now,
+ * the rest still checking — instead of an undifferentiated row count, so the
+ * first visible result content is a real progress state inside the <5s
+ * first-paint budget. Falls back to the plain "N ads so far" wording when the
+ * result carries no tier metadata (legacy v1 results render byte-identical
+ * copy), and uses the exhausted tail when the poll budget ran out so the
+ * promise to auto-refresh is never implied after it stopped.
+ */
+export function formatSearchTierProgressRow(
+  result: SearchResponse,
+  input: { totalVisible: number; exhausted: boolean },
+): string {
+  const tail = input.exhausted
+    ? "the rest is taking longer than a minute"
+    : "loading more…";
+  // Only results that actually carry tier metadata get the tier-progress row.
+  // The resolver's three-tier counts are present together (v2 post-filter) or
+  // per-ad domainMatch levels are set; a legacy v1 result has neither, so it
+  // keeps the plain "N ads so far" wording byte-identical.
+  const hasTierProgress =
+    typeof result.verifiedCount === "number" ||
+    typeof result.likelyCount === "number" ||
+    typeof result.unmatchedCount === "number" ||
+    result.ads.some((ad) => Boolean(ad.domainMatch));
+  if (!hasTierProgress) {
+    return `${input.totalVisible} ad${input.totalVisible === 1 ? "" : "s"} so far — ${tail}`;
+  }
+  const { verified } = resolveResultTierCounts(result);
+  const checking = Math.max(0, input.totalVisible - verified);
+  return `${verified} verified · ${checking} checking — ${tail}`;
+}
+
+/**
  * The customer-facing tier word for one result row. `null` when the ad carries
  * no domain-match metadata (legacy/non-v2 results render no tier label).
  */
