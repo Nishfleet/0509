@@ -237,6 +237,7 @@ export function jsonLdScriptProps(data: unknown) {
 export const SITEMAP_PATHS = [
   "/",
   "/search",
+  "/compare",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
   "/compare/visualping",
@@ -317,6 +318,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/proof": { changefreq: "monthly", priority: "0.5" },
   "/methodology/ad-aggression-score": { changefreq: "monthly", priority: "0.6" },
   "/pricing": { changefreq: "weekly", priority: "0.8" },
+  "/compare": { changefreq: "weekly", priority: "0.8" },
   "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/compare/meta-ad-library": { changefreq: "weekly", priority: "0.7" },
   "/compare/visualping": { changefreq: "weekly", priority: "0.7" },

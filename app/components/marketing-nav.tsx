@@ -39,6 +39,7 @@ export function MarketingNav() {
 
       <nav className="ld-nav-links" aria-label="Primary">
         <Link to="/search">Search preview</Link>
+        <Link to="/compare">Compare</Link>
         <Link to="/#demo">Proof brief</Link>
         <Link to="/pricing">Pricing</Link>
         <Link to="/help">Help</Link>
