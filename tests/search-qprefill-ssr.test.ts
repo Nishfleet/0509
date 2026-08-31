@@ -87,19 +87,16 @@ afterEach(() => {
 });
 
 describe("public /search q= and country= SSR heading and input", () => {
-  it("renders an H1 that names the brand and the Meta Ad Library all-countries query", async () => {
+  it("renders an H1 that names the brand and spells the all-countries scope in buyer language", async () => {
     const { default: SearchRoute } = await import("~/routes/search");
     const markup = renderToStaticMarkup(createElement(SearchRoute));
 
-    expect(markup).toContain(
-      "Nike ads from the Meta Ad Library&#x27;s all-countries query",
-    );
+    expect(markup).toContain("Nike ads across all countries");
     const h1Match = markup.match(/<h1[^>]*>([^<]+)<\/h1>/);
     expect(h1Match?.[1]?.replace(/&#x27;/g, "'")).toBe(
-      "Nike ads from the Meta Ad Library's all-countries query",
+      "Nike ads across all countries",
     );
     expect(markup).not.toContain("in all countries");
-    expect(markup).not.toContain("across all countries");
   });
 
   it("pre-fills the competitor website input with the q value", async () => {
