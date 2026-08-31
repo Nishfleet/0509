@@ -423,17 +423,13 @@ describe("formatSearchMarketScope", () => {
 });
 
 describe("formatSearchPageScope", () => {
-  it("names the Meta Ad Library all-countries query, never worldwide coverage", () => {
-    expect(formatSearchPageScope("all")).toBe(
-      "from the Meta Ad Library's all-countries query",
-    );
-    expect(formatSearchPageScope("ALL")).toBe(
-      "from the Meta Ad Library's all-countries query",
-    );
+  it("spells the all-countries view in plain buyer language, never a single market", () => {
+    expect(formatSearchPageScope("all")).toBe("across all countries");
+    expect(formatSearchPageScope("ALL")).toBe("across all countries");
     expect(formatSearchPageScope("all")).not.toContain("in all countries");
-    expect(formatSearchPageScope("all")).not.toContain("across all countries");
+    expect(formatSearchPageScope("all")).not.toContain("in United States");
     expect(formatSearchPageScope("ALL")).not.toContain("in all countries");
-    expect(formatSearchPageScope("ALL")).not.toContain("across all countries");
+    expect(formatSearchPageScope("ALL")).not.toContain("in United States");
   });
 
   it("names the market for a specific country", () => {
@@ -451,13 +447,10 @@ describe("formatSearchPageScope", () => {
 });
 
 describe("formatSearchCommandTitle", () => {
-  it("title-cases the brand and names the Meta Ad Library all-countries query", () => {
+  it("title-cases the brand and spells the all-countries scope in buyer language", () => {
     const title = formatSearchCommandTitle("nike", "all");
-    expect(title).toBe(
-      "Nike ads from the Meta Ad Library's all-countries query",
-    );
+    expect(title).toBe("Nike ads across all countries");
     expect(title).not.toContain("in all countries");
-    expect(title).not.toContain("across all countries");
   });
 
   it("resolves country names from the catalog", () => {
