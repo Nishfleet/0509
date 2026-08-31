@@ -36,6 +36,55 @@ export default function ChangelogRoute() {
           }),
         )}
       />
+      <PublicDocBlock title="2026-08-30">
+        <ul className="f9-doc-list">
+          <li>Cold searches on /search now show a tier-progress row on first load — &quot;N verified · M checking&quot; — so visitors see what we already know while the verify pass keeps running in the background, instead of staring at a blank warming state.</li>
+          <li>A new /compare hub page lists every comparison against Visualping, Panoramata, Foreplay, MagicBrief, and the other alternatives, so visitors can scan them all from one place instead of finding each one by search.</li>
+        </ul>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="2026-08-29">
+        <ul className="f9-doc-list">
+          <li>Brand pages at /ads/:domain now correctly attribute brand-owned ads on regional stores — e.g. ridgewallet.ca, sugarcosmetics.com, hm.com — so a brand page no longer reads &quot;0 verified&quot; when the brand&apos;s own ads are landing on its own regional site.</li>
+          <li>Bare keyword searches (like &quot;nike&quot; or &quot;nykaa&quot;) now carry the same Verified / Likely / Unmatched labels that domain searches do, so visitors can tell which keyword results were actually verified.</li>
+          <li>The capture-validity rules now live at /capture-rules; old /proof links 301 to the new page, so every old share and bookmark still lands on the right place.</li>
+        </ul>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="2026-08-28">
+        <ul className="f9-doc-list">
+          <li>Landing-page monitoring now gates alerts on a capture-validity classifier — bot walls, cookie walls, partial loads, error pages, and uncorroborated extracts never fire a phantom-change alert.</li>
+          <li>The watchlists board now shows a Suggested competitors panel, with every proposal marked &quot;Suggested · unverified&quot; until you accept it — nothing is added to your watchlist automatically.</li>
+          <li>Mention monitoring now re-sweeps RSS and Atom feeds on a daily cadence, and the digest marks first-observed-in-window mentions with &quot;(new)&quot;, so recurring coverage does not drown out new ones.</li>
+          <li>A new Mentions panel on the entity page lists every RSS mention we have seen, with honest empty states when nothing has surfaced yet.</li>
+          <li>Auto-competitor discovery now re-runs on a cadence and surfaces only net-new advertisers as &quot;newly appeared&quot; candidates, so a brand you already watch or already dismissed never comes back as a suggestion.</li>
+          <li>Full-site watch now classifies careers and legal / policy pages as first-class page kinds, so a hiring change or a privacy-policy update shows up as a real signal instead of being labeled &quot;about&quot; or &quot;other&quot;.</li>
+          <li>Brand pages at /ads/:domain now carry FAQ structured data and a visible FAQ section, so search engines can show rich results for competitor-ad queries on each brand.</li>
+          <li>The Visualping and Foreplay comparison pages now carry FAQ structured data, so search engines can show rich results for those queries.</li>
+          <li>Every /compare/* page now lists the first-party sources behind each claim, with inline &quot;Source:&quot; links and an &quot;Every claim on this page has a link&quot; footer, so readers can verify any claim on the page.</li>
+          <li>Brand pages no longer promise a screenshot on every watch — the copy now reads &quot;a screenshot when the capture includes one&quot;, matching the rest of the public surfaces.</li>
+          <li>First-brief-on-signup is now enabled: a new user sees an in-session brief with evidence within five minutes of signing up, instead of waiting up to a week for the next weekly digest.</li>
+          <li>Empty brand pages (cache-miss) now 301 to /search?q=&lt;domain&gt; instead of showing a soft-404 shell, so visitors never hit a dead end on a brand we have never watched.</li>
+          <li>The run history now lists every capture — including failed and skipped — with a public reason code (bot_wall, cookie_banner, budget_skip, and others), so customers can see why a check did not alert.</li>
+          <li>Budget-skipped captures now surface as &quot;evidence skipped (budget)&quot; in the digest and watchlist record, so a paid plan never silently reports &quot;all quiet&quot; when the allowance was reached.</li>
+          <li>Timeline pages no longer render backfill rows that lack a screenshot or page-text artifact, so a public timeline never promises a screenshot it cannot keep.</li>
+          <li>The proof brief timeline now says &quot;Creative on record since &lt;date&gt;&quot; for old captures (instead of &quot;Creative started running &lt;date&gt;&quot;), and the decision card no longer claims a long-running ad was &quot;captured today&quot; — the only &quot;captured today&quot; stamp on the page is the honest header-level fetch time.</li>
+          <li>/switch pages now cite a verified public complaint at the top, end in a single primary CTA to the free /search preview, and use SEO titles tuned for the non-branded queries they target.</li>
+        </ul>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="2026-08-27">
+        <ul className="f9-doc-list">
+          <li>The homepage hero proof strip now flips its &quot;Live proof&quot; chip to &quot;On record&quot; when the underlying capture is older than 30 days, so the chip and the timestamp agree.</li>
+          <li>Bare keyword searches like ?q=goat now report &quot;N unverified keyword matches&quot; with a next-action link to the verified domain search, instead of presenting an unrelated company match as proof.</li>
+          <li>Google sitelinks to the homepage search bar now run a real query and land on a search page that names the brand in the heading, instead of bouncing on an incomplete-domain error.</li>
+          <li>Brand pages at /ads/:domain now use the public brand name in titles and headings — Allbirds, Bombay Shaving Company, Sugar Cosmetics, ASOS, HubSpot, Ridge Wallet — so search engines and visitors see the name they recognise, not a collapsed host label.</li>
+          <li>The plan grid no longer badges Starter as &quot;Recommended&quot; for paying customers, and the picker reads &quot;Switch&quot; instead of &quot;Select&quot; once you have a paid plan, so the wording matches what the button actually does.</li>
+          <li>The signed-in workspace now caps its working page measure on wide windows so label / value pairs sit close together, and the plan CTA no longer washes out in dark mode.</li>
+          <li>Timeline pages for the 25 sitemap brands are now populated with at least one dated entry, and any future unseeded brand returns 410 instead of an empty shell.</li>
+        </ul>
+      </PublicDocBlock>
+
       <PublicDocBlock title="2026-08-26">
         <ul className="f9-doc-list">
           <li>A public page at /proof now lists the landing-page captures we refuse to turn into alerts, linked from the homepage proof claim.</li>
