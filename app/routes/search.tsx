@@ -25,6 +25,7 @@ import { DashboardShell } from "~/components/dashboard-shell";
 import {
   PublicSearchError,
   PublicSearchLoading,
+  PublicSearchRateLimitError,
 } from "~/components/public-route-state";
 import { SearchResultRow } from "~/components/search/result-row";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
@@ -383,6 +384,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         JSON.stringify({
           error: "rate_limited",
           message: PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+          ...(retryAfterSeconds ? { retryAfter: Number(retryAfterSeconds) } : {}),
         }),
         {
           status: 429,
@@ -410,6 +412,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         JSON.stringify({
           error: "rate_limited",
           message: PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE,
+          ...(retryAfterSeconds ? { retryAfter: Number(retryAfterSeconds) } : {}),
         }),
         {
           status: 429,
@@ -2778,5 +2781,16 @@ export function HydrateFallback() {
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
+  // Use the rate-limit-specific error UI when the loader threw a 429
+  // with a retryAfter value in the body.
+  const isRateLimitError =
+    error &&
+    typeof error === "object" &&
+    "data" in error &&
+    (error as { data?: { error?: string; retryAfter?: number } }).data?.error ===
+      "rate_limited";
+  if (isRateLimitError) {
+    return <PublicSearchRateLimitError error={error} />;
+  }
   return <PublicSearchError error={error} />;
 }
