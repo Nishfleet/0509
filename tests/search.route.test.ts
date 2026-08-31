@@ -1541,6 +1541,68 @@ describe("search loader", () => {
     expect(headers({} as never)).toEqual({});
   });
 
+  it("renders rate-limit error state with policy copy, Retry-After countdown, and working Try again button", async () => {
+    // Regression test for issue #1453: mocked 429 + Retry-After: 600
+    // should render HTML containing "20 requests per 10 minutes" and
+    // a number ≤ 600 representing seconds remaining.
+
+    // Mock error with retryAfter in the data (as the loader throws)
+    const mockError = {
+      data: {
+        error: "rate_limited",
+        retryAfter: 600,
+      },
+      status: 429,
+      statusText: "Too Many Requests",
+    };
+
+    // Mock react-router hooks and components used by the component BEFORE importing it
+    // Also mock DashboardShell to just render children (avoids router context requirements)
+    const React = await import("react");
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      return {
+        ...actual,
+        useRevalidator: () => ({ state: "idle", revalidate: vi.fn() }),
+        Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+      };
+    });
+    vi.doMock("~/components/dashboard-shell", () => ({
+      DashboardShell: ({ children }: { children: React.ReactNode }) =>
+        React.createElement("main", null, children),
+    }));
+
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { PublicSearchRateLimitError } = await import(
+      "~/components/public-route-state"
+    );
+
+    const html = renderToStaticMarkup(
+      createElement(PublicSearchRateLimitError, { error: mockError }),
+    );
+
+    // Policy copy is present
+    expect(html).toMatch(/20 requests per 10 minutes per IP/i);
+
+    // Countdown shows seconds remaining (≤ 600)
+    expect(html).toMatch(/retry in.*\d+s/i);
+    const match = html.match(/\((\d+)s\)/);
+    expect(match).not.toBeNull();
+    if (match) {
+      const seconds = Number(match[1]);
+      expect(seconds).toBeLessThanOrEqual(600);
+    }
+
+    // Try again button is present and not disabled
+    expect(html).toMatch(/Try again/i);
+    expect(html).not.toMatch(/disabled/);
+
+    vi.doUnmock("react-router");
+    vi.doUnmock("~/components/dashboard-shell");
+  });
+
   it("does not spend live discovery on anonymous HEAD searches", async () => {
     const env = { DB: {} };
     const searchAdsViaSourceResolver = vi.fn();
