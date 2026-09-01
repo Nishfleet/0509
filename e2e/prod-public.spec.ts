@@ -100,7 +100,11 @@ async function expectPublicGetTargetReachable(
     requestUrl.search = "";
   }
 
-  const response = await request.get(requestUrl.toString(), { maxRedirects: 0, timeout: 5_000 });
+  // 15s: a freshly deployed Worker can take >10s to serve its first request
+  // during deploy propagation (run 33531233486: GET / timed out at 5s during
+  // the propagation window). The previous 5s budget was tighter than the
+  // deploy-propagation tail and produced false-red release rollsbacks.
+  const response = await request.get(requestUrl.toString(), { maxRedirects: 0, timeout: 15_000 });
   expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).not.toBe(404);
   expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).toBeLessThan(500);
 }

@@ -153,9 +153,18 @@ export default defineConfig({
     {
       name: "prod-public",
       testMatch: /prod-public\.spec\.ts/,
+      // Production API requests (request.get) inherit actionTimeout and have
+      // no per-call override on the health/llms/robots probes. A freshly
+      // deployed Worker can take >10s to serve its first request during
+      // deploy propagation (run 33531233486: GET /llms.txt timed out at 10s
+      // 16:52Z while the new version was still propagating, then auto-rolled
+      // back). 30s gives the propagation window room without weakening the
+      // smoke's ability to catch a real outage (a healthy 0509.io responds
+      // in 1-3s, so 30s is still a tight bound for a hard hang).
       use: {
         ...devices["Desktop Chrome"],
         baseURL: productionBaseURL,
+        actionTimeout: 30_000,
         trace: "retain-on-failure",
         video: "off",
       },
