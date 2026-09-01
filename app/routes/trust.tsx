@@ -88,10 +88,12 @@ export default function TrustRoute() {
 
       <PublicDocBlock title="Capture validity — what we refuse to alert on">
         <p>
-          Alerts are backed by captured page text, source links, and screenshots. The capture-validity
-          gate refuses to turn some captures into alerts at all: error pages, anti-bot challenge walls,
-          cookie walls, partial SPA shells, and churn that is not a real change. See the{" "}
-          <Link to="/capture-rules">capture rules</Link> for the full, checkable list.
+          Alerts are backed by captured page text and source links; a screenshot joins the proof when the
+          capture includes one. The capture-validity gate refuses to turn some captures into alerts at all:
+          error pages, anti-bot challenge walls, cookie walls, partial SPA shells, and churn that is not a real
+          change. See the{" "}
+          <Link to="/capture-rules">capture rules</Link> for the full, checkable list, including which
+          changes are corroborated by a screenshot and which alert without one.
         </p>
       </PublicDocBlock>
 
