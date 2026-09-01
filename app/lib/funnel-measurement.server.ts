@@ -35,6 +35,7 @@ export type FunnelEventKind =
   | "signup_start_locale_de"
   | "signup_start_locale_ja"
   | "signup_start_locale_pt_br"
+  | "pricing_free_card_clicked"
   | "locale_segment_view_en"
   | "locale_segment_view_de"
   | "locale_segment_view_ja"
@@ -57,6 +58,16 @@ export type FunnelRoute =
  */
 export const MAGICBRIEF_MIGRATION_SOURCE = "magicbrief-migration";
 
+/**
+ * The exact signup-URL marker the /pricing Free card CTA appends (issue
+ * #1499). Same contract as the MagicBrief marker: compared server-side
+ * against this allowlisted constant, and the raw marker value is never
+ * stored in a record or a funnel field. It selects the
+ * `pricing_free_card_clicked` kind so scouts can measure whether surfacing
+ * the Free plan as a card lifts free-tier click-through.
+ */
+export const PRICING_FREE_SIGNUP_SOURCE = "pricing-free";
+
 export type FunnelResultBucket = "0" | "1-10" | "11-50" | "51+";
 
 export type FunnelErrorKind = "rate_limited" | "provider" | "empty_result" | "internal";
@@ -77,6 +88,7 @@ const FUNNEL_ROUTES: Record<FunnelEventKind, FunnelRoute> = {
   signup_start_locale_de: "signup",
   signup_start_locale_ja: "signup",
   signup_start_locale_pt_br: "signup",
+  pricing_free_card_clicked: "signup",
   locale_segment_view_en: "sneaker_resale",
   locale_segment_view_de: "sneaker_resale",
   locale_segment_view_ja: "sneaker_resale",
@@ -96,6 +108,7 @@ const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
   signup_start_locale_de: "funnel_signup_start_locale_de",
   signup_start_locale_ja: "funnel_signup_start_locale_ja",
   signup_start_locale_pt_br: "funnel_signup_start_locale_pt_br",
+  pricing_free_card_clicked: "funnel_pricing_free_card_clicked",
   locale_segment_view_en: "funnel_locale_segment_view_en",
   locale_segment_view_de: "funnel_locale_segment_view_de",
   locale_segment_view_ja: "funnel_locale_segment_view_ja",
@@ -115,6 +128,7 @@ const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
   signup_start_locale_de: "Anonymous signup started from the German sneaker-resale page",
   signup_start_locale_ja: "Anonymous signup started from the Japanese sneaker-resale page",
   signup_start_locale_pt_br: "Anonymous signup started from the Brazilian Portuguese sneaker-resale page",
+  pricing_free_card_clicked: "Anonymous signup started from the pricing Free card",
   locale_segment_view_en: "Anonymous English sneaker-resale page view",
   locale_segment_view_de: "Anonymous German sneaker-resale page view",
   locale_segment_view_ja: "Anonymous Japanese sneaker-resale page view",
@@ -297,6 +311,10 @@ export function emitFunnelSignupStartFromAllowlistedSource(
 ) {
   if (source === MAGICBRIEF_MIGRATION_SOURCE) {
     emitFunnelEvent(env, request, "signup_start_magicbrief");
+    return;
+  }
+  if (source === PRICING_FREE_SIGNUP_SOURCE) {
+    emitFunnelEvent(env, request, "pricing_free_card_clicked");
     return;
   }
   const localeMarket = sneakerResaleMarketForSignupSource(source);
