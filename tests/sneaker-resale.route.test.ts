@@ -82,6 +82,28 @@ describe("sneaker-resale locale landing pages", () => {
     expect(adsLinkCount).toBeGreaterThanOrEqual(4);
   });
 
+  // #1521 live proof: the "Who's moving right now" section named the movers
+  // (Saucony, ASICS) with no link at all — the one place on the landing page
+  // the followable-proof pattern was absent. Every mover's brand must link to
+  // the live search surface for its domain (/search?q=<domain> has rows today;
+  // /ads/:domain 301-redirects there until #1282/#1306 populate it). The
+  // required `domain` field keeps a dead link from compiling in.
+  it("links every swing mover to its live /search?q= proof surface in every locale (#1521)", async () => {
+    const { SneakerResaleLanding } = await import("~/components/sneaker-resale-landing");
+    for (const market of SNEAKER_RESALE_MARKETS) {
+      const copy = sneakerResaleCopy(market.id);
+      const markup = renderToStaticMarkup(
+        createElement(SneakerResaleLanding, { locale: market.id }),
+      );
+      expect(copy.swing.length).toBeGreaterThanOrEqual(2);
+      for (const item of copy.swing) {
+        expect(item.domain.trim()).not.toBe("");
+        expect(item.domain).not.toContain(" ");
+        expect(markup).toContain(`href="/search?q=${item.domain}"`);
+      }
+    }
+  });
+
   it("emits reciprocal hreflang from no-arg links() and a locale canonical from loaderData", async () => {
     const { links, meta } = await import("~/routes/$locale.sneaker-resale");
 

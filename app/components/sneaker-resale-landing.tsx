@@ -126,8 +126,10 @@ export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId
         <ul className="ld-brand-links ld-swing" aria-label={copy.swingTitle}>
           {copy.swing.map((item) => (
             <li key={item.brand}>
-              <strong>{item.brand}</strong>
-              <span>{item.line}</span>
+              <Link to={`/search?q=${item.domain}`}>
+                <strong>{item.brand}</strong>
+                <span>{item.line}</span>
+              </Link>
             </li>
           ))}
         </ul>
