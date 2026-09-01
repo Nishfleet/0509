@@ -90,6 +90,24 @@ export default [
   route("competitor-monitoring", "routes/competitor-monitoring.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
+  // Locale-prefixed buyer-surface cluster (issue #1501): /de, /de/pricing,
+  // /de/help, etc. Each child re-exports the EN route's loader/meta/links
+  // so the cluster stays in lockstep with the EN surface — only the
+  // lang attribute and hreflang cluster differ. React Router matches
+  // more-specific routes first, so the named `:locale/sneaker-resale`
+  // route above wins for `/<locale>/sneaker-resale` and only the new
+  // buyer surfaces reach this layout.
+  route(":locale", "routes/$locale.tsx", [
+    index("routes/$locale._index.tsx"),
+    route("pricing", "routes/$locale.pricing.tsx"),
+    route("help", "routes/$locale.help.tsx"),
+    route("docs", "routes/$locale.docs.tsx"),
+    route("api/docs", "routes/$locale.api.docs.tsx"),
+    route("status", "routes/$locale.status.tsx"),
+    route("changelog", "routes/$locale.changelog.tsx"),
+    route("trust", "routes/$locale.trust.tsx"),
+    route("compare", "routes/$locale.compare.tsx"),
+  ]),
   route("team/accept", "routes/team.accept.tsx"),
 	route("share/:token/pdf", "routes/share.$token.pdf.ts"),
   route("share/:token", "routes/share.$token.tsx"),

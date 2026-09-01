@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BUYER_SURFACE_LOCALE_IDS,
+  BUYER_SURFACE_PATHS,
+  canonicalPathnameForLocalePath,
   htmlLangForPathname,
+  isBuyerSurfaceLocaleId,
   isSneakerResaleLocaleId,
   isSneakerResaleSignupSource,
+  matchBuyerSurfaceSplat,
   SNEAKER_RESALE_MARKETS,
   SNEAKER_RESALE_PATHS,
   sneakerResaleMarket,
@@ -15,6 +20,9 @@ import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
 
 describe("sneaker-resale locale catalog", () => {
   it("ships English plus the three evidence-backed non-English markets", () => {
+    // Sneaker-resale copy is scoped to the three translator-passed markets;
+    // fr/es are pre-evidence locales that ship the buyer-surface cluster
+    // (issue #1501) but no localized sneaker-resale copy yet.
     expect(SNEAKER_RESALE_MARKETS.map((market) => market.id)).toEqual([
       "en",
       "de",
@@ -74,5 +82,87 @@ describe("sneaker-resale locale catalog", () => {
       );
     }
     expect(sneakerResaleMarket("de").hreflang).toBe("de");
+  });
+});
+
+describe("buyer-surface locale cluster (issue #1501)", () => {
+  it("ships the five buyer-surface locales the issue asks for", () => {
+    expect(BUYER_SURFACE_LOCALE_IDS).toEqual(["de", "ja", "pt-br", "fr", "es"]);
+    expect(isBuyerSurfaceLocaleId("de")).toBe(true);
+    expect(isBuyerSurfaceLocaleId("ja")).toBe(true);
+    expect(isBuyerSurfaceLocaleId("pt-br")).toBe(true);
+    expect(isBuyerSurfaceLocaleId("fr")).toBe(true);
+    expect(isBuyerSurfaceLocaleId("es")).toBe(true);
+  });
+
+  it("rejects the English x-default locale and any unknown locale", () => {
+    expect(isBuyerSurfaceLocaleId("en")).toBe(false);
+    expect(isBuyerSurfaceLocaleId("xx")).toBe(false);
+    expect(isBuyerSurfaceLocaleId(undefined)).toBe(false);
+  });
+
+  it("keeps every buyer-surface path in the public sitemap", () => {
+    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+      for (const path of BUYER_SURFACE_PATHS) {
+        // The bare `/` index is intentionally NOT in the sitemap — its
+        // canonical is `/`, so listing it twice would emit a duplicate
+        // `<loc>`. The locale-prefixed sitemaps (`/<locale>/sitemap.xml`)
+        // are served by the worker but are not referenced in the EN
+        // sitemap either, so the locale list follows the same rule.
+        if (path === "/" || path === "/sitemap.xml") continue;
+        const sitemapPath = `/${locale}${path}`;
+        expect(SITEMAP_PATHS as readonly string[]).toContain(sitemapPath);
+      }
+    }
+  });
+
+  it("derives the English canonical pathname from any locale-prefixed path", () => {
+    expect(canonicalPathnameForLocalePath("/de")).toBe("/");
+    expect(canonicalPathnameForLocalePath("/de/pricing")).toBe("/pricing");
+    expect(canonicalPathnameForLocalePath("/ja/help")).toBe("/help");
+    expect(canonicalPathnameForLocalePath("/pt-br/api/docs")).toBe("/api/docs");
+    expect(canonicalPathnameForLocalePath("/fr/compare")).toBe("/compare");
+    expect(canonicalPathnameForLocalePath("/es/sitemap.xml")).toBe("/sitemap.xml");
+    // Already-English paths pass through unchanged.
+    expect(canonicalPathnameForLocalePath("/pricing")).toBe("/pricing");
+    expect(canonicalPathnameForLocalePath("/sneaker-resale")).toBe("/sneaker-resale");
+    // Trailing slash is normalized.
+    expect(canonicalPathnameForLocalePath("/de/pricing/")).toBe("/pricing");
+  });
+
+  it("dispatches the splat to the matching EN surface and 404s anything else", () => {
+    expect(matchBuyerSurfaceSplat("")).toBe("");
+    expect(matchBuyerSurfaceSplat("pricing")).toBe("pricing");
+    expect(matchBuyerSurfaceSplat("help")).toBe("help");
+    expect(matchBuyerSurfaceSplat("docs")).toBe("docs");
+    expect(matchBuyerSurfaceSplat("api/docs")).toBe("api/docs");
+    expect(matchBuyerSurfaceSplat("status")).toBe("status");
+    expect(matchBuyerSurfaceSplat("changelog")).toBe("changelog");
+    expect(matchBuyerSurfaceSplat("trust")).toBe("trust");
+    expect(matchBuyerSurfaceSplat("compare")).toBe("compare");
+    // Sub-paths that aren't a registered buyer surface (e.g. /compare/magicbrief
+    // is its own named route, not part of the cluster) must 404 so the
+    // cluster stays bounded.
+    expect(matchBuyerSurfaceSplat("compare/magicbrief")).toBeNull();
+    expect(matchBuyerSurfaceSplat("pricing/extra")).toBeNull();
+    expect(matchBuyerSurfaceSplat("totally-unknown")).toBeNull();
+  });
+
+  it("maps every buyer-surface locale pathname to its lang attribute", () => {
+    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+      // The bare locale index and every subpath report the locale's lang.
+      expect(htmlLangForPathname(`/${locale}`)).toBe(
+        locale === "pt-br" ? "pt-BR" : locale,
+      );
+      expect(htmlLangForPathname(`/${locale}/pricing`)).toBe(
+        locale === "pt-br" ? "pt-BR" : locale,
+      );
+      expect(htmlLangForPathname(`/${locale}/help`)).toBe(
+        locale === "pt-br" ? "pt-BR" : locale,
+      );
+    }
+    // EN pathnames stay EN.
+    expect(htmlLangForPathname("/pricing")).toBe("en");
+    expect(htmlLangForPathname("/")).toBe("en");
   });
 });
