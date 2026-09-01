@@ -173,7 +173,9 @@ export async function warmDiscoveryEvalPanel(
       continue;
     }
 
-    const query = buildSearchV2SavedQuery(intent, "exact", PANEL_SEARCH_FILTERS);
+    const query = buildSearchV2SavedQuery(intent, "exact", PANEL_SEARCH_FILTERS, {
+      identityAliases: brand.brandQuery ? [brand.brandQuery] : [],
+    });
     const cacheKeyOverride = buildSearchV2CacheKey({
       provider,
       intent,
