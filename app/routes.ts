@@ -66,7 +66,13 @@ export default [
   route("ops", "routes/ops.tsx"),
   route("ads/:domain", "routes/ads.$domain.tsx"),
   route("timeline/:domain", "routes/timeline.$domain.tsx"),
-  route("methodology/ad-aggression-score", "routes/methodology.ad-aggression-score.tsx"),
+  // Canonical Ad Aggression Score formula page (issue #1263). Previously lived
+  // at /methodology/ad-aggression-score (issue #960); that path now 301s here
+  // via the route below so any indexed link keeps its equity.
+  route("ad-aggression", "routes/ad-aggression.tsx"),
+  // Legacy alias — 301 to the canonical /ad-aggression path so existing
+  // /methodology/ad-aggression-score links and sitemap entries keep working.
+  route("methodology/ad-aggression-score", "routes/methodology.ad-aggression-score-redirect.ts"),
   route("compare", "routes/compare.tsx"),
   route("compare/magicbrief", "routes/compare.magicbrief.tsx"),
   route("compare/meta-ad-library", "routes/compare.meta-ad-library.tsx"),
