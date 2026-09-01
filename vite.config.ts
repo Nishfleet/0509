@@ -132,7 +132,7 @@ export default defineConfig(async ({ mode }) => ({
           // function"). Pin it so a leaked NODE_ENV from a caller's shell or
           // CI cannot break the suite.
           env: { NODE_ENV: "test" },
-          include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+          include: ["tests/**/*.test.ts", "tests/**/*.test.tsx", "tests/integration/pricing.spec.ts"],
           // Integration suites belong to the `workers` project below; running
           // them on node would silently skip the real runtime.
           exclude: [INTEGRATION_TEST_GLOB],

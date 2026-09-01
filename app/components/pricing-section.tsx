@@ -351,6 +351,33 @@ export function PricingSection({
       </div>
 
       <div className="f9-commerce-grid ld-reveal">
+        {/* Free tier card (issue #1499): the "no card required" promise used
+            to live only in the prose note below, so a buyer scanning the grid
+            saw €10+ before ever seeing the free option. This card is a render
+            surface only — no billing plan, no SKU, no pricing-table entry.
+            The feature list mirrors the ld-pricing-note paragraph verbatim so
+            the card and the prose can never claim different things. */}
+        <article className="f9-commerce-card">
+          <span>Free</span>
+          <h3>€0</h3>
+          <small>free, forever</small>
+          <div className="f9-plan-value" aria-label="Free value summary">
+            <strong>
+              Watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1
+              Collection.
+            </strong>
+            <span>No card required.</span>
+          </div>
+          <p>Weekly proof-backed briefs from an instant first scan, with one saved Collection.</p>
+          <ul className="f9-plan-feature-list">
+            <li>Watch 1 competitor</li>
+            <li>Instant first scan</li>
+            <li>Weekly proof-backed brief</li>
+            <li>1 Collection</li>
+            <li>No card required</li>
+          </ul>
+          <Link to="/auth/signup?source=pricing-free">Start free</Link>
+        </article>
         {rootData.pricingPlans.map((plan) => {
           const yearlyReady = hasPrice(localPricing, plan.slug, "yearly");
           const selectedReady = hasPrice(localPricing, plan.slug, billingCycle);
