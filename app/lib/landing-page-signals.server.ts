@@ -1,3 +1,8 @@
+import {
+  createLpRunAuditContext,
+  runLpRunAuditStage,
+  type LpRunAuditContext,
+} from "~/lib/landing-page-run-audit.server";
 import { hashString, stripChurnTokens } from "~/lib/normalize";
 
 export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v6";
@@ -354,10 +359,43 @@ const AD_SLOT_REGION_SCAN_LIMIT = 24 * 1024;
 
 export function extractLandingPageSignals(
   html: string,
-  options: { documentMode?: "raw" | "rendered" } = {},
+  options: {
+    documentMode?: "raw" | "rendered";
+    /**
+     * Issue #1500: when present, the extractor emits one
+     * `tag: "lp_run_audit"` JSON line per stage transition
+     * (html_parse, anchor_resolve, cta_extract, price_extract,
+     * form_extract). Stages owned by the capture path
+     * (html_fetch, headline_extract, url_extract) are emitted by
+     * the caller. When null/undefined the extractor is silent —
+     * existing call sites do not change behaviour.
+     */
+    audit?: LpRunAuditContext | null;
+  } = {},
 ) {
   const documentMode = options.documentMode ?? "raw";
-  const normalizedHtml = removeNonVisibleElements(html ?? "", documentMode);
+  const audit =
+    options.audit === undefined
+      ? null
+      : options.audit === null
+        ? null
+        : createLpRunAuditContext(options.audit);
+  const rawHtml = html ?? "";
+  // html_parse stage — removeNonVisibleElements + ad-slot strip.
+  // A page that strips to nothing is an extraction bail-out (the
+  // page rendered, but nothing survived the parser), distinct from
+  // the "page never fetched" bail-out emitted at the html_fetch stage.
+  const normalizedHtml = audit
+    ? runLpRunAuditStage({
+        context: audit,
+        stage: "html_parse",
+        bytesIn: utf8ByteLength(rawHtml),
+        bailReasonFor: (parsed) =>
+          parsed.length === 0 ? "empty_after_strip" : null,
+        bytesOutFor: (parsed) => utf8ByteLength(parsed),
+        fn: () => removeNonVisibleElements(rawHtml, documentMode),
+      })
+    : removeNonVisibleElements(rawHtml, documentMode);
   // Issue #949: button candidates are extracted separately so the v5
   // button-text fallback in pickBestCta can use them. They are cleaned
   // exactly once here — spreading them into ctaCandidates and cleaning
@@ -366,20 +404,83 @@ export function extractLandingPageSignals(
   const buttonCandidates = extractButtonText(normalizedHtml).map(cleanText);
   // Issue #1401: anchor candidates are extracted separately so the v6
   // anchor-text fallback can filter navigation chrome without re-decoding.
-  const anchorCandidates = extractActionLinks(normalizedHtml).map(cleanText);
+  // anchor_resolve stage — extractActionLinks + cleanText. The stage
+  // bails when the page has zero anchors at all (no_action_links) and
+  // when every anchor is nav chrome (only_chrome_anchors); both feed
+  // the v6 anchor fallback so the operator can tell apart "no link to
+  // extract" from "every link was nav chrome".
+  const anchorCandidates = audit
+    ? runLpRunAuditStage({
+        context: audit,
+        stage: "anchor_resolve",
+        bytesIn: utf8ByteLength(normalizedHtml),
+        bailReasonFor: (anchors) => {
+          if (anchors.length === 0) return "no_anchors";
+          if (
+            anchors.every((candidate) => CTA_CHROME_ANCHOR_TEXTS.has(candidate.toLowerCase().trim()))
+          ) {
+            return "anchor_chrome_only";
+          }
+          return null;
+        },
+        bytesOutFor: (anchors) =>
+          anchors.reduce((total, anchor) => total + utf8ByteLength(anchor), 0),
+        fn: () => extractActionLinks(normalizedHtml).map(cleanText),
+      })
+    : extractActionLinks(normalizedHtml).map(cleanText);
   const ctaCandidates = [
     ...buttonCandidates,
     ...extractSubmitValues(normalizedHtml).map(cleanText),
     ...anchorCandidates,
   ];
 
-  const { ctaText, funnel: ctaFunnel } = pickBestCta(
-    ctaCandidates,
-    buttonCandidates,
-    anchorCandidates,
-  );
-  const priceText = pickPrice(normalizedHtml);
-  const formPresent = detectFormPresence(normalizedHtml);
+  // cta_extract stage — pickBestCta. The bail reason comes from the
+  // funnel itself (no_cta_candidates / only_chrome_buttons /
+  // only_chrome_anchors / empty_capture), which is exactly the
+  // resolution the diff needs to see why a CTA event is missing.
+  const { ctaText, funnel: ctaFunnel } = audit
+    ? runLpRunAuditStage({
+        context: audit,
+        stage: "cta_extract",
+        bytesIn: ctaCandidates.reduce(
+          (total, candidate) => total + utf8ByteLength(candidate),
+          0,
+        ),
+        bailReasonFor: ({ funnel }) =>
+          funnel.stage === "bailed" ? (funnel.reasonCode ?? "unknown") : null,
+        bytesOutFor: ({ ctaText: text }) => utf8ByteLength(text ?? ""),
+        fn: () =>
+          pickBestCta(ctaCandidates, buttonCandidates, anchorCandidates),
+      })
+    : pickBestCta(ctaCandidates, buttonCandidates, anchorCandidates);
+  // price_extract stage — pickPrice over the normalized HTML. The
+  // stage bails when no PRICE_PATTERN matched; the operator can then
+  // see "this page never had a price" instead of guessing whether the
+  // price was rotated out by the parser.
+  const priceText = audit
+    ? runLpRunAuditStage({
+        context: audit,
+        stage: "price_extract",
+        bytesIn: utf8ByteLength(normalizedHtml),
+        bailReasonFor: (price) => (price === null ? "no_price_pattern" : null),
+        bytesOutFor: (price) => utf8ByteLength(price ?? ""),
+        fn: () => pickPrice(normalizedHtml),
+      })
+    : pickPrice(normalizedHtml);
+  // form_extract stage — detectFormPresence. The stage bails when
+  // the page has neither a lead input (email/phone/etc.) nor a submit
+  // action — two distinct gates that both feed "no form" so the
+  // operator can tell "no form at all" from "form present, no lead".
+  const formPresent = audit
+    ? runLpRunAuditStage({
+        context: audit,
+        stage: "form_extract",
+        bytesIn: utf8ByteLength(normalizedHtml),
+        bailReasonFor: (present) => (present ? null : "no_lead_input"),
+        bytesOutFor: () => 0,
+        fn: () => detectFormPresence(normalizedHtml),
+      })
+    : detectFormPresence(normalizedHtml);
 
   // An empty visible body (shell / challenge that slipped past the capture
   // gate) means extraction had nothing to work on — record it as the bail
@@ -1267,4 +1368,15 @@ function decodeHtml(value: string) {
       }
     },
   );
+}
+
+// Issue #1500: UTF-8 byte-length helper for the lp_run_audit lines. Lives at
+// the bottom of the file (alongside cleanText / decodeHtml) so it is defined
+// before extractLandingPageSignals runs. The existing app/lib/bounded-response.server.ts
+// helper is intentionally NOT imported here — this file is exercised by
+// vitest in isolation and the run-audit module already carries its own
+// TextEncoder-based fallback. The local helper exists so the audit code in
+// extractLandingPageSignals can measure bytes without a cross-file import.
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
 }
