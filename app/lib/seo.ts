@@ -1,4 +1,4 @@
-import { SNEAKER_RESALE_MARKETS } from "~/lib/locale-markets";
+import { BUYER_SURFACE_LOCALE_IDS, SNEAKER_RESALE_MARKETS } from "~/lib/locale-markets";
 import {
   PUBLISHED_BUNDLE_PRICES_EUR,
   PUBLISHED_FREE_PLAN_OFFER,
@@ -46,6 +46,36 @@ export function sneakerResaleHreflangLinks() {
       rel: "alternate" as const,
       hrefLang: "x-default",
       href: canonicalUrl("/sneaker-resale"),
+    },
+  ];
+}
+
+/**
+ * Reciprocal hreflang set for the buyer-surface cluster (issue #1501).
+ *
+ * `splat` is the locale-prefix subpath (e.g. `"pricing"`, `"help"`, or
+ * `""` for the locale index). The function emits self + sibling locale
+ * entries pointing at the same subpath in each locale, plus the EN
+ * (x-default) version. The buyer-surface cluster is broader than the
+ * sneaker-resale cluster (fr/es are pre-evidence for the broader
+ * marketing surface) and uses the same hreflang recipe.
+ *
+ * Google ignores one-way annotations, so the EN-side `rel=canonical`
+ * pointing at the EN subpath does the heavy lifting; this function
+ * exists so the cluster is reciprocal on both ends.
+ */
+export function buyerSurfaceHreflangLinks(splat: string) {
+  const enPath = splat === "" ? "/" : splat === "api/docs" ? "/api/docs" : `/${splat}`;
+  return [
+    ...BUYER_SURFACE_LOCALE_IDS.map((locale) => ({
+      rel: "alternate" as const,
+      hrefLang: locale,
+      href: canonicalUrl(splat === "" ? `/${locale}` : `/${locale}/${splat}`),
+    })),
+    {
+      rel: "alternate" as const,
+      hrefLang: "x-default",
+      href: canonicalUrl(enPath),
     },
   ];
 }
@@ -441,6 +471,24 @@ export const SITEMAP_PATHS = [
   "/de/sneaker-resale",
   "/ja/sneaker-resale",
   "/pt-br/sneaker-resale",
+  // Locale-prefixed buyer-surface cluster (issue #1501). Each locale ships
+  // the same set of buyer surfaces the EN locale serves; canonicals point
+  // back at the EN version so duplicate content does not fragment search
+  // ranking. Built from `BUYER_SURFACE_LOCALE_IDS` so a new locale added
+  // there automatically widens the cluster without a separate edit. The
+  // bare `/{locale}` index (e.g. `/de`) is intentionally NOT in this list:
+  // it carries the same canonical as `/`, so listing it twice would emit a
+  // duplicate `<loc>` for the same canonical target.
+  ...BUYER_SURFACE_LOCALE_IDS.flatMap((locale) => [
+    `/${locale}/pricing`,
+    `/${locale}/help`,
+    `/${locale}/docs`,
+    `/${locale}/api/docs`,
+    `/${locale}/status`,
+    `/${locale}/changelog`,
+    `/${locale}/trust`,
+    `/${locale}/compare`,
+  ]),
   // Canonical Ad Aggression Score formula page (issue #1263). The old
   // /methodology/ad-aggression-score path now 301-redirects here so any
   // indexed link keeps its equity; /proof is the legacy capture-rules
@@ -496,6 +544,28 @@ export interface SitemapEntry {
  * timestamp, and inventing one would be a false freshness claim. Dynamic
  * /ads/:domain brand pages carry a real lastmod from their cache fetched_at.
  */
+/**
+ * Locale-prefixed buyer-surface cluster (issue #1501): each locale in
+ * `BUYER_SURFACE_LOCALE_IDS` ships the same set of buyer surfaces the EN
+ * locale serves, with the same priority/changefreq tier as the EN entry.
+ * The bare `/<locale>` index intentionally carries no entry — its canonical
+ * is `/` and listing it twice would emit a duplicate `<loc>` for the same
+ * canonical target.
+ */
+const LOCALE_BUYER_SURFACE_PRIORITY: Record<string, { changefreq: string; priority: string }> =
+  Object.fromEntries(
+    BUYER_SURFACE_LOCALE_IDS.flatMap((locale) => [
+      [`/${locale}/pricing`, { changefreq: "weekly", priority: "0.8" }],
+      [`/${locale}/help`, { changefreq: "monthly", priority: "0.5" }],
+      [`/${locale}/docs`, { changefreq: "monthly", priority: "0.5" }],
+      [`/${locale}/api/docs`, { changefreq: "monthly", priority: "0.5" }],
+      [`/${locale}/status`, { changefreq: "monthly", priority: "0.5" }],
+      [`/${locale}/changelog`, { changefreq: "weekly", priority: "0.6" }],
+      [`/${locale}/trust`, { changefreq: "yearly", priority: "0.3" }],
+      [`/${locale}/compare`, { changefreq: "weekly", priority: "0.8" }],
+    ]),
+  );
+
 const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
   "/": { changefreq: "daily", priority: "1.0" },
   "/search": { changefreq: "weekly", priority: "0.9" },
@@ -529,6 +599,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/trust": { changefreq: "yearly", priority: "0.3" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },
   "/terms": { changefreq: "yearly", priority: "0.3" },
+  ...LOCALE_BUYER_SURFACE_PRIORITY,
 };
 
 export const SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] = SITEMAP_PATHS.map(
