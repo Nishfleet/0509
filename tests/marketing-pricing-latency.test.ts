@@ -319,8 +319,14 @@ describe("marketing pricing monthly cadence note", () => {
 
     const markup = await renderRoute();
 
-    // Scout, Starter, and Agency each render one plan card.
-    expect(planCardNotes(markup)).toEqual(["Billed monthly", "Billed monthly", "Billed monthly"]);
+    // Free, Scout, Starter, and Agency each render one plan card; the Free
+    // card's sub-label is its static "free, forever" (issue #1499).
+    expect(planCardNotes(markup)).toEqual([
+      "free, forever",
+      "Billed monthly",
+      "Billed monthly",
+      "Billed monthly",
+    ]);
     // Published USD anchor prices render from first paint, and the annual
     // toggle is usable (annual = 8x monthly = 4 months free).
     expect(markup).toContain("$11 USD");
@@ -362,8 +368,13 @@ describe("marketing pricing monthly cadence note", () => {
 
     // Monthly is selected: sale-open plans keep the truthful annual price
     // note, while the held Agency card (no annual checkout) stays on the
-    // monthly cadence note.
-    expect(planCardNotes(markup)).toEqual(["$392 annual", "$792 annual", "Billed monthly"]);
+    // monthly cadence note. The Free card's sub-label stays static.
+    expect(planCardNotes(markup)).toEqual([
+      "free, forever",
+      "$392 annual",
+      "$792 annual",
+      "Billed monthly",
+    ]);
     // The annual savings offer stays visible on the toggle when annual is
     // actually available, and the annual-only claim never leaks into cards.
     expect(markup).toContain("4 months free");
