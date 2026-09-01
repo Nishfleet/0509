@@ -849,9 +849,9 @@ export default function BillingRoute() {
             <div className="f9-wk-workrow">
               <strong>Manage subscription</strong>
               <span>
-                  Cancel anytime — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll
-                  confirm your cancellation request. Open the billing portal for card and invoice
-                  tasks. Use the plan cards above to switch plans or billing cycles.{" "}
+                  Cancel, change your card, or get invoices in the billing portal. Email{" "}
+                  <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need a hand instead. Use the
+                  plan cards above to switch plans or billing cycles.{" "}
                 <Form action="/api/billing/dodo/portal" method="post" className="f9-wk-inline">
                   <SubmitButton className="f9-wk-btn-quiet" pendingLabel="Redirecting…">
                     Open billing portal

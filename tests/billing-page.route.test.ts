@@ -1436,12 +1436,13 @@ describe("billing page", () => {
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
     expect(markup).toContain("Open billing portal");
-    expect(markup).toContain("card and invoice tasks");
-    expect(markup).toContain("Cancel anytime — email");
-    expect(markup).toContain("support@0509.io");
-    expect(markup).toContain("confirm your cancellation request");
+    expect(markup).toContain("Cancel, change your card, or get invoices in the billing portal");
+    // The portal, not the mailto, is the primary cancellation instruction now.
+    expect(markup).not.toContain("Cancel anytime — email");
+    expect(markup).not.toContain("confirm your cancellation request");
+    expect(markup).toContain('href="mailto:support@0509.io"');
+    expect(markup).toContain("if you need a hand instead");
     expect(markup).not.toContain("confirm the same day");
-    expect(markup).not.toContain("Cancel anytime from the billing portal");
     expect(markup).not.toContain("until portal cancellation is fully available");
     expect(markup).toContain("Use the plan cards above to switch plans");
     expect(markup).toContain("/app/support?category=billing");

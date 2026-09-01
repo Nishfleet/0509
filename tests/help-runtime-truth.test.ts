@@ -57,8 +57,11 @@ describe("customer help runtime truth", () => {
     const markup = renderToStaticMarkup(createElement(HelpRoute));
 
     expect(markup).toContain("hosted billing portal");
-    expect(markup).toContain("Plan changes and cancellation stay backed by");
-    expect(markup).toContain("until portal subscription updates are confirmed");
+    expect(markup).toContain("use it to cancel, change your card, or get");
+    // Portal-first truth (issue #1517): the unconditional "cancellation stays
+    // backed by signed-in support cases" claim is removed from /help.
+    expect(markup).not.toContain("stay backed by signed-in support cases");
+    expect(markup).not.toContain("until portal subscription updates are confirmed");
     expect(markup).toContain("Cancellation stops future renewals, and access continues until the end of the period you have paid for.");
     expect(markup).toContain("Account deletion is a support request, not an automatic or in-app deletion.");
     expect(markup).toContain("Nothing is deleted automatically or in-app.");
