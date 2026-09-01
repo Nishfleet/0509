@@ -29,6 +29,11 @@ import {
   recordRenderStage,
   type LandingPagePipelineCounters,
 } from "~/lib/landing-page-pipeline-instrumentation.server";
+import {
+  createLpRunAuditContext,
+  emitLpRunAudit,
+  type LpRunAuditContext,
+} from "~/lib/landing-page-run-audit.server";
 import { normalizeHeadline } from "~/lib/normalize";
 import {
   normalizePublicHttpUrl,
@@ -103,6 +108,17 @@ interface CaptureLandingPageSnapshotOptions {
    * counter is never mutated in a way that affects capture behaviour.
    */
   instrumentation?: LandingPagePipelineCounters | null;
+  /**
+   * Issue #1500: when present, the capture path emits one
+   * `tag: "lp_run_audit"` JSON line per stage transition owned by the
+   * capture (html_fetch, headline_extract, url_extract). The extraction
+   * stages (html_parse, anchor_resolve, cta_extract, price_extract,
+   * form_extract) are emitted by `extractLandingPageSignals` when it
+   * receives the same context. The context is forwarded automatically
+   * by `captureLandingPageSnapshot` — callers do not need to thread it
+   * through manually.
+   */
+  audit?: LpRunAuditContext | null;
 }
 
 interface LandingPageCaptureAttemptState {
@@ -158,6 +174,26 @@ export async function captureLandingPageSnapshot(
     plainHttpRecorded: false,
   };
   if (!publicUrl) {
+    if (options.audit) {
+      emitLpRunAudit({
+        context: createLpRunAuditContext({
+          watchlistId: options.audit.watchlistId,
+          runId: options.audit.runId,
+          domain: (() => {
+            try {
+              return new URL(url).hostname;
+            } catch {
+              return "unknown";
+            }
+          })(),
+        }),
+        stage: "url_extract",
+        outcome: "bailed:landing_url_invalid",
+        bytesIn: utf8ByteLength(url),
+        bytesOut: 0,
+        ms: 0,
+      });
+    }
     await recordLandingLeg(env, telemetry, mapLandingFailureOutcome("landing_url_invalid"));
     return failLandingCapture(options, "landing_url_invalid");
   }
@@ -231,6 +267,28 @@ async function captureLandingPageSnapshotAt(
   telemetry: LandingPageTelemetryContext,
   plainHttpStartedAt: string | null = null,
 ): Promise<LandingPageSnapshotData | null> {
+  // Issue #1500: derive the lp_run_audit context once per top-level capture
+  // call so the recursive redirects all share the same watchlist_id / run_id
+  // / domain. The helper is null-safe — callers that don't pass `audit`
+  // continue to behave exactly as before. The derived domain is the public
+  // hostname (never the raw URL) so the audit stream carries the operator-
+  // legible field even when the source URL is hashed for telemetry.
+  const audit: LpRunAuditContext | null = options.audit ?? null;
+  const auditDomain = (() => {
+    try {
+      return url.hostname;
+    } catch {
+      return "unknown";
+    }
+  })();
+  const auditContext =
+    audit === null
+      ? null
+      : createLpRunAuditContext({
+          watchlistId: audit.watchlistId,
+          runId: audit.runId,
+          domain: auditDomain,
+        });
   // Pre-fetch validation failures keep the leg's start (from the first fetch
   // of the chain when one already ran; otherwise the job start, which is
   // truthful because nothing ran before the validation).
@@ -241,6 +299,16 @@ async function captureLandingPageSnapshotAt(
       telemetry,
       mapLandingFailureOutcome("landing_redirect_limit"),
     );
+    if (auditContext) {
+      emitLpRunAudit({
+        context: auditContext,
+        stage: "url_extract",
+        outcome: "bailed:redirect_limit",
+        bytesIn: 0,
+        bytesOut: 0,
+        ms: 0,
+      });
+    }
     return failLandingCapture(options, "landing_redirect_limit", { redirectCount });
   }
 
@@ -252,7 +320,31 @@ async function captureLandingPageSnapshotAt(
         telemetry,
         mapLandingFailureOutcome("landing_redirect_blocked"),
       );
+      if (auditContext) {
+        emitLpRunAudit({
+          context: auditContext,
+          stage: "url_extract",
+          outcome: "bailed:landing_url_invalid",
+          bytesIn: 0,
+          bytesOut: 0,
+          ms: 0,
+        });
+      }
       return failLandingCapture(options, "landing_redirect_blocked", { redirectCount });
+    }
+    // url_extract stage ok — the canonical URL has been resolved (the
+    // recursive redirect chain will re-emit url_extract on each hop,
+    // but the first resolution is the one the audit stream groups
+    // against watchlist_id + run_id).
+    if (auditContext) {
+      emitLpRunAudit({
+        context: auditContext,
+        stage: "url_extract",
+        outcome: "ok",
+        bytesIn: utf8ByteLength(url.toString()),
+        bytesOut: utf8ByteLength(resolvedUrl.toString()),
+        ms: 0,
+      });
     }
 
     const { captureWarningCodes } = state;
@@ -280,6 +372,11 @@ async function captureLandingPageSnapshotAt(
     // the same leg), so rendered-first time or any earlier work is never
     // included in the HTTP leg's recorded duration.
     telemetry.plainHttpStartedAt ??= new Date().toISOString();
+    // Issue #1500: stamp the html_fetch start once per plain-http leg so
+    // every bail-out below can record `ms` against the same origin. The
+    // redirect recursion re-enters this function and stamps a fresh value,
+    // which keeps each redirect hop's html_fetch audit honest.
+    const fetchStartedAt = auditContext ? Date.now() : 0;
     const { fetchAttempts, response } = await fetchLandingPageWithTransientRetry(
       resolvedUrl.toString(),
     );
@@ -287,6 +384,16 @@ async function captureLandingPageSnapshotAt(
     if (isRedirectStatus(response.status)) {
       const redirectedUrl = resolvePublicRedirectUrl(response.headers.get("location"), resolvedUrl);
       releaseFetchTimeout(response);
+      if (auditContext) {
+        emitLpRunAudit({
+          context: auditContext,
+          stage: "html_fetch",
+          outcome: "bailed:landing_redirect_blocked",
+          bytesIn: utf8ByteLength(resolvedUrl.toString()),
+          bytesOut: 0,
+          ms: Math.max(0, Date.now() - fetchStartedAt),
+        });
+      }
       return redirectedUrl
         ? captureLandingPageSnapshotAt(
             env,
@@ -306,6 +413,16 @@ async function captureLandingPageSnapshotAt(
     const finalUrl = await resolvePublicHttpUrl(response.url || resolvedUrl.toString());
     if (!finalUrl) {
       releaseFetchTimeout(response);
+      if (auditContext) {
+        emitLpRunAudit({
+          context: auditContext,
+          stage: "html_fetch",
+          outcome: "bailed:landing_redirect_blocked",
+          bytesIn: utf8ByteLength(resolvedUrl.toString()),
+          bytesOut: 0,
+          ms: Math.max(0, Date.now() - fetchStartedAt),
+        });
+      }
       return recordFailedLanding(env, telemetry, options, "landing_redirect_blocked", {
         fetchStatus: response.status,
         redirectCount,
@@ -321,6 +438,16 @@ async function captureLandingPageSnapshotAt(
           : fetchStatus === 401 || fetchStatus === 403
             ? "landing_blocked"
             : "landing_http_error";
+      if (auditContext) {
+        emitLpRunAudit({
+          context: auditContext,
+          stage: "html_fetch",
+          outcome: `bailed:${reasonCode}` as const,
+          bytesIn: utf8ByteLength(resolvedUrl.toString()),
+          bytesOut: 0,
+          ms: Math.max(0, Date.now() - fetchStartedAt),
+        });
+      }
       if (
         options.allowRenderedFallback !== false &&
         !state.renderedAttempted
@@ -340,6 +467,16 @@ async function captureLandingPageSnapshotAt(
 
     const html = await readResponseTextWithinLimit(response, MAX_LANDING_PAGE_HTML_BYTES);
     if (!html) {
+      if (auditContext) {
+        emitLpRunAudit({
+          context: auditContext,
+          stage: "html_fetch",
+          outcome: "bailed:landing_content_empty_or_oversized",
+          bytesIn: utf8ByteLength(resolvedUrl.toString()),
+          bytesOut: 0,
+          ms: Math.max(0, Date.now() - fetchStartedAt),
+        });
+      }
       if (
         options.allowRenderedFallback !== false &&
         !state.renderedAttempted
@@ -363,7 +500,24 @@ async function captureLandingPageSnapshotAt(
         { fetchStatus: response.status },
       );
     }
-    const signals = extractLandingPageSignals(html, { documentMode: "raw" });
+    // html_fetch ok — the response body was read within the byte cap.
+    // bytesIn is the URL (the request payload is the URL itself); bytesOut
+    // is the body length so an operator can correlate an empty-shell page
+    // (small bytes_out, large normalised_html later) with a real failure.
+    if (auditContext) {
+      emitLpRunAudit({
+        context: auditContext,
+        stage: "html_fetch",
+        outcome: "ok",
+        bytesIn: utf8ByteLength(resolvedUrl.toString()),
+        bytesOut: utf8ByteLength(html),
+        ms: Math.max(0, Date.now() - fetchStartedAt),
+      });
+    }
+    const signals = extractLandingPageSignals(html, {
+      documentMode: "raw",
+      audit: auditContext,
+    });
     const hasMeaningfulBodyText = hasMeaningfulLandingPageBodyText(html, {
       documentMode: "raw",
     });
@@ -413,11 +567,31 @@ async function captureLandingPageSnapshotAt(
         },
       );
     }
-    const headline =
-      decodeHtml(findFirstMatch(html, OG_TITLE_REGEX) ?? "") ||
-      decodeHtml(findFirstMatch(html, TITLE_REGEX) ?? "") ||
-      decodeHtml(stripTags(findFirstMatch(html, H1_REGEX) ?? "")) ||
-      "Landing page";
+    // headline_extract stage — OG / TITLE / H1 regex cascade with a
+    // generic placeholder fallback. The stage bails when none of the
+    // three patterns matched (the generic "Landing page" placeholder
+    // is the visible bail-out signal — a real page always has at least
+    // a <title>). Bytes in is the HTML body; bytes out is the final
+    // headline text so an operator can see the size of the fallback.
+    const headlineStartedAt = auditContext ? Date.now() : 0;
+    const ogTitle = decodeHtml(findFirstMatch(html, OG_TITLE_REGEX) ?? "");
+    const titleTag = decodeHtml(findFirstMatch(html, TITLE_REGEX) ?? "");
+    const h1 = decodeHtml(stripTags(findFirstMatch(html, H1_REGEX) ?? ""));
+    const headline = ogTitle || titleTag || h1 || "Landing page";
+    if (auditContext) {
+      const headlineBailReason =
+        headline === "Landing page"
+          ? "no_og_title_no_title_no_h1"
+          : null;
+      emitLpRunAudit({
+        context: auditContext,
+        stage: "headline_extract",
+        outcome: headlineBailReason === null ? "ok" : (`bailed:${headlineBailReason}` as const),
+        bytesIn: utf8ByteLength(html),
+        bytesOut: utf8ByteLength(headline),
+        ms: Math.max(0, Date.now() - headlineStartedAt),
+      });
+    }
 
     const normalized = normalizeHeadline(headline);
     const canonicalUrl = finalUrl.toString();
