@@ -33,6 +33,64 @@ export const PUBLISHED_BUNDLE_PRICES_USD: Record<UsageBundleSlug, number> = {
   proof_7500: 599,
 };
 
+/**
+ * Published stable EUR list prices for the schema.org Offer JSON-LD on
+ * /pricing (#1503). The buyer's localized amount shown at Dodo checkout can
+ * drift by locale, SKU, and tax-inclusion settings — search-result surfaces
+ * need a single declared number per tier and pack, so we anchor the EUR
+ * list values once and ship them as-is. The EUR/USD ratio is whatever
+ * Dodo's adaptive localization happens to return at the time of the
+ * observed snapshot (Free=0, Scout €10, Starter €46, Agency €136; Burst
+ * €28, Campaign €91, Scale €227); it is not a manually-set FX rate, and the
+ * canonical published list is what ships in structured data here even when
+ * the live Dodo checkout amount eventually drifts off by a unit. The
+ * visible pricing card still loads the live EUR amount at render time, so
+ * the UI stays accurate; this table just keeps the JSON-LD stable.
+ *
+ * Annual = 8 × monthly (the "4 months free" offer), rounded to whole euros
+ * so the published list reads cleanly and never pretends Dodo delivers
+ * sub-euro precision in the structured data.
+ */
+export const PUBLISHED_PLAN_PRICES_EUR: Record<
+  PricingPlanSlug,
+  { monthly: number; yearly: number }
+> = {
+  scout: { monthly: 10, yearly: 80 },
+  starter: { monthly: 46, yearly: 368 },
+  agency: { monthly: 136, yearly: 1088 },
+};
+
+/** Published stable EUR list prices for proof-capture packs (#1503). */
+export const PUBLISHED_BUNDLE_PRICES_EUR: Record<UsageBundleSlug, number> = {
+  proof_500: 28,
+  proof_2000: 91,
+  proof_7500: 227,
+};
+
+/**
+ * Published declaration of the Free tier for the schema.org Offer JSON-LD
+ * (#1503). PUBLISHED_PLAN_PRICES_USD has no Free entry because the visible
+ * pricing page lists USD anchors only for paid plans — Free is described
+ * in prose ("watch 1 competitor — instant first scan, a weekly
+ * proof-backed brief, and 1 Collection"). Search results still want an
+ * Offer for the Free tier so Google can render it as a $0 row alongside
+ * the paid cards, so we declare it here as a single €0 offer. Free never
+ * appears in Dodo's pricing table and never carries a billing cycle, so
+ * the surface stays minimal: a name, a description, and a 0-priced Offer.
+ */
+export interface PublishedFreePlanOffer {
+  name: string;
+  description: string;
+  offerPriceEUR: 0;
+}
+
+export const PUBLISHED_FREE_PLAN_OFFER: PublishedFreePlanOffer = {
+  name: "Free",
+  description:
+    "Free Five to Nine plan: watch 1 competitor with instant first scan, a weekly proof-backed brief, and 1 Collection. No card required.",
+  offerPriceEUR: 0,
+};
+
 /** Published label for a plan price, e.g. "$11 USD/mo". */
 export function publishedPlanPriceLabel(
   slug: PricingPlanSlug,

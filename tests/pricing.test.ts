@@ -5,7 +5,10 @@ import {
   EVIDENCE_USAGE_CUSTOMER_COPY,
   pricingPlans,
   pricingPlansForRegion,
+  PUBLISHED_BUNDLE_PRICES_EUR,
   PUBLISHED_BUNDLE_PRICES_USD,
+  PUBLISHED_FREE_PLAN_OFFER,
+  PUBLISHED_PLAN_PRICES_EUR,
   PUBLISHED_PLAN_PRICES_USD,
   usageBundles,
 } from "~/lib/pricing";
@@ -127,5 +130,38 @@ describe("pricingPlans", () => {
       "Annual checkout is unavailable while pricing syncs. Monthly checkout still works.",
     );
     expect(dodoAnnualUnavailableCopy(null)).not.toContain("Annual annual");
+  });
+
+  it("publishes stable EUR list prices per plan tier and proof pack for #1503 JSON-LD", () => {
+    // The visible USD labels carry the daily-published anchor; the EUR list
+    // sits beside them as the published stable figure for the search-result
+    // surface, so the structured-data test always has a declared number
+    // even when the live Dodo checkout amount drifts by locale.
+    expect(PUBLISHED_PLAN_PRICES_EUR.scout).toEqual({ monthly: 10, yearly: 80 });
+    expect(PUBLISHED_PLAN_PRICES_EUR.starter).toEqual({ monthly: 46, yearly: 368 });
+    expect(PUBLISHED_PLAN_PRICES_EUR.agency).toEqual({ monthly: 136, yearly: 1088 });
+    // "4 months free" stays 8 × monthly, rounded to whole euros.
+    for (const plan of ["scout", "starter", "agency"] as const) {
+      expect(PUBLISHED_PLAN_PRICES_EUR[plan].yearly).toBe(
+        PUBLISHED_PLAN_PRICES_EUR[plan].monthly * 8,
+      );
+    }
+
+    expect(PUBLISHED_BUNDLE_PRICES_EUR.proof_500).toBe(28);
+    expect(PUBLISHED_BUNDLE_PRICES_EUR.proof_2000).toBe(91);
+    expect(PUBLISHED_BUNDLE_PRICES_EUR.proof_7500).toBe(227);
+    expect(PUBLISHED_BUNDLE_PRICES_EUR.proof_2000).toBeGreaterThan(
+      PUBLISHED_BUNDLE_PRICES_EUR.proof_500,
+    );
+    expect(PUBLISHED_BUNDLE_PRICES_EUR.proof_7500).toBeGreaterThan(
+      PUBLISHED_BUNDLE_PRICES_EUR.proof_2000,
+    );
+  });
+
+  it("declares the Free plan Offer constants for #1503 search-result surface", () => {
+    expect(PUBLISHED_FREE_PLAN_OFFER.name).toBe("Free");
+    expect(PUBLISHED_FREE_PLAN_OFFER.offerPriceEUR).toBe(0);
+    expect(PUBLISHED_FREE_PLAN_OFFER.description).toContain("1 competitor");
+    expect(PUBLISHED_FREE_PLAN_OFFER.description).toContain("Collection");
   });
 });
