@@ -7,6 +7,9 @@ import type {
 } from "~/lib/types";
 import { stripChurnTokens } from "~/lib/normalize";
 import {
+  SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES,
+} from "~/lib/capture-validity-public-rules";
+import {
   classifyExtractorSuppression,
   type ExtractorSuppressionFingerprints,
   type ExtractorSuppressionReason,
@@ -180,9 +183,9 @@ export function evaluateProofBackedEvents(input: {
     // screenshot corroboration: the headline is read from the document title,
     // and form presence is a structural signal, neither of which a missing
     // screenshot can fake.
-    const requiresCorroboration =
-      draft.eventType === "landing_page_offer_changed" ||
-      draft.eventType === "landing_page_cta_changed";
+    const requiresCorroboration = SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES.some(
+      (eventType) => eventType === draft.eventType,
+    );
     const unconfirmedByScreenshot =
       requiresCorroboration && !screenshotCorroborates;
     const suppressed = duplicate || unconfirmedByScreenshot;
