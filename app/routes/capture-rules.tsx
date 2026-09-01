@@ -70,8 +70,9 @@ export default function CaptureRulesRoute() {
 
       <PublicDocBlock title="What still alerts">
         <p>
-          A genuine price, offer, or CTA edit on a real landing page, corroborated by the screenshot.
-          That is the only path from a capture to an event.
+          A genuine price, offer, or CTA edit on a real landing page, corroborated by the screenshot, still
+          alerts. Headline and form changes also alert, from signals in the captured page a missing screenshot
+          cannot fake (the document title and form structure); no screenshot needed.
         </p>
       </PublicDocBlock>
     </PublicDocShell>

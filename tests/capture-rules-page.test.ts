@@ -9,6 +9,7 @@ import {
 import {
   CAPTURE_RULES_PUBLIC_PATH,
   CAPTURE_VALIDITY_PUBLIC_RULES,
+  SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES,
 } from "~/lib/capture-validity-public-rules";
 import { SITEMAP_PATHS } from "~/lib/seo";
 
@@ -93,5 +94,56 @@ describe("capture-rules page lock (#1264)", () => {
     expect(redirectSource).toContain("redirect(");
     expect(redirectSource).toContain("301");
     expect(redirectSource).toContain("/capture-rules");
+  });
+
+  it("pins the screenshot-corroboration scope so the page cannot drift from the code (#1516)", () => {
+    // The evaluator must consume the same list this module exports: a future
+    // change to `requiresCorroboration` must keep the /capture-rules copy true or
+    // this test goes red (prevention mechanism).
+    const evaluatorSource = readFileSync(
+      "app/lib/watch-event-evaluator.server.ts",
+      "utf8",
+    );
+    expect(evaluatorSource).toContain(
+      "SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES",
+    );
+    // The gate must read the constant, not a hand-rolled list. If a future change
+    // re-hardcodes the offer/CTA scope (and drifts from the shared constant),
+    // this regex fails closed and forces the public-copy review.
+    expect(evaluatorSource).toMatch(
+      /requiresCorroboration[\s\S]{0,200}SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES/,
+    );
+
+    // The shared scope is price/offer/CTA. Headline and form changes are exempt
+    // and must stay named in the public copy, with why they are structurally safe.
+    expect(SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES).toEqual([
+      "landing_page_offer_changed",
+      "landing_page_cta_changed",
+    ]);
+
+    const corroborationRule = CAPTURE_VALIDITY_PUBLIC_RULES.find(
+      (rule) => rule.gate.kind === "corroboration",
+    )!;
+    expect(corroborationRule.refused).toMatch(/price, offer, or CTA/);
+    expect(corroborationRule.why.toLowerCase()).toMatch(/headline/);
+    expect(corroborationRule.why.toLowerCase()).toMatch(/form/);
+
+    // The /capture-rules route's "What still alerts" block must name the
+    // exempt event types in plain language so a buyer can verify the rule from
+    // the page itself, not by reading code.
+    const captureRulesRoute = readFileSync(
+      "app/routes/capture-rules.tsx",
+      "utf8",
+    );
+    expect(captureRulesRoute).toMatch(/What still alerts/);
+    expect(captureRulesRoute).toMatch(/Headline/);
+    expect(captureRulesRoute).toMatch(/form/);
+
+    // /trust must not repeat the blanket "every alert is backed by a screenshot"
+    // claim. The corrected sentence stores page text and source link always; a
+    // screenshot only when the capture includes one.
+    const trustRoute = readFileSync("app/routes/trust.tsx", "utf8");
+    expect(trustRoute).not.toMatch(/Alerts are backed by captured page text, source links, and screenshots/);
+    expect(trustRoute).toMatch(/screenshot joins the proof when the[\s\n]+capture includes one/);
   });
 });
