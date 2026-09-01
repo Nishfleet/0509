@@ -22,6 +22,21 @@ export type CaptureValidityPublicGate =
   | { kind: "corroboration"; code: "screenshot_corroboration" }
   | { kind: "classifier"; code: "maintenance_window" };
 
+/**
+ * Screenshot-corroboration scope (BET 4): the capture pipeline corroborates
+ * exactly these landing-page event types against a real rendered screenshot before
+ * they may become an alert.
+ *
+ * This array is the single source of truth consumed by both the evaluator
+ * (`watch-event-evaluator.server.ts`'s `requiresCorroboration` gate) and the public
+ * copy on `/capture-rules` and `/trust`: a future change to the scope must keep the
+ * public language true or `tests/capture-rules-page.test.ts` goes red.
+ */
+export const SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES = [
+  "landing_page_offer_changed",
+  "landing_page_cta_changed",
+] as const;
+
 export interface CaptureValidityPublicRule {
   id: string;
   title: string;
@@ -116,10 +131,11 @@ export const CAPTURE_VALIDITY_PUBLIC_RULES: readonly CaptureValidityPublicRule[]
   },
   {
     id: "screenshot-corroboration",
-    title: "Extract without a matching screenshot",
+    title: "Price, offer, or CTA change without a matching screenshot",
     refused:
-      "A price or CTA change found in the HTML extract that the screenshot does not corroborate.",
-    why: "HTML extraction alone can invent a change a visitor would not see. No screenshot match, no alert.",
+      "A price, offer, or CTA change found in the HTML extract that the screenshot does not corroborate.",
+    why:
+      "HTML extraction alone can invent a change a visitor would not see. Headline and form changes alert from signals a missing screenshot cannot fake (the document title and form structure). No screenshot match for a price, offer, or CTA change means no alert.",
     gate: { kind: "corroboration", code: "screenshot_corroboration" },
     issue953Anchor: "screenshot corroboration",
   },
