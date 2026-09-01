@@ -153,6 +153,22 @@ export default defineConfig({
     {
       name: "prod-public",
       testMatch: /prod-public\.spec\.ts/,
+      // Post-deploy cold-start budget (issue #1529). Right after a main push
+      // the freshly-deployed Worker at https://0509.io can take 5-10s to
+      // warm its first route on a cold edge. The pre-deploy canary
+      // (scripts/check-live-public-home.mjs) only warms `/`, so the suite's
+      // first call to `/llms.txt`, `/robots.txt`, `/api/health` or any auth/
+      // presence/help/trust route would otherwise hit the global 10s
+      // actionTimeout and fail the run — run 33531233486 on 2026-09-01
+      // tripped FleetMainRed with exactly that shape. actionTimeout: 30_000
+      // gives every request.get a cold edge can actually warm against, and
+      // timeout: 90_000 gives the multi-route "machine-readable surfaces"
+      // test room to walk every assertion on a slow first hit. The
+      // test.beforeAll warmup in e2e/prod-public.spec.ts covers the
+      // typical case, but the project-level bound is the safety net for
+      // the path the warmup cannot reach.
+      timeout: 90_000,
+      actionTimeout: 30_000,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: productionBaseURL,

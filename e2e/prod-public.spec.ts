@@ -86,6 +86,22 @@ async function collectVisiblePublicControls(page: import("@playwright/test").Pag
   });
 }
 
+// Post-deploy cold-start budget (issue #1529): right after a main push the
+// freshly-deployed Worker at https://0509.io can take 5-10s to warm its first
+// route on a cold edge. The pre-deploy canary
+// (scripts/check-live-public-home.mjs, run earlier in deploy-production.yml)
+// only warms `/`; smoke checks against `/llms.txt`, `/robots.txt`, `/api/health`
+// and the auth/presence/help/trust cluster hit the worker cold. The 5s request
+// timeout the test originally shipped with was tight enough to fail a green
+// deploy when the first request to a non-warmed route took the full
+// actionTimeout (10s inherited from playwright.config.ts) — run 33531233486 on
+// 2026-09-01 hit exactly that, with two `/llms.txt` and `/` timeouts blocking
+// the prod-public suite and tripping FleetMainRed. 20s gives a cold edge room
+// to warm while still bounded well under the 60s per-test timeout.
+const PROD_PUBLIC_REQUEST_TIMEOUT_MS = 20_000;
+const PROD_PUBLIC_WARMUP_ATTEMPTS = 10;
+const PROD_PUBLIC_WARMUP_BACKOFF_MS = 3_000;
+
 async function expectPublicGetTargetReachable(
   request: import("@playwright/test").APIRequestContext,
   baseURL: string | undefined,
@@ -100,9 +116,46 @@ async function expectPublicGetTargetReachable(
     requestUrl.search = "";
   }
 
-  const response = await request.get(requestUrl.toString(), { maxRedirects: 0, timeout: 5_000 });
+  const response = await request.get(requestUrl.toString(), {
+    maxRedirects: 0,
+    timeout: PROD_PUBLIC_REQUEST_TIMEOUT_MS,
+  });
   expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).not.toBe(404);
   expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).toBeLessThan(500);
+}
+
+/**
+ * Warm the production Worker before the suite runs. The pre-deploy canary
+ * (scripts/check-live-public-home.mjs) already exercised `/`, but every other
+ * surface the suite touches — `/llms.txt`, `/robots.txt`, `/api/health`, the
+ * auth/presence/help/trust cluster, and every link the page captures — sits on
+ * a fresh route that has not seen traffic this run. A bounded retry against
+ * the cheapest path (`/api/health`) gives the edge a few seconds to warm the
+ * first cold route before the suite starts measuring, instead of letting the
+ * very first request.get fail the actionTimeout and trip FleetMainRed.
+ */
+async function warmProductionBeforeAll(baseURL: string | undefined) {
+  const origin = new URL(baseURL || "https://0509.io").origin;
+  const probe = new URL("/api/health", origin).toString();
+  for (let attempt = 1; attempt <= PROD_PUBLIC_WARMUP_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(probe, {
+        headers: { "user-agent": "0509-prod-public-warmup/1.0" },
+        signal: AbortSignal.timeout(PROD_PUBLIC_REQUEST_TIMEOUT_MS),
+      });
+      if (response.ok) {
+        return;
+      }
+    } catch {
+      // network or timeout — retry
+    }
+    if (attempt < PROD_PUBLIC_WARMUP_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, PROD_PUBLIC_WARMUP_BACKOFF_MS));
+    }
+  }
+  throw new Error(
+    `prod_public_warmup_exhausted: ${probe} did not return 2xx after ${PROD_PUBLIC_WARMUP_ATTEMPTS} attempts`,
+  );
 }
 
 async function mockPricingPreview(page: import("@playwright/test").Page) {
@@ -173,6 +226,12 @@ function expectSignedOutPlanIntent(href: string | null, cycle: "monthly" | "year
 }
 
 test.describe("public production-safe E2E smoke", () => {
+  test.beforeAll(async ({ baseURL }) => {
+    if (isProductionBaseURL(baseURL)) {
+      await warmProductionBeforeAll(baseURL);
+    }
+  });
+
   test("public pages and machine-readable surfaces render without auth", async ({ page, baseURL, request }) => {
     await gotoPublicPage(page, "/");
     await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
@@ -190,7 +249,10 @@ test.describe("public production-safe E2E smoke", () => {
       await expect(page.getByRole("heading", { name: "Start with the competitor your team keeps checking by hand." })).toBeVisible();
     } else {
       for (const path of ["/auth/login", "/auth/signup"]) {
-        const response = await request.get(new URL(path, baseURL).toString(), { maxRedirects: 0 });
+        const response = await request.get(new URL(path, baseURL).toString(), {
+          maxRedirects: 0,
+          timeout: PROD_PUBLIC_REQUEST_TIMEOUT_MS,
+        });
         expect(response.status(), `${path} should not be missing`).not.toBe(404);
         expect(response.status(), `${path} should not hard-fail`).toBeLessThan(500);
       }
@@ -205,18 +267,24 @@ test.describe("public production-safe E2E smoke", () => {
       await expect(page.locator("body")).toBeVisible();
     }
 
-    const health = await request.get(new URL("/api/health", baseURL).toString());
+    const health = await request.get(new URL("/api/health", baseURL).toString(), {
+      timeout: PROD_PUBLIC_REQUEST_TIMEOUT_MS,
+    });
     expect(health.ok()).toBeTruthy();
     await expect(await health.json()).toMatchObject({ app: "0509", status: "ok" });
 
-    const llms = await request.get(new URL("/llms.txt", baseURL).toString());
+    const llms = await request.get(new URL("/llms.txt", baseURL).toString(), {
+      timeout: PROD_PUBLIC_REQUEST_TIMEOUT_MS,
+    });
     expect(llms.ok()).toBeTruthy();
     expect(await llms.text()).toContain("Five to Nine");
 
     // AI crawler policy (docs/ai-crawler-policy.md, "answers yes, training
     // no"): training crawlers are denied while AI answer engines stay
     // allowed by the wildcard group — robots.txt and llms.txt must agree.
-    const robots = await request.get(new URL("/robots.txt", baseURL).toString());
+    const robots = await request.get(new URL("/robots.txt", baseURL).toString(), {
+      timeout: PROD_PUBLIC_REQUEST_TIMEOUT_MS,
+    });
     expect(robots.ok()).toBeTruthy();
     const robotsText = await robots.text();
     expect(robotsText).toContain("User-agent: GPTBot");
