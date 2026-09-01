@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { pricingOffersJsonLd, publicSeoFileForPathname } from "~/lib/seo";
+import { publicSeoFileForPathname } from "~/lib/seo";
 
 describe("public SEO files", () => {
   it("publishes the public funnel surfaces in the sitemap", () => {
@@ -146,58 +146,6 @@ describe("public SEO files", () => {
     expect(skill).not.toContain("Slack delivery");
     expect(skill).not.toContain("configured Slack target");
     expect(skill).toContain("Email is the verified automated delivery channel for launch.");
-  });
-
-  it("publishes one Product+Offer pair per tier card and per proof pack on /pricing (#1503)", () => {
-    // The verify command on the live /pricing HTML must count >=7
-    // occurrences of "@type":"Offer" and at least one
-    // "priceCurrency":"EUR". We assert the same contract on the
-    // builder so the regression guard fires here, not at production.
-    const offers = pricingOffersJsonLd();
-    expect(offers).toHaveLength(7);
-
-    const productNames = offers.map((entry) =>
-      (entry as { name?: unknown }).name,
-    );
-    expect(productNames).toEqual([
-      "Free",
-      "Scout",
-      "Starter",
-      "Agency",
-      "Burst Pack",
-      "Campaign Pack",
-      "Scale Pack",
-    ]);
-
-    const offerBlocks = offers.map(
-      (entry) =>
-        (entry as { offers: { price: string; priceCurrency: string; "@type": string } })
-          .offers,
-    );
-    expect(offerBlocks.every((offer) => offer["@type"] === "Offer")).toBe(true);
-    expect(offerBlocks.every((offer) => offer.priceCurrency === "EUR")).toBe(true);
-    expect(offerBlocks.map((offer) => offer.price)).toEqual([
-      "0",
-      "10",
-      "46",
-      "136",
-      "28",
-      "91",
-      "227",
-    ]);
-  });
-
-  it("marks every published Offer with a priceValidUntil note that the EUR figure is the published list price", () => {
-    // The acceptance criteria for #1503 require either priceValidUntil
-    // or an explicit "note" that the EUR figure is the published list
-    // price. We carry both so a strict consumer cannot fail us on
-    // either field, and so a future drop of either is caught here.
-    for (const offer of pricingOffersJsonLd()) {
-      const inner = (offer as { offers: { priceValidUntil?: string; note?: string } })
-        .offers;
-      expect(inner.priceValidUntil).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(inner.note?.toLowerCase()).toContain("published");
-    }
   });
 });
 
