@@ -315,12 +315,16 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
  * Single source of truth for the page title — shared by the <title>/og:title
  * meta and the WebPage JSON-LD `name` so structured data always states exactly
  * what the visible page states.
+ *
+ * The title is deliberately TIME-STABLE: it must never embed the per-request
+ * freshness stamp ("checked about N…", the live-scrape "right now" claim).
+ * That stamp churns the document identity Google indexes for the programmatic
+ * /ads/:domain surface on every crawl, signals instability, and reads as a
+ * tool tell in the SERP. The freshness lives in the visible page captions and
+ * the meta description (which carry their own honesty gate for the "right
+ * now" claim) — never in the title.
  */
 export function brandPageTitle(data: BrandPageLoaderData): string {
-  // "Right now" is a live-scrape claim — it must never appear when the page
-  // renders from a cache older than the "moments ago" window, or on the
-  // cache-miss shell, and it needs the visible checked-ago stamp as its
-  // evidence.
   if (!data.hasCachedAds) {
     return `${data.brandName} Facebook & Instagram ads | Five to Nine`;
   }
@@ -340,10 +344,7 @@ export function brandPageTitle(data: BrandPageLoaderData): string {
   } else {
     subject = `${data.brandName}: Meta ads linking to ${data.domain}`;
   }
-  if (data.freshForLiveClaim && data.checkedAgo) {
-    return `${subject} right now | Five to Nine`;
-  }
-  return `${subject} — checked ${data.checkedAgo ?? "recently"} | Five to Nine`;
+  return `${subject} | Five to Nine`;
 }
 
 /**
