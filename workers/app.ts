@@ -2,10 +2,7 @@
 
 import { createRequestHandler, RouterContextProvider } from "react-router";
 
-import {
-  BUYER_SURFACE_LOCALE_IDS,
-  isBuyerSurfaceLocaleId,
-} from "../app/lib/locale-markets";
+import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import { resumePendingDigestScheduleJobsDetailed } from "../app/lib/digest-orchestration.server";
