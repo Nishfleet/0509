@@ -131,7 +131,7 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/switch/magicbrief",
   "/switch/panoramata",
   "/switch/visualping",
-  "/methodology/ad-aggression-score",
+  "/ad-aggression",
 ]);
 const PUBLIC_CACHEABLE_HTML_PREFIXES = ["/ads/"] as const;
 
