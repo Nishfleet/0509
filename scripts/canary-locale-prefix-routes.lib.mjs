@@ -54,6 +54,12 @@ export const ROUTES = [
  * concatenation collapses to `${baseUrl}/${locale}` with no trailing
  * slash.
  */
+/**
+ * @param {string} baseUrl
+ * @param {string} locale
+ * @param {string} route
+ * @returns {string}
+ */
 export function probeUrl(baseUrl, locale, route) {
   const trimmedRoute = route === "/" ? "" : route;
   return `${baseUrl.replace(/\/+$/, "")}/${locale}${trimmedRoute}`;
@@ -91,13 +97,31 @@ export async function probe(url, timeoutMs, fetchImpl = globalThis.fetch) {
  * The canary's pass condition is `failures.length === 0` — every probed
  * URL must return 200, no exceptions. A single 404 or 5xx anywhere in
  * the cluster fails the canary.
+ *
+ * @typedef {Object} CanaryProbe
+ * @property {string} locale
+ * @property {string} route
+ * @property {string} url
+ * @property {number | null} status
+ * @property {boolean} ok
+ * @property {string} [error]
+ *
+ * @typedef {Object} CanaryReport
+ * @property {boolean} passed
+ * @property {string} generatedAt
+ * @property {string} baseUrl
+ * @property {CanaryProbe[]} probes
+ * @property {CanaryProbe[]} failures
+ *
+ * @param {{ baseUrl: string; timeoutMs?: number; fetchImpl?: typeof fetch }} options
+ * @returns {Promise<CanaryReport>}
  */
 export async function runCanary(options) {
   const probes = [];
   for (const locale of LOCALE_PREFIXES) {
     for (const route of ROUTES) {
       const url = probeUrl(options.baseUrl, locale, route);
-      const result = await probe(url, options.timeoutMs, options.fetchImpl);
+      const result = await probe(url, options.timeoutMs ?? DEFAULT_TIMEOUT_MS, options.fetchImpl);
       probes.push({ locale, route, url, ...result });
     }
   }
@@ -117,6 +141,9 @@ export async function runCanary(options) {
  * operator can see the full damage at a glance; the "first failing
  * probe" footer mirrors the issue verification loop's `exit 1` point so
  * a quick re-run on the failing URL is one `curl` away.
+ *
+ * @param {CanaryReport} report
+ * @returns {string}
  */
 export function formatReport(report) {
   const lines = [];
