@@ -67,11 +67,10 @@ export default function HelpRoute() {
 
       <PublicDocBlock title="Billing help">
         <p>
-          Paid access follows the confirmed payment path connected to the account. Card and invoice tasks can use the
-          hosted billing portal on <Link to={appLinkTarget("/app/billing", session)}>Plan &amp; billing</Link> when it is available. Plan changes
-          and cancellation stay backed by{" "}
-          <Link to={appLinkTarget("/app/support?category=billing", session)}>signed-in support cases</Link> until portal subscription updates
-          are confirmed.
+          Paid access follows the confirmed payment path connected to the account. When the hosted billing portal is
+          available on <Link to={appLinkTarget("/app/billing", session)}>Plan &amp; billing</Link>, use it to cancel, change your card, or get
+          invoices. When the portal is not available for your account, open a{" "}
+          <Link to={appLinkTarget("/app/support?category=billing", session)}>signed-in support case</Link> for billing help.
         </p>
       </PublicDocBlock>
 
