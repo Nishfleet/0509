@@ -64,7 +64,10 @@ export function resolveVerifiedAdvertiserPageId(
   return distinct.size === 1 ? [...distinct][0] : null;
 }
 
-export function buildDomainProviderQuery(intent: ParsedSearchQuery) {
+export function buildDomainProviderQuery(
+  intent: ParsedSearchQuery,
+  identityAliases: string[] = [],
+) {
   if (intent.intent !== "domain") {
     return null;
   }
@@ -73,7 +76,12 @@ export function buildDomainProviderQuery(intent: ParsedSearchQuery) {
   // brand-sized term that can discover candidates, then verify the website
   // connection below. Exact vs broader is a proof policy, not a provider
   // search mode.
-  return buildBroaderProviderQuery(intent) ??
+  // Prefer the resolved website identity (site name, title) as the search
+  // query because generic domain labels like "slack" or "tcs" are too
+  // ambiguous for Meta Ad Library. Fall back to the broader provider query
+  // (domain label) if no identity is available.
+  return identityAliases[0] ??
+    buildBroaderProviderQuery(intent) ??
     intent.registrableDomain ??
     intent.comparableHostname ??
     intent.originalInput;
@@ -96,11 +104,11 @@ export function buildSearchV2SavedQuery(
   intent: ParsedSearchQuery,
   scope: SearchScope,
   filters: NormalizedSavedQuery["filters"],
-  options: { pageId?: string | null } = {},
+  options: { pageId?: string | null; identityAliases?: string[] } = {},
 ): NormalizedSavedQuery {
   const providerTerm =
     intent.intent === "domain"
-      ? buildDomainProviderQuery(intent) ?? intent.originalInput
+      ? buildDomainProviderQuery(intent, options.identityAliases) ?? intent.originalInput
       : intent.normalizedText ?? intent.originalInput;
 
   // A verified page id scopes the scrape to the exact advertiser page — persist
