@@ -195,4 +195,21 @@ describe("pricing section render smoke", () => {
       "<h1>Choose the monitoring rhythm your team needs.</h1>",
     );
   });
+
+  it("publishes 7 or more Offer blocks in EUR on /pricing JSON-LD for issue #1503", async () => {
+    const { default: PricingRoute } = await import("~/routes/pricing");
+    const markup = renderToStaticMarkup(createElement(PricingRoute));
+
+    // The issue's verify command grep-counts "@type":"Offer" (with
+    // optional whitespace) and requires at least 7, plus at least one
+    // priceCurrency="EUR". Render the SSR markup here and apply the
+    // same grep contract so the regression guard fires without the
+    // network round-trip — exactly the same shape as
+    //   curl -sS https://0509.io/pricing | grep -oE '"@type"\s*:\s*"Offer"' | wc -l
+    const offerCount = (markup.match(/"@type"\s*:\s*"Offer"/g) ?? []).length;
+    expect(offerCount).toBeGreaterThanOrEqual(7);
+    expect(markup).toMatch(/"priceCurrency"\s*:\s*"EUR"/);
+    // Free is part of the 7, so it must be the published 0 offer row.
+    expect(markup).toMatch(/"name"\s*:\s*"Free"/);
+  });
 });
