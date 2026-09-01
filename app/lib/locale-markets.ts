@@ -8,8 +8,16 @@
  * Do not import `~/lib/seo` from here: seo.ts reads SNEAKER_RESALE_PATHS
  * to publish the cluster, and a cycle would break both.
  */
-export const SNEAKER_RESALE_LOCALE_IDS = ["en", "de", "ja", "pt-br"] as const;
+export const SNEAKER_RESALE_LOCALE_IDS = ["en", "de", "ja", "pt-br", "fr", "es"] as const;
 export type SneakerResaleLocaleId = (typeof SNEAKER_RESALE_LOCALE_IDS)[number];
+
+/**
+ * Locales that receive the full buyer surface cluster (/, /pricing, /help, etc.).
+ * These are the locales documented in the sitemap as shipping marketing content.
+ * English is x-default and does not get a locale prefix.
+ */
+export const BUYER_SURFACE_LOCALE_IDS = ["de", "ja", "pt-br", "fr", "es"] as const;
+export type BuyerSurfaceLocaleId = (typeof BUYER_SURFACE_LOCALE_IDS)[number];
 
 export interface SneakerResaleMarket {
   id: SneakerResaleLocaleId;
@@ -58,6 +66,24 @@ export const SNEAKER_RESALE_MARKETS: readonly SneakerResaleMarket[] = [
     nativeName: "Português (Brasil)",
     signupSource: "locale-pt-br-sneaker-resale",
   },
+  {
+    id: "fr",
+    hreflang: "fr",
+    htmlLang: "fr",
+    ogLocale: "fr_FR",
+    pathname: "/fr/sneaker-resale",
+    nativeName: "Français",
+    signupSource: "locale-fr-sneaker-resale",
+  },
+  {
+    id: "es",
+    hreflang: "es",
+    htmlLang: "es",
+    ogLocale: "es_ES",
+    pathname: "/es/sneaker-resale",
+    nativeName: "Español",
+    signupSource: "locale-es-sneaker-resale",
+  },
 ] as const;
 
 const MARKET_BY_ID = new Map(SNEAKER_RESALE_MARKETS.map((market) => [market.id, market]));
@@ -66,8 +92,30 @@ const SIGNUP_SOURCE_SET = new Set(SNEAKER_RESALE_MARKETS.map((market) => market.
 
 export const SNEAKER_RESALE_PATHS = SNEAKER_RESALE_MARKETS.map((market) => market.pathname);
 
+/**
+ * Buyer surface paths that must exist under each buyer surface locale prefix.
+ * English (x-default) serves these at the root (/, /pricing, etc.).
+ * Each locale in BUYER_SURFACE_LOCALE_IDS gets these paths prefixed (e.g. /de/, /de/pricing).
+ */
+export const BUYER_SURFACE_PATHS = [
+  "/",
+  "/pricing",
+  "/sitemap.xml",
+  "/help",
+  "/docs",
+  "/api/docs",
+  "/status",
+  "/changelog",
+  "/trust",
+  "/compare",
+] as const;
+
 export function isSneakerResaleLocaleId(value: string | undefined): value is SneakerResaleLocaleId {
   return value !== undefined && MARKET_BY_ID.has(value as SneakerResaleLocaleId);
+}
+
+export function isBuyerSurfaceLocaleId(value: string | undefined): value is BuyerSurfaceLocaleId {
+  return value !== undefined && (BUYER_SURFACE_LOCALE_IDS as readonly string[]).includes(value);
 }
 
 export function sneakerResaleMarket(id: SneakerResaleLocaleId): SneakerResaleMarket {
@@ -104,4 +152,25 @@ export function sneakerResaleMarketForSignupSource(
 
 export function sneakerResaleSignupPath(id: SneakerResaleLocaleId): string {
   return `/auth/signup?source=${sneakerResaleMarket(id).signupSource}`;
+}
+
+/**
+ * Returns the canonical (English) pathname for a buyer surface locale path.
+ * e.g. "/de/pricing" -> "/pricing", "/ja/help" -> "/help"
+ */
+export function canonicalPathnameForLocalePath(pathname: string): string {
+  const pathOnly = pathname.split(/[?#]/)[0] ?? pathname;
+  const withoutTrailingSlash =
+    pathOnly === "/" ? pathOnly : pathOnly.replace(/\/+$/, "");
+  
+  for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+    const prefix = `/${locale}`;
+    if (withoutTrailingSlash === prefix) {
+      return "/";
+    }
+    if (withoutTrailingSlash.startsWith(`${prefix}/`)) {
+      return withoutTrailingSlash.slice(prefix.length);
+    }
+  }
+  return withoutTrailingSlash;
 }
