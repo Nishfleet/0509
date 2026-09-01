@@ -13,6 +13,7 @@ import {
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
+  pricingOffersJsonLd,
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
@@ -61,6 +62,8 @@ export default function PricingRoute() {
     agencySaleOpen: false,
   };
 
+  const structuredOffers = pricingOffersJsonLd();
+
   return (
     <main className="f9-home">
       <script
@@ -70,6 +73,14 @@ export default function PricingRoute() {
       />
       <script
         {...jsonLdScriptProps(faqPageJsonLd(billingFaqJsonLdEntries(commercialLaunch.agencySaleOpen)))}
+      />
+      <script
+        {...jsonLdScriptProps(
+          {
+            "@context": "https://schema.org",
+            "@graph": structuredOffers,
+          },
+        )}
       />
       <MarketingNav />
       <PricingSection
