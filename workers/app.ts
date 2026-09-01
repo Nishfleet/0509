@@ -2,6 +2,7 @@
 
 import { createRequestHandler, RouterContextProvider } from "react-router";
 
+import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import { resumePendingDigestScheduleJobsDetailed } from "../app/lib/digest-orchestration.server";
@@ -95,6 +96,27 @@ export default {
       url.pathname === "/sitemap.xml"
     ) {
       return publicFileResponse(request, await publicSitemapFile(env));
+    }
+
+    // Locale-prefixed /<locale>/sitemap.xml (issue #1501): every buyer-
+    // surface locale ships the same sitemap body as the EN sitemap.xml so
+    // the locale cluster stays in lockstep. Reaching this code path here
+    // avoids loading the React Router tree just to serve the same XML
+    // body under a different prefix. `isBuyerSurfaceLocaleId` gates the
+    // first segment against the allowlist so an unknown locale
+    // (`/xx/sitemap.xml`) cannot silently inherit the EN sitemap body.
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      url.pathname.endsWith("/sitemap.xml")
+    ) {
+      const localeSegment = url.pathname.split("/")[1] ?? "";
+      if (
+        localeSegment !== "" &&
+        url.pathname === `/${localeSegment}/sitemap.xml` &&
+        isBuyerSurfaceLocaleId(localeSegment)
+      ) {
+        return publicFileResponse(request, await publicSitemapFile(env));
+      }
     }
 
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
