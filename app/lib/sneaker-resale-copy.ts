@@ -22,10 +22,7 @@ export interface SneakerResaleCopy {
   swingKicker: string;
   swingTitle: string;
   swingDeck: string;
-  // `domain` is the mover's followable proof path: /search?q=<domain>
-  // (rows live today). Retarget to /ads/<domain> once #1282/#1306 populate
-  // it; a required field keeps the swing section from shipping a dead link.
-  swing: ReadonlyArray<{ brand: string; line: string; domain: string }>;
+  swing: ReadonlyArray<{ brand: string; line: string }>;
   swingSource: string;
   honestKicker: string;
   honestTitle: string;
@@ -99,12 +96,10 @@ const EN: SneakerResaleCopy = {
   swing: [
     {
       brand: "Saucony",
-      domain: "saucony.com",
       line: "Pulled ahead of ASICS in StockX's 2026 midyear 'Big Facts' — the value-tier brand buyers are switching to, not away from.",
     },
     {
       brand: "ASICS",
-      domain: "asics.com",
       line: "The incumbent Saucony is dethroning. Still running heavy Meta spend, which makes its offer and CTA moves the ones to watch.",
     },
   ],
@@ -220,12 +215,10 @@ const DE: SneakerResaleCopy = {
   swing: [
     {
       brand: "Saucony",
-      domain: "saucony.com",
       line: "In StockX' Halbjahres-Big-Facts-2026 an ASICS vorbeigezogen — die Value-Tier-Marke, zu der Käufer wechseln, nicht weg von ihr.",
     },
     {
       brand: "ASICS",
-      domain: "asics.com",
       line: "Der Platzhirsch, den Saucony verdrängt. Läuft weiterhin mit hohem Meta-Budget, deshalb sind seine Offer- und CTA-Änderungen die Beobachtung wert.",
     },
   ],
@@ -341,12 +334,10 @@ const JA: SneakerResaleCopy = {
   swing: [
     {
       brand: "Saucony",
-      domain: "saucony.com",
       line: "StockXの2026年上半期「Big Facts」でASICSを抜いた。買い手が離れる側ではなく、向かう側のバリューティアブランド。",
     },
     {
       brand: "ASICS",
-      domain: "asics.com",
       line: "Sauconyが追い落とす現王者。依然としてMeta広告に多額を投じており、だからこそオファーとCTAの変化が注目点になる。",
     },
   ],
@@ -462,13 +453,11 @@ const PT_BR: SneakerResaleCopy = {
   swing: [
     {
       brand: "Saucony",
-      domain: "saucony.com",
       line: "Passou à frente da ASICS no 'Big Facts' de meio de ano 2026 da StockX — a marca value-tier para a qual os compradores estão indo, não saindo.",
     },
     {
       brand: "ASICS",
-      domain: "asics.com",
-      line: "A incumbente que a Saucony está depando. Ainda roda muito orçamento no Meta, por isso os movimentos de oferta e CTA dela são os que valem acompanhar."
+      line: "A incumbente que a Saucony está depando. Ainda roda muito orçamento no Meta, por isso os movimentos de oferta e CTA dela são os que valem acompanhar.",
     },
   ],
   swingSource:
