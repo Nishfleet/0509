@@ -141,7 +141,7 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "Public capture-validity rules: the landing-page captures that never become alerts.",
   },
-  "/methodology/ad-aggression-score": {
+  "/ad-aggression": {
     title: "Ad Aggression Score methodology",
     description:
       "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",

@@ -78,7 +78,7 @@ describe("Site Rep widget install", () => {
       "/switch/magicbrief",
       "/switch/panoramata",
       "/switch/visualping",
-      "/methodology/ad-aggression-score",
+      "/ad-aggression",
     ]) {
       expect(shouldLoadSiteRepWidget(pathname), pathname).toBe(true);
     }

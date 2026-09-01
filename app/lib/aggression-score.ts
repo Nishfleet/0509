@@ -30,8 +30,18 @@ export const AGGRESSION_TESTING_SATURATION_SHARE = 0.5;
 
 export const AGGRESSION_FORMULA_VERSION = 1;
 
-/** Public methodology page for the formula documented in this module. */
-export const AD_AGGRESSION_METHODOLOGY_PATH =
+/**
+ * Public methodology page for the formula documented in this module.
+ *
+ * Path history: previously `/methodology/ad-aggression-score` (issue #960).
+ * Renamed to `/ad-aggression` for issue #1263 — short, quotable, link-magnet.
+ * The old path 301-redirects to this one in `app/routes.ts` so any external
+ * link or sitemap entry pointing at the old URL keeps its equity.
+ */
+export const AD_AGGRESSION_METHODOLOGY_PATH = "/ad-aggression" as const;
+
+/** Old canonical path; kept here so the redirect stays the only redirect source. */
+export const AD_AGGRESSION_METHODOLOGY_PATH_LEGACY =
 	"/methodology/ad-aggression-score" as const;
 
 export interface AggressionScoreComponents {
