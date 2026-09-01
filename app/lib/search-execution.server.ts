@@ -89,7 +89,9 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
     const comparisonPromise = (async () => {
       const v2Context = await buildSearchV2Context(options.competitorWebsite.raw, options.scope);
       if (!v2Context) return null;
-      const v2Query = buildSearchV2SavedQuery(v2Context.queryIntent, options.scope, options.parsed.filters);
+      const v2Query = buildSearchV2SavedQuery(v2Context.queryIntent, options.scope, options.parsed.filters, {
+        identityAliases: v2Context.identityAliases,
+      });
       const v2CacheKey = buildSearchV2CacheKey({
         provider,
         intent: v2Context.queryIntent,
@@ -152,7 +154,9 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
     : null;
 
   const query = applyDomainV2 && v2Context
-    ? buildSearchV2SavedQuery(v2Context.queryIntent, options.scope, options.parsed.filters)
+    ? buildSearchV2SavedQuery(v2Context.queryIntent, options.scope, options.parsed.filters, {
+        identityAliases: v2Context.identityAliases,
+      })
     : legacyQuery;
 
   const cacheKeyOverride =
