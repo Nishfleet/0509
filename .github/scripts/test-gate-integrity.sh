@@ -65,6 +65,18 @@ with open(sys.argv[1], "w") as fh:
 PY
 }
 
+# Lock-test: workflow file must contain the new context fields
+lock_test_workflow() {
+  local wf=".github/workflows/gate-integrity.yml"
+  test -f "$wf" || { echo "LOCK-TEST FAIL: $wf not found"; return 1; }
+  grep -q 'github\.event\.pull_request\.user\.login' "$wf" || { echo "LOCK-TEST FAIL: $wf missing github.event.pull_request.user.login"; return 1; }
+  grep -q '\.author\.login // \.committer\.login' "$wf" || { echo "LOCK-TEST FAIL: $wf missing .author.login // .committer.login"; return 1; }
+  grep -q 'author: \$author' "$wf" || { echo "LOCK-TEST FAIL: $wf missing author: \$author in bundle jq"; return 1; }
+  grep -q 'pusher: \$pusher' "$wf" || { echo "LOCK-TEST FAIL: $wf missing pusher: \$pusher in bundle jq"; return 1; }
+  echo "LOCK-TEST PASS: workflow contains required context fields"
+  return 0
+}
+
 # run_fixture <name> <PASS|FAIL> [must-contain] [must-not-contain]
 run_fixture() {
   local name="$1" expected="$2" must_contain="${3:-}" must_not_contain="${4:-}"
@@ -546,6 +558,9 @@ fixture auto_revert_attest_not_array '{
   "auto_revert_attestations": "oops",
   "files": [{"filename": "README.md", "status": "modified", "patch": "+x"}]}'
 run_fixture auto_revert_attest_not_array FAIL "auto_revert_attestations is not an array"
+
+# Lock-test: workflow must contain the new context fields (issue #1176)
+lock_test_workflow || exit 1
 
 printf '\n%s passed, %s failed\n' "$PASS_COUNT" "$FAIL_COUNT"
 test "$FAIL_COUNT" -eq 0
