@@ -343,8 +343,33 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // /methodology/ad-aggression-score to /ad-aggression (issue #1263). The old
   // path now 301-redirects; the sitemap lists the canonical one only so we
   // never index a redirect target alongside its origin.
+  // 2026-09: Locale-prefixed buyer-surface cluster expanded to de, ja,
+  // pt-br, fr, es (issue #1501). Each locale ships the same set of
+  // buyer surfaces the EN locale serves with canonical→EN so duplicate
+  // content does not fragment search ranking.
   // Product UI stays English; these are indexable marketing surfaces only.
-  sitemapPaths: ["/", "/search", "/compare", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping", "/compare/visualping-ad-library", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief", "/switch/panoramata", "/switch/visualping", "/competitor-monitoring", "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale", "/pt-br/sneaker-resale", "/capture-rules", "/ad-aggression", "/pricing", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  sitemapPaths: [
+    "/", "/search", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
+    "/compare/visualping", "/compare/visualping-ad-library", "/compare/spyland",
+    "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder",
+    "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief",
+    "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",
+    "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale",
+    "/pt-br/sneaker-resale",
+    // Locale-prefixed buyer-surface cluster (issue #1501) — generated below.
+    ...["de", "ja", "pt-br", "fr", "es"].flatMap((locale) => [
+      `/${locale}/pricing`,
+      `/${locale}/help`,
+      `/${locale}/docs`,
+      `/${locale}/api/docs`,
+      `/${locale}/status`,
+      `/${locale}/changelog`,
+      `/${locale}/trust`,
+      `/${locale}/compare`,
+    ]),
+    "/capture-rules", "/ad-aggression", "/pricing", "/help", "/docs", "/api/docs",
+    "/status", "/changelog", "/trust", "/privacy", "/terms",
+  ],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",
