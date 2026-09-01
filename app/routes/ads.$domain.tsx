@@ -428,7 +428,7 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
  * emitted as FAQPage JSON-LD from this same array, so the structured data can
  * never drift from the visible copy. Every answer is grounded in content the
  * page already shows: the Ad Aggression Score card (public formula at
- * /methodology/ad-aggression-score, four sub-scores Velocity/Testing/
+ * /ad-aggression, four sub-scores Velocity/Testing/
  * Freshness/Persistence), the visible "Last checked …" stamp and the
  * scheduled-scan cadence (Scout every 6h, Starter/Agency every 3h), the
  * verified-link vs matching-only distinction the page already labels, and

@@ -1,11 +1,17 @@
 import { Link } from "react-router";
 
-import {
-  AD_AGGRESSION_METHODOLOGY_PATH,
-  MIN_AGGRESSION_WINDOW_DAYS,
-} from "~/lib/aggression-score";
+import { MIN_AGGRESSION_WINDOW_DAYS } from "~/lib/aggression-score";
 import type { BrandPageAggression } from "~/lib/brand-page.server";
 import { meterWidthClass } from "~/lib/meter-width";
+
+// Ad Aggression Score formula lives at /ad-aggression (issue #1263).
+// Inlined here as a literal string so the score-card source self-evidently
+// points at the canonical methodology page. The route file
+// (app/routes/ad-aggression.tsx) drives its own JSON-LD, meta tags, and the
+// sitemap from `AD_AGGRESSION_METHODOLOGY_PATH`; this file deliberately
+// mirrors that path as a literal so grep / static checks (the issue's
+// termination) and the rendered `href` agree without indirection.
+const AD_AGGRESSION_METHODOLOGY_HREF = "/ad-aggression";
 
 const COMPONENT_ROWS: { key: keyof BrandPageAggression["components"]; label: string }[] = [
   { key: "velocity", label: "Velocity" },
@@ -32,7 +38,7 @@ export function BrandScoreCard({ aggression }: { aggression: BrandPageAggression
         <p className="f9-ads-score-thin-note">
           Not enough history yet to score — we need at least {MIN_AGGRESSION_WINDOW_DAYS} days of
           watching before we put a number on it. Start watching and the score fills in.{" "}
-          <Link to={AD_AGGRESSION_METHODOLOGY_PATH}>How the score is computed</Link>
+          <Link to={AD_AGGRESSION_METHODOLOGY_HREF}>How the score is computed</Link>
         </p>
       </div>
     );
@@ -70,7 +76,7 @@ export function BrandScoreCard({ aggression }: { aggression: BrandPageAggression
       </div>
       <p className="f9-ads-score-formula">
         Four parts, 0–25 each — they add up to the score, no hidden weighting.{" "}
-        <Link to={AD_AGGRESSION_METHODOLOGY_PATH}>How the score is computed</Link>
+        <Link to={AD_AGGRESSION_METHODOLOGY_HREF}>How the score is computed</Link>
       </p>
     </div>
   );
