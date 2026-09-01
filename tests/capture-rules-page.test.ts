@@ -9,6 +9,7 @@ import {
 import {
   CAPTURE_RULES_PUBLIC_PATH,
   CAPTURE_VALIDITY_PUBLIC_RULES,
+  SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES,
 } from "~/lib/capture-validity-public-rules";
 import { SITEMAP_PATHS } from "~/lib/seo";
 
@@ -93,5 +94,32 @@ describe("capture-rules page lock (#1264)", () => {
     expect(redirectSource).toContain("redirect(");
     expect(redirectSource).toContain("301");
     expect(redirectSource).toContain("/capture-rules");
+  });
+
+  it("pins the screenshot-corroboration scope so the page cannot drift from the code (#1516)", () => {
+    // The evaluator must consume the same list this module exports: a future
+    // change to `requiresCorroboration` must keep the /capture-rules copy true or
+    // this test goes red (prevention mechanism).
+    const evaluatorSource = readFileSync(
+      "app/lib/watch-event-evaluator.server.ts",
+      "utf8",
+    );
+    expect(evaluatorSource).toContain(
+      "SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES",
+    );
+
+    // The shared scope is price/offer/CTA — headline and form changes are exempt
+    // and must stay named in the public copy, with why they are structurally safe.
+    expect(SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES).toEqual([
+      "landing_page_offer_changed",
+      "landing_page_cta_changed",
+    ]);
+
+    const corroborationRule = CAPTURE_VALIDITY_PUBLIC_RULES.find(
+      (rule) => rule.gate.kind === "corroboration",
+    )!;
+    expect(corroborationRule.refused).toMatch(/price, offer, or CTA/);
+    expect(corroborationRule.why).toMatch(/headline/);
+    expect(corroborationRule.why).toMatch(/form/);
   });
 });
