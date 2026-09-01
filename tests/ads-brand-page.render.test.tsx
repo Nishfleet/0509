@@ -739,8 +739,13 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
     expect(markup).toContain('"@type":"WebPage"');
     // name and description must match the meta title/description exactly.
     expect(markup).toContain(
-      '"name":"Nike Facebook & Instagram ads — checked about 2 hours ago | Five to Nine"',
+      '"name":"Nike Facebook & Instagram ads | Five to Nine"',
     );
+    // The name is time-stable: the freshness stamp ("checked about N…",
+    // "right now") lives in the visible captions and the description, never
+    // in the indexed title/JSON-LD name.
+    expect(markup).not.toContain('"name":"Nike Facebook & Instagram ads — checked about');
+    expect(markup).not.toContain('"name":"Nike Facebook & Instagram ads right now');
     expect(markup).toContain(
       '"description":"See 6 Meta ads from Nike (nike.com), from a public check of the India Ad Library about 2 hours ago. Get an email when their ads or offer change."',
     );
@@ -754,14 +759,18 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
     expect(markup).toContain('"isPartOf":{"@type":"WebSite","name":"Five to Nine"');
   });
 
-  it("flips the JSON-LD name to the live-claim title only while the capture is fresh", async () => {
+  it("keeps the JSON-LD name time-stable even while the capture is fresh (no 'right now' in the title)", async () => {
     const markup = await render(
       populated({ checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
 
+    // The live-scrape "right now" claim stays in the visible page captions and
+    // the meta description (which carry their own honesty gate); the indexed
+    // name must not churn with the capture clock.
     expect(markup).toContain(
-      '"name":"Nike Facebook & Instagram ads right now | Five to Nine"',
+      '"name":"Nike Facebook & Instagram ads | Five to Nine"',
     );
+    expect(markup).not.toContain('"name":"Nike Facebook & Instagram ads right now');
   });
 
   it("emits no JSON-LD on the noindex honest shell", async () => {

@@ -868,10 +868,14 @@ describe("/ads/:domain meta", () => {
     installBrandPageMocks();
     const tags = await metaFor(richData);
 
-    // The capture is hours old — the title must not claim "right now".
+    // The title is time-stable: the freshness stamp ("checked about N…",
+    // "right now") lives in the visible page and the description — never in
+    // the indexed title, which must not churn with the capture clock.
     expect(tags).toContainEqual({
-      title: "Nykaa Facebook & Instagram ads — checked about 2 hours ago | Five to Nine",
+      title: "Nykaa Facebook & Instagram ads | Five to Nine",
     });
+    expect(tags.some((tag) => tag.title?.includes("checked about"))).toBe(false);
+    expect(tags.some((tag) => tag.title?.includes("right now"))).toBe(false);
     expect(tags).toContainEqual({
       tagName: "link",
       rel: "canonical",
@@ -882,13 +886,17 @@ describe("/ads/:domain meta", () => {
     expect(tags.some((tag) => tag.name === "robots")).toBe(false);
   });
 
-  it('keeps the "right now" title only when the capture is fresh enough for a live claim', async () => {
+  it("keeps the title time-stable even when the capture is fresh enough for a live claim", async () => {
     installBrandPageMocks();
     const tags = await metaFor({ ...richData, checkedAgo: "moments ago", freshForLiveClaim: true });
 
+    // The live-scrape "right now" claim never enters the indexed title — it
+    // belongs to the visible captions and the meta description, whose honesty
+    // gate already guards it.
     expect(tags).toContainEqual({
-      title: "Nykaa Facebook & Instagram ads right now | Five to Nine",
+      title: "Nykaa Facebook & Instagram ads | Five to Nine",
     });
+    expect(tags.some((tag) => tag.title?.includes("right now"))).toBe(false);
   });
 
   it("never claims the capture is right now when the checked-ago stamp is missing", async () => {
@@ -897,7 +905,7 @@ describe("/ads/:domain meta", () => {
 
     expect(tags.some((tag) => tag.title?.includes("right now"))).toBe(false);
     expect(tags).toContainEqual({
-      title: "Nykaa Facebook & Instagram ads — checked recently | Five to Nine",
+      title: "Nykaa Facebook & Instagram ads | Five to Nine",
     });
   });
 
@@ -918,7 +926,7 @@ describe("/ads/:domain meta", () => {
     // The title describes the page honestly as ads linking to the domain,
     // with the brand as the topic — never "{brand}'s ads".
     expect(tags).toContainEqual({
-      title: "Nykaa: Meta ads linking to nykaa.com — checked about 2 hours ago | Five to Nine",
+      title: "Nykaa: Meta ads linking to nykaa.com | Five to Nine",
     });
     const description = tags.find((tag) => tag.name === "description")?.content ?? "";
     // Issue #1428: when no creative could be attributed to the brand, the
@@ -960,7 +968,7 @@ describe("/ads/:domain meta", () => {
     });
 
     expect(tags).toContainEqual({
-      title: "Nykaa: Meta ads matching nykaa.com — checked about 2 hours ago | Five to Nine",
+      title: "Nykaa: Meta ads matching nykaa.com | Five to Nine",
     });
     const description = tags.find((tag) => tag.name === "description")?.content ?? "";
     expect(description).toContain("2 Meta ads matching nykaa.com");
