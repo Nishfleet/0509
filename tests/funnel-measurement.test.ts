@@ -12,6 +12,7 @@ const FUNNEL_OPERATIONS = [
   "funnel_migration_view",
   "funnel_signup_start",
   "funnel_signup_start_magicbrief",
+  "funnel_pricing_free_card_clicked",
   "funnel_first_brief_viewed",
 ];
 
@@ -258,6 +259,28 @@ describe("funnel measurement emission", () => {
     expect(record.operation).toBe("funnel_signup_start");
     expect((record.details as Record<string, string>).route).toBe("signup");
     expect(JSON.stringify(record)).not.toMatch(/client|email|name|token|user/i);
+  });
+
+  it("selects the pricing-free kind from the allowlisted source marker and never records the marker value", async () => {
+    const { emitFunnelSignupStartFromAllowlistedSource, PRICING_FREE_SIGNUP_SOURCE } =
+      await import("~/lib/funnel-measurement.server");
+    const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
+
+    emitFunnelSignupStartFromAllowlistedSource(env, makeFunnelRequest(), PRICING_FREE_SIGNUP_SOURCE);
+    emitFunnelSignupStartFromAllowlistedSource(env, makeFunnelRequest(), null);
+
+    const records = emittedFunnelRecords(logSpy);
+    expect(records).toHaveLength(2);
+    const operations = records.map((record) => (record as { operation: string }).operation);
+    expect(operations).toEqual(["funnel_pricing_free_card_clicked", "funnel_signup_start"]);
+
+    for (const record of records) {
+      const details = (record as { details: Record<string, string> }).details;
+      expect(Object.keys(details).sort()).toEqual(["account_scope", "event_id", "route"].sort());
+      expect(details.route).toBe("signup");
+    }
+    // The raw marker value never appears anywhere in a record.
+    expect(JSON.stringify(records)).not.toContain(PRICING_FREE_SIGNUP_SOURCE);
   });
 
   it("emits a migration-page view with the coarse route label only", async () => {

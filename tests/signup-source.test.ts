@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MAGICBRIEF_MIGRATION_SOURCE } from "~/lib/funnel-measurement.server";
+import { MAGICBRIEF_MIGRATION_SOURCE, PRICING_FREE_SIGNUP_SOURCE } from "~/lib/funnel-measurement.server";
 import {
   ALLOWED_SIGNUP_SOURCES,
   allowlistedSignupSource,
@@ -13,9 +13,11 @@ import {
 } from "~/lib/signup-source";
 
 describe("allowlisted signup_source", () => {
-  it("keeps the MagicBrief marker and the locale sneaker-resale markers, and nothing else", () => {
+  it("keeps the MagicBrief, pricing-free, and locale sneaker-resale markers, and nothing else", () => {
     expect(ALLOWED_SIGNUP_SOURCES).toContain(MAGICBRIEF_MIGRATION_SOURCE);
     expect(allowlistedSignupSource(MAGICBRIEF_MIGRATION_SOURCE)).toBe(MAGICBRIEF_MIGRATION_SOURCE);
+    expect(ALLOWED_SIGNUP_SOURCES).toContain(PRICING_FREE_SIGNUP_SOURCE);
+    expect(allowlistedSignupSource(PRICING_FREE_SIGNUP_SOURCE)).toBe(PRICING_FREE_SIGNUP_SOURCE);
     expect(allowlistedSignupSource("locale-de-sneaker-resale")).toBe("locale-de-sneaker-resale");
     expect([...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES]).toEqual([
       "locale-en-sneaker-resale",
@@ -30,6 +32,8 @@ describe("allowlisted signup_source", () => {
     expect(allowlistedSignupSource("<script>alert(1)</script>")).toBeNull();
     expect(allowlistedSignupSource("/auth/signup?source=magicbrief-migration")).toBeNull();
     expect(allowlistedSignupSource("not-a-marker")).toBeNull();
+    expect(allowlistedSignupSource("pricing-free&x=1")).toBeNull();
+    expect(allowlistedSignupSource(" PRICING-FREE ")).toBeNull();
     expect(allowlistedSignupSource("")).toBeNull();
     expect(allowlistedSignupSource(null)).toBeNull();
     expect(allowlistedSignupSource(" MAGICBRIEF-MIGRATION ")).toBeNull();

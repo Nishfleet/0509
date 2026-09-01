@@ -61,6 +61,7 @@ The account/workspace measures in §3.2 are **derived metrics, not emitted event
 | `funnel_signup_start_magicbrief` | Signup begins from a request whose URL carries the exact migration marker (`source=magicbrief-migration`), recognized server-side by exact string comparison against the allowlisted constant; the marker value itself is never stored | Measure wind-down capture at signup initiation | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
 | `funnel_locale_segment_view_en` / `_de` / `_ja` / `_pt_br` | A sneaker-resale locale landing page renders | Count organic reach per locale page (issue 1154) | `event_id`, `timestamp`, `route` | Pathname, language headers, IP/geo, the raw URL |
 | `funnel_signup_start_locale_en` / `_de` / `_ja` / `_pt_br` | Signup begins from a request whose URL carries the exact locale marker (`source=locale-<id>-sneaker-resale`), recognized server-side against allowlisted constants; the marker value itself is never stored | Measure locale-page capture at signup initiation | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
+| `funnel_pricing_free_card_clicked` | Signup begins from a request whose URL carries the exact pricing Free card marker (`source=pricing-free`), recognized server-side against the allowlisted constant; the marker value itself is never stored | Measure whether surfacing the Free plan as a card on `/pricing` lifts free-tier click-through (issue 1499) | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
 | `funnel_first_brief_viewed` | Authenticated Overview or Briefs renders a first brief with ≥1 evidence-linked item | Measure same-session activation (signup → first brief on screen) | `event_id`, `timestamp`, `route` | Watchlist names, ad URLs, proof content, `workspace_id` |
 
 All v1 emitted events are request-scoped: they carry no identifier that
@@ -70,6 +71,10 @@ default-off gate, same GPC suppression, no new identifiers. The attribution is a
 coarse event-kind selection resolved on the server (the marker selects
 `funnel_signup_start_magicbrief` instead of `funnel_signup_start`) — it never adds a
 caller-controlled value to any record field, so anonymous events remain non-joinable.
+`funnel_pricing_free_card_clicked` follows the same marker contract: the raw
+`source=pricing-free` query value is compared to the allowlisted constant server-side
+and never stored; like every signup-start variant it fires at signup submission with
+`route=signup` and `account_scope=anonymous`.
 `funnel_first_brief_viewed` uses `account_scope=workspace` and `route=activation` because
 it fires after sign-in; it still stores no `workspace_id` and is not joinable to
 `funnel_signup_start`.

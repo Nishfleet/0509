@@ -1,6 +1,6 @@
 import { execute, queryOne } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
-import { MAGICBRIEF_MIGRATION_SOURCE } from "~/lib/funnel-measurement.server";
+import { MAGICBRIEF_MIGRATION_SOURCE, PRICING_FREE_SIGNUP_SOURCE } from "~/lib/funnel-measurement.server";
 
 /**
  * Durable allowlisted signup attribution (issue 1200).
@@ -23,6 +23,7 @@ export const LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES = [
 
 export const ALLOWED_SIGNUP_SOURCES = [
   MAGICBRIEF_MIGRATION_SOURCE,
+  PRICING_FREE_SIGNUP_SOURCE,
   ...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
 ] as const;
 
