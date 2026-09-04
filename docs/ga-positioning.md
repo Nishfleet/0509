@@ -1,16 +1,12 @@
 # GA Positioning
 
-**Status:** LIVE for Scout, Starter, and Agency self-serve. Email delivery, Dodo
-billing, and Workflow-based monitoring fan-out are live in production
-(`docs/final-self-serve-ga-scorecard.md` is the dated release verdict;
-`CLAUDE.md` → "Production Reality" is the canonical current-truth pointer for
-what is deployed). WhatsApp and Slack delivery are dormant and barred from GA
-claims — see "What stays honest" below.
-
-This doc is the positioning pointer. The live GA verdict lives in
-`docs/final-self-serve-ga-scorecard.md`; do not restate that verdict here, point
-at it. When the two disagree, the scorecard + `CLAUDE.md` win and this doc gets
-fixed.
+This doc is the positioning pointer for the self-serve GA surfaces. It does NOT
+state enablement status — that verdict lives in
+`docs/final-self-serve-ga-scorecard.md` (dated release evidence) and in
+`CLAUDE.md` → "Production Reality" (the canonical current-truth pointer for what is
+deployed). Never put an enablement verdict word in this header; when this
+positioning copy and the scorecard disagree, the scorecard + `CLAUDE.md` win and
+this doc gets fixed.
 
 ## Target positioning
 
@@ -40,5 +36,7 @@ fixed.
 
 - Live GA verdict: `docs/final-self-serve-ga-scorecard.md` (dated release evidence).
 - Deployed state + bindings: `CLAUDE.md` → "Production Reality" and `wrangler.jsonc`.
-- Claim-by-claim reality check: `docs/customer-claim-audit-table.json`.
+- Claim-by-claim reality check: `docs/customer-claim-audit-table.json` +
+  `docs/customer-claim-surface-registry.json` → `rows` (mechanical check:
+  `npm run verify:claims`).
 - `docs/ga-launch-scorecard.md` is SUPERSEDED — do not use it as the live verdict.
