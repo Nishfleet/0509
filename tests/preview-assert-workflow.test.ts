@@ -141,6 +141,16 @@ describe("preview-assert workflow", () => {
     expect(source).not.toMatch(/secrets\.DODO/);
   });
 
+  it("does not invoke the post-deploy Gate C canary (it mutates production D1/email)", () => {
+    // scripts/verify-post-deploy-release.mjs hardcodes https://0509.io and
+    // writes billing records / sends proof emails. A preview version of the
+    // production worker shares those bindings, so running Gate C from a PR
+    // check would mutate production. The canary stays post-merge.
+    expect(source).not.toContain("verify-post-deploy-release");
+    expect(source).not.toContain("gate-c-soak");
+    expect(source).not.toContain("npm run deploy");
+  });
+
   it("pins every remote action to a full commit SHA", () => {
     for (const reference of source.matchAll(/^\s*(?:uses:)\s*([^\s]+).*$/gm)) {
       expect(reference[1]).toMatch(/@[a-f0-9]{40}(?:\s|#|$)/);
