@@ -714,9 +714,9 @@ const SITEMAP_XML = renderSitemapXml(SITEMAP_STATIC_ENTRIES);
 // welcome (they match the wildcard group below: Googlebot + AI Overviews,
 // Bingbot, PerplexityBot, OAI-SearchBot, ChatGPT-User, Claude-By-Cloudflare,
 // ...), while AI training/fine-tuning crawlers are denied (ai-train=no).
-// The Cloudflare edge managed robots.txt enforces the same deny list at the
-// zone; this file carries the policy in repo so the stance survives edge
-// feature changes. Keep the lists in sync with the zone config.
+// The Cloudflare edge managed robots.txt is the SOLE source for the AI-training
+// deny list; this file only carries the wildcard rules and Sitemap so the two
+// blocks are not duplicated. Do not re-add an AI-training block here.
 // Single source of truth for the AI training-crawler deny list (shared with
 // the llms.txt "AI access" section in app/lib/public-markdown.ts so the two
 // public surfaces can never drift apart). Policy: docs/ai-crawler-policy.md.
@@ -732,13 +732,10 @@ export const AI_TRAINING_CRAWLERS = [
   "meta-externalagent",
 ] as const;
 
-const AI_TRAINING_BLOCK = AI_TRAINING_CRAWLERS.map(
-  (agent) => `User-agent: ${agent}\nDisallow: /`,
-).join("\n\n");
-
-const ROBOTS_TXT = `# AI training/fine-tuning crawlers are denied (ai-train=no).
-# AI answer/reference engines are allowed by the wildcard group below.
-${AI_TRAINING_BLOCK}
+// The AI-training deny list lives in the Cloudflare managed-robots zone config;
+// it is intentionally NOT duplicated in this served robots.txt (issue #1459).
+const ROBOTS_TXT = `# AI answer/reference engines are allowed by the wildcard group below.
+# AI training/fine-tuning crawlers are denied at the zone by Cloudflare managed robots (ai-train=no).
 
 User-agent: *
 Allow: /api/docs
