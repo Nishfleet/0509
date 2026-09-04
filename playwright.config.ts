@@ -76,6 +76,16 @@ export default defineConfig({
       },
     },
     {
+      name: "search-streaming-three-tier",
+      testDir: "./tests/e2e",
+      testMatch: /search-streaming-three-tier\.spec\.ts/,
+      timeout: 120_000,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: productionBaseURL,
+      },
+    },
+    {
       name: "local-auth",
       // Landing-language live-proof captures ride the same local fixture
       // server and skip themselves unless their package flag is set, so
@@ -152,7 +162,7 @@ export default defineConfig({
     },
     {
       name: "prod-public",
-      testMatch: /prod-public\.spec\.ts/,
+      testMatch: /(prod-public|search-streaming-three-tier)\.spec\.ts/,
       // Production API requests (request.get) inherit actionTimeout and have
       // no per-call override on the health/llms/robots probes. A freshly
       // deployed Worker can take >10s to serve its first request during

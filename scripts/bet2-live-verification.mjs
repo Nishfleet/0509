@@ -184,7 +184,12 @@ export function parseSearchResponseHtml(html) {
   // closing `>`) immediately after `f9-wk-row`. The parent container is
   // `f9-wk-rows` (with the trailing `s`), so this anchor is safe.
   const rowRegex = /class="f9-wk-row[ ">\s]/g;
-  const sayRegex = /<span class="f9-wk-say">(Verified|Likely|Unmatched) — /g;
+  // BET 2 (issue 1482): tier badges are the rendered confidence marker on
+  // each v2 row, so the canary counts them directly instead of parsing a
+  // leading word out of the summary. Legacy v1 rows that carry no badge no
+  // longer count toward any tier (previously the say-prefix heuristic
+  // counted every unlabelled row as verified).
+  const badgeRegex = /class="f9-tier-badge is-(verified|likely|unmatched)"/g;
   const firstRowMatch = html.match(/class="f9-wk-row[ ">\s]/);
   const firstRowIndex = firstRowMatch ? firstRowMatch.index ?? -1 : -1;
   const rowCount = (html.match(rowRegex) ?? []).length;
@@ -193,21 +198,19 @@ export function parseSearchResponseHtml(html) {
   let verifiedCount = 0;
   let likelyCount = 0;
   let unmatchedCount = 0;
-  for (const sayMatch of html.matchAll(sayRegex)) {
-    const tier = sayMatch[1];
-    const offset = sayMatch.index ?? 0;
-    if (tier === "Likely") {
+  for (const badgeMatch of html.matchAll(badgeRegex)) {
+    const tier = badgeMatch[1];
+    const offset = badgeMatch.index ?? 0;
+    if (tier === "verified") {
+      verifiedCount += 1;
+    } else if (tier === "likely") {
       likelyCount += 1;
       likelyRowIndices.push(offset);
-    } else if (tier === "Unmatched") {
+    } else if (tier === "unmatched") {
       unmatchedCount += 1;
       unmatchedRowIndices.push(offset);
     }
-    // `Verified` rows render WITHOUT a tier prefix (formatResultTierLabel
-    // returns null for verified rows), so the regex above does not match
-    // them at all. Their count is rowCount - likelyCount - unmatchedCount.
   }
-  verifiedCount = Math.max(0, rowCount - likelyCount - unmatchedCount);
 
   // The section heading is the strongest signal for warming vs empty vs
   // populated. Pull the first match inside the results panel (skip the
