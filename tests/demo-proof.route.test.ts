@@ -67,7 +67,11 @@ describe("public proof brief API", () => {
     } as never);
     const body = (await response.json()) as { status: string; proofTrail: unknown[] };
 
-    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+    // The payload is now visitor-country-scoped (issue #1468: the home brief
+    // must read the SAME cache row its linked brand page reads), so a shared
+    // cache must never serve one country's count to another visitor — private,
+    // never public.
+    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
     expect(response.headers.get("vary")).toBe("Accept");
     expect(body.status).toBe("live");
     expect(body.proofTrail.length).toBeGreaterThanOrEqual(1);

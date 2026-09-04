@@ -24,14 +24,23 @@ const publicSearchTrialPath =
 // discovery cache only (never a sample fixture and never a live scrape). When
 // no usable real cache exists the page renders the honest "no live proof yet"
 // state instead of inventing evidence.
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
+  const { defaultCountryForVisitor } = await import("~/lib/countries");
+  const { getOptionalCloudflareContext } = await import("~/lib/cloudflare-context");
   const env: AppEnv = getEnv(context);
+  // Same visitor-country resolution as the /ads/:domain loader so this
+  // public proof-brief surface reads the SAME cache row its linked brand
+  // pages read (issue 1468): never different totals for the same brand on
+  // the same day.
+  const visitorCountry = defaultCountryForVisitor(
+    getOptionalCloudflareContext(context)?.country ?? request.headers.get("cf-ipcountry"),
+  );
 
   let proofBrief: PublicProofBrief | null = null;
   try {
     const { loadPublicProofBrief } = await import("~/lib/public-proof.server");
-    proofBrief = await loadPublicProofBrief(env);
+    proofBrief = await loadPublicProofBrief(env, { visitorCountry });
   } catch (error) {
     // A cache-read hiccup degrades to the honest state, never a 500 and
     // never a sample fixture.
