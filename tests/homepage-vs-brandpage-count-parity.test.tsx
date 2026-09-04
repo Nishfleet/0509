@@ -240,8 +240,14 @@ describe("home proof brief ↔ brand page count parity (#1468)", () => {
       }),
     } as never);
 
-    // The audit metric: home count == brand page total.
-    expect(brief.adCount).toBe(page.brandOwnedAdCount + page.unverifiedMatchCount);
+    // The audit metric: home count == brand page total. The loader's own
+    // decomposition of the total is verifiedLinkCount + unverifiedMatchCount
+    // (the wall title "All {n} … on the wall" renders page.ads.length); the
+    // brand-owned subtotal is a subset of the verified links, never the total
+    // when other advertisers' verified links are captured too.
+    expect(brief.adCount).toBe(
+      page.verifiedLinkCount + page.unverifiedMatchCount,
+    );
     expect(brief.adCount).toBe(page.ads.length);
     // The live defect: home printed 12 while the wall read 24.
     expect(brief.adCount).toBeGreaterThan(12);

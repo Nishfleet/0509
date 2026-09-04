@@ -232,11 +232,22 @@
       "resultDetail": "Every categoryPromises/categoryComplaints entry carries a source URL and a check date (e.g. 'panoramata.co — checked 2026-08-08'). Tests assert each market claim card has a source link and freshness limit.",
       "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
       "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-HOME-BRANDPAGE-COUNT-PARITY",
+      "registryClaim": "SOURCE-STATUS-FRESHNESS",
+      "text": "The home page proof brief and the /ads/:domain page for the same brand report the same ad total for the same day — the home never re-derives a capped subset count the brand page does not show.",
+      "surface": "homepage proof brief case-board and /api/demo-proof vs /ads/nykaa.com brand page",
+      "liveQueryOrTest": "tests/homepage-vs-brandpage-count-parity.test.tsx — frozen-now assertions that the home brief adCount equals the brand page wall total (verifiedLinkCount + unverifiedMatchCount) and that both loaders resolve the same discovery-cache key",
+      "currentResult": "pass",
+      "resultDetail": "2026-08-30 live snap: home said 12 of 12 while /ads/nykaa.com wall read 24 (3 brand-owned, 6 verified links, 18 unverified matches) — same brand, same day, two totals. Fix (issue 1468): buildPublicProofBrief counts the full usable snapshot and every home proof-brief surface resolves visitor country through the shared /ads ladder into loadBrandPageCacheSnapshot, so both totals come from one cache row.",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation): code and copy change — the capped 12-ad subset count is gone; the home print and the brand page wall count the same snapshot",
+      "nishReserved": false
     }
   ],
   "summary": {
-    "totalClaims": 20,
-    "pass": 19,
+    "totalClaims": 21,
+    "pass": 20,
     "failCopyChangeNeeded": 0,
     "nishReserved": 1,
     "passCodeDataPending": 0,

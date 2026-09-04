@@ -54,16 +54,25 @@ export const meta: MetaFunction = () =>
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
+  const { defaultCountryForVisitor } = await import("~/lib/countries");
+  const { getOptionalCloudflareContext } = await import("~/lib/cloudflare-context");
   const env = getEnv(context);
   const { emitFunnelHomeView } = await import("~/lib/funnel-measurement.server");
   emitFunnelHomeView(env, request);
   const commercialLaunch = publicCommercialLaunchSummary(env);
   const pricingPreview = await pricingPreviewWithinBound({ env, request });
+  // Resolve the visitor country EXACTLY like the /ads/:domain loader so the
+  // home proof brief reads the SAME discovery-cache row its linked brand
+  // page reads — never different totals for the same brand on the same day
+  // (issue #1468).
+  const visitorCountry = defaultCountryForVisitor(
+    getOptionalCloudflareContext(context)?.country ?? request.headers.get("cf-ipcountry"),
+  );
 
   let proofBrief: PublicProofBrief | null = null;
   try {
     const { loadPublicProofBrief } = await import("~/lib/public-proof.server");
-    proofBrief = await loadPublicProofBrief(env);
+    proofBrief = await loadPublicProofBrief(env, { visitorCountry });
   } catch (error) {
     // A cache-read hiccup degrades to the honest "no live proof yet" state,
     // never a 500 and never a sample fixture.
