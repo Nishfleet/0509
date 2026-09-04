@@ -77,9 +77,14 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
       },
     );
   }
-  const exportGate = await requireExportFeature(env, workspaceUserId, format);
-  if (!exportGate.ok) {
-    return exportGate.response;
+  // BET 6: JSON reads of the account's own saved data are the free + Scout
+  // read surface (`api_access`). CSV and Slack-ready exports remain Starter+
+  // exports — "Writes and exports on Starter+".
+  if (format !== "json") {
+    const exportGate = await requireExportFeature(env, workspaceUserId, format);
+    if (!exportGate.ok) {
+      return exportGate.response;
+    }
   }
 
   if (!resourceType || !resourceId) {

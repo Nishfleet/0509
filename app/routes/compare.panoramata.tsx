@@ -71,7 +71,7 @@ const panoramataCosts: readonly CompareClaimCard[] = [
   {
     title: "No public MCP on listed plans",
     detail:
-      "Panoramata's public materials put API access on Enterprise. Five to Nine's customer API and MCP exist on Agency; they are not claimed as a free-tier feature here.",
+      "Panoramata's public materials put API access on Enterprise. Five to Nine's customer API and MCP read surface is available on Free and Scout; agent actions stay on Agency.",
   },
 ];
 

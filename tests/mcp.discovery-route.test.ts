@@ -33,24 +33,24 @@ const EXPECTED_MCP_ACTION_GROUPS = [
     ],
   },
   {
+    label: "Context read",
+    requiresWriteEnabled: false,
+    actions: ["list_memory", "list_client_rooms", "list_support_cases", "list_web_mentions"],
+  },
+  {
     label: "Context and client rooms",
     requiresWriteEnabled: true,
-    actions: ["upsert_memory", "list_memory", "upsert_client_room", "list_client_rooms"],
+    actions: ["upsert_memory", "upsert_client_room"],
   },
   {
     label: "Support",
     requiresWriteEnabled: true,
-    actions: ["create_support_case", "list_support_cases"],
+    actions: ["create_support_case"],
   },
   {
     label: "Delivery controls",
     requiresWriteEnabled: true,
     actions: ["list_delivery_targets", "update_delivery_settings", "update_delivery_target"],
-  },
-  {
-    label: "Presence observations",
-    requiresWriteEnabled: true,
-    actions: ["list_web_mentions"],
   },
 ] as const;
 
@@ -61,8 +61,8 @@ const READ_EXPORT_TOOL_NAMES = [
   "watchlist_runs.list",
 ] as const;
 const READ_EXPORT_TOOL_NAME_SET = new Set<string>(READ_EXPORT_TOOL_NAMES);
-const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
-const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled Agency customer API key.";
+const READ_ONLY_API_KEY_REQUIREMENT = "Works with any active customer API key. Read-only access is on Free and Scout.";
+const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled customer API key (Starter+ to create; agent actions on Agency).";
 
 async function loadDocs() {
   const { loader } = await import("~/routes/api.mcp");
@@ -119,7 +119,7 @@ describe("MCP route discovery", () => {
     );
 
     expect(body.status).toBe("live");
-    expect(body.planRequirement).toBe("Agency");
+    expect(body.planRequirement).toBe("Read-only tools: Free and Scout. Agent actions: Agency (write-enabled key).");
     expect(body.endpoint).toBe("https://0509.io/api/mcp");
     expect(body.agentActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
     expect(body.agentActivation.actionGroups.map(({ label, requiresWriteEnabled, actions }) => ({
@@ -165,7 +165,7 @@ describe("MCP route discovery", () => {
     body.tools.forEach((tool) => {
       const requiresWriteEnabled = expectedWriteToolNameSet.has(tool.name);
       expect(tool).toMatchObject({
-        planRequirement: "Agency",
+        planRequirement: requiresWriteEnabled ? "Agency" : "Free and Scout",
         requiresWriteEnabled,
         credentialRequirement: requiresWriteEnabled
           ? WRITE_ENABLED_API_KEY_REQUIREMENT

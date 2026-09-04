@@ -48,7 +48,7 @@ describe("developer access route action", () => {
     expect(source).toContain("ownerManagedApiKeys");
   });
 
-  it("loads a clear Agency-plan lock reason before API-key submit", async () => {
+  it("loads API keys as creatable on Starter with write scope (BET 6 ungate)", async () => {
     const { getUserPlan } = await import("~/lib/plan.server");
     vi.mocked(getUserPlan).mockResolvedValue("starter");
 
@@ -74,10 +74,85 @@ describe("developer access route action", () => {
     } as never);
 
     expect(result).toMatchObject({
-      canCreateApiKeys: false,
-      createDisabledReason: "Developer access is included in the Agency plan. Upgrade to Agency to create API keys.",
+      canCreateApiKeys: true,
+      canCreateWriteKeys: true,
+      createDisabledReason: null,
       apiKeys: [],
     });
+  });
+
+  it("keeps write scope off Free while read-only key creation is open (BET 6)", async () => {
+    const { getUserPlan } = await import("~/lib/plan.server");
+    vi.mocked(getUserPlan).mockResolvedValue("free");
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken: vi.fn(),
+    }));
+    const createCustomerApiKey = vi.fn().mockResolvedValue({
+      secret: "read-only-secret",
+      apiKey: { keyPrefix: "f9_live_read" },
+    });
+    vi.doMock("~/lib/api-keys.server", () => ({
+      createCustomerApiKey,
+    }));
+
+    const { loader, action } = await import("~/routes/app.developer-access");
+    const loaded = await loader({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/developer-access"),
+    } as never);
+    expect(loaded).toMatchObject({
+      canCreateApiKeys: true,
+      canCreateWriteKeys: false,
+      createDisabledReason: null,
+    });
+
+    const formData = new FormData();
+    formData.set("intent", "create-api-key");
+    formData.set("apiKeyName", "Free agent read");
+    formData.set("actionsWriteEnabled", "1");
+    const denied = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/developer-access", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+    expect(denied).toMatchObject({
+      ok: false,
+      message: "Write-enabled API keys require Starter or Agency. Read-only keys are available on every plan.",
+    });
+    expect(createCustomerApiKey).not.toHaveBeenCalled();
+
+    formData.set("actionsWriteEnabled", "0");
+    const created = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/developer-access", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+    expect(created).toMatchObject({ ok: true });
+    expect(createCustomerApiKey).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "Free agent read",
+      { actionsWriteEnabled: false },
+    );
   });
 
   it("loads a clear owner-only lock reason for workspace members", async () => {

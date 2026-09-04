@@ -378,12 +378,12 @@ describe("MCP route", () => {
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
     expect(body.result.tools[0]).toMatchObject({
       requiresWriteEnabled: false,
-      credentialRequirement: "Requires an active Agency customer API key.",
+      credentialRequirement: "Works with any active customer API key. Read-only access is on Free and Scout.",
     });
     expect(body.result.tools.find((tool) => tool.name === "create_watchlist")).toMatchObject({
       annotations: { readOnlyHint: false },
       requiresWriteEnabled: true,
-      credentialRequirement: "Requires a write-enabled Agency customer API key.",
+      credentialRequirement: "Requires a write-enabled customer API key (Starter+ to create; agent actions on Agency).",
     });
     const updateWatchlistSchema = body.result.tools.find((tool) => tool.name === "update_watchlist")?.inputSchema;
     expect(updateWatchlistSchema).toMatchObject({
@@ -613,9 +613,13 @@ describe("MCP route", () => {
       "get_watchlist_export",
       "watchlist_runs.list",
       "get_digest_export",
+      "list_memory",
+      "list_client_rooms",
+      "list_support_cases",
+      "list_web_mentions",
     ]);
     expect(body.result.tools.every((tool) => !tool.requiresWriteEnabled)).toBe(true);
-    expect(body.result.tools.every((tool) => tool.credentialRequirement === "Requires an active Agency customer API key.")).toBe(true);
+    expect(body.result.tools.every((tool) => tool.credentialRequirement === "Works with any active customer API key. Read-only access is on Free and Scout.")).toBe(true);
   });
 
   it("returns workspace readiness through tools/call", async () => {

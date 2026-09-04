@@ -513,7 +513,7 @@ describe("getWorkspaceReadiness", () => {
     expect(new Set(actionKeys).size).toBe(actionKeys.length);
   });
 
-  it.each(["scout", "starter"] as const)("marks Developer access not applicable for %s", async (plan) => {
+  it.each(["scout", "starter"] as const)("marks Developer access as setup-needed on %s (BET 6)", async (plan) => {
     setupMocks({
       listCustomerApiKeys: vi.fn().mockResolvedValue([]),
       getUserPlanBillingInfo: vi.fn().mockResolvedValue({
@@ -530,10 +530,12 @@ describe("getWorkspaceReadiness", () => {
 
     const readiness = await loadReadiness();
 
+    // BET 6: the read-only API surface is available on Free + Scout, so the
+    // readiness item is applicable and nudges toward creating a key.
     expect(readiness.items.find((item) => item.id === "api")).toMatchObject({
-      status: "not_applicable",
-      detail: "Developer access is available on Agency.",
-      action: null,
+      status: "needs_setup",
+      detail: "Create a read-only API key to query saved evidence from an agent or script.",
+      action: { label: "Set up developer access", href: "/app/developer-access" },
     });
     expect(readiness.nudges.map((nudge) => nudge.id)).not.toContain("agent_setup");
   });
@@ -619,8 +621,9 @@ describe("getWorkspaceReadiness", () => {
       action: null,
     });
     expect(items.api).toMatchObject({
-      status: "not_applicable",
-      action: null,
+      status: "needs_setup",
+      detail: "Create a read-only API key to query saved evidence from an agent or script.",
+      action: { label: "Set up developer access", href: "/app/developer-access" },
     });
     expect(readiness.nudges[0]).toMatchObject({
       id: "first_competitor",

@@ -9,8 +9,9 @@ import type { LoaderFunctionArgs } from "react-router";
  * what was checked and why a check did not produce an alert. A failed
  * capture is never an alert, but it is always visible here.
  *
- * Read-only: requires an active Agency customer API key with the `api_access`
- * plan feature. No live scraping is triggered; this is a read of existing
+ * Read-only: requires an active customer API key with the `api_access`
+ * plan feature (Free, Scout, Starter, or Agency). No live scraping is
+ * triggered; this is a read of existing
  * `proof_capture` rows associated with the run by watchlist + attempted-at
  * window (no migration — `proof_capture` is append-only).
  */

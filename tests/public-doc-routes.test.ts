@@ -34,7 +34,7 @@ describe("public documentation routes", () => {
     expect(markup).toContain("Free plan scope: one competitor with an instant first scan, then a weekly scheduled check and a weekly email brief backed by one proof capture a month");
     expect(markup).toContain("Use Five to Nine from Claude, ChatGPT, and AI agents");
     expect(markup).toContain("https://0509.io/api/mcp");
-    expect(markup).toContain("API and MCP access are an Agency-plan feature");
+    expect(markup).toContain("read-only API and MCP access works on Free and Scout");
     expect(markup).toContain("Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports");
     expect(markup).toContain("Agency plan scope: client reports, share links, PDF delivery, branding, API/MCP access, and team seats");
     expect(markup).toContain("This documentation does not measure live provider availability");
@@ -76,14 +76,17 @@ describe("public documentation routes", () => {
 
     expect(markup).toContain("Account actions");
     expect(markup).toContain("Developer access");
-    expect(markup).toContain("Developer API and connected-tool access require Agency");
+    expect(markup).toContain("Read-only access is on Free and Scout. Writes and exports are on Starter+");
     expect(markup).toContain("Connected tools");
-    expect(markup).toContain("same bearer token on Agency");
+    expect(markup).toContain("Compatible tools connect with the same bearer token");
     expect(markup).toContain("POST /api/mcp");
     expect(markup).toContain("tools/list");
-    expect(markup).toContain("Use a write-enabled key only when the tool should run approved account actions.");
-    expect(markup).toContain("Requires a write-enabled Agency customer API key");
-    expect(markup).not.toContain("any active customer API key");
+    expect(markup).toContain("Use a write-enabled key only when the tool should run approved account actions");
+    expect(markup).toContain("Requires a write-enabled customer API key (Starter+ to create; agent actions on Agency)");
+    expect(markup).toContain("any active customer API key");
+    expect(markup).toContain("Tool tiers");
+    expect(markup).toContain("list_web_mentions");
+    expect(markup).toContain("create_watchlist");
     expect(markup).toContain("Restricted actions still require signed-in owner review");
     expect(markup).toContain("customer API key creation, rotation, and revocation");
     expect(markup).toContain("Not live yet: automated X, Reddit, LinkedIn, YouTube, TikTok, Google, or Pinterest ingestion.");
