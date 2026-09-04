@@ -16,6 +16,7 @@ type Step = {
   env?: Record<string, string>;
   uses?: string;
   with?: Record<string, unknown>;
+  "timeout-minutes"?: number;
 };
 
 const parsed = parse(source) as {
@@ -220,6 +221,19 @@ describe("daily market-signal D1 snapshot workflow", () => {
     expect(publish).toContain("BRANCH_URL");
     expect(publish).toContain("COMMIT_URL");
     expect(publish).not.toContain("gh pr create");
+  });
+
+  it("fails the run if the snapshot cannot be pushed within 5 minutes", () => {
+    // Regression guard (issue #1448): the 2026-08-21 silent-red period went
+    // undiagnosed for 12+ days partly because a hung push could drift inside
+    // the job's 30-minute timeout with no named failure. A step-level
+    // 5-minute timeout on the publish step turns a stuck push (SSH stall,
+    // dead deploy key, network hang) into a loud, fast failure instead of a
+    // slow silent one. The push is normally sub-second; 5 minutes is generous
+    // headroom. GitHub Actions cancels and fails a step that exceeds its
+    // `timeout-minutes`, so this is a real run failure, not just a log line.
+    const publish = job.steps?.find((step) => step.name === "Publish snapshot to private telemetry sink");
+    expect(publish?.["timeout-minutes"]).toBe(5);
   });
 
   it("rejects stale snapshots before committing them", () => {

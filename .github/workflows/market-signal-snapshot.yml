@@ -131,6 +131,15 @@ jobs:
             console.log('market_signal_snapshot_fresh ' + snapshot.generatedAt);
           "
       - name: Publish snapshot to private telemetry sink
+        # Regression guard (issue #1448): a snapshot that cannot be pushed
+        # within 5 minutes fails the run, not just logs. The 2026-08-21 silent
+        # red period went undiagnosed for 12+ days partly because a hung push
+        # could drift inside the job's 30-minute timeout with no named
+        # failure. A step-level 5-minute timeout turns a stuck push (SSH stall,
+        # dead deploy key, network hang) into a loud, fast failure instead of a
+        # slow silent one. The push itself is normally sub-second; 5 minutes is
+        # generous headroom for a cold runner and a large snapshot.
+        timeout-minutes: 5
         # The snapshot is pushed to the PRIVATE repo Nishfleet/0509-telemetry
         # on the automation-owned data branch `automation/market-signal-snapshot`,
         # never to this public repo. The default GITHUB_TOKEN cannot push
