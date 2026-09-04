@@ -293,6 +293,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "counter_move_brief.create", "memory.upsert", "memory.list", "client_room.upsert",
     "client_room.list", "support_case.create", "support_case.list", "delivery_targets.list",
     "delivery_settings.update", "delivery_target.update", "web_mentions.list",
+    "get_change_history", "get_offer_state_at", "diff_offer", "list_suppressed",
   ],
   billingSkus: [
     "scout_monthly_v1", "scout_annual_v1", "starter_monthly_v1", "starter_annual_v1",

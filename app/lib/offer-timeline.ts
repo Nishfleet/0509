@@ -29,6 +29,11 @@ export interface OfferSnapshotInput {
   screenshotKey: string | null;
   pageTextKey: string | null;
   /**
+   * How this snapshot was captured (e.g. `landing_page_fetch`, `demo_backfill`,
+   * `sitemap_brand_seed`). Null when the row does not carry a capture method.
+   */
+  captureMethod?: string | null;
+  /**
    * Honest evidence label shown when a snapshot has no screenshot and no
    * page-text link (e.g. a seeded backfill row). Null when the snapshot
    * carries real artifact receipts. The data layer sets this from stored
@@ -60,6 +65,11 @@ export interface OfferLedgerEntry {
   formPresent: boolean | null;
   screenshotHref: string | null;
   pageTextHref: string | null;
+  /**
+   * How this snapshot was captured (e.g. `landing_page_fetch`, `demo_backfill`,
+   * `sitemap_brand_seed`). Null when the row does not carry a capture method.
+   */
+  captureMethod?: string | null;
   /**
    * Honest evidence label shown when a snapshot has no screenshot and no
    * page-text link (e.g. a seeded backfill row). Null when real artifact
@@ -145,6 +155,7 @@ export function buildOfferLedger(snapshots: readonly OfferSnapshotInput[]): Offe
       formPresent: snapshot.formPresent,
       screenshotHref: proofScreenshotSrc(snapshot.screenshotKey),
       pageTextHref: proofPageTextSrc(snapshot.pageTextKey),
+      captureMethod: snapshot.captureMethod ?? null,
       evidenceNote: snapshot.evidenceNote ?? null,
       transition: previous ? diffOffer(previous, snapshot) : null,
     };

@@ -102,18 +102,32 @@ export const AGENT_ACTION_GROUPS = [
     requiresWriteEnabled: true,
     credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
   },
+  {
+    id: "offer_history",
+    label: "Offer history",
+    detail: "Read dated competitor offer states, evidence-backed change history, and proof-suppressed snapshot rows without triggering any live capture.",
+    actions: [
+      "get_change_history",
+      "get_offer_state_at",
+      "diff_offer",
+      "list_suppressed",
+    ],
+    requiresWriteEnabled: false,
+    credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
+  },
 ] as const satisfies readonly AgentActionGroup[];
 
-export type AgentCatalogActionName = (typeof AGENT_ACTION_GROUPS)[number]["actions"][number];
-export type CustomerAgentActionName = Exclude<AgentCatalogActionName, typeof READINESS_ACTION_NAME>;
+type WriteEnabledAgentActionGroup = Extract<
+  (typeof AGENT_ACTION_GROUPS)[number],
+  { requiresWriteEnabled: true }
+>;
 
-function isAuditedCatalogActionName(actionName: AgentCatalogActionName): actionName is CustomerAgentActionName {
-  return actionName !== READINESS_ACTION_NAME;
-}
+export type AgentCatalogActionName = (typeof AGENT_ACTION_GROUPS)[number]["actions"][number];
+export type CustomerAgentActionName = WriteEnabledAgentActionGroup["actions"][number];
 
 export const CUSTOMER_AGENT_ACTION_NAMES = AGENT_ACTION_GROUPS
-  .flatMap((group) => group.actions)
-  .filter(isAuditedCatalogActionName);
+  .filter((group) => group.requiresWriteEnabled)
+  .flatMap((group) => group.actions);
 
 export const CUSTOMER_AGENT_ACTION_NAME_SET: ReadonlySet<string> = new Set(CUSTOMER_AGENT_ACTION_NAMES);
 
