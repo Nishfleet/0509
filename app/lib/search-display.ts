@@ -899,7 +899,7 @@ export function isDelayedDiscoveryStatus(
  * but non-empty candidate rows. Names the likely and unmatched tiers so the
  * headline matches the rows below it instead of contradicting them.
  */
-function formatNoVerifiedTierTitle(
+export function formatNoVerifiedTierTitle(
   displayDomain: string,
   tiers: { verified: number; likely: number; unmatched: number },
 ): string {

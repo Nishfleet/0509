@@ -1,5 +1,6 @@
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
-import { formatSearchMarketScope, resolveResultTierCounts } from "~/lib/search-display";
+import { formatNoVerifiedTierTitle, formatSearchMarketScope, resolveResultTierCounts } from "~/lib/search-display";
+import { suggestVerifiedSearchDomain } from "~/lib/search-query";
 import type { SearchResponse } from "~/lib/types";
 
 export type SearchAnswerState =
@@ -348,7 +349,7 @@ function buildCompleteSearchAnswer(input: {
     const unmatchedCount = tiers.unmatched;
     return {
       state: "no_verified",
-      title: withMarketScope(`No verified ads found for ${domain}`, input.country, marketScopeOptions),
+      title: withMarketScope(formatNoVerifiedTierTitle(domain, tiers), input.country, marketScopeOptions),
       summary: likelyCount > 0
         ? "No ad was provably linked to this website, but brand-name matches are below. Confirm the likely ones before treating them as proof."
         : "Returned ads were not connected to this website through advertiser or landing-page evidence.",
@@ -511,37 +512,6 @@ function withMarketScope(
   }
   const scope = formatSearchMarketScope(country);
   return scope ? `${title} ${scope}` : title;
-}
-
-/**
- * Derive the most-likely intended domain from a bare keyword so the keyword
- * verdict can offer a verified-search next action. A single bare label with
- * no dots or spaces (e.g. "goat") maps to `<label>.com` (goat.com). Anything
- * that already looks like a domain, a path, or a multi-word phrase is left
- * alone — the caller already has a domain or the intent is too ambiguous to
- * guess.
- */
-function suggestVerifiedSearchDomain(keyword: string): string | null {
-  const stem = keyword.trim().toLowerCase();
-  if (!stem) {
-    return null;
-  }
-  // Already a domain-like input — the caller should have used ?website=, so
-  // do not fabricate a second guess.
-  if (stem.includes(".") || stem.includes("/") || stem.includes(" ")) {
-    return null;
-  }
-  // Strip common brand-noise suffixes so "goat app" → "goat" → "goat.com",
-  // not "goatapp.com". Conservative: only trailing "app"/"hq"/"co" when the
-  // remaining stem is at least 3 chars (avoids "co" → "" ).
-  const cleaned = stem.replace(/(app|hq|co)$/, (suffix, _match, offset) =>
-    offset >= 3 ? "" : suffix,
-  );
-  const label = cleaned || stem;
-  if (label.length < 2) {
-    return null;
-  }
-  return `${label}.com`;
 }
 
 /**

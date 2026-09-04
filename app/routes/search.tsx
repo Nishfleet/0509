@@ -621,8 +621,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
             result: tieredResult,
             query: legacyQuery,
             searchScope,
-            displayDomain: competitorWebsite.host,
-            relevanceApplied: false,
+            displayDomain: tieredResult.displayDomain ?? competitorWebsite.host,
+            relevanceApplied:
+              tieredResult.searchIntent === "domain" && Boolean(tieredResult.displayDomain),
           };
         })();
   } catch (error) {
@@ -1234,7 +1235,7 @@ export default function SearchRoute() {
   const displayDomain =
     data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
   const isDomainSearch = Boolean(
-    displayDomain && competitorWebsite.normalizedUrl,
+    displayDomain && (competitorWebsite.normalizedUrl || data.relevanceApplied),
   );
   const isBroaderScope = data.searchScope === "broader";
   const formatFilterApproximate =

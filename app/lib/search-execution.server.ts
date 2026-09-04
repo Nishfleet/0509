@@ -6,7 +6,7 @@ import {
   searchAdsViaSourceResolver,
 } from "~/lib/ad-source.server";
 import { hydrateAdsWithPersistedCreatives } from "~/lib/ad-persistence.server";
-import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
+import { parseSearchInputFromWebsiteField, suggestVerifiedSearchDomain } from "~/lib/search-query";
 import {
   applySearchV2PostFilter,
   buildSearchV2CacheKey,
@@ -220,17 +220,18 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
  * This attaches a `domainMatch` object to every keyword-search row so each
  * one renders its tier label (BET 2 never dead-ends; an unmatched row is
  * still a row, labelled as such):
- * - When the keyword resolves to a recognizable brand/domain
- *   (`q=notion.com`), the existing v2 post-filter classifies rows against
- *   that domain (verified / likely / unmatched), matching `/ads/:domain`.
- * - When it is a genuine text keyword (`q=notion`, `q=goat`), every row is
- *   labelled `unmatched` (a provider candidate with no brand connection) so
- *   the row still states its confidence instead of hiding it.
+ * - When the keyword is a full domain (`q=notion.com`), the existing v2
+ *   post-filter classifies rows against that domain.
+ * - When the keyword is a single bare brand (`q=notion`), the helper first
+ *   guesses the most likely intended domain (`notion.com`) and tries the
+ *   same v2 classification. If the brand resolves and at least one ad
+ *   matches, the rows are verified/likely/unmatched; otherwise the rows fall
+ *   back to unmatched so the search stays safe on a wrong guess.
+ * - When no domain can be derived, every row is labelled `unmatched`.
  *
  * Reuses `search-v2.server` and `search-domain-match.server` only; no new
- * classifier, no D1 schema change. A failed identity resolution for a
- * domain-like keyword falls back to the unmatched labelling so the search
- * never breaks on a network hiccup.
+ * classifier, no D1 schema change. A failed identity resolution falls back
+ * to the unmatched labelling so the search never breaks on a network hiccup.
  */
 export async function attachKeywordSearchDomainMatch(
   env: AppEnv,
@@ -243,9 +244,14 @@ export async function attachKeywordSearchDomainMatch(
   }
 
   const queryIntent = parseSearchInputFromWebsiteField(queryText);
-  if (queryIntent.intent === "domain" && queryIntent.registrableDomain) {
+  const domainInput =
+    queryIntent.intent === "domain" && queryIntent.registrableDomain
+      ? queryText
+      : suggestVerifiedSearchDomain(queryText);
+
+  if (domainInput) {
     try {
-      const context = await buildSearchV2Context(queryText, scope);
+      const context = await buildSearchV2Context(domainInput, scope);
       if (context) {
         return await applySearchV2PostFilter(env, result, context);
       }
@@ -256,7 +262,7 @@ export async function attachKeywordSearchDomainMatch(
     }
   }
 
-  // Bare keyword (or a domain-like keyword whose context could not be built):
+  // Keyword could not be resolved to a domain context:
   // no brand website was searched, so nothing connects a provider row to a
   // brand. Every row is an unmatched candidate — still a row, labelled as
   // such, never a silent unlabelled list.
