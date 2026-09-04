@@ -350,33 +350,34 @@ export function brandPageTitle(data: BrandPageLoaderData): string {
 
 /**
  * Honest Ad Library source phrase for page copy, from the snapshot country:
- * "the India Ad Library" for a named country, "the Meta Ad Library's
- * all-countries query" for the all-countries view. The Meta Ad Library is
- * country-scoped, so this always names the library the cached creatives
- * actually came from (the loader geo-defaults the lookup — the copy must
- * not). The all-countries value is a single `country=ALL` query, not a
- * union of every market, so the copy names it as one query rather than
- * implying worldwide coverage. The fallback never renders for a populated
- * page; it exists only to keep the copy grammatical if a snapshot ever
- * lacks a country.
+ * "the India Ad Library" for a named country, "Meta's global ad library"
+ * for the all-countries view. The Meta Ad Library is country-scoped, so
+ * this always names the library the cached creatives actually came from
+ * (the loader geo-defaults the lookup — the copy must not). The
+ * all-countries value is a single `country=ALL` query, not a union of
+ * every market, so the copy names the global library in plain buyer
+ * language without claiming worldwide coverage ("across all countries"
+ * stays banned here, issue #1464). The fallback never renders for a
+ * populated page; it exists only to keep the copy grammatical if a
+ * snapshot ever lacks a country.
  */
 export function adLibrarySourcePhrase(adLibraryCountry: string | null): string {
   if (adLibraryCountry && adLibraryCountry !== "all countries") {
     return `the ${adLibraryCountry} Ad Library`;
   }
-  return "the Meta Ad Library's all-countries query";
+  return "Meta's global ad library";
 }
 
 /**
  * The same source phrase with the "public" qualifier used by the closer
- * honesty line: "the public India Ad Library" / "the public Meta Ad
- * Library's all-countries query".
+ * honesty line: "the public India Ad Library" / "Meta's public global ad
+ * library".
  */
 export function publicAdLibrarySourcePhrase(adLibraryCountry: string | null): string {
   if (adLibraryCountry && adLibraryCountry !== "all countries") {
     return `the public ${adLibraryCountry} Ad Library`;
   }
-  return "the public Meta Ad Library's all-countries query";
+  return "Meta's public global ad library";
 }
 
 /**
