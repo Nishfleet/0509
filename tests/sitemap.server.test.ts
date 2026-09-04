@@ -21,9 +21,14 @@ import {
   brandPageRowRendersAggressionScore,
   buildSitemapXml,
   indexableBrandPageEntriesFromRows,
+  indexableTimelineEntriesFromRows,
   isIndexableBrandPageRow,
+  loadIndexableTimelineEntries,
   SITEMAP_BRAND_PATH_LIMIT,
+  SITEMAP_TIMELINE_PATH_LIMIT,
+  timelineDomainFromSnapshotRow,
   type SitemapCacheRow,
+  type TimelineSitemapRow,
 } from "~/lib/sitemap.server";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -71,6 +76,21 @@ function cacheRow(overrides: Partial<SitemapCacheRow> & { payload?: unknown } = 
     payload_json: JSON.stringify(payload ?? basePayload),
     fetched_at: isoAgo(2 * 60 * 60 * 1000),
     ...rowOverrides,
+  };
+}
+
+// Valid proof artifact keys (the same shapes the monitoring capture writes and
+// the loader's proof gate — issue #1284 — validates).
+const SCREENSHOT_KEY = "landing-pages/2026-08-01/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpeg";
+const HTML_KEY = "landing-pages/2026-08-01/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.html";
+
+function snapshotRow(overrides: Partial<TimelineSitemapRow> = {}): TimelineSitemapRow {
+  return {
+    canonical_url: "https://nykaa.com/glow-serum",
+    captured_at: "2026-08-01T10:00:00.000Z",
+    artifact_key: HTML_KEY,
+    metadata_json: JSON.stringify({ screenshotArtifactKey: SCREENSHOT_KEY }),
+    ...overrides,
   };
 }
 
@@ -656,6 +676,120 @@ describe("llms.txt parity with dynamic sitemap brand paths", () => {
   });
 });
 
+describe("timelineDomainFromSnapshotRow", () => {
+  it("recovers the registrable domain from a bare-host capture URL", () => {
+    expect(
+      timelineDomainFromSnapshotRow(snapshotRow({ canonical_url: "https://nykaa.com/glow" })),
+    ).toBe("nykaa.com");
+  });
+
+  it("maps www and deeper subdomains back to the registrable domain the route uses", () => {
+    expect(
+      timelineDomainFromSnapshotRow(
+        snapshotRow({ canonical_url: "https://www.nykaa.com/glow-serum" }),
+      ),
+    ).toBe("nykaa.com");
+    expect(
+      timelineDomainFromSnapshotRow(
+        snapshotRow({ canonical_url: "https://shop.nykaa.com/offers" }),
+      ),
+    ).toBe("nykaa.com");
+  });
+
+  it("keeps multi-label public suffixes intact (nike.co.uk → nike.co.uk)", () => {
+    expect(
+      timelineDomainFromSnapshotRow(
+        snapshotRow({ canonical_url: "https://www.nike.co.uk/sale" }),
+      ),
+    ).toBe("nike.co.uk");
+  });
+
+  it("rejects reserved domains the timeline route would 404 on (example.com)", () => {
+    expect(
+      timelineDomainFromSnapshotRow(
+        snapshotRow({ canonical_url: "https://example.com/landing" }),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects unparseable or non-http(s) canonical URLs", () => {
+    expect(
+      timelineDomainFromSnapshotRow(snapshotRow({ canonical_url: "not a url" })),
+    ).toBeNull();
+    expect(
+      timelineDomainFromSnapshotRow(
+        snapshotRow({ canonical_url: "file:///tmp/landing.html" }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("indexableTimelineEntriesFromRows", () => {
+  it("lists a domain whose snapshot survives the loader's proof gate (screenshot + page text)", () => {
+    const rows = [snapshotRow()];
+
+    const entries = indexableTimelineEntriesFromRows(rows);
+    expect(entries.map((e) => e.path)).toEqual(["/timeline/nykaa.com"]);
+    expect(entries[0].lastmod).toBe("2026-08-01");
+    expect(entries[0].changefreq).toBe("weekly");
+    expect(entries[0].priority).toBe("0.5");
+  });
+
+  it("does not list a zero-entry domain — rows without complete proof render the empty ledger (gone/noindex shell)", () => {
+    const backfill = snapshotRow({
+      canonical_url: "https://slack.com/landing",
+      artifact_key: null,
+      metadata_json: JSON.stringify({ backfill: true }),
+    });
+    const screenshotOnly = snapshotRow({
+      canonical_url: "https://slack.com/landing",
+      artifact_key: null,
+      metadata_json: JSON.stringify({ screenshotArtifactKey: SCREENSHOT_KEY }),
+    });
+    const pageTextOnly = snapshotRow({
+      canonical_url: "https://slack.com/landing",
+      artifact_key: HTML_KEY,
+      metadata_json: "{}",
+    });
+
+    expect(indexableTimelineEntriesFromRows([backfill, screenshotOnly, pageTextOnly])).toEqual([]);
+  });
+
+  it("dedupes across captures, keeping the newest capture date as lastmod", () => {
+    const rows = [
+      snapshotRow({ captured_at: "2026-08-10T08:00:00.000Z" }),
+      snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }),
+    ];
+
+    const entries = indexableTimelineEntriesFromRows(rows);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].path).toBe("/timeline/nykaa.com");
+    expect(entries[0].lastmod).toBe("2026-08-10");
+  });
+
+  it("a domain whose NEWEST capture fails the proof gate still qualifies when an older capture is complete", () => {
+    // The loader filters proof-less rows out of the ledger, so an empty proof
+    // capture must not bump the domain off the list — the older complete
+    // capture still renders an indexable ledger.
+    const rows = [
+      snapshotRow({ captured_at: "2026-08-20T08:00:00.000Z", artifact_key: null }),
+      snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }),
+    ];
+
+    const entries = indexableTimelineEntriesFromRows(rows);
+    expect(entries.map((e) => e.path)).toEqual(["/timeline/nykaa.com"]);
+    expect(entries[0].lastmod).toBe("2026-08-01");
+  });
+
+  it("bounds the sitemap to SITEMAP_TIMELINE_PATH_LIMIT entries", () => {
+    const rows = Array.from({ length: SITEMAP_TIMELINE_PATH_LIMIT + 25 }, (_, index) =>
+      snapshotRow({ canonical_url: `https://brand-${index}.com/landing` }),
+    );
+
+    expect(indexableTimelineEntriesFromRows(rows)).toHaveLength(SITEMAP_TIMELINE_PATH_LIMIT);
+  });
+});
+
 describe("loadIndexableBrandPageEntries (D1 read)", () => {
   let queryAll: ReturnType<typeof vi.fn>;
 
@@ -762,6 +896,100 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
     queryAll.mockRejectedValue(new Error("connection lost"));
 
     await expect(runLoader({ DB: {}, BROWSER: {} })).rejects.toThrow("connection lost");
+  });
+});
+
+describe("buildSitemapXml with timeline entries", () => {
+  it("appends timeline locs after brand pages; static entries stay first", () => {
+    const brand = [
+      { path: "/ads/nykaa.com", lastmod: "2026-08-21", changefreq: "weekly" as const, priority: "0.6" },
+    ];
+    const timeline = [
+      { path: "/timeline/nykaa.com", lastmod: "2026-08-10", changefreq: "weekly" as const, priority: "0.5" },
+      { path: "/timeline/meesho.com", lastmod: "2026-08-02", changefreq: "weekly" as const, priority: "0.5" },
+    ];
+
+    const xml = buildSitemapXml(brand, timeline);
+    const homeLoc = xml.indexOf("https://0509.io/</loc>");
+    const adsLoc = xml.indexOf("https://0509.io/ads/nykaa.com");
+    const timelineNykaaLoc = xml.indexOf("https://0509.io/timeline/nykaa.com");
+    const timelineMeeshoLoc = xml.indexOf("https://0509.io/timeline/meesho.com");
+
+    expect(homeLoc).toBeGreaterThanOrEqual(0);
+    expect(adsLoc).toBeGreaterThan(homeLoc);
+    expect(timelineNykaaLoc).toBeGreaterThan(adsLoc);
+    expect(timelineMeeshoLoc).toBeGreaterThan(timelineNykaaLoc);
+    expect(xml).toContain("<lastmod>2026-08-10</lastmod>");
+  });
+
+  it("omits timeline locs when the timeline list is empty (default)", () => {
+    const xml = buildSitemapXml([]);
+    expect(xml).not.toContain("/timeline/");
+  });
+});
+
+describe("loadIndexableTimelineEntries (D1 read)", () => {
+  let queryAll: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.resetModules();
+    queryAll = vi.fn();
+    vi.doMock("~/lib/data/d1.server", () => ({ queryAll }));
+  });
+
+  afterEach(() => {
+    vi.doUnmock("~/lib/data/d1.server");
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  async function runLoader(env: Record<string, unknown>) {
+    const { loadIndexableTimelineEntries } = await import("~/lib/sitemap.server");
+    return loadIndexableTimelineEntries(env as never);
+  }
+
+  it("returns nothing when D1 is absent", async () => {
+    await expect(runLoader({})).resolves.toEqual([]);
+    expect(queryAll).not.toHaveBeenCalled();
+  });
+
+  it("keeps listing timeline entries under the PUBLIC_BRAND_PAGES_INDEXABLE emergency brake (the timeline loader never reads that env)", async () => {
+    // The brake noindexes /ads/* pages only; /timeline/:domain indexability is
+    // purely the empty-ledger rule, so its locs must stay live under the brake
+    // (the pages they point to still render indexable).
+    queryAll.mockResolvedValue([snapshotRow()]);
+
+    const entries = await runLoader({ DB: {}, PUBLIC_BRAND_PAGES_INDEXABLE: "0" });
+
+    expect(queryAll).toHaveBeenCalledTimes(1);
+    expect(entries.map((e: { path: string }) => e.path)).toEqual(["/timeline/nykaa.com"]);
+  });
+
+  it("reads a bounded snapshot subset ordered newest-first and maps to timeline entries", async () => {
+    queryAll.mockResolvedValue([snapshotRow()]);
+
+    const entries = await runLoader({ DB: {} });
+
+    expect(queryAll).toHaveBeenCalledTimes(1);
+    const [, sql, limit] = queryAll.mock.calls[0] as [unknown, string, number];
+    expect(sql).toContain("FROM landing_page_snapshot");
+    expect(sql).toContain("ORDER BY captured_at DESC");
+    expect(sql).toContain("LIMIT ?");
+    expect(limit).toBe(SITEMAP_TIMELINE_PATH_LIMIT);
+    expect(entries.map((e: { path: string }) => e.path)).toEqual(["/timeline/nykaa.com"]);
+    expect(entries[0].lastmod).toBe("2026-08-01");
+  });
+
+  it("degrades to the static set when the snapshot table is missing", async () => {
+    queryAll.mockRejectedValue(new Error("D1_ERROR: no such table: landing_page_snapshot"));
+
+    await expect(runLoader({ DB: {} })).resolves.toEqual([]);
+  });
+
+  it("propagates genuine D1 failures instead of silently hiding them", async () => {
+    queryAll.mockRejectedValue(new Error("connection lost"));
+
+    await expect(runLoader({ DB: {} })).rejects.toThrow("connection lost");
   });
 });
 

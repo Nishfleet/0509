@@ -1,5 +1,6 @@
 /**
- * Dynamic sitemap entries for indexable /ads/:domain brand pages.
+ * Dynamic sitemap entries for indexable /ads/:domain brand pages and
+ * /timeline/:domain offer timelines.
  *
  * The static sitemap in app/lib/seo.ts deliberately lists no /ads/* path —
  * the set must be dynamic. This module generates it from existing
@@ -51,6 +52,30 @@
  *      the sitemap can never list a page that serves noindex.
  *   6. This is a bounded cache read only — sitemap generation never triggers
  *      live discovery, Browser Rendering, or any paid operation.
+ *
+ * The sitemap also appends dynamic /timeline/:domain entries (the Offer
+ * Timeline) from `landing_page_snapshot` rows, with its own rules below
+ * (SITEMAP_TIMELINE_PATH_LIMIT and indexableTimelineEntriesFromRows):
+ *
+ *   7. A domain qualifies only when /timeline/:domain WOULD RENDER the
+ *      indexable ledger state — at least one stored snapshot that survives
+ *      the loader's proof gate (both screenshot and page-text artifacts,
+ *      issue #1284). A domain whose rows all fail the gate renders empty
+ *      (gone/noindex), so it stays out.
+ *   8. Domain recovery is lossless-only: the registrable domain of a row's
+ *      canonical_url hostname, gated by the same normalizeBrandPageDomain the
+ *      route applies to its :domain param — a domain the route would 404 on
+ *      (reserved TLDs, single labels, IPs) is never listed.
+ *   9. No freshness window: unlike brand pages (7-day rule), the timeline
+ *      ledger's only indexability rule is the empty-ledger one, so any
+ *      proof-complete capture age qualifies.
+ *   10. The PUBLIC_BRAND_PAGES_INDEXABLE brake does NOT suppress timeline
+ *      entries — the timeline route never reads that env, so its pages stay
+ *      indexable under the brake; mirroring the loader means timeline locs
+ *      stay live (the brand /ads/* entries below are the ones it kills).
+ *   11. Same zero-cost rule: one bounded D1 read at sitemap-render time.
+ *      Missing landing_page_snapshot table on a fresh D1 degrades to the
+ *      static sitemap, never a 500.
  */
 
 import {
@@ -63,7 +88,9 @@ import {
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import { queryAll } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
+import { snapshotRowHasCompleteProof, type LandingPageSnapshotRow } from "~/lib/offer-timeline.server";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
+import { registrableDomainFromHostname } from "~/lib/search-query";
 import { renderSitemapXml, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
 import type { AdRecord } from "~/lib/types";
 
@@ -74,6 +101,13 @@ import type { AdRecord } from "~/lib/types";
  * crawl-budget ceiling for this acquisition channel).
  */
 export const SITEMAP_BRAND_PATH_LIMIT = 500;
+
+/**
+ * Hard bound on dynamic /timeline/:domain entries per sitemap render, next
+ * to the brand-page bound above. Same rationale: keeps the D1 read and the
+ * sitemap bounded (500 timelines is the same crawl-budget ceiling).
+ */
+export const SITEMAP_TIMELINE_PATH_LIMIT = 500;
 
 /**
  * Country scopes the brand-page loader probes for EVERY visitor regardless of
@@ -411,10 +445,150 @@ function isMissingSitemapTableError(error: unknown): boolean {
 /**
  * Full production sitemap body: static funnel entries first (with changefreq
  * and priority), then the dynamic indexable brand-page entries (with lastmod
- * from their cache fetched_at).
+ * from their cache fetched_at), then the dynamic indexable /timeline/:domain
+ * entries (with lastmod from their newest snapshot capture).
  */
-export function buildSitemapXml(brandEntries: readonly SitemapEntry[]): string {
-  return renderSitemapXml([...SITEMAP_STATIC_ENTRIES, ...brandEntries]);
+export function buildSitemapXml(
+  brandEntries: readonly SitemapEntry[],
+  timelineEntries: readonly SitemapEntry[] = [],
+): string {
+  return renderSitemapXml([
+    ...SITEMAP_STATIC_ENTRIES,
+    ...brandEntries,
+    ...timelineEntries,
+  ]);
+}
+
+/**
+ * Timeline sitemap entries (the Offer Timeline) — rules 7–11 of the module
+ * docblock. Pure reduce lives here; the D1 read is `loadIndexableTimelineEntries`.
+ */
+
+/** Subset of landing_page_snapshot columns the sitemap timeline read needs. */
+export interface TimelineSitemapRow {
+  canonical_url: string;
+  captured_at: string;
+  artifact_key: string | null;
+  metadata_json: string | null;
+}
+
+/**
+ * Recover the /timeline/:domain a snapshot row backs, or null. Lossless-only,
+ * mirroring the loader's own domain recovery: the registrable domain of the
+ * row's canonical_url hostname (never guessed from the URL text), gated by the
+ * same normalizeBrandPageDomain the timeline route applies to its :domain
+ * param — a domain the route would 404 on (reserved TLDs like example.com,
+ * single labels, IPs) is never listed.
+ */
+export function timelineDomainFromSnapshotRow(row: TimelineSitemapRow): string | null {
+  let hostname: string;
+  try {
+    const url = new URL(row.canonical_url);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    hostname = url.hostname.trim().toLowerCase().replace(/\.$/, "");
+  } catch {
+    return null;
+  }
+  const registrable = registrableDomainFromHostname(hostname);
+  if (!registrable) {
+    return null;
+  }
+  return normalizeBrandPageDomain(registrable)?.domain ?? null;
+}
+
+/**
+ * Pure core: reduce snapshot rows (ordered newest-first) to deduped, bounded
+ * /timeline/:domain sitemap entries that the timeline route would render
+ * indexable. A domain qualifies only when `loadOfferTimeline` would return at
+ * least one ledger entry for it (entries.length > 0 is the loader's own
+ * noindex predicate): at least one row whose canonical_url maps to the domain
+ * AND survives the proof gate (screenshot + page-text artifacts stored, issue
+ * #1284). No freshness window — unlike brand pages, the timeline ledger
+ * renders indexable regardless of capture age. Each entry carries a `lastmod`
+ * from the newest capture date for that domain plus changefreq=weekly and
+ * priority=0.5 (timelines sit one level below the /ads/:domain brand page in
+ * the funnel: 0.6 > 0.5 > the 0.3–0.4 boilerplate band). Kept separate from
+ * the D1 read so the filtering rules are unit-testable without a database.
+ */
+export function indexableTimelineEntriesFromRows(
+  rows: readonly TimelineSitemapRow[],
+): SitemapEntry[] {
+  const seen = new Set<string>();
+  const entries: SitemapEntry[] = [];
+  for (const row of rows) {
+    const domain = timelineDomainFromSnapshotRow(row);
+    if (!domain || seen.has(domain)) {
+      continue;
+    }
+    // The loader's proof gate: a row without both artifacts is filtered out
+    // of the ledger, so its domain would render empty (gone/noindex) and must
+    // not be listed. `seen` is only marked once an entry is created, so a
+    // later older row with complete proof still qualifies its domain.
+    if (!snapshotRowHasCompleteProof(row)) {
+      continue;
+    }
+    seen.add(domain);
+    entries.push({
+      path: `/timeline/${domain}`,
+      lastmod: row.captured_at.slice(0, 10),
+      changefreq: "weekly",
+      priority: "0.5",
+    });
+    if (entries.length >= SITEMAP_TIMELINE_PATH_LIMIT) {
+      break;
+    }
+  }
+  return entries;
+}
+
+/**
+ * Read the bounded candidate set of timeline snapshot rows. Cache-only: one
+ * SELECT, never a live-provider call. Any hiccup (missing table on a fresh
+ * D1, unparseable rows) degrades to the static sitemap, never a 500.
+ *
+ * Deliberately NOT suppressed by the PUBLIC_BRAND_PAGES_INDEXABLE brake: that
+ * env noindexes /ads/* pages only, and the timeline route never reads it —
+ * /timeline/:domain indexability is purely the empty-ledger rule above.
+ * Mirroring the loader means timeline locs stay live under the brake (the
+ * pages they point to still render indexable).
+ */
+export async function loadIndexableTimelineEntries(
+  env: AppEnv,
+): Promise<SitemapEntry[]> {
+  if (!env.DB) {
+    return [];
+  }
+
+  try {
+    const rows = await queryAll<TimelineSitemapRow>(
+      env,
+      `
+        SELECT canonical_url, captured_at, artifact_key, metadata_json
+        FROM landing_page_snapshot
+        WHERE artifact_key IS NOT NULL OR metadata_json IS NOT NULL
+        ORDER BY captured_at DESC
+        LIMIT ?
+      `,
+      SITEMAP_TIMELINE_PATH_LIMIT,
+    );
+    return indexableTimelineEntriesFromRows(rows);
+  } catch (error) {
+    if (isMissingTimelineTableError(error)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+/** Degrade to the static sitemap when a fresh D1 has no snapshot table. */
+function isMissingTimelineTableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.toLowerCase().includes("no such table") &&
+    message.includes("landing_page_snapshot")
+  );
 }
 
 /** Sitemap file shape consumed by workers/app.ts (publicSeoFileForPathname's). */
@@ -423,8 +597,12 @@ export async function publicSitemapFile(env: AppEnv): Promise<{
   contentType: string;
   cacheControl: string;
 }> {
+  const [brandEntries, timelineEntries] = await Promise.all([
+    loadIndexableBrandPageEntries(env),
+    loadIndexableTimelineEntries(env),
+  ]);
   return {
-    body: buildSitemapXml(await loadIndexableBrandPageEntries(env)),
+    body: buildSitemapXml(brandEntries, timelineEntries),
     contentType: "application/xml; charset=utf-8",
     cacheControl: "public, max-age=3600",
   };
