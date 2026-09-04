@@ -13,6 +13,9 @@ name: Preview assert
 #   - `npm run test`      (the FULL unsharded suite — the demonstrated
 #                          failure class is a test that passes sharded and
 #                          fails when the whole suite runs together)
+#   - `npm run build`     (the deploy pipeline's react-router build; emits
+#                          build/server/wrangler.json + the .wrangler config
+#                          redirect that the deploy uses)
 #   - `wrangler versions upload` of the PR head with a preview alias — the
 #     preview URL Cloudflare itself assigns (Nish, 2026-09-04: "wrangler
 #     versions upload / preview alias"), proving the PR head builds and
@@ -141,6 +144,18 @@ jobs:
         # a test that passes sharded can fail when all 529 files run together
         # (run 33561746667). This is the demonstrated failure class.
         run: npm run test
+
+      - name: Build
+        # The deploy pipeline's own build (react-router build via the
+        # Cloudflare vite plugin, part of "launch:readiness:predeploy"). It
+        # emits build/server/index.js + build/server/wrangler.json
+        # (no_bundle, main index.js) and the .wrangler/deploy/config.json
+        # redirect that `wrangler deploy` uses in production. The preview
+        # upload uploads the SAME built artifacts; without this step the
+        # upload would bundle workers/app.ts raw and fail on the project's
+        # ~/ path aliases and the react-router virtual server-build (seen on
+        # the first preview-assert run of PR #1580).
+        run: npm run build
 
       - name: Upload preview version
         # Cloudflare's own preview mechanism ("wrangler versions upload /

@@ -102,6 +102,22 @@ describe("preview-assert workflow", () => {
     expect(source).not.toContain("--shard=");
   });
 
+  it("builds with the deploy pipeline's own build before uploading the preview", () => {
+    // `npm run build` (react-router build via the Cloudflare vite plugin)
+    // emits build/server/wrangler.json (no_bundle, main index.js) plus the
+    // .wrangler/deploy/config.json redirect the production deploy uses. The
+    // upload would fail to bundle the raw TS entry (~/ aliases, the
+    // react-router virtual server-build) without it — observed on the first
+    // preview-assert run of PR #1580.
+    const build = steps.find((step) => step.run === "npm run build");
+    const upload = steps.find((step) =>
+      step.run?.includes("wrangler versions upload"),
+    );
+    expect(build).toBeDefined();
+    expect(upload).toBeDefined();
+    expect(steps.indexOf(build!)).toBeLessThan(steps.indexOf(upload!));
+  });
+
   it("uploads a preview Worker version via Cloudflare's own mechanism", () => {
     const upload = steps.find((step) =>
       step.run?.includes("wrangler versions upload"),
