@@ -688,6 +688,101 @@ const MCP_TOOLS = [
     },
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
+  {
+    name: "get_change_history",
+    title: "Get Offer Change History",
+    description:
+      "Read the dated offer-history ledger for a competitor domain: every stored capture state, its capture time, an evidence link to the dated timeline view, its source provider, and the before/after change against the previous capture. Reads stored landing-page snapshots only; never triggers a live capture. Returns a documented empty payload when the domain has no captures yet.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: {
+          type: "string",
+          description: "Competitor domain such as nykaa.com.",
+        },
+        since: {
+          type: "string",
+          description: "Optional YYYY-MM-DD date. Only states captured on or after this date are returned.",
+        },
+      },
+      required: ["domain"],
+      additionalProperties: false,
+    },
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "get_offer_state_at",
+    title: "Get Offer State At Date",
+    description:
+      "Read the stored offer state for a competitor domain as of a calendar date: the latest stored capture on or before that date with its evidence links and source provider. Returns a documented empty payload when the domain has no captures yet.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: {
+          type: "string",
+          description: "Competitor domain such as nykaa.com.",
+        },
+        date: {
+          type: "string",
+          description: "YYYY-MM-DD date. The latest capture on or before this date is returned.",
+        },
+      },
+      required: ["domain", "date"],
+      additionalProperties: false,
+    },
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "diff_offer",
+    title: "Diff Offer States",
+    description:
+      "Compare two dated offer states for a competitor domain. Returns the earlier and later states with their evidence links, and every field that changed (headline, CTA text, price, form presence). Returns a documented empty payload when the domain has no captures yet.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: {
+          type: "string",
+          description: "Competitor domain such as nykaa.com.",
+        },
+        dateA: {
+          type: "string",
+          description: "First YYYY-MM-DD date.",
+        },
+        dateB: {
+          type: "string",
+          description: "Second YYYY-MM-DD date.",
+        },
+      },
+      required: ["domain", "dateA", "dateB"],
+      additionalProperties: false,
+    },
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "list_suppressed",
+    title: "List Suppressed Offer Rows",
+    description:
+      "List stored landing-page snapshot rows for a competitor domain that are withheld from the public timeline because they do not carry complete proof artifacts (both a screenshot and a page-text extract). These rows exist in storage but must not be cited as evidence. Returns a documented empty payload when no such rows are stored.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: {
+          type: "string",
+          description: "Competitor domain such as nykaa.com.",
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 200,
+          default: 100,
+          description: "Maximum suppressed rows to return.",
+        },
+      },
+      required: ["domain"],
+      additionalProperties: false,
+    },
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
 ];
 type JsonRpcId = string | number | null;
 
@@ -733,6 +828,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       "Account support case summaries created by this account",
       "Redacted delivery settings and delivery target state owned by this account",
       "Existing source-backed website, blog, and Substack mention observations tied to watchlists",
+      "Dated competitor offer states, evidence-backed change history, and proof-suppressed snapshot rows read from stored landing-page captures",
     ],
     agentActivation: {
       firstWorkflow: AGENT_FIRST_WORKFLOW,
@@ -828,7 +924,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        `Use these Agency tools to retrieve Five to Nine account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active Agency customer API key; account action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
+        `Use these Agency tools to retrieve Five to Nine account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active Agency customer API key; account action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. The dated offer-history tools — get_change_history, get_offer_state_at, diff_offer, list_suppressed — read stored competitor captures for any domain and never trigger a live capture. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
     });
   }
 
@@ -1017,6 +1113,10 @@ async function callTool(
     return buildAgentActionToolResult(env, apiKey, "web_mentions.list", args, origin, executionContext, apiLimit);
   }
 
+  if (name === "get_change_history" || name === "get_offer_state_at" || name === "diff_offer" || name === "list_suppressed") {
+    return buildOfferHistoryToolResult(env, name, args, origin);
+  }
+
   return { ok: false, message: `Unknown tool: ${name}` };
 }
 
@@ -1061,6 +1161,95 @@ async function buildAgentActionToolResult(
     const payload = customerAgentActionErrorPayload(error).body;
     return errorToolResult(payload);
   }
+}
+
+async function buildOfferHistoryToolResult(
+  env: AppEnv,
+  name: string,
+  args: object,
+  origin: string,
+): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; message: string }> {
+  const { parseAsOfDate } = await import("~/lib/offer-timeline");
+  const { loadOfferTimeline, loadSuppressedOfferTimelineRows } = await import(
+    "~/lib/offer-timeline.server"
+  );
+  const {
+    buildChangeHistoryPayload,
+    buildDiffOfferPayload,
+    buildListSuppressedPayload,
+    buildOfferStateAtPayload,
+    OFFER_NO_HISTORY_MESSAGE,
+  } = await import("~/lib/offer-timeline-agent-tools");
+
+  const domain = stringField(args, "domain");
+  if (!domain) {
+    return { ok: false, message: "domain is required." };
+  }
+
+  if (name === "list_suppressed") {
+    const loaded = await loadOfferTimeline(env, { domain, asOf: null });
+    const rows = await loadSuppressedOfferTimelineRows(env, { domain });
+    const payload = buildListSuppressedPayload(domain, rows);
+    if (payload.status === "no_history" && loaded.entries.length === 0) {
+      return structuredToolResult({ ...payload, message: OFFER_NO_HISTORY_MESSAGE });
+    }
+    return structuredToolResult(payload);
+  }
+
+  if (name === "get_change_history") {
+    const since = parseOptionalMcpDate(args, "since", parseAsOfDate);
+    if (!since.ok) {
+      return { ok: false, message: "since must be a YYYY-MM-DD date." };
+    }
+    const loaded = await loadOfferTimeline(env, { domain, asOf: null });
+    return structuredToolResult(buildChangeHistoryPayload(domain, loaded.entries, since.value, origin));
+  }
+
+  if (name === "get_offer_state_at") {
+    const date = parseRequiredMcpDate(args, "date", parseAsOfDate);
+    if (!date.ok) {
+      return { ok: false, message: "date must be a YYYY-MM-DD date." };
+    }
+    const loaded = await loadOfferTimeline(env, { domain, asOf: date.value });
+    return structuredToolResult(buildOfferStateAtPayload(domain, loaded.entries, date.value, origin));
+  }
+
+  const dateA = parseRequiredMcpDate(args, "dateA", parseAsOfDate);
+  if (!dateA.ok) {
+    return { ok: false, message: "dateA must be a YYYY-MM-DD date." };
+  }
+  const dateB = parseRequiredMcpDate(args, "dateB", parseAsOfDate);
+  if (!dateB.ok) {
+    return { ok: false, message: "dateB must be a YYYY-MM-DD date." };
+  }
+  const loaded = await loadOfferTimeline(env, { domain, asOf: null });
+  return structuredToolResult(buildDiffOfferPayload(domain, loaded.entries, dateA.value, dateB.value, origin));
+}
+
+function parseRequiredMcpDate(
+  args: object,
+  field: string,
+  parseAsOfDate: (value: string) => string | null,
+): { ok: true; value: string } | { ok: false } {
+  const raw = stringField(args, field);
+  if (!raw) {
+    return { ok: false };
+  }
+  const value = parseAsOfDate(raw);
+  return value ? { ok: true, value } : { ok: false };
+}
+
+function parseOptionalMcpDate(
+  args: object,
+  field: string,
+  parseAsOfDate: (value: string) => string | null,
+): { ok: true; value: string | null } | { ok: false } {
+  const raw = stringField(args, field);
+  if (!raw) {
+    return { ok: true, value: null };
+  }
+  const value = parseAsOfDate(raw);
+  return value ? { ok: true, value } : { ok: false };
 }
 
 async function buildWorkspaceReadinessToolResult(
