@@ -39,15 +39,14 @@ describe("auto-revert workflow", () => {
     // 0509#1355: a halt files an issue and is the designed, successful
     // outcome — the filed issue is the signal. The workflow run must stay
     // green so a halt does not double a deploy-failure storm with its own
-    // GitHub failure email. All four guards (loop, freshness, repeated
-    // failure, non-assertion deploy failure) route through
-    // `halt_and_exit`, which calls `halt` then
-    // `exit 0`.
+    // GitHub failure email. All five guards (loop, freshness, repeated
+    // failure, non-assertion deploy failure, unclassifiable deploy failure)
+    // route through `halt_and_exit`, which calls `halt` then `exit 0`.
     expect(run).toContain("halt_and_exit ()");
 
     // Each guard calls halt_and_exit, not a bare `halt` followed by `exit 1`.
     const haltAndExitCalls = run.match(/halt_and_exit "/g) ?? [];
-    expect(haltAndExitCalls.length).toBe(4);
+    expect(haltAndExitCalls.length).toBe(5);
 
     // The loop guard (revert commit itself is red on main).
     expect(run).toContain('halt_and_exit "AUTO-REVERT HALT: revert commit itself is red on main"');
@@ -63,6 +62,11 @@ describe("auto-revert workflow", () => {
     expect(run).toContain(
       'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed in a non-assertion step',
     );
+    // Fail-closed when the jobs API cannot name a failed step: halt, do not
+    // fall back to reverting product code.
+    expect(run).toContain(
+      'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed but the jobs API listed no failed step',
+    );
   });
 
   it("does not exit 1 from any halt branch", () => {
@@ -74,6 +78,7 @@ describe("auto-revert workflow", () => {
       'halt_and_exit "AUTO-REVERT HALT: main moved after the red commit"',
       'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failing across consecutive commits',
       'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed in a non-assertion step',
+      'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed but the jobs API listed no failed step',
     ];
     for (const branch of haltBranches) {
       const idx = run.indexOf(branch);
@@ -128,14 +133,33 @@ describe("auto-revert workflow", () => {
     expect(run).toContain(
       'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed in a non-assertion step',
     );
+    // Fail closed: no `|| true` swallow on the jobs API (gate-integrity
+    // flags that as a softened CI step), no fallback revert when the API
+    // returns no failed step names.
+    const jobsFetch = run.slice(
+      run.indexOf("actions/runs/$RUN_ID/jobs"),
+      run.indexOf('if [ -z "$failed_steps" ]'),
+    );
+    expect(jobsFetch).not.toContain("|| true");
+    expect(jobsFetch).not.toContain("2>/dev/null");
+    expect(run).toContain(
+      'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed but the jobs API listed no failed step',
+    );
+    expect(run).not.toContain("falling back to legacy revert behavior");
   });
 
-  it("removes the auto-revert label positionally (the --name form aborts every run)", () => {
-    // `gh pr remove-label PR LABEL` takes the label positionally. The old
-    // `--name auto-revert` form is an unknown flag: it aborted the step
-    // right after opening the revert PR, leaving the PR unmerged and the
-    // Auto revert run red (run 33486589900 on 88270582, 0509#1576).
-    expect(run).toContain('gh pr remove-label "$pr_number" auto-revert --repo "$REPO"');
-    expect(run).not.toContain("--name auto-revert");
+  it("removes the auto-revert label with gh pr edit --remove-label", () => {
+    // `gh pr remove-label` is not a command. Run 33486589900 aborted after
+    // opening the revert PR because origin/main called
+    // `gh pr remove-label ... --name auto-revert` and gh printed `gh pr`
+    // help then exited 1. `gh pr edit --help` documents `--remove-label`.
+    const commandLines = run
+      .split("\n")
+      .filter((ln) => !/^\s*#/.test(ln))
+      .join("\n");
+    expect(commandLines).toContain(
+      'gh pr edit "$pr_number" --repo "$REPO" --remove-label auto-revert',
+    );
+    expect(commandLines).not.toContain("gh pr remove-label");
   });
 });
