@@ -224,6 +224,8 @@ describe("BET 10 claim-by-claim audit table", () => {
       "app/routes/competitor-monitoring.tsx",
       "app/routes/compare.magicbrief.tsx",
       "app/routes/compare.meta-ad-library.tsx",
+      "app/components/pricing-section.tsx",
+      "app/routes/timeline.$domain.tsx",
       "app/lib/pricing.ts",
     ];
     const banned = [
@@ -235,6 +237,9 @@ describe("BET 10 claim-by-claim audit table", () => {
       "with screenshot evidence",
       "saved with screenshots, page text",
       "saved watches attach screenshots",
+      "with screenshots, page text, and the original link",
+      "the screenshot and page text for each state",
+      "each with the stored screenshot and page text",
     ];
     for (const surface of surfaces) {
       const source = readFileSync(resolve(surface), "utf8");

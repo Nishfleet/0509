@@ -160,7 +160,7 @@ describe("/timeline/:domain render", () => {
     expect(markup).not.toContain("Share this timeline");
   });
 
-  it("never renders the no-screenshot label for a proof-less state (issue #1284)", async () => {
+  it("never overclaims a screenshot per state when a row has none (issues #1284, #1271)", async () => {
     const prooflessEntry = entry({
       id: "backfill-nike-20260715",
       capturedAt: "2026-07-15T09:00:00.000Z",
@@ -176,16 +176,16 @@ describe("/timeline/:domain render", () => {
       transition: null,
     });
 
-    const markup = await render(
-      data({
-        domain: "nike.com",
-        brandName: "Nike",
-        canonicalPath: "/timeline/nike.com",
-        sharePath: "/timeline/nike.com",
-        shareUrl: "https://0509.io/timeline/nike.com",
-        entries: [prooflessEntry],
-      }),
-    );
+    const timelineData = data({
+      domain: "nike.com",
+      brandName: "Nike",
+      canonicalPath: "/timeline/nike.com",
+      sharePath: "/timeline/nike.com",
+      shareUrl: "https://0509.io/timeline/nike.com",
+      entries: [prooflessEntry],
+    });
+
+    const markup = await render(timelineData);
 
     // The headline still renders (the data layer is what filters proof-less
     // rows; the component is defense-in-depth against the string itself).
@@ -194,5 +194,15 @@ describe("/timeline/:domain render", () => {
     expect(markup).not.toContain("no screenshot");
     expect(markup).not.toContain("Screenshot ·");
     expect(markup).not.toContain("Page text ·");
+    // The intro must not promise a screenshot on every state.
+    expect(markup).not.toContain("the screenshot and page text for each state");
+    expect(markup).toContain("with page text and a screenshot when we stored one.");
+
+    // The meta description must not promise a screenshot on every state either.
+    const { meta } = await import("~/routes/timeline.$domain");
+    const metas = meta({ loaderData: timelineData } as never) as Array<Record<string, string>>;
+    const description = metas.find((m) => m.name === "description")?.content ?? "";
+    expect(description).not.toContain("each with the stored screenshot and page text");
+    expect(description).toContain("a screenshot when we stored one");
   });
 });

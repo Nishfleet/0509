@@ -54,7 +54,7 @@ export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry
     {
       question: "What uses proof captures?",
       answer:
-        "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with screenshots, page text, and the original link.",
+        "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with page text, the original link, and a screenshot when the capture includes one.",
     },
     {
       question: "Do unused proof captures roll over?",
@@ -548,8 +548,8 @@ export function PricingSection({
             <dt>What uses proof captures?</dt>
             <dd>
               Scheduled scans are included with your plan and never touch your cap. A proof
-              capture is used when Five to Nine saves a confirmed change with screenshots,
-              page text, and the original link.
+              capture is used when Five to Nine saves a confirmed change with page text, the
+              original link, and a screenshot when the capture includes one.
             </dd>
           </div>
           <div>
