@@ -101,7 +101,7 @@ export function parseArgs(argv) {
       continue;
     }
     if (arg === "--threshold" && argv[index + 1]) {
-      const value = Number.parseFloat(argv[index + 1], 10);
+      const value = Number.parseFloat(argv[index + 1]);
       if (Number.isFinite(value) && value >= 0 && value <= 100) {
         parsed.threshold = value;
       }
@@ -125,7 +125,8 @@ export function parseArgs(argv) {
 
 /** One row per project kind so the canary can tell real watcher captures from
  * cleanup-stripped launch-gate captures. Integer-concatenated window (no SQL
- * interpolation), mirroring canary-proof-budget-skip-surface. */
+ * interpolation), mirroring canary-proof-budget-skip-surface.
+ * @param {number} windowHours */
 export function buildScreenshotRateQuery(windowHours) {
   return `
     SELECT
@@ -177,6 +178,7 @@ export function mapScreenshotRateRows(rows) {
       realWithShot += withShot;
     }
   }
+  /** @param {number} withShot @param {number} total */
   const pct = (withShot, total) =>
     total > 0 ? Math.round((1000 * withShot) / total) / 10 : 0;
   const real = {
@@ -232,7 +234,9 @@ export function validateScreenshotRate(input) {
 }
 
 /** Acceptance 3c: the auto-filed ticket must carry rate, sample size, and a
- * link to the capture-path code. */
+ * link to the capture-path code.
+ * @param {{real: {kind: string | null, total: number, withShot: number, pct: number}, canary: {kind: string | null, total: number, withShot: number, pct: number}, all: {total: number, withShot: number, pct: number}, windowHours: number, threshold: number, minSample: number, checkedAt: string}} input
+ * @returns {string} */
 export function buildIssueBody(input) {
   const { real, canary, all, windowHours, threshold, minSample, checkedAt } = input;
   const lines = [];
@@ -260,11 +264,51 @@ export function buildIssueBody(input) {
   return lines.join("\n");
 }
 
-/** The exact `gh issue create` argv the canary would run to file the incident. */
+/** The exact `gh issue create` argv the canary would run to file the incident.
+ * @param {{body: string, title: string, repo: string}} input
+ * @returns {string[]} */
 export function buildGhIssueCommand({ body, title, repo }) {
   return ["issue", "create", "-R", repo, "--title", title, "--body", body];
 }
 
+/**
+ * @typedef {{
+ *   local: boolean,
+ *   windowHours: number,
+ *   threshold: number,
+ *   minSample: number,
+ *   checkedAt: string,
+ *   real: {kind: string | null, total: number, withShot: number, pct: number},
+ *   canary: {kind: string | null, total: number, withShot: number, pct: number},
+ *   all: {total: number, withShot: number, pct: number},
+ *   validation: {verdict: "pass" | "fail" | "skip", failures: string[], skips: string[]},
+ * }} ScreenshotRateReportInput
+ */
+
+/**
+ * @typedef {{
+ *   verdict: "pass" | "fail" | "skip",
+ *   ok: boolean,
+ *   local: boolean,
+ *   windowHours: number,
+ *   threshold: number,
+ *   minSample: number,
+ *   database: string,
+ *   checkedAt: string,
+ *   real: {kind: string | null, total: number, withShot: number, pct: number},
+ *   canary: {kind: string | null, total: number, withShot: number, pct: number},
+ *   all: {total: number, withShot: number, pct: number},
+ *   failures: string[],
+ *   skips: string[],
+ *   capturePathRef: string,
+ *   canaryCleanupRef: string,
+ * }} ScreenshotRateReport
+ */
+
+/**
+ * @param {ScreenshotRateReportInput} input
+ * @returns {ScreenshotRateReport}
+ */
 function summarize(input) {
   const { real, canary, all, windowHours, threshold, minSample, local } = input;
   return {
@@ -296,9 +340,11 @@ function summarize(input) {
     skips: input.validation.skips,
     capturePathRef: CAPTURE_PATH_REF,
     canaryCleanupRef: CANARY_CLEANUP_REF,
+    ok: input.validation.verdict !== "fail",
   };
 }
 
+/** @param {ScreenshotRateReportInput} input */
 function renderHumanReport(input) {
   const s = summarize(input);
   const lines = [];
@@ -327,6 +373,7 @@ function renderHumanReport(input) {
 }
 
 /**
+ * @param {{repo: string}} input
  * @returns {{existing: boolean, command: string[] | null}} existing=true when an
  * open incident already exists (dedupe), else the gh create argv (or the stdin
  * sql wire when dry-run is handled by the caller).
@@ -410,7 +457,6 @@ function main() {
   };
 
   const report = summarize(input);
-  report.ok = validation.verdict !== "fail";
 
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
@@ -427,7 +473,7 @@ function main() {
     const body = buildIssueBody(input);
     const command = buildGhIssueCommand({ body, title, repo });
     if (args.dryRun) {
-      console.log(`[dry-run] would run: gh ${command.map(JSON.stringify).join(" ")}`);
+      console.log(`[dry-run] would run: gh ${command.map((c) => JSON.stringify(c)).join(" ")}`);
     } else {
       const existing = findExistingOpenIncident({ repo });
       if (existing.existing) {

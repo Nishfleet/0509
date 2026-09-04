@@ -166,8 +166,8 @@ describe("canary-proof-screenshot-rate (#1327)", () => {
   describe("buildIssueBody", () => {
     it("carries rate, sample size, and the capture-path code link (acceptance 3c)", () => {
       const body = buildIssueBody({
-        real: { total: 34, withShot: 0, pct: 0 },
-        canary: { total: 9, withShot: 0, pct: 0 },
+        real: { kind: null, total: 34, withShot: 0, pct: 0 },
+        canary: { kind: "launch_readiness_real_capture", total: 9, withShot: 0, pct: 0 },
         all: { total: 43, withShot: 0, pct: 0 },
         windowHours: 48,
         threshold: 80,
