@@ -65,13 +65,14 @@ import { formatCaptureAttemptReasonLabel } from "~/lib/capture-attempt-reason-co
 import type { CaptureAttemptReasonCode } from "~/lib/capture-attempt-reason-code";
 import {
   adsPageServiceJsonLd,
+  breadcrumbListJsonLd,
   canonicalUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
-import type { FaqJsonLdEntry } from "~/lib/seo";
+import type { BreadcrumbJsonLdItem, FaqJsonLdEntry } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
 
@@ -466,6 +467,34 @@ export function brandPageFaqEntries(data: BrandPageLoaderData): ReadonlyArray<Fa
       question: `Can I get an email when ${brandName}'s ads or offer change?`,
       answer: `Yes. The "Watch ${domain} — free" button on this page starts a free account, and the first scan runs the moment you land. After that, every ad, offer, CTA, and form change hits your inbox with a screenshot when the capture includes one, the page text, and the source link. Quiet periods still send a heartbeat so silence always means we looked.`,
     },
+  ];
+}
+
+/**
+ * The breadcrumb trail for the /ads/:domain page, shared by the visible
+ * breadcrumb nav and the BreadcrumbList JSON-LD so the two can never drift
+ * (issue #1418). Three levels: Home (Five to Nine), the Ads parent, and the
+ * current brand page.
+ *
+ * The middle "Ads" entry links to /search — there is no /ads index page and
+ * no /brands hub yet (issue #1417 covers building one). When #1417 lands a
+ * /brands hub, this one line is the only change needed: swap "/search" for
+ * "/brands" and the visible nav + JSON-LD both follow.
+ *
+ * Returns null on the cache-miss shell (which 301-redirects and never
+ * reaches the render) — the breadcrumb is grounded in a real brand page that
+ * the visitor is actually on.
+ */
+export function brandPageBreadcrumbItems(
+  data: BrandPageLoaderData,
+): ReadonlyArray<BreadcrumbJsonLdItem> | null {
+  if (!data.hasCachedAds) {
+    return null;
+  }
+  return [
+    { name: "Five to Nine", pathname: "/" },
+    { name: "Ads", pathname: "/search" },
+    { name: data.brandName, pathname: data.canonicalPath },
   ];
 }
 

@@ -192,6 +192,37 @@ export function faqPageJsonLd(entries: ReadonlyArray<FaqJsonLdEntry>) {
   } as const;
 }
 
+export interface BreadcrumbJsonLdItem {
+  name: string;
+  pathname: string;
+}
+
+/**
+ * schema.org BreadcrumbList. Pass the visible breadcrumb trail in page order
+ * (Home first, current page last) — every entry's `item` URL is derived from
+ * its pathname via `canonicalUrl` so the structured data can never drift from
+ * the site's canonical URL scheme. The last entry is the current page; the
+ * caller passes its real pathname so the `item` URL matches the page's
+ * canonical tag.
+ *
+ * Google expects the `name` to match what the user sees in the visible
+ * breadcrumb, so the caller must pass the same labels it renders.
+ */
+export function breadcrumbListJsonLd(
+  items: ReadonlyArray<BreadcrumbJsonLdItem>,
+) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: canonicalUrl(item.pathname),
+    })),
+  } as const;
+}
+
 /**
  * schema.org WebPage for a public informational page. Deliberately plain: it
  * states only what the page already shows — its name, its description, and the
