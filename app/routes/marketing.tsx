@@ -433,6 +433,8 @@ export default function MarketingRoute() {
   const heroCaptureStale = proofBrief
     ? captureAgeDays(heroCaptureIso) > PROOF_CAPTURE_FRESH_DAYS
     : false;
+  const heroCheckedAgo = proofBrief?.checkedAgoLabel ?? "recently";
+  const heroProofLive = proofBrief ? proofBrief.freshForLiveClaim && !heroCaptureStale : false;
   // Chosen BET 9 direction: Safe. Buyer + job stay in the H1 even when live
   // Nykaa proof is present. See docs/design/hero-directions/CHOSEN.md.
   const heroWall = (
@@ -452,16 +454,25 @@ export default function MarketingRoute() {
 
   const heroProofStrip =
     proofBrief && heroTopHook ? (
-      <aside className="ld-proof-strip" aria-label="Live proof brief">
+      <aside
+        className="ld-proof-strip"
+        aria-label={
+          heroProofLive
+            ? "Live proof brief"
+            : `Cached proof brief — checked ${heroCheckedAgo}`
+        }
+      >
         <div className="ld-proof-strip-head">
           <span className="ld-proof-live">
-            {heroCaptureStale ? "On record" : "Live proof"}
+            {heroProofLive ? "Live" : "On record"}
           </span>
           <b>We saved the proof — {proofBrief.website}</b>
           <span className="ld-proof-time">
-            {heroCaptureStale
-              ? "On record · Meta Ad Library"
-              : `Captured ${heroProofTime} · Meta Ad Library`}
+            {heroProofLive
+              ? `Live · checked ${heroCheckedAgo} · Meta Ad Library`
+              : heroCaptureStale
+                ? `On record · checked ${heroCheckedAgo} · Meta Ad Library`
+                : `Captured ${heroProofTime} · checked ${heroCheckedAgo} · Meta Ad Library`}
           </span>
         </div>
         <div className="ld-proof-strip-body">
