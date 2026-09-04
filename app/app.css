@@ -7192,6 +7192,13 @@ reds soften --- */
   line-height: 1.5;
 }
 
+/* Capture-validity trust note under the hero grid — the "no phantom
+   changes" cross-link to /capture-rules (issue #1320). Sits between the
+   hero grid (score card) and the primary CTA strip. */
+.f9-ads-proof-note {
+  margin: 0.4rem 0 0;
+}
+
 /* ---- PRIMARY CTA STRIP ---- */
 .f9-ads-watch-strip {
   background: var(--ink);

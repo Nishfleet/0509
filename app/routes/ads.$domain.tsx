@@ -52,6 +52,7 @@ import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+import { CAPTURE_RULES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
 import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type {
   BrandChangeEvent,
@@ -820,6 +821,19 @@ function BrandAdsResults({
 
             <BrandScoreCard aggression={data.aggression} />
           </div>
+
+          {/* 1b. CAPTURE-VALIDITY TRUST LINK — "no phantom changes" (issue
+              #1320). The Ad Aggression Score and every screenshot on this
+              page are proof-backed. This link names the public, checkable
+              rule set for what we refuse to alert on (challenge pages,
+              cookie walls, partial SPA shells, error pages) — the trust
+              claim that separates us from the category's false-positive
+              alert noise. Points at the canonical /capture-rules path
+              (#1432); /proof is its legacy 301 alias. */}
+          <p className="f9-wk-dim f9-ads-proof-note">
+            {"No phantom changes: every alert from this page is backed by a saved capture. "}
+            <Link to={CAPTURE_RULES_PUBLIC_PATH}>What we refuse to alert on</Link>
+          </p>
 
           {/* 2. Primary CTA strip */}
           <div className="f9-ads-watch-strip">

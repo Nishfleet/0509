@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BrandPageLoaderData } from "~/routes/ads.$domain";
+import { CAPTURE_RULES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
 import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type { AdRecord } from "~/lib/types";
 
@@ -796,5 +797,27 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
 
     expect(markup).not.toContain("application/ld+json");
     expect(markup).not.toContain("@type");
+  });
+});
+
+describe("/ads/:domain — capture-validity proof cross-link (issue #1320)", () => {
+  it("links the 'what we refuse to alert on' trust page from every sampled /ads/:domain page", async () => {
+    const captureRulesHref = `href="${CAPTURE_RULES_PUBLIC_PATH}"`;
+    // The issue's evidence domains — the pages a "<brand> facebook ads"
+    // buyer actually lands on. All three are indexable populated captures;
+    // the trust link (the "no phantom changes" claim) must render on each.
+    for (const domain of ["nike.com", "nykaa.com", "figma.com"] as const) {
+      const markup = await render(populated({ domain, canonicalPath: `/ads/${domain}` }));
+      expect(markup).toContain(captureRulesHref);
+      expect(markup).toContain("What we refuse to alert on");
+      expect(markup).toContain("No phantom changes");
+    }
+  });
+
+  it("keeps the trust link on the score-thin state (no aggression data), still rendered from the hero", async () => {
+    const markup = await render(populated({ aggression: null }));
+
+    expect(markup).toContain(`href="${CAPTURE_RULES_PUBLIC_PATH}"`);
+    expect(markup).toContain("What we refuse to alert on");
   });
 });
