@@ -859,6 +859,11 @@ export default function MarketingRoute() {
             Ad-spy tools drown teams in &ldquo;new ad&rdquo; pings. Five to Nine alerts you when
             something actually moved — and tells you what it checked when nothing did.
           </p>
+          <p>
+            That same quiet model covers language-localized market swings. The <Link to="/sneaker-resale">sneaker-resale cluster</Link>,
+            for example, tracks resale competitors across English, German, Japanese, and Brazilian
+            Portuguese — the same source-linked receipt, scoped to a single vertical.
+          </p>
         </div>
         <div className="ld-quiet-grid ld-reveal" aria-label="Zero-noise monitoring points">
           {quietSignals.map((item) => (

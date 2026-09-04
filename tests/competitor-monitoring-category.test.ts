@@ -142,6 +142,14 @@ describe("competitor monitoring category page", () => {
     expect(source).toContain('<Link to="/">homepage FAQ</Link>');
   });
 
+  it("links from the category hub into the sneaker-resale cluster", async () => {
+    const source = readFileSync(routePath, "utf8");
+
+    expect(source).toContain('<Link to="/sneaker-resale">');
+    expect(source).toContain("A language-localized market swing, under the same model");
+    expect(source).toContain("Vertical case study");
+  });
+
   it("states explicit source and freshness limits for every market claim", async () => {
     const source = readFileSync(routePath, "utf8");
 

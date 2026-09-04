@@ -509,6 +509,18 @@ export default function CompetitorMonitoringCategoryRoute() {
               and are never hardcoded here.
             </p>
           </article>
+          <article>
+            <span className="ld-kicker">Vertical case study</span>
+            <h3>A language-localized market swing, under the same model</h3>
+            <p>
+              The same public-surfaces-only monitoring that powers this category page also
+              covers language-localized verticals. The{}
+              <Link to="/sneaker-resale">sneaker-resale cluster</Link> tracks resale competitors’
+              Meta ads and landing-page changes across English, German, Japanese, and Brazilian
+              Portuguese, with saved screenshots and source links — the same receipt model, scoped
+              to a single product: sneaker reselling.
+            </p>
+          </article>
         </div>
       </section>
 

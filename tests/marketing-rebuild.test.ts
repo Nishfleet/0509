@@ -206,6 +206,12 @@ describe("marketing rebuild", () => {
     );
   });
 
+  it("links from the homepage into the sneaker-resale cluster", () => {
+    expect(marketingRoute).toContain('<Link to="/sneaker-resale">');
+    expect(marketingRoute).toContain("sneaker-resale cluster");
+    expect(marketingRoute).toContain("language-localized market swings");
+  });
+
   it("keeps Slack out of the public GA offer", () => {
     expect(marketingRoute).not.toContain("Slack delivery");
     expect(marketingRoute).not.toContain("Slack-ready");
