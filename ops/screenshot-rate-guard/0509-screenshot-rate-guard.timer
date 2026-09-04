@@ -1,0 +1,15 @@
+[Unit]
+Description=Run the 0509 proof screenshot-rate regression guard every six hours
+Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
+
+[Timer]
+# Every 6h offset at :37. The guard measures a rolling 48h window, so a 6h
+# cadence overlaps enough that any single-window drop below the threshold is
+# observed within one run window (the issue's acceptance: "the first time the
+# rate drops below 80% on any 48h window").
+OnCalendar=*:37/6
+Persistent=true
+Unit=0509-screenshot-rate-guard.service
+
+[Install]
+WantedBy=timers.target
