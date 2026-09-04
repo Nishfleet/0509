@@ -34,6 +34,7 @@
     "scripts/e2e-validate-auth-state.mjs",
     "scripts/launch-readiness-canary.mjs",
     "scripts/canary-locale-prefix-routes.lib.mjs",
+    "scripts/canary-proof-screenshot-rate.mjs",
     "scripts/canary-proof-budget-skip-surface.mjs",
     "scripts/canary-cta-detector.mjs",
     "scripts/launch-readiness-canary-cycle.mjs",
