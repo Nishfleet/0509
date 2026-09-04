@@ -1,3 +1,5 @@
+import { Link } from "react-router";
+
 import { LocalTime } from "~/components/local-time";
 import { QuietLineList } from "~/components/evidence/quiet-line";
 import { watchlistDetailTabHref } from "~/lib/watchlist-detail-tabs";
@@ -55,7 +57,14 @@ export function RecentChecksSection({
       )}
       {captureItems.length > 0 ? (
         <section aria-label="What the latest check looked at" className="f9-wk-mt">
-          <p className="f9-evidence-micro">What the latest check looked at</p>
+          <div className="f9-wk-sec-head">
+            <p className="f9-evidence-micro">What the latest check looked at</p>
+            {/* Issue #1476: the full run history is its own URL-addressable
+                surface; the quiet line here is the doorway to it. */}
+            <Link className="f9-wk-lnk" to={`/app/watchlists/${watchlistId}`}>
+              Full run history
+            </Link>
+          </div>
           <QuietLineList expanded={checksExpanded} items={captureItems} />
           <p className="f9-wk-dim">
             Every URL the latest check touched is listed — including captures
@@ -89,8 +98,9 @@ function formatCaptureAttemptCopy(
   const reason = formatCaptureAttemptReasonLabel(
     attempt.reasonCode as CaptureAttemptReasonCode | null,
   );
-  const suffix = attempt.reasonCode ? ` (${attempt.reasonCode})` : "";
-  return `${reason}${where}.${suffix} No alert sent.`;
+  // The human label only — the raw reason-code token stays out of the UI
+  // (issue #1476; tokens remain in the /api/v1 response for compatibility).
+  return `${reason}${where}. No alert sent.`;
 }
 
 function shortenUrl(url: string): string {
