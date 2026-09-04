@@ -23,7 +23,7 @@ import { isValidProofScreenshotKey } from "~/lib/proof-screenshot";
 
 const TIMELINE_SNAPSHOT_LIMIT = 200;
 
-interface LandingPageSnapshotRow {
+export interface LandingPageSnapshotRow {
   id: string;
   canonical_url: string;
   raw_headline: string;
@@ -111,8 +111,30 @@ export async function loadOfferTimeline(
   };
 }
 
-function snapshotHasCompleteProof(snapshot: OfferSnapshotInput): boolean {
+function snapshotHasCompleteProof(
+  snapshot: Pick<OfferSnapshotInput, "screenshotKey" | "pageTextKey">,
+): boolean {
   return snapshot.screenshotKey !== null && snapshot.pageTextKey !== null;
+}
+
+/**
+ * The loader's own proof gate on a raw `landing_page_snapshot` row (issue
+ * #1284): a public timeline may only present a competitor state that carries
+ * BOTH a stored screenshot artifact AND a stored page-text extract. Shared by
+ * `loadOfferTimeline` and the sitemap timeline entries (sitemap.server.ts) so
+ * the sitemap can never list a domain whose timeline would render a
+ * proof-filtered (and therefore empty → gone/noindex) ledger.
+ *
+ * Only the two stored-artifact columns matter for the gate; callers with a
+ * subset row (the sitemap read selects fewer columns) can use this directly.
+ */
+export function snapshotRowHasCompleteProof(
+  row: Pick<LandingPageSnapshotRow, "artifact_key" | "metadata_json">,
+): boolean {
+  const metadata = parseJson<Record<string, unknown>>(row.metadata_json, {});
+  const screenshotKey = readScreenshotKey(metadata);
+  const pageTextKey = readPageTextKey(row.artifact_key, metadata);
+  return snapshotHasCompleteProof({ screenshotKey, pageTextKey });
 }
 
 export function isOfferTimelineShareEnabled(env: AppEnv): boolean {
