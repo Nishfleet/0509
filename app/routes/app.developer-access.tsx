@@ -24,9 +24,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const { workspaceUserId, isMember, ownerName } = await requireWorkspaceSession(env, request);
-  const [apiKeys, apiGate] = await Promise.all([
+  const [apiKeys, apiGate, writeKeyGate] = await Promise.all([
     isMember ? Promise.resolve([]) : listCustomerApiKeys(env, workspaceUserId),
     requireWorkspacePlanFeature(env, workspaceUserId, "api_access"),
+    requireWorkspacePlanFeature(env, workspaceUserId, "write_enabled_api_keys"),
   ]);
   const createDisabledReason = developerAccessDisabledReason({
     hasApiAccess: apiGate.ok,
@@ -36,6 +37,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     canCreateApiKeys: !createDisabledReason,
+    canCreateWriteKeys: apiGate.ok && writeKeyGate.ok,
     createDisabledReason,
     apiKeys: apiKeys.map((apiKey) => ({
       id: apiKey.id,
@@ -79,10 +81,22 @@ export async function action({ context, request }: ActionFunctionArgs) {
         })!,
       };
     }
+    const wantsWriteScope = formData.get("actionsWriteEnabled") === "1";
+    if (wantsWriteScope) {
+      // BET 6: read-only keys are free + Scout; write scope starts at Starter.
+      const writeKeyGate = await requireWorkspacePlanFeature(env, workspaceUserId, "write_enabled_api_keys");
+      if (!writeKeyGate.ok) {
+        return {
+          ok: false,
+					intent,
+          message: "Write-enabled API keys require Starter or Agency. Read-only keys are available on every plan.",
+        };
+      }
+    }
     const { createCustomerApiKey } = await import("~/lib/api-keys.server");
     const name = String(formData.get("apiKeyName") ?? "");
     const result = await createCustomerApiKey(env, workspaceUserId, name, {
-      actionsWriteEnabled: formData.get("actionsWriteEnabled") === "1",
+      actionsWriteEnabled: wantsWriteScope,
     });
 
     return {
@@ -128,7 +142,7 @@ function developerAccessDisabledReason(input: {
   }
 
   if (!input.hasApiAccess) {
-    return "Developer access is included in the Agency plan. Upgrade to Agency to create API keys.";
+    return "Read-only API keys are available on every plan. Contact support if this account cannot create keys.";
   }
 
   return null;

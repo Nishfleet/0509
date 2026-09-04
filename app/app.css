@@ -4328,6 +4328,37 @@ one signal-green accent.
   padding-left: 18px;
 }
 
+/* BET 6: per-tool tier table on /api/docs. Same bone/ink/signal-green
+   palette as the surrounding docs blocks; mono tool names, no fill color. */
+.f9-api-tier-table {
+  width: 100%;
+  margin: 14px 0 0;
+  border-collapse: collapse;
+}
+
+.f9-api-tier-table th {
+  color: var(--f9-search-muted, var(--f9-global-muted));
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--f9-search-line, var(--f9-global-line));
+}
+
+.f9-api-tier-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--f9-search-line, var(--f9-global-line));
+  color: var(--ld-ink);
+  vertical-align: top;
+}
+
+.f9-api-tier-table code {
+  font-family: var(--ld-mono);
+  font-size: 0.82rem;
+}
+
 .f9-code-block {
   max-width: 100%;
   overflow-x: auto;

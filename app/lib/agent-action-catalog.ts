@@ -1,6 +1,6 @@
 export const READINESS_ACTION_NAME = "get_workspace_readiness" as const;
-export const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
-export const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled Agency customer API key.";
+export const READ_ONLY_API_KEY_REQUIREMENT = "Works with any active customer API key. Read-only access is on Free and Scout.";
+export const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled customer API key (Starter+ to create; agent actions on Agency).";
 export const BROAD_WRITE_API_NON_GOAL = "broad public write APIs beyond approved account actions";
 
 type AgentActionGroup = {
@@ -60,24 +60,34 @@ export const AGENT_ACTION_GROUPS = [
   },
   {
     id: "memory",
+    label: "Context read",
+    detail: "Read saved account context, client rooms, support cases, and existing presence observations.",
+    actions: [
+      "memory.list",
+      "client_room.list",
+      "support_case.list",
+      "web_mentions.list",
+    ],
+    requiresWriteEnabled: false,
+    credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
+  },
+  {
+    id: "context_write",
     label: "Context and client rooms",
     detail: "Save account context and keep agency client work organized.",
     actions: [
       "memory.upsert",
-      "memory.list",
       "client_room.upsert",
-      "client_room.list",
     ],
     requiresWriteEnabled: true,
     credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
   },
   {
-    id: "support",
+    id: "support_write",
     label: "Support",
-    detail: "Open and review account support cases without exposing private case details.",
+    detail: "Open account support cases without exposing private case details.",
     actions: [
       "support_case.create",
-      "support_case.list",
     ],
     requiresWriteEnabled: true,
     credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
@@ -91,14 +101,6 @@ export const AGENT_ACTION_GROUPS = [
       "delivery_settings.update",
       "delivery_target.update",
     ],
-    requiresWriteEnabled: true,
-    credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
-  },
-  {
-    id: "mentions",
-    label: "Presence observations",
-    detail: "Read existing source-backed website, blog, and Substack observations.",
-    actions: ["web_mentions.list"],
     requiresWriteEnabled: true,
     credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
   },
