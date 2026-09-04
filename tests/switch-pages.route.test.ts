@@ -208,4 +208,47 @@ describe("BET 8 switch pages", () => {
     expect(magicbrief).not.toContain("save fresh screenshots");
     expect(panoramata).not.toContain("when the page actually renders");
   });
+
+  it.each(SWITCH_SLUGS)(
+    "%s emits one FAQPage JSON-LD block with at least 2 Question/Answer pairs matching visible copy",
+    async (slug) => {
+      const page = SWITCH_PAGES[slug];
+      const routeModule = (await import(`~/routes/switch.${slug}`)) as { default: () => ReactNode };
+      const markup = renderToStaticMarkup(createElement(routeModule.default));
+      const blocks = parseLdJsonBlocks(markup);
+      const faqPages = blocks.filter((block) => block["@type"] === "FAQPage");
+
+      expect(faqPages).toHaveLength(1);
+      const mainEntity = (faqPages[0]?.mainEntity ?? []) as Array<{
+        "@type": string;
+        name: string;
+        acceptedAnswer: { "@type": string; text: string };
+      }>;
+      expect(mainEntity.length).toBeGreaterThanOrEqual(2);
+      for (const entry of mainEntity) {
+        expect(entry["@type"]).toBe("Question");
+        expect(entry.acceptedAnswer["@type"]).toBe("Answer");
+      }
+
+      // The visible FAQ section renders the same entries (single source of truth).
+      const text = visibleText(markup);
+      for (const entry of page.faqEntries) {
+        expect(text).toContain(entry.question);
+        expect(text).toContain(entry.answer);
+      }
+      // The Question names in JSON-LD match the page's faqEntries exactly.
+      expect(mainEntity.map((entry) => entry.name)).toEqual(
+        page.faqEntries.map((entry) => entry.question),
+      );
+    },
+  );
+
+  it.each(SWITCH_SLUGS)("%s FAQ answers stay honest — no full-migration promise", (slug) => {
+    const page = SWITCH_PAGES[slug];
+    const copy = JSON.stringify(page.faqEntries);
+    // Match the hedge standard the rest of the page already holds to.
+    expect(copy).not.toMatch(/we migrate everything|full migration|move everything/i);
+    // No invented prices in FAQ answers.
+    expect(copy).not.toMatch(/[$₹€£]\s?\d/);
+  });
 });
