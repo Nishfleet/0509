@@ -139,6 +139,181 @@ describe("structured data (JSON-LD)", () => {
   });
 });
 
+describe("search route structured data (JSON-LD)", () => {
+  // Renders the real /search route server-side (the existing route-render
+  // style) so the JSON-LD assertions read produced markup, not source text:
+  // a dead script tag can never satisfy them by accident.
+
+  let loaderData: Record<string, unknown>;
+  let locationObj: { pathname: string; search: string; hash: string };
+  let navigationState: {
+    state: string;
+    location?: { pathname: string; search: string } | null;
+  };
+  let revalidatorRef: { state: string; revalidate: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.doMock("react-router", async () => {
+      const actual =
+        await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+      return {
+        ...actual,
+        Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        useActionData: () => undefined,
+        useLoaderData: () => loaderData,
+        useLocation: () => locationObj,
+        useNavigate: () => vi.fn(),
+        useNavigation: () => navigationState,
+        useRevalidator: () => revalidatorRef,
+        useRouteLoaderData: () => ({ session: null }),
+      };
+    });
+    vi.doMock("~/components/dashboard-shell", () => ({
+      DashboardShell: ({ children }: { children?: React.ReactNode }) =>
+        createElement("main", null, children),
+    }));
+
+    loaderData = {
+      mode: "advertiser",
+      filters: {
+        query: "",
+        country: "all",
+        platform: "all",
+        creativeType: "all",
+        status: "all",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+      fingerprint: "",
+      result: {
+        ads: [],
+        nextCursor: null,
+        source: "demo",
+        provider: "demo",
+        cacheStatus: "none",
+        discoveryStatus: "disabled",
+        discoverySummary: null,
+        discoveryFailureClass: null,
+      },
+      selectedAd: null,
+      stealSummary: null,
+      selectionEnrichmentPending: false,
+      collections: [],
+      plan: null,
+      session: null,
+      competitorWebsite: {
+        raw: "",
+        normalizedUrl: null,
+        host: null,
+        displayName: null,
+        searchTerm: null,
+        error: null,
+      },
+      trackingRole: "competitor",
+      inputError: null,
+      searchScope: "exact",
+      displayDomain: null,
+      relevanceApplied: false,
+      watchedWatchlist: null,
+      showPresenceNav: false,
+    };
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = { state: "idle" };
+    revalidatorRef = { state: "idle", revalidate: vi.fn() };
+  });
+
+  async function renderSearchMarkup() {
+    const { default: SearchRoute } = await import("~/routes/search");
+    return renderToStaticMarkup(createElement(SearchRoute));
+  }
+
+  it("renders exactly one safe WebPage entity with the canonical search URL", async () => {
+    const markup = await renderSearchMarkup();
+
+    // The page itself still renders (the JSON-LD is additive, not a swap).
+    expect(markup).toContain("Find competitor ads");
+
+    const scripts = [
+      ...markup.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g),
+    ];
+    expect(scripts).toHaveLength(1);
+
+    const raw = scripts[0]![1]!;
+    // jsonLdScriptProps escapes `<` so page data can never break out of the
+    // script element — no raw angle bracket may survive into the payload.
+    expect(raw).not.toContain("<");
+    expect(raw).not.toContain("</script>");
+
+    const entity = JSON.parse(raw);
+    expect(entity["@context"]).toBe("https://schema.org");
+    expect(entity["@type"]).toBe("WebPage");
+    expect(entity.url).toBe("https://0509.io/search");
+    expect(entity.name).toBe("Search competitor Meta ads free | Five to Nine");
+
+    // The WebPage claims exactly the Five to Nine WebSite/Organization
+    // relationship the site already publishes — nothing invented.
+    expect(entity.isPartOf).toEqual({
+      "@type": "WebSite",
+      name: "Five to Nine",
+      url: "https://0509.io",
+    });
+    expect(entity.publisher).toEqual({
+      "@type": "Organization",
+      name: "Five to Nine",
+      url: "https://0509.io",
+    });
+
+    // The description must match the route's meta description verbatim.
+    const { meta, links } = await import("~/routes/search");
+    const metaEntries = (meta as unknown as () => Array<Record<string, string>>)();
+    const descriptionEntry = metaEntries?.find((entry) => entry.name === "description");
+    const titleEntry = metaEntries?.find((entry) => "title" in entry);
+    expect(entity.description).toBe(descriptionEntry?.content);
+    expect(entity.name).toBe(titleEntry?.title);
+    const linkEntries = (links as unknown as () => Array<{ href: string }>)();
+    expect(entity.url).toBe(linkEntries?.[0]?.href);
+  });
+
+  it("asserts no unsupported claims or price amounts in the search entity", async () => {
+    const markup = await renderSearchMarkup();
+    const scripts = [
+      ...markup.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g),
+    ];
+    expect(scripts).toHaveLength(1);
+    const serialized = scripts[0]![1]!;
+
+    // The entity is a plain WebPage: no fabricated result list, no live
+    // provider guarantee, no product/FAQ/rating vocabulary. The review/rating
+    // checks match the JSON property form so prose words inside the truthful
+    // description ("Preview…") can never trip them.
+    for (const banned of [
+      "FAQPage",
+      "Question",
+      "SoftwareApplication",
+      "potentialAction",
+      "mainEntity",
+      "offers",
+      "aggregateRating",
+      "hasPart",
+      '"review"',
+      '"rating"',
+    ]) {
+      expect(serialized).not.toContain(banned);
+    }
+    // No prices anywhere in the structured data.
+    expect(serialized).not.toMatch(/price/i);
+    expect(serialized).not.toMatch(/[$₹€£]\s?\d/);
+
+    // And the visible page does not render results for a queryless load.
+    expect(markup).toContain("Nothing searched yet");
+  });
+});
+
 describe("shared marketing footer", () => {
   it("renders brand line, standard links, and the compare group", async () => {
     const { MarketingFooter, BRAND_ORIGIN_LINE } = await import("~/components/marketing-footer");
