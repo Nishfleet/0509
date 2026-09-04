@@ -12,7 +12,7 @@ import { MCP_TOOLS } from "~/routes/api.mcp";
 import {
   customerApiToolPlanRequirement,
   isMcpWriteToolName,
-} from "~/lib/plan-feature-gate.server";
+} from "~/lib/customer-api-tiers";
 import { appLinkTarget } from "~/lib/app-link";
 import {
   canonicalLinks,
