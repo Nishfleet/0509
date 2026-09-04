@@ -3,7 +3,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
-import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { canonicalLinks, faqPageJsonLd, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import type { SwitchPage, SwitchSource } from "~/lib/switch-pages";
 
 export function switchPageLinks(page: SwitchPage): LinksFunction {
@@ -107,6 +107,28 @@ function SwitchBoundary({ page }: { page: SwitchPage }) {
   );
 }
 
+function SwitchFaq({ page }: { page: SwitchPage }) {
+  if (page.faqEntries.length === 0) {
+    return null;
+  }
+  return (
+    <section className="ld-quiet" id="faq">
+      <div className="ld-pricing-faq" aria-label={`${page.productName} switch FAQ`}>
+        <span className="ld-kicker">FAQ</span>
+        <h2>{page.productName} switch questions, answered honestly.</h2>
+        <dl className="proof-trail-list">
+          {page.faqEntries.map((entry) => (
+            <div key={entry.question}>
+              <dt>{entry.question}</dt>
+              <dd>{entry.answer}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  );
+}
+
 function SwitchClose({ page }: { page: SwitchPage }) {
   const sources = [page.complaint.source, ...page.furtherSources];
   return (
@@ -156,10 +178,14 @@ export function SwitchLanding({ page }: { page: SwitchPage }) {
           }),
         )}
       />
+      {page.faqEntries.length > 0 ? (
+        <script {...jsonLdScriptProps(faqPageJsonLd(page.faqEntries))} />
+      ) : null}
       <MarketingNav />
       <SwitchHero page={page} />
       <SwitchComplaint page={page} />
       <SwitchBoundary page={page} />
+      <SwitchFaq page={page} />
       <SwitchClose page={page} />
       <MarketingFooter />
     </main>
