@@ -1,3 +1,5 @@
+import type { FaqJsonLdEntry } from "~/lib/seo";
+
 export type SwitchSlug = "magicbrief" | "panoramata" | "visualping";
 
 export type PublishedCaptureValidityReasonCode =
@@ -43,6 +45,12 @@ export interface SwitchPage {
     heading: string;
     items: readonly SwitchCopyBlock[];
   } | null;
+  // FAQ entries answer the high-intent "<product> alternative" queries these
+  // switch pages target (BET 8). Every answer is grounded in this page's own
+  // copy — nothing new promised — and is emitted both as visible FAQ copy and
+  // as FAQPage JSON-LD from the same array (single source of truth, mirroring
+  // the /compare/* pages).
+  faqEntries: ReadonlyArray<FaqJsonLdEntry>;
 }
 
 export const NO_PHANTOM_CHANGE_RULES: ReadonlyArray<
@@ -146,6 +154,23 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
     ],
     relatedComparePath: "/compare/magicbrief",
     extraSection: null,
+    faqEntries: [
+      {
+        question: "Is Five to Nine a MagicBrief alternative?",
+        answer:
+          "For competitor-list migration and change monitoring, yes. MagicBrief's own FAQ says the platform closed on 31 July 2026 at 8 PM EST; the successor is Canva Grow, sold inside Canva Business. Five to Nine watches your competitors and saves page text, the source link, and a screenshot when the capture includes one.",
+      },
+      {
+        question: "What transfers from MagicBrief?",
+        answer:
+          "Your tracked brands, pasted or as a CSV, import as watchlists with notes, tags, and client labels. You see the rows first — duplicates and invalid rows are flagged, never silently dropped. That is what transfers.",
+      },
+      {
+        question: "What does not transfer from MagicBrief?",
+        answer:
+          "Saved ad libraries, boards, analytics and report history, and past screenshots stay behind. Five to Nine does not migrate them — keep your original export as the record of what the import carried.",
+      },
+    ],
   },
   panoramata: {
     slug: "panoramata",
@@ -212,6 +237,23 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
     ],
     relatedComparePath: "/compare/panoramata",
     extraSection: null,
+    faqEntries: [
+      {
+        question: "Is Five to Nine a Panoramata alternative?",
+        answer:
+          "For the same public Meta ads and landing-page job from a pasted domain, yes. A verified GetApp reviewer says Panoramata's price feels a bit high for a solo marketer; Five to Nine does the same ads and pages job from a pasted domain.",
+      },
+      {
+        question: "What transfers from Panoramata?",
+        answer:
+          "Domains, URLs, or brand names you already watch import as watchlists. Paste them or upload a CSV. Paid plans then check public Meta ads and the live landing page on a schedule, saving page text, the source link, and a screenshot when the capture includes one.",
+      },
+      {
+        question: "What does not transfer from Panoramata?",
+        answer:
+          "Panoramata's screenshot archive and history, email, SMS, and flow captures, and side-by-side archive tools stay in Panoramata. Five to Nine only has history for competitors you start watching here.",
+      },
+    ],
   },
   visualping: {
     slug: "visualping",
@@ -282,6 +324,23 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
       heading: "What we refuse to alert on.",
       items: NO_PHANTOM_CHANGE_RULES,
     },
+    faqEntries: [
+      {
+        question: "Is Five to Nine a Visualping alternative for ad libraries?",
+        answer:
+          "For watching competitor ads and landing pages from a pasted domain, yes. Visualping's own blog says the AI classifies 83% of detected changes as not important, and its Meta Ad Library playbook still asks you to find the library URL and write a condition prompt. Five to Nine takes a domain.",
+      },
+      {
+        question: "What transfers from Visualping?",
+        answer:
+          "Paste the competitor website instead of finding the Meta Ad Library URL or writing a condition prompt. The public search preview runs a real Meta Ad Library check with no account and says when the result is live, cached, or unavailable.",
+      },
+      {
+        question: "What does not transfer from Visualping?",
+        answer:
+          "Existing Visualping jobs, selected page regions, hand-written AI conditions, screenshot diffs, and check history do not import. Visualping watches any public URL; Five to Nine is built around competitor ads and landing pages, not generic website pixels.",
+      },
+    ],
   },
 };
 
