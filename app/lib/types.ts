@@ -297,6 +297,16 @@ export interface AdRecord {
     reason: string;
     matchedDomain: string | null;
   };
+  /**
+   * Set on /ads/:domain wall records when the creative carries verified link
+   * evidence to the page's brand domain (see adHasVerifiedDomainLink in
+   * brand-page.server.ts). Present means "verified link" — the card shows a
+   * glanceable badge and sorts before search-only matches. Absent means the
+   * creative merely "matched the search". Presentation-only: the Ad
+   * Aggression Score and the change feed never read it (they keep deriving
+   * from the verifiedLinkedAds subset).
+   */
+  linkVerifiedDomain?: string | null;
 }
 
 export type AdDiscoveryProvider = "meta_api" | "meta_library_browser" | "demo";

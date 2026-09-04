@@ -7614,6 +7614,34 @@ reds soften --- */
   color: var(--green-ink);
   font-weight: 600;
 }
+/* Glanceable "Verified link" signal on /ads/:domain wall cards (issue #1474):
+   a filled dark-green badge that leads the card body, distinct from the
+   transparent-bordered generic pills, so a buyer can tell at a glance which
+   card the Ad Aggression Score is built from. `data-verified-link` carries
+   the brand domain for the prod-public Playwright assertion. */
+.f9-ads-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  align-self: flex-start;
+  font-family: var(--ld-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--green-ink);
+  color: var(--green-wash);
+  border: 1.5px solid var(--green-ink);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.f9-ads-verif-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green-wash);
+  flex: none;
+}
 .f9-ads-card-more {
   border: 2px dashed var(--ink);
   background: var(--green-wash);
