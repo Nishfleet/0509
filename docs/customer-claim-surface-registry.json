@@ -529,5 +529,233 @@
       ],
       "reason": "No native app is declared; native editing remains out of scope until Gate D buyer evidence changes the product contract."
     }
-  ]
+  ],
+  "rows": [
+    {
+      "claimId": "AUDIT-CADENCE-PAID-3-6H",
+      "page": "/",
+      "selector": "homepage product FAQ, pricing section",
+      "sentence": "Paid plans run scheduled checks every 3–6 hours: Scout every 6 hours, Starter every 3 hours, and Agency every 3 hours for its first 25 watchlists with the rest every 6 hours.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'every_6h' app/lib/plan-entitlements.ts && grep -qF 'every_3h' app/lib/plan-entitlements.ts && grep -qF 'priorityScanSlots: 25' app/lib/plan-entitlements.ts",
+      "test": "tests/plan-entitlements.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-CADENCE-FREE-WEEKLY",
+      "page": "/pricing",
+      "selector": "pricing section note, homepage final CTA",
+      "sentence": "Free: watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1 Collection. No card required.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'scheduledScanCadence: \"weekly\"' app/lib/plan-entitlements.ts && grep -qF 'Monday 03:00' app/lib/plan-entitlements.ts",
+      "test": "tests/plan-entitlements.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-DIGEST-CADENCE",
+      "page": "/",
+      "selector": "homepage how-step 03",
+      "sentence": "Your brief groups meaningful changes with source-linked proof and one next review — daily on Starter and Agency, weekly on Scout.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'digestCadence: \"weekly\"' app/lib/plan-entitlements.ts && grep -qF 'digestCadence: \"daily_and_weekly\"' app/lib/plan-entitlements.ts",
+      "test": "tests/plan-entitlements.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-INSTANT-ALERTS",
+      "page": "/",
+      "selector": "homepage product FAQ, competitor-monitoring category FAQ",
+      "sentence": "Starter and Agency can also turn on instant alerts, so a confirmed change emails you as soon as a check finds it instead of waiting for the brief.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'high_priority_alerts' app/lib/plan-entitlements.ts",
+      "test": "tests/plan-entitlements.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-PLAN-LIMITS",
+      "page": "/pricing",
+      "selector": "pricing billing FAQ, pricing plan detail",
+      "sentence": "Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team seats, API/MCP access, client reports, and shared report branding.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'watchlists: 75' app/lib/plan-entitlements.ts && grep -qF 'collections: 250' app/lib/plan-entitlements.ts && grep -qF 'includedEvidenceChecksPerMonth: 2500' app/lib/plan-entitlements.ts && grep -qF 'workspaceSeats: 3' app/lib/plan-entitlements.ts && grep -qF 'api_access' app/lib/plan-entitlements.ts && grep -qF 'mcp_access' app/lib/plan-entitlements.ts",
+      "test": "tests/pricing.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-PRICING-DODO-LOCALIZED",
+      "page": "/pricing",
+      "selector": "pricing billing FAQ, pricing section",
+      "sentence": "Published plan prices are shown on this page. Checkout shows the exact amount in your local currency, loaded from Dodo Payments at preview time.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'PUBLISHED_PLAN_PRICES_USD' app/lib/pricing.ts && grep -qF 'PUBLISHED_BUNDLE_PRICES_USD' app/lib/pricing.ts && test -f app/lib/dodo-pricing.server.ts",
+      "test": "tests/pricing.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-PROOF-CAPTURE-ACCOUNTING",
+      "page": "/pricing#evidence-usage",
+      "selector": "pricing evidence-usage note, billing FAQ",
+      "sentence": "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with page text, the original link, and a screenshot when the capture includes one. Included proof captures reset every month and do not roll over. Purchased proof captures never expire and carry over until you use them.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'never expire' app/lib/pricing.ts && grep -qF 'burst_500_v1' app/lib/pricing.ts && grep -qF 'campaign_2000_v1' app/lib/pricing.ts && grep -qF 'scale_7500_v1' app/lib/pricing.ts",
+      "test": "tests/pricing.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-PUBLIC-SURFACES-ONLY",
+      "page": "/compare/meta-ad-library",
+      "selector": "homepage product FAQ, competitor-monitoring category FAQ, wedge point 03",
+      "sentence": "Public surfaces only: the Meta Ad Library — the same public archive anyone can open in a browser — plus the public landing pages those ads link to. Five to Nine never logs in to anything and never reads anything behind a login.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'never logs in' app/routes/competitor-monitoring.tsx && grep -qF 'public landing pages' app/routes/competitor-monitoring.tsx",
+      "test": "tests/competitor-monitoring-category.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-META-ONLY-SCOPE",
+      "page": "/compare/meta-ad-library",
+      "selector": "homepage product FAQ, competitor-monitoring category FAQ",
+      "sentence": "Five to Nine monitors the Meta Ad Library only — other platforms' ad libraries are out of scope.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'Meta Ad Library only' app/routes/competitor-monitoring.tsx",
+      "test": "tests/competitor-monitoring-category.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-PROOF-BRIEF-REAL",
+      "page": "/",
+      "selector": "homepage proof brief trail note, competitor-monitoring proof brief trail note",
+      "sentence": "Every row above is a real capture. Open the source link and check it yourself — saved watches attach page text and original links, plus a screenshot when the capture includes one.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'loadPublicProofBrief' app/routes/marketing.tsx && grep -qF 'no live proof' app/routes/marketing.tsx",
+      "test": "tests/marketing-proof-brief.test.tsx",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-SEARCH-PREVIEW-FRESHNESS",
+      "page": "/search",
+      "selector": "homepage hero honest note, competitor-monitoring hero honest note",
+      "sentence": "We label source, freshness, coverage, cached results, and proof freshness separately.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'isProvenFreshLiveCapture' app/lib/search-display.ts && grep -qF 'data-f9-result-source' app/routes/search.tsx",
+      "test": "tests/search-live-claim.test.tsx",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-QUIET-PERIOD-HEARTBEAT",
+      "page": "/",
+      "selector": "homepage quiet signals, competitor-monitoring wedge point 02",
+      "sentence": "When a field moves you hear about it once. The same field stays quiet for 48 hours unless it changes again. Quiet periods still send a heartbeat — 'All quiet — 24 ads checked' — so silence always means we looked and nothing moved.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'All quiet' app/routes/marketing.tsx && grep -qF '48 hours' app/routes/marketing.tsx",
+      "test": "tests/monitoring.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-SAVES-SCREENSHOTS",
+      "page": "/",
+      "selector": "homepage meta description + hero deck, competitor-monitoring meta + hero, pricing evidence-usage copy, compare/magicbrief migration FAQ",
+      "sentence": "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then files source-linked proof — page text and the source link — plus a screenshot when the capture includes one.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'screenshot when the capture includes one' app/routes/marketing.tsx && grep -qF 'screenshot when the capture includes one' app/routes/competitor-monitoring.tsx && ! grep -qE 'saves the screenshots|sends screenshot evidence' app/routes/marketing.tsx app/routes/competitor-monitoring.tsx app/lib/pricing.ts",
+      "test": "tests/customer-claim-audit-table.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-LANDING-PAGE-CHANGE-HISTORY",
+      "page": "/pricing",
+      "selector": "pricing Starter/Agency feature list",
+      "sentence": "Landing-page change history as scheduled watches complete.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'Landing-page change history as scheduled watches complete' app/lib/pricing.ts && ! grep -qF 'Landing-page change history with screenshots' app/lib/pricing.ts",
+      "test": "tests/customer-claim-audit-table.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-NO-ACCOUNT-NEEDED",
+      "page": "/search",
+      "selector": "homepage hero honest note, homepage final CTA, competitor-monitoring hero honest note",
+      "sentence": "No account needed. Preview one competitor now. / Public search preview is free — no account.",
+      "claimed": true,
+      "verified": true,
+      "verify": "test -f app/routes/search.tsx && grep -qF 'No account needed' app/routes/marketing.tsx && grep -qF 'No account needed' app/routes/competitor-monitoring.tsx",
+      "test": "tests/marketing-rebuild.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-MIGRATION-SELF-SERVE",
+      "page": "/compare/magicbrief",
+      "selector": "compare/magicbrief migration FAQ",
+      "sentence": "For competitor-list migration and change monitoring, yes: your tracked brands import as watchlists, and paid plans check them every 3–6 hours with source-linked proof. For browsing saved creative collections and boards, no — that saved work does not transfer.",
+      "claimed": true,
+      "verified": true,
+      "verify": "test -f app/routes/compare.magicbrief.tsx && grep -qF 'MIGRATION_SIGNUP_PATH' app/routes/compare.magicbrief.tsx && ! grep -qF 'in an afternoon' app/routes/compare.magicbrief.tsx",
+      "test": "tests/marketing-magicbrief-cta.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-DELIVERY-CHANNEL-EMAIL",
+      "page": "/",
+      "selector": "homepage final CTA",
+      "sentence": "Paid plans run scheduled checks every 3–6 hours and email you the proof.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'email_delivery' app/lib/plan-entitlements.ts && grep -qF 'EmailSendingBinding' app/lib/env.server.ts",
+      "test": "tests/plan-entitlements.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-COMPETITOR-MONITORING-CATEGORY",
+      "page": "/competitor-monitoring",
+      "selector": "competitor-monitoring meta description, competitor-monitoring hero",
+      "sentence": "Competitor monitoring software that watches Meta ads and landing pages, then files source-linked proof when something changes. Free preview, no account.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'source-linked proof' app/routes/competitor-monitoring.tsx && grep -qF 'No account needed' app/routes/competitor-monitoring.tsx",
+      "test": "tests/competitor-monitoring-category.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-OUTSIDE-MARKET-CLAIMS",
+      "page": "/competitor-monitoring",
+      "selector": "category promises, complaints, sources section, category FAQ",
+      "sentence": "Every outside claim carries its source URL and the date we checked it, in the sources section below. Vendor pages change, so each quote is scoped to the date it was checked.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'checked 2026' app/routes/competitor-monitoring.tsx && grep -qF 'categoryPromises' app/routes/competitor-monitoring.tsx",
+      "test": "tests/competitor-monitoring-category.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-FUNNEL-MEASUREMENT",
+      "page": "production config + docs",
+      "selector": "wrangler.jsonc FUNNEL_MEASUREMENT_ENABLED, docs/ga-metrics.md 'Funnel measurement status'",
+      "sentence": "Funnel collection is documented as NOT live (docs/ga-metrics.md §'Funnel measurement status'), and production config agrees: FUNNEL_MEASUREMENT_ENABLED is 0 since issue #1278 — re-enablement pending, see followUp.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF '\"FUNNEL_MEASUREMENT_ENABLED\": \"0\"' wrangler.jsonc && grep -qF 'Enablement deferred; flag currently off in production' docs/ga-metrics.md && grep -qF 'funnelMeasurementEnabled' app/lib/funnel-measurement.server.ts",
+      "test": "tests/funnel-measurement.test.ts",
+      "followUp": "https://github.com/Nishfleet/0509/issues/1590"
+    }
+  ],
+  "rowsMetadata": {
+    "addedBy": "BET 10 reconciliation (issue #1278)",
+    "addedAt": "2026-09-04",
+    "verifyCommand": "npm run verify:claims",
+    "claims": "rows are public sentences; claimed is whether the sentence asserts a state, verified is whether the mapped verification command + live test confirm it holds; a row with claimed != verified must carry an open followUp issue URL (never closed silently)"
+  }
 }

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "auditId": "BET10-CLAIM-AUDIT-2026-08-25",
-  "generatedAt": "2026-08-27T00:45:00Z",
+  "generatedAt": "2026-09-04T22:50:00Z",
   "bet": "BET 10 — Say only what is true (claim/reality reconciliation)",
-  "part": "3 of 3 — audit registry verification",
+  "part": "3 of 3 — audit registry verification (refreshed 2026-09-04 for the funnel flip-to-off decision, issue #1278)",
   "siblingRegistry": "docs/customer-claim-surface-registry.json",
   "auditBasis": "Every public sentence maps to a live query or test that passes, or to a copy change that brings the sentence back in line with the data. Claims that depend on a Nish-reserved decision are flagged without being resolved.",
   "resultLegend": {
@@ -214,12 +214,12 @@
     {
       "claimId": "AUDIT-FUNNEL-MEASUREMENT",
       "registryClaim": "CUSTOMER-ROUTE-CATALOG",
-      "text": "(implicit) The homepage → search → signup funnel is measured to prove the public copy converts honestly.",
-      "surface": "homepage loader (emitFunnelHomeView), docs/funnel-measurement-spec.md, docs/ga-metrics.md",
-      "liveQueryOrTest": "wrangler.jsonc → FUNNEL_MEASUREMENT_ENABLED is \"1\" (live in production config); docs/ga-metrics.md → 'Funnel measurement status' says 'Collection is NOT live' and lists an uncleared privacy/legal review (spec §8 gates); docs/funnel-measurement-spec.md (specification); app/lib/funnel-measurement.server.ts (emitFunnelHomeView gated on the env var)",
+      "text": "(public-doc claim) Funnel collection is NOT live: ga-metrics.md says 'Collection is NOT live' and the privacy surface makes no measurement claim.",
+      "surface": "docs/ga-metrics.md, docs/funnel-measurement-decision-2026-08.md, docs/customer-claim-surface-registry.json → rows AUDIT-FUNNEL-MEASUREMENT",
+      "liveQueryOrTest": "wrangler.jsonc → FUNNEL_MEASUREMENT_ENABLED is \"0\" (flag off in production config since 2026-09-04, issue #1278); docs/ga-metrics.md → 'Still required before enablement' reads 'Enablement deferred; flag currently off in production.'; tests/funnel-measurement.test.ts → committed-config guard asserts the flag is \"0\" and the gate turns on only for exact 1/true/yes/on",
       "currentResult": "nish_reserved",
-      "resultDetail": "CONTRADICTION DOCUMENTED [NISH]: the production config (wrangler.jsonc FUNNEL_MEASUREMENT_ENABLED=1) has the gate ON, while docs/ga-metrics.md states collection is NOT live and that privacy/legal review, owner approval, policy-surface copy, and a post-enable canary are still required before enablement (spec §8). The flag is NOT touched by this audit — turning it on or off is Nish-reserved (privacy + product direction). The audit flags the contradiction without resolving it: the docs and the live config disagree, and only Nish can decide whether the flag should be on (and the §8 gates cleared) or off (and the config corrected).",
-      "betOrCopyChange": "nish-reserved — the FUNNEL_MEASUREMENT_ENABLED=1 vs. docs/ga-metrics.md 'NOT live' contradiction is Nish's decision; flagged, not resolved; the flag is untouched",
+      "resultDetail": "RESOLVED FOR THE DOC-CONFIG CONTRADICTION (2026-09-04, issue #1278): decision Path B flip-to-off was taken — production config now sets FUNNEL_MEASUREMENT_ENABLED=0, matching docs/ga-metrics.md 'Collection is NOT live'. Docs and config agree again. The remaining [NISH] decision is the inverse one: re-enabling funnel measurement once the spec §8 gates (privacy/legal review, owner approval incl. retention period, policy-surface copy, post-enable canary) clear. That re-enablement is recorded in docs/funnel-measurement-decision-2026-08.md and tracked in issue #1590 — the gate stays off until Nish chooses to clear it.",
+      "betOrCopyChange": "nish-reserved — re-enabling funnel measurement after the §8 gates are cleared is Nish's decision (privacy + product direction); the contradiction itself was resolved by flipping the flag to off pending that decision; tracked in issue #1590",
       "nishReserved": true
     },
     {
@@ -242,7 +242,7 @@
     "passCodeDataPending": 0,
     "copyChangesNeeded": [],
     "nishReservedOpen": [
-      "AUDIT-FUNNEL-MEASUREMENT — the FUNNEL_MEASUREMENT_ENABLED=1 (wrangler.jsonc) vs. docs/ga-metrics.md 'Collection is NOT live' contradiction is Nish's decision (privacy + product direction); the flag is untouched."
+      "AUDIT-FUNNEL-MEASUREMENT — docs and config now agree (flag flipped to off 2026-09-04, issue #1278); re-enabling funnel measurement once the spec §8 gates clear is Nish's decision (privacy + product direction), tracked in issue #1590."
     ]
   }
 }
