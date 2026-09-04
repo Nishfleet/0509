@@ -38,24 +38,22 @@ Specification: see [docs/funnel-measurement-spec.md](./funnel-measurement-spec.m
 **Collection is NOT live.** A default-off implementation exists so the increment can be
 reviewed and tested without producing a single record:
 
-> **[NISH] CONTRADICTION FLAGGED (2026-08-25):** the production config
-> `wrangler.jsonc` sets `FUNNEL_MEASUREMENT_ENABLED: "1"`, which means the gate
-> is ON in production and `emitFunnelHomeView`/`funnel_search_preview_*`/
-> `funnel_signup_start` records CAN be emitted. This section says collection is
-> NOT live and that the spec §8 gates (privacy/legal review, owner approval,
-> policy-surface copy, post-enable canary) are still required before
-> enablement. The docs and the live config disagree. Whether the flag should
-> be ON (with the §8 gates cleared) or OFF (with the config corrected) is
-> Nish's decision — privacy + product direction. The flag is NOT touched by
-> the audit. Tracked in `docs/customer-claim-audit-table.json` →
-> AUDIT-FUNNEL-MEASUREMENT.
+> **[NISH] CONTRADICTION RESOLVED (2026-09-04, issue #1278):** the production config
+> once set `FUNNEL_MEASUREMENT_ENABLED: "1"` while this section said collection was
+> not live and the spec §8 gates were still required — docs and config disagreed.
+> The worker took the flip-to-off path (worker default; re-enablement is
+> `[NISH]`-reserved): `wrangler.jsonc` now sets `FUNNEL_MEASUREMENT_ENABLED: "0"`,
+> so the gate is off in production and docs and config agree. The decision
+> request and the two resolution paths are recorded in
+> `docs/funnel-measurement-decision-2026-08.md`; re-enablement once the §8 gates
+> clear is tracked in issue #1590.
 
 - **Gate.** Anonymous funnel events (`funnel_home_view`, `funnel_search_preview_*`,
   `funnel_signup_start`) are emitted by `app/lib/funnel-measurement.server.ts` only when
   the environment variable `FUNNEL_MEASUREMENT_ENABLED` is exactly
   `1`/`true`/`yes`/`on` (case-insensitive). Absent, empty, or any other value leaves
-  measurement disabled — an absent variable can never turn it on. Production does not
-  set this variable.
+  measurement disabled — an absent variable can never turn it on. Production sets the
+  variable to `"0"`, so collection stays off until the §8 gates below are cleared.
 - **GPC.** Requests carrying the Global Privacy Control signal (`Sec-GPC: 1`, per the
   W3C GPC spec) record nothing, even when the gate is on.
 - **Boundaries.** Homepage view: `app/routes/marketing.tsx` loader. Search preview
@@ -79,8 +77,9 @@ reviewed and tested without producing a single record:
   events or logged.
 - **Still required before enablement** (spec §8 gates): privacy/legal review, owner
   approval including the final retention period, policy-surface copy on the public
-  privacy/terms pages, and a post-enable canary. Do not claim live numbers until those
-  pass.
+  privacy/terms pages, and a post-enable canary. **Enablement deferred; flag currently off in production.** Re-enablement is tracked in issue #1590 and
+  `docs/funnel-measurement-decision-2026-08.md`. Do not claim live numbers until
+  those pass.
 
 The funnel remains manual (inferred from auth tables) with no automated collection in
 production.
