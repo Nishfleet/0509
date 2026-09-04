@@ -16,9 +16,8 @@ Scope: public surface only (`robots.txt`, `/llms.txt`, public markdown pages)
   group in `app/lib/seo.ts` robots.txt.
 - AI training/fine-tuning crawlers are denied (`ai-train=no`): GPTBot,
   ClaudeBot, Google-Extended, CCBot, Bytespider, Amazonbot, Applebot-Extended,
-  meta-externalagent, and CloudflareBrowserRenderingCrawler (mirrored from the
-  Cloudflare edge managed block). Each gets `User-agent: <name>` + `Disallow: /`
-  in the repo robots.txt.
+  meta-externalagent, and CloudflareBrowserRenderingCrawler (enforced by the
+  Cloudflare edge managed-robots block, not duplicated in the repo robots.txt).
 
 ## Why
 
@@ -40,16 +39,17 @@ Scope: public surface only (`robots.txt`, `/llms.txt`, public markdown pages)
 
 ## What it means
 
-- `app/lib/seo.ts` robots.txt lists the denied training crawlers explicitly,
-  with comments naming the permitted answer engines, so the policy survives
-  edge feature changes and is reviewable in repo.
-- `/llms.txt` documents the same policy in its "AI access" section.
+- `app/lib/seo.ts` robots.txt carries the wildcard allow/disallow rules and
+  the Sitemap; the Cloudflare edge managed-robots feature is the source of
+  truth for the AI-training deny list so the same deny block is not repeated.
+- `/llms.txt` documents the same policy in its "AI access" section, using the
+  shared `AI_TRAINING_CRAWLERS` constant.
 - The worker sets `content-signal: search=yes, ai-input=yes, ai-train=no,
   use=reference` on `/llms.txt` and public markdown responses, matching the
   robots.txt declaration.
 - The Cloudflare edge managed robots.txt remains the enforcement layer for
-  the deny list at the zone; the repo copy is the policy of record and must
-  stay in sync with the zone config (same deny list).
+  the deny list at the zone; the repo keeps the shared constant in sync with
+  the zone config.
 
 ## Reference for the traction loop
 
@@ -62,6 +62,6 @@ metrics remain valid traction signals.
 
 ## Rollback
 
-Revert the robots.txt block in `app/lib/seo.ts` and/or the llms.txt "AI
-access" section in `app/lib/public-markdown.ts` — both are declarative files,
-one-line rollbacks.
+Re-add the AI-training deny block to `app/lib/seo.ts` and/or the llms.txt
+"AI access" section in `app/lib/public-markdown.ts` — both are declarative
+files, one-line rollbacks.
