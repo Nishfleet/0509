@@ -188,3 +188,146 @@ describe("search page title", () => {
     expect(searchSource).not.toContain('title: "Search | Five to Nine"');
   });
 });
+
+describe("search page structured data (JSON-LD)", () => {
+  // Renders the real /search route (the repo's established route-render
+  // pattern: mock the router hooks and shell, then renderToStaticMarkup) so
+  // this asserts server-rendered output, not source text.
+  let loaderData: Record<string, unknown>;
+  const idleResult = {
+    ads: [],
+    nextCursor: null,
+    source: "demo",
+    provider: "demo",
+    cacheStatus: "none",
+    discoveryStatus: "disabled",
+    discoverySummary: null,
+    discoveryFailureClass: null,
+  };
+  const idleLoaderData = {
+    mode: "advertiser",
+    filters: {
+      query: "",
+      country: "all",
+      platform: "all",
+      creativeType: "all",
+      status: "all",
+      firstSeenFrom: "",
+      lastSeenFrom: "",
+    },
+    fingerprint: "",
+    result: idleResult,
+    selectedAd: null,
+    stealSummary: null,
+    selectionEnrichmentPending: false,
+    collections: [],
+    plan: null,
+    session: null,
+    competitorWebsite: {
+      raw: "",
+      normalizedUrl: null,
+      host: null,
+      displayName: null,
+      searchTerm: null,
+      error: null,
+    },
+    trackingRole: "competitor",
+    inputError: null,
+    searchScope: "exact",
+    displayDomain: null,
+    relevanceApplied: false,
+    watchedWatchlist: null,
+    showOpsNav: false,
+    showPresenceNav: false,
+  };
+
+  beforeEach(async () => {
+    loaderData = idleLoaderData;
+    const React = await import("react");
+    vi.doMock("react-router", async () => {
+      const actual =
+        await vi.importActual<typeof import("react-router")>("react-router");
+      return {
+        ...actual,
+        Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        useActionData: () => undefined,
+        useLoaderData: () => loaderData,
+        useLocation: () => ({ pathname: "/search", search: "", hash: "" }),
+        useNavigate: () => vi.fn(),
+        useNavigation: () => ({ state: "idle", location: null }),
+        useRevalidator: () => ({ state: "idle", revalidate: vi.fn() }),
+        useRouteLoaderData: () => ({ session: null }),
+      };
+    });
+    vi.doMock("~/components/dashboard-shell", () => ({
+      DashboardShell: ({ children }: { children: React.ReactNode }) =>
+        React.createElement("main", null, children),
+    }));
+  });
+
+  afterEach(() => {
+    vi.doUnmock("~/components/dashboard-shell");
+  });
+
+  it("renders exactly one WebPage entity matching the meta and site relationship", async () => {
+    const { default: SearchRoute, meta } = await import("~/routes/search");
+    const markup = renderToStaticMarkup(createElement(SearchRoute));
+
+    const scriptTags =
+      markup.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g) ?? [];
+    expect(scriptTags).toHaveLength(1);
+
+    const scriptContent = scriptTags[0]!
+      .replace(/^<script type="application\/ld\+json">/, "")
+      .replace(/<\/script>$/, "");
+    // Escaping: the serialized entity can never close the script element.
+    expect(scriptContent).not.toContain("<");
+    expect(scriptContent).not.toContain("</script>");
+
+    const entity = JSON.parse(scriptContent.replace(/\\u003c/g, "<"));
+
+    expect(entity["@context"]).toBe("https://schema.org");
+    expect(entity["@type"]).toBe("WebPage");
+    expect(entity.url).toBe("https://0509.io/search");
+    // Only the truthful page identity is asserted — nothing about results,
+    // prices, providers, or advertisers.
+    expect(Object.keys(entity).sort()).toEqual(
+      ["@context", "@type", "description", "isPartOf", "name", "publisher", "url"].sort(),
+    );
+
+    // The JSON-LD name/description match the route's own meta output, so the
+    // structured data cannot drift from what search engines already see.
+    const renderedMeta = (meta as unknown as () => Array<Record<string, unknown>>)();
+    const titleEntry = renderedMeta.find(
+      (entry) => typeof entry.title === "string",
+    ) as { title: string } | undefined;
+    const descriptionEntry = renderedMeta.find(
+      (entry) => entry.name === "description" && typeof entry.content === "string",
+    ) as { name: string; content: string } | undefined;
+    expect(titleEntry).toBeDefined();
+    expect(descriptionEntry).toBeDefined();
+    expect(entity.name).toBe(titleEntry!.title);
+    expect(entity.description).toBe(descriptionEntry!.content);
+
+    expect(entity.isPartOf).toEqual({
+      "@type": "WebSite",
+      name: "Five to Nine",
+      url: "https://0509.io",
+    });
+    expect(entity.publisher).toEqual({
+      "@type": "Organization",
+      name: "Five to Nine",
+      url: "https://0509.io",
+    });
+
+    // No unsupported claims in the rendered structured data: no prices, no
+    // fabricated results, no live-provider guarantees, no advertiser claims,
+    // no FAQ/SoftwareApplication vocabulary.
+    expect(scriptContent).not.toMatch(/[$₹€£]\s?\d/);
+    expect(scriptContent).not.toMatch(/price|guarantee|advertiser|FAQPage|SoftwareApplication/i);
+    expect(scriptContent).not.toMatch(/\blive\b/i);
+  });
+});
