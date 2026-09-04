@@ -188,3 +188,146 @@ describe("search page title", () => {
     expect(searchSource).not.toContain('title: "Search | Five to Nine"');
   });
 });
+
+describe("search page WebPage structured data", () => {
+  // Renders the real route (not source checks) with the idle pre-search
+  // loader payload, so the assertions hold against what the server actually
+  // emits for /search. The route's own loader returns exactly this shape for
+  // a visitor with no query.
+  async function renderIdleSearchMarkup() {
+    const React = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { buildIdleSearchResult } = await import("~/lib/search-display");
+
+    const idleLoaderData = {
+      mode: "advertiser" as const,
+      filters: {
+        query: "",
+        country: "all",
+        platform: "all",
+        creativeType: "all",
+        status: "all",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+      fingerprint: "fp-idle",
+      result: buildIdleSearchResult(),
+      selectedAd: null,
+      stealSummary: null,
+      selectionEnrichmentPending: false,
+      collections: [],
+      plan: null,
+      session: null,
+      competitorWebsite: {
+        raw: "",
+        normalizedUrl: "",
+        host: "",
+        displayName: "",
+        error: null,
+      },
+      trackingRole: "competitor" as const,
+      inputError: null,
+      searchScope: "exact" as const,
+      displayDomain: null,
+      relevanceApplied: false,
+      watchedWatchlist: null,
+      showPresenceNav: false,
+    };
+
+    vi.doMock("react-router", async () => {
+      const actual =
+        await vi.importActual<typeof import("react-router")>("react-router");
+
+      return {
+        ...actual,
+        Form: ({
+          children,
+          ...props
+        }: { children?: React.ReactNode } & Record<string, unknown>) =>
+          React.createElement("form", props, children),
+        Link: ({
+          children,
+          to,
+          ...props
+        }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
+          React.createElement(
+            "a",
+            { ...props, href: typeof to === "string" ? to : "" },
+            children,
+          ),
+        useActionData: vi.fn().mockReturnValue(undefined),
+        useLoaderData: vi.fn().mockReturnValue(idleLoaderData),
+        useLocation: vi.fn().mockReturnValue({
+          pathname: "/search",
+          search: "",
+          hash: "",
+        }),
+        useNavigate: vi.fn().mockReturnValue(vi.fn()),
+        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+        useRevalidator: vi.fn().mockReturnValue({
+          state: "idle",
+          revalidate: vi.fn(),
+        }),
+        useRouteLoaderData: vi.fn().mockReturnValue({ session: null }),
+      };
+    });
+    vi.doMock("~/components/dashboard-shell", () => ({
+      DashboardShell: ({ children }: { children?: React.ReactNode }) =>
+        children,
+    }));
+
+    const { default: SearchRoute } = await import("~/routes/search");
+    return renderToStaticMarkup(React.createElement(SearchRoute));
+  }
+
+  it("renders exactly one WebPage entity with the canonical URL and no unsupported claims", async () => {
+    const markup = await renderIdleSearchMarkup();
+
+    // Exactly one JSON-LD script in the server-rendered route markup.
+    const scriptMatches =
+      markup.match(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g,
+      ) ?? [];
+    expect(scriptMatches).toHaveLength(1);
+    expect(markup.match(/<script/g)).toHaveLength(1);
+
+    const rawJson = scriptMatches[0]!
+      .replace(/^<script type="application\/ld\+json">/, "")
+      .replace(/<\/script>$/, "");
+    // jsonLdScriptProps escapes `<` as \u003c; round-tripping proves the
+    // entity can never break out of the script element.
+    expect(rawJson).not.toContain("</script");
+    const entity = JSON.parse(rawJson) as Record<string, unknown>;
+
+    expect(entity["@context"]).toBe("https://schema.org");
+    expect(entity["@type"]).toBe("WebPage");
+    expect(entity.url).toBe("https://0509.io/search");
+    expect(entity.name).toBe("Search competitor Meta ads free | Five to Nine");
+    // Same sentence as the route's meta description — nothing invented.
+    expect(entity.description).toBe(
+      "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.",
+    );
+    // The existing Five to Nine WebSite/Organization relationship.
+    expect(entity.isPartOf).toEqual({
+      "@type": "WebSite",
+      name: "Five to Nine",
+      url: "https://0509.io",
+    });
+    expect(entity.publisher).toEqual({
+      "@type": "Organization",
+      name: "Five to Nine",
+      url: "https://0509.io",
+    });
+
+    // No fabricated results, no unsupported vocabulary, no money or
+    // guarantee claims anywhere in the entity.
+    expect(entity).not.toHaveProperty("mainEntity");
+    expect(entity).not.toHaveProperty("advertiser");
+    const serialized = JSON.stringify(entity);
+    expect(serialized).not.toMatch(/price/i);
+    expect(serialized).not.toMatch(/[$₹€£]\s?\d/);
+    expect(serialized).not.toMatch(/FAQ|Question|acceptedAnswer/i);
+    expect(serialized).not.toMatch(/SoftwareApplication/i);
+    expect(serialized).not.toMatch(/guarantee/i);
+  });
+});
