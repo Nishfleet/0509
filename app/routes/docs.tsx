@@ -68,12 +68,12 @@ export default function DocsRoute() {
             <dd>The result is linked to the requested competitor by the active search pipeline.</dd>
           </div>
           <div>
-            <dt>Related or broader</dt>
-            <dd>A useful lead that still needs human review before it becomes a competitor claim.</dd>
+            <dt>Likely</dt>
+            <dd>The advertiser name fits this brand, but no website link was captured — confirm the match before treating it as proof.</dd>
           </div>
           <div>
-            <dt>Cached</dt>
-            <dd>Previously captured provider evidence. Read its capture time before treating it as current.</dd>
+            <dt>Unmatched</dt>
+            <dd>Returned by the source, but nothing connects this ad to the searched website.</dd>
           </div>
           <div>
             <dt>Sample</dt>
@@ -85,7 +85,9 @@ export default function DocsRoute() {
       <PublicDocBlock id="troubleshoot" title="Troubleshoot empty or partial results">
         <p>
           No evidence is not proof that a competitor has no active ads. Coverage can be partial, delayed,
-          cached, or unavailable. Try the brand name with the website, review broader candidates manually,
+          cached, or unavailable. The freshness line on a result — &quot;Fresh live result&quot;, &quot;Recent cached
+          result&quot;, &quot;Older cached result&quot; — tells you when the evidence was captured; read it before
+          treating a cached result as current. Try the brand name with the website, review broader candidates manually,
           and check <Link to="/status">Status</Link> for what the public page does and does not measure.
           If a known active campaign still does not appear, open <Link to="/help">Help</Link> instead of
           treating the empty state as a market conclusion.
