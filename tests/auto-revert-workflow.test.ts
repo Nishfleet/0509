@@ -39,14 +39,15 @@ describe("auto-revert workflow", () => {
     // 0509#1355: a halt files an issue and is the designed, successful
     // outcome — the filed issue is the signal. The workflow run must stay
     // green so a halt does not double a deploy-failure storm with its own
-    // GitHub failure email. All three guards (loop, freshness, repeated
-    // failure) route through `halt_and_exit`, which calls `halt` then
+    // GitHub failure email. All four guards (loop, freshness, repeated
+    // failure, non-assertion deploy failure) route through
+    // `halt_and_exit`, which calls `halt` then
     // `exit 0`.
     expect(run).toContain("halt_and_exit ()");
 
     // Each guard calls halt_and_exit, not a bare `halt` followed by `exit 1`.
     const haltAndExitCalls = run.match(/halt_and_exit "/g) ?? [];
-    expect(haltAndExitCalls.length).toBe(3);
+    expect(haltAndExitCalls.length).toBe(4);
 
     // The loop guard (revert commit itself is red on main).
     expect(run).toContain('halt_and_exit "AUTO-REVERT HALT: revert commit itself is red on main"');
@@ -55,6 +56,12 @@ describe("auto-revert workflow", () => {
     // The repeated-failure guard (infra fault across consecutive commits).
     expect(run).toContain(
       'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failing across consecutive commits',
+    );
+    // The non-assertion deploy-failure guard (0509#1576 accept 2: a failed
+    // Deploy production run in a preflight/env step files an issue instead
+    // of reverting product code).
+    expect(run).toContain(
+      'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed in a non-assertion step',
     );
   });
 
@@ -66,6 +73,7 @@ describe("auto-revert workflow", () => {
       'halt_and_exit "AUTO-REVERT HALT: revert commit itself is red on main"',
       'halt_and_exit "AUTO-REVERT HALT: main moved after the red commit"',
       'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failing across consecutive commits',
+      'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed in a non-assertion step',
     ];
     for (const branch of haltBranches) {
       const idx = run.indexOf(branch);
@@ -103,5 +111,31 @@ describe("auto-revert workflow", () => {
     // `halt` is called before `exit 0` — order matters for the
     // fail-loud-under-set-e property.
     expect(body.indexOf('halt "$1" "$2"')).toBeLessThan(body.indexOf("exit 0"));
+  });
+
+  it("reverts a failed Deploy production run only when every failed step is an assertion step", () => {
+    // 0509#1576 accept 2: auto-revert reverts only when the failed run
+    // failed in the assertion step. The release-gate assertion steps are
+    // Typecheck, Test (the full unsharded vitest run), Deploy (the release
+    // gate holding the post-deploy Gate C canaries), and Verify complete
+    // release evidence set. All other steps — the secret/token/env preflight
+    // (`missing+=()`), install, evidence materialization, canary-token sync,
+    // archiving — are environment faults and must file an issue instead.
+    expect(run).toContain('if [ "$RUN_NAME" = "Deploy production" ]; then');
+    expect(run).toContain("actions/runs/$RUN_ID/jobs");
+    expect(run).toContain('"Typecheck"|"Test"|"Deploy"|"Verify complete release evidence set"');
+    expect(run).toContain("missing+=()");
+    expect(run).toContain(
+      'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed in a non-assertion step',
+    );
+  });
+
+  it("removes the auto-revert label positionally (the --name form aborts every run)", () => {
+    // `gh pr remove-label PR LABEL` takes the label positionally. The old
+    // `--name auto-revert` form is an unknown flag: it aborted the step
+    // right after opening the revert PR, leaving the PR unmerged and the
+    // Auto revert run red (run 33486589900 on 88270582, 0509#1576).
+    expect(run).toContain('gh pr remove-label "$pr_number" auto-revert --repo "$REPO"');
+    expect(run).not.toContain("--name auto-revert");
   });
 });
