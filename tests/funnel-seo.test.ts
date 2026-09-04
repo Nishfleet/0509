@@ -1,11 +1,22 @@
 import { readFileSync } from "node:fs";
 
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // feat/funnel-seo test surface. Kept in its own file (and its own describe
 // blocks) so parallel branches touching marketing tests do not conflict.
+
+// The search structured data tests render the full public /search route, and
+// the footer tests render react-router components, so react-router is mocked
+// ONCE per test here — a single file-level registration that covers both.
+// Re-registering the same module from a second `vi.doMock` in the same test
+// is racy in vitest (queued mock factories resolve lazily per module fetch,
+// and concurrent fetches of a huge route module graph can resolve them out
+// of order), which intermittently left the real `useLoaderData` in place.
+// Loader data is swapped per test through the `loaderDataForSearchRender`
+// slot below, so no test ever re-registers the module.
+let loaderDataForSearchRender: unknown = null;
 
 beforeEach(() => {
   vi.resetModules();
@@ -19,6 +30,13 @@ beforeEach(() => {
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
         React.createElement("form", props, children),
+      useActionData: () => undefined,
+      useLoaderData: () => loaderDataForSearchRender,
+      useLocation: () => ({ pathname: "/search", search: "", hash: "" }),
+      useNavigate: () => () => {},
+      useNavigation: () => ({ state: "idle" }),
+      useRevalidator: () => ({ state: "idle", revalidate: () => {} }),
+      useRouteLoaderData: () => ({ session: null }),
     };
   });
 });
@@ -26,6 +44,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
+  loaderDataForSearchRender = null;
 });
 
 describe("landing page product FAQ", () => {
@@ -186,5 +205,151 @@ describe("search page title", () => {
     expect(title.length).toBeLessThanOrEqual(60);
     expect(searchSource).toContain(`title: "${title}"`);
     expect(searchSource).not.toContain('title: "Search | Five to Nine"');
+  });
+});
+
+describe("search page structured data (JSON-LD)", () => {
+  // Public idle state: nothing searched yet, anonymous visitor. The WebPage
+  // entity is static, so this is the state crawlers most often hit.
+  const idleLoaderData = {
+    mode: "advertiser" as const,
+    filters: {
+      query: "",
+      country: "all",
+      platform: "all",
+      creativeType: "all",
+      status: "all",
+      firstSeenFrom: "",
+      lastSeenFrom: "",
+    },
+    fingerprint: "fp-idle",
+    result: {
+      ads: [],
+      nextCursor: null,
+      source: "demo" as const,
+      cacheStatus: "none" as const,
+      discoveryStatus: "disabled" as const,
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    },
+    selectedAd: null,
+    collections: [],
+    session: null,
+    competitorWebsite: {
+      raw: "",
+      normalizedUrl: "",
+      host: "",
+      displayName: null,
+      searchTerm: "",
+      error: null,
+    },
+    trackingRole: "competitor" as const,
+    inputError: null,
+    searchScope: "exact" as const,
+    displayDomain: null,
+    relevanceApplied: false,
+    watchedWatchlist: null,
+    showPresenceNav: false,
+  };
+
+  async function renderSearchPageStructuredData() {
+    // The file-level beforeEach already registered the single react-router
+    // mock; this test only swaps in the loader data and re-imports fresh
+    // (resetModules makes the beforeEach factory run again on the next
+    // import, so `useLoaderData` returns this test's idle payload).
+    vi.resetModules();
+    loaderDataForSearchRender = idleLoaderData;
+
+    vi.doMock("~/components/dashboard-shell", () => ({
+      DashboardShell: ({ children }: { children?: ReactNode }) =>
+        createElement("main", null, children),
+    }));
+
+    const { default: SearchRoute, meta } = await import("~/routes/search");
+    const markup = renderToStaticMarkup(createElement(SearchRoute));
+    const scriptMatches = Array.from(
+      markup.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g),
+    );
+    // meta() ignores its args — the route builds its tags from static copy.
+    const metaTags = meta({} as never) as Array<{
+      title?: string;
+      name?: string;
+      content?: string;
+    }>;
+
+    return { markup, metaTags, scriptMatches };
+  }
+
+  it("renders exactly one WebPage entity with the canonical /search URL and the site relationship", async () => {
+    const { metaTags, scriptMatches } = await renderSearchPageStructuredData();
+
+    // One and only one structured-data script, and it is a WebPage.
+    expect(scriptMatches).toHaveLength(1);
+    const entity = JSON.parse(scriptMatches[0]![1]!) as Record<string, unknown>;
+
+    expect(entity["@context"]).toBe("https://schema.org");
+    expect(entity["@type"]).toBe("WebPage");
+    expect(entity.url).toBe("https://0509.io/search");
+
+    // Name and description match the route's meta output (and the visible
+    // funnel-facing title) — structured data never invents copy.
+    expect(entity.name).toBe("Search competitor Meta ads free | Five to Nine");
+    expect(entity.description).toBe(
+      "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.",
+    );
+    expect(entity.name).toBe(metaTags.find((tag) => tag.title)?.title);
+    expect(entity.description).toBe(
+      metaTags.find((tag) => tag.name === "description")?.content,
+    );
+
+    // The existing Five to Nine WebSite/Organization relationship.
+    expect(entity.isPartOf).toEqual({
+      "@type": "WebSite",
+      name: "Five to Nine",
+      url: "https://0509.io",
+    });
+    expect(entity.publisher).toEqual({
+      "@type": "Organization",
+      name: "Five to Nine",
+      url: "https://0509.io",
+    });
+  });
+
+  it("keeps the search structured data free of prices, results, and unsupported claims", async () => {
+    const { markup, scriptMatches } = await renderSearchPageStructuredData();
+
+    // The serialized JSON inside the script is escaped so nothing can break
+    // out of the script element in the server-rendered markup.
+    const serialized = scriptMatches[0]![1]!;
+    expect(serialized).not.toContain("</script>");
+    expect(markup.match(/<script type="application\/ld\+json">/g)).toHaveLength(1);
+
+    const entity = JSON.parse(serialized) as Record<string, unknown>;
+
+    // Exactly the truthful WebPage shape — nothing fabricated alongside it.
+    expect(Object.keys(entity).sort()).toEqual([
+      "@context",
+      "@type",
+      "description",
+      "isPartOf",
+      "name",
+      "publisher",
+      "url",
+    ]);
+
+    const serializedEntity = JSON.stringify(entity);
+    // No prices or currency amounts in the structured data.
+    expect(serializedEntity).not.toMatch(/price/i);
+    expect(serializedEntity).not.toMatch(/[$₹€£]\s?\d/);
+    // No fabricated search results, no live-provider guarantees, no
+    // advertiser-specific claims. ("Provider" itself is allowed — the honest
+    // caveat "Provider coverage and freshness vary." is part of the copy.)
+    expect(serializedEntity).not.toContain('"ads"');
+    expect(serializedEntity).not.toContain('"results"');
+    expect(serializedEntity).not.toMatch(/guarantee|advertiser/i);
+    // No unsupported FAQPage or SoftwareApplication entities.
+    expect(serializedEntity).not.toContain("FAQPage");
+    expect(serializedEntity).not.toContain("SoftwareApplication");
+    expect(serializedEntity).not.toContain("SearchAction");
   });
 });

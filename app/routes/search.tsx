@@ -107,7 +107,12 @@ import {
   withSearchScope,
   withTrackingContext,
 } from "~/lib/search-display";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
@@ -1385,6 +1390,19 @@ export default function SearchRoute() {
       userEmail={rootData.session?.user.email}
       userName={rootData.session?.user.name}
     >
+      {/* schema.org WebPage for the public search surface. States only what
+          this page already shows: its title, its meta description, and the
+          site it belongs to. No prices, no result counts, no provider or
+          advertiser claims. */}
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "Search competitor Meta ads free | Five to Nine",
+            description: searchDescription,
+            pathname: "/search",
+          }),
+        )}
+      />
       <DashboardPage className="f9-wk-page">
         <WorkingHeader
           context={headerContext}
