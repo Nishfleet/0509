@@ -5,7 +5,14 @@ import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
   AGENT_BLOCKED_CAPABILITIES,
   auditedAgentActionGroups,
+  READ_ONLY_API_KEY_REQUIREMENT,
+  WRITE_ENABLED_API_KEY_REQUIREMENT,
 } from "~/lib/agent-action-catalog";
+import { MCP_TOOLS } from "~/routes/api.mcp";
+import {
+  customerApiToolPlanRequirement,
+  isMcpWriteToolName,
+} from "~/lib/plan-feature-gate.server";
 import { appLinkTarget } from "~/lib/app-link";
 import {
   canonicalLinks,
@@ -16,7 +23,7 @@ import {
 import type { RootLoaderData } from "~/root";
 
 const description =
-  "Five to Nine API docs for account-owned exports and approved account actions.";
+  "Five to Nine API docs for read-only access on Free and Scout, exports on Starter, and full agent actions on Agency.";
 
 export const links: LinksFunction = () => canonicalLinks("/api/docs");
 
@@ -34,7 +41,7 @@ export default function ApiDocsRoute() {
     <PublicDocShell
       kicker="Developer access"
       title="Use account-owned evidence from your tools."
-      intro="The API exports saved Five to Nine data that already belongs to the authenticated account and supports selected approved actions."
+      intro="The API reads saved Five to Nine data that already belongs to the authenticated account. Read-only access is on Free and Scout, writes and exports on Starter+, and full agent actions on Agency."
     >
       <script
         {...jsonLdScriptProps(
@@ -47,20 +54,24 @@ export default function ApiDocsRoute() {
       />
       <PublicDocBlock title="Authentication">
         <p>
-          Developer API and connected-tool access require Agency. Create a customer API key inside{" "}
-          <Link to={appLinkTarget("/app/developer-access", rootData?.session)}>Developer access</Link>.
-          Send it as a bearer token:
+          Read-only access is on Free and Scout. Writes and exports are on Starter+.
+          Full agent actions are on Agency. Create a customer API key inside{" "}
+          <Link to={appLinkTarget("/app/developer-access", rootData?.session)}>Developer access</Link>{" "}
+          and send it as a bearer token:
         </p>
         <pre className="f9-code-block">
           <code>{`Authorization: Bearer f9_live_...`}</code>
         </pre>
+        <p>
+          {READ_ONLY_API_KEY_REQUIREMENT}
+        </p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Connected tools">
         <p>
-          Compatible tools can connect with the same bearer token on Agency. Use an active customer
-          API key for readiness and exports. Use a write-enabled key only when the tool should run
-          approved account actions.
+          Compatible tools connect with the same bearer token. Read-only tools work with
+          any active customer API key, including Free and Scout. Use a write-enabled key
+          only when the tool should run approved account actions ({WRITE_ENABLED_API_KEY_REQUIREMENT}).
         </p>
         <p>
           Follow the{" "}
@@ -78,6 +89,37 @@ Authorization: Bearer f9_live_...
   "params": {}
 }`}</code>
         </pre>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Tool tiers">
+        <p>
+          Read-only tools are available on Free and Scout with any active key. Agent
+          action tools need a write-enabled key and the Agency plan.
+        </p>
+        <table className="f9-api-tier-table">
+          <thead>
+            <tr>
+              <th scope="col">Tool</th>
+              <th scope="col">Tier</th>
+              <th scope="col">Key</th>
+            </tr>
+          </thead>
+          <tbody>
+            {MCP_TOOLS.map((tool) => (
+              <tr key={tool.name}>
+                <td>
+                  <code>{tool.name}</code>
+                </td>
+                <td>{customerApiToolPlanRequirement(tool.name)}</td>
+                <td>
+                  {isMcpWriteToolName(tool.name)
+                    ? "Write-enabled"
+                    : "Read-only (any active key)"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </PublicDocBlock>
 
       <PublicDocBlock title="REST endpoints">

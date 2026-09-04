@@ -47,6 +47,7 @@ export const PLAN_FEATURES = [
   "api_access",
   "mcp_access",
   "mcp_account_actions",
+  "write_enabled_api_keys",
   "team_workspace",
   "presence_competitor_tracking",
   "presence_self_tracking",
@@ -80,8 +81,16 @@ export interface PlanEntitlements {
 // MagicBrief free) with an instant first scan, a weekly brief that is
 // genuinely proof-backed once a month, and one real Collection — no card.
 // Free gets the weekly brief + the email lane it rides on; instant alerts,
-// Slack, exports, API, and paid cadences stay paid.
-const FREE_FEATURES: PlanFeature[] = ["weekly_digest", "email_delivery"];
+// Slack, exports, paid cadences stay paid. BET 6: the read-only agent/API
+// surface (MCP reads + JSON API reads of the account's own saved data) is
+// free so the free tier can be queried from an agent; write-enabled keys,
+// CSV exports, and agent actions stay paid.
+const FREE_FEATURES: PlanFeature[] = [
+  "weekly_digest",
+  "email_delivery",
+  "api_access",
+  "mcp_access",
+];
 
 const SCOUT_FEATURES: PlanFeature[] = [
   "competitor_research",
@@ -90,6 +99,8 @@ const SCOUT_FEATURES: PlanFeature[] = [
   "presence_competitor_tracking",
   "presence_website_sources",
   "presence_digest_alerts",
+  "api_access",
+  "mcp_access",
 ];
 
 const STARTER_FEATURES: PlanFeature[] = [
@@ -109,6 +120,9 @@ const STARTER_FEATURES: PlanFeature[] = [
   "share_links",
   "presence_self_tracking",
   "presence_social_connect",
+  // BET 6: write-scoped API keys are creatable from Starter. Using an agent
+  // action still requires Agency (`mcp_account_actions`).
+  "write_enabled_api_keys",
 ];
 
 const AGENCY_FEATURES: PlanFeature[] = [

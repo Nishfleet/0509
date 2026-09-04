@@ -55,10 +55,17 @@ describe("plan feature enforcement matrix", () => {
 		expect(share).toContain("resolveWorkspaceBrandIdentity");
   });
 
-  it("keeps agency-only surfaces off scout and starter", () => {
-    expect(canUsePlanFeature("scout", "api_access")).toBe(false);
-    expect(canUsePlanFeature("starter", "mcp_access")).toBe(false);
+  it("keeps agent actions off free and scout but opens the read surface to them (BET 6)", () => {
+    // BET 6: read-only API/MCP access moved down to free + Scout. Agent
+    // actions (`mcp_account_actions`) remain Agency-only and write-enabled
+    // key creation starts at Starter.
+    expect(canUsePlanFeature("scout", "api_access")).toBe(true);
+    expect(canUsePlanFeature("free", "mcp_access")).toBe(true);
+    expect(canUsePlanFeature("starter", "mcp_account_actions")).toBe(false);
+    expect(canUsePlanFeature("scout", "write_enabled_api_keys")).toBe(false);
+    expect(canUsePlanFeature("starter", "write_enabled_api_keys")).toBe(true);
     expect(canUsePlanFeature("agency", "api_access")).toBe(true);
+    expect(canUsePlanFeature("agency", "mcp_account_actions")).toBe(true);
     expect(canUsePlanFeature("agency", "share_links")).toBe(true);
   });
 

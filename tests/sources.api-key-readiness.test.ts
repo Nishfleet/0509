@@ -49,18 +49,18 @@ describe("developer access route API-key readiness", () => {
     expect(markup).toContain("API docs");
   });
 
-  it("explains plan-gated API keys before submit", async () => {
+  it("explains API keys still need a sign-in before submit", async () => {
     await mockRouter({
       canCreateApiKeys: false,
-      createDisabledReason: "Developer access is included in the Agency plan. Upgrade to Agency to create API keys.",
+      createDisabledReason: "Read-only API keys are available on every plan. Contact support if this account cannot create keys.",
       apiKeys: [],
     });
 
     const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
-    expect(markup).toContain("Developer access is included in the Agency plan. Upgrade to Agency to create API keys.");
-    expect(markup).toContain("Developer access is on Agency");
+    expect(markup).toContain("Read-only API keys are available on every plan. Contact support if this account cannot create keys.");
+    expect(markup).toContain("API keys need a sign-in first");
     expect(markup).toContain(
       'href="/app/billing?source=developer-access#plans"',
     );

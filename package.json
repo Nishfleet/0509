@@ -28,6 +28,7 @@
     "canary:cta-detector": "node scripts/canary-cta-detector.mjs",
     "test:presence-load": "node scripts/presence-load-test.mjs",
     "canary:prod": "node scripts/prod-canary.mjs",
+    "canary:agent-ungate": "node scripts/canary-agent-ungate.mjs",
     "canary:bet2": "node scripts/bet2-live-verification.mjs --json",
     "canary:bet3": "node scripts/bet3-live-verification.mjs --from-sitemap --json",
     "canary:bet7": "node scripts/bet7-activation-verification.mjs --json",
@@ -62,7 +63,11 @@
     "provider:bakeoff:launch": "node scripts/provider-bakeoff.mjs --launch-gate",
     "test": "bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project node --coverage && bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project workers",
     "verify:claims": "node scripts/verify-claims.mjs",
+<<<<<<< HEAD
     "test:integration": "bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project workers",
+=======
+    "test:integration": "vitest run --configLoader runner --project workers",
+>>>>>>> cb37d45c (feat(api): move read-only MCP/API access down to free + Scout (BET 6, issue #1275))
     "test:watch": "vitest --configLoader runner",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
   },

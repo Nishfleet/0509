@@ -28,19 +28,19 @@ const EXPECTED_CUSTOMER_AGENT_ACTION_NAMES = [
   "report.create",
   "report.share",
   "counter_move_brief.create",
-  "memory.upsert",
   "memory.list",
-  "client_room.upsert",
   "client_room.list",
-  "support_case.create",
   "support_case.list",
+  "web_mentions.list",
+  "memory.upsert",
+  "client_room.upsert",
+  "support_case.create",
   "delivery_targets.list",
   "delivery_settings.update",
   "delivery_target.update",
-  "web_mentions.list",
 ] as const;
-const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
-const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled Agency customer API key.";
+const READ_ONLY_API_KEY_REQUIREMENT = "Works with any active customer API key. Read-only access is on Free and Scout.";
+const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled customer API key (Starter+ to create; agent actions on Agency).";
 
 const apiKey = {
   id: "api-key-1",
@@ -196,18 +196,18 @@ function setupMocks(
   authOk = true,
   actionsWriteEnabled = true,
   workspaceUserId = apiKey.userId,
-  workspacePlan: "agency" | "starter" = "agency",
+  workspacePlan: "agency" | "starter" | "free" = "agency",
 ) {
   if (workspacePlan === "agency") {
     mockAgencyWorkspacePlan();
   } else {
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockResolvedValue("starter"),
-      getEffectiveWorkspacePlan: vi.fn().mockResolvedValue("starter"),
-      getUserPlanForActor: vi.fn().mockResolvedValue("starter"),
+      getUserPlan: vi.fn().mockResolvedValue(workspacePlan),
+      getEffectiveWorkspacePlan: vi.fn().mockResolvedValue(workspacePlan),
+      getUserPlanForActor: vi.fn().mockResolvedValue(workspacePlan),
       checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true, limit: 10, current: 1 }),
       PLAN_LIMITS: {
-        starter: { digests: true },
+        [workspacePlan]: { digests: true },
       },
     }));
   }
@@ -409,7 +409,7 @@ describe("customer API v1", () => {
       notLiveYet: string[];
     };
 
-    expect(body.planRequirement).toBe("Agency");
+    expect(body.planRequirement).toBe("Read-only: Free and Scout. Agent actions: Agency.");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/mcp");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/workspace-readiness");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/actions");
@@ -423,10 +423,14 @@ describe("customer API v1", () => {
       requiresWriteEnabled: true,
       credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
     });
-    body.endpoints.forEach((endpoint) => {
-      expect(endpoint.planRequirement).toBe("Agency");
-      expect(endpoint.credentialRequirement).not.toContain("any active customer API key");
+    // BET 6: read endpoints advertise the free + Scout read surface; only the
+    // actions endpoint stays Agency.
+    const readEndpoints = body.endpoints.filter((endpoint) => endpoint.path !== "/api/v1/actions");
+    readEndpoints.forEach((endpoint) => {
+      expect(endpoint.planRequirement).toBe("Free and Scout");
+      expect(endpoint.credentialRequirement).toContain("any active customer API key");
     });
+    expect(body.endpoints.find((endpoint) => endpoint.path === "/api/v1/actions")?.planRequirement).toBe("Agency");
     body.endpoints
       .filter((endpoint) => endpoint.path !== "/api/v1/actions" && endpoint.path !== "/api/mcp")
       .forEach((endpoint) => {
@@ -451,7 +455,18 @@ describe("customer API v1", () => {
     expect(body.toolActivation.actionGroups.map((group) => group.label)).toContain("Evidence and reports");
     expect(body.toolActivation.actionGroups.every((group) => group.requiresWriteEnabled)).toBe(true);
     expect(body.toolActivation.actionGroups.every((group) => group.credentialRequirement.includes("write-enabled"))).toBe(true);
-    expect(body.toolActivation.actionGroups.flatMap((group) => group.actions)).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
+    // auditedAgentActionGroups() renders the write-scoped groups only; the
+    // read list actions (memory.list, client_room.list, support_case.list,
+    // web_mentions.list) are advertised separately on the read surface (BET 6).
+    expect(body.toolActivation.actionGroups.flatMap((group) => group.actions)).toEqual(
+      EXPECTED_CUSTOMER_AGENT_ACTION_NAMES.filter(
+        (name) =>
+          name !== "memory.list" &&
+          name !== "client_room.list" &&
+          name !== "support_case.list" &&
+          name !== "web_mentions.list",
+      ),
+    );
     expect(body.toolActivation.actionGroups.flatMap((group) => group.actions)).not.toContain("get_workspace_readiness");
     expect(body.toolActivation.supportPaths.map((path) => path.label)).toContain("Billing changes and cancellation");
     expect(body.toolActivation.blockedCapabilities).toContain("billing changes");
@@ -486,8 +501,8 @@ describe("customer API v1", () => {
     });
   });
 
-  it("gates workspace readiness to Agency API access", async () => {
-    setupMocks(true, true, apiKey.userId, "starter");
+  it("allows workspace readiness on a Free API key (BET 6 ungate)", async () => {
+    setupMocks(true, true, apiKey.userId, "free");
     const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
     vi.doMock("~/lib/workspace-readiness.server", () => ({
       getWorkspaceReadiness,
@@ -502,16 +517,10 @@ describe("customer API v1", () => {
         },
       }),
     } as never);
-    const body = await response.json();
 
-    expect(response.status).toBe(403);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(body).toMatchObject({
-      error: "plan_gated",
-      feature: "api_access",
-      plan: "starter",
-    });
-    expect(getWorkspaceReadiness).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "needs_setup" });
+    expect(getWorkspaceReadiness).toHaveBeenCalledTimes(1);
   });
 
   it("returns workspace-owner readiness for a member API key", async () => {

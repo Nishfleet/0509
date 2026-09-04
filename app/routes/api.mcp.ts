@@ -15,13 +15,18 @@ import {
   slackDeliveryUnavailableMessage,
 } from "~/lib/ga-customer-surface";
 import type { AppEnv } from "~/lib/env.server";
+import {
+  customerApiToolPlanRequirement,
+  isMcpWriteToolName,
+} from "~/lib/plan-feature-gate.server";
 import type { CustomerAgentActionName } from "~/lib/customer-agent-actions.server";
 import type { CustomerApiKeyRecord } from "~/lib/types";
 import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 import { decodeListCursor } from "~/lib/list-pagination";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
-const API_PLAN_REQUIREMENT = "Agency";
+const CUSTOMER_API_PLAN_SUMMARY =
+  "Read-only tools: Free and Scout. Agent actions: Agency (write-enabled key).";
 const MAX_AUTHENTICATED_API_BODY_BYTES = 64 * 1024;
 type ApiLimitContext = {
   identity: {
@@ -43,30 +48,6 @@ const WRITE_TOOL_ANNOTATIONS = {
   idempotentHint: false,
   openWorldHint: false,
 };
-const WRITE_TOOL_NAMES = new Set([
-  "retest_meta_source",
-  "create_watchlist",
-  "update_watchlist",
-  "refresh_watchlist",
-  "pause_watchlist",
-  "resume_watchlist",
-  "create_collection",
-  "add_external_proof",
-  "create_share_link",
-  "create_report",
-  "share_report",
-  "create_counter_move_brief",
-  "upsert_memory",
-  "list_memory",
-  "upsert_client_room",
-  "list_client_rooms",
-  "create_support_case",
-  "list_support_cases",
-  "list_delivery_targets",
-  "update_delivery_settings",
-  "update_delivery_target",
-  "list_web_mentions",
-]);
 const TOOL_ACTION_NAMES: Readonly<Record<string, CustomerAgentActionName>> = {
   retest_meta_source: "source.meta.retest",
   create_watchlist: "watchlist.create",
@@ -91,7 +72,7 @@ const TOOL_ACTION_NAMES: Readonly<Record<string, CustomerAgentActionName>> = {
   list_support_cases: "support_case.list",
   list_web_mentions: "web_mentions.list",
 };
-const MCP_TOOLS = [
+export const MCP_TOOLS = [
   {
     name: "get_workspace_readiness",
     title: "Get Workspace Readiness",
@@ -808,7 +789,7 @@ export function loader({ request }: LoaderFunctionArgs) {
   return jsonResponse({
     name: "Five to Nine MCP",
     status: "live",
-    planRequirement: API_PLAN_REQUIREMENT,
+    planRequirement: CUSTOMER_API_PLAN_SUMMARY,
     endpoint: `${origin}/api/mcp`,
     transport: "streamable-http-json-rpc",
     protocolVersion: MCP_PROTOCOL_VERSION,
@@ -925,7 +906,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
+<<<<<<< HEAD
         `Use these Agency tools to retrieve Five to Nine account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active Agency customer API key; account action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. The dated offer-history tools — get_change_history, get_offer_state_at, diff_offer, list_suppressed — read stored competitor captures for any domain and never trigger a live capture. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
+=======
+        `Use these tools to retrieve Five to Nine account readiness plus account-owned collections, watchlists, digests, memory, client rooms, support case summaries, and presence observations. Read-only tools work with any active customer API key (Free and Scout included) and do not need a write-enabled key; agent action tools require a write-enabled customer API key and the Agency plan. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
+>>>>>>> cb37d45c (feat(api): move read-only MCP/API access down to free + Scout (BET 6, issue #1275))
     });
   }
 
@@ -972,7 +957,7 @@ async function callTool(
     return { ok: false, message: "tools/call requires name." };
   }
   if (isWriteToolName(name) && !apiKey.actionsWriteEnabled) {
-    return { ok: false, message: "This API key is read-only. Create a write-enabled key for audited action tools." };
+    return { ok: false, message: "This API key is read-only. Create a write-enabled key (Starter+; agent actions on Agency) for audited action tools." };
   }
 
   const format = normalizeAgentFormat(stringField(args, "format"));
@@ -984,25 +969,13 @@ async function callTool(
   }
 
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
-  const { requireExportFeature, requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+  const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const workspaceUserId = await resolveWorkspaceDataUserId(env, apiKey.userId);
-
-  const exportToolNames = new Set([
-    "get_collection_export",
-    "get_watchlist_export",
-    "get_digest_export",
-  ]);
-  if (exportToolNames.has(name)) {
-    const exportGate = await requireExportFeature(env, workspaceUserId, format);
-    if (!exportGate.ok) {
-      return { ok: false, message: "This export format is not included in your current plan." };
-    }
-  }
 
   if (isWriteToolName(name)) {
     const actionsGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_account_actions");
     if (!actionsGate.ok) {
-      return { ok: false, message: "Account actions require the Agency plan." };
+      return { ok: false, message: "Account actions require the Agency plan. Read-only tools are available on Free and Scout and always use a read-only scope." };
     }
   }
 
@@ -1528,14 +1501,14 @@ function toolsForApiKey(apiKey: CustomerApiKeyRecord) {
 }
 
 function isWriteToolName(name: string) {
-  return WRITE_TOOL_NAMES.has(name);
+  return isMcpWriteToolName(name);
 }
 
 function mcpToolDiscoveryEntry(tool: (typeof MCP_TOOLS)[number]) {
   const requiresWriteEnabled = isWriteToolName(tool.name);
   return {
     ...tool,
-    planRequirement: API_PLAN_REQUIREMENT,
+    planRequirement: customerApiToolPlanRequirement(tool.name),
     requiresWriteEnabled,
     credentialRequirement: requiresWriteEnabled
       ? WRITE_ENABLED_API_KEY_REQUIREMENT

@@ -157,19 +157,22 @@ function uniqueSorted(values: readonly string[]) {
 
 const expectedPlanFeaturesByPlan: Record<string, readonly string[]> = {
   // 2026-07-20 merge: overnight free-weekly-watch stack wins — free gets the
-  // weekly brief plus the email lane it rides on, nothing else.
-  free: ["weekly_digest", "email_delivery"],
+  // weekly brief plus the email lane it rides on. BET 6 (issue #1275): the
+  // read-only API/MCP surface moved down to free + Scout.
+  free: ["weekly_digest", "email_delivery", "api_access", "mcp_access"],
   scout: [
     "competitor_research", "weekly_digest", "email_delivery",
     "presence_competitor_tracking", "presence_website_sources", "presence_digest_alerts",
+    "api_access", "mcp_access",
   ],
   starter: [
     "competitor_research", "weekly_digest", "email_delivery",
     "presence_competitor_tracking", "presence_website_sources", "presence_digest_alerts",
+    "api_access", "mcp_access",
     "daily_digest", "high_priority_alerts", "landing_page_evidence", "slack_delivery",
     "teams_delivery", "ad_text_multilingual", "english_translation", "export_csv",
     "export_json", "export_slack_ready", "share_links", "presence_self_tracking",
-    "presence_social_connect",
+    "presence_social_connect", "write_enabled_api_keys",
   ],
   agency: [
     "competitor_research", "weekly_digest", "email_delivery",
@@ -179,7 +182,7 @@ const expectedPlanFeaturesByPlan: Record<string, readonly string[]> = {
     "export_json", "export_slack_ready", "presence_self_tracking",
     "presence_social_connect", "client_reports", "share_links", "pdf_reports",
     "agency_branding", "api_access",
-    "mcp_access", "mcp_account_actions", "team_workspace",
+    "mcp_access", "mcp_account_actions", "write_enabled_api_keys", "team_workspace",
   ],
 };
 
@@ -307,7 +310,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "ad_text_multilingual", "english_translation", "export_csv", "export_json",
     "export_slack_ready", "client_reports", "share_links", "pdf_reports",
     "agency_branding", "api_access",
-    "mcp_access", "mcp_account_actions", "team_workspace", "presence_competitor_tracking",
+    "mcp_access", "mcp_account_actions", "write_enabled_api_keys", "team_workspace", "presence_competitor_tracking",
     "presence_self_tracking", "presence_website_sources", "presence_social_connect",
     "presence_digest_alerts",
   ],

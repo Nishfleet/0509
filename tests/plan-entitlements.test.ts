@@ -28,9 +28,15 @@ describe("plan entitlements catalog", () => {
     expect(entitlements.digestCadence).toBe("weekly");
     expect(planAllowsDigestCadence("free", "weekly")).toBe(true);
     expect(planAllowsDigestCadence("free", "daily")).toBe(false);
-    // Free carries only the weekly digest + its email lane; no exports,
-    // instant alerts, Slack, API, or MCP.
-    expect([...entitlements.features].sort()).toEqual(["email_delivery", "weekly_digest"]);
+    // Free carries the weekly digest + its email lane, and BET 6 adds the
+    // read-only API/MCP surface (no exports, instant alerts, Slack, or
+    // agent actions).
+    expect([...entitlements.features].sort()).toEqual([
+      "api_access",
+      "email_delivery",
+      "mcp_access",
+      "weekly_digest",
+    ]);
     // A Friday 00:00 UTC tick is a 6h-aligned slot for paid plans but must
     // never include free — free scans only on the weekly Monday slot.
     expect(shouldSchedulePlanInRegularScan("free", new Date("2026-07-03T00:00:00.000Z"))).toBe(false);
@@ -128,8 +134,16 @@ describe("plan entitlements catalog", () => {
     ).toBe(true);
   });
 
-  it("gates agency-only capabilities", () => {
-    expect(canUsePlanFeature("starter", "mcp_access")).toBe(false);
+  it("gates agency-only capabilities — and BET 6 keeps the read surface open", () => {
+    // BET 6: read-only API/MCP access is free + Scout; agent actions and
+    // write-enabled keys stay paid.
+    expect(canUsePlanFeature("free", "mcp_access")).toBe(true);
+    expect(canUsePlanFeature("scout", "mcp_access")).toBe(true);
+    expect(canUsePlanFeature("starter", "mcp_access")).toBe(true);
+    expect(canUsePlanFeature("free", "mcp_account_actions")).toBe(false);
+    expect(canUsePlanFeature("scout", "mcp_account_actions")).toBe(false);
+    expect(canUsePlanFeature("starter", "write_enabled_api_keys")).toBe(true);
+    expect(canUsePlanFeature("free", "write_enabled_api_keys")).toBe(false);
     expect(canUsePlanFeature("agency", "mcp_access")).toBe(true);
     expect(canUsePlanFeature("agency", "team_workspace")).toBe(true);
   });

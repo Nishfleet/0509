@@ -14,6 +14,7 @@ import {
   getUserPlanBillingInfo,
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
+import { canUsePlanFeature } from "~/lib/plan-entitlements";
 import { buildLifecycleNudges, type LifecycleNudge } from "~/lib/lifecycle-nudges.server";
 import { TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
 import { getProofUsageSummary, listActiveProofCreditGrants } from "~/lib/plan.server";
@@ -173,6 +174,7 @@ export async function getWorkspaceReadiness(
   const deliveryProofCount = deliveryTargetStats.provenCount;
   const activeApiKeys = apiKeys.filter((apiKey) => !apiKey.revokedAt).length;
   const actionEnabledApiKeys = apiKeys.filter((apiKey) => !apiKey.revokedAt && apiKey.actionsWriteEnabled).length;
+  const hasApiReadAccess = canUsePlanFeature(billingInfo.plan, "api_access");
   const isAgency = billingInfo.plan === "agency";
   const hasBillingPaymentIssue =
     billingInfo.plan !== "free" &&
@@ -311,14 +313,17 @@ export async function getWorkspaceReadiness(
     {
       id: "api",
       label: "Developer access",
-      status: !isAgency ? "not_applicable" : activeApiKeys > 0 ? "ready" : "needs_setup",
+      // BET 6: read-only API/MCP access is the free + Scout read surface
+      // (`api_access`), so the readiness item is applicable on every plan;
+      // write-enabled keys and agent actions stay Starter+/Agency.
+      status: hasApiReadAccess ? (activeApiKeys > 0 ? "ready" : "needs_setup") : "not_applicable",
       detail:
-        !isAgency
-          ? "Developer access is available on Agency."
+        !hasApiReadAccess
+          ? "Read-only API keys are available on every plan."
           : activeApiKeys > 0
-          ? `${activeApiKeys} active API key${activeApiKeys === 1 ? "" : "s"} for exports and automation.`
-          : "Create an API key when you need exports, webhooks, or developer connections.",
-      action: !isAgency || activeApiKeys > 0 ? null : { label: "Set up developer access", href: "/app/developer-access" },
+          ? `${activeApiKeys} active API key${activeApiKeys === 1 ? "" : "s"} for export reads and automation.`
+          : "Create a read-only API key to query saved evidence from an agent or script.",
+      action: !hasApiReadAccess || activeApiKeys > 0 ? null : { label: "Set up developer access", href: "/app/developer-access" },
     },
   ];
 

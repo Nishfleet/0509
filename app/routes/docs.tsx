@@ -126,11 +126,18 @@ Authorization: Bearer f9_live_...`}</code>
           </li>
         </ul>
         <p>
+<<<<<<< HEAD
           Honest boundary: API and MCP access are an Agency-plan feature. Read-only keys cover
           readiness and exports; write-enabled keys unlock only the documented approved actions —
           see <Link to="/api/docs">API docs</Link> for endpoints and limits. The{" "}
           <Link to="/mcp/setup">one-paste MCP setup</Link> has ready-made snippets for Claude
           Desktop, ChatGPT, and pi.
+=======
+          Honest boundary: read-only API and MCP access works on Free and Scout; CSV exports
+          and write-enabled keys start at Starter+, and the full approved-actions surface stays
+          on Agency. Read-only keys cover readiness and exports; write-enabled keys unlock only
+          the documented approved actions — see <Link to="/api/docs">API docs</Link> for endpoints and limits.
+>>>>>>> cb37d45c (feat(api): move read-only MCP/API access down to free + Scout (BET 6, issue #1275))
         </p>
       </PublicDocBlock>
 

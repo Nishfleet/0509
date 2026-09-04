@@ -34,6 +34,7 @@ type CustomerApiKeyView = {
 
 export type DeveloperAccessLoaderData = {
   canCreateApiKeys?: boolean;
+  canCreateWriteKeys?: boolean;
   createDisabledReason?: NullableString;
   apiKeys: CustomerApiKeyView[];
 };
@@ -59,6 +60,7 @@ export function DeveloperAccessRoute() {
   );
   const canCreateApiKeys =
     data.canCreateApiKeys !== false && !data.createDisabledReason;
+  const canCreateWriteKeys = data.canCreateWriteKeys !== false;
   const createDisabledReason = data.createDisabledReason ?? null;
   const ownerManagedApiKeys = Boolean(
     createDisabledReason?.startsWith("Only "),
@@ -194,13 +196,18 @@ export function DeveloperAccessRoute() {
             </label>
             <label className="f9-access-check">
               <input
+                disabled={!canCreateWriteKeys}
                 name="actionsWriteEnabled"
                 type="checkbox"
                 value="1"
               />
               <span>
                 Allow approved account actions
-                <small>Leave off for exports and reporting.</small>
+                <small>
+                  {canCreateWriteKeys
+                    ? "Leave off for exports and reporting."
+                    : "Write-enabled keys require Starter or Agency. Read-only keys are available on every plan."}
+                </small>
               </span>
             </label>
             <SubmitButton
@@ -218,16 +225,15 @@ export function DeveloperAccessRoute() {
             <h2 id="developer-lock-title">
               {ownerManagedApiKeys
                 ? "API keys are managed by the account owner"
-                : "Developer access is on Agency"}
+                : "API keys need a sign-in first"}
             </h2>
             <p>
               {createDisabledReason ??
-                "Developer access is included in the Agency plan. Upgrade to Agency to create API keys."}
+                "Read-only API keys are available on every plan."}
             </p>
             {planLocked ? (
               <p>
-                Existing keys remain visible below so you can review or revoke them. The
-                Agency upgrade action above is the only step needed to create another.
+                Existing keys remain visible below so you can review or revoke them.
               </p>
             ) : null}
           </div>
@@ -310,7 +316,7 @@ export function DeveloperAccessRoute() {
                 {ownerManagedApiKeys
                   ? "The account owner can review and manage developer access."
                   : planLocked
-                    ? "Upgrade to Agency when an external tool needs account access."
+                    ? "Read-only API keys are available on every plan; write keys need Starter or Agency."
                     : "Create a key when an external tool is ready to connect."}
               </p>
             </div>
