@@ -121,7 +121,12 @@ function buildTickerEvents(brief: PublicProofBrief | null) {
   // clock and "on record" copy so the ticker never pairs an old first-seen
   // date with a "new" claim.
   const firstStale = proofRowStale(firstCaptureIso);
-  const firstTime = proofTimeLabel(firstStale ? brief.fetchedAt : firstCaptureIso);
+  // A bare clock stamp ("6:18 AM") with no date reads as "this morning"
+  // even when the capture is a day old (#1467). On-record rows stamp the
+  // cache-check age instead; fresh rows carry the capture's explicit date.
+  const firstTime = firstStale
+    ? `Checked ${brief.checkedAgoLabel}`
+    : proofTimeLabel(firstCaptureIso);
   const topHook = brief.insights.topHooks[0]?.trim() ?? "offer";
   return [
     [`${firstTime}`, firstStale ? `Meta ad on record — “${truncateHook(topHook)}”` : `New Meta ad captured — “${truncateHook(topHook)}”`, "ad library"],
@@ -277,9 +282,18 @@ function proofTimeLabel(iso: string | null | undefined): string {
   if (Number.isNaN(parsed.getTime())) {
     return "recently";
   }
+  // A bare clock ("6:18 AM") with no date reads as "this morning" even when
+  // the capture is a day old (#1467). Full-ISO stamps carry the date; a
+  // prior-year capture appends its year exactly like the date-only branch
+  // above so "Aug 27" cannot read as a same-year date for a year-old
+  // capture.
+  const includeYear = parsed.getUTCFullYear() !== new Date().getUTCFullYear();
   return parsed.toLocaleString("en", {
+    month: "short",
+    day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    ...(includeYear ? { year: "numeric" } : {}),
     timeZone: "UTC",
   });
 }
@@ -443,8 +457,10 @@ export default function MarketingRoute() {
           <b>We saved the proof — {proofBrief.website}</b>
           <span className="ld-proof-time">
             {heroCaptureStale
-              ? "On record · Meta Ad Library"
-              : `Captured ${heroProofTime} · Meta Ad Library`}
+              ? `On record · checked ${proofBrief.checkedAgoLabel}`
+              : proofBrief.freshForLiveClaim
+                ? `Live capture — ${proofBrief.checkedAgoLabel}`
+                : `Checked ${proofBrief.checkedAgoLabel} · captured ${heroProofTime}`}
           </span>
         </div>
         <div className="ld-proof-strip-body">
