@@ -8,8 +8,10 @@ never self-invented work; every run ends with a PR link or a named blocker.
 The tri-audit (Sol + Grok + Fable, 2026-08-07/08) superseded the remaining
 BL phase plan. The external ledger declared as canonical
 (`/home/nish/workspaces/agent-state/0509-design-unification-ledger.md`) was
-**formally retired 2026-08-25**: it never existed on disk, so pointing at it
-made the doc set contradict reality. The real source of truth for program
+**formally retired 2026-08-25** because the file did not exist on disk, so pointing
+at it made the doc set contradict reality. On 2026-09-04 a stub was created at that
+path so it resolves to this repo (BET 10 reconciliation, issue #1278) — the stub
+defers here and holds no program state. The real source of truth for program
 state is this repo:
 
 - **What remains / what landed:** this section + the per-phase entries below.

@@ -254,13 +254,19 @@ describe("BET 10 claim-by-claim audit table", () => {
     expect(starter!.features).not.toContain("Landing-page change history with screenshots");
   });
 
-  it("ga-positioning status header does not say NOT LIVE for now-true claims", () => {
+  it("ga-positioning header carries no release verdict and points at the scorecard", () => {
+    // BET 10 Reconciliation B (issue #1278): the doc's job is positioning, not
+    // release status. The header must not carry a LIVE/NOT LIVE verdict that
+    // could disagree with the scorecard; it must point at the dated release
+    // verdict and the canonical current-truth pointer instead.
     const header = readFileSync(resolve("docs/ga-positioning.md"), "utf8")
       .split("\n")
       .slice(0, 12)
       .join("\n");
     expect(header).not.toMatch(/NOT LIVE/);
-    expect(header).toMatch(/\*\*Status:\*\* LIVE/);
+    expect(header).not.toMatch(/\*\*Status:\*\* LIVE/);
+    expect(header).toMatch(/final-self-serve-ga-scorecard\.md/);
+    expect(header).toMatch(/CLAUDE\.md/);
   });
 
   it("every mapped liveQueryOrTest names at least one existing test file", () => {

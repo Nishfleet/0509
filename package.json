@@ -57,6 +57,7 @@
     "provider:bakeoff": "node scripts/provider-bakeoff.mjs",
     "provider:bakeoff:launch": "node scripts/provider-bakeoff.mjs --launch-gate",
     "test": "bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project node --coverage && bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project workers",
+    "verify:claims": "node scripts/verify-claims.mjs",
     "test:watch": "vitest --configLoader runner",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
   },
