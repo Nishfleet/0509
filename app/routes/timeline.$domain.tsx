@@ -123,7 +123,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   const title = `${loaderData.brandName} offer timeline | Five to Nine`;
   const description =
     loaderData.entries.length > 0
-      ? `Dated offer states for ${loaderData.domain}: headline, CTA, and price, each with the stored screenshot and page text.`
+      ? `Dated offer states for ${loaderData.domain}: headline, CTA, and price, with page text and a screenshot when we stored one.`
       : `No stored offer timeline for ${loaderData.domain} yet.`;
 
   return [
@@ -169,7 +169,7 @@ export default function OfferTimelineRoute() {
           </h1>
           <p className="f9-ads-subline">
             A dated ledger of what this competitor's landing page said: headline, CTA, and
-            price, with the screenshot and page text for each state.
+            price, with page text and a screenshot when we stored one.
           </p>
 
           <form className="f9-timeline-asof" method="get" action={data.canonicalPath}>
