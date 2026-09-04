@@ -155,29 +155,40 @@ jobs:
           # a preflight/env step ("Verify Cloudflare deploy secrets" and the
           # rest) files an issue instead of reverting.
           if [ "$RUN_NAME" = "Deploy production" ]; then
+            # Fail closed: the jobs API is the classifier. No `|| true`
+            # swallow (gate-integrity flags that as a softened CI step),
+            # no fallback revert when the API returns nothing. A machinery
+            # error from `gh api` aborts the step under set -euo pipefail.
             failed_steps="$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" \
               --paginate \
               --jq '[.jobs[] | .steps[]? | select((.conclusion // "") == "failure") | .name] | unique[]' \
-              2>/dev/null | sort -u || true)"
-            if [ -n "$failed_steps" ]; then
-              non_assertion=""
-              while IFS= read -r step_name; do
-                case "$step_name" in
-                  "Typecheck"|"Test"|"Deploy"|"Verify complete release evidence set") ;;
-                  *) non_assertion="$step_name" ;;
-                esac
-              done <<< "$failed_steps"
-              if [ -n "$non_assertion" ]; then
-                halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed in a non-assertion step — preflight/environment fault, not a product regression" "The failed run is \`$RUN_NAME\` and it failed in a non-assertion step, so reverting the merged commit would undo product code that is not at fault.
+              | sort -u)"
+            if [ -z "$failed_steps" ]; then
+              halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed but the jobs API listed no failed step — cannot classify as assertion vs preflight" "The failed run is \`$RUN_NAME\` and the jobs API returned no failed step names, so this cannot be classified as an assertion failure. Reverting would undo product code without proof it was at fault.
+
+          - Failing run: $RUN_NAME — $RUN_URL
+          - Red commit: \`$HEAD_SHA\` — \`$subject\`
+
+          0509#1576 accept 2: revert only on a classified assertion-step failure. An unclassifiable failure files an issue instead."
+            fi
+            non_assertion=""
+            while IFS= read -r step_name; do
+              if [ -z "$step_name" ]; then
+                continue
+              fi
+              case "$step_name" in
+                "Typecheck"|"Test"|"Deploy"|"Verify complete release evidence set") ;;
+                *) non_assertion="$step_name" ;;
+              esac
+            done <<< "$failed_steps"
+            if [ -n "$non_assertion" ]; then
+              halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed in a non-assertion step — preflight/environment fault, not a product regression" "The failed run is \`$RUN_NAME\` and it failed in a non-assertion step, so reverting the merged commit would undo product code that is not at fault.
 
           - Failing run: $RUN_NAME — $RUN_URL
           - Red commit: \`$HEAD_SHA\` — \`$subject\`
           - Failed step: \`$non_assertion\` (not one of the release-gate assertion steps Typecheck / Test / Deploy / Verify complete release evidence set)
 
           0509#1576 accept 2: a failure in secret/token/env preflight (\`missing+=()\`) or any other setup step files an issue instead of reverting product code. Fix the environment; no code was wrong."
-              fi
-            else
-              echo "warning: Deploy production failed but the jobs API returned no failed step names; falling back to legacy revert behavior"
             fi
           fi
           failing="$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs" --paginate \
@@ -239,9 +250,11 @@ jobs:
           gh label create auto-revert --repo "$REPO" --color 0E8A16 \
             --description "Auto-revert PR — gate-integrity auto-revert waiver applies" --force >/dev/null
           gh pr edit "$pr_number" --repo "$REPO" --add-label auto-revert >/dev/null
-          # positional label argument: `gh pr remove-label PR LABEL`. The
-          # previous flag-based form is an unknown flag and aborted
-          # every auto-revert run right after opening the revert PR, leaving
-          # it unmerged and the run red (run 33486589900, 0509#1576).
-          gh pr remove-label "$pr_number" auto-revert --repo "$REPO" >/dev/null
+          # `gh pr remove-label` is not a command (gh 2.93: unknown subcommand
+          # prints `gh pr` help and exits 1). That aborted every auto-revert
+          # run after opening the revert PR (run 33486589900 on 88270582).
+          # `gh pr edit --remove-label` is the documented form (`gh pr edit
+          # --help`). The add-then-remove flip fires `pull_request_target:
+          # labeled` so gate-integrity re-runs with the waiver comment.
+          gh pr edit "$pr_number" --repo "$REPO" --remove-label auto-revert >/dev/null
           gh pr merge --auto --squash --repo "$REPO" "$branch"
