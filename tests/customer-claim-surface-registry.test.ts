@@ -574,4 +574,24 @@ describe("G11 claim-surface registry", () => {
     const tags = (meta as unknown as () => Array<Record<string, string>>)();
     expect(tags).toContainEqual({ name: "robots", content: "noindex" });
   });
+
+  it("does not sell a populated landing-page history unless the timeline route is live", () => {
+    // BET 10 / issue #1265: the unqualified sentence "Landing-page change
+    // history with screenshots" promises a history a visitor cannot open while
+    // /timeline/:domain is not a real public route. This lock is the detector:
+    // the unqualified sentence is tolerated ONLY while a timeline route is
+    // registered in the route table (the surface that would make it true —
+    // #974 / #1240). Regression of either side fails the run.
+    const pricingSource = readRegistrySource("app/lib/pricing.ts");
+    const routesSource = readRegistrySource("app/routes.ts");
+    const unqualified = "Landing-page change history with screenshots";
+    const hasTimelineRoute = /timeline\/:domain/u.test(routesSource);
+    const claimsUnqualifiedHistory = pricingSource.includes(unqualified);
+    // If pricing carries the unqualified promise, the timeline route must exist.
+    expect(claimsUnqualifiedHistory && !hasTimelineRoute).toBe(false);
+    // The honest, forward-looking label is what Starter/Agency present today.
+    expect(pricingSource).toContain(
+      "Landing-page change history as scheduled watches complete",
+    );
+  });
 });
