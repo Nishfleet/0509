@@ -116,18 +116,30 @@ describe("buildBrandChangeFeed", () => {
 });
 
 describe("adIsBrandOwned / countBrandOwnedAds", () => {
-  it("counts an ad as the brand's own when the advertiser page carries the brand label", () => {
+  it("counts an ad as the brand's own when it lands on the brand's exact domain (no page ID to disambiguate)", () => {
     const ads = [
-      ad({ metaAdId: "a1", advertiser: "Nykaa" }),
-      ad({ metaAdId: "a2", advertiser: "Nykaa Fashion" }),
+      ad({ metaAdId: "a1", advertiser: "Nykaa", landingPageUrl: "https://www.nykaa.com/beauty" }),
+      ad({ metaAdId: "a2", advertiser: "Nykaa Fashion", landingPageUrl: "https://nykaa.com/fashion" }),
     ];
     expect(countBrandOwnedAds(ads, "nykaa.com")).toBe(2);
     expect(adIsBrandOwned(ads[0]!, "nykaa.com")).toBe(true);
   });
 
-  it("counts an ad whose advertiser page carries the brand's own domain token", () => {
-    const ads = [ad({ metaAdId: "a1", advertiser: "Nykaa Beauty — nykaa.com" })];
+  it("counts an ad as the brand's own when its Meta Page ID matches the brand's own page (issue #1566)", () => {
+    const ads = [
+      ad({ metaAdId: "a1", advertiser: "Nykaa", advertiserPageId: "111", landingPageUrl: "https://www.nykaa.com/beauty" }),
+      ad({ metaAdId: "a2", advertiser: "Nykaa Fashion", advertiserPageId: "111", landingPageUrl: "https://nykaa.com/fashion" }),
+    ];
+    expect(countBrandOwnedAds(ads, "nykaa.com")).toBe(2);
+  });
+
+  it("does NOT count a partner campaign under a different Meta Page ID, even when its name mentions the brand (issue #1566)", () => {
+    const ads = [
+      ad({ metaAdId: "a1", advertiser: "Nykaa", advertiserPageId: "111", landingPageUrl: "https://www.nykaa.com/beauty" }),
+      ad({ metaAdId: "a2", advertiser: "BeautyDeals with Nykaa", advertiserPageId: "222", landingPageUrl: "https://nykaa.com/beauty" }),
+    ];
     expect(countBrandOwnedAds(ads, "nykaa.com")).toBe(1);
+    expect(adIsBrandOwned(ads[1]!, "nykaa.com")).toBe(false);
   });
 
   it("trusts v2 advertiser evidence (verified_advertiser_domain / verified_entity) even when the name does not carry the label", () => {
@@ -167,49 +179,42 @@ describe("adIsBrandOwned / countBrandOwnedAds", () => {
     expect(ads.every((candidate) => adIsBrandOwned(candidate, "nykaa.com") === false)).toBe(true);
   });
 
-  it("attributes an advertiser page named with the brand label (official-page convention), matching the ad-card display", () => {
-    // Known boundary: a page named "Nykaa Outlet" or "Shop on Nykaa" counts as
-    // the brand's because the name carries the label as a whole word — the
-    // same convention the ad cards and the search product use. Advertisers
-    // with unrelated names never count.
-    expect(adIsBrandOwned(ad({ metaAdId: "a1", advertiser: "Shop on Nykaa" }), "nykaa.com")).toBe(true);
-    expect(adIsBrandOwned(ad({ metaAdId: "a2", advertiser: "Nykaa Outlet" }), "nykaa.com")).toBe(true);
+  it("does not attribute an ad by advertiser-name substring alone (issue #1566)", () => {
+    // The old behavior counted any advertiser whose name carried the brand
+    // label as a whole word ("Shop on Nykaa", "Nykaa Outlet"). That is
+    // exactly the false positive that mis-attributes partner/creator campaigns
+    // ("Juan Dussán with Notion"). Name alone is never enough — the ad must
+    // land on the brand's own domain or match the brand's Meta Page ID.
+    expect(adIsBrandOwned(ad({ metaAdId: "a1", advertiser: "Shop on Nykaa" }), "nykaa.com")).toBe(false);
+    expect(adIsBrandOwned(ad({ metaAdId: "a2", advertiser: "Nykaa Outlet" }), "nykaa.com")).toBe(false);
     expect(adIsBrandOwned(ad({ metaAdId: "a3", advertiser: "BeautyDeals Hub" }), "nykaa.com")).toBe(false);
   });
 
   it("counts only the brand's own ads in a mixed cache", () => {
     const ads = [
-      ad({ metaAdId: "a1", advertiser: "Nykaa" }),
-      ad({ metaAdId: "a2", advertiser: "BeautyDeals Hub" }),
-      ad({ metaAdId: "a3", advertiser: "Nykaa" }),
+      ad({ metaAdId: "a1", advertiser: "Nykaa", landingPageUrl: "https://nykaa.com/x" }),
+      ad({ metaAdId: "a2", advertiser: "BeautyDeals Hub", landingPageUrl: "https://nike.com/x" }),
+      ad({ metaAdId: "a3", advertiser: "Nykaa", landingPageUrl: "https://nykaa.com/y" }),
     ];
     expect(countBrandOwnedAds(ads, "nykaa.com")).toBe(2);
   });
 
-  it("verifies a brand whose Meta page name is space-separated but folds to the domain stem (issue #1428)", () => {
+  it("verifies a brand whose Meta page name is space-separated but lands on the brand's own domain (issue #1428)", () => {
     // Meta advertiser page names are space-separated while the domain label
-    // is the concatenated stem. The whole-word check misses these; a
-    // fold-based exact match recognizes the brand's own page.
-    expect(adIsBrandOwned(ad({ advertiser: "Sugar Cosmetics" }), "sugarcosmetics.com")).toBe(true);
-    expect(adIsBrandOwned(ad({ advertiser: "Bombay Shaving Company" }), "bombayshavingcompany.com")).toBe(true);
-    expect(adIsBrandOwned(ad({ advertiser: "Ridge Wallet" }), "ridgewallet.com")).toBe(true);
-    // 2-char stem: "H&M" folds to "hm" — exact full-name fold is safe where
-    // substring matching would not be.
-    expect(adIsBrandOwned(ad({ advertiser: "H&M" }), "hm.com")).toBe(true);
-    // A regional/corporate variant with a known suffix still verifies when
-    // the stem is long enough to gate the suffix-stripped path.
-    expect(adIsBrandOwned(ad({ advertiser: "Sugar Cosmetics Official" }), "sugarcosmetics.com")).toBe(true);
-    expect(adIsBrandOwned(ad({ advertiser: "Bombay Shaving Company India" }), "bombayshavingcompany.com")).toBe(true);
+    // is the concatenated stem. Ownership now rests on the landing domain, so
+    // these brand ads landing on their own sites are brand-owned.
+    expect(adIsBrandOwned(ad({ advertiser: "Sugar Cosmetics", landingPageUrl: "https://sugarcosmetics.com/x" }), "sugarcosmetics.com")).toBe(true);
+    expect(adIsBrandOwned(ad({ advertiser: "Bombay Shaving Company", landingPageUrl: "https://bombayshavingcompany.com/x" }), "bombayshavingcompany.com")).toBe(true);
+    expect(adIsBrandOwned(ad({ advertiser: "Ridge Wallet", landingPageUrl: "https://ridgewallet.com/x" }), "ridgewallet.com")).toBe(true);
+    expect(adIsBrandOwned(ad({ advertiser: "H&M", landingPageUrl: "https://hm.com/x" }), "hm.com")).toBe(true);
   });
 
-  it("does not over-match a fold that is not exactly the brand stem (issue #1428 precision)", () => {
-    // Exact fold equality only — never a substring — so look-alikes and
-    // co-branded resellers stay unowned.
+  it("does not over-match a name that merely mentions the brand (issue #1428 precision)", () => {
+    // These ads land on nike.com (the helper default), not the brand domain,
+    // and carry no page ID, so they are never the brand's own.
     expect(adIsBrandOwned(ad({ advertiser: "Nykaam" }), "nykaa.com")).toBe(false);
     expect(adIsBrandOwned(ad({ advertiser: "Vrindasurii with H&M" }), "hm.com")).toBe(false);
     expect(adIsBrandOwned(ad({ advertiser: "Ridge Wallet Reseller" }), "ridgewallet.com")).toBe(false);
-    // An unrelated advertiser whose name folds to a different string stays
-    // unowned even when the ad links to the brand domain.
     expect(adIsBrandOwned(ad({ advertiser: "BeautyDeals Hub" }), "sugarcosmetics.com")).toBe(false);
   });
 
@@ -266,15 +271,15 @@ describe("adIsBrandOwned / countBrandOwnedAds", () => {
         "nykaa.com",
       ),
     ).toBe(false);
-    // A same-suffix landing (nykaa.com for nykaa.com) is not a regional
-    // property — the helper requires a different geographic suffix — so it
-    // does not trigger this path; ownership still rests on the name check.
+    // A same-suffix landing on the brand's exact domain with no page ID IS the
+    // brand's own under issue #1566 (exact normalized domain on the landing
+    // page) — ownership no longer rests on the advertiser name.
     expect(
       adIsBrandOwned(
         ad({ advertiser: "BeautyDeals Hub", landingPageUrl: "https://nykaa.com/x" }),
         "nykaa.com",
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 

@@ -142,11 +142,13 @@ describe("/ads/:domain brand-owned attribution (issue #1428)", () => {
       ad({
         metaAdId: "hm-own",
         advertiser: "H&M",
+        advertiserPageId: "111",
         landingPageUrl: "https://hm.com/shirt",
       }),
       ad({
         metaAdId: "hm-cobranded",
         advertiser: "Vrindasurii with H&M",
+        advertiserPageId: "222",
         landingPageUrl: "https://hm.com/sari",
       }),
     ]);
@@ -155,7 +157,11 @@ describe("/ads/:domain brand-owned attribution (issue #1428)", () => {
     expect(result.kind).toBe("data");
     if (result.kind !== "data") throw new Error("expected data");
     expect(result.data.verifiedLinkCount).toBe(2);
+    // The co-branded reseller lands on hm.com but runs under a DIFFERENT Meta
+    // Page ID (222 ≠ the brand's own 111), so it is NOT brand-owned (issue
+    // #1566 — ownership is by Meta Page ID, not advertiser-name substring).
     expect(result.data.brandOwnedAdCount).toBe(1);
+    expect(result.data.partnerCampaignAdIds).toContain("hm-cobranded");
   });
 
   it("counts Ridge Wallet regional-domain ads even when the page name does not fold to the stem", async () => {
