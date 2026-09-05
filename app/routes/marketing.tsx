@@ -25,6 +25,14 @@ import {
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { RootLoaderData } from "~/root";
 
+// The sample brief must never show a blank proof label. If a fixture value is
+// missing, render an explicit unavailable state instead of an empty field.
+export const SAMPLE_FIELD_UNAVAILABLE = "Not available in this sample";
+
+export function sampleProofField(value: string): string {
+  return value.trim() ? value : SAMPLE_FIELD_UNAVAILABLE;
+}
+
 // Kept under ~155 characters so search results show the whole line instead of
 // truncating mid-sentence. The audit flagged the previous 166-character copy.
 // Same claims, nothing new promised.
@@ -652,48 +660,52 @@ export default function MarketingRoute() {
 
           <article className="ld-case-card">
             <span className="ld-kicker">Decision summary</span>
-            <h4>{demoProof.digestPreview.subject}</h4>
-            <p>{demoProof.digestPreview.whyItMatters}</p>
+            <h4>{sampleProofField(demoProof.digestPreview.subject)}</h4>
+            <p>{sampleProofField(demoProof.digestPreview.whyItMatters)}</p>
             <dl>
               <div>
                 <dt>What changed</dt>
-                <dd>{demoProof.digestPreview.whatChanged}</dd>
+                <dd>{sampleProofField(demoProof.digestPreview.whatChanged)}</dd>
               </div>
               <div>
                 <dt>Why it matters</dt>
-                <dd>{demoProof.digestPreview.whyItMatters}</dd>
+                <dd>{sampleProofField(demoProof.digestPreview.whyItMatters)}</dd>
               </div>
               <div>
                 <dt>Urgency</dt>
-                <dd>{demoProof.digestPreview.priority}</dd>
+                <dd>{sampleProofField(demoProof.digestPreview.priority)}</dd>
               </div>
               <div>
                 <dt>Proof status</dt>
-                <dd>{demoProof.digestPreview.proofStatus}</dd>
+                <dd>{sampleProofField(demoProof.digestPreview.proofStatus)}</dd>
               </div>
               <div>
                 <dt>Source</dt>
-                <dd>{demoProof.digestPreview.source}</dd>
+                <dd>{sampleProofField(demoProof.digestPreview.source)}</dd>
               </div>
               <div>
                 <dt>Freshness</dt>
-                <dd>{demoProof.digestPreview.freshness}</dd>
+                <dd>{sampleProofField(demoProof.digestPreview.freshness)}</dd>
               </div>
               <div>
                 <dt>Next action</dt>
-                <dd>{demoProof.digestPreview.recommendedMove}</dd>
+                <dd>{sampleProofField(demoProof.digestPreview.recommendedMove)}</dd>
               </div>
             </dl>
           </article>
 
           <article className="ld-case-card">
             <span className="ld-kicker">Source trail</span>
+            <p className="ld-honest" role="note">
+              Illustrative sample — sources are capture types, shown without links. In your
+              account, each trail entry links to its saved capture.
+            </p>
             <ul className="ld-trail">
               {demoProof.proofTrail.map((item) => (
                 <li key={item.signal}>
-                  <strong>{item.signal}</strong>
-                  <p>{item.evidence}</p>
-                  <em>{item.source}</em>
+                  <strong>{sampleProofField(item.signal)}</strong>
+                  <p>{sampleProofField(item.evidence)}</p>
+                  <em>{sampleProofField(item.source)}</em>
                 </li>
               ))}
             </ul>
