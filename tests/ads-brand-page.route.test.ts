@@ -918,9 +918,14 @@ describe("/ads/:domain meta", () => {
 
   it("never claims the brand owns ads when the cached creatives are other advertisers'", async () => {
     installBrandPageMocks();
+    // No Aggression Score card renders in this state (the cache-miss strip):
+    // this is the ONLY state in which the description may carry the
+    // "could not verify" hedge (issue #1447). Aggression null also means the
+    // loader would self-noindex, so this copy never reaches the sitemap.
     const tags = await metaFor({
       ...richData,
       brandOwnedAdCount: 0,
+      aggression: null,
     });
 
     // The title describes the page honestly as ads linking to the domain,
@@ -937,6 +942,28 @@ describe("/ads/:domain meta", () => {
     expect(description).toContain("We could not verify from the cached capture that Nykaa runs these ads");
     expect(description).not.toContain("from other advertisers");
     expect(description).not.toContain("ads from Nykaa");
+    expect(tags.some((tag) => tag.title?.includes("Nykaa Facebook & Instagram ads"))).toBe(false);
+  });
+
+  it("never carries the could-not-verify hedge when the Aggression Score card renders (issue #1447)", async () => {
+    installBrandPageMocks();
+    // The score card renders (a fixture with verified link evidence that
+    // cleared the score floor — like the live ouraring.com/ulta.com pages from
+    // the issue): the description must speak the verified phrasing and must
+    // never say "could not verify" next to proof the page renders.
+    const tags = await metaFor({
+      ...richData,
+      brandOwnedAdCount: 0,
+      aggression: { score: 53 },
+    });
+
+    const description = tags.find((tag) => tag.name === "description")?.content ?? "";
+    expect(description).toContain("See 1 Meta ad linking to nykaa.com");
+    expect(description).not.toContain("could not verify");
+    // Still no ownership over-claim: the creatives are verified to LINK to
+    // the domain, never claimed to be the brand's own.
+    expect(description).not.toContain("ads from Nykaa");
+    expect(description).not.toContain("from other advertisers");
     expect(tags.some((tag) => tag.title?.includes("Nykaa Facebook & Instagram ads"))).toBe(false);
   });
 

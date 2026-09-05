@@ -408,14 +408,26 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
   if (totalCount > 0 && data.brandOwnedAdCount === totalCount) {
     return `See ${totalCount} Meta ${adWord} from ${data.brandName} (${data.domain}), from ${check}. Get an email when their ads or offer change.${unverifiedTail}`;
   }
-  if (data.brandOwnedAdCount === 0) {
+  if (data.brandOwnedAdCount === 0 && !data.aggression) {
     // The ads link to the domain but none could be attributed to the brand
     // itself (no verified advertiser-domain/entity level, and the advertiser
     // page name does not match the brand). The page must not frame them as
     // "from other advertisers" — that disclaims the page's own subject on the
     // indexed surface. Say explicitly that ownership could not be verified
     // from the cached capture, keeping the brand as the subject (issue #1428).
+    // The deny-proof sentence is legal ONLY in this state: the page renders
+    // no Aggression Score card here. A rendered score card is itself proof
+    // the capture carries a verified link (its own FAQ says so), so saying
+    // "could not verify" next to it would contradict the page (issue #1447).
     return `See ${data.verifiedLinkCount} Meta ${linkWord} linking to ${data.domain}, from ${check}. We could not verify from the cached capture that ${data.brandName} runs these ads. Get an email when the ads or offers change.${unverifiedTail}`;
+  }
+  if (data.brandOwnedAdCount === 0) {
+    // Verified link evidence exists and the Aggression Score card renders.
+    // The description must not deny verification the page proves, and must
+    // not claim the brand runs ads the attribution could not assign to it:
+    // the verified copy keeps the brand as the subject and says the ads
+    // link to the domain (issue #1447).
+    return `See ${data.verifiedLinkCount} Meta ${linkWord} linking to ${data.domain}, from ${check}. Get an email when the ads or offers change.${unverifiedTail}`;
   }
   // When every verified linking creative is the brand's own (no
   // verified-from-other), drop the "and Y from other advertisers" clause —
@@ -979,6 +991,11 @@ function BrandAdsResults({
  * merely match the search (text-mention / provider candidates) are
  * "matching {domain}", never "pointing at" it.
  *
+ * The "pointing at" link-claim H1 pairs ONLY with the no-score state (no
+ * Aggression Score card renders): once verified evidence clears the score
+ * floor the H1 must speak the verified "linking to" phrasing, never the
+ * hedged "pointing at" (issue #1447).
+ *
  * This must return a plain string: the page <h1> is the document topic
  * heading and must not contain nested markup.
  */
@@ -1009,9 +1026,19 @@ function brandHeadline(
   }
 
   if (noneBrandOwned) {
+    if (!data.aggression) {
+      // No score card renders (the hedge state): the hedged "pointing at"
+      // link-claim H1 is legal here and only here (issue #1447).
+      return data.freshForLiveClaim
+        ? `${verifiedPhrase} ${data.verifiedLinkCount === 1 ? "is" : "are"} pointing at ${data.domain} right now.`
+        : `The last check found ${verifiedPhrase} pointing at ${data.domain}.`;
+    }
+    // The Aggression Score card renders, which proves the capture carries
+    // verified link evidence — the H1 speaks the verified "linking to"
+    // phrasing instead of the hedged "pointing at" (issue #1447).
     return data.freshForLiveClaim
-      ? `${verifiedPhrase} ${data.verifiedLinkCount === 1 ? "is" : "are"} pointing at ${data.domain} right now.`
-      : `The last check found ${verifiedPhrase} pointing at ${data.domain}.`;
+      ? `${verifiedPhrase} ${data.verifiedLinkCount === 1 ? "is" : "are"} linking to ${data.domain} right now.`
+      : `The last check found ${verifiedPhrase} linking to ${data.domain}.`;
   }
 
   const splitPhrase = `${data.brandOwnedAdCount} of these ${verifiedPhrase}`;
