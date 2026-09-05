@@ -11,6 +11,7 @@ import {
   formatSearchCommandTitle,
   formatSearchMarketScope,
   formatSearchPageScope,
+  formatSearchScopeAnnotation,
   formatSelectedLandingFactValue,
   formatSelectedLandingHeadline,
 } from "~/lib/search-display";
@@ -447,19 +448,72 @@ describe("formatSearchPageScope", () => {
 });
 
 describe("formatSearchCommandTitle", () => {
-  it("title-cases the brand and spells the all-countries scope in buyer language", () => {
-    const title = formatSearchCommandTitle("nike", "all");
-    expect(title).toBe("Nike ads across all countries");
-    expect(title).not.toContain("in all countries");
+  it("names the buyer's intent without any country scope in the H1", () => {
+    const title = formatSearchCommandTitle("nike");
+    expect(title).toBe("What Nike is running on Meta");
+    // Acceptance criterion 2 (issue #1502): the H1 string never includes the
+    // technical country-scope phrases that mirrored the URL parameter.
+    expect(title).not.toContain("across all countries");
+    expect(title).not.toContain("all-countries query");
+    expect(title).not.toContain("in India");
+    expect(title).not.toContain("in United States");
   });
 
-  it("resolves country names from the catalog", () => {
-    expect(formatSearchCommandTitle("nike", "IN")).toBe("Nike ads in India");
-    expect(formatSearchCommandTitle("nike", "usa")).toBe("Nike ads in United States");
+  it("title-cases multi-word and domain-shaped brands", () => {
+    expect(formatSearchCommandTitle("nykaa.com")).toBe(
+      "What Nykaa.com is running on Meta",
+    );
+    expect(formatSearchCommandTitle("bombay shaving company")).toBe(
+      "What Bombay Shaving Company is running on Meta",
+    );
   });
 
   it("falls back to the generic title when the query is empty", () => {
-    expect(formatSearchCommandTitle("", "all")).toBe("Find competitor ads");
-    expect(formatSearchCommandTitle("   ", "all")).toBe("Find competitor ads");
+    expect(formatSearchCommandTitle("")).toBe("Find competitor ads");
+    expect(formatSearchCommandTitle("   ")).toBe("Find competitor ads");
+  });
+
+  // Acceptance criterion 3 (issue #1502): the H1 is graded across the §1.8
+  // six-domain set + five EU advertisers. Every H1 must name buyer intent and
+  // never carry the technical country-scope phrases.
+  it("grades the §1.8 six-domain set + five EU advertisers with buyer-language H1s", () => {
+    const domains = [
+      "nike",
+      "oura",
+      "allbirds",
+      "hubspot",
+      "notion",
+      "nykaa",
+      "mcaffeine",
+      "sugarcosmetics",
+      "bombayshavingcompany",
+      "lenskart",
+    ];
+    for (const domain of domains) {
+      const title = formatSearchCommandTitle(domain);
+      expect(title).toMatch(/^What .+ is running on Meta$/);
+      expect(title).not.toContain("across all countries");
+      expect(title).not.toContain("all-countries query");
+    }
+  });
+});
+
+describe("formatSearchScopeAnnotation", () => {
+  it("sentence-cases the all-countries scope for the annotation under the H1", () => {
+    expect(formatSearchScopeAnnotation("all")).toBe("Across all countries");
+    expect(formatSearchScopeAnnotation("ALL")).toBe("Across all countries");
+  });
+
+  it("sentence-cases a named market", () => {
+    expect(formatSearchScopeAnnotation("India")).toBe("In India");
+    expect(formatSearchScopeAnnotation("IN")).toBe("In India");
+    expect(formatSearchScopeAnnotation("usa")).toBe("In United States");
+  });
+
+  it("returns null when no country is supplied", () => {
+    expect(formatSearchScopeAnnotation(null)).toBeNull();
+    expect(formatSearchScopeAnnotation(undefined)).toBeNull();
+    expect(formatSearchScopeAnnotation("")).toBeNull();
+    expect(formatSearchScopeAnnotation("   ")).toBeNull();
   });
 });
