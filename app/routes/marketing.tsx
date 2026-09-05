@@ -5,7 +5,7 @@ import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-rout
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { SubmitButton } from "~/components/submit-button";
-import { demoProof } from "~/lib/demo-proof";
+import { demoProof, sampleProofValue, SAMPLE_SOURCE_TRAIL_NOTE } from "~/lib/demo-proof";
 import {
   DODO_ANNUAL_SAVINGS_LABEL,
   dodoAnnualSavingsIsValid,
@@ -645,67 +645,82 @@ export default function MarketingRoute() {
 
         <div className="ld-caseboard ld-reveal" aria-label="Sample Five to Nine evidence trail">
           <article className="ld-case-lead">
-            <span className="ld-kicker">{demoProof.competitor.market}</span>
-            <h3>{demoProof.competitor.name}</h3>
-            <p>{demoProof.summary}</p>
+            <span className="ld-kicker">{sampleProofValue(demoProof.competitor.market)}</span>
+            <h3>{sampleProofValue(demoProof.competitor.name)}</h3>
+            <p>{sampleProofValue(demoProof.summary)}</p>
           </article>
 
           <article className="ld-case-card">
             <span className="ld-kicker">Decision summary</span>
-            <h4>{demoProof.digestPreview.subject}</h4>
-            <p>{demoProof.digestPreview.whyItMatters}</p>
+            <h4>{sampleProofValue(demoProof.digestPreview.subject)}</h4>
+            <p>{sampleProofValue(demoProof.digestPreview.whyItMatters)}</p>
             <dl>
               <div>
                 <dt>What changed</dt>
-                <dd>{demoProof.digestPreview.whatChanged}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.whatChanged)}</dd>
               </div>
               <div>
                 <dt>Why it matters</dt>
-                <dd>{demoProof.digestPreview.whyItMatters}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.whyItMatters)}</dd>
               </div>
               <div>
                 <dt>Urgency</dt>
-                <dd>{demoProof.digestPreview.priority}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.priority)}</dd>
               </div>
               <div>
                 <dt>Proof status</dt>
-                <dd>{demoProof.digestPreview.proofStatus}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.proofStatus)}</dd>
               </div>
               <div>
                 <dt>Source</dt>
-                <dd>{demoProof.digestPreview.source}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.source)}</dd>
               </div>
               <div>
                 <dt>Freshness</dt>
-                <dd>{demoProof.digestPreview.freshness}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.freshness)}</dd>
               </div>
               <div>
                 <dt>Next action</dt>
-                <dd>{demoProof.digestPreview.recommendedMove}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.recommendedMove)}</dd>
               </div>
             </dl>
           </article>
 
           <article className="ld-case-card">
             <span className="ld-kicker">Source trail</span>
+            <p className="ld-trail-note" role="note">
+              {SAMPLE_SOURCE_TRAIL_NOTE}
+            </p>
             <ul className="ld-trail">
-              {demoProof.proofTrail.map((item) => (
-                <li key={item.signal}>
-                  <strong>{item.signal}</strong>
-                  <p>{item.evidence}</p>
-                  <em>{item.source}</em>
+              {demoProof.proofTrail.length > 0 ? (
+                demoProof.proofTrail.map((item) => (
+                  <li key={item.signal}>
+                    <strong>{sampleProofValue(item.signal)}</strong>
+                    <p>{sampleProofValue(item.evidence)}</p>
+                    <em>{sampleProofValue(item.source)}</em>
+                  </li>
+                ))
+              ) : (
+                <li>
+                  <p>Not available in this sample</p>
                 </li>
-              ))}
+              )}
             </ul>
           </article>
 
           <article className="ld-case-card">
-            <span className="ld-kicker">{demoProof.reportPreview.title}</span>
+            <span className="ld-kicker">{sampleProofValue(demoProof.reportPreview.title)}</span>
             <h4>Client-ready view</h4>
             <ul className="ld-trail">
-              {demoProof.reportPreview.rows.map((row) => (
-                <li key={row}>{row}</li>
-              ))}
+              {demoProof.reportPreview.rows.length > 0 ? (
+                demoProof.reportPreview.rows.map((row) => (
+                  <li key={row}>{sampleProofValue(row)}</li>
+                ))
+              ) : (
+                <li>
+                  <p>Not available in this sample</p>
+                </li>
+              )}
             </ul>
           </article>
 
@@ -713,33 +728,45 @@ export default function MarketingRoute() {
             <article>
               <span className="ld-kicker">Top hooks</span>
               <ul>
-                {demoProof.insightPreview.topHooks.map((hook) => (
-                  <li key={hook}>{hook}</li>
-                ))}
+                {demoProof.insightPreview.topHooks.length > 0 ? (
+                  demoProof.insightPreview.topHooks.map((hook) => (
+                    <li key={hook}>{sampleProofValue(hook)}</li>
+                  ))
+                ) : (
+                  <li>Not available in this sample</li>
+                )}
               </ul>
             </article>
             <article>
               <span className="ld-kicker">Media mix</span>
               <ul>
-                {demoProof.insightPreview.mediaMix.map((item) => (
-                  <li key={item.channel}>
-                    <strong>{item.channel}</strong>
-                    <em>{item.share}</em>
-                  </li>
-                ))}
+                {demoProof.insightPreview.mediaMix.length > 0 ? (
+                  demoProof.insightPreview.mediaMix.map((item) => (
+                    <li key={item.channel}>
+                      <strong>{sampleProofValue(item.channel)}</strong>
+                      <em>{sampleProofValue(item.share)}</em>
+                    </li>
+                  ))
+                ) : (
+                  <li>Not available in this sample</li>
+                )}
               </ul>
             </article>
             <article>
               <span className="ld-kicker">Timeline</span>
               <ul>
-                {demoProof.insightPreview.creativeTimeline.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
+                {demoProof.insightPreview.creativeTimeline.length > 0 ? (
+                  demoProof.insightPreview.creativeTimeline.map((item) => (
+                    <li key={item}>{sampleProofValue(item)}</li>
+                  ))
+                ) : (
+                  <li>Not available in this sample</li>
+                )}
               </ul>
             </article>
             <article>
               <span className="ld-kicker">Brief export</span>
-              <p className="ld-export">{demoProof.exports.digestMarkdown}</p>
+              <p className="ld-export">{sampleProofValue(demoProof.exports.digestMarkdown)}</p>
             </article>
           </div>
         </div>

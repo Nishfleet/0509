@@ -1,3 +1,18 @@
+export const SAMPLE_UNAVAILABLE_COPY = "Not available in this sample";
+
+/**
+ * Renders a sample-proof field truthfully: the fixture value when the sample
+ * supports it, otherwise an explicit unavailable state. A blank proof label
+ * is never a valid render.
+ */
+export function sampleProofValue(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : SAMPLE_UNAVAILABLE_COPY;
+}
+
+export const SAMPLE_SOURCE_TRAIL_NOTE =
+  "Illustrative sample: sources are described, not linked, in this sample. Live briefs link each change to its saved evidence.";
+
 export const demoProof = {
   generatedAt: "sample",
   status: "sample_only",
