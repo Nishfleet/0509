@@ -495,6 +495,30 @@ export default function CompetitorMonitoringCategoryRoute() {
 
       <BrowseTrackedCompetitors links={indexableAdsLinks} />
 
+      <section className="ld-quiet" id="by-industry">
+        <div className="ld-section-head">
+          <span className="ld-kicker">By industry</span>
+          <h2>Verticals we cover.</h2>
+          <p>
+            The category page above is the general pitch. Some markets move differently enough to
+            warrant their own page — same product, framed for that trade.
+          </p>
+        </div>
+        <div className="ld-quiet-grid" aria-label="Industry verticals">
+          <article>
+            <span className="ld-kicker">Sneaker resale</span>
+            <h3>
+              <Link to="/sneaker-resale">Sneaker resale competitor ads</Link>
+            </h3>
+            <p>
+              Resellers price around drops other shops post. See the offer, CTA, and landing-page
+              moves the other resellers ran — with the screenshot and the original link, not a
+              swipe file. Available in English, German, Japanese, and Brazilian Portuguese.
+            </p>
+          </article>
+        </div>
+      </section>
+
       <section className="ld-quiet" id="sources">
         <div className="ld-section-head">
           <span className="ld-kicker">Sources and freshness</span>

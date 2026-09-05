@@ -266,4 +266,23 @@ describe("competitor monitoring category page", () => {
       "<loc>https://0509.io/competitor-monitoring</loc>",
     );
   });
+
+  it("links inbound to the sneaker-resale vertical cluster (issue 1460)", async () => {
+    const { default: CompetitorMonitoringCategoryRoute } = await import(
+      "~/routes/competitor-monitoring"
+    );
+    const source = readFileSync(routePath, "utf8");
+    const markup = renderToStaticMarkup(createElement(CompetitorMonitoringCategoryRoute));
+
+    // The category hub is the natural inbound link source for the
+    // sneaker-resale GEO cluster. The link is a followable <a href> with
+    // descriptive anchor text, in a "By industry" section.
+    expect(source).toContain('id="by-industry"');
+    expect(source).toContain('<Link to="/sneaker-resale">');
+    expect(markup).toContain('href="/sneaker-resale"');
+    expect(markup).toContain("Sneaker resale competitor ads");
+    // No nofollow on the inbound link — it must pass link equity.
+    expect(markup).not.toMatch(/rel="nofollow"[^>]*\/sneaker-resale/);
+    expect(markup).not.toMatch(/\/sneaker-resale"[^>]*rel="nofollow/);
+  });
 });
