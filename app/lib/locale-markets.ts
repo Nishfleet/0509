@@ -81,7 +81,7 @@ export const BUYER_SURFACE_SEGMENT_CHILD_SLUGS: Record<string, readonly string[]
   compare: [
     "magicbrief",
     "meta-ad-library",
-    "visualping-ad-library",
+    "visualping-ad-libraries",
     "spyland",
     "pulzifi",
     "foreplay-spyder",

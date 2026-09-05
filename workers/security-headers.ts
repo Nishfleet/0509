@@ -122,6 +122,7 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/compare/meta-ad-library",
   "/compare/visualping",
   "/compare/visualping-ad-library",
+  "/compare/visualping-ad-libraries",
   "/compare/spyland",
   "/compare/pulzifi",
   "/compare/foreplay",

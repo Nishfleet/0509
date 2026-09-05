@@ -13,7 +13,7 @@ const REMAINING_COMPARE_ROUTES = [
   "compare.pulzifi",
   "compare.foreplay-spyder",
   "compare.visualping",
-  "compare.visualping-ad-library",
+  "compare.visualping-ad-libraries",
   "compare.spyland",
   "compare.foreplay",
   "compare.adspyder",

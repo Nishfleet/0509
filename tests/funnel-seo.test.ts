@@ -179,7 +179,7 @@ describe("shared marketing footer", () => {
       "/compare/meta-ad-library",
       // Generic /compare/visualping and /compare/foreplay are not in the
       // footer (issue #1481): duplicates canonicalizing to the two below.
-      "/compare/visualping-ad-library",
+      "/compare/visualping-ad-libraries",
       "/compare/spyland",
       "/compare/pulzifi",
       "/compare/foreplay-spyder",
@@ -205,7 +205,7 @@ describe("shared marketing footer", () => {
       "app/routes/compare.magicbrief.tsx",
       "app/routes/compare.meta-ad-library.tsx",
       "app/routes/compare.visualping.tsx",
-      "app/routes/compare.visualping-ad-library.tsx",
+      "app/routes/compare.visualping-ad-libraries.tsx",
       "app/routes/compare.spyland.tsx",
       "app/routes/compare.pulzifi.tsx",
       "app/routes/compare.foreplay.tsx",
