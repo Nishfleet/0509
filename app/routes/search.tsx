@@ -105,6 +105,7 @@ import {
   formatResultsPanelTitle,
   formatResultTierConfidence,
   formatSearchCommandTitle,
+  formatSearchScopeAnnotation,
   formatSearchCaptureAgeLabel,
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
@@ -1171,10 +1172,12 @@ export default function SearchRoute() {
   // first-time visitor sees whose ads they are looking at instead of an
   // idle-looking page. A invalid `?website=` (the incomplete-website form
   // error) keeps the generic title — the validation message already names
-  // the miss.
+  // the miss. The H1 never carries the country scope (issue #1502): it
+  // names the buyer's intent ("What {Brand} is running on Meta"), and the
+  // country scope renders as a small annotation under the H1 instead.
   const commandTitle = competitorWebsite.displayName
-    ? formatSearchCommandTitle(competitorWebsite.displayName, data.filters.country)
-    : formatSearchCommandTitle(data.filters.query, data.filters.country);
+    ? formatSearchCommandTitle(competitorWebsite.displayName)
+    : formatSearchCommandTitle(data.filters.query);
   const websiteInputValue = competitorWebsite.raw || data.filters.query;
   const trackingRole: WatchlistTrackingRole = "competitor";
   const targetNoun = "competitor";
@@ -1572,8 +1575,15 @@ export default function SearchRoute() {
   // The anonymous "No account needed." claim in particular is asserted before
   // the search and PROVEN by it — repeating it afterwards is weaker, not
   // stronger.
+  //
+  // ISSUE #1502: the country scope moved OUT of the H1 (which now names the
+  // buyer's intent) and INTO this context line as a small annotation. The
+  // scope is a different fact from the answer, so it is not a "second
+  // telling" — it names the market the search ran in, which the H1 no longer
+  // does. Idle (no query) keeps the "Public Meta Ad Library search…" line.
+  const searchScopeAnnotation = formatSearchScopeAnnotation(data.filters.country);
   const headerContext = instrumentUsed
-    ? null
+    ? searchScopeAnnotation
     : rootData.session
       ? "Public Meta Ad Library search. Save an ad to a collection, or start watching the competitor."
       : "Public Meta Ad Library search. No account needed.";
