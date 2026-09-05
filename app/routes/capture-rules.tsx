@@ -2,6 +2,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
+  CAPTURE_BUDGET_SKIP_PUBLIC_RULE,
   CAPTURE_RULES_PUBLIC_PATH,
   CAPTURE_VALIDITY_PUBLIC_RULES,
 } from "~/lib/capture-validity-public-rules";
@@ -67,6 +68,18 @@ export default function CaptureRulesRoute() {
           </p>
         </PublicDocBlock>
       ))}
+
+      <PublicDocBlock
+        id={CAPTURE_BUDGET_SKIP_PUBLIC_RULE.id}
+        title={CAPTURE_BUDGET_SKIP_PUBLIC_RULE.title}
+      >
+        <p>
+          <strong>We skip:</strong> {CAPTURE_BUDGET_SKIP_PUBLIC_RULE.refused}
+        </p>
+        <p>
+          <strong>Why:</strong> {CAPTURE_BUDGET_SKIP_PUBLIC_RULE.why}
+        </p>
+      </PublicDocBlock>
 
       <PublicDocBlock title="What still alerts">
         <p>

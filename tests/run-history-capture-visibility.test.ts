@@ -2,6 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { createMemoryRouter, RouterProvider } from "react-router";
+
 import { RecentEvidenceChecksCard } from "~/components/watchlists/recent-evidence-checks-card";
 import type { CaptureValidityReasonCode } from "~/lib/capture-validity.server";
 import { isCustomerDigestEligibleEvent } from "~/lib/delivery-policy.server";
@@ -119,6 +121,16 @@ function expectNoAlert(row: RunHistoryRefusalRow) {
   expect(row.generatesAlert).toBe(false);
   expect(formatRunHistoryRefusalCopy(row)).toContain("No alert sent.");
   expect(formatRunHistoryRefusalCopy(row)).not.toMatch(/_[a-z]/);
+}
+
+// RecentEvidenceChecksCard renders a react-router <Link> for the budget-skip
+// "why this happened" anchor (#1485), so it needs a router context to render
+// to static markup.
+function renderCard(props: Parameters<typeof RecentEvidenceChecksCard>[0]): string {
+  const router = createMemoryRouter([
+    { path: "/", element: createElement(RecentEvidenceChecksCard, props) },
+  ]);
+  return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
 describe("run-history capture visibility (#969)", () => {
@@ -279,24 +291,22 @@ describe("run-history capture visibility (#969)", () => {
       }),
     ];
 
-    const markup = renderToStaticMarkup(
-      createElement(RecentEvidenceChecksCard, {
-        checksExpanded: true,
-        data: {
-          proofSummary: {
-            ...emptyProofSummary(),
-            totalAttempts: captures.length,
-            failedAttempts: GATE_FAILURE_MODES.length,
-            skippedAttempts: 1,
-          },
-          renderedAt: "2026-08-25T11:00:00.000Z",
-          recentProofCaptures: captures,
-          eventCandidates: candidates,
-          events: [],
+    const markup = renderCard({
+      checksExpanded: true,
+      data: {
+        proofSummary: {
+          ...emptyProofSummary(),
+          totalAttempts: captures.length,
+          failedAttempts: GATE_FAILURE_MODES.length,
+          skippedAttempts: 1,
         },
-        watchlistId: "watch-1",
-      }),
-    );
+        renderedAt: "2026-08-25T11:00:00.000Z",
+        recentProofCaptures: captures,
+        eventCandidates: candidates,
+        events: [],
+      },
+      watchlistId: "watch-1",
+    });
 
     expect(markup).toContain("What we did not alert on");
     expect(markup).toContain("No alert sent.");
@@ -360,24 +370,22 @@ describe("run-history capture visibility (#969)", () => {
 
     it("renders the budget-skip count and reason in the evidence card over the window", () => {
       const skips = Array.from({ length: 5 }, (_, index) => budgetSkipAt(index * 14));
-      const markup = renderToStaticMarkup(
-        createElement(RecentEvidenceChecksCard, {
-          checksExpanded: true,
-          data: {
-            proofSummary: {
-              ...emptyProofSummary(),
-              totalAttempts: 5,
-              skippedAttempts: 5,
-              skippedDueToBudget: 5,
-            },
-            renderedAt: "2026-08-28T00:00:00.000Z",
-            recentProofCaptures: skips,
-            eventCandidates: [],
-            events: [],
+      const markup = renderCard({
+        checksExpanded: true,
+        data: {
+          proofSummary: {
+            ...emptyProofSummary(),
+            totalAttempts: 5,
+            skippedAttempts: 5,
+            skippedDueToBudget: 5,
           },
-          watchlistId: "watch-1",
-        }),
-      );
+          renderedAt: "2026-08-28T00:00:00.000Z",
+          recentProofCaptures: skips,
+          eventCandidates: [],
+          events: [],
+        },
+        watchlistId: "watch-1",
+      });
 
       expect(markup).toContain("Skipped (plan allowance)");
       expect(markup).toContain("plan allowance was reached");
