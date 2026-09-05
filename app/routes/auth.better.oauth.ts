@@ -1,6 +1,8 @@
 import { redirect } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { recordFunnelEvent } from "~/lib/funnel-measurement.server";
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const mode = url.searchParams.get("mode") === "signup" ? "signup" : "login";
@@ -39,6 +41,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (!isSameOriginAuthFormPost(env, request)) {
     throw redirect(`/auth/${mode}?error=request_invalid`);
+  }
+
+  if (mode === "signup") {
+    recordFunnelEvent(env, request, { event: "funnel_signup_start" });
   }
 
   const oauthStart = await startBetterAuthSocialSignIn(env, request, {

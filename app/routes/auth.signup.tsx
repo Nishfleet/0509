@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 
 import { AuthForm } from "~/components/auth-form";
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { recordFunnelEvent } from "~/lib/funnel-measurement.server";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const signupDescription =
@@ -90,6 +91,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
     return signupActionError("send_failed", { email, name, redirectTo });
   }
+
+  recordFunnelEvent(env, request, { event: "funnel_signup_start" });
 
   const next = new URL("/auth/signup", request.url);
   next.searchParams.set("sent", "1");

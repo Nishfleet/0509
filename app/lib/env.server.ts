@@ -64,6 +64,13 @@ export interface AppEnv {
   DODO_PAYMENTS_API_KEY?: string;
   EMAIL?: EmailSendingBinding;
   EMAIL_FROM_EMAIL?: string;
+  /**
+   * Anonymous funnel measurement gate (docs/funnel-measurement-spec.md).
+   * Collection is default-off: only the exact value "true" enables it, and the
+   * spec's rollout gates (legal review, owner-approved retention) remain
+   * unpassed, so this must stay unset in every environment.
+   */
+  FUNNEL_MEASUREMENT_ENABLED?: string;
   /** Local release-proof guard. Never configure this in preview or production. */
   E2E_PROVIDER_NETWORK_DENY?: string;
   E2E_TEST_MODE?: string;

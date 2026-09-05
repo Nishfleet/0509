@@ -60,6 +60,11 @@ import {
   ALL_COUNTRIES_VALUE,
   SUPPORTED_COUNTRIES,
 } from "~/lib/countries";
+import {
+  funnelErrorKind,
+  funnelResultCountBucket,
+  recordFunnelEvent,
+} from "~/lib/funnel-measurement.server";
 import { formatOfferDisplay } from "~/lib/analysis-display";
 import {
   formatAdvertiserLabel,
@@ -421,6 +426,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     };
   }
 
+  // Anonymous funnel measurement: a fresh public preview submit (no ad
+  // selection rerun, no pagination) counts as search intent. Default-off and
+  // GPC-suppressed inside the helper; never emitted for signed-in sessions.
+  if (!session && !url.searchParams.get("selected") && !url.searchParams.get("after")) {
+    recordFunnelEvent(env, request, { event: "funnel_search_preview_submit" });
+  }
+
   const { executeSearchWithRelevance } =
     await import("~/lib/search-execution.server");
   const { shouldApplySearchV2, shouldRunSearchV2Shadow } =
@@ -450,38 +462,49 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const useSearchV2 =
     Boolean(competitorWebsite.raw) &&
     (shouldApplySearchV2(env) || shouldRunSearchV2Shadow(env));
-  const searchExecution = useSearchV2
-    ? await executeSearchWithRelevance({
-        env,
-        competitorWebsite,
-        parsed,
-        scope: searchScope,
-        cursor: url.searchParams.get("after"),
-        forceLive,
-        customerMetaAdLibraryToken,
-        executionContext: cloudflare?.ctx,
-        hydratePersisted: Boolean(session),
-      })
-    : {
-        result: await (
-          await import("~/lib/ad-source.server")
-        ).searchAdsViaSourceResolver(
+  let searchExecution: Awaited<ReturnType<typeof executeSearchWithRelevance>>;
+  try {
+    searchExecution = useSearchV2
+      ? await executeSearchWithRelevance({
           env,
-          normalizeSavedQuery(parsed.mode, parsed.filters),
-          url.searchParams.get("after"),
-          {
-            purpose: "public_search",
-            forceLive,
-            ...(customerMetaAdLibraryToken
-              ? { customerMetaAdLibraryToken }
-              : {}),
-          },
-        ),
-        query: normalizeSavedQuery(parsed.mode, parsed.filters),
-        searchScope,
-        displayDomain: competitorWebsite.host,
-        relevanceApplied: false,
-      };
+          competitorWebsite,
+          parsed,
+          scope: searchScope,
+          cursor: url.searchParams.get("after"),
+          forceLive,
+          customerMetaAdLibraryToken,
+          executionContext: cloudflare?.ctx,
+          hydratePersisted: Boolean(session),
+        })
+      : {
+          result: await (
+            await import("~/lib/ad-source.server")
+          ).searchAdsViaSourceResolver(
+            env,
+            normalizeSavedQuery(parsed.mode, parsed.filters),
+            url.searchParams.get("after"),
+            {
+              purpose: "public_search",
+              forceLive,
+              ...(customerMetaAdLibraryToken
+                ? { customerMetaAdLibraryToken }
+                : {}),
+            },
+          ),
+          query: normalizeSavedQuery(parsed.mode, parsed.filters),
+          searchScope,
+          displayDomain: competitorWebsite.host,
+          relevanceApplied: false,
+        };
+  } catch (error) {
+    if (!session) {
+      recordFunnelEvent(env, request, {
+        event: "funnel_search_preview_error",
+        errorKind: funnelErrorKind(error),
+      });
+    }
+    throw error;
+  }
 
   const waitUntil = cloudflare?.ctx?.waitUntil?.bind(cloudflare?.ctx);
   const {
@@ -499,6 +522,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       ...(typeof waitUntil === "function" ? { waitUntil } : {}),
     },
   );
+
+  // Anonymous funnel measurement: the preview either returned results (coarse
+  // count bucket only) or failed (coarse error kind only). Default-off and
+  // GPC-suppressed inside the helper; never emitted for signed-in sessions.
+  if (!session) {
+    const failureClass = searchExecution.result.discoveryFailureClass;
+    if (failureClass) {
+      recordFunnelEvent(env, request, {
+        event: "funnel_search_preview_error",
+        errorKind: failureClass,
+      });
+    } else {
+      recordFunnelEvent(env, request, {
+        event: "funnel_search_preview_result",
+        resultCountBucket: funnelResultCountBucket(hydratedResult.ads.length),
+      });
+    }
+  }
 
   // WHAT-TO-STEAL cost design: computed synchronously (small model, ~1-2s) and
   // only for signed-in users on fresh (cache-miss), non-demo searches with >=3
