@@ -1,0 +1,15 @@
+[Unit]
+Description=Run the 0509 /search H1 country-scope regression guard daily
+Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
+
+[Timer]
+# Daily 01:47 UTC = 07:17 IST, offset clear of the 00:07 market-signal
+# snapshot and the 20:07/20:47 provider-mutation windows. The guard is a
+# nightly regression detector (accept criterion #4), not an SLO probe, so a
+# daily cadence is the right sensitivity.
+OnCalendar=*-*-* 01:47:00
+Persistent=true
+Unit=0509-search-h1-guard.service
+
+[Install]
+WantedBy=timers.target
