@@ -188,10 +188,15 @@ describe("shared marketing footer", () => {
       "/switch/magicbrief",
       "/switch/panoramata",
       "/switch/visualping",
+      "/sneaker-resale",
     ]) {
       expect(markup).toContain(`href="${href}"`);
     }
     expect(markup).toContain("mailto:support@0509.io");
+    // The footer's "By industry" group is the inbound link that keeps the
+    // sneaker-resale GEO cluster off the sitemap-only orphan path (issue 1460).
+    expect(markup).toContain("By industry");
+    expect(markup).toContain("Sneaker resale competitor ads");
   });
 
   it("is used by the landing page, all compare pages, and all switch pages", () => {
