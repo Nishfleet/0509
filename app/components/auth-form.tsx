@@ -66,7 +66,7 @@ export function AuthForm({
             ? "We sent a setup link. Open it to verify and create the account."
             : "If an account exists for that address, the sign-in link is on the way."
           : isSignup
-            ? "Use a work email. After verification, you can add a competitor and start tracking."
+            ? "Use a work email. We'll send a setup link to that inbox — open it to verify, then add a competitor and start tracking."
             : "Enter your work email and we'll send a one-time link to your inbox."}
       </p>
 
@@ -75,6 +75,12 @@ export function AuthForm({
           <p className="f9-wk-notice is-success" role="status">
             Link sent to <strong>{sentEmail}</strong>
           </p>
+          {isSignup ? (
+            <p className="f9-auth-switch f9-wk-mt1">
+              It usually arrives within a minute. If it's slow, check your spam and promotions folders before
+              resending.
+            </p>
+          ) : null}
           {error ? <p aria-live="assertive" className="f9-wk-notice is-error" role="alert">{error}</p> : null}
           <Form method="post">
             <input name="mode" type="hidden" value={mode} />

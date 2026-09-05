@@ -13,10 +13,15 @@ export const MARKETING_TAGLINE = "Competitor change monitoring";
  * THE single public header for every public surface — landing, /ads/* brand
  * pages, and the legal/doc shell (via `PublicDocHeader`). One canonical link
  * list (Search preview, Pricing, Help, Docs, Status) plus Sign in / Open app
- * — no per-surface improvisation. Uses the `ld-nav*` classes, styled for both
- * `.f9-home` and `.f9-legal-page` containers in app.css. Links are
- * absolute-to-home hashes so Pricing works from any page, not just the landing
- * route.
+ * and the Sign up CTA — no per-surface improvisation. Uses the `ld-nav*`
+ * classes, styled for both `.f9-home` and `.f9-legal-page` containers in
+ * app.css. Links are absolute-to-home hashes so Pricing works from any page,
+ * not just the landing route.
+ *
+ * The signup CTA is the pill so an anonymous visitor can reach /auth/signup
+ * from any public page without scrolling or detouring through Sign in. On the
+ * compact ≤860px row the actions wrap (app.css) so the pill stays a ≥44px
+ * touch target at phone widths.
  */
 export function MarketingNav() {
   return (
@@ -38,8 +43,11 @@ export function MarketingNav() {
         <Link className="f9-link-arrow" to="/auth/login">
           Sign in
         </Link>
-        <Link className="ld-nav-pill" to="/app">
+        <Link className="f9-link-arrow" to="/app">
           Open app
+        </Link>
+        <Link className="ld-nav-pill" to="/auth/signup">
+          Sign up
         </Link>
       </nav>
     </header>
