@@ -2,6 +2,15 @@
  * Public proof brief — the REAL evidence trail shown on public surfaces
  * (homepage proof section, /api/proof brief) instead of any sample fixture.
  *
+ * COUNT PARITY CONTRACT (issue #1468): the home proof brief and the
+ * /ads/:domain page for the same brand must NEVER report different totals
+ * on the same day. Both surfaces read the SAME discovery-cache snapshot via
+ * `loadBrandPageCacheSnapshot` with the SAME visitor-country ladder (the
+ * home routes resolve the visitor country exactly like the /ads loader), and
+ * both count the FULL snapshot — the home never re-derives a capped subset
+ * count. When the home says "12 of 12", the linked brand page shows the
+ * same total with its own honesty breakdown (brand-owned / unverified).
+ *
  * ABSOLUTE CONSTRAINT (same as brand-page.server.ts): everything here renders
  * from the existing discovery cache. A public request must NEVER trigger live
  * scraping, Browser Rendering, Meta API calls, or any other paid operation.
@@ -17,13 +26,12 @@
  */
 
 import { formatBrandPageCheckedAgo, loadBrandPageCacheSnapshot } from "~/lib/brand-page.server";
+import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import type { AppEnv } from "~/lib/env.server";
 import type { AdRecord } from "~/lib/types";
 
 /** The competitor featured on the homepage proof section. */
 export const PUBLIC_PROOF_FEATURED_WEBSITE = "nykaa.com";
-/** Cap the number of creatives used to build the public proof brief. */
-export const PUBLIC_PROOF_MAX_ADS = 12;
 /** Cap the source-trail rows rendered on the public surface. */
 export const PUBLIC_PROOF_MAX_TRAIL_ITEMS = 3;
 
@@ -74,6 +82,14 @@ export interface PublicProofBrief {
 
 export interface PublicProofBriefLoadOptions {
   now?: Date;
+  /**
+   * Visitor-geo country, resolved the same way the /ads/:domain loader
+   * resolves it (`defaultCountryForVisitor(cf-ipcountry)`). The home brief
+   * and the brand page MUST read the same cache row so they can never
+   * report different totals for the same brand on the same day (issue
+   * #1468). Defaults to "all".
+   */
+  visitorCountry?: string;
 }
 
 /**
@@ -89,7 +105,7 @@ export async function loadPublicProofBrief(
   try {
     const snapshot = await loadBrandPageCacheSnapshot(env, {
       domain: PUBLIC_PROOF_FEATURED_WEBSITE,
-      visitorCountry: "all",
+      visitorCountry: options.visitorCountry ?? ALL_COUNTRIES_VALUE,
       now,
     });
     if (!snapshot) {
@@ -124,7 +140,14 @@ export function buildPublicProofBrief(
     now?: Date;
   },
 ): PublicProofBrief | null {
-  const realAds = ads.filter((ad) => ad && ad.source !== "demo").slice(0, PUBLIC_PROOF_MAX_ADS);
+  // Count the FULL usable snapshot — the same array the /ads/:domain page
+  // counts (brand-owned + unverified). A capped subset (the old 12-ad
+  // slice) let the home and the brand page report different totals for the
+  // same brand on the same day (issue #1468; observed live: home 12, page
+  // 24). toUsableSnapshot already strips demo ads and caps at the brand
+  // page's own BRAND_PAGE_MAX_ADS, so both surfaces share the same bound.
+  // Rendering pools (trail/hook/timeline rows) keep their own smaller caps.
+  const realAds = ads.filter((ad) => ad && ad.source !== "demo");
   if (realAds.length === 0) {
     return null;
   }
