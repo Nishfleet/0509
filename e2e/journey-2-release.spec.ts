@@ -140,9 +140,14 @@ for (const viewport of viewports) {
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/website=fresh-empty\.example/);
     await expect(page.getByRole("heading", { name: "No verified ads found for fresh-empty.example" })).toBeVisible();
+    // Issue 1569: a completed 0-row search (discoveryEmptyReason=no_results) is
+    // not evidence the competitor is inactive. The sr-only status region now
+    // carries the honest reason (NO_RESULTS_HONEST_COPY), in sync with the
+    // visible empty state, instead of the old "No search results found.
+    // Search complete." sentence.
     await expectStatusAnnouncement(
-      page.locator('[role="status"][aria-live="polite"]').filter({ hasText: /No search results found/i }),
-      "No search results found. Search complete.",
+      page.locator('.f9-sr-only[role="status"][aria-live="polite"]').filter({ hasText: /not evidence that the competitor is inactive/i }),
+      "This is not evidence that the competitor is inactive; this search did not verify a connected ad.",
     );
     await expect(page.locator(".f9-results-panel")).toHaveAttribute("data-f9-result-cache-status", "hit");
     await expect(page.locator(".f9-results-panel")).toHaveAttribute("data-f9-result-source", "meta_library_browser");
@@ -159,8 +164,8 @@ for (const viewport of viewports) {
       ),
     ).toBeVisible();
     await expectStatusAnnouncement(
-      page.locator('[role="status"][aria-live="polite"]').filter({ hasText: /No results loaded/i }),
-      "No results loaded. Fresh checks are delayed, so coverage may be incomplete.",
+      page.locator('.f9-sr-only[role="status"][aria-live="polite"]').filter({ hasText: /not evidence that the competitor is inactive/i }),
+      "This is not evidence that the competitor is inactive; this search did not verify a connected ad.",
     );
     await expect(page.locator(".f9-results-panel")).toHaveAttribute("data-f9-result-cache-status", "stale");
     await expect(page.locator(".f9-results-panel")).toHaveAttribute("data-f9-result-source", "meta_library_browser");
