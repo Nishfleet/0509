@@ -21,7 +21,13 @@ import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
-import { canonicalUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import {
+  breadcrumbJsonLd,
+  canonicalUrl,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 
 export interface OfferTimelineLoaderData {
   domain: string;
@@ -145,16 +151,31 @@ export default function OfferTimelineRoute() {
   return (
     <main className="f9-home f9-ads-page f9-timeline-page">
       {!data.noindex ? (
-        <script
-          {...jsonLdScriptProps(
-            webPageJsonLd({
-              name: `${data.brandName} offer timeline | Five to Nine`,
-              description: `Dated offer states for ${data.domain}.`,
-              pathname: data.canonicalPath,
-              aboutName: data.brandName,
-            }),
-          )}
-        />
+        <>
+          <script
+            {...jsonLdScriptProps(
+              webPageJsonLd({
+                name: `${data.brandName} offer timeline | Five to Nine`,
+                description: `Dated offer states for ${data.domain}.`,
+                pathname: data.canonicalPath,
+                aboutName: data.brandName,
+              }),
+            )}
+          />
+          <script
+            {...jsonLdScriptProps(
+              breadcrumbJsonLd({
+                items: [
+                  { name: "Home", pathname: "/" },
+                  {
+                    name: `${data.brandName} offer timeline`,
+                    pathname: data.canonicalPath,
+                  },
+                ],
+              }),
+            )}
+          />
+        </>
       ) : null}
       <MarketingNav />
 
