@@ -103,6 +103,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     createCollectionWithinLimit,
     createShareLink,
     getCollection,
+    renameCollection,
     updateCollectionItem,
   } = await import("~/lib/data.server");
   const env = getEnv(context);
@@ -145,6 +146,30 @@ export async function action({ context, request }: ActionFunctionArgs) {
       ok: true,
       intent,
       message: `Created ${collectionResult.collection.name}.`,
+    };
+  }
+
+  if (intent === "rename-collection") {
+    const collectionId = String(formData.get("collectionId") ?? "");
+    const name = String(formData.get("name") ?? "").trim();
+
+    if (!name) {
+      return { ok: false, intent, message: "Give the collection a name first." };
+    }
+
+    const renamed = await renameCollection(env, workspaceUserId, collectionId, name);
+    if (!renamed) {
+      return {
+        ok: false,
+        intent,
+        message: "That collection is no longer available.",
+      };
+    }
+
+    return {
+      ok: true,
+      intent,
+      message: `Renamed to ${renamed.name}.`,
     };
   }
 
