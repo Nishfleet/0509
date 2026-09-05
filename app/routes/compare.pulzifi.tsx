@@ -4,8 +4,19 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import {
+  Cite,
+  CompareCitationsFooter,
+  type CompareCitations,
+  type CompareClaimCard,
+} from "~/components/compare-citations";
 import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
+
+// Source verification (issue #1288): https://pulzifi.com/ returns HTTP 200 and
+// https://pulzifi.com/pricing names real tiers — verified live 2026-09-05.
+const citations = pulzifiCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
 
@@ -21,16 +32,18 @@ export const meta: MetaFunction = () =>
     pathname: "/compare/pulzifi",
   });
 
-const pulzifiStrengths = [
+const pulzifiStrengths: readonly CompareClaimCard[] = [
   {
     title: "AI strategy briefs",
     detail:
       "Pulzifi turns each detected change into a brief with an overview, market analysis, and marketing lens. Copy it, share it, or act on it.",
+    sourceId: "pulzifi-home",
   },
   {
     title: "Any public URL",
     detail:
       "You can monitor competitor pages, client pages, news sources, government portals, real estate listings, and more. Choose a frequency from 5 minutes to 48 hours.",
+    sourceId: "pulzifi-home",
   },
   {
     title: "Visual and text diffs",
@@ -44,7 +57,7 @@ const pulzifiStrengths = [
   },
 ] as const;
 
-const pulzifiCosts = [
+const pulzifiCosts: readonly CompareClaimCard[] = [
   {
     title: "Brief is AI-synthesized",
     detail:
@@ -58,7 +71,8 @@ const pulzifiCosts = [
   {
     title: "Plans and limits vary",
     detail:
-      "Pricing is published in tiers; check the live source at https://pulzifi.com/ for current limits and frequency options.",
+      "Pricing is published in tiers; check the live source on Pulzifi's pricing page for current limits and frequency options.",
+    sourceId: "pulzifi-pricing",
   },
 ] as const;
 
@@ -133,7 +147,10 @@ export default function ComparePulzifiRoute() {
           {pulzifiStrengths.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -148,7 +165,10 @@ export default function ComparePulzifiRoute() {
           {pulzifiCosts.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
-              <p>{item.detail}</p>
+              <p>
+                {item.detail}
+                {item.sourceId ? <Cite citations={citations} id={item.sourceId} /> : null}
+              </p>
             </article>
           ))}
         </div>
@@ -179,6 +199,8 @@ export default function ComparePulzifiRoute() {
           honestly.
         </p>
       </section>
+
+      <CompareCitationsFooter citations={citations} />
 
       <MarketingFooter />
     </main>

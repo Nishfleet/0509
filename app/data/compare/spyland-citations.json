@@ -1,0 +1,20 @@
+{
+  "competitor": "spyland",
+  "productName": "Spyland",
+  "sources": [
+    {
+      "id": "spyland-home",
+      "href": "https://spyland.ing/",
+      "label": "SpyLand.ing home",
+      "checked": "2026-09-05",
+      "claim": "Spyland checks competitor landing pages daily, flags copy, pricing, and CTA changes with before/after screenshots, and adds a short AI read."
+    },
+    {
+      "id": "spyland-pricing",
+      "href": "https://spyland.ing/#pricing",
+      "label": "SpyLand.ing pricing",
+      "checked": "2026-09-05",
+      "claim": "Spyland publishes a Free plan with no card required and a Pro plan that starts as a 14-day trial then $19/mo."
+    }
+  ]
+}
