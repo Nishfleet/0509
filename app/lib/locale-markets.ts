@@ -48,6 +48,48 @@ export const BUYER_SURFACE_PATHS = [
 ] as const;
 export type BuyerSurfacePath = (typeof BUYER_SURFACE_PATHS)[number];
 
+/**
+ * Compare child product pages that must also serve 200 under every
+ * buyer-surface locale prefix (issue #1563). The EN hubs (`/compare`,
+ * each `/compare/<vendor>`) exist already; the BET 5 compare pages and
+ * the BET 8 switch pages were never localised, so `/de/compare/magicbrief`
+ * etc. 404'd while `/de/compare` (the hub) served 200. Each path here maps
+ * to a `$locale.*.tsx` route that re-exports the EN sibling's meta and
+ * component with canonical→EN plus the buyer-surface hreflang cluster.
+ *
+ * Kept as a single source of truth so the route file, the sitemap, and the
+ * `<html lang>` helper in this module can never drift apart.
+ */
+export const BUYER_SURFACE_SEGMENT_CHILD_SLUGS: Record<string, readonly string[]> = {
+  compare: [
+    "magicbrief",
+    "meta-ad-library",
+    "visualping",
+    "visualping-ad-library",
+    "spyland",
+    "pulzifi",
+    "foreplay",
+    "foreplay-spyder",
+    "panoramata",
+    "adspyder",
+  ],
+  switch: ["magicbrief", "panoramata", "visualping"],
+} as const;
+
+/**
+ * The 13 locale-prefixable child routes as EN paths (`/compare/magicbrief`
+ * ... `/switch/visualping`). Derived from `BUYER_SURFACE_SEGMENT_CHILD_SLUGS`
+ * so adding a vendor in one place lights it up in every locale prefix.
+ */
+export const BUYER_SURFACE_CHILD_PATHS: readonly string[] = Object.entries(
+  BUYER_SURFACE_SEGMENT_CHILD_SLUGS,
+).flatMap(([segment, slugs]) => slugs.map((slug) => `/${segment}/${slug}`));
+
+/** True when `splat` (e.g. `compare/magicbrief`) is a locale-prefixable child. */
+export function isBuyerSurfaceChildSplat(splat: string): boolean {
+  return (BUYER_SURFACE_CHILD_PATHS as readonly string[]).includes(`/${splat}`);
+}
+
 export interface SneakerResaleMarket {
   id: SneakerResaleLocaleId;
   hreflang: string;
@@ -141,14 +183,15 @@ const BUYER_SURFACE_HTML_LANG: Record<BuyerSurfaceLocaleId, string> = {
  * `sneakerResaleMarketForPathname` only knows the `/de/sneaker-resale` shape.
  *
  * The prefix match is strict: the splat must be empty (bare `/<locale>`
- * index) or exactly one of the allowlisted buyer-surface subpaths
+ * index), exactly one of the allowlisted buyer-surface subpaths
  * (`pricing`, `help`, `docs`, `api/docs`, `status`, `changelog`, `trust`,
- * `compare`). Any other splat — e.g. `/fr/sneaker-resale`, where `fr` is a
- * buyer-surface locale but `sneaker-resale` is the localized sneaker-resale
- * cluster's own segment — returns `null` so the pathname falls through to
- * the sneaker-resale check (which 404s for fr/es) and ultimately reports
- * `en`. The strict match keeps the buyer-surface lang tag from leaking onto
- * 404s.
+ * `compare`), or one of the locale-prefixable compare/switch child routes
+ * (`compare/magicbrief`, `switch/visualping`, ...). Any other splat — e.g.
+ * `/fr/sneaker-resale`, where `fr` is a buyer-surface locale but
+ * `sneaker-resale` is the localized sneaker-resale cluster's own segment —
+ * returns `null` so the pathname falls through to the sneaker-resale check
+ * (which 404s for fr/es) and ultimately reports `en`. The strict match
+ * keeps the buyer-surface lang tag from leaking onto 404s.
  */
 function buyerSurfaceLocaleForPathname(pathname: string): BuyerSurfaceLocaleId | null {
   const pathOnly = pathname.split(/[?#]/)[0] ?? pathname;
@@ -169,7 +212,8 @@ function buyerSurfaceLocaleForPathname(pathname: string): BuyerSurfaceLocaleId |
         splat === "" ||
         (BUYER_SURFACE_PATHS as readonly string[]).some(
           (path) => path !== "/" && path === `/${splat}`,
-        )
+        ) ||
+        isBuyerSurfaceChildSplat(splat)
       ) {
         return locale;
       }
