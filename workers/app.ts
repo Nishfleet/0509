@@ -26,7 +26,7 @@ import {
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
 import { publicSeoFileForPathname } from "../app/lib/seo";
-import { loadIndexableBrandPageEntries, publicSitemapFile } from "../app/lib/sitemap.server";
+import { loadIndexableBrandPageEntries, publicLocaleSitemapFile, publicSitemapFile } from "../app/lib/sitemap.server";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import {
   observeScheduledTask,
@@ -103,13 +103,15 @@ export default {
       return publicFileResponse(request, await publicSitemapFile(env));
     }
 
-    // Locale-prefixed /<locale>/sitemap.xml (issue #1501): every buyer-
-    // surface locale ships the same sitemap body as the EN sitemap.xml so
-    // the locale cluster stays in lockstep. Reaching this code path here
-    // avoids loading the React Router tree just to serve the same XML
-    // body under a different prefix. `isBuyerSurfaceLocaleId` gates the
+    // Locale-prefixed /<locale>/sitemap.xml (issue #1501 + #1561): each
+    // buyer-surface locale ships a LOCALE-SCOPED sitemap body containing only
+    // paths under /<locale>/ — never the EN root body (that was the #1561
+    // bug: the locale sitemaps mirrored the root byte-for-byte, fragmenting
+    // crawl budget and splitting PageRank across duplicates). Reaching this
+    // code path here avoids loading the React Router tree just to serve the
+    // scoped XML under the locale prefix. `isBuyerSurfaceLocaleId` gates the
     // first segment against the allowlist so an unknown locale
-    // (`/xx/sitemap.xml`) cannot silently inherit the EN sitemap body.
+    // (`/xx/sitemap.xml`) cannot silently inherit the root sitemap body.
     if (
       (request.method === "GET" || request.method === "HEAD") &&
       url.pathname.endsWith("/sitemap.xml")
@@ -120,7 +122,10 @@ export default {
         url.pathname === `/${localeSegment}/sitemap.xml` &&
         isBuyerSurfaceLocaleId(localeSegment)
       ) {
-        return publicFileResponse(request, await publicSitemapFile(env));
+        return publicFileResponse(
+          request,
+          await publicLocaleSitemapFile(localeSegment),
+        );
       }
     }
 
