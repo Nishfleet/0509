@@ -42,9 +42,11 @@ export default function CompareIndexRoute({
   // before.
   const hrefFor = (page: (typeof COMPARE_PAGES)[number]) =>
     localePrefix ? `${localePrefix}${page.href}` : page.href;
+  const _debugPrefix = localePrefix ?? "undefined";
 
   return (
     <main className="f9-home">
+      <div data-debug-compare-prefix={_debugPrefix} hidden />
       <script
         {...jsonLdScriptProps(
           webPageJsonLd({
