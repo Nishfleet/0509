@@ -1937,7 +1937,7 @@ describe("deliverWatchlistAlerts", () => {
 from:{email:"alerts@0509.io",name:"Five to Nine"},
       to: "owner@example.com",
       subject: "Nykaa changed a landing page URL",
-      html: expect.stringContaining("Five to Nine alert"),
+      html: expect.stringContaining("Instant alert"),
       headers: expect.objectContaining({
         "X-0509-Tag": "instant-alert",
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
@@ -2906,7 +2906,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
     expect(html).toContain(
       '<img src="https://cdn.example.com/creative-1.jpg?sig=&quot;x&quot;&amp;v=1" alt="Ad creative" width="280"',
     );
-    expect(html).toContain("max-width: 280px; border-radius: 8px; border: 1px solid #e4e7ec; margin: 12px 0;");
+    expect(html).toContain("max-width: 100%; width: 280px; border-radius: 0; border: 1px solid #e0ddd4; background-color: #fffdf8; margin: 12px 0;");
   });
 
   it("sends after quiet hours when the earlier deferral used the same alert batch", async () => {
