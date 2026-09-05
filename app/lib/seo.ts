@@ -495,24 +495,15 @@ export const SITEMAP_PATHS = [
   "/de/sneaker-resale",
   "/ja/sneaker-resale",
   "/pt-br/sneaker-resale",
-  // Locale-prefixed buyer-surface cluster (issue #1501). Each locale ships
-  // the same set of buyer surfaces the EN locale serves; canonicals point
-  // back at the EN version so duplicate content does not fragment search
-  // ranking. Built from `BUYER_SURFACE_LOCALE_IDS` so a new locale added
-  // there automatically widens the cluster without a separate edit. The
-  // bare `/{locale}` index (e.g. `/de`) is intentionally NOT in this list:
-  // it carries the same canonical as `/`, so listing it twice would emit a
-  // duplicate `<loc>` for the same canonical target.
-  ...BUYER_SURFACE_LOCALE_IDS.flatMap((locale) => [
-    `/${locale}/pricing`,
-    `/${locale}/help`,
-    `/${locale}/docs`,
-    `/${locale}/api/docs`,
-    `/${locale}/status`,
-    `/${locale}/changelog`,
-    `/${locale}/trust`,
-    `/${locale}/compare`,
-  ]),
+  // Issue #1570: the locale-prefixed buyer-surface cluster (`/de/pricing`,
+  // `/ja/help`, ...) was REMOVED from the sitemap. Those pages serve
+  // byte-identical English copy with `lang="en"` and `canonical` -> the EN
+  // twin, so listing them as 43 distinct `<loc>` entries told Google they
+  // were 43 indexable surfaces — a duplicate-content doorway pattern that
+  // burned crawl budget and split PageRank. They stay reachable (200,
+  // canonical->EN) but are no longer advertised as indexable. The genuinely
+  // translated sneaker-resale cluster (`/de/sneaker-resale` etc., listed
+  // above) stays in the sitemap because its content differs per locale.
   // Canonical Ad Aggression Score formula page (issue #1263). The old
   // /methodology/ad-aggression-score path now 301-redirects here so any
   // indexed link keeps its equity; /proof is the legacy capture-rules
@@ -568,28 +559,6 @@ export interface SitemapEntry {
  * timestamp, and inventing one would be a false freshness claim. Dynamic
  * /ads/:domain brand pages carry a real lastmod from their cache fetched_at.
  */
-/**
- * Locale-prefixed buyer-surface cluster (issue #1501): each locale in
- * `BUYER_SURFACE_LOCALE_IDS` ships the same set of buyer surfaces the EN
- * locale serves, with the same priority/changefreq tier as the EN entry.
- * The bare `/<locale>` index intentionally carries no entry — its canonical
- * is `/` and listing it twice would emit a duplicate `<loc>` for the same
- * canonical target.
- */
-const LOCALE_BUYER_SURFACE_PRIORITY: Record<string, { changefreq: string; priority: string }> =
-  Object.fromEntries(
-    BUYER_SURFACE_LOCALE_IDS.flatMap((locale) => [
-      [`/${locale}/pricing`, { changefreq: "weekly", priority: "0.8" }],
-      [`/${locale}/help`, { changefreq: "monthly", priority: "0.5" }],
-      [`/${locale}/docs`, { changefreq: "monthly", priority: "0.5" }],
-      [`/${locale}/api/docs`, { changefreq: "monthly", priority: "0.5" }],
-      [`/${locale}/status`, { changefreq: "monthly", priority: "0.5" }],
-      [`/${locale}/changelog`, { changefreq: "weekly", priority: "0.6" }],
-      [`/${locale}/trust`, { changefreq: "yearly", priority: "0.3" }],
-      [`/${locale}/compare`, { changefreq: "weekly", priority: "0.8" }],
-    ]),
-  );
-
 const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
   "/": { changefreq: "daily", priority: "1.0" },
   "/search": { changefreq: "weekly", priority: "0.9" },
@@ -623,7 +592,6 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/trust": { changefreq: "yearly", priority: "0.3" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },
   "/terms": { changefreq: "yearly", priority: "0.3" },
-  ...LOCALE_BUYER_SURFACE_PRIORITY,
 };
 
 export const SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] = SITEMAP_PATHS.map(

@@ -343,11 +343,13 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // /methodology/ad-aggression-score to /ad-aggression (issue #1263). The old
   // path now 301-redirects; the sitemap lists the canonical one only so we
   // never index a redirect target alongside its origin.
-  // 2026-09: Locale-prefixed buyer-surface cluster expanded to de, ja,
-  // pt-br, fr, es (issue #1501). Each locale ships the same set of
-  // buyer surfaces the EN locale serves with canonical→EN so duplicate
-  // content does not fragment search ranking.
-  // Product UI stays English; these are indexable marketing surfaces only.
+  // 2026-09: Locale-prefixed buyer-surface cluster exists at /de/pricing etc.
+  // but is intentionally NOT in the sitemap (issue #1570). Those pages serve
+  // byte-identical English copy with lang="en" and canonical→EN, so listing
+  // them as 43 distinct indexable surfaces would be a duplicate-content
+  // doorway pattern. They stay reachable (200, canonical→EN) but are only
+  // advertised through the EN pages plus their reciprocal hreflang cluster.
+  // The genuinely translated sneaker-resale cluster stays in the sitemap.
   sitemapPaths: [
     "/", "/search", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
     "/compare/visualping", "/compare/visualping-ad-library", "/compare/spyland",
@@ -356,17 +358,6 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",
     "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale",
     "/pt-br/sneaker-resale",
-    // Locale-prefixed buyer-surface cluster (issue #1501) — generated below.
-    ...["de", "ja", "pt-br", "fr", "es"].flatMap((locale) => [
-      `/${locale}/pricing`,
-      `/${locale}/help`,
-      `/${locale}/docs`,
-      `/${locale}/api/docs`,
-      `/${locale}/status`,
-      `/${locale}/changelog`,
-      `/${locale}/trust`,
-      `/${locale}/compare`,
-    ]),
     "/capture-rules", "/ad-aggression", "/pricing", "/help", "/docs", "/api/docs",
     "/status", "/changelog", "/trust", "/privacy", "/terms",
   ],
