@@ -47,6 +47,15 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
   },
+  // Issue #1417: the /brands hub links every indexable /ads/:domain brand
+  // page so the otherwise-sitemap-orphaned brand surface has an internal-link
+  // graph. Listed in SITEMAP_PATHS, so it needs a title/description here or
+  // buildLlmsText emits `[undefined]` lines.
+  "/brands": {
+    title: "Browse all tracked brands",
+    description:
+      "Indexable public brand pages showing the real Meta ads that run for, or link to, each tracked domain, grouped by category.",
+  },
   "/compare": {
     title: "Compare Five to Nine vs the alternatives",
     description:

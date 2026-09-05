@@ -134,6 +134,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     offerTimelineEntries: [],
     adLibraryCountry: "India",
     noindex: false,
+    relatedBrands: [],
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
     ...overrides,
