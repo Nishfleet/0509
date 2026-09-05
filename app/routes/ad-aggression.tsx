@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
@@ -22,6 +22,7 @@ import {
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
+import { localeSearchPathname } from "~/lib/locale-markets";
 
 const pageTitle = "Ad Aggression Score methodology | Five to Nine";
 const pageDescription =
@@ -62,6 +63,10 @@ export const meta: MetaFunction = () =>
 
 export default function AdAggressionMethodologyRoute() {
   const structuredFaq = faqPageJsonLd(adAggressionMethodologyFaqEntries);
+  // Funnel the localised visitor's search moment to `/{locale}/search`, not
+  // EN `/search` (issue 1578, accept #3).
+  const location = useLocation();
+  const searchPath = localeSearchPathname(location.pathname);
 
   return (
     <PublicDocShell
@@ -133,7 +138,7 @@ export default function AdAggressionMethodologyRoute() {
         <p>
           You will see the number on every{" "}
           <Link to="/ads/nike.com">public brand ads page</Link> that has enough history. A live
-          search of a competitor is at <Link to="/search">Search</Link>.
+          search of a competitor is at <Link to={searchPath}>Search</Link>.
         </p>
       </PublicDocBlock>
 

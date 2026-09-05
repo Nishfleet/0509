@@ -516,6 +516,13 @@ export const SITEMAP_PATHS = [
     // locale ships the same 13 child surfaces, with canonicals pointing
     // back at EN so the locale cluster cannot fragment search ranking.
     ...BUYER_SURFACE_CHILD_PATHS.map((child) => `/${locale}${child}`),
+    // First-value search funnel + trust surfaces (issue 1578). Search is
+    // the strongest first-value purchase-intent moment, so the localised
+    // funnel must be crawlable and locale-targetable end to end.
+    `/${locale}/search`,
+    `/${locale}/competitor-monitoring`,
+    `/${locale}/capture-rules`,
+    `/${locale}/ad-aggression`,
   ]),
   // Canonical Ad Aggression Score formula page (issue #1263). The old
   // /methodology/ad-aggression-score path now 301-redirects here so any
@@ -596,6 +603,11 @@ const LOCALE_BUYER_SURFACE_PRIORITY: Record<string, { changefreq: string; priori
         `/${locale}${child}`,
         { changefreq: "weekly", priority: "0.7" },
       ] as const),
+      // First-value search funnel + supporting trust/proof surfaces (issue 1578).
+      [`/${locale}/search`, { changefreq: "weekly", priority: "0.9" }],
+      [`/${locale}/competitor-monitoring`, { changefreq: "weekly", priority: "0.8" }],
+      [`/${locale}/capture-rules`, { changefreq: "monthly", priority: "0.5" }],
+      [`/${locale}/ad-aggression`, { changefreq: "monthly", priority: "0.6" }],
     ]),
   );
 

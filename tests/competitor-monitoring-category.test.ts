@@ -22,6 +22,7 @@ beforeEach(() => {
       // tests/ads-brand-page.render.test.tsx) so the router hook is a no-op.
       useRouteLoaderData: () => undefined,
       useLoaderData: () => ({ proofBrief: null }),
+      useLocation: () => ({ pathname: "/competitor-monitoring" }),
       Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
@@ -135,8 +136,10 @@ describe("competitor monitoring category page", () => {
   it("links internally to search, docs, and pricing", async () => {
     const source = readFileSync(routePath, "utf8");
 
-    expect(source).toContain('action="/search"');
-    expect(source).toContain('<Link to="/search">');
+    // The search funnel is locale-aware (issue #1578): the source uses
+    // `searchPath` so EN keeps `/search` and locale pages keep `/{locale}/search`.
+    expect(source).toContain('action={searchPath}');
+    expect(source).toContain('<Link to={searchPath}>');
     expect(source).toContain('<Link to="/docs">');
     expect(source).toContain('<Link to="/#pricing">');
     expect(source).toContain('<Link to="/">homepage FAQ</Link>');

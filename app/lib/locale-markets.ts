@@ -45,6 +45,16 @@ export const BUYER_SURFACE_PATHS = [
   "/changelog",
   "/trust",
   "/compare",
+  // First-value search funnel + supporting trust surfaces (issue 1578).
+  // Search is THE first purchase-intent moment (BET 2), so a non-EN buyer
+  // completing the localised funnel must reach the same functional search
+  // outcome instead of a 404 or a language jump back to EN `/search`
+  // (accept #1/#3). Competitor-monitoring, capture-rules and ad-aggression
+  // are the surrounding trust/proof surfaces the localised buyer needs too.
+  "/search",
+  "/competitor-monitoring",
+  "/capture-rules",
+  "/ad-aggression",
 ] as const;
 export type BuyerSurfacePath = (typeof BUYER_SURFACE_PATHS)[number];
 
@@ -263,6 +273,19 @@ export function canonicalPathnameForLocalePath(pathname: string): string {
  * the full cluster, distinct from `isSneakerResaleLocaleId` which is scoped
  * to the sneaker-resale segment).
  */
+/**
+ * The search path a page on `pathname` should funnel its "run a search"
+ * entry points toward, preserving the buyer-surface locale prefix (issue 1578,
+ * accept #3). A localised surface like `/de/competitor-monitoring`
+ * must hand the first-value search moment to `/de/search` — not EN
+ * `/search` — so the non-EN buyer stays inside the localised funnel. EN
+ * (and unknown) pathnames return `/search` unchanged.
+ */
+export function localeSearchPathname(pathname: string): string {
+  const locale = buyerSurfaceLocaleForPathname(pathname);
+  return locale ? `/${locale}/search` : "/search";
+}
+
 export function isBuyerSurfaceLocaleId(value: string | undefined): value is BuyerSurfaceLocaleId {
   return (
     value !== undefined &&
