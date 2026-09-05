@@ -1,9 +1,12 @@
 > **SUPERSEDED (2026-08-08).** This contract described an IA that no
 > longer exists (it disagreed with the shipped nav on five of seven
 > labels). The ratified IA is the five destinations — Today, Watch,
-> Library, Deliver, Settings — defined in `app/lib/dashboard-navigation.ts`
-> and governed by the design-unification ledger in agent-state. Retained
-> as history only; do not plan from this file.
+> Library, Deliver, Settings — defined in `app/lib/dashboard-navigation.ts`.
+> The real source of truth for program state is `docs/BACKLOG.md`,
+> `DESIGN.md`, and `docs/design-system-ratchet.json` (the external
+> `agent-state` ledger was formally retired 2026-08-25; reconciled here
+> 2026-09-05, issue #1497). Retained as history only; do not plan from
+> this file.
 
 # Dashboard V2 — Design Contract
 
