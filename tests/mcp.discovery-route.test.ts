@@ -93,6 +93,7 @@ describe("MCP route discovery", () => {
       status: string;
       planRequirement: string;
       endpoint: string;
+      auth: { setup: string };
       tools: Array<{
         name: string;
         planRequirement: string;
@@ -126,6 +127,7 @@ describe("MCP route discovery", () => {
     expect(body.status).toBe("live");
     expect(body.planRequirement).toBe("Agency");
     expect(body.endpoint).toBe("https://0509.io/api/mcp");
+    expect(body.auth.setup).toBe("https://0509.io/mcp/setup");
     expect(body.agentActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
     expect(body.agentActivation.actionGroups.map(({ label, requiresWriteEnabled, actions }) => ({
       label,

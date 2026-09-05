@@ -100,14 +100,24 @@ export function DeveloperAccessRoute() {
               approved account actions.
             </p>
           </div>
-          <a
-            className="f9-access-text-action"
-            href="/api/docs"
-            rel="noreferrer"
-            target="_blank"
-          >
-            API docs <span aria-hidden="true">&rsaquo;</span>
-          </a>
+          <div className="f9-access-text-actions">
+            <a
+              className="f9-access-text-action"
+              href="/mcp/setup"
+              rel="noreferrer"
+              target="_blank"
+            >
+              MCP setup <span aria-hidden="true">&rsaquo;</span>
+            </a>
+            <a
+              className="f9-access-text-action"
+              href="/api/docs"
+              rel="noreferrer"
+              target="_blank"
+            >
+              API docs <span aria-hidden="true">&rsaquo;</span>
+            </a>
+          </div>
         </div>
 
         <div aria-label="API connection facts" className="f9-access-rows" role="list">
