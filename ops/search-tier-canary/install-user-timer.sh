@@ -18,6 +18,11 @@
 
 set -euo pipefail
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
+
 readonly SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly UNIT_DIR="${HOME}/.config/systemd/user"
 readonly LOG_DIR="${HOME}/workspaces/agent-state/cron-output"
