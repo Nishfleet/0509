@@ -6,8 +6,8 @@ import { MarketingFooter } from "~/components/marketing-footer";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
-const pageDescription =
-  "Moving from MagicBrief? What transfers to Five to Nine, what's different, and how we can help migrate your collections and watchlists.";
+export const pageDescription =
+  "Moving from MagicBrief? What transfers: your competitor list becomes watchlists. What doesn't: collections, boards, and analytics history — plus the person-to-person fallback.";
 
 export const links: LinksFunction = () => canonicalLinks("/compare/magicbrief");
 
@@ -20,8 +20,9 @@ export const meta: MetaFunction = () =>
 
 const transfers = [
   {
-    theirs: "Saved ad library and boards",
-    ours: "Collections — save winning ads with notes and tags, share with clients",
+    theirs: "Your competitor list",
+    ours:
+      "Paste or upload it — one domain, URL, or brand name per line, or a CSV with name, website, notes, tags, and client columns — and the setup import creates your watchlists.",
   },
   {
     theirs: "Brand tracking",
@@ -30,6 +31,24 @@ const transfers = [
   {
     theirs: "Creative inspiration browsing",
     ours: "Search preview — paste a competitor website and inspect available Meta ads with source and freshness labels, no account needed",
+  },
+] as const;
+
+const notImported = [
+  {
+    title: "Collections and boards",
+    detail:
+      "MagicBrief collections, boards, and saved creative evidence — screenshots, saved ads, and links — are not portable through the generic competitor import. Five to Nine does not migrate them.",
+  },
+  {
+    title: "Analytics and report history",
+    detail:
+      "Spend, impressions, reach, charts, and report dates are not imported. Keep your original export and recreate any numbers you need in your own reports.",
+  },
+  {
+    title: "Historical screenshot evidence",
+    detail:
+      "The generic importer does not preserve historical screenshots or evidence from MagicBrief. Going forward, watchlist scans save fresh screenshots, page text, and links as evidence inside Five to Nine.",
   },
 ] as const;
 
@@ -61,7 +80,7 @@ export default function CompareMagicBriefRoute() {
           <span>Migration guide — MagicBrief → Five to Nine</span>
         </p>
         <h1 className="ld-wall ld-wall-compact">
-          Moving from MagicBrief? Bring your saved work. Gain the receipts.
+          Moving from MagicBrief? Bring your competitor list. Gain the receipts.
         </h1>
         <p className="ld-deck-copy">
           If your current tool is winding down or just winding you up, email{" "}
@@ -100,6 +119,21 @@ export default function CompareMagicBriefRoute() {
 
       <section className="ld-quiet">
         <div className="ld-section-head">
+          <span className="ld-kicker">Not imported</span>
+          <h2>What doesn&rsquo;t transfer.</h2>
+        </div>
+        <div className="ld-quiet-grid">
+          {notImported.map((item) => (
+            <article key={item.title}>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="ld-quiet">
+        <div className="ld-section-head">
           <span className="ld-kicker">The honest differences</span>
           <h2>Not a clone. A different bet.</h2>
         </div>
@@ -119,8 +153,9 @@ export default function CompareMagicBriefRoute() {
         </h2>
         <p className="ld-pricing-note">
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> with your MagicBrief export (or just
-          a list of brands you tracked) and we&rsquo;ll set up your collections and watchlists with
-          you. Plans from the <Link to="/#pricing">pricing page</Link> — the public search preview stays free
+          a list of brands you tracked) and we&rsquo;ll set up your watchlists with you —
+          collections and evidence start fresh inside Five to Nine. Plans from the{" "}
+          <Link to="/#pricing">pricing page</Link> — the public search preview stays free
           either way.
         </p>
       </section>

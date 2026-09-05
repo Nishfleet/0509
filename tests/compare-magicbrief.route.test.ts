@@ -36,4 +36,31 @@ describe("compare magicbrief route", () => {
     expect(markup).not.toContain("Slack delivery");
     expect(markup).not.toContain("WhatsApp delivery");
   });
+
+  it("draws the migration boundary: watchlists import, collections and evidence do not", async () => {
+    const { default: CompareMagicBriefRoute, pageDescription } = await import(
+      "~/routes/compare.magicbrief"
+    );
+    const markup = renderToStaticMarkup(createElement(CompareMagicBriefRoute));
+
+    expect(pageDescription).not.toContain("migrate your collections");
+    expect(pageDescription).toContain("person-to-person fallback");
+
+    expect(markup).not.toContain("Bring your saved work");
+    expect(markup).not.toContain("Saved ad library and boards");
+    expect(markup).not.toContain("Collections — save winning ads");
+    expect(markup).not.toContain("set up your collections and watchlists");
+
+    expect(markup).toContain("Bring your competitor list. Gain the receipts.");
+    expect(markup).toContain("one domain, URL, or brand name per line");
+    expect(markup).toContain("the setup import creates your watchlists");
+
+    expect(markup).toContain("What doesn\u2019t transfer.");
+    expect(markup).toContain("Five to Nine does not migrate them");
+    expect(markup).toContain("recreate any numbers you need in your own reports");
+    expect(markup).toContain("fresh screenshots, page text, and links as evidence");
+
+    expect(markup).toContain("set up your watchlists with you");
+    expect(markup).toContain("collections and evidence start fresh inside Five to Nine");
+  });
 });
