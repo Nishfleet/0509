@@ -140,6 +140,16 @@ const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
 // forces a fresh page load to the exact target URL. Exported so tests can pin
 // the exact grace window.
 export const SEARCH_NAVIGATION_SETTLE_GRACE_MS = 90_000;
+// Settled-request escape hatch: the React Router 8 single-fetch SPA loader
+// request for an in-flight /search GET lands on `${pathname}.data` with the
+// target query params. Once that request has SETTLED (resource timing shows
+// the response arrived) while the router still has not committed, the recovery
+// block arms after a short confirmation window instead of waiting out the
+// long-horizon bound. The confirmation window lets a committing router win
+// the race (decode + commit is normally milliseconds once the body arrived).
+// Exported so tests can pin the exact cadence and confirmation window.
+export const SEARCH_DATA_SETTLE_POLL_MS = 1_000;
+export const SEARCH_DATA_SETTLE_REARM_MS = 1_000;
 
 const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
@@ -994,19 +1004,29 @@ export default function SearchRoute() {
   const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
   // Candidate-3 root-cause fix for the public submit hang: the See ads button
   // stays pending only while a GET navigation to /search targets a URL that is
-  // NOT the committed location.search. Once the server commits results or an
-  // error for the submitted URL — even if useNavigation still reports loading
-  // — the target matches the committed location and the button re-enables
-  // instead of spinning forever. The long-horizon recovery overrides it so the
-  // button is never stuck disabled behind a navigation that cannot settle.
+  // NOT the committed location. The committed comparison is SEMANTIC (same
+  // query params, order/encoding-insensitive), so a committed location whose
+  // serialization differs from the in-flight target (param order, encoding,
+  // router normalization) still counts as settled — the request for that URL
+  // has committed its data. Once the server commits results or an error for
+  // the submitted URL — even if useNavigation still reports loading — the
+  // button re-enables instead of spinning forever. The long-horizon recovery
+  // and the settled-request watcher below override it so the button is never
+  // stuck disabled behind a navigation that cannot settle.
   const commandNavigationTarget =
     navigation.state === "loading" &&
     navigation.location?.pathname === "/search"
       ? (navigation.location.search ?? "")
       : null;
+  const commandNavigationCommitted =
+    commandNavigationTarget !== null &&
+    sameSearchParams(
+      new URLSearchParams(commandNavigationTarget),
+      new URLSearchParams(location.search),
+    );
   const commandNavigationPending =
     commandNavigationTarget !== null &&
-    commandNavigationTarget !== location.search &&
+    !commandNavigationCommitted &&
     searchNavigationRecovery === null;
   const displayDomain =
     data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
@@ -1151,6 +1171,28 @@ export default function SearchRoute() {
     setWarmingPollCount(0);
   }, [searchKey]);
 
+  // Navigation-start epoch on the performance clock (the same clock resource
+  // timing entries report): when the committed page last entered the idle
+  // pre-search state. The in-flight idle /search target always begins
+  // at-or-after this instant, while any prior same-parameter request started
+  // before it — so a settled `.data` timing entry can only belong to the
+  // CURRENT navigation when its startTime is at-or-after this epoch, and a
+  // pre-existing same-target entry can never arm recovery for a fresh
+  // still-pending search. Without a performance clock the ref stays 0 and
+  // the bound degrades to matching any settled entry (the pre-repair
+  // behaviour).
+  const idleSearchEpochRef = useRef(0);
+  useEffect(() => {
+    if (
+      hasSearchQuery ||
+      typeof performance === "undefined" ||
+      typeof performance.now !== "function"
+    ) {
+      return;
+    }
+    idleSearchEpochRef.current = performance.now();
+  }, [hasSearchQuery, location.pathname, location.search]);
+
   // Long-horizon recovery: while a /search GET is genuinely loading and the
   // committed page is still the untouched idle pre-search form, arm a 90s
   // grace timer. If the target never commits (server settled but the SPA
@@ -1158,6 +1200,20 @@ export default function SearchRoute() {
   // to the exact in-flight target. Clearing happens on the same effect run:
   // the moment navigation settles, the target changes, or the committed page
   // leaves the idle state, the timer is torn down and recovery is reset.
+  //
+  // Settled-request watcher: the 90s bound stays as the last resort for
+  // genuinely slow or stuck searches, but a settled request must not wait it
+  // out. React Router 8 single-fetch SPA loader requests for /search GETs
+  // land on `/search.data` with the target query params; when resource timing
+  // shows the CURRENT target's request settled (response arrived) while the
+  // router still has not committed, the recovery block arms after a short
+  // confirmation window so the visitor gets the exact-target reload
+  // immediately instead of after a minute and a half. The idle-page epoch
+  // above time-bounds the match: a settled entry that started before the
+  // current navigation began is a pre-existing entry from an earlier
+  // same-target search and never counts. No second request is fired and
+  // nothing is fabricated: the block only offers a fresh page load to the
+  // exact in-flight target.
   useEffect(() => {
     const target = navigation.location?.search ?? "";
     const isInFlightIdleSearch =
@@ -1169,10 +1225,47 @@ export default function SearchRoute() {
     if (!isInFlightIdleSearch) {
       return;
     }
-    const timer = setTimeout(() => {
+    // Navigation start epoch for THIS in-flight idle target: captured from
+    // the idle page's epoch, which the target begins at-or-after.
+    const navigationStartEpoch = idleSearchEpochRef.current;
+    let observedSettledAt: number | null = null;
+    const tick = () => {
+      const now = Date.now();
+      const resourceEntries =
+        typeof performance !== "undefined" &&
+        typeof performance.getEntriesByType === "function"
+          ? (performance.getEntriesByType("resource") as unknown as {
+              name: string;
+              startTime: number;
+              responseEnd: number;
+            }[])
+          : [];
+      if (
+        !hasSettledSearchDataRequest(
+          target,
+          resourceEntries,
+          navigationStartEpoch,
+        )
+      ) {
+        return;
+      }
+      if (observedSettledAt === null) {
+        observedSettledAt = now;
+        return;
+      }
+      if (now - observedSettledAt >= SEARCH_DATA_SETTLE_REARM_MS) {
+        setSearchNavigationRecovery(target);
+      }
+    };
+    tick();
+    const poll = setInterval(tick, SEARCH_DATA_SETTLE_POLL_MS);
+    const deadline = setTimeout(() => {
       setSearchNavigationRecovery(target);
     }, SEARCH_NAVIGATION_SETTLE_GRACE_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      clearInterval(poll);
+      clearTimeout(deadline);
+    };
   }, [
     navigation.state,
     navigation.location?.pathname,
@@ -1541,10 +1634,11 @@ export default function SearchRoute() {
             </details>
           </Form>
 
-          {/* Long-horizon recovery for the submit hang: the server settled but
-              the SPA never committed the target URL, so offer a fresh page
-              load to the exact in-flight /search target instead of an eternal
-              "Searching…". reloadDocument forces the full document load. */}
+          {/* Recovery for the submit hang: the SPA never committed the target
+              URL (the request settled but the page stalled, or the navigation
+              is genuinely stuck), so offer a fresh page load to the exact
+              in-flight /search target instead of an eternal "Searching…".
+              reloadDocument forces the full document load. */}
           {searchNavigationRecovery !== null ? (
             <div
               aria-live="assertive"
@@ -1552,11 +1646,11 @@ export default function SearchRoute() {
               role="alert"
             >
               <p className="f9-wk-lede">
-                This search never finished loading
+                This search didn't finish loading
               </p>
               <p className="f9-wk-note">
-                It has been waiting for about a minute and a half. Reload the
-                search to open it in a fresh page load.
+                The page hasn't moved on from it yet. Reload the search to
+                open it in a fresh page load.
               </p>
               <div className="f9-wk-acts">
                 <Link
@@ -2340,6 +2434,90 @@ function SearchQueryFields({ params }: { params: URLSearchParams }) {
       value={value}
     />
   ));
+}
+
+// Two URLs are the "same search" when their query params carry the same
+// entries — order and encoding differences are serialization noise, not a
+// different search. Used to decide whether the committed location has settled
+// the in-flight /search GET target. Exported so tests can pin the contract.
+export function sameSearchParams(
+  a: URLSearchParams,
+  b: URLSearchParams,
+): boolean {
+  if (a.size !== b.size) {
+    return false;
+  }
+  for (const [key, value] of a) {
+    let expected = 0;
+    let actual = 0;
+    for (const other of a.getAll(key)) {
+      if (other === value) {
+        expected += 1;
+      }
+    }
+    for (const other of b.getAll(key)) {
+      if (other === value) {
+        actual += 1;
+      }
+    }
+    if (expected !== actual) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// React Router 8 single-fetch SPA loader requests for a /search GET land on
+// `/search.data` carrying the navigation's query params plus the router's own
+// `_routes`/`index` hints. The router's `singleFetchUrl` appends `_.data`
+// instead when the request pathname ends with a trailing slash, so
+// `/search/_.data` is accepted as the documented trailing-slash variant; any
+// other `*.data` pathname is a different request, never this search. A
+// resource-timing entry for the exact path with `startTime` at-or-after the
+// navigation start epoch and `responseEnd > 0` means the CURRENT target
+// request has SETTLED — the response arrived — even if the router never
+// committed the navigation. Entries that started before the epoch belong to
+// an earlier same-target navigation and never count. Matching is semantic
+// (same target params, order-insensitive) so any router-side serialization
+// difference cannot hide a settled request. Exported so tests can pin the
+// matching contract without mounting.
+export function hasSettledSearchDataRequest(
+  targetSearch: string,
+  entries: { name: string; startTime: number; responseEnd: number }[],
+  navigationStartEpoch: number,
+): boolean {
+  const targetParams = new URLSearchParams(targetSearch);
+  return entries.some((entry) => {
+    if (
+      typeof entry.startTime !== "number" ||
+      entry.startTime < navigationStartEpoch
+    ) {
+      // Pre-existing timing entry from an earlier same-target navigation:
+      // it must not count as this navigation's settled request.
+      return false;
+    }
+    if (typeof entry.responseEnd !== "number" || entry.responseEnd <= 0) {
+      return false;
+    }
+    let url: URL;
+    try {
+      url = new URL(
+        entry.name,
+        typeof window !== "undefined"
+          ? window.location.origin
+          : "http://localhost",
+      );
+    } catch {
+      return false;
+    }
+    if (url.pathname !== "/search.data" && url.pathname !== "/search/_.data") {
+      return false;
+    }
+    const requestParams = new URLSearchParams(url.search);
+    requestParams.delete("_routes");
+    requestParams.delete("index");
+    return sameSearchParams(targetParams, requestParams);
+  });
 }
 
 function canUseCanaryFreshLiveBypass(
