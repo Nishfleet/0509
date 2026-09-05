@@ -1,7 +1,10 @@
+import { Link } from "react-router";
+
 import { LocalTime } from "~/components/local-time";
 import { QuietLineList } from "~/components/evidence/quiet-line";
 import { WatchlistProofAge } from "~/components/watchlists/watchlist-proof-age";
 import { FactRail, type FactRow } from "~/components/evidence/fact-rail";
+import { CAPTURE_BUDGET_SKIP_HREF } from "~/lib/capture-validity-public-rules";
 import { formatConfidenceBandLabel, formatProofCaptureStatusLabel } from "~/lib/landing-page-display";
 import {
   buildRunHistoryRefusalRows,
@@ -104,7 +107,8 @@ export function RecentEvidenceChecksCard({
           {data.proofSummary.skippedDueToBudget} check
           {data.proofSummary.skippedDueToBudget === 1 ? "" : "s"} skipped because the
           plan allowance was reached. Checks resume when the allowance resets — add a
-          credit pack or upgrade the plan to capture more now.
+          credit pack or upgrade the plan to capture more now.{" "}
+          <Link to={CAPTURE_BUDGET_SKIP_HREF}>Why this happened</Link>
         </p>
       ) : null}
       {refusalRows.length > 0 ? (
