@@ -4,8 +4,12 @@
 Competitor Tracking Tools" comparison — current-month on-call listing item
 [lane 2, 2026-08-21] [traction]
 
-**Status:** PREPARED — ready to send; the send step itself is the only
-remaining action. This document contains a complete pitch for inclusion in
+**Status:** NEEDS-NISH — prepared and ready to send; the send step itself
+remains and requires the owner. **NEEDS-NISH: send the pitch via LinkedIn to
+Angad Singh (recommended), or email from `support@0509.io` once the owner
+confirms a Segwise vendor-facing inbox.** (No repo-local outbound mail path
+exists to fire the message — same constraint the ad-stack.ai lane recorded.)
+This document contains a complete pitch for inclusion in
 Segwise's "Best Ad Spy and Competitor Tracking Tools in 2026" roundup
 (`https://segwise.ai/blog/best-ad-spy-competitor-tools`), grounded in the
 live article (fetched 2026-08-21, HTML + the Superblog `.md` source), the
@@ -101,7 +105,11 @@ ingestion, checks are scheduled not real-time.
 
 ## Submission status (recorded 2026-08-21)
 
-**PREPARED — ready to send; the send step is the only remaining action.**
+**NEEDS-NISH — ready to send; the send step is the only remaining action.**
+
+**NEEDS-NISH: send the pitch via LinkedIn to Angad Singh (recommended), or
+email from `support@0509.io` once the owner confirms a Segwise
+vendor-facing inbox.**
 
 - **No venue form, account, or payment required** — the whole submission is
   one pitch message (LinkedIn DM recommended; see
@@ -117,14 +125,14 @@ ingestion, checks are scheduled not real-time.
   call; this is a submission into the next update cycle, not a confirmed
   placement.
 
-### Re-verified 2026-08-23 — still not listed; send remains blocked on owner decision
+### Re-verified 2026-08-23 — still not listed; send remains blocked on owner decision (NEEDS-NISH)
 
 Fresh pass recorded 2026-08-23 (evidence:
 `.lane/reports/0509-lane1-segwise-listing-reverify-20260823.md`):
 
 - Roundup `https://segwise.ai/blog/best-ad-spy-competitor-tools` returned
   HTTP 200 and still does NOT contain Five to Nine or any `0509.io` link;
-  Angad Singh is still the listed author. **Status stays PREPARED — ready
+  Angad Singh is still the listed author. **Status stays NEEDS-NISH — ready
   to send.**
 - Venue URLs still HTTP 200: the article, author page
   (`https://segwise.ai/blog/author/angad-singh`), blog
