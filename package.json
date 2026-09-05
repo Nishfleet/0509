@@ -40,6 +40,7 @@
     "check:d1:partial-refunds": "node scripts/check-partial-refund-invariants.mjs",
     "signal:market": "node scripts/market-signal-snapshot.mjs",
     "signal:market:validate": "node scripts/validate-market-signal-report.mjs",
+    "seed:publisher": "node scripts/ads-domain-publisher.mjs",
     "deploy": "node scripts/deploy-production.mjs",
     "dev": "react-router dev",
     "e2e": "npm run e2e:local && npm run e2e:prod:public",
