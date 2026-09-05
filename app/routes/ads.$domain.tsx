@@ -76,13 +76,14 @@ import type { CaptureAttemptReasonCode } from "~/lib/capture-attempt-reason-code
 import {
   adsPageServiceJsonLd,
   brandPageTimelineHasPart,
+  breadcrumbListJsonLd,
   canonicalUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
-import type { FaqJsonLdEntry } from "~/lib/seo";
+import type { BreadcrumbJsonLdItem, FaqJsonLdEntry } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
 
@@ -518,6 +519,34 @@ export function brandPageFaqEntries(data: BrandPageLoaderData): ReadonlyArray<Fa
   ];
 }
 
+/**
+ * The breadcrumb trail for the /ads/:domain page, shared by the visible
+ * breadcrumb nav and the BreadcrumbList JSON-LD so the two can never drift
+ * (issue #1418). Three levels: Home (Five to Nine), the Ads parent, and the
+ * current brand page.
+ *
+ * The middle "Ads" entry links to /search — there is no /ads index page and
+ * no /brands hub yet (issue #1417 covers building one). When #1417 lands a
+ * /brands hub, this one line is the only change needed: swap "/search" for
+ * "/brands" and the visible nav + JSON-LD both follow.
+ *
+ * Returns null on the cache-miss shell (which 301-redirects and never
+ * reaches the render) — the breadcrumb is grounded in a real brand page that
+ * the visitor is actually on.
+ */
+export function brandPageBreadcrumbItems(
+  data: BrandPageLoaderData,
+): ReadonlyArray<BreadcrumbJsonLdItem> | null {
+  if (!data.hasCachedAds) {
+    return null;
+  }
+  return [
+    { name: "Five to Nine", pathname: "/" },
+    { name: "Ads", pathname: "/search" },
+    { name: data.brandName, pathname: data.canonicalPath },
+  ];
+}
+
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   if (!loaderData) {
     return [
@@ -551,18 +580,27 @@ export default function BrandAdsRoute() {
   return (
     <main className="f9-home f9-ads-page">
       {/*
-       * Truthful WebPage + Service + FAQPage JSON-LD, and ONLY on indexable
-       * pages: the honest shell, demo-sourced entries, stale (> 7 days)
-       * captures, and the emergency-brake flag all carry noindex — structured
-       * data on those states would be dead weight at best and a freshness lie
-       * at worst. Every field mirrors the visible page: the meta
-       * title/description, the canonical URL, the on-screen "Last checked"
-       * stamp (dateModified), the brand the page is about, the Watch
-       * {domain} offer with Five to Nine as the provider, and the brand-
-       * specific FAQ rendered from the same array further down the page.
+       * Truthful WebPage + Service + FAQPage + BreadcrumbList JSON-LD, and
+       * ONLY on indexable pages: the honest shell, demo-sourced entries,
+       * stale (> 7 days) captures, and the emergency-brake flag all carry
+       * noindex — structured data on those states would be dead weight at
+       * best and a freshness lie at worst. Every field mirrors the visible
+       * page: the meta title/description, the canonical URL, the on-screen
+       * "Last checked" stamp (dateModified), the brand the page is about,
+       * the Watch {domain} offer with Five to Nine as the provider, the
+       * breadcrumb trail rendered as the visible nav (issue #1418), and the
+       * brand-specific FAQ rendered from the same array further down the
+       * page.
        */}
       {!data.noindex ? (
         <>
+          {(() => {
+            const breadcrumbItems = brandPageBreadcrumbItems(data);
+            if (!breadcrumbItems) return null;
+            return (
+              <script {...jsonLdScriptProps(breadcrumbListJsonLd(breadcrumbItems))} />
+            );
+          })()}
           <script
             {...jsonLdScriptProps(
               webPageJsonLd({
@@ -827,6 +865,41 @@ function shortUrl(url: string): string {
   }
 }
 
+/**
+ * Visible breadcrumb nav for the /ads/:domain page (issue #1418). Rendered
+ * from the same `brandPageBreadcrumbItems` trail the BreadcrumbList JSON-LD
+ * above uses, so the two can never drift. Home (Five to Nine) and the Ads
+ * parent link out; the current brand page is the last, non-link item.
+ * Renders only on the cached-indexable page (the cache-miss shell
+ * 301-redirects and never reaches this component anyway).
+ */
+function BrandBreadcrumbs({ data }: { data: BrandPageLoaderData }) {
+  const items = brandPageBreadcrumbItems(data);
+  if (!items) {
+    return null;
+  }
+  return (
+    <nav className="f9-ads-breadcrumb" aria-label="Breadcrumb">
+      <div className="f9-container">
+        <ol>
+          {items.map((item, index) => {
+            const isLast = index === items.length - 1;
+            return (
+              <li key={item.name}>
+                {isLast ? (
+                  <span aria-current="page">{item.name}</span>
+                ) : (
+                  <Link to={item.pathname}>{item.name}</Link>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </nav>
+  );
+}
+
 function BrandAdsResults({
   data,
   liveSearchPath,
@@ -856,6 +929,13 @@ function BrandAdsResults({
 
   return (
     <>
+      {/* 0. BREADCRUMB — visible nav + source for the BreadcrumbList JSON-LD
+          (issue #1418). Rendered from the same brandPageBreadcrumbItems the
+          JSON-LD block above uses, so the structured data can never drift
+          from what the visitor sees: Home (Five to Nine) > Ads > <brand>.
+          The last item is the current page and is not a link. */}
+      <BrandBreadcrumbs data={data} />
+
       {/* 1. HERO — the verdict + the score card */}
       <section className="f9-ads-hero" aria-labelledby="brand-ads-title">
         <div className="f9-container">
