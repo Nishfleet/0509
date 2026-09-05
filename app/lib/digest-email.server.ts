@@ -1,6 +1,11 @@
 import {
   type DigestCadence,
+  DIGEST_MATERIALITY_UNAVAILABLE,
+  DIGEST_NEXT_ACTION_UNAVAILABLE,
   digestCadenceLabel,
+  digestMaterialityReason,
+  digestNextAction,
+  digestReviewerLabel,
   readDigestIntelligence,
   safeHttpsImageUrl,
 } from "~/lib/change-intelligence";
@@ -110,6 +115,13 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     return buildQuietDigestEmail(input);
   }
 
+  // E2 (2026-08-08): an empty period with no heartbeat has no period record at
+  // all — never silently render a generic digest. The explicit failure state
+  // is the only truthful output for this shape.
+  if (input.items.length === 0) {
+    return buildDigestRecordFailureEmail(input);
+  }
+
   const ranked = rankDigestItems(input.items);
   // WP-27: up to 5 top moves, rendered grouped by watchlist.
   const topItems = ranked.slice(0, 5);
@@ -132,6 +144,13 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const trendLines =
     input.cadence === "weekly" ? buildDigestTrendRollups(input.items) : [];
 	const strategyParagraph = input.strategyParagraph?.trim() || null;
+  // E2 (2026-08-08): one materiality reason, one accountable reviewer, one
+  // next action per brief — derived from the filed events, never invented.
+  const accountability = {
+    materialityReason: digestMaterialityReason({ items: input.items }),
+    reviewerLabel: digestReviewerLabel(input.name),
+    nextAction: digestNextAction({ items: input.items }),
+  };
 
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
@@ -143,6 +162,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
         <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
         <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
       </div>
+      ${renderEmailAccountabilityBlock(accountability)}
       ${renderTrendSectionHtml(trendLines)}
       <h2 style="${EMAIL_H2_STYLE}">Top moves</h2>
       ${renderTopMoveGroupsHtml(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl)}
@@ -166,6 +186,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     `Priority mix: ${priorityMixLabel(priorityMix)}`,
     `Evidence mix: ${proofMixLabel(proofMix)}`,
+    ...renderEmailAccountabilityText(accountability),
     ...renderTrendSectionText(trendLines),
     "",
     "Top moves:",
@@ -220,6 +241,12 @@ export function buildScanTroubleEmail(input: {
         We couldn't complete checks for <strong>${escapeHtml(listed)}</strong> in this period.
         We'll try again at the next scheduled check. You don't need to do anything now.
       </p>
+      ${renderEmailAccountabilityBlock({
+        materialityReason: `We couldn't complete checks for ${listed} in this period.`,
+        reviewerLabel: digestReviewerLabel(),
+        nextAction:
+          "We'll try again at the next scheduled check — you don't need to do anything now.",
+      })}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.watchlistsUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Open watchlists</a>
       </p>
@@ -238,6 +265,12 @@ export function buildScanTroubleEmail(input: {
     "We hit a problem checking your competitors.",
     "",
     `We couldn't complete checks for ${listed} in this period. We'll try again at the next scheduled check.`,
+    ...renderEmailAccountabilityText({
+      materialityReason: `We couldn't complete checks for ${listed} in this period.`,
+      reviewerLabel: digestReviewerLabel(),
+      nextAction:
+        "We'll try again at the next scheduled check — you don't need to do anything now.",
+    }),
     "",
     `Open watchlists: ${input.watchlistsUrl}`,
     `Manage frequency: ${input.manageFrequencyUrl}`,
@@ -246,6 +279,58 @@ export function buildScanTroubleEmail(input: {
   ]
     .filter((line): line is string => typeof line === "string")
     .join("\n");
+
+  return { subject, preheader, html, text };
+}
+
+/**
+ * E2 (2026-08-08): an empty digest with no heartbeat has no period record at
+ * all — the orchestration never produces this shape. Rendering it as a
+ * generic "N changes found" digest would be a silent ownerless feed, so the
+ * explicit failure state is the only truthful output: the missing materiality
+ * and next-action are named, and the accountable reviewer is still stated.
+ */
+function buildDigestRecordFailureEmail(input: DigestEmailInput): DigestEmailModel {
+  const subject = "Your brief is missing its period record";
+  const preheader =
+    "This brief has no period record — the materiality reason and next action are unavailable.";
+  const cadenceLabel = digestCadenceLabel(input.cadence);
+  const dateRange = `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`;
+  const html = `
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
+    ${renderEmailContentSurface(`
+      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
+      <h1 style="${EMAIL_H1_STYLE}">This brief is missing its period record.</h1>
+      <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
+      ${renderEmailAccountabilityBlock({
+        materialityReason: DIGEST_MATERIALITY_UNAVAILABLE,
+        reviewerLabel: digestReviewerLabel(input.name),
+        nextAction: DIGEST_NEXT_ACTION_UNAVAILABLE,
+      })}
+      <p style="margin: 0 0 20px;">
+        <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Open the briefs page</a>
+      </p>
+      <p style="margin: 0; color: #98a2b3; font-size: 13px;">
+        Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
+      </p>
+    `)}
+  `;
+  const text = [
+    `Five to Nine ${cadenceLabel}`,
+    "",
+    "This brief is missing its period record.",
+    dateRange,
+    "",
+    ...renderEmailAccountabilityText({
+      materialityReason: DIGEST_MATERIALITY_UNAVAILABLE,
+      reviewerLabel: digestReviewerLabel(input.name),
+      nextAction: DIGEST_NEXT_ACTION_UNAVAILABLE,
+    }),
+    `Open the briefs page: ${input.fullDigestUrl}`,
+    `Manage frequency: ${input.manageFrequencyUrl}`,
+    input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
+    `Support: ${input.supportEmail}`,
+  ].filter((line): line is string => typeof line === "string").join("\n");
 
   return { subject, preheader, html, text };
 }
@@ -268,6 +353,14 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     ? `<p style="margin: 0 0 16px; color: #475467;">${renderTriageRecordText(triage, input.timeZone)}</p>`
     : "";
   const recordText = triage ? renderTriageRecordText(triage, input.timeZone) : null;
+  // E2 (2026-08-08): the all-quiet period still names why it is quiet, who
+  // reviews it, and what happens next — or the failure state when no period
+  // truth exists to state.
+  const accountability = {
+    materialityReason: digestMaterialityReason({ heartbeat, triage }),
+    reviewerLabel: digestReviewerLabel(input.name),
+    nextAction: digestNextAction({ heartbeat, triage }),
+  };
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
@@ -279,6 +372,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
         and reviewed ${heartbeat.adsSeen} ad${heartbeat.adsSeen === 1 ? "" : "s"}. Completed checks found no action-worthy movement across the sources that ran.
       </p>
       ${recordHtml}
+      ${renderEmailAccountabilityBlock(accountability)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
       </p>
@@ -295,6 +389,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors reviewed ${heartbeat.adsSeen} ads. Completed checks found no action-worthy movement across the sources that ran.`,
     ...(recordText ? ["", recordText] : []),
+    ...renderEmailAccountabilityText(accountability),
     "",
     `Review digest history: ${input.fullDigestUrl}`,
     ...renderUpgradeNoteText(input),
@@ -360,6 +455,13 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ? `<p style="margin: 0 0 16px; color: #475467;">Held back: ${escapeHtml(triage.suppressionReasons.join("; "))}.</p>`
       : "";
   const recordText = renderTriageRecordText(triage, input.timeZone);
+  // E2 (2026-08-08): the shared triage vocabulary is the materiality reason
+  // and next action; the recipient identity is the accountable reviewer.
+  const accountability = {
+    materialityReason: digestMaterialityReason({ heartbeat, triage }),
+    reviewerLabel: digestReviewerLabel(input.name),
+    nextAction: digestNextAction({ heartbeat, triage }),
+  };
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
@@ -369,6 +471,7 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(checksLine)}</p>
       ${suppressionHtml}
       <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(recordText)}</p>
+      ${renderEmailAccountabilityBlock(accountability)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View the full brief</a>
       </p>
@@ -388,6 +491,7 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ? [`Held back: ${triage.suppressionReasons.join("; ")}.`]
       : []),
     recordText,
+    ...renderEmailAccountabilityText(accountability),
     "",
     `View the full brief: ${input.fullDigestUrl}`,
     ...renderUpgradeNoteText(input),
@@ -417,6 +521,40 @@ function renderTriageRecordText(
     .filter((line): line is string => typeof line === "string" && line.length > 0)
     .join(" ");
   return `${triage.explanation} ${actionLines}${checkedAt} Source: ${TRIAGE_SOURCE_LABELS[triage.status] ?? "completed checks"}.`;
+}
+
+/**
+ * E2 (2026-08-08): the labeled accountability block every customer-facing
+ * email carries — materiality reason, exactly one accountable reviewer, and
+ * one next action. Values come from the shared period-truth vocabulary, so a
+ * missing value renders its explicit failure state instead of dropping the
+ * line.
+ */
+function renderEmailAccountabilityBlock(input: {
+  materialityReason: string;
+  reviewerLabel: string;
+  nextAction: string;
+}) {
+  return `
+      <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
+        <p style="margin: 0 0 6px;"><strong>Why this matters:</strong> ${escapeHtml(input.materialityReason)}</p>
+        <p style="margin: 0 0 6px;"><strong>Accountable reviewer:</strong> ${escapeHtml(input.reviewerLabel)}</p>
+        <p style="margin: 0;"><strong>Next action:</strong> ${escapeHtml(input.nextAction)}</p>
+      </div>
+  `;
+}
+
+function renderEmailAccountabilityText(input: {
+  materialityReason: string;
+  reviewerLabel: string;
+  nextAction: string;
+}): string[] {
+  return [
+    `Why this matters: ${input.materialityReason}`,
+    `Accountable reviewer: ${input.reviewerLabel}`,
+    `Next action: ${input.nextAction}`,
+    "",
+  ];
 }
 
 type TopMoveGroup = {
