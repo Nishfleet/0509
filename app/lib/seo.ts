@@ -39,12 +39,12 @@ export function sneakerResaleHreflangLinks() {
   return [
     ...SNEAKER_RESALE_MARKETS.map((market) => ({
       rel: "alternate" as const,
-      hrefLang: market.hreflang,
+      hreflang: market.hreflang,
       href: canonicalUrl(market.pathname),
     })),
     {
       rel: "alternate" as const,
-      hrefLang: "x-default",
+      hreflang: "x-default",
       href: canonicalUrl("/sneaker-resale"),
     },
   ];
@@ -69,12 +69,12 @@ export function buyerSurfaceHreflangLinks(splat: string) {
   return [
     ...BUYER_SURFACE_LOCALE_IDS.map((locale) => ({
       rel: "alternate" as const,
-      hrefLang: locale,
+      hreflang: locale,
       href: canonicalUrl(splat === "" ? `/${locale}` : `/${locale}/${splat}`),
     })),
     {
       rel: "alternate" as const,
-      hrefLang: "x-default",
+      hreflang: "x-default",
       href: canonicalUrl(enPath),
     },
   ];
