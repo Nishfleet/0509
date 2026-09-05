@@ -200,13 +200,15 @@ const BUYER_SURFACE_HTML_LANG: Record<BuyerSurfaceLocaleId, string> = {
  * The prefix match is strict: the splat must be empty (bare `/<locale>`
  * index), exactly one of the allowlisted buyer-surface subpaths
  * (`pricing`, `help`, `docs`, `api/docs`, `status`, `changelog`, `trust`,
- * `compare`), or one of the locale-prefixable compare/switch child routes
- * (`compare/magicbrief`, `switch/visualping`, ...). Any other splat — e.g.
- * `/fr/sneaker-resale`, where `fr` is a buyer-surface locale but
- * `sneaker-resale` is the localized sneaker-resale cluster's own segment —
- * returns `null` so the pathname falls through to the sneaker-resale check
- * (which 404s for fr/es) and ultimately reports `en`. The strict match
- * keeps the buyer-surface lang tag from leaking onto 404s.
+ * `compare`), one of the locale-prefixable compare/switch child routes
+ * (`compare/magicbrief`, `switch/visualping`, ...), or a locale-prefixed
+ * programmatic `/ads/:domain` path (`ads/nike.com`, ... — issue #1562).
+ * Any other splat — e.g. `/fr/sneaker-resale`, where `fr` is a
+ * buyer-surface locale but `sneaker-resale` is the localized
+ * sneaker-resale cluster's own segment — returns `null` so the pathname
+ * falls through to the sneaker-resale check (which 404s for fr/es) and
+ * ultimately reports `en`. The strict match keeps the buyer-surface lang
+ * tag from leaking onto 404s.
  */
 function buyerSurfaceLocaleForPathname(pathname: string): BuyerSurfaceLocaleId | null {
   const pathOnly = pathname.split(/[?#]/)[0] ?? pathname;
@@ -220,15 +222,21 @@ function buyerSurfaceLocaleForPathname(pathname: string): BuyerSurfaceLocaleId |
     if (withoutTrailingSlash.startsWith(`${prefix}/`)) {
       const splat = withoutTrailingSlash.slice(prefix.length + 1);
       // The splat must exactly match a known buyer-surface subpath. An
-      // unknown splat (`/fr/sneaker-resale`, `/fr/ads/foo`) means the
+      // unknown splat (`/fr/sneaker-resale`, `/fr/foo`) means the
       // route 404s; the lang tag stays `en` so the not-found page doesn't
-      // mislabel itself as French/Spanish/etc.
+      // mislabel itself as French/Spanish/etc. `/fr/ads/foo` IS a
+      // legitimate locale brand page (issue #1562) once the domain is a
+      // single non-slash segment (domains never contain `/`), so it is
+      // recognised below.
+      const splatIsAdsDomain =
+        splat !== "ads" && /^ads\/[^/]+$/.test(splat);
       if (
         splat === "" ||
         (BUYER_SURFACE_PATHS as readonly string[]).some(
           (path) => path !== "/" && path === `/${splat}`,
         ) ||
-        isBuyerSurfaceChildSplat(splat)
+        isBuyerSurfaceChildSplat(splat) ||
+        splatIsAdsDomain
       ) {
         return locale;
       }
