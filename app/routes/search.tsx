@@ -130,6 +130,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
+import { resolveSearchBrandPageDomain } from "~/lib/ads-internal-links";
 import { localeSearchPathname } from "~/lib/locale-markets";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
@@ -277,6 +278,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       inputError: competitorWebsite.error,
       searchScope: "exact" as const,
       displayDomain: null,
+      brandPageLink: null,
       relevanceApplied: false,
       watchedWatchlist: null,
       ...navFlags,
@@ -306,6 +308,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       inputError: null,
       searchScope: "exact" as const,
       displayDomain: null,
+      brandPageLink: null,
       relevanceApplied: false,
       watchedWatchlist: null,
       ...navFlags,
@@ -488,6 +491,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
             "You've hit your live-search limit for your plan. The window refreshes about 24 hours after your earlier searches. Cached results still work — upgrade for more live checks.",
           searchScope: "exact" as const,
           displayDomain: null,
+          brandPageLink: null,
           relevanceApplied: false,
           watchedWatchlist: null,
           ...navFlags,
@@ -515,6 +519,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       inputError: null,
       searchScope: "exact" as const,
       displayDomain: null,
+      brandPageLink: null,
       relevanceApplied: false,
       watchedWatchlist: null,
       ...navFlags,
@@ -690,6 +695,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ? { ...parsed.filters, pageId: verifiedAdvertiserPageId }
     : parsed.filters;
 
+  // BET 5 cross-link: when this search's brand domain resolves to an indexable
+  // brand page, surface a "see all {brand} ads" link from the results to the
+  // public /ads/:domain destination so the top-of-funnel first-value moment
+  // hands off to the indexable brand page and passes it internal link equity.
+  // Resolves the domain from the search itself (never a `<label>.com` guess)
+  // and gates it on the sitemap's indexability filter so we never link a
+  // noindex brand page. Cache-only; only queried when a domain is present.
+  const { resolveIndexableBrandPageLinkForDomain } = await import(
+    "~/lib/ads-internal-links.server"
+  );
+  const brandPageCandidate = resolveSearchBrandPageDomain({
+    displayDomain: searchExecution.displayDomain,
+    ads: hydratedResult.ads,
+  });
+  const brandPageLink = brandPageCandidate
+    ? await resolveIndexableBrandPageLinkForDomain(env, brandPageCandidate)
+    : null;
+
   return {
     mode: parsed.mode,
     filters: filtersForForms,
@@ -710,6 +733,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     trackingRole,
     searchScope: searchExecution.searchScope,
     displayDomain: searchExecution.displayDomain,
+    brandPageLink,
     relevanceApplied: searchExecution.relevanceApplied,
     inputError: null,
     watchedWatchlist,
@@ -1919,6 +1943,21 @@ export default function SearchRoute() {
                     ) : null}
                   </div>
                   <div className="f9-wk-sec-acts">
+                    {data.brandPageLink ? (
+                      /* BET 5: the programmatic-SEO destination handoff. The
+                         results preview links straight to the indexable public
+                         /ads/:domain brand page, so a buyer drops from the
+                         top-of-funnel search to the "see all {brand} ads"
+                         landing in one click and the brand page inherits the
+                         search route's internal link equity. Gated server-side
+                         on the sitemap indexability filter. */
+                      <Link
+                        className="f9-wk-lnk"
+                        to={data.brandPageLink.path}
+                      >
+                        See all {data.brandPageLink.name} ads
+                      </Link>
+                    ) : null}
                     {visibleAds.length > 1 ? (
                       <label className="f9-wk-field is-inline">
                         <span className="f9-sr-only">Sort results</span>
