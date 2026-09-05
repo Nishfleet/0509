@@ -21,12 +21,15 @@
  *      - fetched_at within the 7-day freshness window
  *        (BRAND_PAGE_FRESH_FOR_INDEXING_MS) — older captures render with an
  *        honest freshness line but must not rank,
- *      - the capture's Ad Aggression Score would render (at least one
- *        verified-linked ad AND an observed window clearing the 14-day
- *        floor) — the score is the page's named differentiator, so a row
- *        whose page would ship the ad wall without it backs indexable thin
- *        content. The loader self-noindexes such a page; this gate keeps it
- *        out of the sitemap so the two agree.
+ *      - the capture carries at least one verified-linked ad (the page is
+ *        populated, not thin). The Ad Aggression Score may still be deferred
+ *        (observed window below the 14-day floor), but indexability is
+ *        decoupled from score computability (issue #1442): a page with a
+ *        real ad wall is indexable while the score card shows an honest
+ *        "N/14 days so far" state. Only a wall with ZERO verified-linked ads
+ *        backs indexable thin content, so those stay out — the loader
+ *        self-noindexes them; this gate keeps them out of the sitemap so the
+ *        two agree.
  *   2. Domain recovery is strictly lossless-only: a row maps to a brand page
  *      ONLY when its cache key or payload carries the registrable domain
  *      (search-v2 domain keys embed it; v2 payloads carry searchIntent +
@@ -80,7 +83,6 @@
 
 import {
   adHasVerifiedDomainLink,
-  computeBrandPageAggressionScore,
   deriveBrandPageLookupForCountry,
   normalizeBrandPageDomain,
   BRAND_PAGE_FRESH_FOR_INDEXING_MS,
@@ -241,27 +243,23 @@ export function isIndexableBrandPageRow(row: SitemapCacheRow, now: Date): boolea
 }
 
 /**
- * Mirror of the brand-page loader's aggression-score gate. The page's named
- * differentiator (the Ad Aggression Score + its four public sub-scores:
- * Velocity/Testing/Freshness/Persistence) renders ONLY when the capture has
- * at least one verified-linked ad AND the observed window clears the 14-day
- * floor — `computeBrandPageAggressionScore` returns null otherwise. A row
- * whose page would ship the ad wall without the score backs an indexable
- * thin page; it must stay out of the sitemap so no indexable thin brand
- * page remains. The wall still renders for a direct visitor (the loader
- * only withholds indexability) — this gate keeps such pages out of the
- * sitemap, mirroring the loader's `aggression === null → noindex` rule.
+ * Mirror of the brand-page loader's populated-vs-thin indexability gate
+ * (issue #1442). A row qualifies for the sitemap when its page would render
+ * at least one VERIFIED-linked ad (real landing-page/advertiser-domain
+ * evidence to the registrable domain) — the page is populated, not thin. The
+ * Ad Aggression Score may still be deferred (window below the 14-day floor,
+ * or no first-seen date) without making the page thin; indexability is
+ * decoupled from score computability. Only a wall with ZERO verified-linked
+ * ads ships as indexable thin content and must stay out, mirroring the
+ * loader's `verifiedLinkedAds.length === 0 → noindex` rule so the sitemap
+ * and the live page agree on indexability.
  *
  * The ads are read from the cached payload as-is (the cache stores full
- * AdRecord objects); `computeBrandPageAggressionScore` returns null on any
- * missing field, so a partial/payload-shape ad degrades to "not listable"
- * rather than a false positive.
+ * AdRecord objects); an ad with missing/invalid link evidence degrades to
+ * not-verified and does not single-handedly qualify a row — a false positive
+ * would list a thin page that actually serves noindex.
  */
-export function brandPageRowRendersAggressionScore(
-  row: SitemapCacheRow,
-  domain: string,
-  now: Date,
-): boolean {
+export function brandPageRowHasVerifiedAds(row: SitemapCacheRow, domain: string): boolean {
   const payload = parseSitemapCachePayload(row.payload_json);
   if (!payload) {
     return false;
@@ -270,10 +268,7 @@ export function brandPageRowRendersAggressionScore(
   const verifiedLinkedAds = ads.filter((ad) =>
     adHasVerifiedDomainLink(ad as AdRecord, domain),
   );
-  if (verifiedLinkedAds.length === 0) {
-    return false;
-  }
-  return computeBrandPageAggressionScore(verifiedLinkedAds as AdRecord[], now) !== null;
+  return verifiedLinkedAds.length > 0;
 }
 
 /**
@@ -349,12 +344,13 @@ export function indexableBrandPageEntriesFromRows(
     if (!lookupKeys.has(row.cache_key)) {
       continue;
     }
-    // The page's differentiator (Ad Aggression Score + 4 sub-scores) must
-    // render, or the loader self-noindexes the page — never list a thin
-    // page (ad wall without its score) in the sitemap. Mirrors the loader's
-    // `aggression === null → noindex` rule so the sitemap and the live page
-    // agree on indexability.
-    if (!brandPageRowRendersAggressionScore(row, domain, now)) {
+    // Indexability is a content-thinness rule, not a score rule: a populated
+    // page (≥1 verified-linked ad) is indexable even when the Ad Aggression
+    // Score is deferred, so a row is listed once it has verified link
+    // evidence — never list a wall with ZERO verified-linked ads (that page
+    // self-noindexes). Mirrors the loader's
+    // `verifiedLinkedAds.length === 0 → noindex` rule (issue #1442).
+    if (!brandPageRowHasVerifiedAds(row, domain)) {
       continue;
     }
     seen.add(domain);

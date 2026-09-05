@@ -18,7 +18,7 @@ import routes from "~/routes";
 import {
   brandDomainFromSitemapCacheRow,
   brandPageLookupCacheKeysForSitemap,
-  brandPageRowRendersAggressionScore,
+  brandPageRowHasVerifiedAds,
   buildSitemapXml,
   indexableBrandPageEntriesFromRows,
   indexableTimelineEntriesFromRows,
@@ -339,10 +339,10 @@ describe("lookup parity — never list a page that would serve noindex", () => {
   });
 });
 
-describe("aggression-score gate — never list a thin page (ad wall without its score)", () => {
+describe("populated-vs-thin gate — never list an indexable thin page (issue #1442)", () => {
   const now = new Date();
 
-  it("lists a row whose verified-linked ad clears the 14-day score floor", () => {
+  it("lists a populated row whose verified-linked ad clears the 14-day score floor", () => {
     expect(indexableBrandPageEntriesFromRows([cacheRow()], now).map((e) => e.path)).toEqual([
       "/ads/nykaa.com",
     ]);
@@ -351,8 +351,8 @@ describe("aggression-score gate — never list a thin page (ad wall without its 
   it("excludes a row whose ads have NO verified link evidence (the 0-verified-ads thin-page defect)", () => {
     // 24 unverified text-mention matches: the provider returned them for the
     // domain, but none carries a landing-page or domainMatch verdict linking
-    // them to it. The page would render the ad wall without the score, so it
-    // self-noindexes — the sitemap must not list it.
+    // them to it. The page would render the ad wall with zero verified-link
+    // evidence, so it self-noindexes — the sitemap must not list it.
     const unverifiedOnlyPayload = {
       ...basePayload,
       ads: [
@@ -375,10 +375,11 @@ describe("aggression-score gate — never list a thin page (ad wall without its 
     ).toEqual([]);
   });
 
-  it("excludes a row whose verified-linked ad is too recent to clear the 14-day floor", () => {
-    // A verified link exists, but the only first-seen is 2 days ago — the
-    // score cannot render (window < MIN_AGGRESSION_WINDOW_DAYS), so the page
-    // is thin and must stay out of the sitemap.
+  it("lists a populated row even when its verified-linked ad is too recent to score (window < 14 days)", () => {
+    // The 14-day Aggression Score window must NOT gate the sitemap (issue
+    // #1442): the verified link exists but the only first-seen is 2 days ago,
+    // so the score is deferred — yet the page is populated (an ad wall with
+    // verified link evidence), not thin, so it belongs in the sitemap.
     const tooRecentPayload = {
       ...basePayload,
       ads: [{ ...verifiedAd, firstSeenAt: isoAgo(2 * DAY_MS) }],
@@ -388,10 +389,13 @@ describe("aggression-score gate — never list a thin page (ad wall without its 
       indexableBrandPageEntriesFromRows([cacheRow({ payload: tooRecentPayload })], now).map(
         (e) => e.path,
       ),
-    ).toEqual([]);
+    ).toEqual(["/ads/nykaa.com"]);
   });
 
-  it("excludes a row whose verified-linked ad carries no first-seen date", () => {
+  it("lists a populated row even when its verified-linked ad carries no first-seen date", () => {
+    // Same decoupling: no first-seen date means no computable score, but the
+    // page still ships a real ad wall with verified link evidence — list it
+    // (issue #1442).
     const noFirstSeenPayload = {
       ...basePayload,
       ads: [{ ...verifiedAd, firstSeenAt: null }],
@@ -401,15 +405,15 @@ describe("aggression-score gate — never list a thin page (ad wall without its 
       indexableBrandPageEntriesFromRows([cacheRow({ payload: noFirstSeenPayload })], now).map(
         (e) => e.path,
       ),
-    ).toEqual([]);
+    ).toEqual(["/ads/nykaa.com"]);
   });
 
-  it("lists a row when at least one verified-linked ad clears the floor even if other ads do not", () => {
+  it("lists a row when at least one verified-linked ad is present even if other ads are not verified", () => {
     const mixedPayload = {
       ...basePayload,
       ads: [
         // An unverified text-mention match — renders on the wall, never feeds
-        // the score.
+        // the score or the verified-link count.
         {
           metaAdId: "meta-text-1",
           source: "meta_library_browser",
@@ -419,7 +423,8 @@ describe("aggression-score gate — never list a thin page (ad wall without its 
           active: true,
           variantCount: 1,
         },
-        // The verified-linked ad with enough history — the score renders.
+        // The verified-linked ad — the wall is populated, so the page is
+        // indexable even though no score may render.
         verifiedAd,
       ],
     };
@@ -431,11 +436,11 @@ describe("aggression-score gate — never list a thin page (ad wall without its 
     ).toEqual(["/ads/nykaa.com"]);
   });
 
-  it("brandPageRowRendersAggressionScore mirrors the gate for a verified, scoreable row", () => {
-    expect(brandPageRowRendersAggressionScore(cacheRow(), "nykaa.com", now)).toBe(true);
+  it("brandPageRowHasVerifiedAds mirrors the gate for a populated row", () => {
+    expect(brandPageRowHasVerifiedAds(cacheRow(), "nykaa.com")).toBe(true);
   });
 
-  it("brandPageRowRendersAggressionScore is false for a 0-verified-ads row", () => {
+  it("brandPageRowHasVerifiedAds is false for a 0-verified-ads row", () => {
     const unverifiedOnlyPayload = {
       ...basePayload,
       ads: [
@@ -451,11 +456,7 @@ describe("aggression-score gate — never list a thin page (ad wall without its 
       ],
     };
     expect(
-      brandPageRowRendersAggressionScore(
-        cacheRow({ payload: unverifiedOnlyPayload }),
-        "nykaa.com",
-        now,
-      ),
+      brandPageRowHasVerifiedAds(cacheRow({ payload: unverifiedOnlyPayload }), "nykaa.com"),
     ).toBe(false);
   });
 
