@@ -98,6 +98,21 @@ describe("public documentation routes", () => {
     expect(markup).not.toContain("BETTER_AUTH_SECRET");
   });
 
+  it("renders the /mcp/setup connector setup page with one-paste configs and a live test", async () => {
+    const { default: McpSetupRoute } = await import("~/routes/mcp.setup");
+    const markup = renderToStaticMarkup(createElement(McpSetupRoute));
+
+    expect(markup).toContain("Claude Desktop");
+    expect(markup).toContain("ChatGPT");
+    expect(markup).toContain("pi and other MCP clients");
+    expect(markup).toContain("API key");
+    expect(markup).toContain("https://0509.io/api/mcp");
+    expect(markup).toContain("Test your connection");
+    expect(markup).toContain("Test connection");
+    expect(markup).toContain("Developer access");
+    expect(markup).not.toContain("fully general write API");
+  });
+
   it("renders help and trust support paths without unsupported claims", async () => {
     const { default: HelpRoute } = await import("~/routes/help");
     const { default: PrivacyRoute } = await import("~/routes/privacy");

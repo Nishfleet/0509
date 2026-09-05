@@ -128,7 +128,9 @@ Authorization: Bearer f9_live_...`}</code>
         <p>
           Honest boundary: API and MCP access are an Agency-plan feature. Read-only keys cover
           readiness and exports; write-enabled keys unlock only the documented approved actions —
-          see <Link to="/api/docs">API docs</Link> for endpoints and limits.
+          see <Link to="/api/docs">API docs</Link> for endpoints and limits. The{" "}
+          <Link to="/mcp/setup">one-paste MCP setup</Link> has ready-made snippets for Claude
+          Desktop, ChatGPT, and pi.
         </p>
       </PublicDocBlock>
 
@@ -145,6 +147,7 @@ Authorization: Bearer f9_live_...`}</code>
         <div className="f9-doc-link-grid">
           <Link to="/help">Help</Link>
           <Link to="/api/docs">API docs</Link>
+          <Link to="/mcp/setup">MCP setup</Link>
           <Link to="/status">Status</Link>
           <Link to="/changelog">Changelog</Link>
           <Link to="/trust">Trust and security</Link>

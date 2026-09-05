@@ -10,6 +10,7 @@ export default [
   route("help", "routes/help.tsx"),
   route("docs", "routes/docs.tsx"),
   route("api/docs", "routes/api.docs.tsx"),
+  route("mcp/setup", "routes/mcp.setup.tsx"),
   route("status", "routes/status.tsx"),
   route("changelog", "routes/changelog.tsx"),
   route("trust", "routes/trust.tsx"),
