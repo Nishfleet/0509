@@ -259,10 +259,13 @@ export async function attachKeywordSearchDomainMatch(
 
   const queryIntent = parseSearchInputFromWebsiteField(queryText);
   // The registrable domain to classify against. An explicit domain keyword is
-  // used as-is. A bare brand keyword is only promoted when the returned rows
-  // themselves land on a domain whose brand label matches — never a
-  // fabricated `<label>.com` guess — which is what turns `q=nike` rows
-  // verified/likely instead of blanket-unmatched (issue #1440).
+  // used as-is. A bare brand keyword is promoted to a brand domain when the
+  // returned rows land on a domain whose brand label matches, or — when no
+  // landing page in the result set carries the brand — to the brand's
+  // canonical `.com` domain so the v2 classifier can still resolve the brand
+  // (e.g. `q=oura` → oura.com → ouraring.com) instead of blanket-unmatched.
+  // The classifier never fabricates a verified label: a row is only marked
+  // verified/likely when it actually connects to the resolved domain.
   const classifyInput =
     queryIntent.intent === "domain" && queryIntent.registrableDomain
       ? queryText
@@ -306,13 +309,19 @@ export async function attachKeywordSearchDomainMatch(
 /**
  * Resolve a bare brand keyword (q=nike) to the registrable domain the result
  * rows actually land on, when one exists. The north-star rule: never present
- * unverified as verified, and never fabricate a `<label>.com` guess. So this
- * only promotes a bare keyword to a brand domain when the returned provider
- * rows themselves carry a landing page whose registrable domain's brand label
- * exactly matches the folded keyword (nike.com for "nike"). Returns null for
+ * unverified as verified. So this promotes a bare keyword to a brand domain
+ * when the returned provider rows themselves carry a landing page whose
+ * registrable domain's brand label exactly matches the folded keyword
+ * (nike.com for "nike"). When no landing page in the result set carries the
+ * brand, it falls back to the brand's canonical `.com` domain so the v2
+ * classifier can still resolve the brand (issue #1452) — but only when an
+ * advertiser name in the result set folds exactly to the keyword stem, so a
+ * generic term never fabricates a brand domain. The classifier only marks a
+ * row verified/likely when it actually connects to that domain, so the
+ * fallback never fabricates a verified label. Returns null for
  * multi-word/phrase keywords, anything already domain-like, short labels, or
- * results with no matching landing domain — the caller then labels every row
- * unmatched as before.
+ * results with no matching landing domain and no exact advertiser-stem match
+ * — the caller then labels every row unmatched as before.
  */
 function resolveBareKeywordBrandDomain(
   keyword: string,
@@ -358,7 +367,28 @@ function resolveBareKeywordBrandDomain(
       bestCount = count;
     }
   }
-  return best;
+  if (best) {
+    return best;
+  }
+
+  // No landing page in the result set carries the brand. Fall back to the
+  // brand's canonical `.com` domain so the v2 classifier can still resolve
+  // the brand (e.g. oura.com → ouraring.com via identity aliases) — but ONLY
+  // when an advertiser name in the result set folds exactly to the keyword
+  // stem. That exact fold is the strongest signal the keyword is a real brand
+  // (ŌURA → oura) rather than a generic term ("shoes" → no advertiser is
+  // exactly "shoes"), so the fallback never fabricates a brand domain for a
+  // non-brand keyword and never triggers a `<term>.com` identity fetch for
+  // one. The classifier only marks a row verified/likely when it actually
+  // connects to the resolved domain, so this never presents unverified as
+  // verified.
+  const hasExactAdvertiserStem = ads.some(
+    (ad) => foldDomainLabel(ad.advertiser) === stem,
+  );
+  if (!hasExactAdvertiserStem) {
+    return null;
+  }
+  return `${stem}.com`;
 }
 
 function hostnameFromUrl(value: string | null | undefined): string | null {

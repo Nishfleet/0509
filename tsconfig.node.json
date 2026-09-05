@@ -69,6 +69,7 @@
     "scripts/validate-market-signal-report.mjs",
     "scripts/search-latency-probe.mjs",
     "scripts/search-latency-regression-guard.mjs",
+    "scripts/search-tier-canary.mjs",
     "tests/**/*",
     "extension/lib/**/*.mjs",
     "app/**/*",
