@@ -148,6 +148,7 @@ export default [
     route("deliver", "routes/app.deliver.tsx"),
     route("settings", "routes/app.settings.tsx"),
     route("watchlists", "routes/app.watchlists.tsx"),
+    route("watchlists/:watchlistId", "routes/app.watchlists.$watchlistId.tsx"),
     route("clients", "routes/app.clients.tsx"),
     route("digests", "routes/app.digests.tsx"),
     route("shares", "routes/app.shares.tsx"),
