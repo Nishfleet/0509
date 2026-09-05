@@ -231,7 +231,7 @@ function renderCaseFileEmailFooter(unsubscribeUrl: string | null): string {
         No proof, no claim.
       </p>
       <p style="font-family: ${EMAIL_MONO_FONT}; margin: 0; color: ${EMAIL_CASE_INK_FAINT}; font-size: 11px; line-height: 1.6;">
-        Five to Nine · <a href="https://0509.io" style="color: ${EMAIL_CASE_INK_FAINT}; text-decoration: underline;">0509.io</a> · Questions? <a href="${SUPPORT_MAILTO}" style="color: ${EMAIL_CASE_INK_FAINT}; text-decoration: underline;">${SUPPORT_EMAIL}</a> · You're receiving this because email delivery is configured for your workspace${unsubscribeLink}
+        Five to Nine · <a href="https://0509.io" style="color: ${EMAIL_CASE_INK_FAINT}; text-decoration: underline;">0509.io</a> · <a href="https://0509.io/capture-rules" style="color: ${EMAIL_CASE_INK_FAINT}; text-decoration: underline;">What we refuse to alert on</a> · Questions? <a href="${SUPPORT_MAILTO}" style="color: ${EMAIL_CASE_INK_FAINT}; text-decoration: underline;">${SUPPORT_EMAIL}</a> · You're receiving this because email delivery is configured for your workspace${unsubscribeLink}
       </p>
     </div>
   `;
