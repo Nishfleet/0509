@@ -62,6 +62,14 @@ export default defineConfig(async ({ mode }) => ({
                       BETTER_AUTH_SECRET: e2eBetterAuthSecret,
                       E2E_PROVIDER_NETWORK_DENY: "1",
                       E2E_TEST_MODE: "1",
+                      // Forwarded from the bet7 activation canary so the
+                      // local E2E server can exercise the same-session first
+                      // brief (issue #1445). Absent by default, so ordinary
+                      // local E2E runs keep the flag's production-off default
+                      // and are unchanged.
+                      ...(process.env.SIGNUP_FIRST_BRIEF_ENABLED
+                        ? { SIGNUP_FIRST_BRIEF_ENABLED: process.env.SIGNUP_FIRST_BRIEF_ENABLED }
+                        : {}),
                       ...(isBl034Capture
                         ? { PRESENCE_WEBSITE_ROLLOUT: "pilot" }
                         : {}),
