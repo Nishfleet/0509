@@ -1541,29 +1541,30 @@ describe("search loader", () => {
     expect(headers({} as never)).toEqual({});
   });
 
-  it("renders rate-limit error state with policy copy, Retry-After countdown, and working Try again button", async () => {
-    // Regression test for issue #1453: mocked 429 + Retry-After: 600
-    // should render HTML containing "20 requests per 10 minutes" and
-    // a number ≤ 600 representing seconds remaining.
+  it("renders rate-limit error state with exact retry time, preserved query, and disabled Try again button until the window clears", async () => {
+    // Issue #1344: the anonymous /search 429 state must not be a dead end.
+    // It should show the exact retry time, preserve q/country in the HTML,
+    // and keep the Try again button disabled until the rate-limit window clears.
 
-    // Mock error with retryAfter in the data (as the loader throws)
     const mockError = {
       data: {
         error: "rate_limited",
+        message: PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
         retryAfter: 600,
       },
       status: 429,
       statusText: "Too Many Requests",
     };
 
-    // Mock react-router hooks and components used by the component BEFORE importing it
-    // Also mock DashboardShell to just render children (avoids router context requirements)
     const React = await import("react");
     vi.doMock("react-router", async () => {
       const actual = await vi.importActual<typeof import("react-router")>("react-router");
       return {
         ...actual,
-        useRevalidator: () => ({ state: "idle", revalidate: vi.fn() }),
+        useLocation: () => ({
+          pathname: "/search",
+          search: "?q=nykaa&country=all",
+        }),
         Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
           React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       };
@@ -1583,21 +1584,23 @@ describe("search loader", () => {
       createElement(PublicSearchRateLimitError, { error: mockError }),
     );
 
-    // Policy copy is present
-    expect(html).toMatch(/20 requests per 10 minutes per IP/i);
+    // Policy copy and exact retry time are present
+    expect(html).toMatch(/20 searches per 10 minutes/i);
+    expect(html).toMatch(/Try again at/i);
+    expect(html).toMatch(/\d{2}:\d{2} remaining/);
 
-    // Countdown shows seconds remaining (≤ 600)
-    expect(html).toMatch(/retry in.*\d+s/i);
-    const match = html.match(/\((\d+)s\)/);
-    expect(match).not.toBeNull();
-    if (match) {
-      const seconds = Number(match[1]);
-      expect(seconds).toBeLessThanOrEqual(600);
-    }
+    // The Try again button is disabled while the countdown runs
+    expect(html).toMatch(/Try again in \d{2}:\d{2}/i);
+    expect(html).toMatch(/disabled/);
 
-    // Try again button is present and not disabled
-    expect(html).toMatch(/Try again/i);
-    expect(html).not.toMatch(/disabled/);
+    // Original q and country are preserved in the rendered HTML
+    expect(html).toMatch(/name="q"[^>]*value="nykaa"/);
+    expect(html).toMatch(/name="country"[^>]*value="all"/);
+    expect(html).toMatch(/data-f9-search-query="nykaa"/);
+    expect(html).toMatch(/data-f9-search-country="all"/);
+
+    // A sign-in path that returns to the original search is provided
+    expect(html).toMatch(/auth\/login\?redirectTo=/);
 
     vi.doUnmock("react-router");
     vi.doUnmock("~/components/dashboard-shell");
