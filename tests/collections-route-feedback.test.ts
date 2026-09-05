@@ -45,6 +45,7 @@ function mockRoute(addExternalProofToCollection: ReturnType<typeof vi.fn>) {
 		getCollection: vi.fn(),
 		listCollectionItems: vi.fn(),
 		listCollections: vi.fn(),
+		renameCollection: vi.fn(),
 		updateCollectionItem: vi.fn(),
 	}));
 }

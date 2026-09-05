@@ -105,6 +105,35 @@ export function CollectionDetailsSection({
           </div>
         ) : null}
 
+        <CollectionDisclosure
+          className="f9-library-rename"
+          group={COLLECTION_PANEL_GROUP}
+          summary="Rename collection"
+        >
+          <Form method="post">
+            <input name="intent" type="hidden" value="rename-collection" />
+            <input name="collectionId" type="hidden" value={collection.id} />
+            <label className="f9-wk-field">
+              <span className="f9-wk-lab">Name</span>
+              <input
+                className="f9-wk-in"
+                defaultValue={collection.name}
+                name="name"
+                placeholder="e.g. Launch proof"
+                required
+                type="text"
+              />
+            </label>
+            <SubmitButton
+              className="f9-wk-lnk"
+              intent="rename-collection"
+              pendingLabel="Renaming…"
+            >
+              Rename collection
+            </SubmitButton>
+          </Form>
+        </CollectionDisclosure>
+
         <Form method="post">
           <input name="intent" type="hidden" value="delete-collection" />
           <input name="collectionId" type="hidden" value={collection.id} />

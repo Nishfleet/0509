@@ -31,6 +31,7 @@ const WARMING_SEARCH =
   "?website=https%3A%2F%2Fnykaa.com&mode=advertiser&query=nykaa.com&country=all&trackingRole=competitor&broader=1";
 
 let loaderData: Record<string, unknown>;
+let rootData: Record<string, unknown>;
 let locationObj: { pathname: string; search: string; hash: string };
 let navigationState: {
   state: string;
@@ -58,7 +59,7 @@ function mockRouter() {
       useNavigate: () => vi.fn(),
       useNavigation: () => navigationState,
       useRevalidator: () => revalidatorRef,
-      useRouteLoaderData: () => ({ session: null }),
+      useRouteLoaderData: () => rootData,
     };
   });
   vi.doMock("~/components/dashboard-shell", () => ({
@@ -219,6 +220,34 @@ const warmingLoaderData: Record<string, unknown> = {
   displayDomain: "nykaa.com",
 };
 
+// A committed domain search that came back with no verified ads: the real
+// empty state (issue #1557 workspace activation target). domainEmptyLoaderData
+// must satisfy `isDomainSearch && !isBroaderScope` and not warm, so the
+// empty-state actions — including the Library link — render.
+const domainEmptyLoaderData: Record<string, unknown> = {
+  ...idleLoaderData,
+  competitorWebsite: {
+    raw: "https://nykaa.com",
+    normalizedUrl: "https://nykaa.com",
+    host: "nykaa.com",
+    displayName: "Nykaa",
+    searchTerm: "nykaa.com",
+    error: null,
+  },
+  displayDomain: "nykaa.com",
+  relevanceApplied: true,
+  result: {
+    ads: [],
+    nextCursor: null,
+    source: "meta_library_browser",
+    provider: "meta_library_browser",
+    cacheStatus: "hit",
+    discoveryStatus: "healthy",
+    discoverySummary: null,
+    discoveryFailureClass: null,
+  },
+};
+
 async function renderMarkup() {
   const { default: SearchRoute } = await import("~/routes/search");
   return renderToStaticMarkup(createElement(SearchRoute));
@@ -243,6 +272,7 @@ async function mountRoute() {
 beforeEach(() => {
   vi.useFakeTimers();
   revalidatorRef = { state: "idle", revalidate: vi.fn() };
+  rootData = { session: null };
   loaderData = idleLoaderData;
   locationObj = { pathname: "/search", search: "", hash: "" };
   navigationState = { state: "idle", location: null };
@@ -522,6 +552,54 @@ describe("public search submission settle", () => {
     expect(revalidatorRef.revalidate.mock.calls.length).toBe(
       revalidationsBeforeRetry + 1,
     );
+  });
+
+  it("offers the Library as the compounding surface from an empty domain search", async () => {
+    // Workspace-memory activation (issue #1557): the empty domain search is
+    // the exact moment a signed-in user should learn the Library exists, so
+    // it links /app/collections instead of leaving the visitor to guess.
+    // Signed-out visitors keep the monitoring-setup actions without the
+    // signed-in Library nudge.
+    loaderData = domainEmptyLoaderData;
+    rootData = {
+      session: {
+        id: "u1",
+        user: { id: "u1", name: "Test User", email: "test@example.com" },
+      },
+    };
+    locationObj = {
+      pathname: "/search",
+      search:
+        "?website=https%3A%2F%2Fnykaa.com&mode=advertiser&query=nykaa.com&trackingRole=competitor",
+      hash: "",
+    };
+    navigationState = { state: "idle", location: null };
+
+    const markup = await renderMarkup();
+
+    // The shared Link mock drops text children (file header), so assert on
+    // the preserved hrefs. The Library link must appear alongside the
+    // existing monitoring-setup and broader-search actions.
+    expect(markup).toContain('href="/app/collections"');
+    expect(markup).toContain('href="/app/watchlists"');
+    expect(markup).toContain("broader=1");
+  });
+
+  it("keeps the Library nudge out of the empty search for signed-out visitors", async () => {
+    loaderData = domainEmptyLoaderData;
+    rootData = { session: null };
+    locationObj = {
+      pathname: "/search",
+      search:
+        "?website=https%3A%2F%2Fnykaa.com&mode=advertiser&query=nykaa.com&trackingRole=competitor",
+      hash: "",
+    };
+    navigationState = { state: "idle", location: null };
+
+    const markup = await renderMarkup();
+
+    expect(markup).not.toContain('href="/app/collections"');
+    expect(markup).toContain('href="/app/watchlists"');
   });
 
   it("shows the recovery reload after 90 seconds on an uncommitted idle page, enables submit, and clears when navigation settles", async () => {
