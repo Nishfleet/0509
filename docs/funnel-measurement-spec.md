@@ -63,6 +63,8 @@ The account/workspace measures in §3.2 are **derived metrics, not emitted event
 | `funnel_signup_start_locale_en` / `_de` / `_ja` / `_pt_br` | Signup begins from a request whose URL carries the exact locale marker (`source=locale-<id>-sneaker-resale`), recognized server-side against allowlisted constants; the marker value itself is never stored | Measure locale-page capture at signup initiation | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
 | `funnel_pricing_free_card_clicked` | Signup begins from a request whose URL carries the exact pricing Free card marker (`source=pricing-free`), recognized server-side against the allowlisted constant; the marker value itself is never stored | Measure whether surfacing the Free plan as a card on `/pricing` lifts free-tier click-through (issue 1499) | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
 | `funnel_first_brief_viewed` | Authenticated Overview or Briefs renders a first brief with ≥1 evidence-linked item | Measure same-session activation (signup → first brief on screen) | `event_id`, `timestamp`, `route` | Watchlist names, ad URLs, proof content, `workspace_id` |
+| `funnel_activation_scan_started` | The BET 7 onboarding flow queues the first activation scan for a signup workspace (request that created the watchlist) | Measure activation step 1 — the scan that produces the first brief | `event_id`, `timestamp`, `route` | Watchlist ids, competitor names/URLs, ad content, `workspace_id` |
+| `funnel_first_brief_email_sent` | The "Your first brief" email is dispatched (digest path with `firstBrief: true`), in-session or from the async scan-completion path | Measure the within-the-hour email promise | `event_id`, `timestamp`, `route` | Email addresses, watchlist names, ad URLs, digest content, `workspace_id` |
 
 All v1 emitted events are request-scoped: they carry no identifier that
 can join one request to another or connect them to an account (see §4). The two
@@ -78,6 +80,14 @@ and never stored; like every signup-start variant it fires at signup submission 
 `funnel_first_brief_viewed` uses `account_scope=workspace` and `route=activation` because
 it fires after sign-in; it still stores no `workspace_id` and is not joinable to
 `funnel_signup_start`.
+`funnel_activation_scan_started` and `funnel_first_brief_email_sent` use the same
+workspace scope and `activation` route; neither stores a `workspace_id` or any watchlist,
+competitor, or email field, so none of the activation events join to an account or to each
+other. `funnel_first_brief_email_sent` is the one event that may be server-emitted without
+a user request: it fires from the async scan-completion delivery path (and in-session), so
+there is no request header to carry GPC — the GPC opt-out cannot apply when no request
+exists. Its field allowlist and account-scope rules are unchanged, and it fires only for a
+signed-in workspace whose own onboarding action caused the delivery.
 
 ### 3.2 Derived activation metrics (read-only, not emitted)
 
