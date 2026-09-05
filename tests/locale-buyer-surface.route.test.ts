@@ -154,8 +154,12 @@ describe("locale buyer-surface sitemap + worker wiring", () => {
         const expected = `<loc>https://0509.io/${locale}${path}</loc>`;
         expect(body, `sitemap must not list ${expected}`).not.toContain(expected);
       }
-      // The genuinely translated sneaker-resale cluster STAYS in the sitemap.
-      expect(body).toContain(`<loc>https://0509.io/${locale}/sneaker-resale</loc>`);
+      // The genuinely translated sneaker-resale cluster STAYS in the sitemap
+      // for the locales that ship it (de, ja, pt-br). fr/es have no
+      // sneaker-resale page, so their locale feed is empty of buyer surfaces.
+      if (locale === "de" || locale === "ja" || locale === "pt-br") {
+        expect(body).toContain(`<loc>https://0509.io/${locale}/sneaker-resale</loc>`);
+      }
     }
   });
 
