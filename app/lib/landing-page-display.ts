@@ -29,7 +29,80 @@ export function formatCaptureMethodLabel(captureMethod: CaptureMethod | null | u
 }
 
 export function formatLandingPageSignalValue(value: string | null | undefined) {
-  return value?.trim() ? value : "Not detected";
+  return formatEvidenceFactValue(value);
+}
+
+// Selected-evidence states for the /search pane. The pane presents a captured
+// ad as usable evidence, so a field the capture could not read is stated as
+// such with its own explanation and next step — never invented, and never
+// substituted with the search term or watchlist name.
+
+/**
+ * A generic selected-pane fact value: a read value renders exactly as
+ * captured, a blank one renders an explicit missing word — never an empty
+ * definition in the evidence pane.
+ */
+export function formatEvidenceFactValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed || "Not detected";
+}
+
+/**
+ * Explicit identity state for the selected pane head. Returns null while a
+ * source-backed advertiser name exists; otherwise a plain explanation that the
+ * search term is NOT the advertiser (scrapes store an empty string instead of
+ * guessing, and a wrong attribution is worse than an honest gap).
+ */
+export function formatIdentityNote(advertiser: string | null | undefined) {
+  if (advertiser?.trim()) {
+    return null;
+  }
+  return "We couldn't read the advertiser's name off this ad. The search term is not the advertiser.";
+}
+
+/**
+ * The headline row of the landing-page block: the source-backed headline when
+ * the capture read one, otherwise an explicit field-specific unavailable word.
+ * The checked/not-checked distinction and the next step live in
+ * formatHeadlineUnavailableNote, so no unexplained "Headline not captured yet"
+ * ever reaches the pane.
+ */
+export function formatHeadlineEvidenceLabel(
+  headline: string | null | undefined,
+  captureMethod: CaptureMethod | null | undefined,
+  enrichmentPending: boolean,
+) {
+  const trimmed = headline?.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+  if (enrichmentPending) {
+    return "Analyzing creative…";
+  }
+  return captureMethod ? "Headline not detected" : "Headline unavailable";
+}
+
+/**
+ * What was checked or not checked for a missing headline, and what the
+ * visitor can do next. Null when there is nothing to explain (a headline was
+ * read, or the enrichment pass is still running).
+ */
+export function formatHeadlineUnavailableNote(
+  headline: string | null | undefined,
+  captureMethod: CaptureMethod | null | undefined,
+  landingPageUrl: string | null | undefined,
+  enrichmentPending = false,
+) {
+  if (headline?.trim() || enrichmentPending) {
+    return null;
+  }
+  if (captureMethod) {
+    return "The landing page was checked, but no headline text was detected on it. Open the destination yourself to read what it says.";
+  }
+  if (landingPageUrl) {
+    return "The landing page wasn't read for this result. Open the destination yourself, or create an account to capture it on a schedule.";
+  }
+  return "The landing page wasn't read for this result. Create an account to capture it on a schedule.";
 }
 
 export function formatLandingPageFormValue(value: boolean | null | undefined) {

@@ -64,6 +64,10 @@ import { formatOfferDisplay } from "~/lib/analysis-display";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
+  formatEvidenceFactValue,
+  formatHeadlineEvidenceLabel,
+  formatHeadlineUnavailableNote,
+  formatIdentityNote,
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
@@ -1330,6 +1334,19 @@ export default function SearchRoute() {
   const selectedLongevity = selectedAd ? formatAdLongevityLabel(selectedAd) : null;
   const selectedRunning =
     selectedAd?.activeStatusObserved !== false && Boolean(selectedAd?.active);
+  // The selected pane presents the capture as evidence, so the two gaps the
+  // capture can leave — a blank advertiser and a missing landing headline —
+  // get explicit states with their own explanation, never a guessed identity
+  // or an unexplained "not captured yet" placeholder.
+  const identityNote = selectedAd ? formatIdentityNote(selectedAd.advertiser) : null;
+  const headlineUnavailableNote = selectedAd
+    ? formatHeadlineUnavailableNote(
+        selectedAd.landingPage?.rawHeadline,
+        selectedAd.landingPage?.captureMethod,
+        selectedAd.landingPageUrl,
+        selectionEnrichmentUiPending,
+      )
+    : null;
 
   useEffect(() => {
     if (new URLSearchParams(location.search).has("selected")) {
@@ -1903,6 +1920,9 @@ export default function SearchRoute() {
                     </>
                   }
                 />
+                {identityNote ? (
+                  <p className="f9-wk-quote">{identityNote}</p>
+                ) : null}
 
                 <div className="f9-wk-creative">
                   <AdThumb ad={selectedAd} />
@@ -1927,7 +1947,7 @@ export default function SearchRoute() {
                 <DetailBlock kicker="What the ad says">
                   <DetailFacts
                     rows={[
-                      { key: "Hook", value: selectedAd.hook },
+                      { key: "Hook", value: formatEvidenceFactValue(selectedAd.hook) },
                       ...(selectedAdAngle
                         ? [
                             {
@@ -1940,7 +1960,7 @@ export default function SearchRoute() {
                         key: "Offer",
                         value: formatOfferDisplay(selectedAd.offer),
                       },
-                      { key: "CTA", value: selectedAd.cta },
+                      { key: "CTA", value: formatEvidenceFactValue(selectedAd.cta) },
                       {
                         key: "Format",
                         value: formatCreativeFormatLabel(selectedAd.format),
@@ -1953,10 +1973,13 @@ export default function SearchRoute() {
                             },
                           ]
                         : []),
-                      { key: "Language", value: selectedAd.languageLabel },
+                      {
+                        key: "Language",
+                        value: formatEvidenceFactValue(selectedAd.languageLabel),
+                      },
                       {
                         key: "Destination",
-                        value: selectedAd.destinationType,
+                        value: formatEvidenceFactValue(selectedAd.destinationType),
                       },
                     ]}
                   />
@@ -1980,11 +2003,15 @@ export default function SearchRoute() {
 
                 <DetailBlock kicker="Landing page">
                   <h4 className="f9-wk-blk-head">
-                    {selectedAd.landingPage?.rawHeadline ??
-                      (selectionEnrichmentUiPending
-                        ? "Analyzing creative…"
-                        : "Headline not captured yet")}
+                    {formatHeadlineEvidenceLabel(
+                      selectedAd.landingPage?.rawHeadline,
+                      selectedAd.landingPage?.captureMethod,
+                      selectionEnrichmentUiPending,
+                    )}
                   </h4>
+                  {headlineUnavailableNote ? (
+                    <p className="f9-wk-small">{headlineUnavailableNote}</p>
+                  ) : null}
                   <DetailFacts
                     rows={[
                       {
