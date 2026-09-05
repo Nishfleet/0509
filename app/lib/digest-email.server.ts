@@ -99,9 +99,13 @@ export interface DigestEmailInput {
   supportMailto: string;
   unsubscribeUrl: string | null;
   // Free-plan digests carry one tasteful upgrade line in the footer area.
-  // Absent or empty renders nothing — paid digests are byte-identical.
+  // Absent or empty renders nothing at all — paid digests are byte-identical.
   upgradeNote?: string | null;
   upgradeUrl?: string | null;
+  // Full-Site Watch metering receipt ("Watched N of M known pages across K
+  // competitors"). Absent or empty renders nothing — digests without it are
+  // byte-identical (flag-off callers never pass it).
+  websiteCoverageLine?: string | null;
 }
 
 export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
@@ -157,7 +161,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     ${renderEmailContentSurface(`
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="${EMAIL_H1_STYLE}">${escapeHtml(answer)}</h1>
-			<p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>${renderStrategySectionHtml(strategyParagraph)}
+			<p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>${renderWebsiteCoverageHtml(input)}${renderStrategySectionHtml(strategyParagraph)}
       <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
         <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
         <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>

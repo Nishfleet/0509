@@ -26,6 +26,36 @@ export const MONITORING_QUEUE_PRIORITY: Record<PlanFamily, MonitoringQueuePriori
   scout: 2,
 };
 
+// Full-Site Watch metering (design §5): sitemap size × cadence, bounded per
+// tier. The budget is the per-competitor capture cap stored on each scan
+// manifest's page_budget column (schema CHECK 1..5000); agency rides the
+// schema cap exactly. The cadence ceiling caps how hot any page class may be
+// watched on the plan: "per_class" defers to the scheduler's per-class
+// cadence map; cheaper plans clamp hotter classes down.
+export type WebsiteScanCadenceCeiling = "weekly" | "every_6h" | "per_class";
+
+export const WEBSITE_PAGE_BUDGET: Record<PlanFamily, number> = {
+  free: 50,
+  scout: 100,
+  starter: 250,
+  agency: 5000,
+};
+
+export const WEBSITE_SCAN_CADENCE_CEILING: Record<PlanFamily, WebsiteScanCadenceCeiling> = {
+  free: "weekly",
+  scout: "every_6h",
+  starter: "per_class",
+  agency: "per_class",
+};
+
+export function websitePageBudgetForPlan(planFamily: PlanFamily): number {
+  return WEBSITE_PAGE_BUDGET[planFamily];
+}
+
+export function websiteCadenceForPlan(planFamily: PlanFamily): WebsiteScanCadenceCeiling {
+  return WEBSITE_SCAN_CADENCE_CEILING[planFamily];
+}
+
 export const PLAN_FEATURES = [
   "competitor_research",
   "weekly_digest",
