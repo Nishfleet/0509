@@ -8,6 +8,16 @@ const J3_DELIVERY_DIGEST_ID = "e2e-digest-j3-provider-denied";
 const J3_CRASH_RESERVATION_KEY = "e2e-j3-crash-reservation"; // gitleaks:allow -- fixture identifier.
 const J3_RECONCILE_RESERVATION_KEY = "e2e-j3-reconcile-reservation"; // gitleaks:allow -- fixture identifier.
 const J3_UNSUBSCRIBE_ATTEMPT_KEY = "e2e-j3-unsubscribe-attempt"; // gitleaks:allow -- fixture identifier.
+const J3_RUN_HISTORY_WATCHLIST_ID = "e2e-watchlist-j3-runhistory";
+const J3_RUN_HISTORY_RUN_ID = "e2e-run-j3-run-history";
+
+// Run-history fixture targets (issue #1476): one target that captured
+// cleanly and one that hit an anti-bot challenge. Their proofs belong to a
+// watchlist the board never touches, so the run-history e2e owns the pair.
+const J3_RUN_HISTORY_TARGETS = {
+  succeeded: "e2e-proof-target-j3-runhistory-a",
+  failed: "e2e-proof-target-j3-runhistory-b",
+} as const;
 
 type J3ReplayAction =
   | "workflow_accept"
@@ -15,7 +25,8 @@ type J3ReplayAction =
   | "reconcile"
   | "delivery_denied"
   | "unsubscribe_cas"
-  | "recover";
+  | "recover"
+  | "run_history";
 
 interface J3ReplayMapping {
   action: J3ReplayAction;
@@ -55,6 +66,11 @@ const J3_REPLAY_ACTIONS: Readonly<Record<string, J3ReplayMapping>> = Object.free
     action: "recover",
     userId: "e2e-starter",
     runId: "e2e-run-j3-recover",
+  },
+  "e2e-j3-run-history": {
+    action: "run_history",
+    userId: "e2e-starter",
+    runId: J3_RUN_HISTORY_RUN_ID,
   },
   ...Object.fromEntries(
     J3_REPLAY_VIEWPORTS.flatMap((viewport) => [
@@ -220,7 +236,190 @@ async function runJ3ReplayAction(
       return runUnsubscribeCas(env, metadata.userId, metadata.clock);
     case "recover":
       return runRecoveryCleanup(env, metadata.userId);
+    case "run_history":
+      return runRunHistorySeed(env, metadata.userId, metadata.clock);
   }
+}
+
+/**
+ * Seed the run-history fixture for issue #1476's e2e: one succeeded capture
+ * and one `capture_failed` capture (internal failure code
+ * `landing_challenge_page` -> public `cloudflare_challenge`) inside a single
+ * latest run for a dedicated watchlist. Deterministic on retry: the action
+ * deletes its own rows before inserting, and the replay ledger makes the
+ * duplicate POST a no-op.
+ */
+async function runRunHistorySeed(env: AppEnv, userId: string, clock: string) {
+  const db = ensureDb(env);
+  const user = await db
+    .prepare("SELECT id FROM user WHERE id = ? LIMIT 1")
+    .bind(userId)
+    .first<{ id: string }>();
+  if (!user) throw new Error("fixture_user_unavailable");
+
+  const watchlistId = J3_RUN_HISTORY_WATCHLIST_ID;
+  const targetSucceeded = J3_RUN_HISTORY_TARGETS.succeeded;
+  const targetFailed = J3_RUN_HISTORY_TARGETS.failed;
+  const captureSucceeded = `e2e-proof-capture-j3-runhistory-a`;
+  const captureFailed = `e2e-proof-capture-j3-runhistory-b`;
+  const startedAt = isoMinusMinutes(clock, 12);
+  const finishedAt = isoMinusMinutes(clock, 5);
+  const succeededAt = isoMinusMinutes(clock, 6);
+  const failedAttemptedAt = isoMinusMinutes(clock, 8);
+
+  await db.batch([
+    // Child rows first so the deletes are foreign-key safe whether the
+    // connection enforces them or not.
+    db.prepare(
+      `DELETE FROM proof_capture
+       WHERE proof_target_id IN (
+         SELECT target.id FROM proof_target target WHERE target.watchlist_id = ?
+       )`,
+    ).bind(watchlistId),
+    db.prepare("DELETE FROM proof_target WHERE watchlist_id = ?").bind(watchlistId),
+    db.prepare("DELETE FROM watchlist_run WHERE watchlist_id = ?").bind(watchlistId),
+    db.prepare("DELETE FROM watchlist WHERE id = ?").bind(watchlistId),
+  ]);
+
+  await db.batch([
+    db.prepare(
+      `INSERT INTO watchlist (
+         id, user_id, name, target_type, target_id, target_fingerprint,
+         target_label, is_active, last_scanned_at, created_at, updated_at,
+         paused_reason, target_country, tracking_role
+       ) VALUES (?, ?, ?, 'saved_query', ?, ?, ?, 1, ?, ?, ?, NULL, 'IN', 'competitor')`,
+    ).bind(
+      watchlistId,
+      userId,
+      "Run history fixture",
+      `e2e-query-j3-runhistory`,
+      `e2e-query-j3-runhistory`,
+      "Okara",
+      finishedAt,
+      isoMinusMinutes(clock, 24 * 60),
+      finishedAt,
+    ),
+    db.prepare(
+      `INSERT INTO proof_target (
+         id, watchlist_id, ad_id, landing_page_url, canonical_page_identity,
+         proof_target_identity, last_capture_attempt_at, last_successful_proof_at,
+         last_successful_capture_id, created_at, updated_at
+       ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      targetSucceeded,
+      watchlistId,
+      "https://okara.example.invalid/launch",
+      "okara.example.invalid/launch",
+      targetSucceeded,
+      succeededAt,
+      succeededAt,
+      captureSucceeded,
+      isoMinusMinutes(clock, 24 * 60),
+      succeededAt,
+    ),
+    db.prepare(
+      `INSERT INTO proof_target (
+         id, watchlist_id, ad_id, landing_page_url, canonical_page_identity,
+         proof_target_identity, last_capture_attempt_at, last_successful_proof_at,
+         last_successful_capture_id, created_at, updated_at
+       ) VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
+    ).bind(
+      targetFailed,
+      watchlistId,
+      "https://okara.example.invalid/checkout",
+      "okara.example.invalid/checkout",
+      targetFailed,
+      failedAttemptedAt,
+      isoMinusMinutes(clock, 24 * 60),
+      failedAttemptedAt,
+    ),
+    db.prepare(
+      `INSERT INTO proof_capture (
+         id, proof_target_id, status, skip_reason, failure_code, failure_reason,
+         screenshot_artifact_key, html_artifact_key, extracted_fields_json,
+         field_confidence_json, extraction_warnings_json, capture_metadata_json,
+         render_mode, device_profile, extractor_version, idempotency_key,
+         attempted_at, succeeded_at, created_at, updated_at
+       ) VALUES (?, ?, 'succeeded', NULL, NULL, NULL, NULL, NULL, ?, '{}', '[]',
+         ?, 'mobile', 'mobile_default', 'e2e-v1', ?, ?, ?, ?, ?)`,
+    ).bind(
+      captureSucceeded,
+      targetSucceeded,
+      '{"headline":"Workflow offer","cta":"Learn more","offer":"Free trial"}',
+      '{"source":"e2e-j3-run-history"}',
+      `e2e-proof-capture-j3-runhistory-a`,
+      isoMinusMinutes(clock, 7),
+      succeededAt,
+      isoMinusMinutes(clock, 7),
+      succeededAt,
+    ),
+    db.prepare(
+      `INSERT INTO proof_capture (
+         id, proof_target_id, status, skip_reason, failure_code, failure_reason,
+         screenshot_artifact_key, html_artifact_key, extracted_fields_json,
+         field_confidence_json, extraction_warnings_json, capture_metadata_json,
+         render_mode, device_profile, extractor_version, idempotency_key,
+         attempted_at, succeeded_at, created_at, updated_at
+       ) VALUES (?, ?, 'failed', NULL, ?, ?, NULL, NULL, '{}', '{}', '[]',
+         ?, 'mobile', 'mobile_default', 'e2e-v1', ?, ?, NULL, ?, ?)`,
+    ).bind(
+      captureFailed,
+      targetFailed,
+      "landing_challenge_page",
+      "Page served a challenge during capture.",
+      '{"source":"e2e-j3-run-history"}',
+      `e2e-proof-capture-j3-runhistory-b`,
+      failedAttemptedAt,
+      failedAttemptedAt,
+      failedAttemptedAt,
+    ),
+    db.prepare(
+      `INSERT INTO watchlist_run (
+         id, watchlist_id, trigger_type, status, page_budget, pages_scanned,
+         baseline_from_run_id, summary_json, started_at, finished_at,
+         error_code, error_message, created_at, updated_at, idempotency_key
+       ) VALUES (?, ?, 'scheduled', 'succeeded', 4, 2, NULL, ?, ?, ?,
+         NULL, NULL, ?, ?, ?)`,
+    ).bind(
+      J3_RUN_HISTORY_RUN_ID,
+      watchlistId,
+      '{"scanStatus":"healthy","attempts":2,"failed":1}',
+      startedAt,
+      finishedAt,
+      startedAt,
+      finishedAt,
+      J3_RUN_HISTORY_RUN_ID,
+    ),
+  ]);
+
+  const attempts = await db
+    .prepare(
+      `SELECT capture.status, capture.failure_code
+       FROM proof_capture capture
+       JOIN proof_target target ON target.id = capture.proof_target_id
+       WHERE target.watchlist_id = ?
+       ORDER BY capture.attempted_at ASC`,
+    )
+    .bind(watchlistId)
+    .all<{ status: string; failure_code: string | null }>();
+  const rows = attempts.results ?? [];
+  const failedCaptures = rows.filter((row) => row.status === "failed").length;
+  if (rows.length !== 2 || failedCaptures !== 1) {
+    throw new Error("run_history_fixture_mismatch");
+  }
+
+  return {
+    action: "run_history",
+    watchlistId,
+    runId: J3_RUN_HISTORY_RUN_ID,
+    attempts: rows.length,
+    failedCaptures,
+    internalFailureCode: rows.find((row) => row.status === "failed")?.failure_code ?? null,
+  };
+}
+
+function isoMinusMinutes(iso: string, minutes: number): string {
+  return new Date(Date.parse(iso) - minutes * 60_000).toISOString();
 }
 
 async function runWorkflowAcceptance(env: AppEnv, userId: string) {

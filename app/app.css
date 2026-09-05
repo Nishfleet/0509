@@ -16909,3 +16909,19 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   font-size: 0.875rem;
   margin: 0 0 12px;
 }
+
+/* ------------------------------------------------------------------ */
+/* Run history page (/app/watchlists/:id, issue #1476).               */
+/* The row contract inherits the board's RuledRow (1px rules, no      */
+/* boxes, status as a word). Only the run-summary line needs a home.  */
+/* ------------------------------------------------------------------ */
+.f9-rh-run-line {
+  margin: 13px 0 0;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.f9-rh-page .f9-wk-rows {
+  margin-top: 13px;
+}
