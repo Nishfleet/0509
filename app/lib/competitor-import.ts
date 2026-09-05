@@ -55,6 +55,7 @@ export interface CompetitorImportPreview {
   selectedCount: number;
   rows: CompetitorImportRow[];
   summary: Record<CompetitorImportRowStatus, number>;
+  rejectedFields: string[];
 }
 
 interface ParsedImportRow {
@@ -67,11 +68,19 @@ interface ParsedImportRow {
   client: string | null;
 }
 
-const KNOWN_NAME_HEADERS = ["name", "company", "brand", "competitor", "advertiser"];
-const KNOWN_WEBSITE_HEADERS = ["domain", "website", "url", "site"];
-const KNOWN_NOTES_HEADERS = ["note", "notes", "description"];
-const KNOWN_TAG_HEADERS = ["tag", "tags"];
-const KNOWN_CLIENT_HEADERS = ["client", "account", "customer"];
+export const COMPETITOR_IMPORT_NAME_HEADERS = ["name", "company", "brand", "competitor", "advertiser"] as const;
+export const COMPETITOR_IMPORT_WEBSITE_HEADERS = ["domain", "website", "url", "site"] as const;
+export const COMPETITOR_IMPORT_NOTES_HEADERS = ["note", "notes", "description"] as const;
+export const COMPETITOR_IMPORT_TAG_HEADERS = ["tag", "tags"] as const;
+export const COMPETITOR_IMPORT_CLIENT_HEADERS = ["client", "account", "customer"] as const;
+export const COMPETITOR_IMPORT_ACCEPTED_HEADERS = [
+  ...COMPETITOR_IMPORT_NAME_HEADERS,
+  ...COMPETITOR_IMPORT_WEBSITE_HEADERS,
+  ...COMPETITOR_IMPORT_NOTES_HEADERS,
+  ...COMPETITOR_IMPORT_TAG_HEADERS,
+  ...COMPETITOR_IMPORT_CLIENT_HEADERS,
+] as const;
+export const COMPETITOR_IMPORT_POSITIONAL_FIELDS = 5;
 
 export function buildCompetitorImportPreview(input: CompetitorImportPreviewInput): CompetitorImportPreview {
   const maxBytes = input.maxBytes ?? COMPETITOR_IMPORT_MAX_BYTES;
@@ -99,7 +108,6 @@ export function buildCompetitorImportPreview(input: CompetitorImportPreviewInput
       availableSlots,
     });
   }
-
   const existingFingerprints = new Set(input.existingFingerprints ?? []);
   const selectedIds = input.selectedRowIds ? new Set(input.selectedRowIds) : null;
   const previewState = parsedRows.rows.reduce<{
@@ -242,6 +250,7 @@ export function buildCompetitorImportPreview(input: CompetitorImportPreviewInput
     selectedCount: rows.filter((row) => row.selected && row.status === "valid").length,
     rows,
     summary,
+    rejectedFields: parsedRows.rejectedFields,
   };
 }
 
@@ -260,31 +269,56 @@ function emptyPreview(input: {
     selectedCount: 0,
     rows: [],
     summary: emptySummary(),
+    rejectedFields: [],
   };
 }
 
-function parseCompetitorImportRows(rawText: string, maxRows: number): { rows: ParsedImportRow[]; error: string | null } {
+function parseCompetitorImportRows(
+  rawText: string,
+  maxRows: number,
+): { rows: ParsedImportRow[]; error: string | null; rejectedFields: string[] } {
   const trimmed = rawText.trim();
   if (!trimmed) {
-    return { rows: [], error: null };
+    return { rows: [], error: null, rejectedFields: [] };
   }
 
   const csv = parseCsvRecords(trimmed);
-  const rows = shouldUseCsvRows(csv)
+  const useCsv = shouldUseCsvRows(csv);
+  const rows = useCsv
     ? parsedRowsFromCsv(csv)
     : trimmed
       .split(/\r?\n/)
       .map((line, index) => parsedRowFromLine(line, index + 1))
       .filter((row): row is ParsedImportRow => Boolean(row));
+  const rejectedFields = useCsv ? rejectedCsvFields(csv) : [];
 
   if (rows.length > maxRows) {
     return {
       rows: [],
       error: `Import has ${rows.length} rows. Keep one import to ${maxRows} rows or fewer.`,
+      rejectedFields,
     };
   }
 
-  return { rows, error: null };
+  return { rows, error: null, rejectedFields };
+}
+
+function rejectedCsvFields(records: string[][]) {
+  const header = records[0] ?? [];
+  if (hasKnownHeader(header)) {
+    const accepted = new Set<string>(COMPETITOR_IMPORT_ACCEPTED_HEADERS);
+    return Array.from(new Set(
+      header
+        .map(normalizeHeader)
+        .filter((value) => value && !accepted.has(value)),
+    ));
+  }
+
+  const widestRecord = Math.max(0, ...records.map((record) => record.length));
+  return Array.from(
+    { length: Math.max(0, widestRecord - COMPETITOR_IMPORT_POSITIONAL_FIELDS) },
+    (_, index) => `column ${COMPETITOR_IMPORT_POSITIONAL_FIELDS + index + 1}`,
+  );
 }
 
 function shouldUseCsvRows(records: string[][]) {
@@ -473,24 +507,21 @@ function parseCsvRecords(input: string) {
 
 function hasKnownHeader(header: string[]) {
   const normalized = header.map(normalizeHeader);
-  return normalized.some((value) =>
-    [...KNOWN_NAME_HEADERS, ...KNOWN_WEBSITE_HEADERS, ...KNOWN_NOTES_HEADERS, ...KNOWN_TAG_HEADERS, ...KNOWN_CLIENT_HEADERS]
-      .includes(value)
-  );
+  return normalized.some((value) => (COMPETITOR_IMPORT_ACCEPTED_HEADERS as readonly string[]).includes(value));
 }
 
 function buildHeaderMap(header: string[]) {
   const normalized = header.map(normalizeHeader);
   return {
-    name: findHeaderIndex(normalized, KNOWN_NAME_HEADERS),
-    website: findHeaderIndex(normalized, KNOWN_WEBSITE_HEADERS),
-    notes: findHeaderIndex(normalized, KNOWN_NOTES_HEADERS),
-    tags: findHeaderIndex(normalized, KNOWN_TAG_HEADERS),
-    client: findHeaderIndex(normalized, KNOWN_CLIENT_HEADERS),
+    name: findHeaderIndex(normalized, COMPETITOR_IMPORT_NAME_HEADERS),
+    website: findHeaderIndex(normalized, COMPETITOR_IMPORT_WEBSITE_HEADERS),
+    notes: findHeaderIndex(normalized, COMPETITOR_IMPORT_NOTES_HEADERS),
+    tags: findHeaderIndex(normalized, COMPETITOR_IMPORT_TAG_HEADERS),
+    client: findHeaderIndex(normalized, COMPETITOR_IMPORT_CLIENT_HEADERS),
   };
 }
 
-function findHeaderIndex(header: string[], names: string[]) {
+function findHeaderIndex(header: string[], names: readonly string[]) {
   const index = header.findIndex((value) => names.includes(value));
   return index >= 0 ? index : null;
 }
