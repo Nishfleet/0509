@@ -245,6 +245,21 @@ describe("public markdown", () => {
     expect(buildLlmsText()).toBe(LLMS_TEXT);
   });
 
+  it("emits no [undefined] title lines in llms.txt (issue #1575)", () => {
+    // Every SITEMAP_PATHS entry must have a non-empty title and description
+    // in LLMS_PAGE_DETAILS, so `buildLlmsText()` never stringifies `undefined`
+    // into the public AI citation index.
+    const rendered = buildLlmsText();
+    expect(rendered).not.toContain("[undefined]");
+    expect(rendered).not.toMatch(/: undefined\s*$/m);
+    LLMS_PAGES.forEach((page) => {
+      expect(page.title).not.toBe("undefined");
+      expect(page.description).not.toBe("undefined");
+      expect(page.title).not.toBe(null);
+      expect(page.description).not.toBe(null);
+    });
+  });
+
   it("labels configured capability separately from live proof", () => {
     const markdown = `${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`;
 

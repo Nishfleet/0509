@@ -136,6 +136,530 @@ const LLMS_PAGE_DETAILS: Record<
     description:
       "Brazilian Portuguese sneaker-resale landing page. Product UI stays English; checkout currency follows the buyer.",
   },
+  // Locale-prefixed buyer-surface cluster (issue #1501): one entry per path
+  // in `SITEMAP_PATHS` so `LLMS_PAGES` never yields `undefined` titles or
+  // descriptions. English-language copy with a locale tag until real
+  // translations ship.
+  "/de/pricing": {
+    title: "Pricing (Deutsch)",
+    description:
+      "Competitor monitoring Pläne: kostenlos, Scout, Starter und Agency. Preise werden an der Kasse lokalisiert.",
+  },
+  "/de/help": {
+    title: "Hilfe-Center (Deutsch)",
+    description: "Kunden-Hilfe-Center.",
+  },
+  "/de/docs": {
+    title: "Dokumentation (Deutsch)",
+    description: "Produktdokumentation.",
+  },
+  "/de/api/docs": {
+    title: "API-Dokumentation (Deutsch)",
+    description:
+      "Kunden-API-Dokumentation für key-basierte Exporte und freigegebene Workspace-Aktionen.",
+  },
+  "/de/status": {
+    title: "Status (Deutsch)",
+    description:
+      "Öffentliche Statusseite, die kundenorientierte Oberflächen zusammenfasst.",
+  },
+  "/de/changelog": {
+    title: "Änderungsprotokoll (Deutsch)",
+    description: "Ausgelieferte Produktänderungen.",
+  },
+  "/de/trust": {
+    title: "Vertrauen (Deutsch)",
+    description: "Vertrauen, Sicherheit und Datenverarbeitungspraktiken.",
+  },
+  "/de/compare": {
+    title: "Vergleichen (Deutsch)",
+    description:
+      "Index der Vergleiche von Five to Nine mit Visualping, MagicBrief, Panoramata, Foreplay und anderen.",
+  },
+  "/ja/pricing": {
+    title: "価格表 (日本語)",
+    description:
+      "競合モニタリングプラン: 無料、Scout、Starter、Agency。チェックアウト時に変更。",
+  },
+  "/ja/help": {
+    title: "ヘルプセンター (日本語)",
+    description: "カスタマーヘルプセンター。",
+  },
+  "/ja/docs": {
+    title: "ドキュメント (日本語)",
+    description: "製品ドキュメント。",
+  },
+  "/ja/api/docs": {
+    title: "APIドキュメント (日本語)",
+    description:
+      "キーベースのエクスポートと承認されたワークスペースアクションのカスタマーAPIドキュメント。",
+  },
+  "/ja/status": {
+    title: "ステータス (日本語)",
+    description:
+      "顧客向けサーフェスを要約する公開ステータスページ。",
+  },
+  "/ja/changelog": {
+    title: "変更履歴 (日本語)",
+    description: "配信された製品変更。",
+  },
+  "/ja/trust": {
+    title: "信頼 (日本語)",
+    description: "信頼、セキュリティ、データ取り扱いの実践。",
+  },
+  "/ja/compare": {
+    title: "比較 (日本語)",
+    description:
+      "Five to NineのVisualping、MagicBrief、Panoramata、Foreplayとの比較インデックス。",
+  },
+  "/pt-br/pricing": {
+    title: "Preços (Português, Brasil)",
+    description:
+      "Planos de monitoramento de concorrentes: gratuito, Scout, Starter e Agency. Preços localizados no checkout.",
+  },
+  "/pt-br/help": {
+    title: "Central de Ajuda (Português, Brasil)",
+    description: "Central de ajuda ao cliente.",
+  },
+  "/pt-br/docs": {
+    title: "Documentação (Português, Brasil)",
+    description: "Documentação do produto.",
+  },
+  "/pt-br/api/docs": {
+    title: "Documentação da API (Português, Brasil)",
+    description:
+      "Documentação da API para exportações baseadas em chave e ações aprovadas do workspace.",
+  },
+  "/pt-br/status": {
+    title: "Status (Português, Brasil)",
+    description:
+      "Página de status pública que resume superfícies voltadas ao cliente.",
+  },
+  "/pt-br/changelog": {
+    title: "Histórico de alterações (Português, Brasil)",
+    description: "Alterações de produto enviadas.",
+  },
+  "/pt-br/trust": {
+    title: "Confiança (Português, Brasil)",
+    description: "Confiança, segurança e práticas de manipulação de dados.",
+  },
+  "/pt-br/compare": {
+    title: "Comparar (Português, Brasil)",
+    description:
+      "Índice de comparações do Five to Nine com Visualping, MagicBrief, Panoramata, Foreplay e outros.",
+  },
+  "/fr/pricing": {
+    title: "Tarifs (Français)",
+    description:
+      "Plans de surveillance des concurrents : gratuit, Scout, Starter et Agency. Les prix sont localisés au checkout.",
+  },
+  "/fr/help": {
+    title: "Centre d'aide (Français)",
+    description: "Centre d'aide client.",
+  },
+  "/fr/docs": {
+    title: "Documentation (Français)",
+    description: "Documentation produit.",
+  },
+  "/fr/api/docs": {
+    title: "Documentation API (Français)",
+    description:
+      "Documentation API client pour les exports basés sur les clés et les actions approuvées.",
+  },
+  "/fr/status": {
+    title: "Statut (Français)",
+    description:
+      "Page de statut publique résumant les surfaces client.",
+  },
+  "/fr/changelog": {
+    title: "Journal des modifications (Français)",
+    description: "Modifications du produit livrées.",
+  },
+  "/fr/trust": {
+    title: "Confiance (Français)",
+    description: "Confiance, sécurité et pratiques de gestion des données.",
+  },
+  "/fr/compare": {
+    title: "Comparer (Français)",
+    description:
+      "Index des comparaisons de Five to Nine avec Visualping, MagicBrief, Panoramata, Foreplay et plus.",
+  },
+  "/es/pricing": {
+    title: "Precios (Español)",
+    description:
+      "Planes de monitorización de competidores: gratuito, Scout, Starter y Agency. Los precios se localizan en el checkout.",
+  },
+  "/es/help": {
+    title: "Centro de ayuda (Español)",
+    description: "Centro de ayuda al cliente.",
+  },
+  "/es/docs": {
+    title: "Documentación (Español)",
+    description: "Documentación del producto.",
+  },
+  "/es/api/docs": {
+    title: "Documentación de la API (Español)",
+    description:
+      "Documentación de la API para exportaciones basadas en claves y acciones aprobadas del workspace.",
+  },
+  "/es/status": {
+    title: "Estado (Español)",
+    description:
+      "Página de estado pública que resume las superficies orientadas al cliente.",
+  },
+  "/es/changelog": {
+    title: "Registro de cambios (Español)",
+    description: "Cambios de producto publicados.",
+  },
+  "/es/trust": {
+    title: "Confianza (Español)",
+    description: "Confianza, seguridad y prácticas de manejo de datos.",
+  },
+  "/es/compare": {
+    title: "Comparar (Español)",
+    description:
+      "Índice de comparaciones de Five to Nine con Visualping, MagicBrief, Panoramata, Foreplay y más.",
+  },
+  "/de/compare/magicbrief": {
+    title: "Five to Nine vs MagicBrief (Deutsch)",
+    description: "How Five to Nine compares with MagicBrief.",
+  },
+  "/de/compare/meta-ad-library": {
+    title: "Five to Nine vs Meta Ad Library (Deutsch)",
+    description: "How Five to Nine extends Meta Ad Library results with monitoring and proof.",
+  },
+  "/de/compare/visualping": {
+    title: "Five to Nine vs Visualping (Deutsch)",
+    description: "How Five to Nine compares with Visualping.",
+  },
+  "/de/compare/visualping-ad-library": {
+    title: "Five to Nine vs Visualping for ad libraries (Deutsch)",
+    description: "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
+  },
+  "/de/compare/spyland": {
+    title: "Five to Nine vs Spyland (Deutsch)",
+    description: "How Five to Nine compares with Spyland.",
+  },
+  "/de/compare/pulzifi": {
+    title: "Five to Nine vs Pulzifi (Deutsch)",
+    description: "How Five to Nine compares with Pulzifi.",
+  },
+  "/de/compare/foreplay": {
+    title: "Five to Nine vs Foreplay (Deutsch)",
+    description: "How Five to Nine compares with Foreplay.",
+  },
+  "/de/compare/foreplay-spyder": {
+    title: "Five to Nine vs Foreplay Spyder (Deutsch)",
+    description: "How Five to Nine's change diffs compare with Foreplay Spyder's ad and landing-page archive.",
+  },
+  "/de/compare/panoramata": {
+    title: "Five to Nine vs Panoramata (Deutsch)",
+    description: "How Five to Nine compares with Panoramata on ads-plus-pages monitoring and list prices.",
+  },
+  "/de/compare/adspyder": {
+    title: "Five to Nine vs AdSpyder (Deutsch)",
+    description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
+  },
+  "/de/switch/magicbrief": {
+    title: "MagicBrief alternative (Deutsch)",
+    description: "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
+  },
+  "/de/switch/panoramata": {
+    title: "Panoramata alternative (Deutsch)",
+    description: "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job.",
+  },
+  "/de/switch/visualping": {
+    title: "Visualping alternative for ad libraries (Deutsch)",
+    description: "Visualping's own blog says 83% of detected changes are not important. Paste a domain for the same ad and landing-page job.",
+  },
+  "/de/search": {
+    title: "Public competitor ad search (Deutsch)",
+    description: "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+  },
+  "/de/competitor-monitoring": {
+    title: "Competitor monitoring (Deutsch)",
+    description: "Product overview: scans, digests, alerts, and proof captures.",
+  },
+  "/de/capture-rules": {
+    title: "What we refuse to alert on (Deutsch)",
+    description: "Public capture-validity rules: the landing-page captures that never become alerts.",
+  },
+  "/de/ad-aggression": {
+    title: "Ad Aggression Score methodology (Deutsch)",
+    description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
+  },
+  "/ja/compare/magicbrief": {
+    title: "Five to Nine vs MagicBrief (日本語)",
+    description: "How Five to Nine compares with MagicBrief.",
+  },
+  "/ja/compare/meta-ad-library": {
+    title: "Five to Nine vs Meta Ad Library (日本語)",
+    description: "How Five to Nine extends Meta Ad Library results with monitoring and proof.",
+  },
+  "/ja/compare/visualping": {
+    title: "Five to Nine vs Visualping (日本語)",
+    description: "How Five to Nine compares with Visualping.",
+  },
+  "/ja/compare/visualping-ad-library": {
+    title: "Five to Nine vs Visualping for ad libraries (日本語)",
+    description: "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
+  },
+  "/ja/compare/spyland": {
+    title: "Five to Nine vs Spyland (日本語)",
+    description: "How Five to Nine compares with Spyland.",
+  },
+  "/ja/compare/pulzifi": {
+    title: "Five to Nine vs Pulzifi (日本語)",
+    description: "How Five to Nine compares with Pulzifi.",
+  },
+  "/ja/compare/foreplay": {
+    title: "Five to Nine vs Foreplay (日本語)",
+    description: "How Five to Nine compares with Foreplay.",
+  },
+  "/ja/compare/foreplay-spyder": {
+    title: "Five to Nine vs Foreplay Spyder (日本語)",
+    description: "How Five to Nine's change diffs compare with Foreplay Spyder's ad and landing-page archive.",
+  },
+  "/ja/compare/panoramata": {
+    title: "Five to Nine vs Panoramata (日本語)",
+    description: "How Five to Nine compares with Panoramata on ads-plus-pages monitoring and list prices.",
+  },
+  "/ja/compare/adspyder": {
+    title: "Five to Nine vs AdSpyder (日本語)",
+    description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
+  },
+  "/ja/switch/magicbrief": {
+    title: "MagicBrief alternative (日本語)",
+    description: "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
+  },
+  "/ja/switch/panoramata": {
+    title: "Panoramata alternative (日本語)",
+    description: "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job.",
+  },
+  "/ja/switch/visualping": {
+    title: "Visualping alternative for ad libraries (日本語)",
+    description: "Visualping's own blog says 83% of detected changes are not important. Paste a domain for the same ad and landing-page job.",
+  },
+  "/ja/search": {
+    title: "Public competitor ad search (日本語)",
+    description: "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+  },
+  "/ja/competitor-monitoring": {
+    title: "Competitor monitoring (日本語)",
+    description: "Product overview: scans, digests, alerts, and proof captures.",
+  },
+  "/ja/capture-rules": {
+    title: "What we refuse to alert on (日本語)",
+    description: "Public capture-validity rules: the landing-page captures that never become alerts.",
+  },
+  "/ja/ad-aggression": {
+    title: "Ad Aggression Score methodology (日本語)",
+    description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
+  },
+  "/pt-br/compare/magicbrief": {
+    title: "Five to Nine vs MagicBrief (Português, Brasil)",
+    description: "How Five to Nine compares with MagicBrief.",
+  },
+  "/pt-br/compare/meta-ad-library": {
+    title: "Five to Nine vs Meta Ad Library (Português, Brasil)",
+    description: "How Five to Nine extends Meta Ad Library results with monitoring and proof.",
+  },
+  "/pt-br/compare/visualping": {
+    title: "Five to Nine vs Visualping (Português, Brasil)",
+    description: "How Five to Nine compares with Visualping.",
+  },
+  "/pt-br/compare/visualping-ad-library": {
+    title: "Five to Nine vs Visualping for ad libraries (Português, Brasil)",
+    description: "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
+  },
+  "/pt-br/compare/spyland": {
+    title: "Five to Nine vs Spyland (Português, Brasil)",
+    description: "How Five to Nine compares with Spyland.",
+  },
+  "/pt-br/compare/pulzifi": {
+    title: "Five to Nine vs Pulzifi (Português, Brasil)",
+    description: "How Five to Nine compares with Pulzifi.",
+  },
+  "/pt-br/compare/foreplay": {
+    title: "Five to Nine vs Foreplay (Português, Brasil)",
+    description: "How Five to Nine compares with Foreplay.",
+  },
+  "/pt-br/compare/foreplay-spyder": {
+    title: "Five to Nine vs Foreplay Spyder (Português, Brasil)",
+    description: "How Five to Nine's change diffs compare with Foreplay Spyder's ad and landing-page archive.",
+  },
+  "/pt-br/compare/panoramata": {
+    title: "Five to Nine vs Panoramata (Português, Brasil)",
+    description: "How Five to Nine compares with Panoramata on ads-plus-pages monitoring and list prices.",
+  },
+  "/pt-br/compare/adspyder": {
+    title: "Five to Nine vs AdSpyder (Português, Brasil)",
+    description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
+  },
+  "/pt-br/switch/magicbrief": {
+    title: "MagicBrief alternative (Português, Brasil)",
+    description: "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
+  },
+  "/pt-br/switch/panoramata": {
+    title: "Panoramata alternative (Português, Brasil)",
+    description: "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job.",
+  },
+  "/pt-br/switch/visualping": {
+    title: "Visualping alternative for ad libraries (Português, Brasil)",
+    description: "Visualping's own blog says 83% of detected changes are not important. Paste a domain for the same ad and landing-page job.",
+  },
+  "/pt-br/search": {
+    title: "Public competitor ad search (Português, Brasil)",
+    description: "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+  },
+  "/pt-br/competitor-monitoring": {
+    title: "Competitor monitoring (Português, Brasil)",
+    description: "Product overview: scans, digests, alerts, and proof captures.",
+  },
+  "/pt-br/capture-rules": {
+    title: "What we refuse to alert on (Português, Brasil)",
+    description: "Public capture-validity rules: the landing-page captures that never become alerts.",
+  },
+  "/pt-br/ad-aggression": {
+    title: "Ad Aggression Score methodology (Português, Brasil)",
+    description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
+  },
+  "/fr/compare/magicbrief": {
+    title: "Five to Nine vs MagicBrief (Français)",
+    description: "How Five to Nine compares with MagicBrief.",
+  },
+  "/fr/compare/meta-ad-library": {
+    title: "Five to Nine vs Meta Ad Library (Français)",
+    description: "How Five to Nine extends Meta Ad Library results with monitoring and proof.",
+  },
+  "/fr/compare/visualping": {
+    title: "Five to Nine vs Visualping (Français)",
+    description: "How Five to Nine compares with Visualping.",
+  },
+  "/fr/compare/visualping-ad-library": {
+    title: "Five to Nine vs Visualping for ad libraries (Français)",
+    description: "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
+  },
+  "/fr/compare/spyland": {
+    title: "Five to Nine vs Spyland (Français)",
+    description: "How Five to Nine compares with Spyland.",
+  },
+  "/fr/compare/pulzifi": {
+    title: "Five to Nine vs Pulzifi (Français)",
+    description: "How Five to Nine compares with Pulzifi.",
+  },
+  "/fr/compare/foreplay": {
+    title: "Five to Nine vs Foreplay (Français)",
+    description: "How Five to Nine compares with Foreplay.",
+  },
+  "/fr/compare/foreplay-spyder": {
+    title: "Five to Nine vs Foreplay Spyder (Français)",
+    description: "How Five to Nine's change diffs compare with Foreplay Spyder's ad and landing-page archive.",
+  },
+  "/fr/compare/panoramata": {
+    title: "Five to Nine vs Panoramata (Français)",
+    description: "How Five to Nine compares with Panoramata on ads-plus-pages monitoring and list prices.",
+  },
+  "/fr/compare/adspyder": {
+    title: "Five to Nine vs AdSpyder (Français)",
+    description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
+  },
+  "/fr/switch/magicbrief": {
+    title: "MagicBrief alternative (Français)",
+    description: "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
+  },
+  "/fr/switch/panoramata": {
+    title: "Panoramata alternative (Français)",
+    description: "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job.",
+  },
+  "/fr/switch/visualping": {
+    title: "Visualping alternative for ad libraries (Français)",
+    description: "Visualping's own blog says 83% of detected changes are not important. Paste a domain for the same ad and landing-page job.",
+  },
+  "/fr/search": {
+    title: "Public competitor ad search (Français)",
+    description: "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+  },
+  "/fr/competitor-monitoring": {
+    title: "Competitor monitoring (Français)",
+    description: "Product overview: scans, digests, alerts, and proof captures.",
+  },
+  "/fr/capture-rules": {
+    title: "What we refuse to alert on (Français)",
+    description: "Public capture-validity rules: the landing-page captures that never become alerts.",
+  },
+  "/fr/ad-aggression": {
+    title: "Ad Aggression Score methodology (Français)",
+    description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
+  },
+  "/es/compare/magicbrief": {
+    title: "Five to Nine vs MagicBrief (Español)",
+    description: "How Five to Nine compares with MagicBrief.",
+  },
+  "/es/compare/meta-ad-library": {
+    title: "Five to Nine vs Meta Ad Library (Español)",
+    description: "How Five to Nine extends Meta Ad Library results with monitoring and proof.",
+  },
+  "/es/compare/visualping": {
+    title: "Five to Nine vs Visualping (Español)",
+    description: "How Five to Nine compares with Visualping.",
+  },
+  "/es/compare/visualping-ad-library": {
+    title: "Five to Nine vs Visualping for ad libraries (Español)",
+    description: "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
+  },
+  "/es/compare/spyland": {
+    title: "Five to Nine vs Spyland (Español)",
+    description: "How Five to Nine compares with Spyland.",
+  },
+  "/es/compare/pulzifi": {
+    title: "Five to Nine vs Pulzifi (Español)",
+    description: "How Five to Nine compares with Pulzifi.",
+  },
+  "/es/compare/foreplay": {
+    title: "Five to Nine vs Foreplay (Español)",
+    description: "How Five to Nine compares with Foreplay.",
+  },
+  "/es/compare/foreplay-spyder": {
+    title: "Five to Nine vs Foreplay Spyder (Español)",
+    description: "How Five to Nine's change diffs compare with Foreplay Spyder's ad and landing-page archive.",
+  },
+  "/es/compare/panoramata": {
+    title: "Five to Nine vs Panoramata (Español)",
+    description: "How Five to Nine compares with Panoramata on ads-plus-pages monitoring and list prices.",
+  },
+  "/es/compare/adspyder": {
+    title: "Five to Nine vs AdSpyder (Español)",
+    description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
+  },
+  "/es/switch/magicbrief": {
+    title: "MagicBrief alternative (Español)",
+    description: "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
+  },
+  "/es/switch/panoramata": {
+    title: "Panoramata alternative (Español)",
+    description: "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job.",
+  },
+  "/es/switch/visualping": {
+    title: "Visualping alternative for ad libraries (Español)",
+    description: "Visualping's own blog says 83% of detected changes are not important. Paste a domain for the same ad and landing-page job.",
+  },
+  "/es/search": {
+    title: "Public competitor ad search (Español)",
+    description: "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+  },
+  "/es/competitor-monitoring": {
+    title: "Competitor monitoring (Español)",
+    description: "Product overview: scans, digests, alerts, and proof captures.",
+  },
+  "/es/capture-rules": {
+    title: "What we refuse to alert on (Español)",
+    description: "Public capture-validity rules: the landing-page captures that never become alerts.",
+  },
+  "/es/ad-aggression": {
+    title: "Ad Aggression Score methodology (Español)",
+    description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
+  },
   "/capture-rules": {
     title: "What we refuse to alert on",
     description:
