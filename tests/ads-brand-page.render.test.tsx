@@ -125,6 +125,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     offerTimelineEntries: [],
     adLibraryCountry: "India",
     noindex: false,
+    relatedBrands: [],
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
     ...overrides,
@@ -1017,5 +1018,102 @@ describe("/ads/:domain — ad-aggression methodology footer cross-link (issue #1
     );
 
     expect(markup).not.toContain(anchor);
+  });
+});
+
+describe("/ads/:domain — related-brand cross-links (issue #1417)", () => {
+  const other = [
+    { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
+    { domain: "asos.com", path: "/ads/asos.com", name: "ASOS" },
+    { domain: "hm.com", path: "/ads/hm.com", name: "H&M" },
+    { domain: "nykaa.com", path: "/ads/nykaa.com", name: "Nykaa" },
+  ] as const;
+
+  it("cross-links every populated page to OTHER /ads pages and never to itself", async () => {
+    for (const domain of ["nike.com", "adidas.com", "asos.com", "hm.com"] as const) {
+      // Mirror pickRelatedBrandLinks: the current domain is always excluded
+      // from the related set — a page must never link to itself.
+      const others = other.filter((link) => link.domain !== domain);
+      const markup = await render(
+        populated({ domain, canonicalPath: `/ads/${domain}`, relatedBrands: others }),
+      );
+      // At least one cross-link to another /ads/:domain page renders.
+      const adsHrefCount = (markup.match(/href="\/ads\//g) ?? []).length;
+      expect(adsHrefCount).toBeGreaterThan(0);
+      // The page never links to itself.
+      expect(markup).not.toContain(`href="/ads/${domain}"`);
+      // Every other brand in the set is linked.
+      for (const link of others) {
+        expect(markup).toContain(`href="${link.path}"`);
+      }
+    }
+  });
+
+  it("hides the related-brand section when no OTHER indexable brand pages exist, and never links /brands without real links", async () => {
+    const markup = await render(populated({ relatedBrands: [] }));
+    expect(markup).not.toContain("Browse tracked competitors");
+  });
+});
+
+/**
+ * Issue #1417 regression: the sitemap /ads pages were orphaned — none linked
+ * to another /ads page. The related-brand selection must guarantee that any
+ * brand page with at least one other indexable brand in the sitemap gets a
+ * non-empty cross-link set (never a link to itself).
+ */
+describe("pickRelatedBrandLinks — no /ads page is an orphan", () => {
+  it("excludes the current domain and returns a deterministic capped set of OTHER brands", async () => {
+    const { pickRelatedBrandLinks } = await import("~/lib/ads-internal-links");
+    const links = [
+      { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
+      { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
+      { domain: "asos.com", path: "/ads/asos.com", name: "ASOS" },
+      { domain: "hm.com", path: "/ads/hm.com", name: "H&M" },
+      { domain: "nykaa.com", path: "/ads/nykaa.com", name: "Nykaa" },
+      { domain: "zara.com", path: "/ads/zara.com", name: "Zara" },
+    ];
+
+    const set = pickRelatedBrandLinks(links, "nike.com");
+    // Default cap of 4.
+    expect(set).toHaveLength(4);
+    // Never the page itself.
+    expect(set.some((link) => link.domain === "nike.com")).toBe(false);
+    // Deterministic across calls (stable internal-link set, no crawl churn).
+    expect(pickRelatedBrandLinks(links, "nike.com")).toEqual(set);
+
+    // Every other brand in a small sitemap still gets cross-links when count
+    // exceeds the remaining set size.
+    const two = links.slice(0, 2);
+    const fromAdidas = pickRelatedBrandLinks(two, "adidas.com", 4);
+    expect(fromAdidas.map((link) => link.domain)).toEqual(["nike.com"]);
+  });
+});
+
+describe("brand categories — /brands hub grouping (issue #1417)", () => {
+  it("classifies known domains and buckets unknowns under 'More brands'", async () => {
+    const mod = await import("~/lib/brand-categories");
+    expect(mod.brandCategoryForDomain("nike.com")).toBe("Sport & footwear");
+    expect(mod.brandCategoryForDomain("hm.com")).toBe("E-commerce");
+    expect(mod.brandCategoryForDomain("www.hm.com")).toBe("E-commerce");
+    expect(mod.brandCategoryForDomain("unknownbrand.example")).toBe("More brands");
+  });
+
+  it("groups indexable links into categories with the 'More brands' bucket last", async () => {
+    const mod = await import("~/lib/brand-categories");
+    const links = [
+      { domain: "nike.com" },
+      { domain: "mybrand.com" },
+      { domain: "adidas.com" },
+      { domain: "other.example" },
+    ];
+    const groups = mod.groupBrandRecordsByCategory(links);
+    const cats = groups.map((group) => group.category);
+    expect(cats).toContain("Sport & footwear");
+    expect(cats[cats.length - 1]).toBe("More brands");
+    const sport = groups.find((group) => group.category === "Sport & footwear");
+    expect(sport?.items.map((item: { domain: string }) => item.domain).sort()).toEqual([
+      "adidas.com",
+      "nike.com",
+    ]);
   });
 });

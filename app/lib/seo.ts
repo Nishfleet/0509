@@ -618,6 +618,11 @@ export function jsonLdScriptProps(data: unknown) {
 export const SITEMAP_PATHS = [
   "/",
   "/search",
+  // Issue #1417: /brands is the hub that links the otherwise-orphaned /ads/*
+  // pages to each other — adding it to the sitemap gives crawlers a direct
+  // path to the full indexable brand surface (and Google an internal-link
+  // graph instead of sitemap-only orphan pages).
+  "/brands",
   "/compare",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
@@ -760,6 +765,7 @@ const LOCALE_BUYER_SURFACE_PRIORITY: Record<string, { changefreq: string; priori
 const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
   "/": { changefreq: "daily", priority: "1.0" },
   "/search": { changefreq: "weekly", priority: "0.9" },
+  "/brands": { changefreq: "weekly", priority: "0.6" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
   "/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
   "/de/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
