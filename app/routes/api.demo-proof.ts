@@ -13,7 +13,16 @@ import { getEnv } from "~/lib/context.server";
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = getEnv(context);
-  const brief = await loadPublicProofBrief(env);
+  // Resolve the visitor country EXACTLY like the /ads/:domain loader so this
+  // endpoint reports the same total the linked brand page reports for the
+  // same visitor (issue #1468). No geo header (server-to-server fetches)
+  // falls back to "all", matching pre-#1468 behavior.
+  const { defaultCountryForVisitor } = await import("~/lib/countries");
+  const { getOptionalCloudflareContext } = await import("~/lib/cloudflare-context");
+  const visitorCountry = defaultCountryForVisitor(
+    getOptionalCloudflareContext(context)?.country ?? request.headers.get("cf-ipcountry"),
+  );
+  const brief = await loadPublicProofBrief(env, { visitorCountry });
 
   const url = new URL(request.url);
   const wantsMarkdown =
@@ -24,7 +33,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     return new Response(formatPublicProofBriefMarkdown(brief), {
       headers: {
         "content-type": "text/markdown; charset=utf-8",
-        "cache-control": "public, max-age=300",
+        // Payload is visitor-country-scoped: private so a shared cache can
+        // never serve one country's count to another visitor (issue #1468).
+        "cache-control": "private, max-age=300",
         vary: "Accept",
       },
     });
@@ -40,7 +51,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         },
     {
       headers: {
-        "cache-control": "public, max-age=300",
+        // Payload is visitor-country-scoped: private so a shared cache can
+        // never serve one country's count to another visitor (issue #1468).
+        "cache-control": "private, max-age=300",
         vary: "Accept",
       },
     },
