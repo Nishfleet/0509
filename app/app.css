@@ -7199,6 +7199,13 @@ reds soften --- */
   margin: 0.4rem 0 0;
 }
 
+/* Ad-aggression methodology footer under the ad wall (issue #1552). Dimmed
+   by pairing with .f9-wk-dim; adds the modest separation so the trust link
+   reads as part of the wall, not a stray line. */
+.f9-ads-wall-foot {
+  margin-top: 0.9rem;
+}
+
 /* ---- PRIMARY CTA STRIP ---- */
 .f9-ads-watch-strip {
   background: var(--ink);
