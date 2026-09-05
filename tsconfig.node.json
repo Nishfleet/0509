@@ -37,6 +37,7 @@
     "scripts/canary-proof-screenshot-rate.mjs",
     "scripts/canary-proof-budget-skip-surface.mjs",
     "scripts/canary-cta-detector.mjs",
+    "scripts/canary-demo-brand-timeline.mjs",
     "scripts/launch-readiness-canary-cycle.mjs",
     "scripts/local-release-server.mjs",
     "scripts/playwright-release-manifest-reporter.mjs",
