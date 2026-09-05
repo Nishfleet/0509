@@ -182,9 +182,35 @@ describe("/timeline/:domain render", () => {
     expect(webPages).toHaveLength(1);
   });
 
+  it("emits a citable Dataset JSON-LD on an indexable timeline (issue #964)", async () => {
+    const markup = await render(data());
+    const blocks = parseLdJsonBlocks(markup);
+
+    const dataset = blocks.find((block) => block["@type"] === "Dataset");
+    expect(dataset, "missing Dataset JSON-LD").not.toBeUndefined();
+    expect(dataset?.["@context"]).toBe("https://schema.org");
+    expect(dataset?.["name"]).toBe("Nykaa offer timeline");
+    expect(dataset?.["url"]).toBe("https://0509.io/timeline/nykaa.com");
+    expect(dataset?.["isAccessibleForFree"]).toBe(true);
+    // datePublished = first stored snapshot, dateModified = last stored
+    // snapshot — the same timestamps the visible ledger renders.
+    expect(dataset?.["datePublished"]).toBe("2026-08-01T10:00:00.000Z");
+    expect(dataset?.["dateModified"]).toBe("2026-08-20T10:00:00.000Z");
+    // license is the operating terms the page footer links, not an invented
+    // Creative Commons grant.
+    expect(dataset?.["license"]).toBe("https://0509.io/terms");
+    const distribution = dataset?.["distribution"] as Record<string, unknown>;
+    expect(distribution?.["@type"]).toBe("DataDownload");
+    expect(distribution?.["contentUrl"]).toBe("https://0509.io/timeline/nykaa.com");
+    expect(distribution?.["encodingFormat"]).toBe("text/html");
+    const creator = dataset?.["creator"] as Record<string, unknown>;
+    expect(creator?.["name"]).toBe("Five to Nine");
+  });
+
   it("emits neither JSON-LD block on a noindex timeline shell", async () => {
     const markup = await render(data({ noindex: true, entries: [] }));
     expect(markup).not.toContain("application/ld+json");
+    expect(markup).not.toContain('"@type":"Dataset"');
   });
 
   it("renders the as-of offer and the share URL without requiring a login", async () => {
