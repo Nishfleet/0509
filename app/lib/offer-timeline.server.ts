@@ -32,6 +32,7 @@ export interface LandingPageSnapshotRow {
   form_present: number | null;
   artifact_key: string | null;
   metadata_json: string | null;
+  capture_method: string | null;
   captured_at: string;
 }
 
@@ -62,6 +63,7 @@ export async function loadOfferTimeline(
           form_present,
           artifact_key,
           metadata_json,
+          capture_method,
           captured_at
         FROM landing_page_snapshot
         WHERE
@@ -135,6 +137,100 @@ export function snapshotRowHasCompleteProof(
   const screenshotKey = readScreenshotKey(metadata);
   const pageTextKey = readPageTextKey(row.artifact_key, metadata);
   return snapshotHasCompleteProof({ screenshotKey, pageTextKey });
+}
+
+/**
+ * Stored `landing_page_snapshot` rows for a domain that the proof gate
+ * (issue #1284) suppresses from the public ledger: a row without BOTH a
+ * screenshot artifact and a page-text extract must never be presented as
+ * evidence. The MCP `list_suppressed` tool exposes these rows so an agent
+ * can see they exist but must not be cited.
+ *
+ * Bounded D1 read only; never triggers a live capture. Returns [] when D1 is
+ * absent or the table is missing (the read surface never 500s).
+ */
+export interface SuppressedOfferTimelineRow {
+  id: string;
+  canonicalUrl: string;
+  capturedAt: string;
+  reason: string;
+}
+
+export async function loadSuppressedOfferTimelineRows(
+  env: AppEnv,
+  input: { domain: string; limit?: number },
+): Promise<SuppressedOfferTimelineRow[]> {
+  if (!env.DB) {
+    return [];
+  }
+  const limit = Math.min(Math.max(input.limit ?? 100, 1), 200);
+  let rows: LandingPageSnapshotRow[] = [];
+  try {
+    rows = await queryAll<LandingPageSnapshotRow>(
+      env,
+      `
+        SELECT
+          id,
+          canonical_url,
+          raw_headline,
+          cta_text,
+          price_text,
+          form_present,
+          artifact_key,
+          metadata_json,
+          capture_method,
+          captured_at
+        FROM landing_page_snapshot
+        WHERE
+          canonical_url = ?
+          OR canonical_url = ?
+          OR canonical_url = ?
+          OR canonical_url = ?
+          OR canonical_url LIKE ? ESCAPE '\\'
+          OR canonical_url LIKE ? ESCAPE '\\'
+          OR canonical_url LIKE ? ESCAPE '\\'
+          OR canonical_url LIKE ? ESCAPE '\\'
+          OR canonical_url LIKE ? ESCAPE '\\'
+          OR canonical_url LIKE ? ESCAPE '\\'
+          OR canonical_url LIKE ? ESCAPE '\\'
+          OR canonical_url LIKE ? ESCAPE '\\'
+        ORDER BY captured_at ASC, id ASC
+        LIMIT ?
+      `,
+      ...domainUrlBindings(input.domain),
+      limit,
+    );
+  } catch (error) {
+    if (isMissingSnapshotTable(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  return rows
+    .filter((row) => canonicalUrlBelongsToDomain(row.canonical_url, input.domain))
+    .filter((row) => !snapshotRowHasCompleteProof(row))
+    .map((row) => ({
+      id: row.id,
+      canonicalUrl: row.canonical_url,
+      capturedAt: row.captured_at,
+      reason: suppressionReason(row),
+    }));
+}
+
+function suppressionReason(row: LandingPageSnapshotRow): string {
+  const metadata = parseJson<Record<string, unknown>>(row.metadata_json, {});
+  const hasScreenshot = readScreenshotKey(metadata) !== null;
+  const hasPageText = readPageTextKey(row.artifact_key, metadata) !== null;
+  if (!hasScreenshot && !hasPageText) {
+    return isBackfillMetadata(metadata)
+      ? "seeded backfill row with no screenshot or page-text artifact"
+      : "no screenshot or page-text artifact stored";
+  }
+  if (!hasScreenshot) {
+    return "no screenshot artifact stored";
+  }
+  return "no page-text artifact stored";
 }
 
 export function isOfferTimelineShareEnabled(env: AppEnv): boolean {
@@ -324,6 +420,7 @@ function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
     formPresent: readFormPresent(row.form_present),
     screenshotKey,
     pageTextKey,
+    captureMethod: row.capture_method,
     // A backfill row (issue #968) carries no screenshot and no page text by
     // design — fabricating either would be dishonest. The proof gate above
     // (issue #1284) filters these rows out before they reach the ledger, so
