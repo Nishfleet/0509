@@ -66,6 +66,7 @@ import { formatCaptureAttemptReasonLabel } from "~/lib/capture-attempt-reason-co
 import type { CaptureAttemptReasonCode } from "~/lib/capture-attempt-reason-code";
 import {
   adsPageServiceJsonLd,
+  brandPageTimelineHasPart,
   canonicalUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -535,6 +536,19 @@ export default function BrandAdsRoute() {
                 pathname: data.canonicalPath,
                 dateModified: data.lastCheckedAt ?? undefined,
                 aboutName: data.brandName,
+                // Issue 964: link this brand page to its citable Offer
+                // Timeline Dataset so answer engines can follow the
+                // relationship from the brand page to the change-ledger.
+                // Only when a stored timeline exists — the page links the
+                // timeline section in exactly that case, and a missing
+                // timeline would point hasPart at a 410 Gone URL.
+                hasPart:
+                  data.offerTimelineEntries.length > 0
+                    ? brandPageTimelineHasPart({
+                        domain: data.domain,
+                        brandName: data.brandName,
+                      })
+                    : undefined,
               }),
             )}
           />
