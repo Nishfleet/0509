@@ -195,7 +195,12 @@ describe("landing-page snapshot persistence against real D1", () => {
   });
 
   it("dedup + state-change rows compose into a dated timeline (accept #4)", async () => {
-    const domainUrl = `https://${DOMAIN}/ledger`;
+    // Isolated domain: loadOfferTimeline queries by domain and buildOfferLedger
+    // computes transitions across every URL in that domain, so this test must
+    // own its domain to avoid rows seeded by tests (a)-(c) leaking into the
+    // transition math.
+    const LEDGER_DOMAIN = "ledger-persist.example";
+    const domainUrl = `https://${LEDGER_DOMAIN}/offer`;
     await persistCapture(
       {
         canonicalUrl: domainUrl,
@@ -229,25 +234,25 @@ describe("landing-page snapshot persistence against real D1", () => {
       "d-two",
     );
 
-    const loaded = await loadOfferTimeline(appEnv, { domain: DOMAIN, asOf: null });
-    const ledger = loaded.entries.filter((entry) =>
-      entry.canonicalUrl?.includes("/ledger"),
-    );
-    expect(ledger).toHaveLength(2);
-    expect(ledger[0]?.headline).toBe("Launch offer");
-    expect(ledger[0]?.transition).toBeNull();
-    expect(ledger[1]?.headline).toBe("Summer sale");
-    expect(ledger[1]?.transition?.headline).toEqual({
+    const loaded = await loadOfferTimeline(appEnv, {
+      domain: LEDGER_DOMAIN,
+      asOf: null,
+    });
+    expect(loaded.entries).toHaveLength(2);
+    expect(loaded.entries[0]?.headline).toBe("Launch offer");
+    expect(loaded.entries[0]?.transition).toBeNull();
+    expect(loaded.entries[1]?.headline).toBe("Summer sale");
+    expect(loaded.entries[1]?.transition?.headline).toEqual({
       before: "Launch offer",
       after: "Summer sale",
     });
     // Proof gate (issue #1284): both persisted rows carry a screenshot and a
     // page-text artifact, so both render with working artifact links.
-    expect(ledger.every((entry) => entry.screenshotHref?.startsWith("/artifacts/proof/"))).toBe(
-      true,
-    );
-    expect(ledger.every((entry) => entry.pageTextHref?.startsWith("/artifacts/page-text/"))).toBe(
-      true,
-    );
+    expect(
+      loaded.entries.every((entry) => entry.screenshotHref?.startsWith("/artifacts/proof/")),
+    ).toBe(true);
+    expect(
+      loaded.entries.every((entry) => entry.pageTextHref?.startsWith("/artifacts/page-text/")),
+    ).toBe(true);
   });
 });
