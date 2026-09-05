@@ -87,15 +87,20 @@ afterEach(() => {
 });
 
 describe("public /search q= and country= SSR heading and input", () => {
-  it("renders an H1 that names the brand and spells the all-countries scope in buyer language", async () => {
+  it("renders an H1 that names the buyer's intent and moves the country scope to the annotation under the H1", async () => {
     const { default: SearchRoute } = await import("~/routes/search");
     const markup = renderToStaticMarkup(createElement(SearchRoute));
 
-    expect(markup).toContain("Nike ads across all countries");
+    // Issue #1502: the H1 names the buyer's intent ("What Nike is running on
+    // Meta") and never carries the technical country-scope phrases.
     const h1Match = markup.match(/<h1[^>]*>([^<]+)<\/h1>/);
     expect(h1Match?.[1]?.replace(/&#x27;/g, "'")).toBe(
-      "Nike ads across all countries",
+      "What Nike is running on Meta",
     );
+    expect(h1Match?.[1] ?? "").not.toContain("across all countries");
+    expect(h1Match?.[1] ?? "").not.toContain("all-countries query");
+    // The country scope moved to the small annotation line under the H1.
+    expect(markup).toContain("Across all countries");
     expect(markup).not.toContain("in all countries");
   });
 

@@ -38,6 +38,7 @@
     "scripts/canary-proof-screenshot-rate.mjs",
     "scripts/canary-proof-budget-skip-surface.mjs",
     "scripts/canary-cta-detector.mjs",
+    "scripts/canary-search-h1.mjs",
     "scripts/canary-demo-brand-timeline.mjs",
     "scripts/canary-digest-headline-ratio.mjs",
     "scripts/launch-readiness-canary-cycle.mjs",
