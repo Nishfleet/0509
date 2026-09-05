@@ -16,6 +16,10 @@ import { parse } from "yaml";
 const REQUIRED_JOBS = [
   [".github/workflows/secret-scan.yml", "gitleaks"],
   [".github/workflows/ci.yml", "codex-node-checks"],
+  // preview-assert (0509#1576) becomes a required context on main once the
+  // orchestrator adds it to branch protection; it must satisfy the same
+  // never-skipped contract from day one.
+  [".github/workflows/preview-assert.yml", "preview-assert"],
 ] as const;
 
 type WorkflowStep = {
