@@ -1,0 +1,15 @@
+# .gitleaksignore
+#
+# Pre-existing, reviewed-safe findings that gitleaks flags on full-history
+# scans but that are NOT real credentials. These are allowlisted so the
+# required "Gitleaks" secret-scan check can run on the OSS gitleaks binary
+# (the gitleaks-action@v3 wrapper now requires a paid org license) without
+# failing closed on known-safe content. Every other finding is still enforced.
+#
+# 1) ops/netcup-browser/tests/server.test.mjs:19 — a low-entropy, obviously-fake
+#    32-hex PDF fixture token (VALID_TOKEN) used only by a unit test. It lives
+#    in an old commit and the file has since been removed from the tree.
+# 2) docs/FIRSTRUN-DIRECTIONS-2026-07-21.md:42 — false positive: the word
+#    "tokens" (design tokens) adjacent to font names triggers generic-api-key.
+b157f14f3a2989221dc52cc87a3ff1ace8f4327f:ops/netcup-browser/tests/server.test.mjs:generic-api-key:19
+d2adaa81b92a8e52b62fadce5ad21754e87f64ff:docs/FIRSTRUN-DIRECTIONS-2026-07-21.md:generic-api-key:42
