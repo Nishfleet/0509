@@ -70,8 +70,9 @@ function record(
   subject: string,
   bodyHtml: string,
   unsubscribeUrl: string | null,
+  theme: "plain" | "case-file" = "plain",
 ) {
-  const html = renderEmailShell({ bodyHtml, unsubscribeUrl });
+  const html = renderEmailShell({ bodyHtml, unsubscribeUrl, theme });
   gallery.push({ id, label, unsub, rendered: { subject, html } });
   return html;
 }
@@ -231,7 +232,7 @@ function makeEvent(over: Partial<WatchEventRecord> & { metadata?: Record<string,
 describe("email render gallery", () => {
   it("weekly digest — five grouped moves, thumbnails present and absent", () => {
     const model = buildDigestEmail({ ...baseDigestInput, items: digestItems });
-    const html = record("digest-weekly", "Weekly digest (5 grouped moves)", true, model.subject, model.html, UNSUB);
+    const html = record("digest-weekly", "Weekly digest (5 grouped moves)", true, model.subject, model.html, UNSUB, "case-file");
     expect(model.subject).toBeTruthy();
     expect(html).toContain("Unsubscribe");
     expect(html).toContain("Glowkart");
@@ -248,7 +249,7 @@ describe("email render gallery", () => {
       strategyParagraph: null,
       items: [digestItems[0]],
     });
-    record("digest-daily", "Daily digest (single move)", true, model.subject, model.html, UNSUB);
+    record("digest-daily", "Daily digest (single move)", true, model.subject, model.html, UNSUB, "case-file");
     expect(model.html).toContain("40%");
   });
 
@@ -259,7 +260,7 @@ describe("email render gallery", () => {
       upgradeUrl: "https://0509.io/app/billing",
       items: digestItems.slice(0, 3),
     });
-    record("digest-free-upgrade", "Weekly digest (free plan, upgrade line)", true, model.subject, model.html, UNSUB);
+    record("digest-free-upgrade", "Weekly digest (free plan, upgrade line)", true, model.subject, model.html, UNSUB, "case-file");
     expect(model.html).toContain("See plans");
   });
 
@@ -269,7 +270,7 @@ describe("email render gallery", () => {
       items: [],
       heartbeat: { runs: 42, watchlistsChecked: 6, adsSeen: 214 },
     });
-    record("digest-quiet", "Quiet digest (all-quiet heartbeat)", true, model.subject, model.html, UNSUB);
+    record("digest-quiet", "Quiet digest (all-quiet heartbeat)", true, model.subject, model.html, UNSUB, "case-file");
     expect(model.subject.toLowerCase()).toContain("all quiet");
   });
 
@@ -282,7 +283,7 @@ describe("email render gallery", () => {
       supportMailto: "mailto:support@0509.io",
       unsubscribeUrl: UNSUB,
     });
-    record("scan-trouble", "Scan-trouble notice", true, model.subject, model.html, UNSUB);
+    record("scan-trouble", "Scan-trouble notice", true, model.subject, model.html, UNSUB, "case-file");
     expect(model.html).toContain("Open watchlists");
   });
 
@@ -302,7 +303,7 @@ describe("email render gallery", () => {
       topCompetitorChanges: 14,
       billingUrl: "https://0509.io/app/billing",
     });
-    record("monthly-recap", "Monthly recap", true, model.subject, model.html, UNSUB);
+    record("monthly-recap", "Monthly recap", true, model.subject, model.html, UNSUB, "case-file");
     expect(model.html).toContain("Glowkart");
   });
 
@@ -357,7 +358,7 @@ describe("email render gallery", () => {
         { metaAdId: "ad-100", creativeImageUrl: `${CDN}/alert-creative.svg` } as never,
       ]]),
     );
-    record("instant-single", "Instant alert (single, diff + creative)", true, content.subject, content.html, UNSUB);
+    record("instant-single", "Instant alert (single, diff + creative)", true, content.subject, content.html, UNSUB, "case-file");
     expect(content.html).toContain("Suggested next action");
     expect(content.html).toContain("40% off everything");
   });
@@ -387,7 +388,7 @@ describe("email render gallery", () => {
       false,
       env,
     );
-    record("instant-batched", "Instant alert (batched, 3 changes)", true, content.subject, content.html, UNSUB);
+    record("instant-batched", "Instant alert (batched, 3 changes)", true, content.subject, content.html, UNSUB, "case-file");
     expect(content.subject).toContain("3 changes");
   });
 
@@ -481,7 +482,7 @@ describe("email render gallery", () => {
       ],
       appUrl: "https://0509.io/app/presence",
     });
-    record("presence-digest", "Presence digest", true, "Where your competitors showed up this week", html, UNSUB);
+    record("presence-digest", "Presence digest", true, "Where your competitors showed up this week", html, UNSUB, "case-file");
     expect(html).toContain("Open presence tracking");
   });
 

@@ -36,6 +36,10 @@ export async function sendCloudflareEmail(
 		text?: string;
 		tag: string;
 		unsubscribeUrl: string | null;
+		/** "case-file" wraps the brief surfaces (digest/alert/recap/presence) in the bone/ink/signal-green frame. */
+		theme?: "plain" | "case-file";
+		/** Optional hidden preheader for inbox preview text (passed to the shell). */
+		preheader?: string | null;
 	},
 ): Promise<EmailProviderResult> {
 	if (!isEmailSendingConfigured(env)) {
@@ -54,6 +58,8 @@ export async function sendCloudflareEmail(
 	const html = renderEmailShell({
 		bodyHtml: input.html,
 		unsubscribeUrl: input.unsubscribeUrl,
+		theme: input.theme ?? "plain",
+		preheader: input.preheader ?? null,
 	});
 	const headers: Record<string, string> = {
 		"X-0509-Tag": input.tag,
