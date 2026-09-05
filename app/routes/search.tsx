@@ -2224,6 +2224,19 @@ export default function SearchRoute() {
                             &rsaquo;
                           </span>
                         </Link>
+                        {rootData.session ? (
+                          /* Workspace-memory activation (issue #1557): an
+                             empty domain search is the exact moment a signed-in
+                             user should know the Library exists, so every search
+                             has a compounding surface once they find an ad to
+                             keep. One honest next step alongside monitoring setup. */
+                          <Link className="f9-wk-lnk" to="/app/collections">
+                            Open your Library{" "}
+                            <span aria-hidden="true" className="f9-wk-chev">
+                              &rsaquo;
+                            </span>
+                          </Link>
+                        ) : null}
                         <Link className="f9-wk-lnk" to="/app/watchlists">
                           View monitoring setup{" "}
                           <span aria-hidden="true" className="f9-wk-chev">
