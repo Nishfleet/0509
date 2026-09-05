@@ -1271,7 +1271,9 @@ export async function searchAdsViaSourceResolver(
         discoveryStatus: "cache_only",
         discoveryProgress: "warming",
         discoverySummary:
-          "Showing previously captured results while refreshing this query in the background.",
+          usableCached.payload.ads.length > 0
+            ? "Showing previously captured results while refreshing this query in the background."
+            : null,
         discoveryFailureClass: null,
       };
     }
@@ -1776,7 +1778,9 @@ async function waitForDiscoveryLeaseResolution(
           discoveryStatus: "cache_only",
           discoveryProgress: "warming",
           discoverySummary:
-            "Showing previously captured results while this query refreshes in the background.",
+            staleCached.payload.ads.length > 0
+              ? "Showing previously captured results while this query refreshes in the background."
+              : null,
           discoveryFailureClass: null,
         };
       }
