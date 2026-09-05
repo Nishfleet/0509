@@ -29,6 +29,7 @@
     "canary:prod": "node scripts/prod-canary.mjs",
     "canary:bet2": "node scripts/bet2-live-verification.mjs --json",
     "canary:bet3": "node scripts/bet3-live-verification.mjs --from-sitemap --json",
+    "canary:bet7": "node scripts/bet7-activation-verification.mjs --json",
     "canary:bet9": "node scripts/bet9-first-viewport-verification.mjs --json",
     "canary:search-latency": "node scripts/search-latency-probe.mjs",
     "gate-c:soak:start": "node scripts/gate-c-soak.mjs start",
