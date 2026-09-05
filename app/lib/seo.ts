@@ -242,6 +242,30 @@ export function webPageJsonLd(input: {
 }
 
 /**
+ * schema.org BreadcrumbList for a public informational page. Emitted on
+ * indexable multi-level pages (e.g. /timeline/:domain) so Google can show a
+ * breadcrumb in the rich result. Every `item` is the canonical URL of the
+ * corresponding pathname — the same canonical the page itself links — so the
+ * crumbs can never point at a strayhost or query-parameter variant. The last
+ * crumb is the page itself (its canonical URL), which the rich-results
+ * validator accepts as the current position.
+ */
+export function breadcrumbJsonLd(input: {
+  items: ReadonlyArray<{ name: string; pathname: string }>;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: input.items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: canonicalUrl(item.pathname),
+    })),
+  } as const;
+}
+
+/**
  * schema.org Product+Offer pair for a /pricing tier or proof pack (#1503).
  *
  * Returns a single Product entity with one nested Offer; the Offer carries

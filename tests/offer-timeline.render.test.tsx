@@ -36,6 +36,13 @@ async function render(data: OfferTimelineLoaderData): Promise<string> {
   return renderToStaticMarkup(createElement(OfferTimelineRoute));
 }
 
+function parseLdJsonBlocks(markup: string): Array<Record<string, unknown>> {
+  const matches = [
+    ...markup.matchAll(/type="application\/ld\+json">([\s\S]*?)<\/script>/g),
+  ];
+  return matches.map((match) => JSON.parse(match[1] ?? "") as Record<string, unknown>);
+}
+
 const SCREENSHOT_A = "landing-pages/2026-08-01/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpeg";
 const SCREENSHOT_B = "landing-pages/2026-08-10/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpeg";
 const SCREENSHOT_C = "landing-pages/2026-08-20/cccccccccccccccccccccccccccccccc.jpeg";
@@ -135,6 +142,49 @@ describe("/timeline/:domain render", () => {
     expect(markup).toContain("Headline");
     expect(markup).toContain("Glow serum");
     expect(markup).toContain("Festive glow kit");
+  });
+
+  it("links each dated state to its source URL with nofollow (accept #2)", async () => {
+    const markup = await render(data());
+
+    // Every entry points at the captured canonical URL the state came from.
+    expect(markup.match(/Source: nykaa\.com/g)).toHaveLength(3);
+    expect(markup).toContain('href="https://nykaa.com/glow"');
+    expect(markup).toContain('rel="nofollow noreferrer"');
+    // The source link never fakes a receipt; screenshot and page text remain.
+    expect(markup).toContain(`href="/artifacts/proof/${encodeURIComponent(SCREENSHOT_A)}"`);
+  });
+
+  it("emits BreadcrumbList structured data on an indexable timeline (accept #6)", async () => {
+    const markup = await render(data());
+    const blocks = parseLdJsonBlocks(markup);
+
+    const breadcrumb = blocks.find((block) => block["@type"] === "BreadcrumbList");
+    expect(breadcrumb, "missing BreadcrumbList JSON-LD").not.toBeUndefined();
+    expect(breadcrumb?.["@context"]).toBe("https://schema.org");
+    const items = breadcrumb?.["itemListElement"] as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(2);
+    expect(items[0]).toEqual({
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://0509.io/",
+    });
+    expect(items[1]).toEqual({
+      "@type": "ListItem",
+      position: 2,
+      name: "Nykaa offer timeline",
+      item: "https://0509.io/timeline/nykaa.com",
+    });
+
+    // The WebPage block is still the page's other structured-data payload.
+    const webPages = blocks.filter((block) => block["@type"] === "WebPage");
+    expect(webPages).toHaveLength(1);
+  });
+
+  it("emits neither JSON-LD block on a noindex timeline shell", async () => {
+    const markup = await render(data({ noindex: true, entries: [] }));
+    expect(markup).not.toContain("application/ld+json");
   });
 
   it("renders the as-of offer and the share URL without requiring a login", async () => {
