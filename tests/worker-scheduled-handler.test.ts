@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  DAILY_DIGEST_CRON,
   DISCOVERY_WARMUP_CRON,
   WEEKLY_DIGEST_CRON,
 } from "../workers/schedule";
@@ -26,6 +27,16 @@ async function loadWorker() {
     dispatchFailures: 0,
   });
   const runScheduledDiscoveryWarmup = vi.fn().mockResolvedValue({});
+  const runDemoBrandBackfill = vi.fn().mockResolvedValue({
+    day: "2026-09-05",
+    startedAt: "2026-09-05T01:00:00.000Z",
+    capturedCount: 5,
+    failedCount: 0,
+    domains: [],
+  });
+  const summarizeDemoBrandBackfill = vi.fn((result) =>
+    `demo-brand-backfill day=${result.day} captured=${result.capturedCount} failed=${result.failedCount} []`,
+  );
   const flushDeferredInstantAlerts = vi.fn().mockResolvedValue({ groups: 0 });
   const sendWeeklyBusinessNumbers = vi.fn().mockResolvedValue({ sent: false });
   const sendCustomerAtRiskAlert = vi.fn().mockResolvedValue({ sent: false });
@@ -62,6 +73,10 @@ async function loadWorker() {
     sendCustomerAtRiskAlert,
     sendWeeklyBusinessNumbers,
   }));
+  vi.doMock("../app/lib/demo-brand-backfill.server", () => ({
+    runDemoBrandBackfill,
+    summarizeDemoBrandBackfill,
+  }));
   vi.doMock("../app/lib/cron-failure-alert.server", () => ({ reportScheduledTaskFailure }));
   vi.doMock("../app/lib/monthly-recap.server", () => ({ sendMonthlyCustomerRecaps }));
   vi.doMock("../app/lib/scheduled-observation-health.server", () => ({
@@ -89,14 +104,25 @@ async function loadWorker() {
     resolveScheduledTask: vi.fn((cron: string) =>
       cron === WARMUP_CRON
         ? { kind: "discovery_warmup" }
-        : {
-            kind: "monitoring",
-            includeScans: true,
-            includeDigests: true,
-            digestCadence: "weekly",
-            digestLookbackDays: 7,
-            includeRiskAlert: false,
-          },
+        : cron === DAILY_DIGEST_CRON
+          ? {
+              kind: "monitoring",
+              includeScans: false,
+              includeDigests: true,
+              includeMentionResweep: false,
+              includeAutoCompetitorResweep: true,
+              includeRiskAlert: true,
+              digestCadence: "daily",
+              digestLookbackDays: 1,
+            }
+          : {
+              kind: "monitoring",
+              includeScans: true,
+              includeDigests: true,
+              digestCadence: "weekly",
+              digestLookbackDays: 7,
+              includeRiskAlert: false,
+            },
     ),
   }));
   vi.doMock("../workers/primary-domain", () => ({ primaryDomainRedirect: vi.fn().mockReturnValue(null) }));
@@ -109,6 +135,8 @@ async function loadWorker() {
     worker: worker.default,
     runScheduledMonitoring,
     runScheduledDiscoveryWarmup,
+    runDemoBrandBackfill,
+    summarizeDemoBrandBackfill,
     flushDeferredInstantAlerts,
     scheduleBillingLifecycleEmailRecovery,
     scheduleDigestScheduleExhaustionRecovery,
@@ -416,5 +444,73 @@ describe("Worker scheduled handler", () => {
       cron: NORMAL_CRON,
     });
     expect(call[1].executionContext).toBe(ctx);
+  });
+
+  it("runs the nightly demo-brand backfill on the daily 04:00 cron alongside monitoring", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    const scheduledTime = Date.parse("2026-09-05T04:00:00.000Z");
+
+    await loaded.worker.scheduled(
+      { cron: DAILY_DIGEST_CRON, scheduledTime } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    expect(loaded.runDemoBrandBackfill).toHaveBeenCalledTimes(1);
+    // The daily digest cron itself still runs its normal monitoring/digest
+    // work — the backfill rides the rail, it does not replace it. The hook
+    // only fires for digestCadence "daily", never the 3-hour or weekly crons.
+    expect(loaded.runScheduledMonitoring).toHaveBeenCalledTimes(1);
+    expect(loaded.runScheduledDiscoveryWarmup).not.toHaveBeenCalled();
+    expect(loaded.observeScheduledTask.mock.calls.map((call) => call[2])).toEqual(
+      expect.arrayContaining([
+        { cron: DAILY_DIGEST_CRON, scheduledTime, taskName: "scheduled_monitoring" },
+      ]),
+    );
+    // The shared customer-email outbox drain still runs for this cron.
+    expect(loaded.scheduleBillingLifecycleEmailRecovery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ observationContext: expect.anything() }),
+    );
+  });
+
+  it("does not run the demo-brand backfill on the 3-hour or weekly crons", async () => {
+    for (const cron of [WARMUP_CRON, NORMAL_CRON]) {
+      const loaded = await loadWorker();
+      const { ctx, pending } = createContext();
+      await loaded.worker.scheduled(
+        { cron, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
+        {} as never,
+        ctx as never,
+      );
+      await Promise.all(pending);
+      expect(loaded.runDemoBrandBackfill).not.toHaveBeenCalled();
+    }
+  });
+
+  it("pages the operator when the nightly demo-brand backfill throws", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    const failure = new Error("capture pipeline down");
+    loaded.runDemoBrandBackfill.mockRejectedValueOnce(failure);
+
+    await loaded.worker.scheduled(
+      {
+        cron: DAILY_DIGEST_CRON,
+        scheduledTime: Date.parse("2026-09-05T04:00:00.000Z"),
+      } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      "demo_brand_backfill",
+      failure,
+    );
   });
 });

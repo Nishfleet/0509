@@ -5,6 +5,10 @@ import { createRequestHandler, RouterContextProvider } from "react-router";
 import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
+import {
+  runDemoBrandBackfill,
+  summarizeDemoBrandBackfill,
+} from "../app/lib/demo-brand-backfill.server";
 import { resumePendingDigestScheduleJobsDetailed } from "../app/lib/digest-orchestration.server";
 import {
   flushDeferredInstantAlerts,
@@ -368,6 +372,30 @@ export default {
         ),
       );
       return;
+    }
+
+    // Nightly demo-brand Offer Timeline backfill (issue #1449): folded into
+    // the one existing cron that fires exactly once per UTC day (the 04:00
+    // digest rail). A new wrangler cron would escape the release-soak gap
+    // coverage (the soak table's CHECK accepts only the four production
+    // crons), so the backfill rides the daily rail instead; the corpus still
+    // grows exactly once per day, and rollback = removing this block (the
+    // digest cron and watchlist runs continue untouched).
+    if (scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily") {
+      ctx.waitUntil(
+        runDemoBrandBackfill(env).then(
+          (result) => {
+            console.log("demo brand backfill completed", {
+              day: result.day,
+              captured: result.capturedCount,
+              failed: result.failedCount,
+              summary: summarizeDemoBrandBackfill(result),
+            });
+          },
+          (error) =>
+            reportScheduledTaskFailure(env, "demo_brand_backfill", error),
+        ),
+      );
     }
 
     ctx.waitUntil(
