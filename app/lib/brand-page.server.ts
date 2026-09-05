@@ -121,6 +121,107 @@ export function isReservedBrandPageDomain(host: string): boolean {
   return false;
 }
 
+/**
+ * Canonical /ads/:domain alias resolution (issue #1446).
+ *
+ * A brand can occupy several registrable domains: the natural brand base
+ * domain a buyer actually types (ridge.com, oura.com) and the product/company
+ * domain advertisers truly use (ridgewallet.com, ouraring.com). Left alone
+ * these become two competing indexable URLs — the brand's verified ads and
+ * link equity split across them, and the natural domain can serve the weakest
+ * version of the brand while the real set sits one registrable domain over.
+ *
+ * Each row maps an alias registrable domain to its canonical (product) brand
+ * page. The relationship is the existing folded stem-extension identity from
+ * #1428 (`hostnamesMatchBrandStemExtension`: the canonical label folds to the
+ * alias stem plus a product word — "ridge" + "wallet" = ridgewallet.com,
+ * "oura" + "ring" = ouraring.com), kept as a curated table because the loader
+ * cannot enumerate a stem's unknown extensions at request time. The route
+ * 301-redirects the alias to the canonical page; the sitemap lists only the
+ * canonical page so an alias never splits crawl budget. Render/route logic
+ * only — no D1 change.
+ */
+export const BRAND_PAGE_CANONICAL_ALIASES: Readonly<Record<string, string>> = {
+  "ridge.com": "ridgewallet.com",
+  "oura.com": "ouraring.com",
+};
+
+/**
+ * Resolution of a requested brand-page domain against the canonical alias
+ * graph. Returns the registrable domain that should serve this brand and
+ * whether the requested domain is itself an alias.
+ */
+export interface CanonicalBrandPageResolution {
+  /** The registrable domain that should serve this brand. Never a reserved name. */
+  canonical: string;
+  /** True when the requested domain is an alias that should 301 to `canonical`. */
+  isAlias: boolean;
+}
+
+/**
+ * Normalize a request-side domain to its canonical brand page. Non-alias
+ * domains resolve to themselves. A domain that IS a canonical target always
+ * resolves to itself (never redirects).
+ */
+export function resolveCanonicalBrandPageDomain(
+  domain: string | null | undefined,
+): CanonicalBrandPageResolution {
+  const normalized = domain?.trim().toLowerCase() ?? "";
+  const target = BRAND_PAGE_CANONICAL_ALIASES[normalized];
+  if (target) {
+    return { canonical: target, isAlias: true };
+  }
+  // A domain that is not a mapped alias resolves to itself — a domain that IS
+  // a canonical target is covered by the alias lookup of its own alias.
+  return { canonical: normalized, isAlias: false };
+}
+
+/**
+ * Is this a brand-page domain that should be excluded from the dynamic
+ * sitemap? Once the route 301-redirects an alias page, it is no longer a
+ * distinct indexable URL (issue #1446 criterion 3).
+ */
+export function isBrandPageAliasDomain(domain: string): boolean {
+  return resolveCanonicalBrandPageDomain(domain).isAlias;
+}
+
+/**
+ * Does a creative's landing host belong to the same brand as the served brand
+ * page? Same registrable domain, or either side is the alias/canonical partner
+ * of the other per the canonical graph. This is what keeps a brand's verified
+ * set from splitting by landing-host: on the ridgewallet.com page an ad that
+ * lands on ridge.com still counts as the brand's own, because both fold to
+ * the same brand identity the route consolidates (issue #1446 criterion 2).
+ */
+function landingHostIsThisBrand(
+  landingHost: string | null | undefined,
+  brandDomain: string,
+): boolean {
+  if (!landingHost) {
+    return false;
+  }
+  const landingRegistrable = registrableDomainFromHostname(landingHost);
+  const brandRegistrable = registrableDomainFromHostname(brandDomain);
+  if (!landingRegistrable || !brandRegistrable) {
+    return false;
+  }
+  // The identical-domain case is deliberately NOT this helper's job — the
+  // regional-property rule requires a different registrable domain, and the
+  // same-host case is already proven elsewhere (name/stem checks in
+  // adIsBrandOwned, hostnamesMatchDomainIntent in adHasVerifiedDomainLink).
+  if (landingRegistrable === brandRegistrable) {
+    return false;
+  }
+  const brandResolved = resolveCanonicalBrandPageDomain(brandRegistrable);
+  const landingResolved = resolveCanonicalBrandPageDomain(landingRegistrable);
+  // Require at least one side to actually be an alias so two unrelated plain
+  // domains never collide on equal `canonical` (each resolves to itself).
+  return (
+    brandResolved.canonical === landingResolved.canonical &&
+    (brandResolved.isAlias || landingResolved.isAlias)
+  );
+}
+
 export interface BrandPageCacheSnapshot {
   ads: AdRecord[];
   /** ISO timestamp of the underlying Ad Library check. */
@@ -314,6 +415,14 @@ export function adIsBrandOwned(ad: AdRecord, brandDomain: string): boolean {
     }
   }
 
+  // The creative lands on the brand's alias/canonical partner (e.g. an ad
+  // landing on ridge.com counted on the ridgewallet.com page). Same brand
+  // identity per the canonical graph, so the set never splits by landing-host
+  // (issue #1446 criterion 2).
+  if (landingHostIsThisBrand(regionalHost, brandDomain)) {
+    return true;
+  }
+
   const advertiser = (ad.advertiser ?? "").trim();
   if (!advertiser) {
     return false;
@@ -397,7 +506,14 @@ export function adHasVerifiedDomainLink(
   // Existing cache rows for allbirds.com / mamaearth.com still carry
   // unverified domainMatch from before regional-property matching. Re-read
   // the landing host so a deploy repairs those pages without a recrawl.
-  return hostnamesMatchBrandVerifiedProperty(landingHost, { registrableDomain });
+  if (hostnamesMatchBrandVerifiedProperty(landingHost, { registrableDomain })) {
+    return true;
+  }
+  // The creative lands on the brand's alias/canonical partner (e.g. an ad
+  // landing on ridge.com counted on the ridgewallet.com page) — same brand
+  // identity per the canonical graph, so the verified set never splits by
+  // landing-host (issue #1446 criterion 2).
+  return landingHostIsThisBrand(landingHost, brandDomain);
 }
 
 /** How many cached creatives carry verified link evidence to the domain. */
