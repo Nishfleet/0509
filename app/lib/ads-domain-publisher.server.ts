@@ -39,13 +39,19 @@
 
 import sneakerResaleSeedList from "../../data/seed-lists/sneaker-resale.json";
 import { hydrateAdsWithPersistedCreatives } from "~/lib/ad-persistence.server";
-import { resolveCommercialDiscoveryProvider } from "~/lib/ad-source.server";
+import {
+  resolveCommercialDiscoveryProvider,
+  searchAdsViaSourceResolver,
+} from "~/lib/ad-source.server";
 import type { AppEnv } from "~/lib/env.server";
 import { normalizeSearchFilters } from "~/lib/normalize";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
-import { buildSearchV2SavedQuery, buildSearchV2Context } from "~/lib/search-v2.server";
-import { buildSearchV2CacheKey, applySearchV2PostFilter } from "~/lib/search-v2.server";
-import { searchAdsViaSourceResolver } from "~/lib/ad-source.server";
+import {
+  applySearchV2PostFilter,
+  buildSearchV2CacheKey,
+  buildSearchV2Context,
+  buildSearchV2SavedQuery,
+} from "~/lib/search-v2.server";
 import type { AdDiscoveryProvider } from "~/lib/types";
 
 /** One entry in a curated seed list. `brand` is display metadata only. */
