@@ -56,4 +56,6 @@ The orchestrator must add `preview-assert` to main's required status checks (bra
 
 net-positive-because: the +471 lines are one new required-check workflow (preview-assert.yml, ~192 lines) plus its two lock-tests, replacing the failure mode of 9 auto-reverts of good production code in the last 120 merges (each the same lines of workflow plus a full revert+re-land round trip). The added machinery is test/check code plus the classifier in auto-revert.yml; no production runtime code grows.
 
+organ-heartbeat: .github/workflows/ not-an-organ: workflow files and their lock-tests are not a fleet organ (no systemd unit, no heartbeat metric, no absent() rule); fleet-organ-heartbeat-check gate returned SKIP.
+
 Closes #1576
