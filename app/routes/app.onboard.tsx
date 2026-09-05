@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { SignupFirstBriefView } from "~/components/signup-first-brief-view";
+import { useFirstCapturePolling } from "~/components/workspace/use-first-capture-polling";
 import type { SignupFirstBriefLoaderData } from "~/lib/first-brief";
 
 const COMPAT_COOKIE = "f9_onboard_compat";
@@ -96,6 +97,14 @@ export default function RetiredOnboardRoute() {
   const data = useLoaderData<typeof loader>() as
     | SignupFirstBriefLoaderData
     | null;
+  // BET 7 (issue #1487): while the activation scan is in flight, keep
+  // revalidating the loader so the brief renders in the SAME session the
+  // moment evidence lands — no manual reload, no "check email Monday"
+  // placeholder. Same bounded 30s-poll pattern as the dashboard and the
+  // Competitors board (useFirstCapturePolling).
+  const awaitingFirstScan =
+    data?.step === "first-brief" && data.status === "waiting";
+  useFirstCapturePolling(awaitingFirstScan);
   if (data && data.step === "first-brief") {
     return <SignupFirstBriefView data={data} />;
   }

@@ -180,4 +180,72 @@ describe("watchlists bulk competitor import", () => {
     expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(2);
     expect(completeUserOnboarding).not.toHaveBeenCalled();
   });
+
+  it("emits funnel_activation_scan_started when the BET 7 first-brief path queues the scan", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const createWatchlistWithinLimit = vi.fn().mockResolvedValueOnce({
+      status: "created",
+      watchlist: { id: "watch-1", targetLabel: "boAt Lifestyle" },
+      current: 2,
+      limit: 10,
+    });
+    const queueFirstWatchlistScanForSignupFirstBrief = vi.fn();
+    const queueFirstWatchlistScan = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => authModule());
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        SIGNUP_FIRST_BRIEF_ENABLED: "1",
+        FUNNEL_MEASUREMENT_ENABLED: "1",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding: vi.fn(),
+      createWatchlistWithinLimit,
+      listWatchlists: vi.fn().mockResolvedValue([]),
+      upsertAgentMemory: vi.fn(),
+      upsertClientRoom: vi.fn(),
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      queueFirstWatchlistScan,
+      queueFirstWatchlistScanForSignupFirstBrief,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 1,
+        limit: 10,
+      }),
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+    }));
+
+    const formData = new FormData();
+    formData.set("intent", "create-market-desk-import");
+    formData.set("importSurface", "watchlists");
+    formData.set("competitors", "boat-lifestyle.com");
+    formData.append("selectedRowIds", "row-1");
+
+    await expectRedirect(
+      () => postWatchlists(formData),
+      "/app/watchlists?imported=1",
+    );
+
+    expect(queueFirstWatchlistScanForSignupFirstBrief).toHaveBeenCalledTimes(1);
+    expect(queueFirstWatchlistScan).not.toHaveBeenCalled();
+    const records = logSpy.mock.calls
+      .map((call) => call[0])
+      .filter((line): line is string => typeof line === "string")
+      .map((line) => {
+        try {
+          return JSON.parse(line) as { operation?: string };
+        } catch {
+          return null;
+        }
+      })
+      .filter((record) => Boolean(record));
+    expect(
+      records.some((record) => record?.operation === "funnel_activation_scan_started"),
+    ).toBe(true);
+  });
 });
