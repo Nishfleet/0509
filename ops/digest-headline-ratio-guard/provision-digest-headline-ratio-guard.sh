@@ -39,19 +39,44 @@ require_root() {
 
 # Resolve the node bin dir for the nish user. systemd does not source the
 # nish user's login shell, so node/npm (which live under the nish toolchain,
-# not /usr/bin) are not on the default service PATH. The provision script
-# runs as root, so discover the dir via the nish user's login shell; when not
-# root (tests / drills) fall back to the ambient PATH. Fails (non-zero) if
-# node cannot be resolved at all.
+# not /usr/bin) are not on the default service PATH.
+#
+# A login-shell lookup is NOT reliable here: this host's ~/.bash_profile is an
+# empty file, so `bash -lc` never reaches ~/.profile and its PATH misses
+# ~/.local/bin entirely. Worse, a stale root-owned /usr/local/bin/node exists
+# WITHOUT a matching npm, so `command -v node` alone resolves to a dir the
+# guard still cannot run `npm ci` from. Instead, scan candidate dirs and pick
+# the first that contains BOTH an executable node AND npm. Fails (non-zero)
+# if no such dir exists.
 resolve_node_bin_dir() {
-  local node_bin
+  local nish_home dir
+  local -a candidates=()
+  if [[ "$(id -u)" -eq 0 ]]; then
+    nish_home="$(getent passwd nish | cut -d: -f6)"
+  else
+    nish_home="${HOME:-}"
+  fi
+  if [[ -n "${nish_home}" ]]; then
+    candidates+=("${nish_home}/.local/bin" "${nish_home}/bin")
+  fi
+  # Then wherever a node resolves for the target user (login shell as root,
+  # ambient PATH otherwise), in case the toolchain lives elsewhere.
+  local node_bin=""
   if [[ "$(id -u)" -eq 0 ]]; then
     node_bin="$(runuser -u nish -- bash -lc 'command -v node' 2>/dev/null || true)"
+    node_bin="${node_bin##*$'\n'}"
   else
     node_bin="$(command -v node 2>/dev/null || true)"
   fi
-  [[ -n "${node_bin}" ]] || return 1
-  dirname "${node_bin}"
+  [[ -n "${node_bin}" ]] && candidates+=("$(dirname "${node_bin}")")
+  candidates+=(/usr/local/bin /usr/bin /bin)
+  for dir in "${candidates[@]}"; do
+    if [[ -x "${dir}/node" && -x "${dir}/npm" ]]; then
+      printf '%s\n' "${dir}"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # The full PATH the guard unit runs with: the nish node bin dir first, then
@@ -62,16 +87,21 @@ guard_path() {
   printf '%s:/usr/local/bin:/usr/bin:/bin' "${node_bin_dir}"
 }
 
-# Assert that node AND npm both resolve within the given PATH. This is the
-# fail-loud guard: if the resolved PATH still cannot find npm, provisioning
-# stops with the PATH in the message rather than installing a unit that will
-# fail on every start.
+# Assert that node AND npm both resolve within the given PATH for the user
+# the unit runs as. This is the fail-loud guard: if the resolved PATH still
+# cannot find npm, provisioning stops with the PATH in the message rather
+# than installing a unit that will fail on every start. When run as root the
+# check runs AS nish (via runuser), matching the unit's runtime user so
+# permission bits are evaluated the same way systemd will.
 verify_guard_path() {
   local guard_path="$1"
-  local node_bin npm_bin
-  node_bin="$(PATH="${guard_path}" command -v node 2>/dev/null || true)"
-  npm_bin="$(PATH="${guard_path}" command -v npm 2>/dev/null || true)"
-  [[ -n "${node_bin}" && -n "${npm_bin}" ]]
+  if [[ "$(id -u)" -eq 0 ]]; then
+    runuser -u nish -- env PATH="${guard_path}" bash -c \
+      'command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1'
+  else
+    PATH="${guard_path}" bash -c \
+      'command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1'
+  fi
 }
 
 install_files() {
