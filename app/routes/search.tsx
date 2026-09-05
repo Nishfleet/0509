@@ -107,7 +107,12 @@ import {
   withSearchScope,
   withTrackingContext,
 } from "~/lib/search-display";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
@@ -1402,6 +1407,20 @@ export default function SearchRoute() {
       userName={rootData.session?.user.name}
     >
       <DashboardPage className="f9-wk-page">
+        {/* schema.org WebPage for the public search surface. Plain and honest:
+            states only what the page itself says in its head — the same title,
+            description, and canonical URL — with no result lists, prices,
+            ratings, or guarantees. Result claims are query-dependent and are
+            never asserted in structured data. */}
+        <script
+          {...jsonLdScriptProps(
+            webPageJsonLd({
+              name: "Search competitor Meta ads free | Five to Nine",
+              description: searchDescription,
+              pathname: "/search",
+            }),
+          )}
+        />
         <WorkingHeader
           context={headerContext}
           title="Find competitor ads"
