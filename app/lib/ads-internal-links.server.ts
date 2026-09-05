@@ -13,6 +13,7 @@ import {
   pickFeaturedAdsInternalLink,
   type IndexableAdsLink,
 } from "~/lib/ads-internal-links";
+import { hostnamesMatchOpenCctldToGenericCommercial } from "~/lib/search-query";
 import { PUBLIC_PROOF_FEATURED_WEBSITE } from "~/lib/public-proof.server";
 import { loadIndexableBrandPageEntries } from "~/lib/sitemap.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -60,7 +61,29 @@ export async function resolveIndexableBrandPageLinkForDomain(
     return null;
   }
   const links = await loadIndexableAdsInternalLinks(env);
-  return links.find((link) => link.domain === normalized) ?? null;
+  const direct = links.find((link) => link.domain === normalized);
+  if (direct) {
+    return direct;
+  }
+  // Open-ccTLD fallback (issue #1431): a bare-keyword search resolves the
+  // registrable domain its result rows actually land on, which for a brand
+  // whose public page lives on an open ccTLD is the generic-commercial twin
+  // (notion.com) while the indexable brand page is the open-ccTLD one
+  // (/ads/notion.so). Reuse the same one-directional open-ccTLD → generic
+  // commercial matcher the verified-link classifier trusts, so a search that
+  // resolves notion.com hands off to the indexable /ads/notion.so page
+  // instead of silently dropping the brand destination. Bounded: iterates the
+  // same ≤500 indexable set, cache-only.
+  for (const link of links) {
+    if (
+      hostnamesMatchOpenCctldToGenericCommercial(normalized, {
+        registrableDomain: link.domain,
+      })
+    ) {
+      return link;
+    }
+  }
+  return null;
 }
 
 /** Shared loader for /compare/* pages that have no other loader work. */
