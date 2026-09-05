@@ -4051,6 +4051,92 @@ describe("searchAdsViaSourceResolver", () => {
     expect(browserSearch).not.toHaveBeenCalled();
   });
 
+  // Issue #1452 accept #2: a cached-but-empty serve must NOT claim "Showing
+  // previously captured results" — there are no captured results on the
+  // page, so the stale-cache copy would be a dead-end lie. Non-empty serves
+  // keep the copy (covered by the expired-entry test above rendering ads).
+  it("serves a cached-but-empty entry with no stale-cache discoverySummary (issue #1452)", async () => {
+    const browserSearch = vi.fn();
+    const future = new Date(Date.now() + 180_000).toISOString();
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          run: vi.fn().mockResolvedValue({ success: true }),
+          first: vi.fn().mockResolvedValue({
+            holder_id: "other-isolate",
+            lease_expires_at: future,
+          }),
+        })),
+      })),
+    } as unknown as D1Database;
+    const expiredAt = new Date(Date.now() - 60 * 1000).toISOString();
+    const fetchedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_library_browser:fp-waiter-empty:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-waiter-empty",
+      country: "India",
+      cursor: null,
+      payload: {
+        ...buildLiveBrowserResult({ ads: [] }),
+        discoveryEmptyReason: "no_results",
+        discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+      },
+      fetchedAt,
+      expiresAt: expiredAt,
+      browserMsUsed: 12_000,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "waiter-empty",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search", executionContext: { waitUntil: vi.fn() } },
+    );
+
+    // The page shows no captured rows, so the "previously captured results"
+    // copy must be absent — the client poll copy owns the warming state.
+    expect(result).toMatchObject({
+      cacheStatus: "stale",
+      discoveryStatus: "cache_only",
+      discoveryProgress: "warming",
+      ads: [],
+    });
+    expect(result.discoverySummary).toBeNull();
+    expect(browserSearch).not.toHaveBeenCalled();
+  });
+
   it("keeps cursor (load-more) requests on the synchronous discovery path", async () => {
     const browserSearch = vi.fn().mockResolvedValue(buildLiveBrowserResult());
     const waitUntil = vi.fn();
