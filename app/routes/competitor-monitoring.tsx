@@ -13,6 +13,7 @@ import {
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
+  socialCardImage,
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
@@ -117,6 +118,7 @@ export const meta: MetaFunction = () =>
     title: "Competitor monitoring software | Five to Nine",
     description: pageDescription,
     pathname: "/competitor-monitoring",
+    image: socialCardImage("competitor-monitoring", undefined, "Competitor monitoring software — Five to Nine"),
   });
 
 // Outside-market claims. Every quote below carries its source URL and the date

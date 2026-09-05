@@ -8,7 +8,7 @@ import {
   type SneakerResaleLocaleId,
 } from "~/lib/locale-markets";
 import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
-import { canonicalUrl, publicSeoMeta, sneakerResaleHreflangLinks } from "~/lib/seo";
+import { canonicalUrl, publicSeoMeta, sneakerResaleHreflangLinks, socialCardImage } from "~/lib/seo";
 
 function localeFromParams(params: LoaderFunctionArgs["params"] | { locale?: string }): SneakerResaleLocaleId {
   const locale = params.locale;
@@ -42,6 +42,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
       description: copy.description,
       pathname: market.pathname,
       ogLocale: market.ogLocale,
+      image: socialCardImage("sneaker-resale", undefined, "Sneaker resale competitor ads — Five to Nine"),
     }),
     { tagName: "link", rel: "canonical", href: canonicalUrl(market.pathname) },
   ];
