@@ -1,5 +1,9 @@
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
-import { formatSearchMarketScope, resolveResultTierCounts } from "~/lib/search-display";
+import {
+  formatNoVerifiedTierTitle,
+  formatSearchMarketScope,
+  resolveResultTierCounts,
+} from "~/lib/search-display";
 import type { SearchResponse } from "~/lib/types";
 
 export type SearchAnswerState =
@@ -346,11 +350,18 @@ function buildCompleteSearchAnswer(input: {
     const tiers = resolveResultTierCounts(result);
     const likelyCount = tiers.likely;
     const unmatchedCount = tiers.unmatched;
+    // BET 2 (issue 1482): when candidates exist below but none are verified,
+    // the headline names the tiers instead of the "No verified ads found"
+    // dead-end copy — a first-time visitor with 17 likely rows under a
+    // "No verified ads found" head reads the page as broken, not honest.
+    const hasCandidates = likelyCount + unmatchedCount > 0;
     return {
       state: "no_verified",
-      title: withMarketScope(`No verified ads found for ${domain}`, input.country, marketScopeOptions),
-      summary: likelyCount > 0
-        ? "No ad was provably linked to this website, but brand-name matches are below. Confirm the likely ones before treating them as proof."
+      title: hasCandidates
+        ? withMarketScope(formatNoVerifiedTierTitle(domain, tiers), input.country, marketScopeOptions)
+        : withMarketScope(`No verified ads found for ${domain}`, input.country, marketScopeOptions),
+      summary: hasCandidates
+        ? "These ads matched your search but we couldn't verify they belong to the brand. Confirm a likely one before treating it as proof."
         : "Returned ads were not connected to this website through advertiser or landing-page evidence.",
       facts: [
         { label: "Verified ads", value: "0", detail: "Exact website match only" },
