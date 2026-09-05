@@ -126,6 +126,36 @@ export async function createLandingPageSnapshot(
   env: AppEnv,
   snapshot: NonNullable<AdRecord["landingPage"]>,
 ) {
+  // Issue #1484: duplicate captures are not re-inserted — only state changes
+  // create new snapshot rows. The captured offer state is identified by the
+  // schema's content fingerprint (`normalized_headline_hash`) plus the other
+  // visible offer signals (CTA, price, form-present); a later capture whose
+  // state is identical to an already-persisted one returns the existing row
+  // id instead of appending a duplicate versioned row. `IS` gives SQLite's
+  // NULL-safe comparison for the nullable signal columns.
+  const existing = await one<{ id: string }>(
+    env,
+    `
+      SELECT id
+      FROM landing_page_snapshot
+      WHERE canonical_url = ?
+        AND normalized_headline_hash = ?
+        AND cta_text IS ?
+        AND price_text IS ?
+        AND form_present IS ?
+      ORDER BY captured_at DESC
+      LIMIT 1
+    `,
+    snapshot.canonicalUrl,
+    snapshot.normalizedHeadlineHash,
+    snapshot.ctaText ?? null,
+    snapshot.priceText ?? null,
+    typeof snapshot.formPresent === "boolean" ? (snapshot.formPresent ? 1 : 0) : null,
+  );
+  if (existing) {
+    return existing.id;
+  }
+
   const id = createId();
   const timestamp = nowIso();
   await run(
