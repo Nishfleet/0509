@@ -63,7 +63,47 @@ export function buildLocalReleaseServerCommand(origin) {
   // LOCAL_RELEASE_SERVER_BOOT_SECONDS or longer, its exit is a real result
   // (Playwright tearing it down, or a genuine crash) and is passed straight
   // through. This cannot mask a server that starts and then misbehaves.
+  //
+  // On a runner that declares the network-interface enumeration contract
+  // (NETWORK_INTERFACE_ENUM_CONTRACT_ENV), the server command itself carries
+  // the contract forward so @cloudflare/vite-plugin never reaches the failing
+  // enumeration during its inspector port resolution — the boot failure the
+  // retry loop alone cannot outrun. See localReleaseServerCloudflareOptions.
   return `node scripts/e2e-prepare-local.mjs && ${buildLocalReleaseServerRetryScript(server)}`;
+}
+
+/**
+ * Environment contract set by the hardened self-hosted CI runners: the host
+ * cannot enumerate network interfaces (`os.networkInterfaces()` throws
+ * `uv_interface_addresses returned Unknown system error 97`, EAFNOSUPPORT),
+ * which `@cloudflare/vite-plugin`'s inspector port resolution needs at dev
+ * server boot. Declaring this contract disables that resolution so boot never
+ * reaches the failing enumeration. Keeping it as an explicit opt-in contract
+ * preserves the default inspector-port behaviour everywhere else.
+ */
+export const NETWORK_INTERFACE_ENUM_CONTRACT_ENV = "E2E_NETWORK_INTERFACE_ENUM_UNAVAILABLE";
+
+/**
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {boolean}
+ */
+export function hasNetworkInterfaceEnumerationContract(env = process.env) {
+  return String(env?.[NETWORK_INTERFACE_ENUM_CONTRACT_ENV]) === "1";
+}
+
+/**
+ * Deterministic `@cloudflare/vite-plugin` options for the local release
+ * server. On a runner that declared the network-interface enumeration
+ * contract, inspector port resolution is disabled (`inspectorPort: false`) so
+ * the plugin's `getLocalHosts` / `getPorts` / `getInputInspectorPort` boot
+ * path never calls `os.networkInterfaces()`. Without the contract the options
+ * are empty and the plugin keeps its default inspector behaviour.
+ *
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {Record<string, never> | { inspectorPort: false }}
+ */
+export function localReleaseServerCloudflareOptions(env = process.env) {
+  return hasNetworkInterfaceEnumerationContract(env) ? { inspectorPort: false } : {};
 }
 
 /**

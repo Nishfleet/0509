@@ -6,9 +6,12 @@ import { describe, expect, it } from "vitest";
 const {
   buildLocalReleaseServerCommand,
   buildLocalReleaseServerRetryScript,
+  hasNetworkInterfaceEnumerationContract,
   LOCAL_RELEASE_SERVER_BOOT_SECONDS,
   LOCAL_RELEASE_SERVER_MAX_ATTEMPTS,
   LOCAL_RELEASE_SERVER_RETRY_DELAY_SECONDS,
+  localReleaseServerCloudflareOptions,
+  NETWORK_INTERFACE_ENUM_CONTRACT_ENV,
   createLocalReleaseServerIdentity,
   isLocalReleaseServerIdentity,
   parseExactLoopbackOrigin,
@@ -168,5 +171,32 @@ describe("local release proof server identity", () => {
     for (const value of ["0", "59999", "1200001", "not-a-number"]) {
       expect(() => resolveLocalReleaseRunTimeout(value)).toThrow("invalid_local_release_timeout");
     }
+  });
+
+  it("declares a stable environment contract for the hardened interface-enumeration runners", () => {
+    expect(NETWORK_INTERFACE_ENUM_CONTRACT_ENV).toBe("E2E_NETWORK_INTERFACE_ENUM_UNAVAILABLE");
+    expect(hasNetworkInterfaceEnumerationContract({})).toBe(false);
+    expect(hasNetworkInterfaceEnumerationContract({ [NETWORK_INTERFACE_ENUM_CONTRACT_ENV]: "1" })).toBe(true);
+    expect(hasNetworkInterfaceEnumerationContract({ [NETWORK_INTERFACE_ENUM_CONTRACT_ENV]: "0" })).toBe(false);
+    expect(hasNetworkInterfaceEnumerationContract({ [NETWORK_INTERFACE_ENUM_CONTRACT_ENV]: "yes" })).toBe(false);
+    expect(hasNetworkInterfaceEnumerationContract({ [NETWORK_INTERFACE_ENUM_CONTRACT_ENV]: "" })).toBe(false);
+    expect(
+      hasNetworkInterfaceEnumerationContract({
+        [NETWORK_INTERFACE_ENUM_CONTRACT_ENV]: "1",
+        E2E_TEST_MODE: "1",
+      }),
+    ).toBe(true);
+  });
+
+  it("disables the Cloudflare inspector only when the runner declares the contract", () => {
+    expect(localReleaseServerCloudflareOptions({})).toEqual({});
+    expect(localReleaseServerCloudflareOptions({ E2E_TEST_MODE: "1" })).toEqual({});
+    expect(localReleaseServerCloudflareOptions({ [NETWORK_INTERFACE_ENUM_CONTRACT_ENV]: "0" })).toEqual({});
+    expect(
+      localReleaseServerCloudflareOptions({
+        [NETWORK_INTERFACE_ENUM_CONTRACT_ENV]: "1",
+        E2E_TEST_MODE: "1",
+      }),
+    ).toEqual({ inspectorPort: false });
   });
 });

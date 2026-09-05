@@ -41,6 +41,17 @@ jobs:
         run: ./scripts/deploy-window-lock.sh run -- npm run build
 
       - name: Run cross-browser risk proof
+        # Runner-specific environment contract: the hardened self-hosted
+        # verify runners cannot enumerate network interfaces
+        # (os.networkInterfaces() throws `uv_interface_addresses ... system
+        # error 97`), which @cloudflare/vite-plugin's inspector port
+        # resolution needs at dev-server boot. Declaring the contract makes
+        # the release server boot with the Cloudflare inspector disabled so
+        # boot never reaches the failing enumeration (see
+        # scripts/local-release-server.mjs). The diagnostic still fails loudly
+        # on any genuine boot or journey failure.
+        env:
+          E2E_NETWORK_INTERFACE_ENUM_UNAVAILABLE: "1"
         run: ./scripts/deploy-window-lock.sh run -- node scripts/run-cross-browser-risk-proof.mjs
 
       - name: Upload artifacts on failure

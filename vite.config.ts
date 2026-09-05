@@ -5,6 +5,7 @@ import { reactRouter } from "@react-router/dev/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { localReleaseServerCloudflareOptions } from "./scripts/local-release-server.mjs";
 
 const require = createRequire(import.meta.url);
 const reactRouterDevRoot = path.dirname(require.resolve("@react-router/dev/package.json"));
@@ -23,6 +24,7 @@ export default defineConfig(({ mode }) => ({
       ? [tsconfigPaths()]
       : [
           cloudflare({
+            ...localReleaseServerCloudflareOptions(),
             ...(isE2ETestMode
               ? {
                   configPath: "./wrangler.e2e.jsonc",
