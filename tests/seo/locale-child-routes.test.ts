@@ -21,7 +21,7 @@ type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
  * Live production probes are the operator canary lane's job (see
  * `scripts/canary-locale-prefix-routes.*` and the issue's `verify:` block);
  * CI cannot hit production reliably. This test enforces the same failure
- * contract statically: every one of the 5×13 locale × child cells must be
+ * contract statically: every one of the 5×11 locale × child cells must be
  * (a) a real registered route under `:locale` (so the router serves 200, not
  * 404), (b) backed by a `$locale.*.tsx` file that re-exports the EN sibling's
  * component and meta with canonical→EN + the buyer-surface hreflang cluster,
@@ -89,8 +89,12 @@ afterEach(() => {
 });
 
 describe("locale compare/switch child routes (issue #1563)", () => {
-  it("ships exactly the 13 child routes (10 compare + 3 switch)", () => {
-    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(13);
+  it("ships exactly the 11 child routes (8 compare + 3 switch)", () => {
+    // The compare set is 8, not 10: /compare/visualping and
+    // /compare/foreplay are canonicalized duplicates that left the locale
+    // child set with the EN URLs (issue #1481). Their $locale.compare.*
+    // route files stay registered so those URLs still render 200.
+    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(11);
   });
 
   it("registers every locale child route under :locale in routes.ts", () => {
@@ -179,8 +183,8 @@ describe("locale compare/switch child routes (issue #1563)", () => {
     }
   });
 
-  it("lists all 65 locale child URLs in the public sitemap", () => {
-    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(13);
+  it("lists all 55 locale child URLs in the public sitemap", () => {
+    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(11);
     expect(BUYER_SURFACE_LOCALE_IDS).toHaveLength(5);
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       for (const child of BUYER_SURFACE_CHILD_PATHS) {

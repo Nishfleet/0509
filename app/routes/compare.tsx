@@ -17,15 +17,16 @@ export const meta: MetaFunction = () =>
     pathname: "/compare",
   });
 
-/** The 13 indexed /compare/* product pages the hub links. */
+/** The 8 indexed /compare/* product pages the hub links. */
 const COMPARE_PAGES = [
   { slug: "magicbrief", label: "Five to Nine vs MagicBrief", href: "/compare/magicbrief" },
   { slug: "meta-ad-library", label: "vs checking the Meta Ad Library by hand", href: "/compare/meta-ad-library" },
-  { slug: "visualping", label: "Five to Nine vs Visualping", href: "/compare/visualping" },
+  // /compare/visualping and /compare/foreplay are not linked here (issue
+  // #1481): both are duplicates that canonicalize to their more specific
+  // sibling below, so the hub surfaces one URL per vendor pair.
   { slug: "visualping-ad-library", label: "Five to Nine vs Visualping for ad libraries", href: "/compare/visualping-ad-library" },
   { slug: "spyland", label: "Five to Nine vs Spyland", href: "/compare/spyland" },
   { slug: "pulzifi", label: "Five to Nine vs Pulzifi", href: "/compare/pulzifi" },
-  { slug: "foreplay", label: "Five to Nine vs Foreplay", href: "/compare/foreplay" },
   { slug: "foreplay-spyder", label: "Five to Nine vs Foreplay Spyder", href: "/compare/foreplay-spyder" },
   { slug: "panoramata", label: "Five to Nine vs Panoramata", href: "/compare/panoramata" },
   { slug: "adspyder", label: "Five to Nine vs AdSpyder", href: "/compare/adspyder" },

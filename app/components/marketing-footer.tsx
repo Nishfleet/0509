@@ -41,11 +41,11 @@ export function MarketingFooter() {
         <span className="ld-footer-group-label">Compare</span>
         <Link to="/compare/meta-ad-library">vs checking the Meta Ad Library by hand</Link>
         <Link to="/compare/magicbrief">vs MagicBrief</Link>
-        <Link to="/compare/visualping">vs Visualping</Link>
+        {/* /compare/visualping and /compare/foreplay are not linked here
+            (issue #1481): duplicates canonicalizing to the two links below. */}
         <Link to="/compare/visualping-ad-library">vs Visualping for ad libraries</Link>
         <Link to="/compare/spyland">vs Spyland</Link>
         <Link to="/compare/pulzifi">vs Pulzifi</Link>
-        <Link to="/compare/foreplay">vs Foreplay</Link>
         <Link to="/compare/foreplay-spyder">vs Foreplay Spyder</Link>
         <Link to="/compare/panoramata">vs Panoramata</Link>
         <Link to="/compare/adspyder">vs AdSpyder</Link>

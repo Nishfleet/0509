@@ -11,6 +11,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  COMPARE_CANONICAL_TARGETS,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -28,7 +29,11 @@ export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.serv
 const pageDescription =
   "Foreplay is an ad intelligence and creative research platform. Five to Nine is source-backed competitor change monitoring for Meta ads and landing pages.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/foreplay");
+// Duplicate of /compare/foreplay-spyder (#1481): the generic vs-page
+// canonicalizes to the narrower Spyder comparison and is absent from the
+// sitemap. The page still renders HTTP 200 so existing links never 404.
+export const links: LinksFunction = () =>
+  canonicalLinks(COMPARE_CANONICAL_TARGETS["/compare/foreplay"]);
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

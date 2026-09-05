@@ -67,6 +67,13 @@ export type BuyerSurfacePath = (typeof BUYER_SURFACE_PATHS)[number];
  * to a `$locale.*.tsx` route that re-exports the EN sibling's meta and
  * component with canonical→EN plus the buyer-surface hreflang cluster.
  *
+ * Issue #1481 removed `compare/visualping` and `compare/foreplay` from the
+ * compare set: both are canonicalized duplicates of their more specific
+ * siblings, so their locale variants dropped out of the sitemap and the
+ * locale hub alongside the EN URLs. The `$locale.compare.*` route files
+ * stay registered — the URLs still render 200 — they are just no longer
+ * indexed or linked as locale surfaces.
+ *
  * Kept as a single source of truth so the route file, the sitemap, and the
  * `<html lang>` helper in this module can never drift apart.
  */
@@ -74,11 +81,9 @@ export const BUYER_SURFACE_SEGMENT_CHILD_SLUGS: Record<string, readonly string[]
   compare: [
     "magicbrief",
     "meta-ad-library",
-    "visualping",
     "visualping-ad-library",
     "spyland",
     "pulzifi",
-    "foreplay",
     "foreplay-spyder",
     "panoramata",
     "adspyder",
@@ -87,7 +92,7 @@ export const BUYER_SURFACE_SEGMENT_CHILD_SLUGS: Record<string, readonly string[]
 } as const;
 
 /**
- * The 13 locale-prefixable child routes as EN paths (`/compare/magicbrief`
+ * The 11 locale-prefixable child routes as EN paths (`/compare/magicbrief`
  * ... `/switch/visualping`). Derived from `BUYER_SURFACE_SEGMENT_CHILD_SLUGS`
  * so adding a vendor in one place lights it up in every locale prefix.
  */
