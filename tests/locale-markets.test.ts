@@ -123,6 +123,10 @@ describe("buyer-surface locale cluster (issue #1501)", () => {
     expect(canonicalPathnameForLocalePath("/pt-br/api/docs")).toBe("/api/docs");
     expect(canonicalPathnameForLocalePath("/fr/compare")).toBe("/compare");
     expect(canonicalPathnameForLocalePath("/es/sitemap.xml")).toBe("/sitemap.xml");
+    // Programmatic /ads/:domain locale pages (issue #1562) canonical to the
+    // EN brand route.
+    expect(canonicalPathnameForLocalePath("/de/ads/nike.com")).toBe("/ads/nike.com");
+    expect(canonicalPathnameForLocalePath("/fr/ads/stockx.com")).toBe("/ads/stockx.com");
     // Already-English paths pass through unchanged.
     expect(canonicalPathnameForLocalePath("/pricing")).toBe("/pricing");
     expect(canonicalPathnameForLocalePath("/sneaker-resale")).toBe("/sneaker-resale");
@@ -169,5 +173,15 @@ describe("buyer-surface locale cluster (issue #1501)", () => {
     // EN pathnames stay EN.
     expect(htmlLangForPathname("/pricing")).toBe("en");
     expect(htmlLangForPathname("/")).toBe("en");
+    // Programmatic /ads/:domain locale pages (issue #1562) carry the locale
+    // lang so Google can locale-target the full surface set.
+    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+      const expected = locale === "pt-br" ? "pt-BR" : locale;
+      expect(htmlLangForPathname(`/${locale}/ads/nike.com`)).toBe(expected);
+      expect(htmlLangForPathname(`/${locale}/ads/stockx.com`)).toBe(expected);
+    }
+    // A stray `/ads` with no domain is a 404, not a locale page — lang stays EN.
+    expect(htmlLangForPathname("/de/ads")).toBe("en");
+    expect(htmlLangForPathname("/de/ads/")).toBe("en");
   });
 });

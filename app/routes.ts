@@ -138,6 +138,15 @@ export default [
     route("competitor-monitoring", "routes/$locale.competitor-monitoring.tsx"),
     route("capture-rules", "routes/$locale.capture-rules.tsx"),
     route("ad-aggression", "routes/$locale.ad-aggression.tsx"),
+    // Programmatic /ads/:domain under every locale prefix (issue #1562):
+    // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
+    // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com
+    // 404'd for every brand. This child re-exports the EN route's loader +
+    // meta + component so the localised surface serves the SAME score page
+    // an EN buyer sees; canonical consolidates on the EN /ads/<domain>
+    // (accept #2) and the root layout emits `<html lang="<locale>">` via
+    // htmlLangForPathname (accept #3).
+    route("ads/:domain", "routes/$locale.ads.$domain.tsx"),
   ]),
   route("team/accept", "routes/team.accept.tsx"),
 	route("share/:token/pdf", "routes/share.$token.pdf.ts"),
