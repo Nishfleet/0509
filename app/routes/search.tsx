@@ -2647,11 +2647,11 @@ export default function SearchRoute() {
              Rank-1 above it. No specimen, no dimmed sample card, no diagram of
              a result — the form IS the affordance and the sentence says what
              comes back.
-             The scope copy below the fold is the response to the SEO engine's
+             The scope detail is a closed <details>, so the first viewport reads
+             as a tool (BL-031: "a sentence and one text action") while the words
+             stay in the DOM for crawlers — the response to the SEO engine's
              thin-content warning (dogfood 694ddbd68e95 / AI Answer Readiness
-             69e1b4be47bf): honest, page-specific detail — what a search
-             returns, proof, and the next step — without decorating the
-             instrument. The copy avoids claiming current activity: the
+             69e1b4be47bf). The copy avoids claiming current activity: the
              discovery cache can serve cached inventory, so the "right now"
              promise stays gated (PR #567). */
           <>
@@ -2677,44 +2677,41 @@ export default function SearchRoute() {
                 </Link>
               </div>
             </section>
-            <section
-              aria-labelledby="search-scope-title"
-              className="f9-wk-sec"
-            >
-              <h2 className="f9-wk-sec-title" id="search-scope-title">
-                What a search returns
-              </h2>
-              <p className="f9-wk-lede">
-                The public preview searches Meta&rsquo;s Ad Library for the
-                competitor&rsquo;s ads — across Facebook, Instagram, Audience
-                Network, and Messenger — and keeps what it finds, so a later
-                change is provable, not anecdotal.
-              </p>
-              <ul className="f9-search-scope-list">
-                <li>
-                  <strong>Current and recent ads</strong> — creative previews
-                  with first-seen and last-active dates, filterable by country,
-                  platform, creative type, status, and date range.
-                </li>
-                <li>
-                  <strong>The offer, read off their landing page</strong> — the
-                  hook and the offer are extracted from the page, and translated
-                  when the creative is in another language.
-                </li>
-                <li>
-                  <strong>The proof capture</strong> — each ad and its landing
-                  page are saved with a timestamp, so next week&rsquo;s
-                  comparison has today&rsquo;s evidence.
-                </li>
-              </ul>
-              <p className="f9-wk-note">
-                Coverage and freshness vary by advertiser and provider, and
-                public searches are rate-limited to keep the free preview fair.
-                Signing in is free: save the useful examples, start a watchlist
-                that scans on a schedule, and get an email when the offer or
-                the landing page moves.
-              </p>
-            </section>
+            <details className="f9-search-scope-details">
+              <summary>What a search returns</summary>
+              <div className="f9-search-scope-body">
+                <p>
+                  The public preview searches Meta&rsquo;s Ad Library for the
+                  competitor&rsquo;s ads — across Facebook, Instagram, Audience
+                  Network, and Messenger — and keeps what it finds, so a later
+                  change is provable, not anecdotal.
+                </p>
+                <ul className="f9-search-scope-items">
+                  <li>
+                    <strong>Current and recent ads</strong> — creative previews
+                    with first-seen and last-active dates, filterable by
+                    country, platform, creative type, status, and date range.
+                  </li>
+                  <li>
+                    <strong>The offer, read off their landing page</strong> —
+                    the hook and the offer are extracted from the page, and
+                    translated when the creative is in another language.
+                  </li>
+                  <li>
+                    <strong>The proof capture</strong> — each ad and its
+                    landing page are saved with a timestamp, so next
+                    week&rsquo;s comparison has today&rsquo;s evidence.
+                  </li>
+                </ul>
+                <p>
+                  Coverage and freshness vary by advertiser and provider, and
+                  public searches are rate-limited to keep the free preview
+                  fair. Signing in is free: save the useful examples, start a
+                  watchlist that scans on a schedule, and get an email when the
+                  offer or the landing page moves.
+                </p>
+              </div>
+            </details>
           </>
         )}
       </DashboardPage>

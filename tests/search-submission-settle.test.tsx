@@ -301,6 +301,13 @@ describe("public search submission settle", () => {
     expect(markup).toContain("The offer, read off their landing page");
     expect(markup).toContain("The proof capture");
     expect(markup).toContain("Coverage and freshness vary by advertiser");
+    // The scope copy is now a closed disclosure so the idle first viewport
+    // reads as a tool, not a brochure (BL-031): exactly one leading paragraph
+    // under the "Nothing searched yet" kicker, no scope-list class, no note
+    // paragraph in the idle branch.
+    expect(markup).toContain('<details class="f9-search-scope-details">');
+    expect(markup).not.toContain("f9-search-scope-list");
+    expect(markup.match(/class="f9-wk-lede"/g)).toHaveLength(1);
     const text = markup.replace(/<[^>]+>/g, " ");
     const words = text.split(/\s+/).filter(Boolean).length;
     expect(words).toBeGreaterThanOrEqual(250);
