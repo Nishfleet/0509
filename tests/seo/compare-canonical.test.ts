@@ -58,13 +58,32 @@ async function importLoserRoute(slug: string) {
   }
 }
 
+/** Concrete locale loser route modules; static paths so Vite resolves them. */
+async function importLocaleLoserRoute(slug: string) {
+  switch (slug) {
+    case "visualping":
+      return import("~/routes/$locale.compare.visualping");
+    case "foreplay":
+      return import("~/routes/$locale.compare.foreplay");
+    default:
+      throw new Error(`unknown canonicalized locale loser slug: ${slug}`);
+  }
+}
+
 describe("compare canonical consolidation (issue #1481)", () => {
   it("lists only the canonical winner of each duplicate pair in the sitemap", () => {
     const sitemapPaths = sitemapComparePaths();
 
     for (const [loser, winner] of Object.entries(COMPARE_CANONICAL_TARGETS)) {
-      expect(sitemapPaths, `${winner} dropped from the sitemap`).toContain(winner);
-      expect(sitemapPaths, `${loser} must leave the sitemap`).not.toContain(loser);
+      expect(sitemapPaths, `${winner} must stay in the sitemap`).toContain(winner);
+      // The loser leaves the sitemap at every locale prefix too — the
+      // /de|ja|pt-br|fr|es/compare/<loser> variants are the same duplicated
+      // pair, so their slugs dropped out of the locale child set alongside
+      // the EN URLs (issue #1481). `endsWith` catches every locale prefix.
+      expect(
+        sitemapPaths.filter((path) => path === loser || path.endsWith(loser)),
+        `${loser} must leave the sitemap under every locale prefix`,
+      ).toEqual([]);
     }
   });
 
@@ -105,7 +124,7 @@ describe("compare canonical consolidation (issue #1481)", () => {
     // renders its H1 (never 404) so existing backlinks and /switch links keep
     // working while Google consolidates each pair on the winner.
     const routesSource = readFileSync("app/routes.ts", "utf8");
-    for (const loser of Object.keys(COMPARE_CANONICAL_TARGETS)) {
+    for (const [loser, winner] of Object.entries(COMPARE_CANONICAL_TARGETS)) {
       const slug = loser.replace(/^\/compare\//, "");
       expect(routesSource, `${loser} route must stay registered`).toContain(
         `route("compare/${slug}", "routes/compare.${slug}.tsx")`,
@@ -116,6 +135,24 @@ describe("compare canonical consolidation (issue #1481)", () => {
         createElement((mod as { default: () => ReactElement }).default),
       );
       expect(markup, `${loser} must render a real page`).toContain("<h1");
+
+      // The locale loser (`/de/compare/visualping`, ...) stays registered
+      // too, and inherits the EN loser's links: canonical straight at the
+      // winner, never a canonical chain through the EN loser.
+      expect(
+        routesSource,
+        `locale ${loser} route must stay registered`,
+      ).toContain(
+        `route("compare/${slug}", "routes/$locale.compare.${slug}.tsx")`,
+      );
+      const localeMod = await importLocaleLoserRoute(slug);
+      const localeLinks = (
+        localeMod as { links: () => Array<{ rel: string; href: string }> }
+      ).links;
+      expect(
+        localeLinks(),
+        `locale ${loser} must carry the ${winner} canonical directly`,
+      ).toEqual([{ rel: "canonical", href: canonicalUrl(winner) }]);
     }
   });
 });
