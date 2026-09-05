@@ -124,8 +124,15 @@ export function isSettingsNavPath(pathname: string) {
 export const PUBLIC_SEARCH_NAV: DashboardNavItem[] = [
   { label: "Home", to: "/" },
   { label: "Search", to: "/search", end: true },
-  { label: "Pricing", to: "/#pricing" },
+  { label: "Compare", to: "/compare" },
+  { label: "Pricing", to: "/pricing" },
   { label: "Help", to: "/help" },
+];
+
+export const PUBLIC_SEARCH_FOOTER: DashboardNavItem[] = [
+  { label: "Docs", to: "/docs" },
+  { label: "Sign in", to: "/auth/login" },
+  { label: "Sign up", to: "/auth/signup" },
 ];
 
 export function filterDashboardNav(

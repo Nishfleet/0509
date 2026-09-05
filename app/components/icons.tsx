@@ -227,7 +227,8 @@ export function navIconFor(item: { label: string; to: string }) {
   const path = item.to.toLowerCase();
   if (path === "/app" || item.label === "Overview") return IconOverview;
   if (path.startsWith("/search") || item.label === "Search") return IconSearch;
-  if (path.includes("watchlist") || item.label === "Competitors") return IconCompetitors;
+  if (path.includes("watchlist") || item.label === "Competitors" || item.label === "Compare" || path === "/compare")
+    return IconCompetitors;
   if (path.includes("presence")) return IconPresence;
   if (path.includes("collection")) return IconCollections;
   if (path.includes("digest") || item.label === "Briefs") return IconBriefs;

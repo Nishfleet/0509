@@ -5,6 +5,7 @@ import { SignOutButton } from "~/components/sign-out-button";
 import { navIconFor } from "~/components/icons";
 import {
   DASHBOARD_PRIMARY_NAV,
+  PUBLIC_SEARCH_FOOTER,
   PUBLIC_SEARCH_NAV,
   buildDashboardMobileNav,
   isDestinationMemberActive,
@@ -170,12 +171,11 @@ export function DashboardShell({
             {railNote}
 
             <div className="f9-dash-rail-footer">
-              <Link prefetch="intent" to="/docs">
-                Docs
-              </Link>
-              <Link prefetch="intent" to="/auth/login">
-                Sign in
-              </Link>
+              {PUBLIC_SEARCH_FOOTER.map((item) => (
+                <Link key={item.to} prefetch="intent" to={item.to}>
+                  {item.label}
+                </Link>
+              ))}
             </div>
           </aside>
         ) : (
