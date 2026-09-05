@@ -28,6 +28,95 @@ export function formatCaptureMethodLabel(captureMethod: CaptureMethod | null | u
   return "Not checked yet";
 }
 
+// --- Selected evidence (anonymous /search selected pane) ---
+// The selected pane is presented as usable evidence, so a field the source
+// could not fill must say so explicitly, explain what was or was not checked,
+// and point at something the visitor can do. An unknown advertiser is never
+// replaced with the search query or watchlist name.
+
+export interface SelectedIdentityDisplay {
+  name: string;
+  note: string | null;
+}
+
+export function formatSelectedAdvertiserIdentity(
+  advertiser: string | null | undefined,
+): SelectedIdentityDisplay {
+  if (advertiser?.trim()) {
+    return { name: advertiser.trim(), note: null };
+  }
+
+  return {
+    name: formatAdvertiserLabel(advertiser),
+    note: "The ad source did not name the advertiser on this ad, so we won't guess who ran it.",
+  };
+}
+
+export interface SelectedLandingHeadlineDisplay {
+  headline: string;
+  note: string | null;
+}
+
+export function formatSelectedLandingHeadline(input: {
+  headline: string | null | undefined;
+  landingPageCaptured: boolean;
+  landingPageUrl: string | null | undefined;
+  enrichmentPending: boolean;
+}): SelectedLandingHeadlineDisplay {
+  const headline = input.headline?.trim();
+  if (headline) {
+    return { headline, note: null };
+  }
+
+  if (input.enrichmentPending) {
+    return {
+      headline: "Analyzing creative…",
+      note: "Reading the ad creative now — this updates in a few seconds.",
+    };
+  }
+
+  if (input.landingPageCaptured) {
+    return {
+      headline: "Headline not detected",
+      note: input.landingPageUrl
+        ? "The landing page was checked, but no headline could be read from it. Open the destination link below to check it yourself."
+        : "The landing page was checked, but no headline could be read from it.",
+    };
+  }
+
+  if (input.landingPageUrl) {
+    return {
+      headline: "Landing page not checked yet",
+      note: "The destination link below was not checked yet — open it to read the headline yourself.",
+    };
+  }
+
+  return {
+    headline: "No destination to check",
+    note: "This ad did not carry a landing-page link, so there was no page to check. Run a fresh search later to retry the check.",
+  };
+}
+
+export function formatSelectedProofCaptureLabel(ad: {
+  landingPage?: { capturedAt?: string | null } | null | undefined;
+  landingPageUrl: string | null | undefined;
+}) {
+  const capturedAt = ad.landingPage?.capturedAt;
+  if (capturedAt) {
+    const parsed = new Date(capturedAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      return `Landing page checked ${parsed.toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })}`;
+    }
+  }
+
+  return ad.landingPageUrl
+    ? "Landing page not checked yet — see the destination below"
+    : "No landing-page destination on this ad";
+}
+
 export function formatLandingPageSignalValue(value: string | null | undefined) {
   return value?.trim() ? value : "Not detected";
 }

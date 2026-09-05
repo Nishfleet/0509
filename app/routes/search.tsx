@@ -62,10 +62,12 @@ import {
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
 import {
-  formatAdvertiserLabel,
   formatCaptureMethodLabel,
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
+  formatSelectedAdvertiserIdentity,
+  formatSelectedLandingHeadline,
+  formatSelectedProofCaptureLabel,
 } from "~/lib/landing-page-display";
 import { buildSearchAnswer, type SearchStealSummary } from "~/lib/search-answer";
 import {
@@ -93,7 +95,6 @@ import {
   formatEmptyResultHeadline,
   formatHookLabel,
   formatOfferLabel,
-  formatProofCaptureLabel,
   formatResultsPanelTitle,
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
@@ -1217,6 +1218,26 @@ export default function SearchRoute() {
   const selectionEnrichmentUiPending =
     Boolean(data.selectionEnrichmentPending) &&
     selectionEnrichmentRevalidatedFor !== selectionEnrichmentKey;
+  // Selected-evidence identity: source-backed fields render as-is; anything
+  // the source left blank gets an explicit explanation and an actionable
+  // fallback instead of an opaque placeholder or a query-derived guess.
+  const selectedIdentity = selectedAd
+    ? formatSelectedAdvertiserIdentity(selectedAd.advertiser)
+    : null;
+  const selectedLandingHeadline = selectedAd
+    ? formatSelectedLandingHeadline({
+        headline: selectedAd.landingPage?.rawHeadline,
+        landingPageCaptured: Boolean(selectedAd.landingPage?.captureMethod),
+        landingPageUrl: selectedAd.landingPageUrl,
+        enrichmentPending: selectionEnrichmentUiPending,
+      })
+    : null;
+  const selectedAdLibraryLink =
+    selectedAd &&
+    selectedAd.adSnapshotUrl &&
+    selectedAd.source !== "demo"
+      ? selectedAd.adSnapshotUrl
+      : null;
   const nextCursor = visibleResult.nextCursor;
   const retryingCursor = visibleAccumulated.retryCursor;
   const loadMoreParams = nextCursor
@@ -1893,7 +1914,7 @@ export default function SearchRoute() {
                 paneRef={selectedProofRef}
               >
                 <DetailPaneHead
-                  name={formatAdvertiserLabel(selectedAd.advertiser)}
+                  name={selectedIdentity?.name}
                   site={
                     <>
                       <span className={selectedRunning ? "f9-wk-st is-on" : "f9-wk-st"}>
@@ -1903,6 +1924,27 @@ export default function SearchRoute() {
                     </>
                   }
                 />
+
+                {selectedIdentity?.note ? (
+                  <>
+                    <p className="f9-wk-small">{selectedIdentity.note}</p>
+                    {selectedAdLibraryLink ? (
+                      <p className="f9-wk-acts">
+                        <a
+                          className="f9-wk-lnk"
+                          href={selectedAdLibraryLink}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          View this ad in the Meta Ad Library{" "}
+                          <span aria-hidden="true" className="f9-wk-chev">
+                            &rsaquo;
+                          </span>
+                        </a>
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
 
                 <div className="f9-wk-creative">
                   <AdThumb ad={selectedAd} />
@@ -1918,7 +1960,7 @@ export default function SearchRoute() {
                 <p className="f9-wk-prov">
                   <span>{formatSearchSourceLabel(visibleResult)}</span>
                   <span>{formatSearchFreshnessLabel(visibleResult)}</span>
-                  <span>{formatProofCaptureLabel(selectedAd)}</span>
+                  <span>{formatSelectedProofCaptureLabel(selectedAd)}</span>
                 </p>
                 {selectedAd.domainMatch?.reason ? (
                   <p className="f9-wk-quote">{selectedAd.domainMatch.reason}</p>
@@ -1980,11 +2022,13 @@ export default function SearchRoute() {
 
                 <DetailBlock kicker="Landing page">
                   <h4 className="f9-wk-blk-head">
-                    {selectedAd.landingPage?.rawHeadline ??
-                      (selectionEnrichmentUiPending
-                        ? "Analyzing creative…"
-                        : "Headline not captured yet")}
+                    {selectedLandingHeadline?.headline}
                   </h4>
+                  {selectedLandingHeadline?.note ? (
+                    <p className="f9-wk-small">
+                      {selectedLandingHeadline.note}
+                    </p>
+                  ) : null}
                   <DetailFacts
                     rows={[
                       {
@@ -2024,7 +2068,8 @@ export default function SearchRoute() {
                     </a>
                   ) : (
                     <p className="f9-wk-small">
-                      No landing-page link found on this ad.
+                      No landing-page link was found on this ad, so there is
+                      nothing to open.
                     </p>
                   )}
                 </DetailBlock>
