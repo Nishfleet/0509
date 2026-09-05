@@ -140,6 +140,25 @@ const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
 // forces a fresh page load to the exact target URL. Exported so tests can pin
 // the exact grace window.
 export const SEARCH_NAVIGATION_SETTLE_GRACE_MS = 90_000;
+// Settlement-driven recovery for the wedged public submit. When the SPA
+// navigation to a /search target stays "loading" on the still-idle page (the
+// server settled but the router never commits — the observed live failure),
+// the client probes the exact single-fetch URL the router itself requested
+// (/search.data + the in-flight query). The search pipeline serves identical
+// in-flight queries from one shared promise / D1 discovery lease, so the probe
+// never starts duplicate provider work: it settles with the real committed
+// outcome (cached result, rate limit, cooldown, input refusal) the moment the
+// target request finishes, or with the honest "still warming" state after the
+// bounded public-search lease wait (~12s). A probe answered in under
+// SEARCH_SETTLE_PROBE_FAST_MS means the target request has SETTLED and the
+// page may recover immediately; a slower answer means the search is genuinely
+// still running and the submit stays pending. Exported so tests can pin the
+// exact cadence.
+export const SEARCH_SETTLE_PROBE_FIRST_DELAY_MS = 5_000;
+export const SEARCH_SETTLE_PROBE_INTERVAL_MS = 15_000;
+export const SEARCH_SETTLE_PROBE_FAST_MS = 8_000;
+export const SEARCH_SETTLE_PROBE_MAX = 5;
+export const SEARCH_SETTLE_RECOVERY_RELOAD_DELAY_MS = 300;
 
 const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
@@ -862,6 +881,18 @@ export default function SearchRoute() {
   const [searchNavigationRecovery, setSearchNavigationRecovery] = useState<
     string | null
   >(null);
+  // Settlement-armed recovery: set when the settlement probe proves the target
+  // request finished while the router is still wedged. Same shape as the
+  // long-horizon recovery above, but triggered by server settlement instead of
+  // the 90s timer, and it auto-reloads the exact target in a fresh page load.
+  const [searchNavigationSettledRecovery, setSearchNavigationSettledRecovery] =
+    useState<string | null>(null);
+  // Bounded probe budget for the settlement probe (one probe per tick, capped
+  // so a search that never settles falls through to the 90s long-horizon
+  // recovery instead of probing forever).
+  const [searchSettleProbeCount, setSearchSettleProbeCount] = useState(0);
+  const searchNavigationRecoveryRef = useRef<string | null>(null);
+  searchNavigationRecoveryRef.current = searchNavigationRecovery;
   const locationSearchParams = new URLSearchParams(location.search);
   const [resultSort, setResultSort] = useState<SearchResultSort>(
     () =>
@@ -1007,7 +1038,8 @@ export default function SearchRoute() {
   const commandNavigationPending =
     commandNavigationTarget !== null &&
     commandNavigationTarget !== location.search &&
-    searchNavigationRecovery === null;
+    searchNavigationRecovery === null &&
+    searchNavigationSettledRecovery === null;
   const displayDomain =
     data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
   const isDomainSearch = Boolean(
@@ -1179,6 +1211,103 @@ export default function SearchRoute() {
     navigation.location?.search,
     hasSearchQuery,
   ]);
+
+  // Settlement probe for the wedged submit (the 90s fallback above is the
+  // terminal backstop, but a settled request must not strand the visitor on a
+  // disabled "Searching…" button for a minute and a half). While a /search GET
+  // navigation is in flight against the still-idle page, probe the exact
+  // single-fetch URL the router itself requested. The search pipeline serves
+  // identical in-flight queries from one shared promise/D1 lease, so the probe
+  // never starts duplicate provider work: it settles with the committed
+  // outcome the moment the target request finishes, or with the honest
+  // "warming" state after the bounded lease wait. A fast answer proves the
+  // request has settled and arms the fresh-page recovery; a slow one keeps the
+  // submit pending because the search is genuinely still running.
+  useEffect(() => {
+    const target = navigation.location?.search ?? "";
+    const isInFlightIdleSearch =
+      navigation.state === "loading" &&
+      navigation.location?.pathname === "/search" &&
+      target !== "" &&
+      !hasSearchQuery;
+    if (!isInFlightIdleSearch || searchNavigationRecovery !== null) {
+      setSearchNavigationSettledRecovery(null);
+      return;
+    }
+    if (searchNavigationSettledRecovery !== null) {
+      return;
+    }
+    if (searchSettleProbeCount >= SEARCH_SETTLE_PROBE_MAX) {
+      return;
+    }
+    const delay =
+      searchSettleProbeCount === 0
+        ? SEARCH_SETTLE_PROBE_FIRST_DELAY_MS
+        : SEARCH_SETTLE_PROBE_INTERVAL_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      const startedAt = Date.now();
+      const probeUrl = `/search.data${target}`;
+      fetch(probeUrl, {
+        method: "GET",
+        headers: { Accept: "text/plain" },
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then(() => {
+          if (searchNavigationRecoveryRef.current !== null) {
+            return;
+          }
+          if (Date.now() - startedAt < SEARCH_SETTLE_PROBE_FAST_MS) {
+            setSearchNavigationSettledRecovery(target);
+          } else {
+            setSearchSettleProbeCount((count) => count + 1);
+          }
+        })
+        .catch(() => {
+          // A failed probe is not a settlement: the server may still be
+          // running the search. Probe again on the next interval; the 90s
+          // long-horizon recovery remains the backstop.
+          if (controller.signal.aborted) {
+            return;
+          }
+          setSearchSettleProbeCount((count) => count + 1);
+        });
+    }, delay);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    navigation.state,
+    navigation.location?.pathname,
+    navigation.location?.search,
+    hasSearchQuery,
+    searchNavigationRecovery,
+    searchNavigationSettledRecovery,
+    searchSettleProbeCount,
+  ]);
+
+  // The settlement-armed recovery reloads the exact in-flight target in a
+  // fresh document load — the same URL a direct load renders results from.
+  // The short delay lets the recovery block paint so the visitor sees why the
+  // page reloads; if a programmatic navigation is blocked (sandboxed context),
+  // the in-block reload link remains available.
+  useEffect(() => {
+    if (searchNavigationSettledRecovery === null) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      try {
+        if (typeof window !== "undefined") {
+          window.location.assign(`/search${searchNavigationSettledRecovery}`);
+        }
+      } catch {
+        // The in-block reload link covers blocked programmatic navigation.
+      }
+    }, SEARCH_SETTLE_RECOVERY_RELOAD_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [searchNavigationSettledRecovery]);
 
   // WP-11: single revalidation ~4s after deferred selection enrichment starts.
   // FIX-13: only one shot per selection key — if still pending after that,
@@ -1563,6 +1692,40 @@ export default function SearchRoute() {
                   className="f9-wk-lnk"
                   reloadDocument
                   to={`/search${searchNavigationRecovery}`}
+                >
+                  Reload the search{" "}
+                  <span aria-hidden="true" className="f9-wk-chev">
+                    &rsaquo;
+                  </span>
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Settlement recovery for the wedged submit: the probe proved the
+              target request finished while the SPA navigation never committed,
+              so the page reloads the exact target in a fresh page load (which
+              renders the committed results or the actionable reason — nothing
+              is fabricated client-side). The in-block link covers environments
+              where the automatic reload is blocked. */}
+          {searchNavigationSettledRecovery !== null ? (
+            <div
+              aria-live="assertive"
+              className="f9-wk-note f9-search-settle-recovery"
+              role="alert"
+            >
+              <p className="f9-wk-lede">
+                The search request finished, but the page didn't update
+              </p>
+              <p className="f9-wk-note">
+                The results are ready on our end — or a clear reason why
+                they're not. Reloading the search in a fresh page load now.
+              </p>
+              <div className="f9-wk-acts">
+                <Link
+                  className="f9-wk-lnk"
+                  reloadDocument
+                  to={`/search${searchNavigationSettledRecovery}`}
                 >
                   Reload the search{" "}
                   <span aria-hidden="true" className="f9-wk-chev">

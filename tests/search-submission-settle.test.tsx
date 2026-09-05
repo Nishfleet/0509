@@ -258,6 +258,7 @@ afterEach(async () => {
   cleanupRoot = null;
   cleanupContainer = null;
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.resetModules();
 });
@@ -443,5 +444,248 @@ describe("public search submission settle", () => {
       vi.advanceTimersByTime(4_000);
     });
     expect(revalidatorRef.revalidate).toHaveBeenCalledTimes(1);
+  });
+
+  describe("settlement probe recovery", () => {
+    // The observed live failure: the /search.data request settles but the SPA
+    // never commits, so the committed page stays idle while the button keeps
+    // "Searching…". The settlement probe asks the exact single-fetch URL the
+    // router itself requested; the search pipeline serves identical in-flight
+    // queries from one shared promise/D1 lease, so the probe never starts
+    // duplicate provider work. A fast answer proves the target request has
+    // settled; the ~12s public-search lease-wait answer is the honest "still
+    // warming" state.
+    const wedgeState = () => {
+      loaderData = idleLoaderData;
+      locationObj = { pathname: "/search", search: "", hash: "" };
+      navigationState = {
+        state: "loading",
+        location: { pathname: "/search", search: TARGET_SEARCH },
+      };
+    };
+
+    it("uses a bounded settlement probe cadence", async () => {
+      const routeModule = await import("~/routes/search");
+      expect(routeModule.SEARCH_SETTLE_PROBE_FIRST_DELAY_MS).toBe(5_000);
+      expect(routeModule.SEARCH_SETTLE_PROBE_INTERVAL_MS).toBe(15_000);
+      expect(routeModule.SEARCH_SETTLE_PROBE_FAST_MS).toBe(8_000);
+      expect(routeModule.SEARCH_SETTLE_PROBE_MAX).toBe(5);
+      expect(routeModule.SEARCH_SETTLE_RECOVERY_RELOAD_DELAY_MS).toBe(300);
+    });
+
+    it("recovers from a settled-but-stale navigation as soon as the target request settles, without fabricating results", async () => {
+      // The server answers the target request instantly (cached result, rate
+      // limit, cooldown, or input refusal — any terminal settlement).
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(new Response("", { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+      const assignSpy = vi.spyOn(window.location, "assign");
+
+      wedgeState();
+      const { container } = await mountRoute();
+
+      // Before the first probe fires the navigation is still genuinely
+      // pending.
+      expect(
+        container.querySelector('button[type="submit"]')?.textContent,
+      ).toContain("Searching…");
+
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+
+      // The probe went to the router's own single-fetch URL for the exact
+      // in-flight target.
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/search.data${TARGET_SEARCH}`,
+        expect.anything(),
+      );
+      // The page leaves Searching… and arms the fresh-page recovery — no 90s
+      // wait for a settled request. The reload anchor targets the exact
+      // in-flight URL (the harness's mocked Link drops its text children on
+      // later mounts, so the href is the reliable assertion).
+      expect(container.textContent).toContain(
+        "The search request finished, but the page didn't update",
+      );
+      const reloadLink = container.querySelector(
+        `a[href="/search${TARGET_SEARCH}"]`,
+      );
+      expect(reloadLink).not.toBeNull();
+      // No false success and no fabricated evidence: the recovery never
+      // claims results — it hands the navigation to a fresh page load of the
+      // exact target.
+      expect(container.textContent).not.toContain("Festive glow");
+      expect(container.textContent).not.toContain("Nykaa");
+      expect(container.textContent).not.toContain(
+        "This search never finished loading",
+      );
+      expect(container.textContent).not.toContain("about a minute and a half");
+      // The submit is no longer stuck in Searching….
+      const button = container.querySelector('button[type="submit"]');
+      expect(button?.textContent).toContain("See ads");
+      expect(button?.hasAttribute("disabled")).toBe(false);
+      expect(button?.getAttribute("aria-busy")).not.toBe("true");
+
+      // The armed recovery auto-reloads the exact in-flight target in a
+      // fresh page load.
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(assignSpy).toHaveBeenCalledWith(`/search${TARGET_SEARCH}`);
+    });
+
+    it("keeps the submit pending while the target request is still warming, then recovers on settlement", async () => {
+      // First probe answers like the bounded public-search lease wait (~12s,
+      // the honest "still warming" state); the second answers instantly like
+      // a warm cache hit once the search finishes.
+      const fetchMock = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              setTimeout(
+                () => resolve(new Response("", { status: 200 })),
+                12_000,
+              );
+            }),
+        )
+        .mockResolvedValue(new Response("", { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+      const assignSpy = vi.spyOn(window.location, "assign");
+
+      wedgeState();
+      const { container } = await mountRoute();
+
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      // The warming answer means the search is genuinely still running: the
+      // navigation stays pending, no recovery is armed.
+      await act(async () => {
+        vi.advanceTimersByTime(12_000);
+      });
+      expect(container.textContent).not.toContain(
+        "The search request finished, but the page didn't update",
+      );
+      expect(
+        container.querySelector('button[type="submit"]')?.textContent,
+      ).toContain("Searching…");
+      expect(
+        container.querySelector('button[type="submit"]')?.hasAttribute(
+          "disabled",
+        ),
+      ).toBe(true);
+
+      // The next probe settles with the committed outcome: recovery arms and
+      // the submit un-sticks.
+      await act(async () => {
+        vi.advanceTimersByTime(15_000);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(container.textContent).toContain(
+        "The search request finished, but the page didn't update",
+      );
+      const button = container.querySelector('button[type="submit"]');
+      expect(button?.textContent).toContain("See ads");
+      expect(button?.hasAttribute("disabled")).toBe(false);
+
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(assignSpy).toHaveBeenCalledWith(`/search${TARGET_SEARCH}`);
+    });
+
+    it("keeps pending through the probe budget and still reaches the 90s long-horizon recovery", async () => {
+      // The server never settles the target request: every probe answers with
+      // the warming state.
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              setTimeout(
+                () => resolve(new Response("", { status: 200 })),
+                12_000,
+              );
+            }),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+
+      wedgeState();
+      const { container } = await mountRoute();
+
+      await act(async () => {
+        vi.advanceTimersByTime(89_999);
+      });
+      // No settlement recovery and no long-horizon recovery yet.
+      expect(container.textContent).not.toContain(
+        "The search request finished, but the page didn't update",
+      );
+      expect(container.textContent).not.toContain(
+        "This search never finished loading",
+      );
+      expect(
+        container.querySelector('button[type="submit"]')?.textContent,
+      ).toContain("Searching…");
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      // The bounded long-horizon recovery remains the terminal backstop.
+      expect(container.textContent).toContain(
+        "This search never finished loading",
+      );
+      expect(container.textContent).toContain("about a minute and a half");
+      const button = container.querySelector('button[type="submit"]');
+      expect(button?.textContent).toContain("See ads");
+      expect(button?.hasAttribute("disabled")).toBe(false);
+    });
+
+    it("does not arm any recovery when the navigation commits normally", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              setTimeout(
+                () => resolve(new Response("", { status: 200 })),
+                12_000,
+              );
+            }),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+
+      wedgeState();
+      const { container, root, SearchRoute } = await mountRoute();
+
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(12_000);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      // The router commits the target results before the next probe.
+      loaderData = resultsLoaderData;
+      locationObj = { pathname: "/search", search: TARGET_SEARCH, hash: "" };
+      navigationState = { state: "idle", location: null };
+      await act(async () => {
+        root.render(createElement(SearchRoute));
+      });
+
+      expect(container.textContent).toContain("Festive glow");
+      expect(container.textContent).not.toContain(
+        "The search request finished, but the page didn't update",
+      );
+      expect(container.textContent).not.toContain(
+        "This search never finished loading",
+      );
+      // No further probes once the navigation commits.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
   });
 });
