@@ -162,7 +162,6 @@ describe("collection limit", () => {
       getCollection: vi.fn(),
       listCollectionItems: vi.fn(),
       listCollections: vi.fn().mockResolvedValue([]),
-      renameCollection: vi.fn(),
       updateCollectionItem: vi.fn(),
     }));
 
@@ -225,7 +224,6 @@ describe("collection limit", () => {
       getCollection: vi.fn(),
       listCollectionItems: vi.fn(),
       listCollections: vi.fn().mockResolvedValue([]),
-      renameCollection: vi.fn(),
       updateCollectionItem: vi.fn(),
     }));
 

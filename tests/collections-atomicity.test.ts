@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createCollectionWithinLimit, renameCollection } from "~/lib/data/collections.server";
+import { createCollectionWithinLimit } from "~/lib/data/collections.server";
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 describe("collection plan-cap atomicity (sqlite)", () => {
@@ -47,33 +47,5 @@ describe("collection plan-cap atomicity (sqlite)", () => {
     expect(
       harness.sqlite.prepare("SELECT COUNT(*) AS count FROM collection WHERE user_id = ?").get("user-1"),
     ).toEqual({ count: 3 });
-  });
-
-  it("renames a collection the user owns and bumps updated_at", async () => {
-    const created = await createCollectionWithinLimit(env, "user-1", { name: "Old name" }, 3);
-    expect(created.status).toBe("created");
-    const collectionId = created.collection!.id;
-
-    const renamed = await renameCollection(env, "user-1", collectionId, "  New name  ");
-
-    expect(renamed).not.toBeNull();
-    expect(renamed!.name).toBe("New name");
-    expect(renamed!.updatedAt).toBeTruthy();
-    expect(
-      harness.sqlite.prepare("SELECT name FROM collection WHERE id = ?").get(collectionId),
-    ).toEqual({ name: "New name" });
-  });
-
-  it("refuses to rename a collection owned by another user", async () => {
-    const created = await createCollectionWithinLimit(env, "user-1", { name: "Mine" }, 3);
-    expect(created.status).toBe("created");
-    const collectionId = created.collection!.id;
-
-    const renamed = await renameCollection(env, "user-2", collectionId, "Theirs");
-
-    expect(renamed).toBeNull();
-    expect(
-      harness.sqlite.prepare("SELECT name FROM collection WHERE id = ?").get(collectionId),
-    ).toEqual({ name: "Mine" });
   });
 });
