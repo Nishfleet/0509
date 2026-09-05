@@ -958,10 +958,11 @@ export default function MarketingRoute() {
         </p>
 
         <p className="ld-pricing-note">
-          Coming from MagicBrief or another tool that&rsquo;s winding down? See the{" "}
-          <Link to="/compare/magicbrief">migration guide</Link>. Email{" "}
-          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll help you move your
-          collections and watchlists.
+          Coming from MagicBrief or another tool that&rsquo;s winding down? Your competitor
+          list imports as watchlists — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
+          we&rsquo;ll set them up with you, person to person. Collections, boards, analytics
+          history, and past evidence do not transfer. See the{" "}
+          <Link to="/compare/magicbrief">migration guide</Link>.
         </p>
 
         <div className="ld-bundles" aria-label="Check packs">
