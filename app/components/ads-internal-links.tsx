@@ -31,6 +31,12 @@ export function BrowseTrackedCompetitors({
           </article>
         ))}
       </div>
+      {/* Issue #1417: the /brands hub links every tracked brand page, so any
+          consumer of this internal-link surface can always reach the full
+          list, not just the slice passed here. */}
+      <p className="ld-quiet-cta">
+        <Link to="/brands">Browse all tracked brands →</Link>
+      </p>
     </section>
   );
 }
