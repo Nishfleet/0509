@@ -6,6 +6,7 @@ import {
   displayNameFromDomain,
   indexableAdsLinkFromPath,
   pickFeaturedAdsInternalLink,
+  resolveSearchBrandPageDomain,
   type IndexableAdsLink,
 } from "~/lib/ads-internal-links";
 
@@ -85,6 +86,57 @@ describe("indexable ads link helpers", () => {
     expect(pickFeaturedAdsInternalLink([glossier, nykaa], "nykaa.com")).toEqual(nykaa);
     expect(pickFeaturedAdsInternalLink([glossier], "nykaa.com")).toEqual(glossier);
     expect(pickFeaturedAdsInternalLink([], "nykaa.com")).toBeNull();
+  });
+
+  it("resolves a search brand domain from an explicit domain search", () => {
+    expect(
+      resolveSearchBrandPageDomain({
+        displayDomain: "Nykaa.com",
+        ads: [
+          { domainMatch: { matchedDomain: "nykaa.com" } },
+          { domainMatch: { matchedDomain: "unrelated.net" } },
+        ],
+      }),
+    ).toBe("nykaa.com");
+    expect(
+      resolveSearchBrandPageDomain({
+        displayDomain: "www.Nykaa.com",
+        ads: [],
+      }),
+    ).toBe("nykaa.com");
+  });
+
+  it("falls back to the matched domain of result rows for a bare keyword", () => {
+    expect(
+      resolveSearchBrandPageDomain({
+        displayDomain: null,
+        ads: [
+          { domainMatch: { matchedDomain: null } },
+          { domainMatch: { matchedDomain: "Glossier.com" } },
+        ],
+      }),
+    ).toBe("glossier.com");
+  });
+
+  it("never invents a brand domain when nothing is established", () => {
+    expect(
+      resolveSearchBrandPageDomain({
+        displayDomain: null,
+        ads: [{ domainMatch: { matchedDomain: null } }],
+      }),
+    ).toBeNull();
+    expect(
+      resolveSearchBrandPageDomain({
+        displayDomain: null,
+        ads: [],
+      }),
+    ).toBeNull();
+    expect(
+      resolveSearchBrandPageDomain({
+        displayDomain: "   ",
+        ads: [{ domainMatch: { matchedDomain: null } }],
+      }),
+    ).toBeNull();
   });
 });
 
@@ -212,5 +264,46 @@ describe("public funnel loaders reuse the sitemap indexability filter", () => {
       proofBrief: null,
       indexableAdsLinks: [nykaa, glossier],
     });
+  });
+});
+
+describe("resolveIndexableBrandPageLinkForDomain", () => {
+  beforeEach(() => {
+    vi.doMock("~/lib/sitemap.server", () => ({
+      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
+        { path: "/ads/nykaa.com" },
+        { path: "/ads/glossier.com" },
+      ]),
+    }));
+  });
+
+  it("resolves a search-derived domain to its indexable brand-page link", async () => {
+    vi.resetModules();
+    const { resolveIndexableBrandPageLinkForDomain } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    expect(await resolveIndexableBrandPageLinkForDomain({}, "Nykaa.com")).toEqual({
+      domain: "nykaa.com",
+      path: "/ads/nykaa.com",
+      name: "Nykaa",
+    });
+  });
+
+  it("returns null when the domain has no indexable brand page", async () => {
+    vi.resetModules();
+    const { resolveIndexableBrandPageLinkForDomain } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    expect(await resolveIndexableBrandPageLinkForDomain({}, "missingbrand.com")).toBeNull();
+  });
+
+  it("returns null for an absent or blank domain without querying", async () => {
+    vi.resetModules();
+    const { resolveIndexableBrandPageLinkForDomain } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    expect(await resolveIndexableBrandPageLinkForDomain({}, null)).toBeNull();
+    expect(await resolveIndexableBrandPageLinkForDomain({}, undefined)).toBeNull();
+    expect(await resolveIndexableBrandPageLinkForDomain({}, "   ")).toBeNull();
   });
 });

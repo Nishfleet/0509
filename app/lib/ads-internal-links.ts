@@ -43,6 +43,46 @@ export function indexableAdsLinkFromPath(path: string): IndexableAdsLink | null 
   };
 }
 
+export interface SearchBrandPageSource {
+  /** A resolved registrable domain (e.g. the `?website=` domain search host). */
+  displayDomain: string | null;
+  /** Result rows, used only to fall back to the matched domain for bare keywords. */
+  ads: readonly { domainMatch?: { matchedDomain: string | null } | null }[];
+}
+
+/**
+ * Resolve the most defensible `/ads/:domain` target from a search context.
+ *
+ * An explicit domain search (`?website=nike.com`) and a V2-resolved brand
+ * keyword both pin the brand domain on `displayDomain`. A bare keyword that
+ * only produced verified rows on the legacy path (which discards
+ * `displayDomain`) falls back to the registrable domain those rows actually
+ * land on via `domainMatch.matchedDomain`. The north-star rule: never invent
+ * a `<label>.com` guess from the query text alone — only a domain the results
+ * themselves establish is returned. Returns null when nothing is defensible.
+ */
+export function resolveSearchBrandPageDomain(
+  source: SearchBrandPageSource,
+): string | null {
+  const explicit = source.displayDomain;
+  if (explicit) {
+    const normalized = explicit.trim().toLowerCase().replace(/^www\./, "");
+    if (normalized) {
+      return normalized;
+    }
+  }
+  for (const ad of source.ads) {
+    const matched = ad.domainMatch?.matchedDomain;
+    if (matched) {
+      const normalized = matched.trim().toLowerCase().replace(/^www\./, "");
+      if (normalized) {
+        return normalized;
+      }
+    }
+  }
+  return null;
+}
+
 export function pickFeaturedAdsInternalLink(
   links: readonly IndexableAdsLink[],
   preferredDomain?: string,

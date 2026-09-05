@@ -41,6 +41,28 @@ export async function loadFeaturedAdsInternalLink(env: AppEnv): Promise<Indexabl
   return pickFeaturedAdsInternalLink(links, PUBLIC_PROOF_FEATURED_WEBSITE);
 }
 
+/**
+ * Resolve a single search-derived brand domain to its indexable /ads/:domain
+ * link, reusing the sitemap's indexability filter so the search surface never
+ * links a brand page that would render noindex (demo, stale, empty, or
+ * emergency-brake). Returns null when the domain is absent or has no indexable
+ * brand page, and degrades to null on any sitemap hiccup. Cache-only.
+ */
+export async function resolveIndexableBrandPageLinkForDomain(
+  env: AppEnv,
+  domain: string | null | undefined,
+): Promise<IndexableAdsLink | null> {
+  if (!domain) {
+    return null;
+  }
+  const normalized = domain.trim().toLowerCase().replace(/^www\./, "");
+  if (!normalized) {
+    return null;
+  }
+  const links = await loadIndexableAdsInternalLinks(env);
+  return links.find((link) => link.domain === normalized) ?? null;
+}
+
 /** Shared loader for /compare/* pages that have no other loader work. */
 export async function compareAdsExampleLoader({ context }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
