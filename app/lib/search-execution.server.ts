@@ -6,7 +6,11 @@ import {
   searchAdsViaSourceResolver,
 } from "~/lib/ad-source.server";
 import { hydrateAdsWithPersistedCreatives } from "~/lib/ad-persistence.server";
-import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
+import {
+  foldDomainLabel,
+  parseSearchInputFromWebsiteField,
+  registrableDomainFromHostname,
+} from "~/lib/search-query";
 import {
   applySearchV2PostFilter,
   buildSearchV2CacheKey,
@@ -25,7 +29,12 @@ import {
 } from "~/lib/search-rollout.server";
 import type { CompetitorWebsiteState } from "~/lib/competitor-website";
 import type { BrowserJobPlanTier } from "~/lib/browser-job-telemetry.server";
-import type { NormalizedSavedQuery, SearchFilters, SearchResponse } from "~/lib/types";
+import type {
+  AdRecord,
+  NormalizedSavedQuery,
+  SearchFilters,
+  SearchResponse,
+} from "~/lib/types";
 
 export interface ExecuteSearchOptions {
   env: AppEnv;
@@ -223,9 +232,15 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
  * - When the keyword resolves to a recognizable brand/domain
  *   (`q=notion.com`), the existing v2 post-filter classifies rows against
  *   that domain (verified / likely / unmatched), matching `/ads/:domain`.
- * - When it is a genuine text keyword (`q=notion`, `q=goat`), every row is
- *   labelled `unmatched` (a provider candidate with no brand connection) so
- *   the row still states its confidence instead of hiding it.
+ * - When a bare brand keyword's returned rows land on that brand's own
+ *   domain (`q=nike` → ads landing on nike.com), the keyword is resolved to
+ *   the real registrable domain present in the results and the rows are
+ *   classified against it — so a Nike ad is `verified`, never blanket
+ *   `Unmatched`, matching `/ads/nike.com`.
+ * - When it is a genuine text keyword with no brand-domain landing evidence
+ *   (`q=goat`, mouth-tape ads on no matching site), every row is labelled
+ *   `unmatched` (a provider candidate with no brand connection) so the row
+ *   still states its confidence instead of hiding it.
  *
  * Reuses `search-v2.server` and `search-domain-match.server` only; no new
  * classifier, no D1 schema change. A failed identity resolution for a
@@ -243,9 +258,18 @@ export async function attachKeywordSearchDomainMatch(
   }
 
   const queryIntent = parseSearchInputFromWebsiteField(queryText);
-  if (queryIntent.intent === "domain" && queryIntent.registrableDomain) {
+  // The registrable domain to classify against. An explicit domain keyword is
+  // used as-is. A bare brand keyword is only promoted when the returned rows
+  // themselves land on a domain whose brand label matches — never a
+  // fabricated `<label>.com` guess — which is what turns `q=nike` rows
+  // verified/likely instead of blanket-unmatched (issue #1440).
+  const classifyInput =
+    queryIntent.intent === "domain" && queryIntent.registrableDomain
+      ? queryText
+      : resolveBareKeywordBrandDomain(queryText, result.ads);
+  if (classifyInput) {
     try {
-      const context = await buildSearchV2Context(queryText, scope);
+      const context = await buildSearchV2Context(classifyInput, scope);
       if (context) {
         return await applySearchV2PostFilter(env, result, context);
       }
@@ -277,6 +301,79 @@ export async function attachKeywordSearchDomainMatch(
     likelyCount: 0,
     unmatchedCount: ads.length,
   };
+}
+
+/**
+ * Resolve a bare brand keyword (q=nike) to the registrable domain the result
+ * rows actually land on, when one exists. The north-star rule: never present
+ * unverified as verified, and never fabricate a `<label>.com` guess. So this
+ * only promotes a bare keyword to a brand domain when the returned provider
+ * rows themselves carry a landing page whose registrable domain's brand label
+ * exactly matches the folded keyword (nike.com for "nike"). Returns null for
+ * multi-word/phrase keywords, anything already domain-like, short labels, or
+ * results with no matching landing domain — the caller then labels every row
+ * unmatched as before.
+ */
+function resolveBareKeywordBrandDomain(
+  keyword: string,
+  ads: AdRecord[],
+): string | null {
+  const trimmed = keyword.trim();
+  if (
+    !trimmed ||
+    trimmed.includes(".") ||
+    trimmed.includes("/") ||
+    /\s/.test(trimmed)
+  ) {
+    return null;
+  }
+  const stem = foldDomainLabel(trimmed);
+  if (!stem || stem.length < 3) {
+    return null;
+  }
+
+  // Tally distinct landing registrable domains across the result rows. Only
+  // landing-page hosts are strong enough to promote a keyword to a brand; a
+  // missing/absent landing page (or an unmatched domain) leaves the search on
+  // the unmatched fallback rather than risking a wrong verified label.
+  const tally = new Map<string, number>();
+  for (const ad of ads) {
+    const host = hostnameFromUrl(ad.landingPageUrl);
+    if (!host) {
+      continue;
+    }
+    const registrable = registrableDomainFromHostname(host);
+    if (!registrable) {
+      continue;
+    }
+    tally.set(registrable, (tally.get(registrable) ?? 0) + 1);
+  }
+
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [domain, count] of tally) {
+    const label = foldDomainLabel(domain.split(".")[0] ?? "");
+    if (label === stem && count > bestCount) {
+      best = domain;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+function hostnameFromUrl(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    return url.hostname;
+  } catch {
+    return null;
+  }
 }
 
 export type SearchCacheProbeOptions = Omit<ExecuteSearchOptions, "forceLive">;
