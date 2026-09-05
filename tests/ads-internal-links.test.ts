@@ -297,6 +297,41 @@ describe("resolveIndexableBrandPageLinkForDomain", () => {
     expect(await resolveIndexableBrandPageLinkForDomain({}, "missingbrand.com")).toBeNull();
   });
 
+  it("falls back to the open-ccTLD brand page when the resolved domain is its generic-commercial twin (issue #1431)", async () => {
+    vi.resetModules();
+    vi.doMock("~/lib/sitemap.server", () => ({
+      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
+        { path: "/ads/nykaa.com" },
+        { path: "/ads/notion.so" },
+      ]),
+    }));
+    const { resolveIndexableBrandPageLinkForDomain } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    // A bare-keyword `notion` search resolves notion.com (the registrable
+    // domain its result rows land on); the indexable brand page is the
+    // open-ccTLD /ads/notion.so. The link must hand off to it.
+    expect(await resolveIndexableBrandPageLinkForDomain({}, "notion.com")).toEqual({
+      domain: "notion.so",
+      path: "/ads/notion.so",
+      name: "Notion",
+    });
+  });
+
+  it("does not fall back to an open-ccTLD page for an unrelated label", async () => {
+    vi.resetModules();
+    vi.doMock("~/lib/sitemap.server", () => ({
+      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
+        { path: "/ads/nykaa.com" },
+        { path: "/ads/notion.so" },
+      ]),
+    }));
+    const { resolveIndexableBrandPageLinkForDomain } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    expect(await resolveIndexableBrandPageLinkForDomain({}, "glossier.com")).toBeNull();
+  });
+
   it("returns null for an absent or blank domain without querying", async () => {
     vi.resetModules();
     const { resolveIndexableBrandPageLinkForDomain } = await import(
