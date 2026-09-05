@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import {
   AD_AGGRESSION_METHODOLOGY_PATH,
   AGGRESSION_FORMULA_VERSION,
@@ -84,6 +85,12 @@ export default function AdAggressionMethodologyRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Ad Aggression Score", pathname: AD_AGGRESSION_METHODOLOGY_PATH },
+        ]}
+      />
 
       <nav className="f9-doc-toc" aria-label="On this page">
         <span className="f9-doc-toc-label">On this page</span>
