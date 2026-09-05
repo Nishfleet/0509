@@ -721,6 +721,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       type: "bearer",
       header: "Authorization: Bearer <Five to Nine API key>",
       createKeysIn: `${origin}/app/developer-access`,
+      setup: `${origin}/mcp/setup`,
     },
     tools: MCP_TOOLS.map(mcpToolDiscoveryEntry),
     liveDataScope: [
