@@ -3267,6 +3267,13 @@ one signal-green accent.
   padding: 1px 7px;
 }
 
+.ld-case-card .ld-case-note {
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--ld-ink-soft);
+  margin: 12px 0 0;
+}
+
 .ld-intel {
   grid-column: 1 / -1;
   display: grid;

@@ -7,6 +7,10 @@ export const demoProof = {
     market: "India beauty retail",
   },
   summary: "Sample competitor evidence trail for a buyer evaluating Five to Nine.",
+  sampleOnlyNote:
+    "Sample only — no competitor was actually watched for this brief. The values below show the format of a real brief and are not live monitoring data.",
+  trailNote:
+    "Illustrative sample — a real brief links each change to its saved screenshot, page text, or Meta Ad Library capture. This sample shows those source types without live links.",
   trackedPreview: {
     watchlistName: "Nykaa weekly competitor watch",
     cadence: "Weekly digest",
@@ -45,8 +49,8 @@ export const demoProof = {
     whyItMatters: "The page now sells a bundle habit, not a one-off discount, so your counter-offer should be reviewed before the next campaign refresh.",
     priority: "Review before next campaign refresh",
     recommendedMove: "Compare the bundle angle against your own acquisition offer and brief one counter-test.",
-    confidence: "Verified evidence with source and freshness attached.",
-    proofStatus: "Verified evidence",
+    confidence: "Sample-only brief: the evidence above is illustrative and was not captured from a live watch.",
+    proofStatus: "Sample-only evidence",
     source: "Landing-page snapshot + page text capture",
     freshness: "Sample captured at 05:09",
   },

@@ -654,6 +654,7 @@ export default function MarketingRoute() {
             <span className="ld-kicker">Decision summary</span>
             <h4>{demoProof.digestPreview.subject}</h4>
             <p>{demoProof.digestPreview.whyItMatters}</p>
+            <p className="ld-case-note">{demoProof.sampleOnlyNote}</p>
             <dl>
               <div>
                 <dt>What changed</dt>
@@ -688,6 +689,7 @@ export default function MarketingRoute() {
 
           <article className="ld-case-card">
             <span className="ld-kicker">Source trail</span>
+            <p className="ld-case-note">{demoProof.trailNote}</p>
             <ul className="ld-trail">
               {demoProof.proofTrail.map((item) => (
                 <li key={item.signal}>

@@ -20,7 +20,16 @@ describe("demo proof API", () => {
     expect(body.trackedPreview.loop).toContain("Run the public search preview");
     expect(body.proofTrail.length).toBeGreaterThanOrEqual(3);
     expect(body.digestPreview.recommendedMove).toContain("counter-test");
-    expect(body.digestPreview.confidence).toBe("Verified evidence with source and freshness attached.");
+    expect(body.digestPreview.proofStatus).toBe("Sample-only evidence");
+    expect(body.digestPreview.confidence).toContain("Sample-only brief");
+    expect(body.digestPreview.confidence).not.toContain("Verified evidence");
+    expect(body.sampleOnlyNote).toContain("Sample only");
+    expect(body.trailNote).toContain("Illustrative sample");
+    for (const item of body.proofTrail) {
+      expect(item.signal.trim()).not.toBe("");
+      expect(item.evidence.trim()).not.toBe("");
+      expect(item.source.trim()).not.toBe("");
+    }
     expect(body.exports.apiPath).toBe("/api/demo-proof");
     expect(body.trackedPreview.deliveryPreview).not.toContain("Slack-ready");
     expect(body.exports.digestMarkdown).toContain("\nPriority:");
@@ -45,7 +54,9 @@ describe("demo proof API", () => {
     expect(body).toContain("## Digest Markdown");
     expect(body).not.toContain("Slack Export");
     expect(body).toContain("\nPriority: Review before next campaign refresh");
-    expect(body).toContain("- Confidence: Verified evidence with source and freshness attached.");
+    expect(body).toContain("- Confidence: Sample-only brief: the evidence above is illustrative and was not captured from a live watch.");
+    expect(body).toContain("- Source status: Sample-only evidence");
+    expect(body).not.toContain("Verified evidence");
     expect(body).not.toContain("Deprecated sample field");
     expect(body).not.toContain("\\nPriority");
   });
