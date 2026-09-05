@@ -8,7 +8,7 @@ Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime
 # offset follows the ops-guard convention of avoiding whole-minute collisions
 # (the demo-brand-timeline guard runs at :37, the screenshot-rate guard at
 # its own offset).
-OnCalendar=*-*-* 09:53:00
+OnCalendar=*-*-* 09:53:00 UTC
 Persistent=true
 Unit=0509-digest-headline-ratio-guard.service
 
