@@ -37,14 +37,60 @@ require_root() {
   [[ "$(id -u)" -eq 0 ]] || die "run as root"
 }
 
+# Resolve the node bin dir for the nish user. systemd does not source the
+# nish user's login shell, so node/npm (which live under the nish toolchain,
+# not /usr/bin) are not on the default service PATH. The provision script
+# runs as root, so discover the dir via the nish user's login shell; when not
+# root (tests / drills) fall back to the ambient PATH. Fails (non-zero) if
+# node cannot be resolved at all.
+resolve_node_bin_dir() {
+  local node_bin
+  if [[ "$(id -u)" -eq 0 ]]; then
+    node_bin="$(runuser -u nish -- bash -lc 'command -v node' 2>/dev/null || true)"
+  else
+    node_bin="$(command -v node 2>/dev/null || true)"
+  fi
+  [[ -n "${node_bin}" ]] || return 1
+  dirname "${node_bin}"
+}
+
+# The full PATH the guard unit runs with: the nish node bin dir first, then
+# the standard systemd PATH. Fails (non-zero) if node cannot be resolved.
+guard_path() {
+  local node_bin_dir
+  node_bin_dir="$(resolve_node_bin_dir)" || return 1
+  printf '%s:/usr/local/bin:/usr/bin:/bin' "${node_bin_dir}"
+}
+
+# Assert that node AND npm both resolve within the given PATH. This is the
+# fail-loud guard: if the resolved PATH still cannot find npm, provisioning
+# stops with the PATH in the message rather than installing a unit that will
+# fail on every start.
+verify_guard_path() {
+  local guard_path="$1"
+  local node_bin npm_bin
+  node_bin="$(PATH="${guard_path}" command -v node 2>/dev/null || true)"
+  npm_bin="$(PATH="${guard_path}" command -v npm 2>/dev/null || true)"
+  [[ -n "${node_bin}" && -n "${npm_bin}" ]]
+}
+
 install_files() {
   install -d -o root -g root -m 0755 "${INSTALL_ROOT}"
   install -o root -g root -m 0755 \
     "${SOURCE_DIR}/0509-digest-headline-ratio-guard-run.sh" \
     "${INSTALL_ROOT}/0509-digest-headline-ratio-guard-run.sh"
-  install -o root -g root -m 0644 \
+  # Render the service unit with the node bin dir discovered at provision
+  # time, substituting the __NODE_BIN_DIR__ placeholder in the repo template.
+  # Fail loud (with the resolved PATH) if node/npm are still not resolvable.
+  local guard_path node_bin_dir
+  guard_path="$(guard_path)" \
+    || die "could not resolve node/npm on PATH (is node installed for the nish user?)"
+  verify_guard_path "${guard_path}" \
+    || die "node/npm not resolvable on resolved PATH: ${guard_path}"
+  node_bin_dir="${guard_path%%:*}"
+  sed "s|__NODE_BIN_DIR__|${node_bin_dir}|" \
     "${SOURCE_DIR}/0509-digest-headline-ratio-guard.service" \
-    /etc/systemd/system/0509-digest-headline-ratio-guard.service
+    > /etc/systemd/system/0509-digest-headline-ratio-guard.service
   install -o root -g root -m 0644 \
     "${SOURCE_DIR}/0509-digest-headline-ratio-guard.timer" \
     /etc/systemd/system/0509-digest-headline-ratio-guard.timer
@@ -82,6 +128,17 @@ verify_timer() {
 }
 
 main() {
+  # --resolve-path: print the resolved guard PATH (and assert node/npm resolve
+  # within it) without touching the system. Used by the provision drill test
+  # to assert PATH resolution without root or systemd.
+  if [[ "${1:-}" == "--resolve-path" ]]; then
+    local guard_path
+    guard_path="$(guard_path)" || die "could not resolve node/npm on PATH"
+    verify_guard_path "${guard_path}" \
+      || die "node/npm not resolvable on resolved PATH: ${guard_path}"
+    printf '%s\n' "${guard_path}"
+    return 0
+  fi
   require_root
   install_files
   smoke_guard
