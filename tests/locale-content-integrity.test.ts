@@ -112,7 +112,7 @@ describe("locale content integrity (issue #1570)", () => {
         "compare",
       ]) {
         const links = buyerSurfaceHreflangLinks(splat);
-        const xDefault = links.find((link) => link.hrefLang === "x-default");
+        const xDefault = links.find((link) => link.hreflang === "x-default");
         expect(xDefault, `x-default missing for splat="${splat}"`).toBeDefined();
         // x-default points at the EN twin.
         const enPath =
@@ -150,7 +150,7 @@ describe("locale content integrity (issue #1570)", () => {
 
       it(`/sneaker-resale locale "${locale}" ships an hreflang x-default alternate`, () => {
         const links = sneakerResaleHreflangLinks();
-        const xDefault = links.find((link) => link.hrefLang === "x-default");
+        const xDefault = links.find((link) => link.hreflang === "x-default");
         expect(xDefault, `sneaker-resale x-default missing`).toBeDefined();
         expect(xDefault?.href).toBe("https://0509.io/sneaker-resale");
       });

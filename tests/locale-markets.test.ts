@@ -64,11 +64,11 @@ describe("sneaker-resale locale catalog", () => {
   it("emits a reciprocal hreflang set including self and x-default", () => {
     const links = sneakerResaleHreflangLinks();
     expect(links).toEqual([
-      { rel: "alternate", hrefLang: "en", href: "https://0509.io/sneaker-resale" },
-      { rel: "alternate", hrefLang: "de", href: "https://0509.io/de/sneaker-resale" },
-      { rel: "alternate", hrefLang: "ja", href: "https://0509.io/ja/sneaker-resale" },
-      { rel: "alternate", hrefLang: "pt-BR", href: "https://0509.io/pt-br/sneaker-resale" },
-      { rel: "alternate", hrefLang: "x-default", href: "https://0509.io/sneaker-resale" },
+      { rel: "alternate", hreflang: "en", href: "https://0509.io/sneaker-resale" },
+      { rel: "alternate", hreflang: "de", href: "https://0509.io/de/sneaker-resale" },
+      { rel: "alternate", hreflang: "ja", href: "https://0509.io/ja/sneaker-resale" },
+      { rel: "alternate", hreflang: "pt-BR", href: "https://0509.io/pt-br/sneaker-resale" },
+      { rel: "alternate", hreflang: "x-default", href: "https://0509.io/sneaker-resale" },
     ]);
     expect(links).toHaveLength(SNEAKER_RESALE_MARKETS.length + 1);
   });
