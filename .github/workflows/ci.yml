@@ -114,6 +114,17 @@ jobs:
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
               --project workers
+      - name: Upload coverage to Codecov (shard 1)
+        # Tokenless upload: 0509 is public and PR head branches are unprotected,
+        # so Codecov accepts the upload without a CODECOV_TOKEN. The upload is
+        # non-fatal (fail_ci_if_error: false) during the evaluate phase so a
+        # Codecov-side rate limit or outage cannot block a PR. Each shard uploads
+        # its own lcov; Codecov merges the four uploads by commit SHA.
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./coverage/lcov.info
+          disable_search: true
+          fail_ci_if_error: false
       - name: Typecheck
         env:
           NODE_OPTIONS: --max-old-space-size=2048
@@ -195,7 +206,13 @@ jobs:
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
               --shard=2/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
+              --project node --coverage
+      - name: Upload coverage to Codecov (shard 2)
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./coverage/lcov.info
+          disable_search: true
+          fail_ci_if_error: false
 
   codex-node-checks-shard-3:
     # Required context (branch protection) — shard 3 of 4. Same no-skip
@@ -272,7 +289,13 @@ jobs:
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
               --shard=3/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
+              --project node --coverage
+      - name: Upload coverage to Codecov (shard 3)
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./coverage/lcov.info
+          disable_search: true
+          fail_ci_if_error: false
 
   codex-node-checks-shard-4:
     # Required context (branch protection) — shard 4 of 4. Same no-skip
@@ -349,4 +372,10 @@ jobs:
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
               --shard=4/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
+              --project node --coverage
+      - name: Upload coverage to Codecov (shard 4)
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./coverage/lcov.info
+          disable_search: true
+          fail_ci_if_error: false
