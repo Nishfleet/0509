@@ -90,7 +90,7 @@ const DEFAULT_SAMPLE_HOURS = 24;
  */
 export function parseArgs(argv) {
   const parsed = {
-    input: null,
+    input: /** @type {string | null} */ (null),
     local: false,
     json: false,
     noCommit: false,
@@ -419,6 +419,10 @@ function sampleDeliveredDigestItems({ local, hours }) {
   return { eventTypes: eventTypesFromCountRows(rowsFromWranglerJson(result.stdout ?? "")), cutoffIso, error: null };
 }
 
+/**
+ * @param {{ sampled: boolean, sampleHours: number, cutoffIso: string | null, periodStart: string, landingPageCount: number, headlineItemCount: number, ratio: number, adChurnCount: number, sampledDays: number, rollingRatio: number, guardFired: boolean }} report
+ * @param {boolean} json
+ */
 function emitReport(report, json) {
   if (json) {
     console.log(JSON.stringify(report, null, 2));
