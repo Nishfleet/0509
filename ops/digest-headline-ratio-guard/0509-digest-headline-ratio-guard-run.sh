@@ -39,6 +39,15 @@ fail() {
   exit 2
 }
 
+# Fail loud if node/npm are not resolvable on the service PATH. systemd does
+# not source the nish user's login shell, so the unit must carry an explicit
+# Environment=PATH (set by the provision script). If that is missing or
+# wrong, print the resolved PATH to the journal so the failure is
+# diagnosable instead of a bare 'npm: command not found'.
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  fail "node/npm not on PATH; resolved PATH=${PATH}"
+fi
+
 [[ -f "${CF_TOKEN_FILE}" ]] || fail "sanctioned CF token file missing: ${CF_TOKEN_FILE}"
 
 mkdir -p "${STATE_DIR}"
