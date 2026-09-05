@@ -258,20 +258,22 @@ for (const viewport of viewports) {
     );
     await expect(page.locator(".f9-results-panel")).toHaveAttribute("data-f9-result-cache-status", "hit");
     await expect(page.locator(".f9-results-panel")).toHaveAttribute("data-f9-result-source", "meta_library_browser");
-    const broaderLink = page.getByRole("link", { name: /Search broader matches for.*fresh-empty/i });
-    await expect(broaderLink).toBeVisible();
-    await expectMinimumTouchTarget(broaderLink);
-    await expectVisibleKeyboardFocus(broaderLink);
+    // BL-031 / issue 1376: a completed empty search offers exactly ONE next
+    // action, and it re-points the same search — with the fixture running
+    // unscoped (country=all) the affordance is the brand stem as a keyword.
+    const nextActionLink = page.getByRole("link", { name: /Search .fresh-empty. as a keyword/i });
+    await expect(nextActionLink).toBeVisible();
+    await expectMinimumTouchTarget(nextActionLink);
+    await expectVisibleKeyboardFocus(nextActionLink);
     await expectPhoneTouchTargets(page);
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "empty" });
-    await broaderLink.press("Enter");
-    await expect(page).toHaveURL(/\/search\?.*website=fresh-empty\.example.*broader=1/);
-    const broaderUrl = new URL(page.url());
-    expect(broaderUrl.searchParams.get("website")).toBe("fresh-empty.example");
-    expect(broaderUrl.searchParams.get("query")).toBe("fresh-empty.example");
-    expect(broaderUrl.searchParams.get("mode")).toBe("advertiser");
-    expect(broaderUrl.searchParams.get("trackingRole")).toBe("competitor");
-    expect(broaderUrl.searchParams.get("broader")).toBe("1");
+    await nextActionLink.press("Enter");
+    await expect(page).toHaveURL(/\/search\?.*mode=keyword.*query=fresh-empty/);
+    const keywordUrl = new URL(page.url());
+    expect(keywordUrl.searchParams.get("mode")).toBe("keyword");
+    expect(keywordUrl.searchParams.get("query")).toBe("fresh-empty");
+    expect(keywordUrl.searchParams.get("website")).toBeNull();
+    expect(keywordUrl.searchParams.get("trackingRole")).toBe("competitor");
 
     await searchWebsite.fill("stale.example");
     await page.keyboard.press("Enter");
