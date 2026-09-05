@@ -43,7 +43,9 @@ export function PublicDocBlock(props: {
 export function PublicDocHeader() {
   // The doc/legal shell shares the one public header so every public surface
   // shows the same canonical link list and the same bone case-file chrome.
-  return <MarketingNav />;
+  // Switch-page links are surfaced in the footer on these pages so the header
+  // stays focused on navigation, not competitor mentions (issue #1466).
+  return <MarketingNav showSwitchLinks={false} />;
 }
 
 export function PublicDocFooter() {
