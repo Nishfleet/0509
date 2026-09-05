@@ -454,9 +454,19 @@ export function adIsBrandOwned(
   // 5. The creative lands on the brand's alias/canonical partner (e.g. an ad
   //    landing on ridge.com counted on the ridgewallet.com page). Same brand
   //    identity per the canonical graph, so the set never splits by
-  //    landing-host (issue #1446 criterion 2).
+  //    landing-host (issue #1446 criterion 2). Attribute by landing host ONLY
+  //    when the ad's own page ID cannot disambiguate (null) or it belongs to
+  //    the brand's own page — a partner/affiliate campaign under a DIFFERENT
+  //    Meta Page ID (e.g. "Oura Ring Reviews" landing on ouraring.com) is
+  //    still not the brand's own, mirroring issue #1566's identity discipline
+  //    and the exact-domain branch above.
   if (landingHostIsThisBrand(regionalHost, brandDomain)) {
-    return true;
+    if (!ad.advertiserPageId) {
+      return true;
+    }
+    if (brandPageIds.has(String(ad.advertiserPageId))) {
+      return true;
+    }
   }
 
   return false;
