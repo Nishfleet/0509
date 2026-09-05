@@ -1,0 +1,16 @@
+[Unit]
+Description=Run the 0509 digest headline-ratio regression guard daily
+Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
+
+[Timer]
+# Daily at 09:53 UTC — after the 04:00 UTC daily digest cron and the morning
+# delivery window, so the sample sees the day's delivered digests. The :53
+# offset follows the ops-guard convention of avoiding whole-minute collisions
+# (the demo-brand-timeline guard runs at :37, the screenshot-rate guard at
+# its own offset).
+OnCalendar=*-*-* 09:53:00
+Persistent=true
+Unit=0509-digest-headline-ratio-guard.service
+
+[Install]
+WantedBy=timers.target

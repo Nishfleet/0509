@@ -66,15 +66,22 @@ export function measureDigestHeadline(
 
 /**
  * The 7-day rolling regression-guard signal over a series of daily
- * measurements. Uses the last DIGEST_HEADLINE_ROLLING_DAYS measurements (in
- * arrival order), averages their per-period ratios, and reports whether the
- * guard fires (below the 50% floor). A window with no measurements never
- * fires the guard — there is nothing to regress yet.
+ * measurements. Uses the last DIGEST_HEADLINE_ROLLING_DAYS days that actually
+ * produced headline-stream items (in arrival order), averages their
+ * per-period ratios, and reports whether the guard fires (below the 50%
+ * floor). Days with zero headline-stream items — nothing delivered, or a day
+ * whose items were entirely collapsed creative churn — are kept out of the
+ * mean: the ratio judges the headline mix, and a vacuous day is not a
+ * regression (a churn-heavy day is the common case, not a breach). A window
+ * with no measured days never fires the guard — there is nothing to regress
+ * yet.
  */
 export function headlineRatioSignal(
   measurements: readonly DigestHeadlineMeasurement[],
 ): HeadlineRatioSignal {
-  const window = measurements.slice(-DIGEST_HEADLINE_ROLLING_DAYS);
+  const window = measurements
+    .filter((m) => m.headlineItemCount > 0)
+    .slice(-DIGEST_HEADLINE_ROLLING_DAYS);
   if (window.length === 0) {
     return {
       sampledDays: 0,
