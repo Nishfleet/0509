@@ -10,6 +10,7 @@ import {
   summarizeDemoBrandBackfill,
 } from "../app/lib/demo-brand-backfill.server";
 import { resumePendingDigestScheduleJobsDetailed } from "../app/lib/digest-orchestration.server";
+import { runAdsDomainPublisher } from "../app/lib/ads-domain-publisher.server";
 import {
   flushDeferredInstantAlerts,
   runScheduledDiscoveryWarmup,
@@ -394,6 +395,39 @@ export default {
           },
           (error) =>
             reportScheduledTaskFailure(env, "demo_brand_backfill", error),
+        ),
+      );
+    }
+
+    // Nightly programmatic /ads/:domain publisher (BET 5a, issue #1549):
+    // rides the same 04:00 daily rail as the demo-brand backfill for the
+    // same release-soak reason (a new wrangler cron would escape the CHECK
+    // that accepts only the four production crons). The publisher gates on
+    // SEARCH_ROLLOUT_MODE=v2, runs the search-v2 exact pipeline for country
+    // "all" per seed-list domain, and lets the existing /ads/:domain loader
+    // and dynamic sitemap pick up the written public_search cache rows. The
+    // domain cap (ADS_DOMAIN_PUBLISHER_CAP, default 60) bounds the nightly
+    // provider spend; a per-domain failure is logged and counted, never
+    // thrown, and a whole-run failure surfaces through the same scheduled-
+    // task alert channel as the backfill.
+    if (scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily") {
+      ctx.waitUntil(
+        runAdsDomainPublisher(env, ctx).then(
+          (result) => {
+            if (result.attempted > 0) {
+              console.log("ads domain publisher completed", {
+                list: result.list,
+                gate: result.gate,
+                attempted: result.attempted,
+                published: result.published,
+                skipped: result.skipped,
+                failed: result.failed,
+                invalid: result.invalid,
+              });
+            }
+          },
+          (error) =>
+            reportScheduledTaskFailure(env, "ads_domain_publisher", error),
         ),
       );
     }

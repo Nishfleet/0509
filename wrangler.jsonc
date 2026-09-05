@@ -79,6 +79,7 @@
     "MONITORING_SCHEDULED_BROWSER_MODE": "billing",
     "BROWSER_RUN_SESSION_REUSE": "0",
     "SEARCH_ROLLOUT_MODE": "v2",
+    "ADS_DOMAIN_PUBLISHER_CAP": "60",
     "PRESENCE_WEBSITE_ROLLOUT": "generally_available",
     "PRESENCE_DIGEST_ROLLOUT": "disabled",
     "PRESENCE_X_ROLLOUT": "disabled",

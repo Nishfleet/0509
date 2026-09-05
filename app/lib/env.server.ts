@@ -108,6 +108,7 @@ export interface AppEnv {
   MONITORING_SCHEDULED_BROWSER_ALLOWLIST?: string;
   MONITORING_SCHEDULED_BROWSER_MODE?: string;
   SEARCH_ROLLOUT_MODE?: string;
+  ADS_DOMAIN_PUBLISHER_CAP?: string;
   /**
    * Public /ads/:domain brand-page indexing brake. Unset or "1" = indexable
    * (fresh cached pages carry no robots meta); explicitly "0" = emergency
