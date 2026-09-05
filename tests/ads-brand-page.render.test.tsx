@@ -836,6 +836,81 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
     expect(markup).not.toContain("application/ld+json");
     expect(markup).not.toContain("@type");
   });
+
+  it("emits no hasPart on an indexable brand page with no stored timeline (no broken Dataset link)", async () => {
+    // Default populated() has offerTimelineEntries: []. The WebPage JSON-LD
+    // must NOT carry a hasPart pointing at /timeline/nike.com — that URL is
+    // 410 Gone when no snapshots are stored (timeline.$domain.tsx).
+    const markup = await render(populated());
+
+    expect(markup).toContain('"@type":"WebPage"');
+    expect(markup).not.toContain('"hasPart"');
+    expect(markup).not.toContain('"@type":"Dataset"');
+  });
+
+  it("links the WebPage hasPart to the Offer Timeline Dataset on an indexable page with a stored timeline (issue #964)", async () => {
+    const markup = await render(
+      populated({
+        offerTimelineEntries: [
+          {
+            id: "snap-nike-20260825",
+            capturedAt: "2026-08-25T00:00:00.000Z",
+            dateLabel: "25 Aug 2026",
+            canonicalUrl: "https://www.nike.com/",
+            headline: "Nike. Just Do It.",
+            ctaText: "Shop Now",
+            priceText: null,
+            formPresent: false,
+            screenshotHref: null,
+            pageTextHref: null,
+            evidenceNote: null,
+            transition: null,
+          },
+        ],
+      }),
+    );
+
+    // The WebPage JSON-LD carries a hasPart Dataset pointing at the timeline
+    // canonical URL — the same /timeline/nike.com link the visible section
+    // renders. Answer engines can follow this to the citable change-ledger.
+    expect(markup).toContain('"@type":"WebPage"');
+    expect(markup).toContain('"hasPart":{');
+    expect(markup).toContain('"@type":"Dataset"');
+    expect(markup).toContain('"name":"Nike offer timeline"');
+    expect(markup).toContain('"url":"https://0509.io/timeline/nike.com"');
+  });
+
+  it("emits no hasPart on a noindex brand page even when a stored timeline exists", async () => {
+    // The freshness gate: only indexable brand pages get the hasPart link.
+    // A noindex page (stale, emergency brake, score-thin) carries no
+    // structured data at all, so the Dataset relationship is never advertised
+    // for a page answer engines must not index.
+    const markup = await render(
+      populated({
+        noindex: true,
+        offerTimelineEntries: [
+          {
+            id: "snap-nike-20260825",
+            capturedAt: "2026-08-25T00:00:00.000Z",
+            dateLabel: "25 Aug 2026",
+            canonicalUrl: "https://www.nike.com/",
+            headline: "Nike. Just Do It.",
+            ctaText: "Shop Now",
+            priceText: null,
+            formPresent: false,
+            screenshotHref: null,
+            pageTextHref: null,
+            evidenceNote: null,
+            transition: null,
+          },
+        ],
+      }),
+    );
+
+    expect(markup).not.toContain("application/ld+json");
+    expect(markup).not.toContain('"hasPart"');
+    expect(markup).not.toContain('"@type":"Dataset"');
+  });
 });
 
 describe("/ads/:domain — capture-validity proof cross-link (issue #1320)", () => {

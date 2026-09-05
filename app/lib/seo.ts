@@ -217,6 +217,14 @@ export function webPageJsonLd(input: {
   dateModified?: string;
   aboutName?: string;
   comparedProductName?: string;
+  /**
+   * A `Dataset` (or other `CreativeWork`) this page has as a citable part.
+   * The `/ads/:domain` brand page sets this to its Offer Timeline `Dataset`
+   * when the page is indexable and a stored timeline exists, so answer
+   * engines can follow the relationship from the brand page to the
+   * change-ledger dataset (issue #964).
+   */
+  hasPart?: Record<string, unknown>;
 }) {
   return {
     "@context": "https://schema.org",
@@ -236,6 +244,7 @@ export function webPageJsonLd(input: {
           },
         }
       : {}),
+    ...(input.hasPart ? { hasPart: input.hasPart } : {}),
     isPartOf: { "@type": "WebSite", name: SITE_NAME, url: SITE_ORIGIN },
     publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
   } as const;
@@ -457,6 +466,92 @@ export function adsPageServiceJsonLd(input: {
     url: canonicalUrl(input.pathname),
     provider: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
     about: { "@type": "Organization", name: input.brandName },
+  } as const;
+}
+
+/**
+ * schema.org `Dataset` for the public Offer Timeline (`/timeline/:domain`).
+ *
+ * The timeline is the uncopyable-history asset: a dated, source-linked change
+ * ledger for one watched competitor, built from stored `landing_page_snapshot`
+ * rows. Wrapping it in `Dataset` JSON-LD lets answer engines (GEO) address and
+ * cite it as original data — the highest-leverage play in category-research
+ * Bet 3 (issue #964).
+ *
+ * Every field mirrors what the page itself shows or stores — nothing invented:
+ * - `datePublished`: the ISO timestamp of the FIRST stored snapshot (the day
+ *   the ledger opened for this domain). Omitted when there are no entries.
+ * - `dateModified`: the ISO timestamp of the LAST stored snapshot (the most
+ *   recent capture the page renders). Omitted when there are no entries.
+ * - `license`: the operating terms URL that governs reuse of the dataset —
+ *   the same `/terms` the page footer links. Not a Creative Commons grant the
+ *   terms do not make.
+ * - `distribution`: a `DataDownload` pointing at the timeline's canonical URL
+ *   as `text/html`, so an answer engine can fetch the citable surface itself.
+ *
+ * Emitted ONLY on indexable timeline pages (the route gates this on
+ * `noindex === false`); a noindex shell never carries the Dataset.
+ */
+export function offerTimelineDatasetJsonLd(input: {
+  brandName: string;
+  domain: string;
+  description: string;
+  pathname: string;
+  datePublished: string | null;
+  dateModified: string | null;
+}) {
+  const dataset: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    name: `${input.brandName} offer timeline`,
+    description: input.description,
+    url: canonicalUrl(input.pathname),
+    isAccessibleForFree: true,
+    keywords: [
+      input.domain,
+      "offer timeline",
+      "landing page changes",
+      "competitor monitoring",
+    ],
+    creator: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
+    publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
+    license: canonicalUrl("/terms"),
+    distribution: {
+      "@type": "DataDownload",
+      name: `${input.brandName} offer timeline (HTML)`,
+      contentUrl: canonicalUrl(input.pathname),
+      encodingFormat: "text/html",
+    },
+  };
+  if (input.datePublished) {
+    dataset.datePublished = input.datePublished;
+  }
+  if (input.dateModified) {
+    dataset.dateModified = input.dateModified;
+  }
+  return dataset;
+}
+
+/**
+ * `hasPart` entry a brand page (`/ads/:domain`) embeds in its `WebPage`
+ * JSON-LD to point answer engines at the per-competitor Offer Timeline
+ * `Dataset`. Returned as the value for `WebPage.hasPart` — schema.org accepts
+ * a single `CreativeWork`/`Dataset` there.
+ *
+ * Only emitted when the brand page is indexable AND a stored timeline exists
+ * (the route already links the timeline section in that case). The URL is the
+ * timeline's canonical URL; the type is `Dataset` so the relationship reads as
+ * "this brand page has a citable dataset of its offer history".
+ */
+export function brandPageTimelineHasPart(input: {
+  domain: string;
+  brandName: string;
+}) {
+  const pathname = `/timeline/${input.domain}`;
+  return {
+    "@type": "Dataset",
+    name: `${input.brandName} offer timeline`,
+    url: canonicalUrl(pathname),
   } as const;
 }
 
