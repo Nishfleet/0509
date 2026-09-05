@@ -6,6 +6,9 @@ import {
 
 export default [
   index("routes/marketing.tsx"),
+  route("sample-brief", "routes/sample-brief.tsx"),
+  route("pricing", "routes/pricing.tsx"),
+  route("plans", "routes/plans.tsx"),
   route("search", "routes/search.tsx"),
   route("help", "routes/help.tsx"),
   route("docs", "routes/docs.tsx"),

@@ -63,6 +63,70 @@ jobs:
           esac
           printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
+      - name: Self-integrity check (protected verifier definitions must match the base branch)
+        # Defense-in-depth so a candidate cannot redefine its own verifier and
+        # self-certify (sol-sweep product-ci/0509-required-verifiers-self-
+        # certify-without-independent-app). The integrity gate added in PR #700
+        # is the authorization path for changing protected files; this step is
+        # the in-workflow refusal: even if the integrity gate's required-context
+        # binding is bypassed (admin API mutation, stale binding, race), this
+        # codex-node-checks run cannot conclude green for a commit whose
+        # protected verifier definitions drift from the base branch's. A
+        # candidate who softens this step is itself modifying ci.yml and is
+        # therefore both a drift event (caught here) and an unapproved
+        # required-verifier edit (caught by required-verifier-integrity.yml).
+        id: self-integrity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          # Pull-request path only. workflow_dispatch is already pinned to an
+          # explicit EXPECTED_SHA == GITHUB_SHA on refs/heads/main, so the
+          # base-branch comparison is redundant for dispatch candidates; an
+          # unexpected event name fails closed.
+          test "$GITHUB_EVENT_NAME" = "pull_request"
+          # Resolve the base-branch tip SHA via the API so the comparison
+          # cannot be fooled by a stale github.event.pull_request.base.sha.
+          base_sha="$(gh api "repos/$REPO/branches/$BASE_REF" --jq '.commit.sha')"
+          [[ "$base_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "bad base_sha: $base_sha" >&2; exit 1; }
+          # Protected verifier definitions. The list matches the one the
+          # required-verifier-integrity gate uses so a drift here is also an
+          # unapproved protected-file edit in the gate's eyes.
+          protected=(
+            ".github/workflows/ci.yml"
+            ".github/workflows/secret-scan.yml"
+            ".github/workflows/required-verifier-integrity.yml"
+            ".github/scripts/required-verifier-integrity.sh"
+            ".github/scripts/test-required-verifier-integrity.sh"
+          )
+          drift=()
+          for f in "${protected[@]}"; do
+            base_content="$(gh api "repos/$REPO/contents/$f?ref=$base_sha" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || true)"
+            current_content="$(cat "$f" 2>/dev/null || true)"
+            # Drift if either: (a) both differ as non-empty strings, or
+            # (b) one side has content and the other does not (file added or
+            # removed by the PR). Equal-or-both-empty counts as no drift so
+            # an honest removal of an unused protected file does not fail
+            # the check spuriously, but adding/removing a listed file is
+            # itself caught by the integrity gate's protected-file list.
+            if [[ -n "$base_content" || -n "$current_content" ]]; then
+              if [[ "$base_content" != "$current_content" ]]; then
+                drift+=("$f")
+              fi
+            fi
+          done
+          if [[ ${#drift[@]} -gt 0 ]]; then
+            {
+              echo "::error title=protected verifier drift::protected verifier definition(s) modified in this PR: ${drift[*]}"
+              echo "These files may only be changed by a candidate whose PR carries a current APPROVED review from a repository admin/maintainer other than the PR author."
+              echo "That authorization is enforced by .github/workflows/required-verifier-integrity.yml; without it, codex-node-checks cannot conclude green for this PR."
+            } >&2
+            exit 1
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ steps.authorize.outputs.sha }}
@@ -104,3 +168,135 @@ jobs:
           # Keep it below MemoryHigh/MemoryMax so systemd still fails closed.
           NODE_OPTIONS: --max-old-space-size=2048
         run: ./scripts/deploy-window-lock.sh run -- npm run typecheck
+
+  # Deterministic regression job for the self-integrity check. Runs only on
+  # explicit workflow_dispatch (never on PRs), proves the in-workflow check
+  # that lands the fix exists with the expected shape and behaves correctly
+  # against synthetic inputs. The same comparison logic the in-workflow
+  # step uses is sourced from a fixed string here so it is unit-testable
+  # offline and the regression is provably independent of network or the
+  # GitHub API.
+  test-self-integrity-regression:
+    name: ci.yml self-integrity regression
+    if: github.event_name == 'workflow_dispatch'
+    needs: []
+    runs-on: [self-hosted, linux, x64, vps-verify]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Verify ci.yml ships the self-integrity check
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/ci.yml
+          # The step that lands the fix MUST be present in the as-shipped
+          # ci.yml. Without the change, this grep exits 1 and the regression
+          # fails: that is exactly what proves the test catches drift.
+          grep -F -q "Self-integrity check (protected verifier definitions must match the base branch)" .github/workflows/ci.yml
+          grep -F -q 'gh api "repos/$REPO/branches/$BASE_REF"' .github/workflows/ci.yml
+          grep -F -q ".github/workflows/required-verifier-integrity.yml" .github/workflows/ci.yml
+          grep -F -q '"::error title=protected verifier drift::' .github/workflows/ci.yml
+
+      - name: Run deterministic self-integrity fixture regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The fixtures below reproduce the exact comparison logic the
+          # in-workflow self-integrity step uses, against synthetic file
+          # bytes (no network, no GitHub API). The fixtures prove:
+          #   1) clean PR (no drift) -> PASS
+          #   2) malicious edit to ci.yml -> FAIL
+          #   3) malicious edit to secret-scan.yml -> FAIL
+          #   4) malicious edit to the integrity workflow itself -> FAIL
+          #   5) malicious edit to the integrity gate's decision script -> FAIL
+          #   6) candidate adds a NEW workflow under .github/workflows/
+          #      not listed in the protected set -> NOT caught by THIS step
+          #      (the integrity gate's directory-prefix list is the catch
+          #      for unlisted workflow additions); this fixture pins the
+          #      two-layer split so a future change to one layer cannot
+          #      silently regress the other.
+          #   7) listed file deletion counted as drift
+          #   8) non-workflow file change (caught by the integrity gate's
+          #      wider list) passes this step: same split, pinned again.
+          # The whole step is network-free and deterministic.
+          python3 - <<'PY'
+          import sys
+
+          PROTECTED = (
+              ".github/workflows/ci.yml",
+              ".github/workflows/secret-scan.yml",
+              ".github/workflows/required-verifier-integrity.yml",
+              ".github/scripts/required-verifier-integrity.sh",
+              ".github/scripts/test-required-verifier-integrity.sh",
+          )
+
+          BASE = {p: f"base:{p}" for p in PROTECTED}
+
+          def mutate(base, edits):
+              cur = dict(base)
+              cur.update(edits)
+              return cur
+
+          def check_drift(base, current):
+              """Reproduces the in-workflow comparison exactly: a file in
+              PROTECTED drifts if the base and current content differ, OR if
+              exactly one side has content (file added or removed)."""
+              drift = []
+              for f in PROTECTED:
+                  b = base.get(f, "")
+                  c = current.get(f, "")
+                  if b == c:
+                      continue
+                  if b == "" and c == "":
+                      continue
+                  drift.append(f)
+              return drift
+
+          CASES = [
+              ("clean PR passes",
+               "PASS", BASE, BASE),
+              ("ci.yml edit fails",
+               "FAIL", BASE, mutate(BASE, {".github/workflows/ci.yml": "MALICIOUS: skip authorize"})),
+              ("secret-scan.yml edit fails",
+               "FAIL", BASE, mutate(BASE, {".github/workflows/secret-scan.yml": "MALICIOUS: never scan"})),
+              ("integrity workflow self-edit fails",
+               "FAIL", BASE, mutate(BASE, {".github/workflows/required-verifier-integrity.yml": "MALICIOUS: always APPROVED"})),
+              ("decision script edit fails",
+               "FAIL", BASE, mutate(BASE, {".github/scripts/required-verifier-integrity.sh": "MALICIOUS: self-approve allowed"})),
+              ("test regression script edit fails",
+               "FAIL", BASE, mutate(BASE, {".github/scripts/test-required-verifier-integrity.sh": "MALICIOUS: bypass"})),
+              ("unlisted workflow addition passes this step (caught by integrity gate)",
+               "PASS", BASE, mutate(BASE, {".github/workflows/evil.yml": "candidate-added workflow"})),
+              ("listed file deletion fails",
+               "FAIL", BASE, {p: ("" if p == ".github/workflows/ci.yml" else BASE[p]) for p in PROTECTED}),
+              ("non-workflow file change in repo passes this step (caught by integrity gate)",
+               "PASS", BASE, mutate(BASE, {"app/routes/app.clients.tsx": "unrelated product change"})),
+              ("combined: ci.yml + integrity workflow both edited fails once",
+               "FAIL", BASE, mutate(BASE, {
+                   ".github/workflows/ci.yml": "MALICIOUS: skip authorize",
+                   ".github/workflows/required-verifier-integrity.yml": "MALICIOUS: always APPROVED",
+               })),
+          ]
+
+          pass_count = 0
+          fail_count = 0
+          for name, expected, base, current in CASES:
+              drift = check_drift(base, current)
+              got_pass = (len(drift) == 0)
+              ok = (expected == "PASS" and got_pass) or (expected == "FAIL" and not got_pass)
+              mark = "ok  " if ok else "FAIL"
+              drift_repr = ",".join(drift) if drift else "none"
+              print(f"  {mark} {name} (expected {expected}, drift on: {drift_repr})")
+              if ok:
+                  pass_count += 1
+              else:
+                  fail_count += 1
+          print()
+          if fail_count == 0:
+              print(f"ALL FIXTURES PASS ({pass_count}/{pass_count})")
+              sys.exit(0)
+          else:
+              print(f"{fail_count} FIXTURE FAILURE(S) ({pass_count} passed)")
+              sys.exit(1)
+          PY
