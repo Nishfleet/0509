@@ -1,7 +1,6 @@
 # Lane reports
 
-Three remediation lanes wrote evidence to this path independently. All are kept
-verbatim below.
+Lane reports are appended below (each section is kept verbatim).
 
 - [MONEY silent-failure remediation](#money-silent-failure-remediation) — PR #445, branch `fix/silent-fixmoney` (landed on `main`)
 - [Silent-failure observability remediation](#silent-failure-observability-remediation) — PR #447, branch `fix/silent-fixobserve`
@@ -372,3 +371,49 @@ is deployed. The dogfood job auto-resolves the fingerprint on the next complete
 ## Files
 
 - `.lane/report.md` — evidence record only; no product code touched.
+
+---
+# Manual SaaSHub listing preparation
+
+**Status: prepared; PR open, not merged, not submitted to SaaSHub.**
+
+Branch: `docs/saashub-listing`
+Base: `origin/main` at `5e682868`
+Pull request: https://github.com/nish3451/0509/pull/574
+
+## Item
+
+- [ ] Prepare a manual SaaSHub listing for Five to Nine [scout 2026-08-09,
+  risk: green] [traction] [unreviewed-by-grok]
+
+## Outcome
+
+`docs/saashub-listing.md` contains the complete, paste-ready SaaSHub
+submission: form facts, acceptance-criteria check, category picks, verified
+competitor picks, tagline + description + features copy, media guidance,
+honesty constraints, and the owner submission checklist. The actual form
+submission is an owner action (requires a SaaSHub account and a `@0509.io`
+mailbox for product verification); nothing in the directory can be submitted
+from the repo.
+
+## Research grounding (2026-08-10, live checks)
+
+- SaaSHub submission guidelines fetched from `/services/submit`: products
+  must be released, English, on an owned domain, not agencies/waitlists;
+  categories and competitors are requested during submission; missing
+  competitors drops the submission to the bottom of the queue; domain-email
+  verification raises priority.
+- Category pages verified: Advertising, Marketing Platform, Website
+  Monitoring, Marketing Analytics (all return real SaaSHub category pages).
+- Competitor slugs verified live: AdSpyder, PowerAdSpy, AdPlexity,
+  MagicBrief, BigSpy, Brand24, Mention, AWARIO, SpyFu, AdCreative.ai all
+  return real product pages; `minea`, `foreplay`, `swipewell` return 404 and
+  are documented as not-existing.
+- Listing copy mirrors already-public homepage claims (`app/routes/marketing.tsx`
+  headline/hero sentence) and plan facts from `docs/plan-catalog.md` +
+  README; honesty constraints (no WhatsApp/Slack, no hardcoded currency, no
+  unlimited-monitoring, no `.in`) are encoded in the doc.
+
+## Checks
+
+- `git diff --check`: clean (markdown-only change; no product code touched).
