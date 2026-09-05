@@ -16,6 +16,7 @@ import {
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
+  socialCardImage,
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
@@ -47,6 +48,7 @@ export const meta: MetaFunction = () =>
     title: "MagicBrief alternative: Five to Nine | Migration guide",
     description: pageDescription,
     pathname: "/compare/magicbrief",
+    image: socialCardImage("compare", "magicbrief", "Five to Nine vs MagicBrief"),
   });
 
 const imports = [

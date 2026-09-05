@@ -15,6 +15,7 @@ import {
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
+  socialCardImage,
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
@@ -35,6 +36,7 @@ export const meta: MetaFunction = () =>
     title: "Five to Nine vs checking the Meta Ad Library by hand",
     description: pageDescription,
     pathname: "/compare/meta-ad-library",
+    image: socialCardImage("compare", "meta-ad-library", "Five to Nine vs the Meta Ad Library by hand"),
   });
 
 const adLibraryStrengths: readonly CompareClaimCard[] = [

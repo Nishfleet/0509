@@ -129,6 +129,14 @@ export default {
       }
     }
 
+    if (request.method === "GET" || request.method === "HEAD") {
+      const { serveSocialCard } = await import("../app/lib/social-cards.server");
+      const socialCard = await serveSocialCard(env, request, url.pathname);
+      if (socialCard) {
+        return withSecurityHeaders(socialCard, request);
+      }
+    }
+
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
     if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {
       return publicFileResponse(request, publicSeoFile);
