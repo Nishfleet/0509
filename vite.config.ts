@@ -60,6 +60,11 @@ export default defineConfig(({ mode }) => ({
   },
   test: {
     environment: "node",
+    // Vitest 4 defaults NODE_ENV to "production", which makes react resolve
+    // its production builds where `act` is a stub (React.act does not exist
+    // in production). Tests that drive components with `act` then fail with
+    // "act is not a function". Run tests against the development builds.
+    env: { NODE_ENV: "development" },
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     testTimeout: 10_000,
     maxWorkers: isVerificationLane ? 1 : undefined,
