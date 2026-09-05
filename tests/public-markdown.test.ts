@@ -160,9 +160,9 @@ describe("public markdown", () => {
     // file cannot be read as implying unrestricted AI participation.
     expect(LLMS_TEXT).toContain("AI answer and reference engines may use this file");
     expect(LLMS_TEXT).toContain("ai-train=no");
-    // The denied training-crawler list must match robots.txt exactly — it is
-    // derived from the same shared constant (app/lib/seo.ts AI_TRAINING_CRAWLERS),
-    // and this pins every agent by name so a removed entry fails loudly.
+    // The denied training-crawler list must match the Cloudflare managed-robots
+    // deny list and the shared constant (app/lib/seo.ts AI_TRAINING_CRAWLERS);
+    // this pins every agent by name so a removed entry fails loudly.
     AI_TRAINING_CRAWLERS.forEach((agent) => {
       expect(LLMS_TEXT, `${agent} should be named in the llms.txt deny list`).toContain(agent);
     });

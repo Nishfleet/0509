@@ -80,10 +80,12 @@ describe("public SEO files", () => {
 		expect(robots?.body).not.toContain("Disallow: /share");
 	});
 
-	it("denies AI training crawlers in robots.txt but keeps AI answer engines allowed (docs/ai-crawler-policy.md)", () => {
+	it("does not duplicate the AI-training deny block in repo robots.txt; edge is the sole source (issue #1459)", () => {
 		const robots = publicSeoFileForPathname("/robots.txt");
 
-		// Training/fine-tuning crawlers are denied with their own group.
+		// The Cloudflare managed-robots zone feature is the source of truth for
+		// the AI-training deny list. The repo file only holds the wildcard allow
+		// rules and the Sitemap so the served file does not repeat the block.
 		for (const agent of [
 			"Amazonbot",
 			"Applebot-Extended",
@@ -95,7 +97,7 @@ describe("public SEO files", () => {
 			"GPTBot",
 			"meta-externalagent",
 		]) {
-			expect(robots?.body, `${agent} should be denied`).toContain(
+			expect(robots?.body, `${agent} should not be in repo robots.txt`).not.toContain(
 				`User-agent: ${agent}\nDisallow: /`,
 			);
 		}
@@ -114,7 +116,8 @@ describe("public SEO files", () => {
 			);
 		}
 
-		// The wildcard group still allows the public crawl for everyone else.
+		// The wildcard group still allows the public crawl and carries the
+		// Sitemap directive.
 		expect(robots?.body).toContain("Allow: /\nSitemap:");
 	});
 
