@@ -64,7 +64,21 @@ import {
   isTeamsWebhookDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
-import { EMAIL_H1_STYLE } from "~/lib/email-template.server";
+import {
+  EMAIL_CASE_BONE,
+  EMAIL_CASE_BUTTON_STYLE,
+  EMAIL_CASE_CARD,
+  EMAIL_CASE_CARD_STYLE,
+  EMAIL_CASE_EYEBROW_STYLE,
+  EMAIL_CASE_GREEN_INK,
+  EMAIL_CASE_H1_STYLE,
+  EMAIL_CASE_INK,
+  EMAIL_CASE_INK_FAINT,
+  EMAIL_CASE_INK_SOFT,
+  EMAIL_CASE_LINE,
+  EMAIL_CASE_META_STYLE,
+  EMAIL_MONO_FONT,
+} from "~/lib/email-template.server";
 import { proofScreenshotAbsoluteUrl } from "~/lib/proof-screenshot.server";
 import { buildUnsubscribeUrl } from "~/lib/unsubscribe.server";
 import type {
@@ -457,6 +471,7 @@ export async function deliverScanTroubleNotice(
     text: model.text,
     tag: "scan-trouble",
     unsubscribeUrl,
+    theme: "case-file",
   });
 
   const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {
@@ -2833,6 +2848,7 @@ async function sendRenderedDigestEmail(
     text: input.email.text,
     tag: "weekly-digest",
     unsubscribeUrl: input.unsubscribeUrl,
+    theme: "case-file",
   });
   return result;
 }
@@ -2852,6 +2868,7 @@ async function sendInstantEmail(
     html: input.html,
     tag: "instant-alert",
     unsubscribeUrl: input.unsubscribeUrl,
+    theme: "case-file",
   });
 }
 
@@ -3536,7 +3553,7 @@ function renderEventDiffHtml(
   const captures = resolveEventDiffCaptures(metadata);
   if (!captures) {
     return `
-      <p style="margin: 0 0 16px; color: #667085; font-size: 13px;">
+      <p style="margin: 0 0 16px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; color: ${EMAIL_CASE_INK_FAINT};">
         Before/Now comparison not shown because one or both capture times were unavailable or invalid.
       </p>
     `;
@@ -3552,15 +3569,15 @@ function renderEventDiffHtml(
   const screenshotRow = screenshotPair
     ? `<tr>
           <td colspan="2" style="padding: 0 0 12px 0;">
-            <table role="presentation" style="border-collapse: collapse; background-color: #ffffff; color: #0b1220; width: 100%;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; background-color: ${EMAIL_CASE_BONE};">
               <tr>
                 <td style="padding: 0 8px 0 0; vertical-align: top; width: 50%;">
-                  <p style="margin: 0 0 4px; color: #98a2b3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;">Before</p>
-                  <img src="${escapeHtml(screenshotPair.beforeUrl)}" alt="Before the change" width="280" style="display: block; max-width: 280px; width: 100%; border-radius: 8px; border: 1px solid #e4e7ec; background-color: #f5f7fa;">
+                  <p style="margin: 0 0 4px; font-family: ${EMAIL_MONO_FONT}; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">Before</p>
+                  <img src="${escapeHtml(screenshotPair.beforeUrl)}" alt="Before the change" width="280" style="display: block; max-width: 100%; width: 100%; border-radius: 0; border: 1px solid ${EMAIL_CASE_LINE}; background-color: ${EMAIL_CASE_CARD};">
                 </td>
                 <td style="padding: 0; vertical-align: top; width: 50%;">
-                  <p style="margin: 0 0 4px; color: #98a2b3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;">Now</p>
-                  <img src="${escapeHtml(screenshotPair.afterUrl)}" alt="After the change" width="280" style="display: block; max-width: 280px; width: 100%; border-radius: 8px; border: 1px solid #e4e7ec; background-color: #f5f7fa;">
+                  <p style="margin: 0 0 4px; font-family: ${EMAIL_MONO_FONT}; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">Now</p>
+                  <img src="${escapeHtml(screenshotPair.afterUrl)}" alt="After the change" width="280" style="display: block; max-width: 100%; width: 100%; border-radius: 0; border: 1px solid ${EMAIL_CASE_LINE}; background-color: ${EMAIL_CASE_CARD};">
                 </td>
               </tr>
             </table>
@@ -3570,15 +3587,15 @@ function renderEventDiffHtml(
 
   // The one fact the customer actually wants: what it said before, and now.
   return `
-    <table style="margin: 0 0 16px; border-collapse: collapse; font-size: 14px; background-color: #ffffff; color: #0b1220;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 16px; border-collapse: collapse; font-size: 14px; background-color: ${EMAIL_CASE_BONE}; border: 1px solid ${EMAIL_CASE_LINE};">
       ${screenshotRow}
       <tr>
-        <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Before</td>
-        <td style="padding: 0; color: #475467;">${escapeHtml(from)}<br><small>Captured ${escapeHtml(formatEventCaptureTime(captures.beforeCapturedAt))}</small></td>
+        <td style="padding: 8px 10px 8px 12px; color: ${EMAIL_CASE_INK_FAINT}; vertical-align: top; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;">Before</td>
+        <td style="padding: 8px 12px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(from)}<br><small style="font-family: ${EMAIL_MONO_FONT}; color: ${EMAIL_CASE_INK_FAINT};">Captured ${escapeHtml(formatEventCaptureTime(captures.beforeCapturedAt))}</small></td>
       </tr>
       <tr>
-        <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Now</td>
-        <td style="padding: 0; color: #0b1220;"><strong>${escapeHtml(to)}</strong><br><small>Captured ${escapeHtml(formatEventCaptureTime(captures.nowCapturedAt))}</small></td>
+        <td style="padding: 8px 10px 8px 12px; color: ${EMAIL_CASE_INK_FAINT}; vertical-align: top; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;">Now</td>
+        <td style="padding: 8px 12px; color: ${EMAIL_CASE_INK};"><strong>${escapeHtml(to)}</strong><br><small style="font-family: ${EMAIL_MONO_FONT}; color: ${EMAIL_CASE_INK_FAINT};">Captured ${escapeHtml(formatEventCaptureTime(captures.nowCapturedAt))}</small></td>
       </tr>
     </table>
   `;
@@ -3761,7 +3778,7 @@ function renderCreativeImageHtml(
     return "";
   }
 
-  return `<img src="${escapeHtml(imageUrl)}" alt="Ad creative" width="280" style="display: block; max-width: 280px; border-radius: 8px; border: 1px solid #e4e7ec; margin: 12px 0;">`;
+  return `<img src="${escapeHtml(imageUrl)}" alt="Ad creative" width="280" style="display: block; max-width: 100%; width: 280px; border-radius: 0; border: 1px solid ${EMAIL_CASE_LINE}; background-color: ${EMAIL_CASE_CARD}; margin: 12px 0;">`;
 }
 
 export function renderPresenceDigestHtml(input: {
@@ -3771,16 +3788,16 @@ export function renderPresenceDigestHtml(input: {
   const htmlLines = input.lines
     .map(
       (line) =>
-        `<li style="margin: 0 0 8px; color: #475467;">${escapeHtml(line)}</li>`,
+        `<li style="margin: 0 0 8px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(line)}</li>`,
     )
     .join("");
   return `
-      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; font-size: 15px; line-height: 1.6;">
-        <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3; margin: 0 0 12px;">Five to Nine presence</p>
-        <h1 style="${EMAIL_H1_STYLE}">Where your competitors showed up</h1>
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: ${EMAIL_CASE_CARD}; color: ${EMAIL_CASE_INK}; font-size: 15px; line-height: 1.6;">
+        <p style="${EMAIL_CASE_EYEBROW_STYLE}">Presence digest</p>
+        <h1 style="${EMAIL_CASE_H1_STYLE}">Where your competitors showed up</h1>
         <ul style="margin: 0 0 24px; padding-left: 20px;">${htmlLines}</ul>
         <p style="margin: 0;">
-          <a href="${escapeHtml(input.appUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 15px;">Open presence tracking</a>
+          <a href="${escapeHtml(input.appUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Open presence tracking</a>
         </p>
       </div>
     `;
@@ -3853,7 +3870,7 @@ export function buildInstantAlertContent(
       : primaryEvent.title;
     const intelligence = buildChangeIntelligenceSummary(primaryEvent);
     const advertiserNote = readCompetitorLabel(primaryEvent)
-      ? `<p style="margin: 0 0 10px; color: #5b6577; font-size: 13px;">Advertiser: ${escapeHtml(competitor)}</p>`
+      ? `<p style="margin: 0 0 10px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">Advertiser: ${escapeHtml(competitor)}</p>`
       : "";
 
     return {
@@ -3864,17 +3881,17 @@ export function buildInstantAlertContent(
       materialityReason,
       reviewerLabel: reviewer,
       html: `
-        <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
-          <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
-          <h1 style="${EMAIL_H1_STYLE}">${escapeHtml(subject)}</h1>
+        <div style="font-family: Inter, system-ui, sans-serif; background-color: ${EMAIL_CASE_CARD}; color: ${EMAIL_CASE_INK}; line-height: 1.5;">
+          <p style="${EMAIL_CASE_EYEBROW_STYLE}">Instant alert · ${escapeHtml(provisional ? "provisional" : "live")}</p>
+          <h1 style="${EMAIL_CASE_H1_STYLE}">${escapeHtml(subject)}</h1>
           ${advertiserNote}
-          <p style="margin: 0 0 8px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
-          <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #5b6577;">${escapeHtml(intelligence.priorityBand)}</p>
-          <p style="margin: 0 0 16px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
+          <p style="margin: 0 0 8px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(primaryEvent.summary)}</p>
+          <p style="margin: 0 0 6px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(intelligence.priorityBand)}</p>
+          <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK};"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
           ${accountabilityBlock}
           ${renderEventDiffHtml(primaryEvent, primaryScreenshotPair)}
           ${creativeImageHtml}
-          ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 20px; border-radius:8px; font-weight:600; font-size:15px;">See the evidence</a></p>` : ""}
+          ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}" style="${EMAIL_CASE_BUTTON_STYLE}">See the evidence</a></p>` : ""}
         </div>
       `,
     };
@@ -3887,7 +3904,7 @@ export function buildInstantAlertContent(
   // Mirror the single-event gate: only claim an advertiser when real advertiser
   // metadata exists — never present the watchlist name as an advertiser.
   const batchedAdvertiserNote = readCompetitorLabel(primaryEvent)
-    ? `<p style="margin: 0 0 12px; color: #5b6577; font-size: 13px;">Advertiser: ${escapeHtml(competitor)}</p>`
+    ? `<p style="margin: 0 0 12px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">Advertiser: ${escapeHtml(competitor)}</p>`
     : "";
 
   return {
@@ -3898,28 +3915,32 @@ export function buildInstantAlertContent(
     materialityReason,
     reviewerLabel: reviewer,
     html: `
-      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
-        <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
-        <h1 style="${EMAIL_H1_STYLE}">${escapeHtml(subject)}</h1>
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: ${EMAIL_CASE_CARD}; color: ${EMAIL_CASE_INK}; line-height: 1.5;">
+        <p style="${EMAIL_CASE_EYEBROW_STYLE}">Instant alert · ${escapeHtml(provisional ? "provisional" : "live")}</p>
+        <h1 style="${EMAIL_CASE_H1_STYLE}">${escapeHtml(subject)}</h1>
         ${batchedAdvertiserNote}
         ${accountabilityBlock}
         ${creativeImageHtml}
-        <ul style="padding-left: 18px;">
+        <div style="${EMAIL_CASE_CARD_STYLE}">
           ${events
-            .map((event) => {
+            .map((event, index) => {
               const intelligence = buildChangeIntelligenceSummary(event);
+              const dotted =
+                index < events.length - 1
+                  ? `; border-bottom: 1px dotted ${EMAIL_CASE_LINE}`
+                  : "";
               return `
-                <li style="margin-bottom: 12px;">
+                <div style="padding: 6px 0;${dotted}">
                   <strong>${escapeHtml(event.title)}</strong>
-                  <span style="display:block; font-size: 12px; color: #5b6577; margin: 2px 0 4px;">${escapeHtml(intelligence.priorityBand)}</span>
-                  <span style="color: #475467;">${escapeHtml(event.summary)}${escapeHtml(renderEventDiffText(event))}</span>
-                  <span style="display:block; margin-top: 4px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</span>
-                </li>
+                  <span style="display:block; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT}; margin: 2px 0 4px;">${escapeHtml(intelligence.priorityBand)}</span>
+                  <span style="color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(event.summary)}${escapeHtml(renderEventDiffText(event))}</span>
+                  <span style="display:block; margin-top: 4px; color: ${EMAIL_CASE_INK};"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</span>
+                </div>
               `;
             })
             .join("")}
-        </ul>
-        ${watchlistUrl ? `<p style="margin: 20px 0 0;"><a href="${watchlistUrl}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 20px; border-radius:8px; font-weight:600; font-size:15px;">View watchlist</a></p>` : ""}
+        </div>
+        ${watchlistUrl ? `<p style="margin: 20px 0 0;"><a href="${watchlistUrl}" style="${EMAIL_CASE_BUTTON_STYLE}">View watchlist</a></p>` : ""}
       </div>
     `,
   };
@@ -4047,7 +4068,6 @@ export async function sendPresenceDigestEmail(
     idempotencyKey: string;
   },
 ) {
-  const { renderEmailShell } = await import("~/lib/email-template.server");
   const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
 
   // Every exit reports the same {accepted, delivered} shape main introduced,
@@ -4139,13 +4159,14 @@ export async function sendPresenceDigestEmail(
   const providerResult = await sendCloudflareEmail(env, {
     to: normalized,
     subject: input.subject,
-    html: renderEmailShell({
-      bodyHtml,
-      unsubscribeUrl,
-      preheader: "Presence tracking updates from Five to Nine",
-    }),
+    // The single shell comes from sendCloudflareEmail's case-file theme (the
+    // pre-existing double-wrap here wrapped a full shell inside another shell;
+    // passing the bare body gives the digest family one coherent frame).
+    html: bodyHtml,
     tag: "presence-digest",
     unsubscribeUrl,
+    theme: "case-file",
+    preheader: "Presence tracking updates from Five to Nine",
   });
   const sentAt = providerAcceptedAt(providerResult);
 

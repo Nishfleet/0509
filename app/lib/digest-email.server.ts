@@ -38,12 +38,32 @@ import { firstBriefEmailSubject } from "~/lib/first-brief";
 import { safeTimeZone } from "~/lib/safe-timezone";
 import type { WatchPeriodTriageStatus } from "~/lib/watch-event-evaluator.server";
 import {
-  EMAIL_H1_STYLE,
-  EMAIL_H2_STYLE,
-  EMAIL_SURFACE_BG,
-  EMAIL_TEXT_PRIMARY,
+  EMAIL_CASE_BONE,
+  EMAIL_CASE_BUTTON_STYLE,
+  EMAIL_CASE_CARD,
+  EMAIL_CASE_CARD_STYLE,
+  EMAIL_CASE_DISPLAY_STYLE,
+  EMAIL_CASE_EYEBROW_STYLE,
+  EMAIL_CASE_GREEN_INK,
+  EMAIL_CASE_H1_STYLE,
+  EMAIL_CASE_INK,
+  EMAIL_CASE_INK_FAINT,
+  EMAIL_CASE_INK_SOFT,
+  EMAIL_CASE_LINE,
+  EMAIL_CASE_META_STYLE,
+  EMAIL_MONO_FONT,
+  renderEmailCaseStamp,
   renderEmailContentSurface,
+  renderEmailProofTrail,
+  type EmailCaseStampTone,
 } from "~/lib/email-template.server";
+
+// Case-file freshness window (issue: email brief design overhaul): a change
+// whose evidence was captured within this many days of the digest period end
+// is stamped "Live"; older stored evidence is stamped "On record" — the same
+// honest distinction the landing page draws between "Live proof" and "On
+// record" (marketing.tsx PROOF_CAPTURE_FRESH_DAYS).
+const EMAIL_PROOF_FRESH_DAYS = 3;
 
 // WP-26: monthly customer recap template (implementation lives with the
 // orchestration module; re-exported here so the digest email surface stays the
@@ -218,26 +238,28 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
-      <h1 style="${EMAIL_H1_STYLE}">${escapeHtml(answer)}</h1>
-			<p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>${renderStrategySectionHtml(strategyParagraph)}
-      <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
-        <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
-        <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
+      <p style="${EMAIL_CASE_EYEBROW_STYLE}">Five to Nine ${escapeHtml(cadenceLabel)}</p>
+      <h1 style="${EMAIL_CASE_H1_STYLE}">${escapeHtml(answer)}</h1>
+			<p style="margin: 0 0 18px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(dateRange)}</p>${renderStrategySectionHtml(strategyParagraph)}
+      <div style="${EMAIL_CASE_CARD_STYLE}">
+        <p style="${EMAIL_CASE_META_STYLE}">Priority mix:</p>
+        <p style="margin: 0 0 10px; color: ${EMAIL_CASE_INK};">${escapeHtml(priorityMixLabel(priorityMix))}</p>
+        <p style="${EMAIL_CASE_META_STYLE}">Evidence mix:</p>
+        <p style="margin: 0; color: ${EMAIL_CASE_INK};">${escapeHtml(proofMixLabel(proofMix))}</p>
       </div>
       ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
       ${renderTrendSectionHtml(trendLines)}
-      <h2 style="${EMAIL_H2_STYLE}">Top moves</h2>
+      <h2 style="${EMAIL_CASE_DISPLAY_STYLE}">Top moves</h2>
       ${renderTopMoveGroupsHtml(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl)}
-      ${adChurnFootnote ? `<p style="margin: 0 0 18px; color: #475467; font-size: 13px;">${escapeHtml(adChurnFootnote)}</p>` : ""}
-      ${omittedCount > 0 ? `<p style="margin: 0 0 18px; color: #475467;">${omittedCount} more change${omittedCount === 1 ? " is" : "s are"} in the full brief.</p>` : ""}
+      ${adChurnFootnote ? `<p style="margin: 0 0 18px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(adChurnFootnote)}</p>` : ""}
+      ${omittedCount > 0 ? `<p style="margin: 0 0 18px; color: ${EMAIL_CASE_INK_SOFT};">${omittedCount} more change${omittedCount === 1 ? " is" : "s are"} in the full brief.</p>` : ""}
       <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View full brief</a>
+        <a href="${escapeHtml(input.fullDigestUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">View full brief</a>
       </p>
-      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; color: #98a2b3; font-size: 13px;">
-        Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Some items are flagged for a quick look before you share this externally.
-        Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
+      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
+        Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Some items are flagged for a quick look before you share this externally. No proof, no claim.
+        Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
   `;
@@ -268,7 +290,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
     `Support: ${input.supportEmail}`,
     "",
-    "Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Some items are flagged for a quick look before you share this externally.",
+    "Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Some items are flagged for a quick look before you share this externally. No proof, no claim.",
   ].filter((line): line is string => typeof line === "string").join("\n");
 
   return {
@@ -304,9 +326,9 @@ export function buildScanTroubleEmail(input: {
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine</p>
-      <h1 style="${EMAIL_H1_STYLE}">We hit a problem checking your competitors.</h1>
-      <p style="margin: 0 0 16px; color: #475467;">
+      <p style="${EMAIL_CASE_EYEBROW_STYLE}">Five to Nine — scan trouble notice</p>
+      <h1 style="${EMAIL_CASE_H1_STYLE}">We hit a problem checking your competitors.</h1>
+      <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">
         We couldn't complete checks for <strong>${escapeHtml(listed)}</strong> in this period.
         We'll try again at the next scheduled check. You don't need to do anything now.
       </p>
@@ -317,14 +339,14 @@ export function buildScanTroubleEmail(input: {
           "We'll try again at the next scheduled check — you don't need to do anything now.",
       })}
       <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.watchlistsUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Open watchlists</a>
+        <a href="${escapeHtml(input.watchlistsUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Open watchlists</a>
       </p>
-      <p style="margin: 0; color: #98a2b3; font-size: 13px;">
-        Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>${
+      <p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
+        Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">Notifications</a>${
           input.unsubscribeUrl
-            ? `, <a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#344054;">unsubscribe</a>`
+            ? `, <a href="${escapeHtml(input.unsubscribeUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">unsubscribe</a>`
             : ""
-        }, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
+        }, or contact <a href="${escapeHtml(input.supportMailto)}" style="color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
   `;
@@ -368,9 +390,9 @@ function buildDigestRecordFailureEmail(input: DigestEmailInput): DigestEmailMode
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
-      <h1 style="${EMAIL_H1_STYLE}">This brief is missing its period record.</h1>
-      <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
+      <p style="${EMAIL_CASE_EYEBROW_STYLE}">Five to Nine ${escapeHtml(cadenceLabel)}</p>
+      <h1 style="${EMAIL_CASE_H1_STYLE}">This brief is missing its period record.</h1>
+      <p style="margin: 0 0 18px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(dateRange)}</p>
       ${renderEmailAccountabilityBlock({
         materialityReason: DIGEST_MATERIALITY_UNAVAILABLE,
         reviewerLabel: digestReviewerLabel(input.name),
@@ -384,10 +406,10 @@ function buildDigestRecordFailureEmail(input: DigestEmailInput): DigestEmailMode
         }),
       })}
       <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Open the briefs page</a>
+        <a href="${escapeHtml(input.fullDigestUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Open the briefs page</a>
       </p>
-      <p style="margin: 0; color: #98a2b3; font-size: 13px;">
-        Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
+      <p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
+        Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
   `;
@@ -433,7 +455,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   // source status, and an explicit no-action + next-action line. Legacy
   // heartbeats without a triage stay byte-identical.
   const recordHtml = triage
-    ? `<p style="margin: 0 0 16px; color: #475467;">${renderTriageRecordText(triage, input.timeZone)}</p>`
+    ? `<p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">${renderTriageRecordText(triage, input.timeZone)}</p>`
     : "";
   const recordText = triage ? renderTriageRecordText(triage, input.timeZone) : null;
   // Brief-as-retention-loop (lane 1, 2026-08-20): the all-quiet heartbeat is
@@ -469,21 +491,21 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
-      <h1 style="${EMAIL_H1_STYLE}">All quiet: no competitor moves worth action ${escapeHtml(quietPeriodLabel)}.</h1>
-      <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
-      <p style="margin: 0 0 16px;">
+      <p style="${EMAIL_CASE_EYEBROW_STYLE}">Five to Nine ${escapeHtml(cadenceLabel)}</p>
+      <h1 style="${EMAIL_CASE_H1_STYLE}">All quiet: no competitor moves worth action ${escapeHtml(quietPeriodLabel)}.</h1>
+      <p style="margin: 0 0 18px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(dateRange)}</p>
+      <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">
         We ran ${heartbeat.runs} check${heartbeat.runs === 1 ? "" : "s"} across ${heartbeat.watchlistsChecked} competitor${heartbeat.watchlistsChecked === 1 ? "" : "s"}
-        and reviewed ${heartbeat.adsSeen} ad${heartbeat.adsSeen === 1 ? "" : "s"}. Completed checks found no action-worthy movement across the sources that ran.
+        and reviewed ${heartbeat.adsSeen} ad${heartbeat.adsSeen === 1 ? "" : "s"}. Completed checks found no action-worthy movement across the sources that ran. No proof, no claim.
       </p>
       ${recordHtml}
       ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
       <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
+        <a href="${escapeHtml(input.fullDigestUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Review digest history</a>
       </p>
-      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; color: #98a2b3; font-size: 13px;">
-        Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
+      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
+        Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
   `;
@@ -564,7 +586,7 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const checksLine = `We ran ${heartbeat.runs} check${heartbeat.runs === 1 ? "" : "s"} across ${heartbeat.watchlistsChecked} competitor${heartbeat.watchlistsChecked === 1 ? "" : "s"} this period.`;
   const suppressionHtml =
     triage.suppressionReasons.length > 0
-      ? `<p style="margin: 0 0 16px; color: #475467;">Held back: ${escapeHtml(triage.suppressionReasons.join("; "))}.</p>`
+      ? `<p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">Held back: ${escapeHtml(triage.suppressionReasons.join("; "))}.</p>`
       : "";
   const recordText = renderTriageRecordText(triage, input.timeZone);
   // Brief-as-retention-loop (lane 1, 2026-08-20): a failed or incomplete
@@ -600,19 +622,19 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
-      <h1 style="${EMAIL_H1_STYLE}">${escapeHtml(headline)}</h1>
-      <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
-      <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(checksLine)}</p>
+      <p style="${EMAIL_CASE_EYEBROW_STYLE}">Five to Nine ${escapeHtml(cadenceLabel)}</p>
+      <h1 style="${EMAIL_CASE_H1_STYLE}">${escapeHtml(headline)}</h1>
+      <p style="margin: 0 0 18px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(dateRange)}</p>
+      <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(checksLine)}</p>
       ${suppressionHtml}
-      <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(recordText)}</p>
+      <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(recordText)}</p>
       ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
       <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View the full brief</a>
+        <a href="${escapeHtml(input.fullDigestUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">View the full brief</a>
       </p>
-      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; color: #98a2b3; font-size: 13px;">
-        Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
+      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
+        Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
   `;
@@ -679,18 +701,18 @@ export function renderEmailAccountabilityBlock(input: {
   freshUntil?: string | null;
 }) {
   const nextActionLine = input.nextAction
-    ? `<p style="margin: 0;"><strong>Next action:</strong> ${escapeHtml(input.nextAction)}</p>`
+    ? `<p style="${EMAIL_CASE_META_STYLE}"><strong>Next action:</strong> ${escapeHtml(input.nextAction)}</p>`
     : "";
   const confidenceLine = input.confidence
-    ? `<p style="margin: 0 0 6px;"><strong>Confidence:</strong> ${escapeHtml(input.confidence)}</p>`
+    ? `<p style="${EMAIL_CASE_META_STYLE}"><strong>Confidence:</strong> ${escapeHtml(input.confidence)}</p>`
     : "";
   const freshUntilLine = input.freshUntil
-    ? `<p style="margin: 0;"><strong>Fresh until:</strong> ${escapeHtml(input.freshUntil)}</p>`
+    ? `<p style="${EMAIL_CASE_META_STYLE}"><strong>Fresh until:</strong> ${escapeHtml(input.freshUntil)}</p>`
     : "";
   return `
-      <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
-        <p style="margin: 0 0 6px;"><strong>Why this matters:</strong> ${escapeHtml(input.materialityReason)}</p>
-        <p style="margin: 0 0 6px;"><strong>Accountable reviewer:</strong> ${escapeHtml(input.reviewerLabel)}</p>
+      <div style="${EMAIL_CASE_CARD_STYLE}">
+        <p style="margin: 0 0 10px; color: ${EMAIL_CASE_INK};"><strong>Why this matters:</strong> ${escapeHtml(input.materialityReason)}</p>
+        <p style="${EMAIL_CASE_META_STYLE}"><strong>Accountable reviewer:</strong> ${escapeHtml(input.reviewerLabel)}</p>
         ${nextActionLine}
         ${confidenceLine}
         ${freshUntilLine}
@@ -728,12 +750,14 @@ export function renderEmailRetentionBlock(retention: {
   expiry: string;
 }): string {
   return `
-      <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
-        <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Brief retention</p>
-        <p style="margin: 0 0 6px;"><strong>Since last brief:</strong> ${escapeHtml(retention.delta)}</p>
-        <p style="margin: 0 0 6px;"><strong>Accountable reviewer:</strong> ${escapeHtml(retention.owner)}</p>
-        <p style="margin: 0 0 6px;"><strong>Confidence:</strong> ${escapeHtml(retention.confidenceLabel)}</p>
-        <p style="margin: 0;"><strong>Expiry:</strong> ${escapeHtml(retention.expiry)}</p>
+      <div style="${EMAIL_CASE_CARD_STYLE}">
+        <p style="${EMAIL_CASE_EYEBROW_STYLE}">Brief retention</p>
+        ${renderEmailProofTrail([
+          { label: "Since last brief:", value: retention.delta },
+          { label: "Accountable reviewer:", value: retention.owner },
+          { label: "Confidence:", value: retention.confidenceLabel },
+          { label: "Expiry:", value: retention.expiry },
+        ])}
       </div>
   `;
 }
@@ -784,7 +808,7 @@ function renderTopMoveGroupsHtml(
   fullDigestUrl: string,
 ) {
   if (groups.length === 0) {
-    return `<ol style="margin: 0 0 20px; padding-left: 20px;"></ol>`;
+    return `<div style="margin: 0 0 20px;"></div>`;
   }
 
   return groups
@@ -793,21 +817,27 @@ function renderTopMoveGroupsHtml(
         group.items.length === 1
           ? "1 change"
           : `${group.items.length} changes`;
+      const rows = group.items
+        .map((item, index) => {
+          const card = renderTopMoveHtml(
+            item,
+            fallbackTimestamp,
+            timeZone,
+            fullDigestUrl,
+            { omitWatchlistPrefix: true },
+          );
+          // Hand-drawn dashed connector between rows within a group.
+          const connector =
+            index < group.items.length - 1
+              ? `<div style="width: 48px; border-bottom: 2px dashed ${EMAIL_CASE_INK_FAINT}; margin: 0 0 14px 16px;"></div>`
+              : "";
+          return `${card}${connector}`;
+        })
+        .join("");
       return `
-      <div style="margin: 0 0 18px;">
-        <p style="margin: 0 0 8px; font-size: 14px; color: #101828;">
-          <strong>${escapeHtml(group.watchlistName)}</strong>
-          <span style="color: #98a2b3; font-weight: 400;"> · ${escapeHtml(countLabel)}</span>
-        </p>
-        <ol style="margin: 0; padding-left: 20px;">
-          ${group.items
-            .map((item) =>
-              renderTopMoveHtml(item, fallbackTimestamp, timeZone, fullDigestUrl, {
-                omitWatchlistPrefix: true,
-              }),
-            )
-            .join("")}
-        </ol>
+      <div style="margin: 0 0 24px;">
+        <p style="${EMAIL_CASE_EYEBROW_STYLE}"><strong>${escapeHtml(group.watchlistName)}</strong><span style="color: ${EMAIL_CASE_INK_FAINT};"> · ${escapeHtml(countLabel)}</span></p>
+        ${rows}
       </div>`;
     })
     .join("");
@@ -910,25 +940,140 @@ function renderTopMoveHtml(
   const heading = options.omitWatchlistPrefix
     ? escapeHtml(title)
     : `${escapeHtml(watchlistName)}: ${escapeHtml(title)}`;
+  // Case-file honesty stamp (issue: email brief design overhaul). Mirrors the
+  // landing proof strip's "Live proof" / "On record" split — fresh stored
+  // evidence says Live, older stored evidence says On record, flagged items
+  // say Check-spotted, nothing attached says Evidence unavailable.
+  const stamp = digestItemEvidenceStamp(item, fallbackTimestamp);
+  // Freshness label rides the same stamp line, e.g. "Live · 2d ago".
+  const freshness = freshnessLabel(item, fallbackTimestamp);
+  const sourceUrl = readEmailSourceUrl(item);
 
   return `
-    <li style="margin-bottom: 18px;">
-      <p style="margin: 0 0 4px;"><strong>${heading}</strong></p>
-      <p style="margin: 0 0 8px; color: #475467;">${escapeHtml(truncate(summary, 220))}</p>
+    <div style="${EMAIL_CASE_CARD_STYLE}">
+      <p style="margin: 0 0 8px;">
+        ${renderEmailCaseStamp(stamp.label, stamp.tone)}
+        <span style="font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(priority)} · ${escapeHtml(classification.label)} · ${escapeHtml(classification.sourceTypeLabel)}${freshness ? ` · ${escapeHtml(freshness)}` : ""} · ${escapeHtml(when)}</span>
+      </p>
+      <p style="margin: 0 0 6px; font-size: 16px; line-height: 1.35; font-weight: 700; color: ${EMAIL_CASE_INK};">${heading}</p>
+      <p style="margin: 0 0 10px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(truncate(summary, 220))}</p>
       ${landingEvidenceHtml || creativeHtml}
       ${metricLines
         .map(
           (line) =>
-            `<p style="margin: 0 0 8px; color: #475467; font-size: 13px;">${escapeHtml(line)}</p>`,
+            `<p style="margin: 0 0 8px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(line)}</p>`,
         )
         .join("")}
-      <p style="margin: 0 0 8px; color: #98a2b3; font-size: 13px;">
-        ${escapeHtml(priority)} · ${escapeHtml(classification.label)} · ${escapeHtml(classification.sourceTypeLabel)} · ${escapeHtml(when)}
+      ${renderEmailProofTrail([
+        ...(sourceUrl
+          ? [{ label: "Source:", value: sourceUrl, link: sourceUrl }]
+          : []),
+        { label: "Suggested next action:", value: intelligence.recommendedAction },
+      ])}
+      <p style="margin: 0;">
+        <a href="${escapeHtml(reviewUrl)}" style="color: ${EMAIL_CASE_GREEN_INK}; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none;">Review in Five to Nine →</a>
       </p>
-      <p style="margin: 0 0 8px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
-      <p style="margin: 0;"><a href="${escapeHtml(reviewUrl)}" style="color:#101828; font-weight:700;">Review in Five to Nine</a></p>
-    </li>
+    </div>
   `;
+}
+
+/**
+ * Per-row source link: the first stored public-source URL the item carries
+ * (landing page, proof page, or creative source). Gives every change row the
+ * "source link" proof-strip parity demanded by the email brief redesign —
+ * when an item has no stored source URL the row simply omits the line.
+ */
+function readEmailSourceUrl(item: DigestTrustItem): string | null {
+  const metadata = item.metadata ?? {};
+  for (const key of [
+    "sourceUrl",
+    "landingPageUrl",
+    "proofUrl",
+    "websiteUrl",
+    "canonicalUrl",
+  ]) {
+    const value = readString(metadata[key]);
+    if (value && /^https?:\/\//i.test(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
+/**
+ * Honest per-row stamp for a digest change (case-file "Live" / "On record"
+ * split). Uses only facts already carried by the item: verified stored
+ * evidence within EMAIL_PROOF_FRESH_DAYS of the period end is "Live"; older
+ * stored evidence is "On record"; items flagged for human review are
+ * "Check-spotted"; anything without attached evidence is "Evidence
+ * unavailable". Never invents a status the item does not carry.
+ */
+function digestItemEvidenceStamp(
+  item: DigestTrustItem,
+  anchorIso: string,
+): { label: string; tone: EmailCaseStampTone } {
+  const classification = classifyDigestItemSource(item);
+  const metadata = item.metadata ?? {};
+  const needsReview =
+    Boolean(metadata.needsReview) ||
+    classification.status === "needs_review" ||
+    classification.status === "scan_spotted";
+  if (needsReview) {
+    return { label: "Check-spotted", tone: "check" };
+  }
+  const hasStoredEvidence =
+    classification.status === "verified_proof" ||
+    Boolean(readString(metadata.proofCaptureId));
+  if (!hasStoredEvidence) {
+    return { label: "Evidence unavailable", tone: "unavailable" };
+  }
+  const captureIso =
+    readString(metadata.confirmedAt) ??
+    readString(metadata.createdAt) ??
+    item.createdAt ??
+    null;
+  const fresh = isFreshEnough(captureIso, anchorIso);
+  return fresh
+    ? { label: "Live", tone: "live" }
+    : { label: "On record", tone: "record" };
+}
+
+function isFreshEnough(captureIso: string | null, anchorIso: string): boolean {
+  if (!captureIso) {
+    return false;
+  }
+  const captureMs = Date.parse(captureIso);
+  const anchorMs = Date.parse(anchorIso);
+  if (!Number.isFinite(captureMs) || !Number.isFinite(anchorMs)) {
+    return false;
+  }
+  const days = (anchorMs - captureMs) / 86_400_000;
+  return days >= 0 && days <= EMAIL_PROOF_FRESH_DAYS;
+}
+
+/** Relative freshness label: "2 days ago" / "5 hours ago" / null when unknown. */
+function freshnessLabel(item: DigestTrustItem, anchorIso: string): string | null {
+  const metadata = item.metadata ?? {};
+  const captureIso =
+    readString(metadata.confirmedAt) ??
+    readString(metadata.createdAt) ??
+    item.createdAt ??
+    null;
+  const captureMs = captureIso ? Date.parse(captureIso) : Number.NaN;
+  const anchorMs = Date.parse(anchorIso);
+  if (!Number.isFinite(captureMs) || !Number.isFinite(anchorMs) || captureMs > anchorMs) {
+    return null;
+  }
+  const diffMs = anchorMs - captureMs;
+  const hours = Math.floor(diffMs / 3_600_000);
+  if (hours <= 0) {
+    return "just now";
+  }
+  if (hours < 24) {
+    return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  }
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
 function renderTopMoveText(
@@ -956,8 +1101,12 @@ function renderTopMoveText(
   const reviewUrl =
     digestItemDeepLink(item, originFromDigestUrl(fullDigestUrl)) ?? fullDigestUrl;
   const heading = options.omitWatchlistPrefix ? title : `${watchlistName}: ${title}`;
+  // Case-file text parity: the same honest "Live"/"On record" stamp the
+  // HTML row carries, in the plain-text fallback.
+  const stamp = digestItemEvidenceStamp(item, fallbackTimestamp);
   return [
     `${index}. ${heading}`,
+    `   Evidence status: ${stamp.label}`,
     `   What changed: ${truncate(summary, 220)}`,
     ...(landingEvidenceLines.length > 0
       ? landingEvidenceLines
@@ -1011,8 +1160,8 @@ function renderUpgradeNoteHtml(
     return "";
   }
   const link = input.upgradeUrl?.trim();
-  return `<p style="margin: 0 0 16px; color: #475467; font-size: 13px;">
-        ${escapeHtml(note)}${link ? ` <a href="${escapeHtml(link)}" style="color:#344054; font-weight:700;">See plans</a>` : ""}
+  return `<p style="margin: 0 0 16px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT};">
+        ${escapeHtml(note)}${link ? ` <a href="${escapeHtml(link)}" style="color: ${EMAIL_CASE_GREEN_INK}; font-weight: 700; text-decoration: underline;">See plans</a>` : ""}
       </p>
       `;
 }
@@ -1034,9 +1183,9 @@ function renderStrategySectionHtml(strategyParagraph: string | null) {
 	}
 
   return `
-      <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
-        <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">AI summary of the week</p>
-        <p style="margin: 0; color: #475467;">${escapeHtml(strategyParagraph)}</p>
+      <div style="${EMAIL_CASE_CARD_STYLE}">
+        <p style="${EMAIL_CASE_EYEBROW_STYLE}">AI summary of the week</p>
+        <p style="margin: 0; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(strategyParagraph)}</p>
       </div>`;
 }
 
@@ -1046,13 +1195,13 @@ function renderTrendSectionHtml(lines: Array<{ text: string }>) {
   }
 
   return `
-      <h2 style="${EMAIL_H2_STYLE}">Trends this period</h2>
-      <table style="margin: 0 0 20px; border-collapse: collapse; width: 100%; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
+      <h2 style="${EMAIL_CASE_DISPLAY_STYLE}">Trends this period</h2>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 20px; background-color: ${EMAIL_CASE_CARD};">
         ${lines
           .map(
-            (line) => `
+            (line, index) => `
           <tr>
-            <td style="padding: 6px 0; color: #475467; font-size: 14px; border-bottom: 1px solid #eef1f6;">${escapeHtml(line.text)}</td>
+            <td style="font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT}; padding: 8px 0;${index < lines.length - 1 ? ` border-bottom: 1px dotted ${EMAIL_CASE_LINE};` : ""}">${escapeHtml(line.text)}</td>
           </tr>`,
           )
           .join("")}
@@ -1076,15 +1225,15 @@ function renderCreativeThumbnailHtml(metadata: Record<string, unknown> | undefin
 
   if (beforeUrl && afterUrl) {
     return `
-      <table role="presentation" style="margin: 0 0 10px; border-collapse: collapse; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 10px; background-color: ${EMAIL_CASE_BONE};">
         <tr>
-          <td style="padding: 0 10px 0 0; vertical-align: top; background-color: ${EMAIL_SURFACE_BG};">
-            <p style="margin: 0 0 4px; color: #98a2b3; font-size: 12px;">Before</p>
-            <img src="${escapeHtml(beforeUrl)}" alt="Previous creative" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:${EMAIL_SURFACE_BG};">
+          <td style="padding: 0 8px 0 0; vertical-align: top; width: 50%; background-color: ${EMAIL_CASE_BONE};">
+            <p style="margin: 0 0 4px; font-family: ${EMAIL_MONO_FONT}; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">Before</p>
+            <img src="${escapeHtml(beforeUrl)}" alt="Previous creative" width="150" style="display:block; max-width:100%; width:100%; border:1px solid ${EMAIL_CASE_LINE}; border-radius:0; background-color:${EMAIL_CASE_CARD};">
           </td>
-          <td style="padding: 0; vertical-align: top; background-color: ${EMAIL_SURFACE_BG};">
-            <p style="margin: 0 0 4px; color: #98a2b3; font-size: 12px;">Now</p>
-            <img src="${escapeHtml(afterUrl)}" alt="Current creative" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:${EMAIL_SURFACE_BG};">
+          <td style="padding: 0; vertical-align: top; width: 50%; background-color: ${EMAIL_CASE_BONE};">
+            <p style="margin: 0 0 4px; font-family: ${EMAIL_MONO_FONT}; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">Now</p>
+            <img src="${escapeHtml(afterUrl)}" alt="Current creative" width="150" style="display:block; max-width:100%; width:100%; border:1px solid ${EMAIL_CASE_LINE}; border-radius:0; background-color:${EMAIL_CASE_CARD};">
           </td>
         </tr>
       </table>
@@ -1096,10 +1245,10 @@ function renderCreativeThumbnailHtml(metadata: Record<string, unknown> | undefin
   }
 
   return `
-      <table role="presentation" style="margin: 0 0 10px; border-collapse: collapse; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 10px; background-color: ${EMAIL_CASE_BONE};">
         <tr>
-          <td style="padding: 0; background-color: ${EMAIL_SURFACE_BG};">
-            <img src="${escapeHtml(singleUrl)}" alt="Ad creative" width="200" style="display:block; max-width:200px; width:200px; border-radius:8px; border:1px solid #e4e7ec; background-color:${EMAIL_SURFACE_BG};">
+          <td style="padding: 0; background-color: ${EMAIL_CASE_BONE};">
+            <img src="${escapeHtml(singleUrl)}" alt="Ad creative" width="200" style="display:block; max-width:100%; width:200px; border:1px solid ${EMAIL_CASE_LINE}; border-radius:0; background-color:${EMAIL_CASE_CARD};">
           </td>
         </tr>
       </table>
@@ -1170,34 +1319,34 @@ function renderLandingPageEvidenceHtml(item: DigestTrustItem, timeZone: string |
   if (!evidence) return "";
   const changedLine =
     evidence.from || evidence.to
-      ? `<p style="margin: 0 0 8px; color: #475467; font-size: 13px; word-break: break-word;">Changed: ${escapeHtml(evidence.changedField)} — “${escapeHtml(evidence.from ?? "not stored")}” → “${escapeHtml(evidence.to ?? "not stored")}”</p>`
+      ? `<p style="margin: 0 0 8px; color: ${EMAIL_CASE_INK_SOFT}; font-size: 13px; word-break: break-word;">Changed: ${escapeHtml(evidence.changedField)} — “${escapeHtml(evidence.from ?? "not stored")}” → “${escapeHtml(evidence.to ?? "not stored")}”</p>`
       : "";
   const shotsHtml = evidence.screenshotProof
     ? `
-      <table role="presentation" style="margin: 0 0 10px; border-collapse: collapse; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 10px; background-color: ${EMAIL_CASE_BONE};">
         <tr>
-          <td style="padding: 0 10px 0 0; vertical-align: top; background-color: ${EMAIL_SURFACE_BG};">
-            <p style="margin: 0 0 4px; color: #98a2b3; font-size: 12px;">Before</p>
-            <img src="${escapeHtml(evidence.beforeUrl!)}" alt="Landing page before the change" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:${EMAIL_SURFACE_BG};">
+          <td style="padding: 0 8px 0 0; vertical-align: top; width: 50%; background-color: ${EMAIL_CASE_BONE};">
+            <p style="margin: 0 0 4px; font-family: ${EMAIL_MONO_FONT}; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">Before</p>
+            <img src="${escapeHtml(evidence.beforeUrl!)}" alt="Landing page before the change" width="150" style="display:block; max-width:100%; width:100%; border:1px solid ${EMAIL_CASE_LINE}; border-radius:0; background-color:${EMAIL_CASE_CARD};">
           </td>
-          <td style="padding: 0; vertical-align: top; background-color: ${EMAIL_SURFACE_BG};">
-            <p style="margin: 0 0 4px; color: #98a2b3; font-size: 12px;">Now</p>
-            <img src="${escapeHtml(evidence.afterUrl!)}" alt="Landing page after the change" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:${EMAIL_SURFACE_BG};">
+          <td style="padding: 0; vertical-align: top; width: 50%; background-color: ${EMAIL_CASE_BONE};">
+            <p style="margin: 0 0 4px; font-family: ${EMAIL_MONO_FONT}; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">Now</p>
+            <img src="${escapeHtml(evidence.afterUrl!)}" alt="Landing page after the change" width="150" style="display:block; max-width:100%; width:100%; border:1px solid ${EMAIL_CASE_LINE}; border-radius:0; background-color:${EMAIL_CASE_CARD};">
           </td>
         </tr>
       </table>
     `
-    : `<p style="margin: 0 0 8px; color: #475467; font-size: 13px;">${LANDING_PAGE_EVIDENCE_PENDING_COPY}</p>`;
+    : `<p style="margin: 0 0 8px; color: ${EMAIL_CASE_INK_SOFT}; font-size: 12px;">${LANDING_PAGE_EVIDENCE_PENDING_COPY}</p>`;
   const sourceHtml = evidence.sourceUrl
-    ? `<p style="margin: 0 0 8px; color: #98a2b3; font-size: 12px;">Source: ${escapeHtml(evidence.sourceUrl)}</p>`
+    ? `<p style="margin: 0 0 8px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">Source: ${escapeHtml(evidence.sourceUrl)}</p>`
     : "";
   const timeHtml =
     evidence.beforeCapturedAt || evidence.capturedAt
-      ? `<p style="margin: 0 0 8px; color: #98a2b3; font-size: 12px;">Before: ${escapeHtml(formatDateTime(evidence.beforeCapturedAt ?? "", timeZone))} · Now: ${escapeHtml(formatDateTime(evidence.capturedAt ?? "", timeZone))}</p>`
+      ? `<p style="margin: 0 0 8px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">Before: ${escapeHtml(formatDateTime(evidence.beforeCapturedAt ?? "", timeZone))} · Now: ${escapeHtml(formatDateTime(evidence.capturedAt ?? "", timeZone))}</p>`
       : "";
   return `
-      <div style="margin: 0 0 10px; padding: 10px; border: 1px solid #d7dce5; border-radius: 12px; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
-        <p style="margin: 0 0 4px; color: #101828; font-size: 13px;"><strong>Landing page evidence</strong> · ${escapeHtml(evidence.changedField)} changed</p>
+      <div style="margin: 0 0 12px; padding: 10px 12px; border: 1px solid ${EMAIL_CASE_LINE}; border-radius: 0; background-color: ${EMAIL_CASE_BONE};">
+        <p style="margin: 0 0 4px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK};">Landing page evidence · ${escapeHtml(evidence.changedField)} changed</p>
         ${changedLine}
         ${shotsHtml}
         ${sourceHtml}
