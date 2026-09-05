@@ -13,7 +13,7 @@ describe("global-first default examples", () => {
 		"app/routes/compare.magicbrief.tsx",
 		"app/routes/compare.meta-ad-library.tsx",
 		"app/routes/compare.visualping.tsx",
-		"app/routes/compare.visualping-ad-library.tsx",
+		"app/routes/compare.visualping-ad-libraries.tsx",
 		"app/routes/compare.spyland.tsx",
 		"app/routes/compare.pulzifi.tsx",
 		"app/routes/compare.foreplay.tsx",

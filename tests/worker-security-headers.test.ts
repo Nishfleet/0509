@@ -178,7 +178,7 @@ describe("Worker security headers", () => {
 
   describe("anonymous public HTML caching", () => {
     it("lets anonymous public pages carry short browser caching", () => {
-      for (const path of ["/", "/help", "/docs", "/terms", "/ads/nike.com", "/compare/magicbrief", "/compare/visualping", "/compare/visualping-ad-library", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief", "/switch/panoramata", "/switch/visualping", "/ad-aggression"]) {
+      for (const path of ["/", "/help", "/docs", "/terms", "/ads/nike.com", "/compare/magicbrief", "/compare/visualping", "/compare/visualping-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief", "/switch/panoramata", "/switch/visualping", "/ad-aggression"]) {
         const response = withSecurityHeaders(
           htmlResponse(),
           new Request(`https://0509.io${path}`),

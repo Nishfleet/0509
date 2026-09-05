@@ -65,7 +65,7 @@ const LLMS_PAGE_DETAILS: Record<
     title: "Five to Nine vs Visualping",
     description: "How Five to Nine compares with Visualping.",
   },
-  "/compare/visualping-ad-library": {
+  "/compare/visualping-ad-libraries": {
     title: "Five to Nine vs Visualping for ad libraries",
     description:
       "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
@@ -332,7 +332,7 @@ const LLMS_PAGE_DETAILS: Record<
     title: "Five to Nine vs Visualping (Deutsch)",
     description: "How Five to Nine compares with Visualping.",
   },
-  "/de/compare/visualping-ad-library": {
+  "/de/compare/visualping-ad-libraries": {
     title: "Five to Nine vs Visualping for ad libraries (Deutsch)",
     description: "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
   },
@@ -400,7 +400,7 @@ const LLMS_PAGE_DETAILS: Record<
     title: "Five to Nine vs Visualping (日本語)",
     description: "How Five to Nine compares with Visualping.",
   },
-  "/ja/compare/visualping-ad-library": {
+  "/ja/compare/visualping-ad-libraries": {
     title: "Five to Nine vs Visualping for ad libraries (日本語)",
     description: "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
   },
@@ -468,7 +468,7 @@ const LLMS_PAGE_DETAILS: Record<
     title: "Five to Nine vs Visualping (Português, Brasil)",
     description: "How Five to Nine compares with Visualping.",
   },
-  "/pt-br/compare/visualping-ad-library": {
+  "/pt-br/compare/visualping-ad-libraries": {
     title: "Five to Nine vs Visualping for ad libraries (Português, Brasil)",
     description: "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
   },
@@ -536,7 +536,7 @@ const LLMS_PAGE_DETAILS: Record<
     title: "Five to Nine vs Visualping (Français)",
     description: "How Five to Nine compares with Visualping.",
   },
-  "/fr/compare/visualping-ad-library": {
+  "/fr/compare/visualping-ad-libraries": {
     title: "Five to Nine vs Visualping for ad libraries (Français)",
     description: "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
   },
@@ -604,7 +604,7 @@ const LLMS_PAGE_DETAILS: Record<
     title: "Five to Nine vs Visualping (Español)",
     description: "How Five to Nine compares with Visualping.",
   },
-  "/es/compare/visualping-ad-library": {
+  "/es/compare/visualping-ad-libraries": {
     title: "Five to Nine vs Visualping for ad libraries (Español)",
     description: "Domain-paste Meta Ad Library monitoring versus Visualping's URL-and-pixel playbook.",
   },

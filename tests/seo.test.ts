@@ -39,7 +39,7 @@ describe("public SEO files", () => {
     // #1481). Only the winners stay listed.
     expect(sitemap?.body).not.toContain("<loc>https://0509.io/compare/visualping</loc>");
     expect(sitemap?.body).toContain(
-      "<loc>https://0509.io/compare/visualping-ad-library</loc>",
+      "<loc>https://0509.io/compare/visualping-ad-libraries</loc>",
     );
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/spyland</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/pulzifi</loc>");

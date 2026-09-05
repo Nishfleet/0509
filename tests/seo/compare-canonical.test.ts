@@ -51,6 +51,8 @@ async function importLoserRoute(slug: string) {
   switch (slug) {
     case "visualping":
       return import("~/routes/compare.visualping");
+    case "visualping-ad-library":
+      return import("~/routes/compare.visualping-ad-library.tsx");
     case "foreplay":
       return import("~/routes/compare.foreplay");
     default:
@@ -63,6 +65,8 @@ async function importLocaleLoserRoute(slug: string) {
   switch (slug) {
     case "visualping":
       return import("~/routes/$locale.compare.visualping");
+    case "visualping-ad-library":
+      return import("~/routes/$locale.compare.visualping-ad-library.tsx");
     case "foreplay":
       return import("~/routes/$locale.compare.foreplay");
     default:

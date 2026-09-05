@@ -355,14 +355,14 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // Product UI stays English; these are indexable marketing surfaces only.
   // 2026-09: /compare/visualping and /compare/foreplay left the sitemap
   // (issue #1481) — each is a duplicate that canonicalizes to its more
-  // specific sibling (visualping-ad-library / foreplay-spyder), which stays
+  // specific sibling (visualping-ad-libraries / foreplay-spyder), which stays
   // listed. The loser routes remain registered so the pages still render 200.
   // Their locale-prefixed variants (/de/compare/visualping, ...) left too:
   // the slugs are out of BUYER_SURFACE_SEGMENT_CHILD_SLUGS.compare, so the
   // generated locale child set below excludes them.
   sitemapPaths: [
     "/", "/search", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
-    "/compare/visualping-ad-library", "/compare/spyland",
+    "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
     "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief",
     "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",

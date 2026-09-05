@@ -23,7 +23,7 @@ const NEW_COMPARE_PAGES = [
     competitor: "AdSpyder",
   },
   {
-    slug: "visualping-ad-library",
+    slug: "visualping-ad-libraries",
     title: "Five to Nine vs Visualping for ad libraries",
     pricing: ["free", "$350"],
     competitor: "Visualping",
@@ -60,8 +60,8 @@ async function loadCompareModule(slug: string) {
       return import("~/routes/compare.foreplay-spyder");
     case "adspyder":
       return import("~/routes/compare.adspyder");
-    case "visualping-ad-library":
-      return import("~/routes/compare.visualping-ad-library");
+    case "visualping-ad-libraries":
+      return import("~/routes/compare.visualping-ad-libraries");
     default:
       throw new Error(`unknown compare slug: ${slug}`);
   }

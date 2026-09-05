@@ -34,7 +34,7 @@ export function canonicalLinks(pathname: string) {
  * Canonical consolidation for the duplicate /compare/* pairs (issue #1481).
  *
  * Every entry maps a loser URL to the winner it must canonicalize to. The
- * winners (`visualping-ad-library`, `foreplay-spyder`) name the narrower
+ * winners (`visualping-ad-libraries`, `foreplay-spyder`) name the narrower
  * buyer intent, so the generic `vs Visualping` / `vs Foreplay` pages point
  * their `rel="canonical"` at them. Losers stay live HTTP-200 pages (existing
  * backlinks and /switch links keep working) but carry the winner canonical
@@ -42,7 +42,10 @@ export function canonicalLinks(pathname: string) {
  * of splitting PageRank between two near-identical SERP targets.
  */
 export const COMPARE_CANONICAL_TARGETS: Readonly<Record<string, string>> = {
-  "/compare/visualping": "/compare/visualping-ad-library",
+  "/compare/visualping": "/compare/visualping-ad-libraries",
+  // Singular was the pre-#1548 winner; the issue names the plural URL as the
+  // page, so the plural is the winner and this singular stays a 200 loser.
+  "/compare/visualping-ad-library": "/compare/visualping-ad-libraries",
   "/compare/foreplay": "/compare/foreplay-spyder",
 };
 
@@ -590,11 +593,11 @@ export const SITEMAP_PATHS = [
   "/compare",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
-  // /compare/visualping and /compare/foreplay are DROPPED from the sitemap
-  // (issue #1481): each is a duplicate of its more specific sibling
-  // (visualping-ad-library / foreplay-spyder) and canonicals to it. The
-  // winner of each pair stays listed below.
-  "/compare/visualping-ad-library",
+  // /compare/visualping, /compare/foreplay, and /compare/visualping-ad-library
+  // are DROPPED from the sitemap (issues #1481, #1548): each is a duplicate
+  // that canonicals to its more specific sibling winner. The winner of each
+  // pair stays listed below.
+  "/compare/visualping-ad-libraries",
   "/compare/spyland",
   "/compare/pulzifi",
   "/compare/foreplay-spyder",
@@ -740,7 +743,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/compare": { changefreq: "weekly", priority: "0.8" },
   "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/compare/meta-ad-library": { changefreq: "weekly", priority: "0.7" },
-  "/compare/visualping-ad-library": { changefreq: "weekly", priority: "0.7" },
+  "/compare/visualping-ad-libraries": { changefreq: "weekly", priority: "0.7" },
   "/compare/spyland": { changefreq: "weekly", priority: "0.7" },
   "/compare/pulzifi": { changefreq: "weekly", priority: "0.7" },
   "/compare/foreplay-spyder": { changefreq: "weekly", priority: "0.7" },

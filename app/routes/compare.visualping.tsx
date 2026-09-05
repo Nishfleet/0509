@@ -30,7 +30,7 @@ export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.serv
 const pageDescription =
   "Visualping monitors public pages for visual, text, and element changes. Five to Nine is built around competitor ad and landing-page moves with source-backed proof.";
 
-// Duplicate of /compare/visualping-ad-library (#1481): the generic vs-page
+// Duplicate of /compare/visualping-ad-libraries (#1481, #1548): the generic vs-page
 // canonicalizes to the narrower ad-library comparison and is absent from the
 // sitemap. The page still renders HTTP 200 so existing links never 404.
 export const links: LinksFunction = () =>
@@ -167,7 +167,7 @@ export default function CompareVisualpingRoute() {
           Visualping is a solid website-change monitor. For tracking competitor offers, prices, and
           landing-page moves, the job is slightly different — and we built Five to Nine for that.
           For the Meta Ad Library case specifically, see{" "}
-          <Link to="/compare/visualping-ad-library">
+          <Link to="/compare/visualping-ad-libraries">
             Five to Nine vs Visualping for ad libraries
           </Link>
           .
