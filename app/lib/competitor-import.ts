@@ -55,6 +55,12 @@ export interface CompetitorImportPreview {
   selectedCount: number;
   rows: CompetitorImportRow[];
   summary: Record<CompetitorImportRowStatus, number>;
+  /**
+   * CSV columns the generic importer cannot map (unknown header names, or
+   * positional columns beyond name/website/notes/tags/client). Every rejected
+   * field is surfaced here — never silently discarded.
+   */
+  rejectedFields: string[];
 }
 
 interface ParsedImportRow {
@@ -72,6 +78,15 @@ const KNOWN_WEBSITE_HEADERS = ["domain", "website", "url", "site"];
 const KNOWN_NOTES_HEADERS = ["note", "notes", "description"];
 const KNOWN_TAG_HEADERS = ["tag", "tags"];
 const KNOWN_CLIENT_HEADERS = ["client", "account", "customer"];
+
+/** Every CSV header alias the generic competitor-list importer accepts. */
+export const COMPETITOR_IMPORT_ACCEPTED_HEADERS: readonly string[] = [
+  ...KNOWN_NAME_HEADERS,
+  ...KNOWN_WEBSITE_HEADERS,
+  ...KNOWN_NOTES_HEADERS,
+  ...KNOWN_TAG_HEADERS,
+  ...KNOWN_CLIENT_HEADERS,
+];
 
 export function buildCompetitorImportPreview(input: CompetitorImportPreviewInput): CompetitorImportPreview {
   const maxBytes = input.maxBytes ?? COMPETITOR_IMPORT_MAX_BYTES;
@@ -242,6 +257,7 @@ export function buildCompetitorImportPreview(input: CompetitorImportPreviewInput
     selectedCount: rows.filter((row) => row.selected && row.status === "valid").length,
     rows,
     summary,
+    rejectedFields: parsedRows.rejectedFields,
   };
 }
 
@@ -260,31 +276,39 @@ function emptyPreview(input: {
     selectedCount: 0,
     rows: [],
     summary: emptySummary(),
+    rejectedFields: [],
   };
 }
 
-function parseCompetitorImportRows(rawText: string, maxRows: number): { rows: ParsedImportRow[]; error: string | null } {
+function parseCompetitorImportRows(rawText: string, maxRows: number): {
+  rows: ParsedImportRow[];
+  error: string | null;
+  rejectedFields: string[];
+} {
   const trimmed = rawText.trim();
   if (!trimmed) {
-    return { rows: [], error: null };
+    return { rows: [], error: null, rejectedFields: [] };
   }
 
   const csv = parseCsvRecords(trimmed);
-  const rows = shouldUseCsvRows(csv)
+  const useCsv = shouldUseCsvRows(csv);
+  const rows = useCsv
     ? parsedRowsFromCsv(csv)
     : trimmed
       .split(/\r?\n/)
       .map((line, index) => parsedRowFromLine(line, index + 1))
       .filter((row): row is ParsedImportRow => Boolean(row));
+  const rejectedFields = useCsv ? rejectedFieldsFromCsv(csv) : [];
 
   if (rows.length > maxRows) {
     return {
       rows: [],
       error: `Import has ${rows.length} rows. Keep one import to ${maxRows} rows or fewer.`,
+      rejectedFields,
     };
   }
 
-  return { rows, error: null };
+  return { rows, error: null, rejectedFields };
 }
 
 function shouldUseCsvRows(records: string[][]) {
@@ -473,10 +497,18 @@ function parseCsvRecords(input: string) {
 
 function hasKnownHeader(header: string[]) {
   const normalized = header.map(normalizeHeader);
-  return normalized.some((value) =>
-    [...KNOWN_NAME_HEADERS, ...KNOWN_WEBSITE_HEADERS, ...KNOWN_NOTES_HEADERS, ...KNOWN_TAG_HEADERS, ...KNOWN_CLIENT_HEADERS]
-      .includes(value)
-  );
+  return normalized.some((value) => COMPETITOR_IMPORT_ACCEPTED_HEADERS.includes(value));
+}
+
+function rejectedFieldsFromCsv(records: string[][]) {
+  const header = records[0] ?? [];
+  if (hasKnownHeader(header)) {
+    return header
+      .filter((value) => value.trim() && !COMPETITOR_IMPORT_ACCEPTED_HEADERS.includes(normalizeHeader(value)));
+  }
+
+  const maxColumns = records.reduce((max, record) => Math.max(max, record.length), 0);
+  return Array.from({ length: Math.max(0, maxColumns - 5) }, (_, index) => `column ${index + 6}`);
 }
 
 function buildHeaderMap(header: string[]) {
