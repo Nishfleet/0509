@@ -4092,6 +4092,16 @@ one signal-green accent.
     gap: 6px 10px;
     margin-bottom: 10px;
   }
+
+  /* The switch-from cross-links are subtle text links, but on phone widths
+     they still must meet the 44px touch-target floor (WCAG 2.5.5). Enlarge
+     the tappable area without adding pill chrome — the link stays an
+     underlined text link, just with a 44px hit height. */
+  .ld-switch-from-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
 }
 
 /* ============================================================

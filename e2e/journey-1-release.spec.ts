@@ -72,8 +72,8 @@ const publicTruthSurfaces = [
     path: "/status",
     heading: "Five to Nine service status.",
     truth: [
-      "This page provides configuration and scope information, not a live provider-health monitor.",
-      "It does not measure live search, email, billing, or provider availability.",
+      "does not measure live search, email, billing, or provider availability",
+      "this page does not report live billing-provider health",
     ],
   },
   {
