@@ -13,6 +13,7 @@ import {
 } from "~/components/compare-citations";
 import {
   canonicalLinks,
+  compareSocialCardUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -47,6 +48,8 @@ export const meta: MetaFunction = () =>
     title: "MagicBrief alternative: Five to Nine | Migration guide",
     description: pageDescription,
     pathname: "/compare/magicbrief",
+    ogImageUrl: compareSocialCardUrl("magicbrief"),
+    ogImageAlt: "Five to Nine vs MagicBrief comparison card",
   });
 
 const imports = [

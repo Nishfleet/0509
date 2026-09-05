@@ -11,6 +11,7 @@ import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
 import {
   canonicalLinks,
+  clusterSocialCardUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -119,6 +120,8 @@ export const meta: MetaFunction = () =>
     title: "Competitor monitoring software | Five to Nine",
     description: pageDescription,
     pathname: "/competitor-monitoring",
+    ogImageUrl: clusterSocialCardUrl("competitor-monitoring"),
+    ogImageAlt: "Competitor monitoring software — Five to Nine",
   });
 
 // Outside-market claims. Every quote below carries its source URL and the date
