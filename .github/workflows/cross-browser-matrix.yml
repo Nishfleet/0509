@@ -41,6 +41,15 @@ jobs:
         run: ./scripts/deploy-window-lock.sh run -- npm run build
 
       - name: Run cross-browser risk proof
+        # Runner-specific environment contract: the hardened verify runners
+        # intermittently throw `uv_interface_addresses returned Unknown system
+        # error 97` (EAFNOSUPPORT) while the Cloudflare Vite plugin resolves
+        # its inspector port at boot. The release-server launcher reads this
+        # flag and boots under a deterministic loopback-only interface view so
+        # the matrix reaches its journeys; without it the boot failure stays
+        # loud and the diagnostic stays red.
+        env:
+          E2E_LOOPBACK_INTERFACES_ONLY: "1"
         run: ./scripts/deploy-window-lock.sh run -- node scripts/run-cross-browser-risk-proof.mjs
 
       - name: Upload artifacts on failure

@@ -32,6 +32,7 @@
     "scripts/launch-readiness-canary.mjs",
     "scripts/launch-readiness-canary-cycle.mjs",
     "scripts/local-release-server.mjs",
+    "scripts/local-release-server-launcher.mjs",
     "scripts/playwright-release-manifest-reporter.mjs",
     "scripts/deploy-production-plan.mjs",
     "scripts/verify-deploy-readiness.mjs",

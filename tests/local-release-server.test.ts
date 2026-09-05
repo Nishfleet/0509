@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // @ts-ignore JavaScript release-server module is intentionally exercised through Vitest.
@@ -15,6 +17,55 @@ const {
   reserveLocalReleaseOrigin,
   resolveLocalReleaseRunTimeout,
 } = await import("../scripts/local-release-server.mjs");
+
+// @ts-ignore JavaScript launcher module is intentionally exercised through Vitest.
+const {
+  applyLoopbackInterfaceContract,
+  LOOPBACK_INTERFACES_ONLY_ENV,
+  loopbackInterfaceAddresses,
+} = await import("../scripts/local-release-server-launcher.mjs");
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const launcherUrl = pathToFileURL(path.join(root, "scripts", "local-release-server-launcher.mjs")).href;
+
+type NetworkInterfacesLike = () => Record<string, Array<Record<string, unknown>>>;
+
+const enumerationFailure: NetworkInterfacesLike = () => {
+  const error = Object.assign(new Error("uv_interface_addresses returned Unknown system error 97"), {
+    code: "EAFNOSUPPORT",
+  });
+  throw error;
+};
+
+const loopbackContractChild = `
+import { applyLoopbackInterfaceContract } from ${JSON.stringify(launcherUrl)};
+const os = await import("node:os");
+os.default.networkInterfaces = ${enumerationFailure.toString()};
+if (!applyLoopbackInterfaceContract({ osModule: os.default, enabled: true })) throw new Error("contract not applied");
+const pluginStyle = os.default.networkInterfaces();
+const cjsStyle = process.getBuiltinModule("node:os").networkInterfaces();
+if (pluginStyle.lo?.[0]?.address !== "127.0.0.1") throw new Error("plugin-style view missing loopback");
+if (cjsStyle.lo?.[0]?.address !== "127.0.0.1") throw new Error("cjs-style view missing loopback");
+console.log("loopback contract rescued enumeration failure");
+`;
+
+const enumFailurePropagatesChild = `
+import { applyLoopbackInterfaceContract } from ${JSON.stringify(launcherUrl)};
+const os = await import("node:os");
+os.default.networkInterfaces = ${enumerationFailure.toString()};
+applyLoopbackInterfaceContract({ osModule: os.default, enabled: false });
+try {
+  os.default.networkInterfaces();
+  console.log("unexpected enumeration success");
+  process.exit(1);
+} catch (error) {
+  if (error?.code === "EAFNOSUPPORT") {
+    console.log("enumeration failure propagates without contract");
+    process.exit(0);
+  }
+  throw error;
+}
+`;
 
 function runRetryScript(exitCodes: number[], runtimes: number[]) {
   const serverCases = exitCodes
@@ -117,6 +168,12 @@ describe("local release proof server identity", () => {
     expect(command).not.toContain("4179");
   });
 
+  it("boots the strict-port server through the loopback-only launcher", () => {
+    const command = buildLocalReleaseServerCommand("http://127.0.0.1:43127");
+    expect(command).toContain("node scripts/local-release-server-launcher.mjs --host 127.0.0.1 --port 43127 --strictPort");
+    expect(command).not.toContain("node_modules/.bin/react-router");
+  });
+
   it("retries a fast failure once, then returns a successful server exit", () => {
     const result = runRetryScript([17, 0], [14, 0]);
     expect(result.status).toBe(0);
@@ -168,5 +225,87 @@ describe("local release proof server identity", () => {
     for (const value of ["0", "59999", "1200001", "not-a-number"]) {
       expect(() => resolveLocalReleaseRunTimeout(value)).toThrow("invalid_local_release_timeout");
     }
+  });
+});
+
+describe("loopback-only interface contract", () => {
+  it("leaves the os module untouched when the contract is disabled", () => {
+    const real = () => ({});
+    const osModule = { networkInterfaces: real };
+    expect(applyLoopbackInterfaceContract({ osModule, enabled: false })).toBe(false);
+    expect(osModule.networkInterfaces).toBe(real);
+  });
+
+  it("enables by default only under the workflow environment contract", () => {
+    const real = () => ({});
+    const osModule = { networkInterfaces: real };
+    const previous = process.env[LOOPBACK_INTERFACES_ONLY_ENV];
+    try {
+      process.env[LOOPBACK_INTERFACES_ONLY_ENV] = "1";
+      expect(applyLoopbackInterfaceContract({ osModule })).toBe(true);
+      expect(osModule.networkInterfaces).not.toBe(real);
+    } finally {
+      if (previous === undefined) delete process.env[LOOPBACK_INTERFACES_ONLY_ENV];
+      else process.env[LOOPBACK_INTERFACES_ONLY_ENV] = previous;
+    }
+  });
+
+  it("passes successful interface enumeration through unchanged under the contract", () => {
+    const real = () => ({ eth0: [{ address: "192.168.0.5" }] });
+    const osModule = { networkInterfaces: real };
+    expect(applyLoopbackInterfaceContract({ osModule, enabled: true })).toBe(true);
+    expect(osModule.networkInterfaces).not.toBe(real);
+    expect(osModule.networkInterfaces()).toEqual({ eth0: [{ address: "192.168.0.5" }] });
+  });
+
+  it("rescues the observed enumeration failure with a deterministic loopback-only view", () => {
+    const osModule = { networkInterfaces: enumerationFailure };
+    expect(applyLoopbackInterfaceContract({ osModule, enabled: true })).toBe(true);
+    expect(() => osModule.networkInterfaces()).not.toThrow();
+    const view = osModule.networkInterfaces();
+    expect(view.lo).toHaveLength(1);
+    expect(view.lo[0].address).toBe("127.0.0.1");
+    expect(view.lo[0].family).toBe("IPv4");
+    expect(view.lo[0].internal).toBe(true);
+    expect(loopbackInterfaceAddresses()).toEqual(view);
+  });
+
+  it("fails clearly when enumeration fails without the contract (unsupported environment)", () => {
+    const osModule = { networkInterfaces: enumerationFailure };
+    applyLoopbackInterfaceContract({ osModule, enabled: false });
+    expect(osModule.networkInterfaces).toBe(enumerationFailure);
+    expect(() => osModule.networkInterfaces()).toThrow("uv_interface_addresses");
+  });
+
+  it("applies the contract to the real node:os module the plugin reads", () => {
+    const child = spawnSync(process.execPath, ["--input-type=module", "-e", loopbackContractChild], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(child.error).toBeUndefined();
+    expect(child.status).toBe(0);
+    expect(child.stdout).toContain("loopback contract rescued enumeration failure");
+    expect(child.stderr).toContain("interface enumeration failed");
+  });
+
+  it("lets an unsupported environment fail clearly in a real process", () => {
+    const child = spawnSync(process.execPath, ["--input-type=module", "-e", enumFailurePropagatesChild], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(child.error).toBeUndefined();
+    expect(child.status).toBe(0);
+    expect(child.stdout).toContain("enumeration failure propagates without contract");
+  });
+
+  it("forwards CLI arguments to the react-router dev entry", () => {
+    const child = spawnSync(process.execPath, ["scripts/local-release-server-launcher.mjs", "--version"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(child.error).toBeUndefined();
+    expect(child.status).toBe(0);
+    expect(child.stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(child.stderr).not.toContain("interface enumeration failed");
   });
 });

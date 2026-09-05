@@ -53,11 +53,18 @@ export function parseExactLoopbackOrigin(value) {
  */
 export function buildLocalReleaseServerCommand(origin) {
   const parsed = parseExactLoopbackOrigin(origin);
-  const server = `E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} ./node_modules/.bin/react-router dev --host 127.0.0.1 --port ${parsed.port} --strictPort`;
+  const server = `E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} node scripts/local-release-server-launcher.mjs --host 127.0.0.1 --port ${parsed.port} --strictPort`;
   // The self-hosted verify runners intermittently fail the dev server at boot
   // with `uv_interface_addresses returned Unknown system error 97`
-  // (EAFNOSUPPORT) while Vite enumerates interfaces for its startup banner.
-  // It is environmental and transient — a second attempt starts cleanly.
+  // (EAFNOSUPPORT) while the Cloudflare Vite plugin resolves its inspector
+  // port (`getLocalHosts`/`getPorts`/`getInputInspectorPort`). It is
+  // environmental and transient — a second attempt starts cleanly.
+  //
+  // Booting through the launcher is an explicit, deterministic environment
+  // contract: when the matrix sets E2E_LOOPBACK_INTERFACES_ONLY=1, the
+  // launcher substitutes a loopback-only interface view for that single
+  // enumeration call so it can never kill the boot. Otherwise it is a
+  // passthrough and the failing enumeration still fails clearly.
   //
   // Retry ONLY a fast boot failure. If the server stayed up for
   // LOCAL_RELEASE_SERVER_BOOT_SECONDS or longer, its exit is a real result
