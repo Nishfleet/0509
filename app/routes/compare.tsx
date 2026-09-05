@@ -3,7 +3,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
-import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, socialCardImage, webPageJsonLd } from "~/lib/seo";
 
 const pageDescription =
   "Five to Nine vs the alternatives: source-backed competitor ad and landing-page change monitoring compared to Visualping, MagicBrief, Panoramata, Foreplay, Spyland, Pulzifi, and more.";
@@ -15,6 +15,7 @@ export const meta: MetaFunction = () =>
     title: "Compare Five to Nine vs the alternatives",
     description: pageDescription,
     pathname: "/compare",
+    image: socialCardImage("compare", undefined, "Compare Five to Nine vs the alternatives"),
   });
 
 /** The 13 indexed /compare/* product pages the hub links. */

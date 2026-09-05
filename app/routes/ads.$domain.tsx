@@ -68,11 +68,13 @@ import {
   adsPageServiceJsonLd,
   canonicalUrl,
   faqPageJsonLd,
+  imageMimeTypeFromUrl,
   jsonLdScriptProps,
   publicSeoMeta,
+  socialCardImage,
   webPageJsonLd,
 } from "~/lib/seo";
-import type { FaqJsonLdEntry } from "~/lib/seo";
+import type { FaqJsonLdEntry, PublicSeoImage } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
 
@@ -148,6 +150,12 @@ export interface BrandPageLoaderData {
    * (the section hides in that case).
    */
   captureFailuresSummary: CaptureFailuresSummary | null;
+  /**
+   * Open Graph image for this brand page: a real landing-page screenshot from
+   * the offer timeline when one exists, otherwise a dynamic brand-name + Ad
+   * Aggression Score SVG card.
+   */
+  ogImage: PublicSeoImage;
 }
 
 export async function loader({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
@@ -246,6 +254,25 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     });
   }
 
+  // Prefer a real landing-page screenshot from the offer timeline. If none
+  // is stored, fall back to a dynamic brand-name + Ad Aggression Score card.
+  let ogImage: PublicSeoImage = socialCardImage(
+    "ads",
+    brand.domain,
+    `${brand.displayName} Ad Aggression Score — Five to Nine`,
+  );
+  for (let i = offerTimelineEntries.length - 1; i >= 0; i--) {
+    const entry = offerTimelineEntries[i];
+    if (entry?.screenshotHref) {
+      ogImage = {
+        url: canonicalUrl(entry.screenshotHref),
+        alt: `${brand.displayName} landing page screenshot — Five to Nine`,
+        type: imageMimeTypeFromUrl(entry.screenshotHref),
+      };
+      break;
+    }
+  }
+
   // Issues #1289 / #1345: surface failed/suppressed landing-page captures
   // for this domain so the public page names what we checked and why it did
   // not become an alert. The full array is NOT leaked into the loader data —
@@ -309,6 +336,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     noindex,
     canonicalPath: `/ads/${brand.domain}`,
     captureFailuresSummary,
+    ogImage,
   };
 }
 
@@ -494,7 +522,12 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   const description = brandPageDescription(loaderData);
 
   return [
-    ...publicSeoMeta({ title, description, pathname: loaderData.canonicalPath }),
+    ...publicSeoMeta({
+      title,
+      description,
+      pathname: loaderData.canonicalPath,
+      image: loaderData.ogImage,
+    }),
     // links() cannot see route params in this router version, so the
     // canonical tag ships as a meta-descriptor link instead.
     { tagName: "link", rel: "canonical", href: canonicalUrl(loaderData.canonicalPath) },

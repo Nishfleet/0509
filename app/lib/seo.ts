@@ -9,13 +9,19 @@ import {
 import { TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
 
 const SITE_ORIGIN = "https://0509.io";
-const SITE_NAME = "Five to Nine";
+export const SITE_NAME = "Five to Nine";
 // PNG, not SVG: most social scrapers (WhatsApp, Slack, X, iMessage) refuse
 // SVG og:images. The legacy /social-card.svg stays served for cached links.
 const SOCIAL_IMAGE_PATH = "/og-image.png";
 const SOCIAL_IMAGE_URL = `${SITE_ORIGIN}${SOCIAL_IMAGE_PATH}`;
 const LEGACY_SOCIAL_CARD_PATH = "/social-card.svg";
 const SOCIAL_IMAGE_ALT = "Five to Nine competitor offer monitoring preview";
+
+export interface PublicSeoImage {
+  url: string;
+  alt: string;
+  type?: string;
+}
 
 export function canonicalUrl(pathname: string): string {
   const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
@@ -85,8 +91,12 @@ export function publicSeoMeta(input: {
   description: string;
   pathname: string;
   ogLocale?: string;
+  image?: PublicSeoImage;
 }) {
   const url = canonicalUrl(input.pathname);
+  const imageUrl = input.image?.url ?? SOCIAL_IMAGE_URL;
+  const imageAlt = input.image?.alt ?? SOCIAL_IMAGE_ALT;
+  const imageType = input.image?.type ?? imageMimeTypeFromUrl(imageUrl);
 
   return [
     { title: input.title },
@@ -97,17 +107,45 @@ export function publicSeoMeta(input: {
     { property: "og:title", content: input.title },
     { property: "og:description", content: input.description },
     { property: "og:url", content: url },
-    { property: "og:image", content: SOCIAL_IMAGE_URL },
-    { property: "og:image:type", content: "image/png" },
+    { property: "og:image", content: imageUrl },
+    { property: "og:image:type", content: imageType },
     { property: "og:image:width", content: "1200" },
     { property: "og:image:height", content: "630" },
-    { property: "og:image:alt", content: SOCIAL_IMAGE_ALT },
+    { property: "og:image:alt", content: imageAlt },
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:title", content: input.title },
     { name: "twitter:description", content: input.description },
-    { name: "twitter:image", content: SOCIAL_IMAGE_URL },
-    { name: "twitter:image:alt", content: SOCIAL_IMAGE_ALT },
+    { name: "twitter:image", content: imageUrl },
+    { name: "twitter:image:alt", content: imageAlt },
   ];
+}
+
+export function imageMimeTypeFromUrl(imageUrl: string): string {
+  const path = imageUrl.split("?")[0] ?? "";
+  if (path.endsWith(".svg")) return "image/svg+xml";
+  if (path.endsWith(".png")) return "image/png";
+  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+  if (path.endsWith(".webp")) return "image/webp";
+  if (path.endsWith(".gif")) return "image/gif";
+  return "image/png";
+}
+
+/**
+ * Build a social-card URL for dynamic SVG cards. Routes pass the returned
+ * object as `image` to `publicSeoMeta` so the `og:image` points at a
+ * page-specific card served by the Worker edge.
+ */
+export function socialCardImage(
+  kind: string,
+  slug?: string,
+  alt?: string,
+): PublicSeoImage {
+  const path = slug ? `/social/${kind}/${slug}` : `/social/${kind}`;
+  return {
+    url: canonicalUrl(path),
+    alt: alt ?? `${SITE_NAME} social card`,
+    type: "image/svg+xml",
+  };
 }
 
 /**

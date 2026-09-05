@@ -3,7 +3,7 @@ import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-rout
 import { SneakerResaleLanding } from "~/components/sneaker-resale-landing";
 import { sneakerResaleMarket } from "~/lib/locale-markets";
 import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
-import { canonicalLinks, publicSeoMeta, sneakerResaleHreflangLinks } from "~/lib/seo";
+import { canonicalLinks, publicSeoMeta, sneakerResaleHreflangLinks, socialCardImage } from "~/lib/seo";
 
 const MARKET = sneakerResaleMarket("en");
 const COPY = sneakerResaleCopy("en");
@@ -26,6 +26,7 @@ export const meta: MetaFunction = () =>
     description: COPY.description,
     pathname: MARKET.pathname,
     ogLocale: MARKET.ogLocale,
+    image: socialCardImage("sneaker-resale", undefined, "Sneaker resale competitor ads — Five to Nine"),
   });
 
 export default function SneakerResaleEnglishRoute() {

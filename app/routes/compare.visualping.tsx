@@ -15,6 +15,7 @@ import {
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
+  socialCardImage,
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
@@ -35,6 +36,7 @@ export const meta: MetaFunction = () =>
     title: "Five to Nine vs Visualping",
     description: pageDescription,
     pathname: "/compare/visualping",
+    image: socialCardImage("compare", "visualping", "Five to Nine vs Visualping"),
   });
 
 const visualpingStrengths: readonly CompareClaimCard[] = [

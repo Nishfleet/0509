@@ -4,7 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
-import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, socialCardImage, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
@@ -19,6 +19,7 @@ export const meta: MetaFunction = () =>
     title: "Five to Nine vs Spyland",
     description: pageDescription,
     pathname: "/compare/spyland",
+    image: socialCardImage("compare", "spyland", "Five to Nine vs Spyland"),
   });
 
 const spylandStrengths = [
