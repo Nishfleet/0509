@@ -415,9 +415,10 @@ describe("streaming three-tier on /search (BET 2, issue 1482)", () => {
       '<span class="f9-tier-badge is-verified">Verified</span>',
     );
 
-    // The honest explanation sentence is on the page.
+    // The honest explanation sentence is on the page. renderToStaticMarkup
+    // HTML-encodes the apostrophe in "couldn't" to &#x27;; match the encoded form.
     expect(markup).toContain(
-      "These ads matched your search but we couldn't verify they belong to the brand",
+      "These ads matched your search but we couldn&#x27;t verify they belong to the brand",
     );
 
     // The three-tier tail reflects the zero-verified split.
