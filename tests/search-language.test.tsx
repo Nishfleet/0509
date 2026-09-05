@@ -208,16 +208,26 @@ describe("BL-031 — the page budgets", () => {
 
   it("answers the thin-content finding with honest scope copy, not filler", () => {
     // dogfood 694ddbd68e95: 207 rendered words on /search. The idle state now
-    // carries a scope section under the quiet lede — what a search returns,
-    // the proof, and the next step — with the coverage caveat still stated.
+    // carries a scope disclosure under the quiet lede — what a search returns,
+    // the proof, and the next step — with the coverage caveat still stated, but
+    // closed so the first viewport reads as a tool (BL-031), not a brochure.
     // The budgets hold: still one kicker on the pre-search state, still three
-    // filled buttons on the whole page, and still no specimen or sample card.
+    // filled buttons on the whole page, still only one idle lede, and still no
+    // specimen or sample card.
     expect(route).toContain("What a search returns");
     expect(route).toContain("Current and recent ads");
     expect(route).toContain("The offer, read off their landing page");
     expect(route).toContain("The proof capture");
-    expect(route).toContain("f9-search-scope-list");
+    expect(route).toContain("f9-search-scope-details");
+    expect(route).toContain("f9-search-scope-items");
     expect(route).toContain("Coverage and freshness vary by advertiser");
+    // The scope copy now lives in a closed <details> — the dropped section
+    // wrapper and its scope-list class are gone, and the scope detail uses no
+    // f9-wk-lede / f9-wk-note (those stay reserved for the results view).
+    expect(route).not.toContain("f9-search-scope-list");
+    // The scope detail keeps a f9-wk-lede out of the scope disclosure — the
+    // idle lede count is asserted on the rendered idle markup in
+    // search-submission-settle.test.tsx, where the idle branch is isolated.
     expect(route.match(/className="f9-wk-kick"/g)).toHaveLength(1);
     expect(route.match(/className="f9-wk-btn"/g)).toHaveLength(3);
     expect(route).not.toContain("f9-search-specimen");
