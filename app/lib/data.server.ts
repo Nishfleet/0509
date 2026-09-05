@@ -341,3 +341,9 @@ export {
   getMetaIntegrationStatus,
   getLaunchReadinessSignals,
 } from "~/lib/data/workspace.server";
+
+export {
+  getPublicStatusCounters,
+  type PublicStatusCounters,
+} from "~/lib/public-status-counters.server";
+

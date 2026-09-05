@@ -113,9 +113,114 @@ describe("status route", () => {
     expect(markup).not.toContain("secret-token");
     expect(markup).not.toContain("hooks.slack.com");
     expect(markup).toContain("configuration and scope information");
-    expect(markup).toContain("not a live provider-health monitor");
+    expect(markup).toContain("does not measure live search, email, billing, or provider availability");
     expect(markup).not.toMatch(/(?:search|checkout|billing|email delivery) (?:is|are) available/i);
     expect(markup).not.toContain("Available for checking competitor ads");
     expect(markup).not.toContain("Digest and alert emails are available");
+  });
+
+  it("renders measured monitoring counters with an as-of timestamp when present", async () => {
+    const counters = {
+      lastWatchlistRunAt: "2026-09-01T03:00:00.000Z",
+      runsInLast24h: 31,
+      failedRunsInLast24h: 0,
+      lastDigestSentAt: "2026-09-04T00:00:00.000Z",
+    };
+
+    await mockRouter(() => ({
+      generatedAt: "2026-09-04T09:00:00.000Z",
+      asOf: "2026-09-04T09:30:00.000Z",
+      appServed: true,
+      monitoring: counters,
+      measurementsUnavailable: false,
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Monitoring health");
+    expect(markup).toContain("31");
+    expect(markup).toContain("0");
+    expect(markup).toContain("2026-09-01T03:00:00.000Z");
+    expect(markup).toContain("as of 2026-09-04T09:30:00.000Z");
+    expect(markup).not.toContain("Measurements unavailable right now.");
+    expect(markup).toContain("Configuration and scope information and live monitoring facts");
+  });
+
+  it("loader propagates measured monitoring counters and renders no stale number", async () => {
+    const counters = {
+      lastWatchlistRunAt: "2026-09-01T03:00:00.000Z",
+      runsInLast24h: 31,
+      failedRunsInLast24h: 0,
+      lastDigestSentAt: null,
+    };
+    vi.doMock("~/lib/public-status-counters.server", () => ({
+      getPublicStatusCounters: vi.fn().mockResolvedValue(counters),
+    }));
+
+    const { loader } = await import("~/routes/status");
+    const result = await loader({
+      context: createContext({ DB: {} }),
+      request: new Request("https://0509.io/status"),
+    } as never);
+
+    expect(result.monitoring).toEqual(counters);
+    expect(result.measurementsUnavailable).toBe(false);
+    expect(typeof result.asOf).toBe("string");
+  });
+
+  it("degrades to honest static prose and a 200 when monitoring counters cannot be read", async () => {
+    vi.doMock("~/lib/public-status-counters.server", () => ({
+      getPublicStatusCounters: vi
+        .fn()
+        .mockRejectedValue(new Error("d1 read failed")),
+    }));
+
+    const { loader } = await import("~/routes/status");
+    const result = await loader({
+      context: createContext({ DB: {} }),
+      request: new Request("https://0509.io/status"),
+    } as never);
+
+    // A D1 read error must not throw: the route still returns 200.
+    expect(result.monitoring).toBeNull();
+    expect(result.measurementsUnavailable).toBe(true);
+
+    await mockRouter(() => ({
+      generatedAt: "2026-09-04T09:00:00.000Z",
+      asOf: "2026-09-04T09:30:00.000Z",
+      appServed: true,
+      monitoring: null,
+      measurementsUnavailable: true,
+    }));
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Measurements unavailable right now.");
+    expect(markup).toContain("Core surfaces");
+    expect(markup).toContain("does not measure live search, email, billing, or provider availability");
+  });
+
+  it("never renders account-scoped field names on the public page", async () => {
+    vi.doMock("~/lib/public-status-counters.server", () => ({
+      getPublicStatusCounters: vi.fn().mockResolvedValue({
+        lastWatchlistRunAt: "2026-09-01T03:00:00.000Z",
+        runsInLast24h: 31,
+        failedRunsInLast24h: 0,
+        lastDigestSentAt: null,
+      }),
+    }));
+
+    const { loader } = await import("~/routes/status");
+    const result = await loader({
+      context: createContext({ DB: {} }),
+      request: new Request("https://0509.io/status"),
+    } as never);
+
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("recipient_email");
+    expect(serialized).not.toContain("@");
+    expect(serialized).not.toContain("watchlist_id");
+    expect(serialized).not.toContain("competitor");
   });
 });
