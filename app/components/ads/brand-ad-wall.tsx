@@ -98,11 +98,10 @@ function BrandAdCard({ ad, now }: { ad: AdRecord; now: Date }) {
       <div className="f9-ads-card-body">
         {ad.linkVerifiedDomain ? (
           <span
-            className="f9-ads-verified-badge"
+            className="f9-ads-pill f9-ads-verified-badge"
             data-verified-link={ad.linkVerifiedDomain}
           >
-            <span aria-hidden="true" className="f9-ads-verif-dot" />
-            Verified link
+            <span aria-hidden="true">✓</span> Verified link
           </span>
         ) : null}
         <span className="f9-ads-card-adv">
