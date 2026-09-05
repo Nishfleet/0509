@@ -46,6 +46,35 @@ describe("public documentation routes", () => {
     expect(markup).not.toContain("Public competitor ad search from a website");
   });
 
+  it("names the proof labels exactly as the /search UI renders them (issue 1462)", async () => {
+    const { default: DocsRoute } = await import("~/routes/docs");
+    const markup = renderToStaticMarkup(createElement(DocsRoute));
+
+    // The proof-labels reference must name the tiers the /search UI actually
+    // shows (Verified / Likely / Unmatched) and must not invent a "Cached"
+    // proof tier or the old "Related or broader" name the UI never renders.
+    expect(markup).toContain("Understand the proof labels");
+    expect(markup).toContain("<dt>Verified</dt>");
+    expect(markup).toContain("<dt>Likely</dt>");
+    expect(markup).toContain("<dt>Unmatched</dt>");
+    expect(markup).toContain("<dt>Sample</dt>");
+    expect(markup).not.toContain("Related or broader");
+    expect(markup).not.toContain("<dt>Cached</dt>");
+
+    // The Unmatched description matches the UI confidence note at
+    // app/lib/search-display.ts ("returned by the source, but nothing connects
+    // this ad to the searched website").
+    expect(markup).toContain(
+      "Returned by the source, but nothing connects this ad to the searched website.",
+    );
+
+    // Cached is a freshness state, not a proof tier: it is documented in the
+    // troubleshooting block where capture freshness is discussed.
+    expect(markup).toContain("Fresh live result");
+    expect(markup).toContain("Recent cached result");
+    expect(markup).toContain("Older cached result");
+  });
+
   it("gives /docs an in-page table of contents that jumps to each block — distinct from /help", async () => {
     const { default: DocsRoute } = await import("~/routes/docs");
     const docsMarkup = renderToStaticMarkup(createElement(DocsRoute));
