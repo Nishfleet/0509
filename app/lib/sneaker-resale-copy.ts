@@ -22,9 +22,10 @@ export interface SneakerResaleCopy {
   swingKicker: string;
   swingTitle: string;
   swingDeck: string;
-  // `domain` is the mover's followable proof path: /search?q=<domain>
-  // (rows live today). Retarget to /ads/<domain> once #1282/#1306 populate
-  // it; a required field keeps the swing section from shipping a dead link.
+  // `domain` is the mover's followable proof path: the landing component
+  // links it to /ads/<domain> when that brand page is live and indexable,
+  // else /search?q=<domain> (#1547). A required field keeps the swing section
+  // from shipping a dead link.
   swing: ReadonlyArray<{ brand: string; line: string; domain: string }>;
   swingSource: string;
   // Publication date of the cited daily market signal — the freshness guard.

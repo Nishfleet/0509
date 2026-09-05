@@ -1,3 +1,4 @@
+import { useLoaderData } from "react-router";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { SneakerResaleLanding } from "~/components/sneaker-resale-landing";
@@ -15,9 +16,15 @@ export const links: LinksFunction = () => [
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
+  const env = getEnv(context);
   const { emitFunnelLocaleSegmentView } = await import("~/lib/funnel-measurement.server");
-  emitFunnelLocaleSegmentView(getEnv(context), request, "en");
-  return null;
+  emitFunnelLocaleSegmentView(env, request, "en");
+  // Cluster cross-links (issue #1547): the live indexable /ads/:domain pages
+  // in the sneaker-resale seed list. Cache-only; [] on a sitemap hiccup.
+  const { loadSneakerResaleAdsInternalLinks } = await import(
+    "~/lib/ads-internal-links.server"
+  );
+  return { indexableAdsLinks: await loadSneakerResaleAdsInternalLinks(env) };
 }
 
 export const meta: MetaFunction = () =>
@@ -29,5 +36,6 @@ export const meta: MetaFunction = () =>
   });
 
 export default function SneakerResaleEnglishRoute() {
-  return <SneakerResaleLanding locale="en" />;
+  const { indexableAdsLinks } = useLoaderData<typeof loader>();
+  return <SneakerResaleLanding locale="en" indexableAdsLinks={indexableAdsLinks} />;
 }

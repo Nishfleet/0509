@@ -180,7 +180,7 @@ describe("issue #1442 — indexability is decoupled from the 14-day Aggression w
     // trigger) — but that must not cost the page its indexability.
     expect(result.aggression).toBeNull();
     expect(result.observationDays).toBe(2);
-    expect(result.noindex).toBe(false);
+    expect(result.indexable).toBe(true);
   });
 
   it("renders a 0-verified-ads (thin) page noindex — the anti-thin-content guard survives", async () => {
@@ -192,7 +192,7 @@ describe("issue #1442 — indexability is decoupled from the 14-day Aggression w
 
     expect(result.verifiedLinkCount).toBe(0);
     expect(result.aggression).toBeNull();
-    expect(result.noindex).toBe(true);
+    expect(result.indexable).toBe(false);
   });
 
   it("includes a populated page in the sitemap even though its score is deferred", () => {

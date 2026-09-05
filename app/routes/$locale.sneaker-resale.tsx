@@ -25,9 +25,15 @@ export const links: LinksFunction = () => sneakerResaleHreflangLinks();
 export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const locale = localeFromParams(params);
   const { getEnv } = await import("~/lib/context.server");
+  const env = getEnv(context);
   const { emitFunnelLocaleSegmentView } = await import("~/lib/funnel-measurement.server");
-  emitFunnelLocaleSegmentView(getEnv(context), request, locale);
-  return { locale };
+  emitFunnelLocaleSegmentView(env, request, locale);
+  // Cluster cross-links (issue #1547): the live indexable /ads/:domain pages
+  // in the sneaker-resale seed list. Cache-only; [] on a sitemap hiccup.
+  const { loadSneakerResaleAdsInternalLinks } = await import(
+    "~/lib/ads-internal-links.server"
+  );
+  return { locale, indexableAdsLinks: await loadSneakerResaleAdsInternalLinks(env) };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
@@ -48,6 +54,6 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 };
 
 export default function SneakerResaleLocaleRoute() {
-  const { locale } = useLoaderData<typeof loader>();
-  return <SneakerResaleLanding locale={locale} />;
+  const { locale, indexableAdsLinks } = useLoaderData<typeof loader>();
+  return <SneakerResaleLanding locale={locale} indexableAdsLinks={indexableAdsLinks} />;
 }

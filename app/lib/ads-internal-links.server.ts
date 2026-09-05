@@ -8,6 +8,7 @@
 
 import type { LoaderFunctionArgs } from "react-router";
 
+import sneakerResaleSeedList from "../../data/seed-lists/sneaker-resale.json";
 import {
   indexableAdsLinkFromPath,
   pickFeaturedAdsInternalLink,
@@ -39,6 +40,34 @@ export async function loadIndexableAdsInternalLinks(env: AppEnv): Promise<Indexa
 export async function loadFeaturedAdsInternalLink(env: AppEnv): Promise<IndexableAdsLink | null> {
   const links = await loadIndexableAdsInternalLinks(env);
   return pickFeaturedAdsInternalLink(links, PUBLIC_PROOF_FEATURED_WEBSITE);
+}
+
+/**
+ * The sneaker-resale publisher cluster's domain set — the same curated seed
+ * list the nightly `runAdsDomainPublisher` runs (data/seed-lists/
+ * sneaker-resale.json, issue #1547). Membership is data, not code: adding a
+ * domain to the seed list is enough for it to join this set once published.
+ */
+const SNEAKER_RESALE_SEED_DOMAINS: ReadonlySet<string> = new Set(
+  sneakerResaleSeedList.domains.map((entry) =>
+    entry.domain.trim().toLowerCase().replace(/^www\./, ""),
+  ),
+);
+
+/**
+ * Indexable /ads/:domain links filtered to the sneaker-resale cluster
+ * (issue #1547 accept 4). Intersecting the live indexable set with the seed
+ * list means the /sneaker-resale landing cross-links exactly the cluster
+ * brands whose brand pages are live and indexable today: a new publish
+ * appears without a code change, and a page that lapses (stale capture,
+ * lost verified coverage, emergency brake) drops off instead of shipping a
+ * stale link. Degrades to [] on a sitemap hiccup via the shared loader.
+ */
+export async function loadSneakerResaleAdsInternalLinks(
+  env: AppEnv,
+): Promise<IndexableAdsLink[]> {
+  const links = await loadIndexableAdsInternalLinks(env);
+  return links.filter((link) => SNEAKER_RESALE_SEED_DOMAINS.has(link.domain));
 }
 
 /**

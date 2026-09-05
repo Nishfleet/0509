@@ -124,7 +124,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     changeEvents,
     offerTimelineEntries: [],
     adLibraryCountry: "India",
-    noindex: false,
+    indexable: true,
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
     ...overrides,
@@ -178,7 +178,7 @@ describe("/ads/:domain — Case File render", () => {
         teaser: null,
         aggression: null,
         changeEvents: [],
-        noindex: true,
+        indexable: false,
       }),
     );
     expect(scored).toContain(methodologyHref);
@@ -414,7 +414,7 @@ describe("/ads/:domain — Case File render", () => {
         teaser: null,
         aggression: null,
         changeEvents: [],
-        noindex: true,
+        indexable: false,
       }),
     );
 
@@ -439,7 +439,7 @@ describe("/ads/:domain — Case File render", () => {
         teaser: null,
         aggression: null,
         changeEvents: [],
-        noindex: true,
+        indexable: false,
         offerTimelineEntries: [
           {
             id: "backfill-nike-20260825",
@@ -760,7 +760,7 @@ describe("/ads/:domain — Case File render", () => {
         teaser: null,
         aggression: null,
         changeEvents: [],
-        noindex: true,
+        indexable: false,
       }),
     );
     const h1Matches = markup.match(/<h1\b[^>]*>[^<]+<\/h1>/g) ?? [];
@@ -823,7 +823,7 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
         teaser: null,
         aggression: null,
         changeEvents: [],
-        noindex: true,
+        indexable: false,
       }),
     );
 
@@ -832,7 +832,7 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
   });
 
   it("emits no JSON-LD when the emergency noindex brake is on", async () => {
-    const markup = await render(populated({ noindex: true }));
+    const markup = await render(populated({ indexable: false }));
 
     expect(markup).not.toContain("application/ld+json");
     expect(markup).not.toContain("@type");
@@ -888,7 +888,7 @@ describe("/ads/:domain — truthful WebPage JSON-LD", () => {
     // for a page answer engines must not index.
     const markup = await render(
       populated({
-        noindex: true,
+        indexable: false,
         offerTimelineEntries: [
           {
             id: "snap-nike-20260825",

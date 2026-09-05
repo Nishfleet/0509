@@ -10,7 +10,7 @@ import type { BrandPageLoaderData } from "~/routes/ads.$domain";
  * (Home → Ads → Brand), and BOTH must be withheld on indexable-only pages.
  *
  * The /ads route emits structured data ONLY when the page is indexable
- * (`!noindex`) — the honesty discipline shared with the WebPage/Service/
+ * (`data.indexable`) — the honesty discipline shared with the WebPage/Service/
  * FAQPage block. A noindex page (emergency brake, stale capture, thin
  * sub-floor wall) must never ship BreadcrumbList or the visible trail, so
  * the test asserts both the present (indexable) and absent (noindex) cases
@@ -87,7 +87,7 @@ function shellData(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     changeEvents: [],
     offerTimelineEntries: [],
     adLibraryCountry: "all countries",
-    noindex: false,
+    indexable: true,
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
     ...overrides,
@@ -120,7 +120,7 @@ describe("Breadcrumb on /ads/:domain pages (issue #1547 / #1418)", () => {
   });
 
   it("withholds the breadcrumb nav and BreadcrumbList entirely when the page is noindex", async () => {
-    const markup = await render(shellData({ noindex: true }));
+    const markup = await render(shellData({ indexable: false }));
 
     expect(breadcrumb(markup)).toBeUndefined();
     expect(markup).not.toContain('<nav aria-label="Breadcrumb"');

@@ -108,7 +108,7 @@ function cachedIndexable(overrides: Partial<BrandPageLoaderData> = {}): BrandPag
     changeEvents: [],
     observationDays: null,
     adLibraryCountry: "India",
-    noindex: false,
+    indexable: true,
     canonicalPath: "/ads/nike.com",
     offerTimelineEntries: [],
     captureFailuresSummary: null,
@@ -221,7 +221,7 @@ describe("/ads/:domain JSON-LD", () => {
         brandOwnedAdCount: 0,
         verifiedLinkCount: 0,
         unverifiedMatchCount: 0,
-        noindex: true,
+        indexable: false,
       }),
     );
 
@@ -232,7 +232,7 @@ describe("/ads/:domain JSON-LD", () => {
   }, 20_000);
 
   it("omits Service and FAQPage JSON-LD when the emergency noindex brake is on", async () => {
-    const markup = await render(cachedIndexable({ noindex: true }));
+    const markup = await render(cachedIndexable({ indexable: false }));
 
     expect(parseLdJsonBlocks(markup)).toHaveLength(0);
     expect(markup).not.toContain("application/ld+json");

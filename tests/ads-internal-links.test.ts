@@ -267,6 +267,34 @@ describe("public funnel loaders reuse the sitemap indexability filter", () => {
   });
 });
 
+describe("loadSneakerResaleAdsInternalLinks", () => {
+  beforeEach(() => {
+    vi.doMock("~/lib/sitemap.server", () => ({
+      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
+        { path: "/ads/nike.com" },
+        { path: "/ads/stockx.com" },
+        { path: "/ads/nykaa.com" },
+        { path: "/ads/nike.com/extra" },
+      ]),
+    }));
+  });
+
+  // Issue #1547: the /sneaker-resale cross-link section must list exactly the
+  // cluster's live pages — seed-list members that are indexable (nike.com,
+  // stockx.com) and nothing else (nykaa.com is indexable but not in the
+  // cluster; the non-bare path is dropped by the shared filter).
+  it("keeps only indexable pages whose domain is in the seed list", async () => {
+    vi.resetModules();
+    const { loadSneakerResaleAdsInternalLinks } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    expect(await loadSneakerResaleAdsInternalLinks({} as never)).toEqual([
+      { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
+      { domain: "stockx.com", path: "/ads/stockx.com", name: "StockX" },
+    ]);
+  });
+});
+
 describe("resolveIndexableBrandPageLinkForDomain", () => {
   beforeEach(() => {
     vi.doMock("~/lib/sitemap.server", () => ({

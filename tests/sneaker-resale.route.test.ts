@@ -3,8 +3,21 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
+import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 import { SNEAKER_RESALE_MARKETS } from "~/lib/locale-markets";
 import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
+
+// The brand-links and swing sections render exactly the loader-provided
+// indexable set (the sneaker-resale seed list ∩ the sitemap indexability
+// filter). Fixtures stand in for the live set; cluster members missing from
+// it (hoka.com, sneakerping.com) model a still-unpublished brand page.
+const INDEXABLE_LINKS: IndexableAdsLink[] = [
+  { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
+  { domain: "stockx.com", path: "/ads/stockx.com", name: "StockX" },
+  { domain: "adidas.com", path: "/ads/adidas.com", name: "adidas" },
+  { domain: "stadiumgoods.com", path: "/ads/stadiumgoods.com", name: "Stadium Goods" },
+];
+const INDEXABLE_DOMAINS = new Set(INDEXABLE_LINKS.map((link) => link.domain));
 
 beforeEach(() => {
   vi.resetModules();
@@ -52,7 +65,10 @@ describe("sneaker-resale locale landing pages", () => {
     for (const market of SNEAKER_RESALE_MARKETS) {
       const copy = sneakerResaleCopy(market.id);
       const markup = renderToStaticMarkup(
-        createElement(SneakerResaleLanding, { locale: market.id }),
+        createElement(SneakerResaleLanding, {
+          locale: market.id,
+          indexableAdsLinks: INDEXABLE_LINKS,
+        }),
       );
       expect(markup).toContain(copy.h1);
       expect(markup).toContain(`href="/auth/signup?source=${market.signupSource}"`);
@@ -65,43 +81,73 @@ describe("sneaker-resale locale landing pages", () => {
   // #1290 live proof: the sneaker-resale category page used to name brands in
   // copy only and link to zero /ads/ pages. Each brand tile must now link to a
   // real /ads/:domain brand page so the market's #1 swing is not orphaned.
-  // A domain without a cached /ads/ page 301-redirects to /search, so a
-  // missing link here is a dead-end regression, not a styling change.
-  it("links every brand tile to a real /ads/:domain brand page (#1290)", async () => {
+  // Since #1547 the tiles are the loader's live indexable set — the sitemap's
+  // own indexability filter — so a brand that loses its page drops off
+  // instead of shipping a stale link.
+  it("links every brand tile to a real /ads/:domain brand page (#1290, #1547)", async () => {
     const { SneakerResaleLanding } = await import("~/components/sneaker-resale-landing");
     const markup = renderToStaticMarkup(
-      createElement(SneakerResaleLanding, { locale: "en" }),
+      createElement(SneakerResaleLanding, {
+        locale: "en",
+        indexableAdsLinks: INDEXABLE_LINKS,
+      }),
     );
-    for (const domain of ["nike.com", "adidas.com", "asos.com", "decathlon.com"]) {
-      expect(markup).toContain(`href="/ads/${domain}"`);
+    for (const link of INDEXABLE_LINKS) {
+      expect(markup).toContain(`href="${link.path}"`);
+      expect(markup).toContain(link.name);
     }
-    // The brand-links section must not be empty or copy-only: at least four
-    // /ads/ links ship, matching the live sneaker-resale page driven on
-    // 2026-08-28.
-    const adsLinkCount = (markup.match(/href="\/ads\/[^"]+"/g) ?? []).length;
-    expect(adsLinkCount).toBeGreaterThanOrEqual(4);
+    // A seed-list domain whose page is not indexable must not appear.
+    expect(markup).not.toContain('href="/ads/hoka.com"');
+    expect(markup).not.toContain('href="/ads/sneakerping.com"');
+  });
+
+  it("hides the brand-links section entirely when no cluster page is indexable", async () => {
+    const { SneakerResaleLanding } = await import("~/components/sneaker-resale-landing");
+    const copy = sneakerResaleCopy("en");
+    const markup = renderToStaticMarkup(
+      createElement(SneakerResaleLanding, { locale: "en", indexableAdsLinks: [] }),
+    );
+    expect(markup).not.toContain(copy.brandsTitle);
+    expect(markup).not.toMatch(/href="\/ads\/[^"]+"/);
   });
 
   // #1521 live proof: the "Who's moving right now" section named the movers
   // (Saucony, ASICS) with no link at all — the one place on the landing page
   // the followable-proof pattern was absent. Every mover's brand must link to
-  // the live search surface for its domain (/search?q=<domain> has rows today;
-  // /ads/:domain 301-redirects there until #1282/#1306 populate it). The
-  // required `domain` field keeps a dead link from compiling in.
-  it("links every swing mover to its live /search?q= proof surface in every locale (#1521)", async () => {
+  // a live proof surface: /ads/<domain> when that brand page is indexable
+  // (#1547: #1282/#1306 populated it), else /search?q=<domain>. The required
+  // `domain` field keeps a dead link from compiling in.
+  it("links every swing mover to its live proof surface in every locale (#1521, #1547)", async () => {
     const { SneakerResaleLanding } = await import("~/components/sneaker-resale-landing");
     for (const market of SNEAKER_RESALE_MARKETS) {
       const copy = sneakerResaleCopy(market.id);
       const markup = renderToStaticMarkup(
-        createElement(SneakerResaleLanding, { locale: market.id }),
+        createElement(SneakerResaleLanding, {
+          locale: market.id,
+          indexableAdsLinks: INDEXABLE_LINKS,
+        }),
       );
       expect(copy.swing.length).toBeGreaterThanOrEqual(2);
       for (const item of copy.swing) {
         expect(item.domain.trim()).not.toBe("");
         expect(item.domain).not.toContain(" ");
-        expect(markup).toContain(`href="/search?q=${item.domain}"`);
+        const expected = INDEXABLE_DOMAINS.has(item.domain)
+          ? `href="/ads/${item.domain}"`
+          : `href="/search?q=${item.domain}"`;
+        expect(markup).toContain(expected);
       }
     }
+    // The retarget is real: nike.com is in the fixture indexable set, so its
+    // swing tile leaves /search for the brand page; sneakerping.com has no
+    // indexable page and keeps the /search fallback.
+    const enMarkup = renderToStaticMarkup(
+      createElement(SneakerResaleLanding, {
+        locale: "en",
+        indexableAdsLinks: INDEXABLE_LINKS,
+      }),
+    );
+    expect(enMarkup).toContain('href="/ads/nike.com"');
+    expect(enMarkup).toContain('href="/search?q=sneakerping.com"');
   });
 
   it("emits reciprocal hreflang from no-arg links() and a locale canonical from loaderData", async () => {
@@ -178,7 +224,12 @@ describe("sneaker-resale locale landing pages", () => {
   it("keeps FAQ JSON-LD in lockstep with the visible FAQ", async () => {
     const { SneakerResaleLanding } = await import("~/components/sneaker-resale-landing");
     const copy = sneakerResaleCopy("de");
-    const markup = renderToStaticMarkup(createElement(SneakerResaleLanding, { locale: "de" }));
+    const markup = renderToStaticMarkup(
+      createElement(SneakerResaleLanding, {
+        locale: "de",
+        indexableAdsLinks: INDEXABLE_LINKS,
+      }),
+    );
     const ldBlocks = [...markup.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
     const faqBlocks = ldBlocks
       .map((match) => JSON.parse(match[1] ?? "{}"))

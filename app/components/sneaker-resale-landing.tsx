@@ -3,6 +3,7 @@ import { Form, Link } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingFooter } from "~/components/marketing-footer";
+import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 import {
   SNEAKER_RESALE_MARKETS,
   sneakerResaleSignupPath,
@@ -12,23 +13,23 @@ import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
 import { faqPageJsonLd, jsonLdScriptProps, webPageJsonLd } from "~/lib/seo";
 
 /**
- * Real sneaker-resale advertisers that have a live, indexable `/ads/:domain`
- * brand page built from real Meta Ad Library captures. The sneaker-resale
- * landing page used to name brands in copy only (Jordan / StockX / GOAT in
- * the FAQ) and link to zero `/ads/` pages — orphaned from the market's #1
- * swing (#1290). Each entry here is a domain whose `/ads/` page is live and
- * indexable today (verified against the production sitemap); a domain
- * without a cached page 301-redirects to `/search` and is intentionally
- * omitted so this section never ships a dead link.
+ * `indexableAdsLinks` is the sneaker-resale publisher cluster's live,
+ * indexable `/ads/:domain` brand pages — the route loader resolves it from
+ * the same sitemap indexability signal the sitemap itself uses
+ * (`loadSneakerResaleAdsInternalLinks`, issue #1547), so the section can
+ * never point at a brand page that would render noindex or 301 to /search.
+ * The sneaker-resale landing page used to name brands in copy only (Jordan /
+ * StockX / GOAT in the FAQ) and link to zero `/ads/` pages — orphaned from
+ * the market's #1 swing (#1290). The section hides entirely when no cluster
+ * page is indexable (a sitemap hiccup degrades the loader to []).
  */
-const SNEAKER_RESALE_BRAND_PAGES: ReadonlyArray<{ name: string; domain: string }> = [
-  { name: "Nike", domain: "nike.com" },
-  { name: "Adidas", domain: "adidas.com" },
-  { name: "ASOS", domain: "asos.com" },
-  { name: "Decathlon", domain: "decathlon.com" },
-];
-
-export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId }) {
+export function SneakerResaleLanding({
+  locale,
+  indexableAdsLinks,
+}: {
+  locale: SneakerResaleLocaleId;
+  indexableAdsLinks: readonly IndexableAdsLink[];
+}) {
   const copy = sneakerResaleCopy(locale);
   const market = SNEAKER_RESALE_MARKETS.find((entry) => entry.id === locale);
   if (!market) {
@@ -109,23 +110,25 @@ export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId
         </div>
       </section>
 
-      <section className="ld-quiet ld-reveal">
-        <div className="ld-section-head">
-          <span className="ld-kicker">{copy.brandsKicker}</span>
-          <h2>{copy.brandsTitle}</h2>
-          <p className="ld-deck-copy">{copy.brandsDeck}</p>
-        </div>
-        <ul className="ld-brand-links" aria-label={copy.brandsTitle}>
-          {SNEAKER_RESALE_BRAND_PAGES.map((brand) => (
-            <li key={brand.domain}>
-              <Link to={`/ads/${brand.domain}`}>
-                <strong>{brand.name}</strong>
-                <span>{brand.domain}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {indexableAdsLinks.length > 0 ? (
+        <section className="ld-quiet ld-reveal">
+          <div className="ld-section-head">
+            <span className="ld-kicker">{copy.brandsKicker}</span>
+            <h2>{copy.brandsTitle}</h2>
+            <p className="ld-deck-copy">{copy.brandsDeck}</p>
+          </div>
+          <ul className="ld-brand-links" aria-label={copy.brandsTitle}>
+            {indexableAdsLinks.map((link) => (
+              <li key={link.domain}>
+                <Link to={link.path}>
+                  <strong>{link.name}</strong>
+                  <span>{link.domain}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="ld-quiet ld-reveal">
         <div className="ld-section-head">
@@ -136,7 +139,19 @@ export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId
         <ul className="ld-brand-links ld-swing" aria-label={copy.swingTitle}>
           {copy.swing.map((item) => (
             <li key={item.brand}>
-              <Link to={`/search?q=${item.domain}`}>
+              {/*
+               * A mover whose /ads/:domain page is live and indexable links
+               * straight to the real ad wall; the rest fall back to the live
+               * search surface (#1521 keeps every tile followable, #1547
+               * retargets populated domains per the copy file's own note).
+               */}
+              <Link
+                to={
+                  indexableAdsLinks.some((link) => link.domain === item.domain)
+                    ? `/ads/${item.domain}`
+                    : `/search?q=${item.domain}`
+                }
+              >
                 <strong>{item.brand}</strong>
                 <span>{item.line}</span>
               </Link>

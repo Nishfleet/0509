@@ -210,7 +210,7 @@ describe("/ads/:domain loader", () => {
       domain: "nykaa.com",
       brandName: "Nykaa",
       hasCachedAds: true,
-      noindex: false,
+      indexable: true,
       canonicalPath: "/ads/nykaa.com",
     });
     // The all-countries cache view is spelled out — the page must name the
@@ -635,7 +635,7 @@ describe("/ads/:domain indexing flag", () => {
 
     const result = await runLoader("nykaa.com", mocks.env);
 
-    expect(result.noindex).toBe(false);
+    expect(result.indexable).toBe(true);
   });
 
   it('stays indexable when the flag is explicitly "1" and the cache is fresh', async () => {
@@ -646,7 +646,7 @@ describe("/ads/:domain indexing flag", () => {
 
     const result = await runLoader("nykaa.com", mocks.env);
 
-    expect(result.noindex).toBe(false);
+    expect(result.indexable).toBe(true);
   });
 
   it('noindexes everything when the emergency brake ("0") is set', async () => {
@@ -658,7 +658,7 @@ describe("/ads/:domain indexing flag", () => {
     const result = await runLoader("nykaa.com", mocks.env);
 
     expect(result.hasCachedAds).toBe(true);
-    expect(result.noindex).toBe(true);
+    expect(result.indexable).toBe(false);
   });
 
   it("still renders but noindexes cache older than 7 days", async () => {
@@ -670,7 +670,7 @@ describe("/ads/:domain indexing flag", () => {
 
     expect(result.hasCachedAds).toBe(true);
     expect(result.ads).toHaveLength(1);
-    expect(result.noindex).toBe(true);
+    expect(result.indexable).toBe(false);
   });
 
   it("treats cache older than 30 days as not checked recently — redirects (issue #1282)", async () => {
@@ -729,7 +729,7 @@ describe("/ads/:domain indexing flag", () => {
     expect(result.ads).toHaveLength(1);
     expect(result.verifiedLinkCount).toBe(0);
     expect(result.aggression).toBeNull();
-    expect(result.noindex).toBe(true);
+    expect(result.indexable).toBe(false);
   });
 
   it("indexes a fresh capture whose verified-linked ad is too recent to score (window < 14 days)", async () => {
@@ -755,7 +755,7 @@ describe("/ads/:domain indexing flag", () => {
     expect(result.verifiedLinkCount).toBe(1);
     expect(result.aggression).toBeNull();
     // The score is deferred, but the populated page is indexable (issue #1442).
-    expect(result.noindex).toBe(false);
+    expect(result.indexable).toBe(true);
     // Honest "N/14 days so far" figure for the deferred score state.
     expect(result.observationDays).toBe(2);
   });
@@ -784,7 +784,7 @@ describe("/ads/:domain indexing flag", () => {
     expect(result.verifiedLinkCount).toBe(1);
     expect(result.aggression).toBeNull();
     expect(result.observationDays).toBeNull();
-    expect(result.noindex).toBe(false);
+    expect(result.indexable).toBe(true);
   });
 
   it("stays indexable when the verified-linked capture clears the 14-day score floor", async () => {
@@ -797,7 +797,7 @@ describe("/ads/:domain indexing flag", () => {
 
     expect(result.verifiedLinkCount).toBe(1);
     expect(result.aggression).not.toBeNull();
-    expect(result.noindex).toBe(false);
+    expect(result.indexable).toBe(true);
   });
 
   it("indexes allbirds.com when the warmed cache lands on allbirds.co.uk (production 2026-08-26 shape)", async () => {
@@ -836,7 +836,7 @@ describe("/ads/:domain indexing flag", () => {
     expect(result.hasCachedAds).toBe(true);
     expect(result.verifiedLinkCount).toBe(1);
     expect(result.aggression).not.toBeNull();
-    expect(result.noindex).toBe(false);
+    expect(result.indexable).toBe(true);
   });
 
   it("indexes mamaearth.com when the warmed cache lands on mamaearth.in (production 2026-08-26 shape)", async () => {
@@ -870,7 +870,7 @@ describe("/ads/:domain indexing flag", () => {
     expect(result.hasCachedAds).toBe(true);
     expect(result.verifiedLinkCount).toBe(1);
     expect(result.aggression).not.toBeNull();
-    expect(result.noindex).toBe(false);
+    expect(result.indexable).toBe(true);
   });
 });
 
@@ -890,7 +890,7 @@ describe("/ads/:domain meta", () => {
     checkedAgo: "about 2 hours ago",
     teaser: null,
     adLibraryCountry: "India",
-    noindex: false,
+    indexable: true,
     canonicalPath: "/ads/nykaa.com",
     freshForLiveClaim: false,
     brandOwnedAdCount: 1,
@@ -945,7 +945,7 @@ describe("/ads/:domain meta", () => {
 
   it("adds the robots noindex meta when the loader marked the page noindex", async () => {
     installBrandPageMocks();
-    const tags = await metaFor({ ...richData, noindex: true });
+    const tags = await metaFor({ ...richData, indexable: false });
 
     expect(tags).toContainEqual({ name: "robots", content: "noindex" });
   });
@@ -1139,7 +1139,7 @@ describe("/ads/:domain meta", () => {
       hasCachedAds: false,
       ads: [],
       checkedAgo: null,
-      noindex: true,
+      indexable: false,
     });
 
     const description = tags.find((tag) => tag.name === "description")?.content ?? "";

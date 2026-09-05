@@ -18,6 +18,24 @@ export const PUBLIC_BRAND_NAME_OVERRIDES: Record<string, string> = {
   "asos.com": "ASOS",
   "hubspot.com": "HubSpot",
   "ridgewallet.com": "Ridge Wallet",
+  // Sneaker-resale publisher cluster (data/seed-lists/sneaker-resale.json,
+  // issue #1547): host-derived labels would render "Stockx", "Newbalance",
+  // "Kickscrew" on brand-page titles and internal link tiles.
+  "stockx.com": "StockX",
+  "goat.com": "GOAT",
+  "asics.com": "ASICS",
+  "puma.com": "PUMA",
+  "newbalance.com": "New Balance",
+  "footlocker.com": "Foot Locker",
+  "dsw.com": "DSW",
+  "jdsports.com": "JD Sports",
+  "finishline.com": "Finish Line",
+  "stadiumgoods.com": "Stadium Goods",
+  "flightclub.com": "Flight Club",
+  "kickscrew.com": "KICKS CREW",
+  "solesavy.com": "SoleSavy",
+  "underarmour.com": "Under Armour",
+  "sneakerping.com": "SneakerPing",
 };
 
 export function publicBrandNameFromDomain(domain: string): string | null {

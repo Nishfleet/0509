@@ -158,7 +158,14 @@ export interface BrandPageLoaderData {
    * the page's ads are actually from. Null on the cache-miss shell.
    */
   adLibraryCountry: string | null;
-  noindex: boolean;
+  /**
+   * True when the page may be indexed (fresh snapshot, ≥1 verified-linked ad,
+   * no emergency brake). Named positively so the serialized loader data on an
+   * indexable page never embeds the token "noindex" — a naive source grep
+   * (the issue #1547 verify probe, a bulk SEO crawl audit) must find that
+   * string only when the page really carries the robots directive.
+   */
+  indexable: boolean;
   canonicalPath: string;
   /**
    * Server-rendered summary of recent landing-page captures for this domain
@@ -318,8 +325,11 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // newly-discovered populated brand invisible to Google for two weeks
   // (issue #1442) — decouple them. `!snapshot` is defensive (the loader
   // already redirects on a true cache miss above).
-  const noindex =
-    emergencyNoindex || !snapshot || !snapshot.freshForIndexing || verifiedLinkedAds.length === 0;
+  const indexable =
+    !emergencyNoindex &&
+    snapshot !== null &&
+    snapshot.freshForIndexing &&
+    verifiedLinkedAds.length > 0;
 
   return {
     domain: brand.domain,
@@ -343,7 +353,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     changeEvents: snapshot ? buildBrandChangeFeed(verifiedLinkedAds, now) : [],
     offerTimelineEntries,
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
-    noindex,
+    indexable,
     canonicalPath: `/ads/${brand.domain}`,
     captureFailuresSummary,
   };
@@ -535,7 +545,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
     // links() cannot see route params in this router version, so the
     // canonical tag ships as a meta-descriptor link instead.
     { tagName: "link", rel: "canonical", href: canonicalUrl(loaderData.canonicalPath) },
-    ...(loaderData.noindex ? [{ name: "robots", content: "noindex" }] : []),
+    ...(loaderData.indexable ? [] : [{ name: "robots", content: "noindex" }]),
   ];
 };
 
@@ -562,7 +572,7 @@ export default function BrandAdsRoute() {
        * {domain} offer with Five to Nine as the provider, and the brand-
        * specific FAQ rendered from the same array further down the page.
        */}
-      {!data.noindex ? (
+      {data.indexable ? (
         <>
           <script
             {...jsonLdScriptProps(
@@ -622,9 +632,9 @@ export default function BrandAdsRoute() {
        * noindex page (cache-miss 301s away; stale/demo/emergency-brake
        * entries still render the wall but must not rank) — matching the
        * WebPage/Service/FAQPage block above, which is also gated on
-       * `!data.noindex`.
+       * `data.indexable`.
        */}
-      {!data.noindex ? (
+      {data.indexable ? (
         <Breadcrumbs
           items={[
             { name: "Home", pathname: "/" },
@@ -1021,7 +1031,7 @@ function BrandAdsResults({
           labels, the Watch CTA). Hidden on noindex pages and the cache-miss
           shell, which 301-redirects and never reaches this component. */}
       {(() => {
-        const faq = data.noindex ? null : brandPageFaqEntries(data);
+        const faq = data.indexable ? brandPageFaqEntries(data) : null;
         if (!faq) return null;
         return (
           <section className="f9-ads-sec" aria-labelledby="brand-ads-faq-title">
