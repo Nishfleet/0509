@@ -27,7 +27,7 @@ afterEach(() => {
 
 const COMPARE_PAGES = [
   { slug: "visualping", module: "~/routes/compare.visualping" },
-  { slug: "visualping-ad-library", module: "~/routes/compare.visualping-ad-library" },
+  { slug: "visualping-ad-libraries", module: "~/routes/compare.visualping-ad-libraries" },
   { slug: "panoramata", module: "~/routes/compare.panoramata" },
   { slug: "adspyder", module: "~/routes/compare.adspyder" },
   { slug: "foreplay", module: "~/routes/compare.foreplay" },

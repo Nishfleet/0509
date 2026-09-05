@@ -1057,7 +1057,7 @@ describe("SITEMAP_PATHS", () => {
     const moneyPages = [
       "/pricing",
       "/compare/foreplay-spyder",
-      "/compare/visualping-ad-library",
+      "/compare/visualping-ad-libraries",
       "/compare/pulzifi",
       "/compare/spyland",
     ] as const;
