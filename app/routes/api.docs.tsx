@@ -62,6 +62,11 @@ export default function ApiDocsRoute() {
           API key for readiness and exports. Use a write-enabled key only when the tool should run
           approved account actions.
         </p>
+        <p>
+          Follow the{" "}
+          <Link to="/mcp/setup">one-paste MCP setup</Link> for Claude Desktop, ChatGPT, and pi
+          connector snippets.
+        </p>
         <pre className="f9-code-block">
           <code>{`POST /api/mcp
 Authorization: Bearer f9_live_...

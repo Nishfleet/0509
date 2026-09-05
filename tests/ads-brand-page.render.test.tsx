@@ -859,3 +859,28 @@ describe("/ads/:domain — capture-validity proof cross-link (issue #1320)", () 
     expect(markup).toContain("What we refuse to alert on");
   });
 });
+
+describe("/ads/:domain — ad-aggression methodology footer cross-link (issue #1552)", () => {
+  const anchor = "How the Ad Aggression Score is calculated";
+
+  it("links the methodology page from the ad wall footer on every populated page, including the five live demo brands", async () => {
+    const methodologyHref = `href="${AD_AGGRESSION_METHODOLOGY_PATH}"`;
+    // Evidence domains from the issue — the pages a "<brand> facebook ads"
+    // buyer lands on. All five are populated captures with ≥1 verified ad;
+    // the methodology cross-link must render on each and sit after the wall.
+    for (const domain of ["nike.com", "nykaa.com", "allbirds.com", "lenskart.com", "mamaearth.com"] as const) {
+      const markup = await render(populated({ domain, canonicalPath: `/ads/${domain}` }));
+      expect(markup).toContain(methodologyHref);
+      expect(markup).toContain(anchor);
+      expect(markup.indexOf(anchor)).toBeGreaterThan(markup.indexOf("All 6 ads, on the wall"));
+    }
+  });
+
+  it("hides the methodology footer on an unverified wall with no verified-linked ad (no score exists to explain)", async () => {
+    const markup = await render(
+      populated({ verifiedLinkedAds: [], verifiedLinkCount: 0, aggression: null }),
+    );
+
+    expect(markup).not.toContain(anchor);
+  });
+});

@@ -132,6 +132,22 @@ describe("public capture-validity rules page (#970, #1432)", () => {
     expect(combined).not.toMatch(/#1|best competitor|nobody advertises/i);
   });
 
+  it("renders FAQPage JSON-LD covering every visible rule block", async () => {
+    const { default: CaptureRulesRoute } = await import("~/routes/capture-rules");
+    const markup = renderToStaticMarkup(createElement(CaptureRulesRoute));
+
+    // The page must emit a single FAQPage entity whose questions mirror the
+    // visible rule titles and the guarantee / what-still-alerts framing, so a
+    // buyer and a search engine see the same rule set as the page body.
+    expect(markup).toContain('"@type":"FAQPage"');
+    expect(markup).toContain('"@type":"Question"');
+    for (const rule of CAPTURE_VALIDITY_PUBLIC_RULES) {
+      expect(markup).toContain(`"name":"${rule.title}"`);
+    }
+    expect(markup).toContain('"name":"The guarantee"');
+    expect(markup).toContain('"name":"What still alerts"');
+  });
+
   it("is linked from the homepage proof claim", async () => {
     const marketing = readFileSync(marketingPath, "utf8");
     expect(marketing).toContain('className="ld-rec" to="/capture-rules"');

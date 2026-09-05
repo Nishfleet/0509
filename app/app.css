@@ -7199,6 +7199,13 @@ reds soften --- */
   margin: 0.4rem 0 0;
 }
 
+/* Ad-aggression methodology footer under the ad wall (issue #1552). Dimmed
+   by pairing with .f9-wk-dim; adds the modest separation so the trust link
+   reads as part of the wall, not a stray line. */
+.f9-ads-wall-foot {
+  margin-top: 0.9rem;
+}
+
 /* ---- PRIMARY CTA STRIP ---- */
 .f9-ads-watch-strip {
   background: var(--ink);
@@ -16901,6 +16908,22 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   color: var(--ink-soft);
   font-size: 0.875rem;
   margin: 0 0 12px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Run history page (/app/watchlists/:id, issue #1476).               */
+/* The row contract inherits the board's RuledRow (1px rules, no      */
+/* boxes, status as a word). Only the run-summary line needs a home.  */
+/* ------------------------------------------------------------------ */
+.f9-rh-run-line {
+  margin: 13px 0 0;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.f9-rh-page .f9-wk-rows {
+  margin-top: 13px;
 }
 
 /* Visible breadcrumb navigation (issue #1463). Rendered by the shared

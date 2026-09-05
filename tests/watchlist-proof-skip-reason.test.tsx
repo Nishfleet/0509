@@ -1,6 +1,9 @@
+import { createElement } from "react";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
+import { createMemoryRouter, RouterProvider } from "react-router";
 
 import { RecentEvidenceChecksCard } from "~/components/watchlists/recent-evidence-checks-card";
 import type { ProofCaptureRecord, WatchlistProofSummary } from "~/lib/types";
@@ -39,7 +42,13 @@ function proofCapture(
 }
 
 function render(element: ReactElement): string {
-  return renderToStaticMarkup(element);
+  // RecentEvidenceChecksCard renders a react-router <Link> for the budget-skip
+  // "why this happened" anchor (#1485), so it needs a router context to render
+  // to static markup.
+  const router = createMemoryRouter([
+    { path: "/", element },
+  ]);
+  return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
 describe("buildProofSummary skip-reason counts (Q3 #958)", () => {
