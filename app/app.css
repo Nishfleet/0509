@@ -10321,12 +10321,13 @@ a.f9-wk-btn {
 /* BET 2 tier badge (issue 1482): the confidence marker on each search row.
    One badge per row, tier in the class; bet2-live-verification counts these
    spans, so the markup contract stays stable. Verified (green), Likely
-   (amber), Unmatched (grey). */
+   (amber), Unmatched (grey). Colours come from the design tokens and the
+   radius stays 0 — the workspace language layer's boringness budget is law
+   (BL-030), so the badge is a flat label, not a pill. */
 .f9-tier-badge {
   display: inline-block;
   margin-right: 6px;
   padding: 0 7px;
-  border-radius: 999px;
   font-size: 11.5px;
   font-weight: 650;
   letter-spacing: 0.02em;
@@ -10342,16 +10343,12 @@ a.f9-wk-btn {
 
 .f9-tier-badge.is-likely {
   background: var(--amber-wash);
-  color: #8a5a00;
+  color: var(--ink);
 }
 
 .f9-tier-badge.is-unmatched {
   background: var(--line);
   color: var(--ink-soft);
-}
-
-[data-f9-theme="dark"] .f9-tier-badge.is-likely {
-  color: #e2a83e;
 }
 
 .f9-wk-st {
