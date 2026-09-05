@@ -374,6 +374,10 @@ describe("MCP route", () => {
       "create_support_case",
       "list_support_cases",
       "list_web_mentions",
+      "get_change_history",
+      "get_offer_state_at",
+      "diff_offer",
+      "list_suppressed",
     ]);
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
     expect(body.result.tools[0]).toMatchObject({
@@ -613,6 +617,10 @@ describe("MCP route", () => {
       "get_watchlist_export",
       "watchlist_runs.list",
       "get_digest_export",
+      "get_change_history",
+      "get_offer_state_at",
+      "diff_offer",
+      "list_suppressed",
     ]);
     expect(body.result.tools.every((tool) => !tool.requiresWriteEnabled)).toBe(true);
     expect(body.result.tools.every((tool) => tool.credentialRequirement === "Requires an active Agency customer API key.")).toBe(true);
