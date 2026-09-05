@@ -270,6 +270,55 @@ describe("public search submission settle", () => {
     expect(SEARCH_NAVIGATION_SETTLE_GRACE_MS).toBe(90_000);
   });
 
+  it("builds one canonical identity for a committed payload and its target URL", async () => {
+    const { buildSearchIdentityFromLoaderData, buildSearchUrlIdentity } =
+      await import("~/routes/search");
+    type IdentityInput = Parameters<
+      typeof buildSearchIdentityFromLoaderData
+    >[0];
+    const committedResults = buildSearchIdentityFromLoaderData(
+      resultsLoaderData as unknown as IdentityInput,
+    );
+    const committedError = buildSearchIdentityFromLoaderData(
+      errorLoaderData as unknown as IdentityInput,
+    );
+
+    // The fixture committed payloads and the in-flight target URLs describe
+    // the same searches: the settled submit must recognize them as one.
+    expect(committedResults).toBe(buildSearchUrlIdentity(TARGET_SEARCH));
+    expect(committedError).toBe(buildSearchUrlIdentity(ERROR_SEARCH));
+
+    // A real form-submit target carries no `query` param — the website
+    // fallback derives it, so the identity still matches the committed
+    // results payload.
+    const SUBMIT_SHAPE_SEARCH =
+      "?mode=advertiser&trackingRole=competitor&website=https%3A%2F%2Fnykaa.com&country=all&platform=all&creativeType=all&status=all&firstSeenFrom=&lastSeenFrom=";
+    expect(buildSearchUrlIdentity(SUBMIT_SHAPE_SEARCH)).toBe(committedResults);
+
+    // View-only params (selection, cursor) never change the search identity.
+    expect(
+      buildSearchUrlIdentity(`${TARGET_SEARCH}&selected=ad-nykaa`),
+    ).toBe(buildSearchUrlIdentity(TARGET_SEARCH));
+    expect(buildSearchUrlIdentity(`${TARGET_SEARCH}&after=cursor-2`)).toBe(
+      buildSearchUrlIdentity(TARGET_SEARCH),
+    );
+
+    // No search committed and no search in the target: the pre-search idle
+    // state is never mistaken for a settled search.
+    expect(
+      buildSearchIdentityFromLoaderData(
+        idleLoaderData as unknown as IdentityInput,
+      ),
+    ).toBeNull();
+    expect(buildSearchUrlIdentity("")).toBeNull();
+
+    // Broader scope is a different search: no false settle on a filter/scope
+    // change.
+    expect(buildSearchUrlIdentity(WARMING_SEARCH)).not.toBe(
+      buildSearchUrlIdentity(TARGET_SEARCH),
+    );
+  });
+
   it("keeps See ads pending while a new GET navigation to /search is loading", async () => {
     loaderData = idleLoaderData;
     locationObj = { pathname: "/search", search: "", hash: "" };
@@ -317,6 +366,73 @@ describe("public search submission settle", () => {
     expect(errorMarkup).toContain("See ads");
     expect(errorMarkup).not.toContain("Searching…");
     expect(errorMarkup).not.toContain('aria-busy="true"');
+  });
+
+  it("settles the submit when the committed loader data already matches the in-flight target (stale URL and loading signal, results)", async () => {
+    // Observed live failure: the /search data request completed but the SPA
+    // never committed the target URL and useNavigation still reported loading,
+    // leaving "Searching…" over the idle page for up to 90 seconds. The
+    // committed loader data IS the target's committed state — the page must
+    // render it and re-enable the submit instead of stranding the visitor.
+    loaderData = resultsLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: TARGET_SEARCH },
+    };
+
+    const markup = await renderMarkup();
+
+    // The results are the committed loader data (the fixture's own ad), not a
+    // fabricated success.
+    expect(markup).toContain("Festive glow");
+    expect(markup).toContain("See ads");
+    expect(markup).not.toContain("Searching…");
+    expect(markup).not.toContain('aria-busy="true"');
+    expect(markup).not.toContain("disabled");
+    expect(markup).not.toContain("Nothing searched yet");
+  });
+
+  it("settles the submit into the committed actionable error when the in-flight target matches stale URL and loading signals", async () => {
+    loaderData = errorLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: ERROR_SEARCH },
+    };
+
+    const markup = await renderMarkup();
+
+    // The committed inputError for the exact target URL, with the submit
+    // released — an honest, actionable failure state.
+    expect(markup).toContain(
+      "That website looks incomplete. Add the full domain, like brand.com.",
+    );
+    expect(markup).toContain("See ads");
+    expect(markup).not.toContain("Searching…");
+    expect(markup).not.toContain('aria-busy="true"');
+    expect(markup).not.toContain("disabled");
+    expect(markup).not.toContain("Nothing searched yet");
+  });
+
+  it("keeps See ads pending for a genuinely different in-flight search (no false settle)", async () => {
+    // Committed results for the exact nykaa search while a BROADER re-run of
+    // the same website is loading: a different search identity, so the submit
+    // must stay pending and the old committed results must not be presented
+    // as the new search's own settlement.
+    loaderData = resultsLoaderData;
+    locationObj = { pathname: "/search", search: TARGET_SEARCH, hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: WARMING_SEARCH },
+    };
+
+    const markup = await renderMarkup();
+
+    expect(markup).toContain("Searching…");
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toContain("disabled");
+    expect(markup).toContain("Festive glow");
   });
 
   it("shows the recovery reload after 90 seconds on an uncommitted idle page, enables submit, and clears when navigation settles", async () => {

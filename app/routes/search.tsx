@@ -141,6 +141,65 @@ const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
 // the exact grace window.
 export const SEARCH_NAVIGATION_SETTLE_GRACE_MS = 90_000;
 
+/**
+ * Canonical identity of a committed /search loader payload: which search the
+ * page is actually showing, as a stable URL-search string. Only the parts that
+ * DEFINE the search take part — mode, filters, website, scope — so view-only
+ * params (selected, after, sort, fresh) can never make two different searches
+ * collide or one search look like another. Returns null for the pre-search
+ * idle payload (no query, no website).
+ */
+export function buildSearchIdentityFromLoaderData(data: {
+  mode: string;
+  filters: SearchFilters;
+  competitorWebsite?: { raw?: string | null } | null;
+  searchScope: string;
+}): string | null {
+  const query = data.filters.query;
+  const websiteRaw = data.competitorWebsite?.raw?.trim() ?? "";
+  if (!query && !websiteRaw) {
+    return null;
+  }
+  const params = new URLSearchParams();
+  params.set("mode", data.mode);
+  params.set("query", query);
+  params.set("country", data.filters.country);
+  params.set("platform", data.filters.platform);
+  params.set("creativeType", data.filters.creativeType);
+  params.set("status", data.filters.status);
+  if (data.filters.firstSeenFrom) {
+    params.set("firstSeenFrom", data.filters.firstSeenFrom);
+  }
+  if (data.filters.lastSeenFrom) {
+    params.set("lastSeenFrom", data.filters.lastSeenFrom);
+  }
+  params.set("website", websiteRaw);
+  params.set("broader", data.searchScope === "broader" ? "1" : "0");
+  return params.toString();
+}
+
+/**
+ * The search identity an in-flight /search GET target URL commits to, derived
+ * with the same normalization the loader applies (website fallback for the
+ * query, invalid-website error branch, scope). Comparing it with the committed
+ * loader data's identity detects that the committed state IS the target state
+ * — the request settled — even when the router still reports loading and the
+ * URL has not flipped.
+ */
+export function buildSearchUrlIdentity(search: string): string | null {
+  const params = new URLSearchParams(search);
+  const website = normalizeCompetitorWebsiteInput(params.get("website") ?? "");
+  const parsed = hasInvalidCompetitorWebsite(website)
+    ? parseSearchParams(params)
+    : applyWebsiteSearchFallback(parseSearchParams(params), website);
+  return buildSearchIdentityFromLoaderData({
+    mode: parsed.mode,
+    filters: parsed.filters,
+    competitorWebsite: website,
+    searchScope: params.get("broader") === "1" ? "broader" : "exact",
+  });
+}
+
 const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
 const SEARCH_DELAY_SESSION_KEY = "f9.search.recent-delay.v1";
@@ -999,14 +1058,31 @@ export default function SearchRoute() {
   // — the target matches the committed location and the button re-enables
   // instead of spinning forever. The long-horizon recovery overrides it so the
   // button is never stuck disabled behind a navigation that cannot settle.
+  //
+  // Candidate-4 extension: the submit also settles when the committed loader
+  // data already represents the in-flight target search — the committed target
+  // state — even if useNavigation still reports loading AND the URL has not
+  // flipped (the settled-but-stale signal seen live: the request completed but
+  // the DOM kept "Searching…" over the idle page). Identity is the search
+  // itself, so selection, cursor, sort, and canary params never unstick a
+  // genuinely different in-flight search; those keep the button pending until
+  // they commit or reach the bounded recovery state.
   const commandNavigationTarget =
     navigation.state === "loading" &&
     navigation.location?.pathname === "/search"
       ? (navigation.location.search ?? "")
       : null;
+  const targetSearchIdentity =
+    commandNavigationTarget !== null
+      ? buildSearchUrlIdentity(commandNavigationTarget)
+      : null;
+  const targetSearchSettled =
+    targetSearchIdentity !== null &&
+    buildSearchIdentityFromLoaderData(data) === targetSearchIdentity;
   const commandNavigationPending =
     commandNavigationTarget !== null &&
     commandNavigationTarget !== location.search &&
+    !targetSearchSettled &&
     searchNavigationRecovery === null;
   const displayDomain =
     data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
