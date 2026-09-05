@@ -66,6 +66,11 @@ import {
   formatCaptureMethodLabel,
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
+  formatSearchAdvertiserUnavailableNote,
+  formatSearchCtaLabel,
+  formatSearchLandingHeadlineUnavailableNote,
+  hasSearchAdvertiserIdentity,
+  hasSearchLandingHeadline,
 } from "~/lib/landing-page-display";
 import { buildSearchAnswer, type SearchStealSummary } from "~/lib/search-answer";
 import {
@@ -1903,6 +1908,13 @@ export default function SearchRoute() {
                     </>
                   }
                 />
+                {!hasSearchAdvertiserIdentity(selectedAd.advertiser) ? (
+                  <p className="f9-wk-note">
+                    {formatSearchAdvertiserUnavailableNote({
+                      hasDestination: Boolean(selectedAd.landingPageUrl),
+                    })}
+                  </p>
+                ) : null}
 
                 <div className="f9-wk-creative">
                   <AdThumb ad={selectedAd} />
@@ -1927,7 +1939,7 @@ export default function SearchRoute() {
                 <DetailBlock kicker="What the ad says">
                   <DetailFacts
                     rows={[
-                      { key: "Hook", value: selectedAd.hook },
+                      { key: "Hook", value: formatHookLabel(selectedAd.hook) },
                       ...(selectedAdAngle
                         ? [
                             {
@@ -1940,7 +1952,10 @@ export default function SearchRoute() {
                         key: "Offer",
                         value: formatOfferDisplay(selectedAd.offer),
                       },
-                      { key: "CTA", value: selectedAd.cta },
+                      {
+                        key: "CTA",
+                        value: formatSearchCtaLabel(selectedAd.cta),
+                      },
                       {
                         key: "Format",
                         value: formatCreativeFormatLabel(selectedAd.format),
@@ -1953,7 +1968,12 @@ export default function SearchRoute() {
                             },
                           ]
                         : []),
-                      { key: "Language", value: selectedAd.languageLabel },
+                      {
+                        key: "Language",
+                        value:
+                          selectedAd.languageLabel?.trim() ||
+                          "Language unavailable",
+                      },
                       {
                         key: "Destination",
                         value: selectedAd.destinationType,
@@ -1980,11 +2000,20 @@ export default function SearchRoute() {
 
                 <DetailBlock kicker="Landing page">
                   <h4 className="f9-wk-blk-head">
-                    {selectedAd.landingPage?.rawHeadline ??
+                    {selectedAd.landingPage?.rawHeadline?.trim() ||
                       (selectionEnrichmentUiPending
                         ? "Analyzing creative…"
-                        : "Headline not captured yet")}
+                        : "Headline unavailable")}
                   </h4>
+                  {!hasSearchLandingHeadline(selectedAd.landingPage) &&
+                  !selectionEnrichmentUiPending ? (
+                    <p className="f9-wk-note">
+                      {formatSearchLandingHeadlineUnavailableNote({
+                        captureMethod: selectedAd.landingPage?.captureMethod,
+                        hasDestination: Boolean(selectedAd.landingPageUrl),
+                      })}
+                    </p>
+                  ) : null}
                   <DetailFacts
                     rows={[
                       {

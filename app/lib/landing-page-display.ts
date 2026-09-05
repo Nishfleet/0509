@@ -3,6 +3,7 @@ import type {
   CaptureMethod,
   DeliveryAttemptStatus,
   DeliveryChannel,
+  LandingPageSnapshotData,
   WebhookReconciliationStatus,
   WatchEventStatus,
   WatchEventType,
@@ -42,6 +43,45 @@ export function formatLandingPageFormValue(value: boolean | null | undefined) {
   }
 
   return "Not detected";
+}
+
+export function hasSearchAdvertiserIdentity(
+  advertiser: string | null | undefined,
+) {
+  return Boolean(advertiser?.trim());
+}
+
+export function formatSearchAdvertiserUnavailableNote(input: {
+  hasDestination: boolean;
+}) {
+  return input.hasDestination
+    ? "The advertiser name couldn't be read from the Meta Ad Library card. We never guess it from your search — open the destination link below to confirm who is running this ad."
+    : "The advertiser name couldn't be read from the Meta Ad Library card. We never guess it from your search — search a line of the ad copy above in the Meta Ad Library to confirm who is running it.";
+}
+
+export function hasSearchLandingHeadline(
+  landingPage: LandingPageSnapshotData | null | undefined,
+) {
+  return Boolean(landingPage?.rawHeadline?.trim());
+}
+
+export function formatSearchLandingHeadlineUnavailableNote(input: {
+  captureMethod: CaptureMethod | null | undefined;
+  hasDestination: boolean;
+}) {
+  if (!input.hasDestination) {
+    return "This ad didn't surface a destination link, so there was no page to read a headline from. Search a line of the ad copy above in the Meta Ad Library to find the landing page.";
+  }
+
+  if (input.captureMethod) {
+    return "We checked this page and couldn't read a headline from it. Open the destination link below to see the current headline.";
+  }
+
+  return "This destination hasn't been read — open the link below to see the headline yourself.";
+}
+
+export function formatSearchCtaLabel(cta: string | null | undefined) {
+  return cta?.trim() || "CTA not detected";
 }
 
 export function formatAnalysisSourceLabel(source: AnalysisSource | null | undefined) {
