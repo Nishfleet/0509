@@ -27,6 +27,9 @@ export interface SneakerResaleCopy {
   // it; a required field keeps the swing section from shipping a dead link.
   swing: ReadonlyArray<{ brand: string; line: string; domain: string }>;
   swingSource: string;
+  // Publication date of the cited daily market signal — the freshness guard.
+  // The canary test fails when this drifts more than 14 days from today.
+  swingAsOfIso: string;
   honestKicker: string;
   honestTitle: string;
   honest: ReadonlyArray<{ title: string; detail: string }>;
@@ -93,23 +96,24 @@ const EN: SneakerResaleCopy = {
   brandsDeck:
     "These brands are running Meta ads right now. Each link opens the live ad page we built from real captures — the same proof a watchlist tracks.",
   swingKicker: "Who's moving right now",
-  swingTitle: "The value-tier swing: Saucony over ASICS.",
+  swingTitle: "The below-retail swing.",
   swingDeck:
-    "The 30-day market signal is a shift away from £250 trainers toward value-tier running. We name it here so the page cannot read as evergreen while the market moves underneath it.",
+    "The 30-day market signal is a value-tier shift: most sneakers released in the last two years now sell below retail, and a high-engagement thread is moving Nike demand. We name it here so the page cannot read as evergreen while the market moves underneath it.",
   swing: [
     {
-      brand: "Saucony",
-      domain: "saucony.com",
-      line: "Pulled ahead of ASICS in StockX's 2026 midyear 'Big Facts' — the value-tier brand buyers are switching to, not away from.",
+      brand: "Nike",
+      domain: "nike.com",
+      line: "The high-engagement demand thread the signal flagged — 'Just Don't Wear It' (~6,000 points, ~1,800 comments) — as resale buyers weigh trading down.",
     },
     {
-      brand: "ASICS",
-      domain: "asics.com",
-      line: "The incumbent Saucony is dethroning. Still running heavy Meta spend, which makes its offer and CTA moves the ones to watch.",
+      brand: "SneakerPing",
+      domain: "sneakerping.com",
+      line: "Its 2026 report puts most recently sold releases below retail (59.5%) — the below-retail anchor behind the value-tier swing.",
     },
   ],
   swingSource:
-    "Source: StockX 2026 midyear 'Big Facts' report, via PRNewswire (2026-08-12). We cite the public report; we do not rehost it.",
+    "Source: 0509 daily market signal, 2026-09-01 — SneakerPing's report (59.5% below retail) and a high-engagement Nike demand thread. We cite the public report; we do not rehost it.",
+  swingAsOfIso: "2026-09-01",
   honestKicker: "Honest limits",
   honestTitle: "What this page does not pretend.",
   honest: [
@@ -214,23 +218,24 @@ const DE: SneakerResaleCopy = {
   brandsDeck:
     "Diese Marken schalten gerade Meta-Anzeigen. Jeder Link öffnet die Live-Anzeigenseite, die wir aus echten Erfassungen erstellt haben — derselbe Beleg, den eine Watchlist verfolgt.",
   swingKicker: "Wer sich jetzt bewegt",
-  swingTitle: "Der Value-Tier-Swing: Saucony vor ASICS.",
+  swingTitle: "Der Swing unter den Verkaufspreis.",
   swingDeck:
-    "Das 30-Tage-Marktsignal ist eine Wende weg von 250-Pfund-Schuhen hin zu Value-Tier-Laufschuhen. Wir nennen es hier, damit die Seite nicht evergreen wirkt, während sich der Markt darunter bewegt.",
+    "Das 30-Tage-Marktsignal ist eine Wertverschiebung: Die meisten in den letzten zwei Jahren veröffentlichten Sneaker werden jetzt unter dem Verkaufspreis gehandelt, und ein Thread mit viel Beteiligung bewegt die Nike-Nachfrage. Wir nennen es hier, damit die Seite nicht evergreen wirkt, während sich der Markt darunter bewegt.",
   swing: [
     {
-      brand: "Saucony",
-      domain: "saucony.com",
-      line: "In StockX' Halbjahres-Big-Facts-2026 an ASICS vorbeigezogen — die Value-Tier-Marke, zu der Käufer wechseln, nicht weg von ihr.",
+      brand: "Nike",
+      domain: "nike.com",
+      line: "Der Nachfrage-Thread mit viel Beteiligung, den das Signal markiert hat ('Just Don't Wear It', rund 6.000 Punkte, rund 1.800 Kommentare) — während Resale-Käufer nach unten ausweichen.",
     },
     {
-      brand: "ASICS",
-      domain: "asics.com",
-      line: "Der Platzhirsch, den Saucony verdrängt. Läuft weiterhin mit hohem Meta-Budget, deshalb sind seine Offer- und CTA-Änderungen die Beobachtung wert.",
+      brand: "SneakerPing",
+      domain: "sneakerping.com",
+      line: "59,5 % von 3.538 Releases aus 31 Marken wurden zuletzt unter dem Verkaufspreis verkauft — der Anker des Below-Retail-Swings.",
     },
   ],
   swingSource:
-    "Quelle: StockX Halbjahres-Big-Facts-2026, via PRNewswire (2026-08-12). Wir zitieren den öffentlichen Bericht; wir hosten ihn nicht neu.",
+    "Quelle: 0509-Tagesmarktsignal, 2026-09-01 — SneakerPings Bericht (59,5 % der Releases unter dem Verkaufspreis) und ein Nike-Nachfrage-Thread mit viel Beteiligung. Wir zitieren den öffentlichen Bericht; wir hosten ihn nicht neu.",
+  swingAsOfIso: "2026-09-01",
   honestKicker: "Ehrliche Grenzen",
   honestTitle: "Was diese Seite nicht behauptet.",
   honest: [
@@ -335,23 +340,24 @@ const JA: SneakerResaleCopy = {
   brandsDeck:
     "これらのブランドは現在Meta広告を出しています。各リンクは実キャプチャから作成した広告ページを開きます。ウォッチリストが追跡するのと同じ証拠です。",
   swingKicker: "今動いているのは",
-  swingTitle: "バリューティアの潮目：ASICSを抜いたSaucony。",
+  swingTitle: "定価割れの潮目が動いている。",
   swingDeck:
-    "直近30日の市場シグナルは、250ポンドのスニーカーからバリューティアのランニングシューズへの転換です。市場が動いている間、ページが永遠の定石に見えないよう、ここに明記します。",
+    "直近30日の市場シグナルは、価値重視への転換です。過去2年に出たスニーカーのほとんどが今は定価以下で取引され、エンゲージメントの高いスレッドがNike需要を動かしています。市場が動いている間、ページが永遠の定石に見えないよう、ここに明記します。",
   swing: [
     {
-      brand: "Saucony",
-      domain: "saucony.com",
-      line: "StockXの2026年上半期「Big Facts」でASICSを抜いた。買い手が離れる側ではなく、向かう側のバリューティアブランド。",
+      brand: "Nike",
+      domain: "nike.com",
+      line: "シグナルが注目した高エンゲージメントの需要スレッド（'Just Don't Wear It'、約6,000ポイント、約1,800コメント）。リセールの買い手が値下げ方向に動いている。",
     },
     {
-      brand: "ASICS",
-      domain: "asics.com",
-      line: "Sauconyが追い落とす現王者。依然としてMeta広告に多額を投じており、だからこそオファーとCTAの変化が注目点になる。",
+      brand: "SneakerPing",
+      domain: "sneakerping.com",
+      line: "31ブランドの3,538リリースのうち59.5%が直近で定価以下で売れた——価値重視への潮目の定価割れの要。",
     },
   ],
   swingSource:
-    "出典：StockX 2026年上半期「Big Facts」レポート、PRNewswire経由（2026-08-12）。公開レポートを引用するだけで、再ホストはしません。",
+    "出典：0509日次市場シグナル、2026-09-01 — SneakerPingのレポート（定価以下59.5%）と高エンゲージメントのNike需要スレッド。公開レポートを引用するだけで、再ホストはしません。",
+  swingAsOfIso: "2026-09-01",
   honestKicker: "言わないこと",
   honestTitle: "このページが約束しない範囲。",
   honest: [
@@ -456,23 +462,24 @@ const PT_BR: SneakerResaleCopy = {
   brandsDeck:
     "Essas marcas estão rodando anúncios no Meta agora. Cada link abre a página de anúncio ao vivo que montamos com capturas reais — a mesma prova que uma watchlist acompanha.",
   swingKicker: "Quem está se movendo agora",
-  swingTitle: "A virada do value-tier: Saucony à frente da ASICS.",
+  swingTitle: "A virada do below-retail.",
   swingDeck:
-    "O sinal de 30 dias do mercado é uma virada dos tênis de £250 para o value-tier de corrida. Nomeamos aqui para a página não parecer evergreen enquanto o mercado se move embaixo dela.",
+    "O sinal de 30 dias do mercado é uma virada de valor: a maioria dos tênis lançados nos últimos dois anos agora vende abaixo do varejo, e um tópico de alto engajamento move a demanda da Nike. Nomeamos aqui para a página não parecer evergreen enquanto o mercado se move embaixo dela.",
   swing: [
     {
-      brand: "Saucony",
-      domain: "saucony.com",
-      line: "Passou à frente da ASICS no 'Big Facts' de meio de ano 2026 da StockX — a marca value-tier para a qual os compradores estão indo, não saindo.",
+      brand: "Nike",
+      domain: "nike.com",
+      line: "O tópico de demanda de alto engajamento que o sinal marcou ('Just Don't Wear It', ~6k pontos, ~1,8k comentários) enquanto compradores de revenda pesam trocar para baixo.",
     },
     {
-      brand: "ASICS",
-      domain: "asics.com",
-      line: "A incumbente que a Saucony está depando. Ainda roda muito orçamento no Meta, por isso os movimentos de oferta e CTA dela são os que valem acompanhar."
+      brand: "SneakerPing",
+      domain: "sneakerping.com",
+      line: "59,5% de 3.538 lançamentos de 31 marcas venderam recentemente abaixo do varejo — a âncora do below-retail por trás da virada de valor.",
     },
   ],
   swingSource:
-    "Fonte: relatório 'Big Facts' de meio de ano 2026 da StockX, via PRNewswire (2026-08-12). Citar o relatório público; não o rehospedamos.",
+    "Fonte: sinal de mercado diário 0509, 2026-09-01 — relatório da SneakerPing (59,5% abaixo do varejo) e um tópico de alta demanda da Nike. Citar o relatório público; não o rehospedamos.",
+  swingAsOfIso: "2026-09-01",
   honestKicker: "Limite honesto",
   honestTitle: "O que esta página não vende.",
   honest: [
