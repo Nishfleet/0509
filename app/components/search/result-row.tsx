@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import { RuledRow } from "~/components/workspace/ruled-list";
 import { ResultQuickSave } from "~/components/result-quick-save";
+import { TierBadge } from "~/components/search/tier-badge";
 import { formatAdLongevityLabel } from "~/lib/ad-display";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import {
@@ -30,11 +31,12 @@ type ResultQuickSaveProps = ComponentProps<typeof ResultQuickSave>;
  * column: a demo-sourced result says the word "Sample" where a live result
  * says "Active". It was a boxed pill; a state is a word.
  *
- * BET 2: a non-verified candidate carries its tier as a leading word in the
- * summary line ("Likely — …", "Unmatched — …") so the row is labelled by its
- * confidence. A likely row also gets a one-click "Yes, that's them" trail
- * link that opens the ad's detail pane, where the track/signup CTA lives —
- * the confirmation is one click, not a dead-end.
+ * BET 2 (issue 1482): every row that carries a `domainMatch.level` renders a
+ * visible tier badge — "Verified" (green), "Likely" (amber), "Unmatched"
+ * (grey) — the confidence marker a first-time visitor can read at a glance.
+ * A likely row also gets a one-click "Yes, that's them" trail link that
+ * opens the ad's detail pane, where the track/signup CTA lives — the
+ * confirmation is one click, not a dead-end.
  */
 export function SearchResultRow({
   ad,
@@ -59,7 +61,14 @@ export function SearchResultRow({
   const summary = formatResultCardSummary(ad);
   const tierLabel = formatResultTierLabel(ad);
   const tier = domainMatchTier(ad.domainMatch?.level);
-  const say = tierLabel ? `${tierLabel} — ${summary}` : summary;
+  const say = ad.domainMatch ? (
+    <>
+      <TierBadge level={ad.domainMatch.level} />
+      {summary}
+    </>
+  ) : (
+    summary
+  );
   return (
     <RuledRow
       keyFocused={isKeyFocused}

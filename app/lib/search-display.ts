@@ -872,6 +872,35 @@ export function formatResultTierConfidence(ad: AdRecord): string | null {
   return "Unmatched — returned by the source, but nothing connects this ad to the searched website.";
 }
 
+/**
+ * BET 2 three-tier tail (issue 1482): the honest sentence under the results
+ * that reflects the current verified / likely / unmatched counts. Returns
+ * null for results with no tier metadata (legacy v1 payloads keep their
+ * existing provenance copy byte-identical). Re-renders from the visible
+ * result each poll, so the tail updates as rows stream in.
+ */
+export function hasResultTierMetadata(result: SearchResponse): boolean {
+  return (
+    typeof result.verifiedCount === "number" ||
+    typeof result.likelyCount === "number" ||
+    typeof result.unmatchedCount === "number" ||
+    result.ads.some((ad) => Boolean(ad.domainMatch))
+  );
+}
+
+export function formatResultTierTail(result: SearchResponse): string | null {
+  if (!hasResultTierMetadata(result)) {
+    return null;
+  }
+  const { verified, likely, unmatched } = resolveResultTierCounts(result);
+  const counts = [
+    `${verified} verified`,
+    `${likely} likely`,
+    `${unmatched} unmatched`,
+  ].join(" · ");
+  return `${counts} — verified links the ad to this brand's website; likely and unmatched rows are unconfirmed leads.`;
+}
+
 export function formatEmptyResultHeadline(
   result: SearchResponse,
   context: {
@@ -932,9 +961,11 @@ export function isDelayedDiscoveryStatus(
 /**
  * BET 2 panel title for an exact-scope domain search with zero verified ads
  * but non-empty candidate rows. Names the likely and unmatched tiers so the
- * headline matches the rows below it instead of contradicting them.
+ * headline matches the rows below it instead of contradicting them. Shared
+ * with buildSearchAnswer so the answer panel and the section heading never
+ * disagree about a zero-verified result with candidates.
  */
-function formatNoVerifiedTierTitle(
+export function formatNoVerifiedTierTitle(
   displayDomain: string,
   tiers: { verified: number; likely: number; unmatched: number },
 ): string {

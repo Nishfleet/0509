@@ -111,6 +111,7 @@ import {
   formatSearchResultsAnnouncement,
   formatSearchSourceLabel,
   formatSearchTierProgressRow,
+  formatResultTierTail,
   formatLandingPageCaptureGap,
   formatSelectedLandingFactValue,
   formatSelectedLandingHeadline,
@@ -1247,6 +1248,10 @@ export default function SearchRoute() {
   // inside the <5s budget while the cold verify pass keeps running in the
   // background.
   const tierCounts = resolveResultTierCounts(visibleResult);
+  // BET 2 three-tier tail (issue 1482): the honest sentence under the results
+  // that reflects the current verified/likely/unmatched split. Re-computed
+  // every render, so it updates in place as the warming poll appends rows.
+  const tierTail = formatResultTierTail(visibleResult);
   // When the check outlives the 5s x 12 = 60s warming poll budget, the
   // promised auto-refresh stops silently: the page must say so and hand the
   // visitor a working retry instead of leaving "we'll refresh automatically"
@@ -2241,6 +2246,11 @@ export default function SearchRoute() {
                     them — and putting it above pushed the first row to 67% of
                     the viewport when every list this was calibrated against
                     starts its records inside 20%. */}
+                {visibleAds.length > 0 && tierTail ? (
+                  <p className="f9-wk-small f9-tier-tail" role="status">
+                    {tierTail}
+                  </p>
+                ) : null}
                 {discoverySummary &&
                 visibleAds.length > 0 &&
                 visibleResult.discoveryStatus === "healthy" ? (
