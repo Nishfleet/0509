@@ -135,11 +135,17 @@ export type { SearchAccumulationState };
 
 const SEARCH_WARMING_POLL_MS = 5_000;
 const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
-// Long-horizon escape hatch for the public submit hang: how long an in-flight
+// Settlement horizon for the public submit hang: how long an in-flight
 // /search GET may keep the idle pre-search page spinning before the client
-// forces a fresh page load to the exact target URL. Exported so tests can pin
-// the exact grace window.
-export const SEARCH_NAVIGATION_SETTLE_GRACE_MS = 90_000;
+// forces a fresh page load to the exact target URL. The anonymous search
+// loader settles well inside the platform's ~30s request wall-clock cap
+// (typically 5-25s, and the product copy promises "usually under a minute"),
+// so a navigation still loading past this horizon cannot be a healthy
+// in-flight request — either the response already settled and the SPA never
+// committed it, or the transition is genuinely stuck. Both reach the same
+// bounded recovery escape instead of stranding the visitor behind a disabled
+// button. Exported so tests can pin the exact grace window.
+export const SEARCH_NAVIGATION_SETTLE_GRACE_MS = 45_000;
 
 const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
@@ -992,13 +998,19 @@ export default function SearchRoute() {
     !data.inputError;
   const discoverySummary = formatDiscoverySummary(visibleResult);
   const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
-  // Candidate-3 root-cause fix for the public submit hang: the See ads button
-  // stays pending only while a GET navigation to /search targets a URL that is
-  // NOT the committed location.search. Once the server commits results or an
-  // error for the submitted URL — even if useNavigation still reports loading
-  // — the target matches the committed location and the button re-enables
-  // instead of spinning forever. The long-horizon recovery overrides it so the
-  // button is never stuck disabled behind a navigation that cannot settle.
+  // Candidate-2 settlement fix on top of the candidate-3 root cause: the See
+  // ads button stays pending only while the in-flight GET target has NOT yet
+  // settled into the committed state. The target settles the moment the
+  // committed loader data reflects a search — results, an input error, or a
+  // rate-limit message — which the anonymous loader only ever produces for
+  // the submitted URL (submits always start from the idle form, so
+  // hasSearchQuery flipping false→true means the submitted target's loader
+  // data committed). Once that flips, the button re-enables even if
+  // useNavigation still reports loading AND even if the URL bookkeeping is
+  // stale (data committed but location.search did not), so a settled request
+  // never strands the visitor behind a disabled button. The bounded recovery
+  // overrides the idle-page case so the button is never stuck disabled behind
+  // a navigation that cannot settle at all.
   const commandNavigationTarget =
     navigation.state === "loading" &&
     navigation.location?.pathname === "/search"
@@ -1007,6 +1019,7 @@ export default function SearchRoute() {
   const commandNavigationPending =
     commandNavigationTarget !== null &&
     commandNavigationTarget !== location.search &&
+    !hasSearchQuery &&
     searchNavigationRecovery === null;
   const displayDomain =
     data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
@@ -1152,12 +1165,13 @@ export default function SearchRoute() {
   }, [searchKey]);
 
   // Long-horizon recovery: while a /search GET is genuinely loading and the
-  // committed page is still the untouched idle pre-search form, arm a 90s
-  // grace timer. If the target never commits (server settled but the SPA
-  // never updates the URL), surface the recovery block with a fresh page load
-  // to the exact in-flight target. Clearing happens on the same effect run:
-  // the moment navigation settles, the target changes, or the committed page
-  // leaves the idle state, the timer is torn down and recovery is reset.
+  // committed page is still the untouched idle pre-search form, arm the
+  // settlement-horizon grace timer. If the target never commits (server
+  // settled but the SPA never updates the URL), surface the recovery block
+  // with a fresh page load to the exact in-flight target. Clearing happens on
+  // the same effect run: the moment navigation settles, the target changes,
+  // or the committed page leaves the idle state, the timer is torn down and
+  // recovery is reset.
   useEffect(() => {
     const target = navigation.location?.search ?? "";
     const isInFlightIdleSearch =
@@ -1555,8 +1569,8 @@ export default function SearchRoute() {
                 This search never finished loading
               </p>
               <p className="f9-wk-note">
-                It has been waiting for about a minute and a half. Reload the
-                search to open it in a fresh page load.
+                The search has had enough time to finish — the page just never
+                moved on. Reload the search to open it in a fresh page load.
               </p>
               <div className="f9-wk-acts">
                 <Link

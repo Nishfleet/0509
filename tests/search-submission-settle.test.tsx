@@ -13,9 +13,12 @@ import type { AdRecord } from "~/lib/types";
 // Public /search submit hang: the server settles but the SPA never commits
 // the target URL, so useNavigation keeps saying loading. The candidate-3 root
 // cause fix derives the See ads pending state from the in-flight GET target
-// vs the committed location.search, and the 90s long-horizon recovery gives
-// the idle pre-search page an escape hatch (a fresh page load to the exact
-// in-flight target) when that navigation cannot settle.
+// vs the committed location.search; the candidate-2 settlement fix adds the
+// committed loader data — once it reflects the submitted target (results,
+// input error, or rate-limit message), the submit un-sticks even when the URL
+// bookkeeping is stale. The 45s settlement-horizon recovery gives the idle
+// pre-search page an escape hatch (a fresh page load to the exact in-flight
+// target) when that navigation cannot settle at all.
 //
 // Markup assertions use renderToStaticMarkup (the existing route-render style)
 // because mounting the results row through createRoot twice in one worker
@@ -263,11 +266,11 @@ afterEach(async () => {
 });
 
 describe("public search submission settle", () => {
-  it("uses a 90-second (not 45) navigation settle grace window", async () => {
+  it("uses a 45-second settlement-horizon (not 90) navigation settle grace window", async () => {
     const { SEARCH_NAVIGATION_SETTLE_GRACE_MS } = await import(
       "~/routes/search"
     );
-    expect(SEARCH_NAVIGATION_SETTLE_GRACE_MS).toBe(90_000);
+    expect(SEARCH_NAVIGATION_SETTLE_GRACE_MS).toBe(45_000);
   });
 
   it("keeps See ads pending while a new GET navigation to /search is loading", async () => {
@@ -319,7 +322,7 @@ describe("public search submission settle", () => {
     expect(errorMarkup).not.toContain('aria-busy="true"');
   });
 
-  it("shows the recovery reload after 90 seconds on an uncommitted idle page, enables submit, and clears when navigation settles", async () => {
+  it("reaches the bounded recovery reload after 45 seconds on an uncommitted idle page, enables submit, never fabricates results, and clears when navigation settles", async () => {
     loaderData = idleLoaderData;
     locationObj = { pathname: "/search", search: "", hash: "" };
     navigationState = {
@@ -334,7 +337,7 @@ describe("public search submission settle", () => {
     );
 
     await act(async () => {
-      vi.advanceTimersByTime(89_999);
+      vi.advanceTimersByTime(44_999);
     });
     expect(container.textContent).not.toContain(
       "This search never finished loading",
@@ -347,13 +350,17 @@ describe("public search submission settle", () => {
 
     expect(container.textContent).toContain("This search never finished loading");
     expect(container.textContent).toContain(
-      "It has been waiting for about a minute and a half.",
+      "The search has had enough time to finish — the page just never moved on.",
     );
     expect(container.textContent).toContain("Reload the search");
     const reloadLink = container.querySelector(
       `a[href="/search${TARGET_SEARCH}"]`,
     );
     expect(reloadLink).not.toBeNull();
+
+    // No fabricated evidence: the committed loader data is still idle, so the
+    // recovery must not claim any results for the never-committed target.
+    expect(container.textContent).not.toContain("Festive glow");
 
     const button = container.querySelector('button[type="submit"]');
     expect(button?.textContent).toContain("See ads");
@@ -369,6 +376,50 @@ describe("public search submission settle", () => {
       "This search never finished loading",
     );
     expect(container.querySelector('a[href^="/search?website="]')).toBeNull();
+  });
+
+  it("unsticks the submit when the committed loader data already reflects the submitted target even though the URL never committed", async () => {
+    // Settled-but-stale navigation/loading signal matching the observed
+    // failure: the server settled for the submitted URL and the committed
+    // loader data carries the target's results (or its error), but the SPA
+    // never updated the URL and useNavigation keeps reporting loading. The
+    // page must render the committed state and re-enable the submit instead
+    // of lying with an eternal "Searching…". The results are asserted from
+    // the committed loader data — never fabricated from the pending target.
+    loaderData = resultsLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: TARGET_SEARCH },
+    };
+
+    const resultsMarkup = await renderMarkup();
+
+    expect(resultsMarkup).toContain("Festive glow");
+    expect(resultsMarkup).toContain("Nykaa");
+    expect(resultsMarkup).not.toContain("Nothing searched yet");
+    expect(resultsMarkup).toContain("See ads");
+    expect(resultsMarkup).not.toContain("Searching…");
+    expect(resultsMarkup).not.toContain('aria-busy="true"');
+    expect(resultsMarkup).not.toContain("disabled");
+
+    loaderData = errorLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: ERROR_SEARCH },
+    };
+
+    const errorMarkup = await renderMarkup();
+
+    expect(errorMarkup).toContain(
+      "That website looks incomplete. Add the full domain, like brand.com.",
+    );
+    expect(errorMarkup).not.toContain("Nothing searched yet");
+    expect(errorMarkup).toContain("See ads");
+    expect(errorMarkup).not.toContain("Searching…");
+    expect(errorMarkup).not.toContain('aria-busy="true"');
+    expect(errorMarkup).not.toContain("disabled");
   });
 
   it("does not fire warming revalidation during loading but resumes when idle", async () => {
