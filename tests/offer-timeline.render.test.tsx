@@ -201,8 +201,8 @@ describe("/timeline/:domain render", () => {
     expect(dataset?.["license"]).toBe("https://0509.io/terms");
     const distribution = dataset?.["distribution"] as Record<string, unknown>;
     expect(distribution?.["@type"]).toBe("DataDownload");
-    expect(distribution?.["contentUrl"]).toBe("https://0509.io/timeline/nykaa.com");
-    expect(distribution?.["encodingFormat"]).toBe("text/html");
+    expect(distribution?.["contentUrl"]).toBe("https://0509.io/ads/nykaa.com/timeline");
+    expect(distribution?.["encodingFormat"]).toBe("application/json");
     const creator = dataset?.["creator"] as Record<string, unknown>;
     expect(creator?.["name"]).toBe("Five to Nine");
   });

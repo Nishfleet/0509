@@ -65,6 +65,7 @@ export default [
   route("app/onboard", "routes/app.onboard.tsx"),
   route("ops", "routes/ops.tsx"),
   route("ads/:domain", "routes/ads.$domain.tsx"),
+  route("ads/:domain/timeline", "routes/ads.$domain.timeline.ts"),
   route("timeline/:domain", "routes/timeline.$domain.tsx"),
   // Canonical Ad Aggression Score formula page (issue #1263). Previously lived
   // at /methodology/ad-aggression-score (issue #960); that path now 301s here

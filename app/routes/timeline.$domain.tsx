@@ -133,11 +133,23 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
       ? `Dated offer states for ${loaderData.domain}: headline, CTA, and price, with page text and a screenshot when we stored one.`
       : `No stored offer timeline for ${loaderData.domain} yet.`;
 
-  return [
+  const meta: ReturnType<MetaFunction<typeof loader>> = [
     ...publicSeoMeta({ title, description, pathname: loaderData.canonicalPath }),
     { tagName: "link", rel: "canonical", href: canonicalUrl(loaderData.canonicalPath) },
     ...(loaderData.noindex ? [{ name: "robots", content: "noindex" }] : []),
   ];
+
+  if (!loaderData.noindex) {
+    meta.push({
+      tagName: "link",
+      rel: "alternate",
+      type: "application/json",
+      href: canonicalUrl(`/ads/${loaderData.domain}/timeline`),
+      title: `${loaderData.brandName} offer timeline feed`,
+    });
+  }
+
+  return meta;
 };
 
 export default function OfferTimelineRoute() {

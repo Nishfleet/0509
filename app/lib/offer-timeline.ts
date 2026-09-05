@@ -80,6 +80,29 @@ export interface OfferLedgerEntry {
   transition: OfferTransition | null;
 }
 
+const OFFER_TIMELINE_CHANGE_TYPE_LABELS = {
+  headline: "Landing-page copy",
+  ctaText: "CTA",
+  priceText: "Price",
+  formPresent: "Offer",
+} as const;
+
+/**
+ * Maps an offer transition to the public change-type labels the GEO feed
+ * and Dataset expose (offer, price, CTA, landing-page copy).
+ */
+export function offerTimelineChangeTypes(transition: OfferTransition | null): string[] {
+  if (!transition) {
+    return [];
+  }
+  const types: string[] = [];
+  if (transition.headline) types.push(OFFER_TIMELINE_CHANGE_TYPE_LABELS.headline);
+  if (transition.ctaText) types.push(OFFER_TIMELINE_CHANGE_TYPE_LABELS.ctaText);
+  if (transition.priceText) types.push(OFFER_TIMELINE_CHANGE_TYPE_LABELS.priceText);
+  if (transition.formPresent) types.push(OFFER_TIMELINE_CHANGE_TYPE_LABELS.formPresent);
+  return types;
+}
+
 export function parseAsOfDate(value: string | null | undefined): string | null {
   if (!value) {
     return null;

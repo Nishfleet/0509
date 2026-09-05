@@ -486,8 +486,9 @@ export function adsPageServiceJsonLd(input: {
  * - `license`: the operating terms URL that governs reuse of the dataset —
  *   the same `/terms` the page footer links. Not a Creative Commons grant the
  *   terms do not make.
- * - `distribution`: a `DataDownload` pointing at the timeline's canonical URL
- *   as `text/html`, so an answer engine can fetch the citable surface itself.
+ * - `distribution`: a `DataDownload` pointing at the JSON feed at
+ *   `/ads/:domain/timeline` as `application/json`, so an answer engine can
+ *   download the citable change ledger directly.
  *
  * Emitted ONLY on indexable timeline pages (the route gates this on
  * `noindex === false`); a noindex shell never carries the Dataset.
@@ -518,9 +519,9 @@ export function offerTimelineDatasetJsonLd(input: {
     license: canonicalUrl("/terms"),
     distribution: {
       "@type": "DataDownload",
-      name: `${input.brandName} offer timeline (HTML)`,
-      contentUrl: canonicalUrl(input.pathname),
-      encodingFormat: "text/html",
+      name: `${input.brandName} offer timeline feed`,
+      contentUrl: canonicalUrl(`/ads/${input.domain}/timeline`),
+      encodingFormat: "application/json",
     },
   };
   if (input.datePublished) {
