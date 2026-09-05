@@ -52,6 +52,11 @@ const EXPECTED_MCP_ACTION_GROUPS = [
     requiresWriteEnabled: true,
     actions: ["list_web_mentions"],
   },
+  {
+    label: "Offer history",
+    requiresWriteEnabled: false,
+    actions: ["get_change_history", "get_offer_state_at", "diff_offer", "list_suppressed"],
+  },
 ] as const;
 
 const READ_EXPORT_TOOL_NAMES = [
@@ -161,6 +166,38 @@ describe("MCP route discovery", () => {
           },
         },
       },
+    });
+    const OFFER_HISTORY_TOOL_NAMES = [
+      "get_change_history",
+      "get_offer_state_at",
+      "diff_offer",
+      "list_suppressed",
+    ] as const;
+    OFFER_HISTORY_TOOL_NAMES.forEach((toolName) => {
+      const tool = body.tools.find((candidate) => candidate.name === toolName);
+      expect(tool, `expected ${toolName} in the discovery tools`).toBeDefined();
+      expect(tool?.requiresWriteEnabled).toBe(false);
+      expect(tool?.credentialRequirement).toBe(READ_ONLY_API_KEY_REQUIREMENT);
+      expect(tool?.inputSchema).toMatchObject({
+        type: "object",
+        additionalProperties: false,
+      });
+    });
+    expect(body.tools.find((tool) => tool.name === "get_change_history")?.inputSchema).toMatchObject({
+      properties: {
+        domain: { type: "string" },
+        since: { type: "string" },
+      },
+      required: ["domain"],
+    });
+    expect(body.tools.find((tool) => tool.name === "get_offer_state_at")?.inputSchema).toMatchObject({
+      required: ["domain", "date"],
+    });
+    expect(body.tools.find((tool) => tool.name === "diff_offer")?.inputSchema).toMatchObject({
+      required: ["domain", "dateA", "dateB"],
+    });
+    expect(body.tools.find((tool) => tool.name === "list_suppressed")?.inputSchema).toMatchObject({
+      required: ["domain"],
     });
     body.tools.forEach((tool) => {
       const requiresWriteEnabled = expectedWriteToolNameSet.has(tool.name);
