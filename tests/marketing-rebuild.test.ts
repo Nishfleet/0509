@@ -347,12 +347,11 @@ describe("landing reveal fail-safe", () => {
 });
 
 describe("proof strip freshness chip", () => {
-	// The `.ld-proof-live` chip on the populated proof strip must honor
-	// `heroCaptureStale` exactly like its sibling `.ld-proof-time` pill, so a
-	// stale capture never reads "Live proof" next to an "On record" time pill.
-	// See #1304. The empty-state branch is intentionally left as "Live proof"
-	// (it pairs with "No live proof yet"); only the populated branch is gated.
-	it("gates the populated-state chip label on heroCaptureStale", () => {
+	// The `.ld-proof-live` chip on the populated proof strip now uses
+	// `heroProofLive` (freshForLiveClaim && !heroCaptureStale) so the API's
+	// live claim and the capture age both gate the "Live" badge. The empty-state
+	// branch stays hardcoded "Live proof". See #1465 / #1304.
+	it("gates the populated-state chip label on heroProofLive", () => {
 		// The populated-state chip is the one immediately followed by the
 		// "We saved the proof" headline, so anchor on that to avoid matching
 		// the empty-state chip which stays hardcoded "Live proof".
@@ -361,20 +360,21 @@ describe("proof strip freshness chip", () => {
 		const populatedChip = marketingRoute.lastIndexOf('ld-proof-live', populatedHead);
 		expect(populatedChip).toBeGreaterThan(-1);
 		const chipBlock = marketingRoute.slice(populatedChip, populatedHead);
-		expect(chipBlock).toContain("heroCaptureStale");
+		expect(chipBlock).toContain("heroProofLive");
 		expect(chipBlock).toContain('"On record"');
-		expect(chipBlock).toContain('"Live proof"');
+		expect(chipBlock).toContain('"Live"');
 	});
 
-	it("keeps the chip and the time pill on the same stale predicate", () => {
-		// Both the chip and the sibling time pill must branch on the same
-		// `heroCaptureStale` flag within the populated strip head.
+	it("keeps the chip and the time pill on the same live predicate", () => {
+		// Both the chip and the sibling time pill branch on `heroProofLive`;
+		// the time pill also falls back to `heroCaptureStale` so a stale capture
+		// still drops the old date. See #1465.
 		const headStart = marketingRoute.indexOf('className="ld-proof-strip-head"');
 		expect(headStart).toBeGreaterThan(-1);
 		const headEnd = marketingRoute.indexOf("</div>", headStart);
 		const head = marketingRoute.slice(headStart, headEnd);
-		const chipMatches = head.match(/heroCaptureStale/g) ?? [];
-		// One in the chip, one in the time pill.
-		expect(chipMatches.length).toBeGreaterThanOrEqual(2);
+		const liveMatches = head.match(/heroProofLive/g) ?? [];
+		expect(liveMatches.length).toBeGreaterThanOrEqual(2);
+		expect(head).toContain("heroCaptureStale");
 	});
 });
