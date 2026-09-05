@@ -30,6 +30,11 @@ export interface SwitchPage {
   kicker: string;
   headline: string;
   deck: string;
+  // One honest, source-grounded line for the /search cross-link card (issue
+  // 1554). Scoped to what this page's own copy already claims — never new
+  // promises. Rendered on /search above the fold for a matching switch
+  // target so the first-value moment hands off to the /switch/* destination.
+  cardLine: string;
   complaint: {
     kicker: string;
     heading: string;
@@ -100,6 +105,7 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
     kicker: "Switch from MagicBrief",
     headline: "MagicBrief closed. Here is what actually moves.",
     deck: "MagicBrief's own FAQ says the platform closed on 31 July 2026 at 8 PM EST. The successor is Canva Grow, sold inside Canva Business. Paste your competitor list here. Collections, boards, and analytics history stay behind.",
+    cardLine: "MagicBrief closed. Paste your competitor list; collections and analytics stay behind. See what actually moves.",
     complaint: {
       kicker: "The public record",
       heading: "The platform closed.",
@@ -183,6 +189,7 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
     kicker: "Switch from Panoramata",
     headline: "Same ads and pages job. Paste a domain.",
     deck: "A verified GetApp reviewer says Panoramata's price feels a bit high for a solo marketer. Five to Nine does the same public Meta ads and landing-page job from a pasted domain.",
+    cardLine: "Panoramata's price felt high for solo. Same public Meta ads and landing-page job from a pasted domain.",
     complaint: {
       kicker: "The public record",
       heading: "Same ads and pages job.",
@@ -266,6 +273,7 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
     kicker: "Switch from Visualping",
     headline: "Skip the Ad Library URL hunt and the condition prompt.",
     deck: "Visualping's own blog says the AI classifies 83% of detected changes as not important. Its Meta Ad Library playbook still asks you to find the library URL and write a condition prompt. Five to Nine takes a domain.",
+    cardLine: "Skip the Ad Library URL hunt and the condition prompt. Five to Nine takes a domain and flags real moves.",
     complaint: {
       kicker: "The public complaint",
       heading: "Cited, not invented.",
@@ -345,3 +353,25 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
 };
 
 export const SWITCH_SLUGS = Object.keys(SWITCH_PAGES) as SwitchSlug[];
+
+/**
+ * Map a searched brand domain onto its /switch/* destination page (issue
+ * 1554). Only the three named switching triggers (MagicBrief, Panoramata,
+ * Visualping) resolve — never a `<label>.com` guess from the query text
+ * alone. Same normalization as the /ads/:domain resolver (trim + lowercase +
+ * strip `www.`) so a `?website=` domain search and a V2-resolved brand both
+ * land here. Returns null for every other domain.
+ */
+export function switchPageForDomain(domain: string): SwitchPage | null {
+  const normalized = domain.trim().toLowerCase().replace(/^www\./, "");
+  switch (normalized) {
+    case "magicbrief.com":
+      return SWITCH_PAGES.magicbrief;
+    case "panoramata.co":
+      return SWITCH_PAGES.panoramata;
+    case "visualping.io":
+      return SWITCH_PAGES.visualping;
+    default:
+      return null;
+  }
+}
