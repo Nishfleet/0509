@@ -24,10 +24,9 @@ import {
 function htmlForRows(rows: Array<{ tier: "verified" | "likely" | "unmatched"; advertiser: string; summary: string }>): string {
   const rowMarkup = rows
     .map((row) => {
-      const say = row.tier === "verified"
-        ? row.summary
-        : `${row.tier.charAt(0).toUpperCase()}${row.tier.slice(1)} — ${row.summary}`;
-      return `<div class="f9-wk-row has-trail"><span class="f9-wk-say">${say}</span></div>`;
+      const tierWord = row.tier.charAt(0).toUpperCase() + row.tier.slice(1);
+      const say = `<span class="f9-wk-say"><span class="f9-tier-badge is-${row.tier}">${tierWord}</span> ${row.summary}</span>`;
+      return `<div class="f9-wk-row has-trail">${say}</div>`;
     })
     .join("");
   const verifiedCount = rows.filter((row) => row.tier === "verified").length;
@@ -49,7 +48,7 @@ function mockFetchResponse(
 }
 
 describe("parseSearchResponseHtml", () => {
-  it("counts verified rows from row count minus tier-prefixed rows", () => {
+  it("counts verified rows from the tier badges", () => {
     const html = htmlForRows([
       { tier: "verified", advertiser: "Nykaa", summary: "Festive glow" },
       { tier: "verified", advertiser: "Nykaa", summary: "Summer sale" },
@@ -93,7 +92,7 @@ describe("parseSearchResponseHtml", () => {
   });
 
   it("locates the first row index in the byte stream for first-card timing", () => {
-    const html = `<html><body>some preamble<div class="f9-wk-row"><span class="f9-wk-say">Verified — summary</span></div></body></html>`;
+    const html = `<html><body>some preamble<div class="f9-wk-row"><span class="f9-wk-say"><span class="f9-tier-badge is-verified">Verified</span> summary</span></div></body></html>`;
     const parsed = parseSearchResponseHtml(html);
     expect(parsed.firstRowIndex).toBeGreaterThan(0);
     // The row anchor matches `f9-wk-row` followed by a legal CSS-attribute
