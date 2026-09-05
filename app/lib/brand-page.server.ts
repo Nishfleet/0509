@@ -524,6 +524,34 @@ export function computeBrandPageAggressionScore(
   };
 }
 
+/**
+ * Whole-day observation window behind the Deferred Aggression Score (issue
+ * #1442): the span from the oldest verified-linked ad's real first-seen date
+ * to now. Used by the score card's honest "N/14 days so far" state while the
+ * score itself is deferred below the 14-day floor. Returns null when no ad
+ * carries a first-seen date (window not computable) — the card degrades to
+ * the generic "not enough history" note. This is a render-time copy aid only;
+ * it is NEVER an indexability signal (the page's indexability is decoupled
+ * from score computability once it has ≥1 verified-linked ad).
+ */
+export function brandPageObservationWindowDays(
+  ads: AdRecord[],
+  now: Date = new Date(),
+): number | null {
+  let earliestFirstSeen = Number.POSITIVE_INFINITY;
+  for (const ad of ads) {
+    if (!ad.firstSeenAt) continue;
+    const parsed = Date.parse(ad.firstSeenAt);
+    if (!Number.isNaN(parsed) && parsed < earliestFirstSeen) {
+      earliestFirstSeen = parsed;
+    }
+  }
+  if (!Number.isFinite(earliestFirstSeen)) {
+    return null;
+  }
+  return Math.floor((now.getTime() - earliestFirstSeen) / MS_PER_DAY);
+}
+
 /** Ads first observed within this window count toward the "what changed" feed. */
 export const BRAND_CHANGE_FEED_WINDOW_DAYS = 14;
 /** Cap the number of change rows rendered on the public timeline. */

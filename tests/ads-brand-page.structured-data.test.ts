@@ -106,6 +106,7 @@ function cachedIndexable(overrides: Partial<BrandPageLoaderData> = {}): BrandPag
       activeCount: 6,
     },
     changeEvents: [],
+    observationDays: null,
     adLibraryCountry: "India",
     noindex: false,
     canonicalPath: "/ads/nike.com",

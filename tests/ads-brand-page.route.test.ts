@@ -732,7 +732,11 @@ describe("/ads/:domain indexing flag", () => {
     expect(result.noindex).toBe(true);
   });
 
-  it("noindexes a fresh capture whose verified-linked ad is too recent to score (window < 14 days)", async () => {
+  it("indexes a fresh capture whose verified-linked ad is too recent to score (window < 14 days)", async () => {
+    // The 14-day Aggression Score window must NOT gate indexability on a
+    // populated page (issue #1442): the verified-linked ad's first-seen is
+    // 2 days ago, so the score is still deferred (aggression === null), but
+    // the page has a real ad wall and is NOT thin — it stays indexable.
     const mocks = installBrandPageMocks({
       entry: cacheEntry({
         payload: {
@@ -750,7 +754,37 @@ describe("/ads/:domain indexing flag", () => {
     expect(result.hasCachedAds).toBe(true);
     expect(result.verifiedLinkCount).toBe(1);
     expect(result.aggression).toBeNull();
-    expect(result.noindex).toBe(true);
+    // The score is deferred, but the populated page is indexable (issue #1442).
+    expect(result.noindex).toBe(false);
+    // Honest "N/14 days so far" figure for the deferred score state.
+    expect(result.observationDays).toBe(2);
+  });
+
+  it("indexes a fresh populated capture whose verified-linked ad carries no first-seen date", async () => {
+    // A verified-link ad with no first-seen date: the Ad Aggression Score
+    // cannot render (no window), but the page is populated — indexability is
+    // decoupled from score computability (issue #1442), so it stays
+    // indexable. The score card degrades to the generic "not enough history"
+    // note because no observation window is computable.
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [{ ...baseAd, firstSeenAt: null }],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.verifiedLinkCount).toBe(1);
+    expect(result.aggression).toBeNull();
+    expect(result.observationDays).toBeNull();
+    expect(result.noindex).toBe(false);
   });
 
   it("stays indexable when the verified-linked capture clears the 14-day score floor", async () => {

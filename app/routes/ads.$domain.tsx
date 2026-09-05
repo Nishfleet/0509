@@ -20,11 +20,20 @@
  *     out → no snapshot → redirect),
  *   - cache entries older than 7 days (stale pages still render with an
  *     honest freshness line but must not rank),
- *   - a capture whose Ad Aggression Score cannot render (0 verified-linked
- *     ads, no first-seen date, or an observed window shorter than the 14-day
- *     floor) — the score is the page's named differentiator, so a page that
- *     ships the ad wall without it is indexable thin content. The wall still
- *     renders for a direct visitor; only indexability is withheld.
+ *   - a capture with ZERO verified-linked ads — the page's named
+ *     differentiator (the Ad Aggression Score) cannot render for a wall of
+ *     unverified text-mention matches, so the page would ship as indexable
+ *     thin content. The wall still renders for a direct visitor; only
+ *     indexability is withheld.
+ *
+ * A populated page (at least one verified-linked ad) with a fresh snapshot
+ * is indexable EVEN when the Ad Aggression Score is deferred (the observed
+ * window is shorter than the 14-day floor, or no ad carries a first-seen
+ * date): the page is not thin — it has a real ad wall, verified counts, a
+ * teaser, and a change feed. Indexability is decoupled from score
+ * computability (issue #1442); the score card renders an honest
+ * "N/14 days so far" state instead of suppressing the page. Only the
+ * genuinely thin case (0 verified-linked ads) withholds indexability.
  *
  * DESIGN: the "Case File" system (see docs/ADS-PAGE-DIRECTIONS-2026-07-21.md).
  * Every number traces to a real loader field; sections render only when their
@@ -124,6 +133,16 @@ export interface BrandPageLoaderData {
   unverifiedMatchCount: number;
   teaser: BrandIntelTeaser | null;
   aggression: BrandPageAggression | null;
+  /**
+   * Observation window (whole days) between the oldest verified-linked ad's
+   * first-seen date and now, for the score card's honest "N/14 days so far"
+   * state when the Ad Aggression Score is still deferred (window below the
+   * MIN_AGGRESSION_WINDOW_DAYS floor). Null when no verified-linked ad
+   * carries a first-seen date (window not computable) — the card degrades to
+   * the generic "not enough history" note. Never a signal for indexability
+   * (issue #1442).
+   */
+  observationDays: number | null;
   changeEvents: BrandChangeEvent[];
   /**
    * Dated landing-page offer states for this domain. Empty when nothing is
@@ -180,6 +199,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   const {
     adHasVerifiedDomainLink,
     brandPageAdLibraryCountryLabel,
+    brandPageObservationWindowDays,
     buildBrandChangeFeed,
     buildBrandIntelTeaser,
     computeBrandPageAggressionScore,
@@ -229,8 +249,11 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // indexability is withheld:
   //   - emergency brake (PUBLIC_BRAND_PAGES_INDEXABLE=0),
   //   - stale > 7 days but < 30 days (!snapshot.freshForIndexing),
-  //   - aggression score unavailable (aggression === null — sub-14-day window
-  //     or 0 verified-linked ads).
+  //   - thin content (0 verified-linked ads — the Ad Aggression Score cannot
+  //     render, so the wall ships without the page's differentiator).
+  // A populated page (≥1 verified-linked ad) with a fresh snapshot stays
+  // indexable even when the score is deferred (sub-14-day window) — issue
+  // #1442 decouples indexability from score computability.
   if (!snapshot) {
     throw redirect(`/search?q=${encodeURIComponent(brand.domain)}`, 301);
   }
@@ -281,14 +304,21 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // capture has at least one verified-linked ad AND the observed window
   // clears the 14-day floor — `computeBrandPageAggressionScore` returns null
   // otherwise (0 verified-linked ads, no first-seen date, or a window shorter
-  // than MIN_AGGRESSION_WINDOW_DAYS). A page that ships the ad wall without
-  // its proprietary score is indexable thin content, so it self-noindexes:
-  // no indexable thin brand page remains in the sitemap. The wall still
-  // renders for a human who navigated directly — this is about indexability,
-  // not hiding the page.
+  // than MIN_AGGRESSION_WINDOW_DAYS). Below the floor the score card renders
+  // an honest "N/14 days so far" state, but indexability is NOT gated on the
+  // score: a populated page (≥1 verified-linked ad, fresh snapshot) is
+  // indexable even when the score is deferred. Only the genuinely thin case
+  // — a wall with ZERO verified-linked ads — self-noindexes, so no indexable
+  // thin brand page remains in the sitemap (issue #1442).
   const aggression = snapshot ? computeBrandPageAggressionScore(verifiedLinkedAds, now) : null;
+  // Indexability is a content-thinness rule, not a score rule: a populated
+  // page with real verified-linked ads is indexable regardless of whether
+  // the score can render. The 14-day window previously forced every
+  // newly-discovered populated brand invisible to Google for two weeks
+  // (issue #1442) — decouple them. `!snapshot` is defensive (the loader
+  // already redirects on a true cache miss above).
   const noindex =
-    emergencyNoindex || !snapshot || !snapshot.freshForIndexing || aggression === null;
+    emergencyNoindex || !snapshot || !snapshot.freshForIndexing || verifiedLinkedAds.length === 0;
 
   return {
     domain: brand.domain,
@@ -304,6 +334,11 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     unverifiedMatchCount: snapshotAds.length - verifiedLinkedAds.length,
     teaser: snapshot ? buildBrandIntelTeaser(verifiedLinkedAds, now) : null,
     aggression,
+    // Honest "N/14 days so far" for the score card when the score is
+    // deferred; NOT an indexability signal (issue #1442).
+    observationDays: snapshot
+      ? brandPageObservationWindowDays(verifiedLinkedAds, now)
+      : null,
     changeEvents: snapshot ? buildBrandChangeFeed(verifiedLinkedAds, now) : [],
     offerTimelineEntries,
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
@@ -845,7 +880,7 @@ function BrandAdsResults({
               </p>
             </div>
 
-            <BrandScoreCard aggression={data.aggression} />
+            <BrandScoreCard aggression={data.aggression} observationDays={data.observationDays} />
           </div>
 
           {/* 1b. CAPTURE-VALIDITY TRUST LINK — "no phantom changes" (issue

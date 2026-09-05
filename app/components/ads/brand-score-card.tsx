@@ -27,17 +27,35 @@ const HOT_BANDS = new Set(["aggressive", "all_out"]);
  * The Ad Aggression Score dossier card. Renders the real 0-100 score, its band
  * stamp, the four component bars (which always sum to the score — the formula
  * is public), and a plain-language formula note. Below the evidence floor the
- * score is HIDDEN and replaced with an honest "not enough history" note —
- * never a score on thin evidence.
+ * score is HIDDEN and replaced with an honest "N/14 days so far" note — never
+ * a score on thin evidence, but never a page hidden from Google either
+ * (issue #1442: the card defers the score; it does not suppress indexing).
+ * `observationDays` feeds the "N/14 days so far" figure while the score is
+ * still deferred; it is null when the window is not computable (no first-seen
+ * date), and irrelevant once the score renders.
  */
-export function BrandScoreCard({ aggression }: { aggression: BrandPageAggression | null }) {
+export function BrandScoreCard({
+  aggression,
+  observationDays,
+}: {
+  aggression: BrandPageAggression | null;
+  observationDays?: number | null;
+}) {
   if (!aggression) {
+    const daysSoFar =
+      typeof observationDays === "number" &&
+      Number.isFinite(observationDays) &&
+      observationDays >= 0 &&
+      observationDays < MIN_AGGRESSION_WINDOW_DAYS
+        ? observationDays
+        : null;
     return (
       <div className="f9-ads-score-card f9-ads-score-thin">
         <div className="f9-ads-score-label">Ad Aggression Score</div>
         <p className="f9-ads-score-thin-note">
-          Not enough history yet to score — we need at least {MIN_AGGRESSION_WINDOW_DAYS} days of
-          watching before we put a number on it. Start watching and the score fills in.{" "}
+          {daysSoFar === null
+            ? `Not enough history yet to score — we need at least ${MIN_AGGRESSION_WINDOW_DAYS} days of watching before we put a number on it. Start watching and the score fills in.`
+            : `Score available after ${MIN_AGGRESSION_WINDOW_DAYS} days of observation — ${daysSoFar}/${MIN_AGGRESSION_WINDOW_DAYS} days so far. Start watching and the score fills in.`}{" "}
           <Link to={AD_AGGRESSION_METHODOLOGY_HREF}>How the score is computed</Link>
         </p>
       </div>
