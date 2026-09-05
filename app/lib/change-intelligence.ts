@@ -290,3 +290,202 @@ function stringOr(value: unknown, fallback: null): string | null;
 function stringOr(value: unknown, fallback: string | null) {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
+
+/* ============================================================================
+   Digest accountability vocabulary (2026-08-08, named-owner materiality E2).
+
+   Every customer-facing digest/brief surface — the app route and the email
+   renderer — reads the same truthful values from here so app and email never
+   diverge: a non-empty materiality reason, exactly one accountable reviewer
+   (or an explicit visible failure state when no trusted identity is
+   available), and one next action. Identity is NEVER taken from event text:
+   only the workspace owner label, the recipient name, or the explicit
+   "Workspace owner" role fallback may name the reviewer. Missing identity
+   stays visible as a failure, never as a silent generic digest.
+   ========================================================================== */
+
+/** Role fallback the product contract supports wherever an owner exists. */
+export const DIGEST_WORKSPACE_OWNER_ROLE_LABEL = "Workspace owner";
+
+/** Shown as the reviewer value when no trusted identity is available. */
+export const DIGEST_REVIEWER_MISSING_LABEL = "Reviewer not recorded";
+
+/** Explicit failure-state copy rendered beside the missing label. */
+export const DIGEST_REVIEWER_MISSING_COPY =
+  "No accountable owner could be confirmed for this workspace. Contact support before relying on this brief.";
+
+export interface DigestAccountabilityItem {
+  eventType?: string | null;
+  watchlistName?: string | null;
+}
+
+export interface DigestAccountabilityTriageInput {
+  status: string;
+  explanation: string;
+  nextAction: string;
+}
+
+export interface DigestAccountabilityReasonInput {
+  items: readonly DigestAccountabilityItem[];
+  triage?: DigestAccountabilityTriageInput | null;
+}
+
+export interface DigestAccountabilityReason {
+  /** Non-empty, human-readable reason the period matters (or does not). */
+  materialityReason: string;
+  /** Non-empty, human-readable single next action. */
+  nextAction: string;
+}
+
+export interface DigestReviewerResolution {
+  label: string;
+  /** True only when no trusted identity and no role fallback were available. */
+  missing: boolean;
+}
+
+const DIGEST_EVENT_BUCKETS: Record<string, string> = {
+  landing_page_offer_changed: "pricing",
+  landing_page_cta_changed: "cta",
+  landing_page_headline_changed: "headline",
+  landing_page_url_changed: "destination",
+  landing_page_form_changed: "form",
+  ad_new: "ad_new",
+  ad_inactive: "ad_inactive",
+};
+
+const DIGEST_BUCKET_LABELS: Record<string, string> = {
+  pricing: "pricing or offer change",
+  cta: "CTA change",
+  headline: "headline change",
+  destination: "destination change",
+  form: "form change",
+  ad_new: "new ad",
+  ad_inactive: "paused ad",
+  other: "other change",
+};
+
+// Why a bucket matters, grounded in what actually changed this period. Same
+// claim family as the per-event recommended actions — never invented numbers.
+const DIGEST_BUCKET_WHY: Record<string, string> = {
+  pricing: "Pricing and offer moves change the buying decision directly.",
+  cta: "CTA rewrites show where the competitor is pushing next.",
+  headline: "Headline changes signal a positioning shift.",
+  destination: "Destination changes redirect where the competitor sends traffic.",
+  form: "Form changes alter how the competitor captures leads.",
+  ad_new: "New ads show where the competitor is spending attention.",
+  ad_inactive: "Paused ads signal a campaign or budget shift.",
+};
+
+// Deterministic tie-break order for equal-count buckets: the most material
+// kind leads the composed reason (pricing before CTA before cosmetic).
+const DIGEST_BUCKET_RANK: Record<string, number> = {
+  pricing: 0,
+  cta: 1,
+  headline: 2,
+  destination: 3,
+  form: 4,
+  ad_new: 5,
+  ad_inactive: 6,
+  other: 7,
+};
+
+/**
+ * The period's materiality reason and single next action. Triage periods
+ * (all-quiet, evidence-failed, evidence-pending, routine-only, not-run) use
+ * the persisted triage vocabulary verbatim so every surface tells the same
+ * story; changed periods compose a factual bucket summary from the actual
+ * items. Always returns non-empty strings.
+ */
+export function buildDigestAccountabilityReason(
+  input: DigestAccountabilityReasonInput,
+): DigestAccountabilityReason {
+  if (input.items.length === 0) {
+    if (input.triage) {
+      return {
+        materialityReason: reasonString(
+          input.triage.explanation,
+          "No summary is available for this period.",
+        ),
+        nextAction: reasonString(
+          input.triage.nextAction,
+          "Review the changes in your brief.",
+        ),
+      };
+    }
+    return {
+      materialityReason: "No changes were filed in this period.",
+      nextAction: "We check again at the next scheduled scan.",
+    };
+  }
+
+  const counts = new Map<string, number>();
+  for (const item of input.items) {
+    const bucket = digestEventBucket(item.eventType);
+    counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
+  }
+  const ranked = [...counts.entries()].sort(
+    (a, b) =>
+      b[1] - a[1] ||
+      (DIGEST_BUCKET_RANK[a[0]] ?? 7) - (DIGEST_BUCKET_RANK[b[0]] ?? 7),
+  );
+  const kinds = ranked
+    .map(
+      ([bucket, count]) =>
+        `${count} ${pluralize(DIGEST_BUCKET_LABELS[bucket], count)}`,
+    )
+    .join(", ");
+  const competitorCount = new Set(
+    input.items
+      .map((item) => item.watchlistName?.trim())
+      .filter((name): name is string => Boolean(name)),
+  ).size;
+  const across =
+    competitorCount > 0
+      ? ` across ${competitorCount} competitor${competitorCount === 1 ? "" : "s"}`
+      : "";
+  const leadBucket = ranked[0]?.[0];
+  const why = leadBucket ? DIGEST_BUCKET_WHY[leadBucket] : null;
+  return {
+    materialityReason: [
+      `${input.items.length} change${input.items.length === 1 ? "" : "s"}${across}: ${kinds}.`,
+      why,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    nextAction: "Review the changes in your brief.",
+  };
+}
+
+/**
+ * Resolve the accountable reviewer from trusted identity only: an explicit
+ * owner label wins, then the recipient name, then the caller's role fallback
+ * ("Workspace owner" on app surfaces). With none of the three, the result is
+ * the explicit missing/failure state.
+ */
+export function resolveDigestReviewer(input: {
+  ownerLabel?: string | null;
+  recipientName?: string | null;
+  roleFallback?: string | null;
+}): DigestReviewerResolution {
+  const named = input.ownerLabel?.trim() || input.recipientName?.trim() || "";
+  if (named) {
+    return { label: named, missing: false };
+  }
+  const role = input.roleFallback?.trim();
+  if (role) {
+    return { label: role, missing: false };
+  }
+  return { label: DIGEST_REVIEWER_MISSING_LABEL, missing: true };
+}
+
+function digestEventBucket(eventType: string | null | undefined) {
+  return (eventType && DIGEST_EVENT_BUCKETS[eventType]) || "other";
+}
+
+function pluralize(label: string, count: number) {
+  return count === 1 ? label : `${label}s`;
+}
+
+function reasonString(value: string | null | undefined, fallback: string) {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}

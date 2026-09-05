@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildDigestAccountabilityReason,
+  DIGEST_REVIEWER_MISSING_LABEL,
+  DIGEST_WORKSPACE_OWNER_ROLE_LABEL,
+  resolveDigestReviewer,
+} from "~/lib/change-intelligence";
+import {
   buildDigestEmail,
   buildScanTroubleEmail,
   digestItemDeepLink,
@@ -892,6 +898,217 @@ describe("zero-noise triage digest emails (2026-08-06)", () => {
 		expect(email.html).toContain("Suggested next action:");
 		expect(email.text).toContain("Suggested next action:");
 	});
+
+	describe("named-owner brief accountability (2026-08-08)", () => {
+		it("renders a materiality reason, one accountable reviewer, and one next action for price, CTA, and cosmetic changes", () => {
+			const email = buildDigestEmail({
+				name: "Owner",
+				periodStart: "2026-06-01T00:00:00.000Z",
+				periodEnd: "2026-06-08T00:00:00.000Z",
+				cadence: "weekly",
+				timeZone: "UTC",
+				items: [
+					{
+						...digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+						eventType: "landing_page_offer_changed",
+					},
+					{
+						...digestItem("boAt", "CTA changed", 80, "scan_backed"),
+						eventType: "landing_page_cta_changed",
+					},
+					{
+						...digestItem("Plum", "Headline changed", 55, "scan_backed"),
+						eventType: "landing_page_headline_changed",
+					},
+				],
+				fullDigestUrl: "https://0509.io/app/digests",
+				manageFrequencyUrl: "https://0509.io/app/notifications",
+				supportEmail: "support@0509.io",
+				supportMailto: "mailto:support@0509.io",
+				unsubscribeUrl: null,
+			});
+
+			expect(email.html).toContain("Accountability");
+			expect(email.html).toContain("Why this matters:");
+			expect(email.html).toContain(
+				"3 changes across 3 competitors: 1 pricing or offer change, 1 CTA change, 1 headline change.",
+			);
+			expect(email.html).toContain(
+				"Pricing and offer moves change the buying decision directly.",
+			);
+			expect(email.html).toContain("Next action:</strong> Review the changes in your brief.");
+			expect(email.html).toContain("Accountable reviewer:</strong> Owner");
+			expect(email.text).toContain("Why this matters:");
+			expect(email.text).toContain("Next action: Review the changes in your brief.");
+			expect(email.text).toContain("Accountable reviewer: Owner");
+			// Per-item next actions stay untouched.
+			expect(email.html).toContain("Suggested next action:");
+		});
+
+		it("keeps materiality reason and next action for all-quiet periods", () => {
+			const email = buildDigestEmail(
+				triageEmailInput({
+					runs: 7,
+					watchlistsChecked: 4,
+					adsSeen: 128,
+					triage: triage("all_quiet", {
+						explanation:
+							"Checks completed and nothing changed across the sources that ran.",
+					}),
+				}),
+			);
+
+			expect(email.html).toContain("Accountable reviewer:</strong> Owner");
+			expect(email.text).toContain("Accountable reviewer: Owner");
+			// Materiality reason and next action ride the shared triage vocabulary.
+			expect(email.html).toContain(
+				"Checks completed and nothing changed across the sources that ran.",
+			);
+			expect(email.html).toContain("We check again at the next scheduled scan.");
+		});
+
+		it("keeps materiality reason and next action for failed-check periods", () => {
+			const email = buildDigestEmail(
+				triageEmailInput({
+					runs: 7,
+					watchlistsChecked: 4,
+					adsSeen: 128,
+					triage: triage("evidence_failed", {
+						explanation:
+							"An evidence check couldn't finish, so nothing is confirmed yet.",
+						nextAction:
+							"We'll retry at the next scheduled check. If it persists, email support and we'll dig in.",
+					}),
+				}),
+			);
+
+			expect(email.html).toContain("Accountable reviewer:</strong> Owner");
+			expect(email.text).toContain("Accountable reviewer: Owner");
+			expect(email.text).toContain(
+				"An evidence check couldn't finish, so nothing is confirmed yet.",
+			);
+			expect(email.text).toContain("We'll retry at the next scheduled check");
+		});
+
+		it("renders an explicit failure state instead of a generic digest when no owner identity is available", () => {
+			const email = buildDigestEmail({
+				...strategyEmailInput(),
+				name: "",
+				ownerLabel: null,
+			});
+
+			expect(email.html).toContain(
+				"Accountable reviewer:</strong> Reviewer not recorded.",
+			);
+			expect(email.html).toContain(
+				"No accountable owner could be confirmed for this workspace.",
+			);
+			expect(email.html).toContain("Contact support before relying on this brief.");
+			expect(email.text).toContain("Accountable reviewer: Reviewer not recorded.");
+			expect(email.text).toContain("Contact support before relying on this brief.");
+			// Materiality and next action remain — only ownership is the failure.
+			expect(email.html).toContain("Why this matters:");
+			expect(email.html).toContain("Next action:");
+		});
+
+		it("names the reviewer on legacy all-quiet heartbeats and adds an explicit next action", () => {
+			const email = buildDigestEmail({
+				name: "Owner",
+				periodStart: "2026-06-01T00:00:00.000Z",
+				periodEnd: "2026-06-02T00:00:00.000Z",
+				cadence: "daily",
+				timeZone: "UTC",
+				items: [],
+				heartbeat: { runs: 3, watchlistsChecked: 2, adsSeen: 42 },
+				fullDigestUrl: "https://0509.io/app/digests",
+				manageFrequencyUrl: "https://0509.io/app/notifications",
+				supportEmail: "support@0509.io",
+				supportMailto: "mailto:support@0509.io",
+				unsubscribeUrl: null,
+			});
+
+			expect(email.html).toContain("Accountable reviewer:</strong> Owner");
+			expect(email.text).toContain("Accountable reviewer: Owner");
+			expect(email.text).toContain(
+				"Next action: We check again at the next scheduled scan.",
+			);
+		});
+	});
+});
+
+describe("shared digest accountability vocabulary (app + email)", () => {
+  it("composes a non-empty materiality reason from price, CTA, and cosmetic items", () => {
+    const reason = buildDigestAccountabilityReason({
+      items: [
+        { eventType: "landing_page_offer_changed", watchlistName: "Nykaa" },
+        { eventType: "landing_page_cta_changed", watchlistName: "boAt" },
+        { eventType: "landing_page_headline_changed", watchlistName: "Plum" },
+      ],
+    });
+
+    expect(reason.materialityReason).toContain(
+      "1 pricing or offer change, 1 CTA change, 1 headline change",
+    );
+    expect(reason.materialityReason).toContain("across 3 competitors");
+    expect(reason.materialityReason.trim().length).toBeGreaterThan(0);
+    expect(reason.nextAction).toBe("Review the changes in your brief.");
+  });
+
+  it("uses the triage explanation and next action verbatim for all-quiet and failed periods", () => {
+    const quiet = buildDigestAccountabilityReason({
+      items: [],
+      triage: {
+        status: "all_quiet",
+        explanation: "Checks completed and nothing changed across the sources that ran.",
+        nextAction: "We check again at the next scheduled scan.",
+      },
+    });
+    expect(quiet.materialityReason).toBe(
+      "Checks completed and nothing changed across the sources that ran.",
+    );
+    expect(quiet.nextAction).toBe("We check again at the next scheduled scan.");
+
+    const failed = buildDigestAccountabilityReason({
+      items: [],
+      triage: {
+        status: "evidence_failed",
+        explanation: "An evidence check couldn't finish, so nothing is confirmed yet.",
+        nextAction: "We'll retry at the next scheduled check.",
+      },
+    });
+    expect(failed.materialityReason).toBe(
+      "An evidence check couldn't finish, so nothing is confirmed yet.",
+    );
+    expect(failed.nextAction).toBe("We'll retry at the next scheduled check.");
+  });
+
+  it("keeps non-empty truthful values for a legacy empty digest without triage", () => {
+    const reason = buildDigestAccountabilityReason({ items: [], triage: null });
+    expect(reason.materialityReason.trim().length).toBeGreaterThan(0);
+    expect(reason.nextAction.trim().length).toBeGreaterThan(0);
+  });
+
+  it("resolves the reviewer from trusted identity with the workspace-owner role fallback", () => {
+    expect(resolveDigestReviewer({ ownerLabel: "Asha", recipientName: "Bob" }).label).toBe(
+      "Asha",
+    );
+    expect(resolveDigestReviewer({ ownerLabel: null, recipientName: "Bob" }).label).toBe(
+      "Bob",
+    );
+    expect(
+      resolveDigestReviewer({
+        ownerLabel: null,
+        roleFallback: DIGEST_WORKSPACE_OWNER_ROLE_LABEL,
+      }),
+    ).toEqual({ label: DIGEST_WORKSPACE_OWNER_ROLE_LABEL, missing: false });
+    // No trusted identity and no role fallback: explicit missing state.
+    expect(
+      resolveDigestReviewer({ ownerLabel: null, recipientName: "" }).missing,
+    ).toBe(true);
+    expect(
+      resolveDigestReviewer({ ownerLabel: null, recipientName: "" }).label,
+    ).toBe(DIGEST_REVIEWER_MISSING_LABEL);
+  });
 });
 
 function strategyEmailInput() {

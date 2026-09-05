@@ -1,8 +1,13 @@
 import {
   type DigestCadence,
+  buildDigestAccountabilityReason,
   digestCadenceLabel,
+  DIGEST_REVIEWER_MISSING_COPY,
   readDigestIntelligence,
+  resolveDigestReviewer,
   safeHttpsImageUrl,
+  type DigestAccountabilityReason,
+  type DigestReviewerResolution,
 } from "~/lib/change-intelligence";
 import {
   isLandingPageEventType,
@@ -76,6 +81,14 @@ export interface DigestEmailModel {
 
 export interface DigestEmailInput {
   name: string;
+  /**
+   * Trusted accountable reviewer for this period: the workspace owner's
+   * name, the recipient's name, or an explicit role label such as
+   * "Workspace owner". Never derived from event text. When no trusted
+   * identity is available the email renders an explicit visible failure
+   * state instead of a silent generic digest.
+   */
+  ownerLabel?: string | null;
   periodStart: string;
   periodEnd: string;
   items: DigestTrustItem[];
@@ -118,6 +131,12 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const proofMix = summarizeDigestProofMix(input.items);
   const priorityMix = summarizePriorityMix(input.items);
   const cadenceLabel = digestCadenceLabel(input.cadence);
+  // Named-owner materiality (2026-08-08): the period carries one accountable
+  // reviewer, one next action, and a materiality reason composed from the
+  // actual items — or an explicit visible failure state when identity is
+  // missing. Never a silent generic digest.
+  const accountability = buildDigestAccountabilityReason({ items: input.items });
+  const reviewer = resolveDigestReviewerForEmail(input);
   const subject = subjectForDigest(input.items.length, actionCount, topItems);
   const totalEligibleEvents = input.totalEligibleEvents ?? input.items.length;
   const includedEvents = input.includedEvents ?? input.items.length;
@@ -143,6 +162,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
         <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
         <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
       </div>
+      ${renderChangedAccountabilityHtml(accountability, reviewer)}
       ${renderTrendSectionHtml(trendLines)}
       <h2 style="${EMAIL_H2_STYLE}">Top moves</h2>
       ${renderTopMoveGroupsHtml(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl)}
@@ -166,6 +186,10 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     `Priority mix: ${priorityMixLabel(priorityMix)}`,
     `Evidence mix: ${proofMixLabel(proofMix)}`,
+    "",
+    `Why this matters: ${accountability.materialityReason}`,
+    `Next action: ${accountability.nextAction}`,
+    `Accountable reviewer: ${reviewerText(reviewer)}`,
     ...renderTrendSectionText(trendLines),
     "",
     "Top moves:",
@@ -253,6 +277,7 @@ export function buildScanTroubleEmail(input: {
 function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const heartbeat = input.heartbeat!;
   const triage = input.heartbeat!.triage ?? null;
+  const reviewer = resolveDigestReviewerForEmail(input);
   const cadenceLabel = digestCadenceLabel(input.cadence);
   const quietPeriodLabel = input.cadence === "daily" ? "today" : "this period";
   const mondayBriefNote =
@@ -279,6 +304,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
         and reviewed ${heartbeat.adsSeen} ad${heartbeat.adsSeen === 1 ? "" : "s"}. Completed checks found no action-worthy movement across the sources that ran.
       </p>
       ${recordHtml}
+      ${renderQuietAccountabilityHtml(input, reviewer)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
       </p>
@@ -295,6 +321,9 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors reviewed ${heartbeat.adsSeen} ads. Completed checks found no action-worthy movement across the sources that ran.`,
     ...(recordText ? ["", recordText] : []),
+    ...(recordText ? [] : ["", "Next action: We check again at the next scheduled scan."]),
+    "",
+    `Accountable reviewer: ${reviewerText(reviewer)}`,
     "",
     `Review digest history: ${input.fullDigestUrl}`,
     ...renderUpgradeNoteText(input),
@@ -347,6 +376,7 @@ const TRIAGE_SOURCE_LABELS: Record<WatchPeriodTriageStatus, string> = {
 function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const heartbeat = input.heartbeat!;
   const triage = input.heartbeat!.triage!;
+  const reviewer = resolveDigestReviewerForEmail(input);
   const cadenceLabel = digestCadenceLabel(input.cadence);
   const dateRange = `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`;
   const subject =
@@ -369,6 +399,7 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(checksLine)}</p>
       ${suppressionHtml}
       <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(recordText)}</p>
+      ${renderReviewerParagraphHtml(reviewer)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View the full brief</a>
       </p>
@@ -388,6 +419,8 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ? [`Held back: ${triage.suppressionReasons.join("; ")}.`]
       : []),
     recordText,
+    "",
+    `Accountable reviewer: ${reviewerText(reviewer)}`,
     "",
     `View the full brief: ${input.fullDigestUrl}`,
     ...renderUpgradeNoteText(input),
@@ -417,6 +450,66 @@ function renderTriageRecordText(
     .filter((line): line is string => typeof line === "string" && line.length > 0)
     .join(" ");
   return `${triage.explanation} ${actionLines}${checkedAt} Source: ${TRIAGE_SOURCE_LABELS[triage.status] ?? "completed checks"}.`;
+}
+
+/**
+ * Named-owner accountability (2026-08-08): resolve the reviewer from trusted
+ * identity only — the caller's owner label or the recipient name. With
+ * neither, the renderers show the explicit failure state.
+ */
+function resolveDigestReviewerForEmail(
+  input: Pick<DigestEmailInput, "ownerLabel" | "name">,
+): DigestReviewerResolution {
+  return resolveDigestReviewer({
+    ownerLabel: input.ownerLabel,
+    recipientName: input.name,
+  });
+}
+
+function renderChangedAccountabilityHtml(
+  reason: DigestAccountabilityReason,
+  reviewer: DigestReviewerResolution,
+) {
+  const reviewerColor = reviewer.missing ? "#b42318" : "#475467";
+  return `
+      <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
+        <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Accountability</p>
+        <p style="margin: 0 0 6px; color: #475467;"><strong>Why this matters:</strong> ${escapeHtml(reason.materialityReason)}</p>
+        <p style="margin: 0 0 6px; color: #475467;"><strong>Next action:</strong> ${escapeHtml(reason.nextAction)}</p>
+        <p style="margin: 0; color: ${reviewerColor};"><strong>Accountable reviewer:</strong> ${renderReviewerHtml(reviewer)}</p>
+      </div>
+  `;
+}
+
+function renderQuietAccountabilityHtml(
+  input: Pick<DigestEmailInput, "heartbeat">,
+  reviewer: DigestReviewerResolution,
+) {
+  // Triage records already state the next action; legacy heartbeats get an
+  // explicit one so every quiet representation stays actionable.
+  const nextActionLine = input.heartbeat?.triage
+    ? ""
+    : `<p style="margin: 0 0 16px; color: #475467;"><strong>Next action:</strong> We check again at the next scheduled scan.</p>`;
+  return `${nextActionLine}${renderReviewerParagraphHtml(reviewer)}`;
+}
+
+function renderReviewerParagraphHtml(reviewer: DigestReviewerResolution) {
+  const color = reviewer.missing ? "#b42318" : "#475467";
+  return `<p style="margin: 0 0 16px; color: ${color};"><strong>Accountable reviewer:</strong> ${renderReviewerHtml(reviewer)}</p>`;
+}
+
+function renderReviewerHtml(reviewer: DigestReviewerResolution) {
+  if (reviewer.missing) {
+    return `${escapeHtml(reviewer.label)}. ${escapeHtml(DIGEST_REVIEWER_MISSING_COPY)}`;
+  }
+  return escapeHtml(reviewer.label);
+}
+
+function reviewerText(reviewer: DigestReviewerResolution) {
+  if (reviewer.missing) {
+    return `${reviewer.label}. ${DIGEST_REVIEWER_MISSING_COPY}`;
+  }
+  return reviewer.label;
 }
 
 type TopMoveGroup = {
