@@ -44,10 +44,12 @@ export const meta: MetaFunction = () =>
 
 const noPricingPreview = { available: false } as const;
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const env = getEnv(context);
+  const { emitFunnelEvent } = await import("~/lib/funnel-measurement.server");
+  emitFunnelEvent(env, request, { name: "funnel_home_view" });
 
   return {
     // Keep the document request provider-independent. The client hydrates

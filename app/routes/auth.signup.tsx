@@ -91,6 +91,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return signupActionError("send_failed", { email, name, redirectTo });
   }
 
+  const { emitFunnelEvent } = await import("~/lib/funnel-measurement.server");
+  emitFunnelEvent(env, request, { name: "funnel_signup_start" });
+
   const next = new URL("/auth/signup", request.url);
   next.searchParams.set("sent", "1");
   next.searchParams.set("email", email);

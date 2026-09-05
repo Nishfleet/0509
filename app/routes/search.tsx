@@ -110,7 +110,7 @@ import {
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
-import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
+import type { SearchFilters, SearchResponse, WatchlistTrackingRole } from "~/lib/types";
 
 // Re-exported so existing test imports from "~/routes/search" keep working
 // after the pure helpers moved to "~/lib/search-display".
@@ -427,6 +427,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     await import("~/lib/search-rollout.server");
   const { prepareSearchResultSelection } =
     await import("~/lib/search-selection.server");
+  const { bucketResultCount, emitFunnelEvent, funnelErrorKindFrom } = await import(
+    "~/lib/funnel-measurement.server"
+  );
 
   // Cross-link (workflow-friction pass): if the signed-in user already
   // watches this competitor, the results page links straight to its dossier.
@@ -447,58 +450,95 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       })()
     : null;
 
-  const useSearchV2 =
-    Boolean(competitorWebsite.raw) &&
-    (shouldApplySearchV2(env) || shouldRunSearchV2Shadow(env));
-  const searchExecution = useSearchV2
-    ? await executeSearchWithRelevance({
-        env,
-        competitorWebsite,
-        parsed,
-        scope: searchScope,
-        cursor: url.searchParams.get("after"),
-        forceLive,
-        customerMetaAdLibraryToken,
-        executionContext: cloudflare?.ctx,
-        hydratePersisted: Boolean(session),
-      })
-    : {
-        result: await (
-          await import("~/lib/ad-source.server")
-        ).searchAdsViaSourceResolver(
+  // Dormant funnel measurement: submit is recorded once a real preview is
+  // about to run (rate limits and input validation already passed), so
+  // refused requests never inflate the intent count.
+  emitFunnelEvent(env, request, { name: "funnel_search_preview_submit" });
+
+  let searchExecution: {
+    result: SearchResponse;
+    searchScope: "exact" | "broader";
+    displayDomain: string | null;
+    relevanceApplied: boolean;
+  };
+  try {
+    const useSearchV2 =
+      Boolean(competitorWebsite.raw) &&
+      (shouldApplySearchV2(env) || shouldRunSearchV2Shadow(env));
+    searchExecution = useSearchV2
+      ? await executeSearchWithRelevance({
           env,
-          normalizeSavedQuery(parsed.mode, parsed.filters),
-          url.searchParams.get("after"),
-          {
-            purpose: "public_search",
-            forceLive,
-            ...(customerMetaAdLibraryToken
-              ? { customerMetaAdLibraryToken }
-              : {}),
-          },
-        ),
-        query: normalizeSavedQuery(parsed.mode, parsed.filters),
-        searchScope,
-        displayDomain: competitorWebsite.host,
-        relevanceApplied: false,
-      };
+          competitorWebsite,
+          parsed,
+          scope: searchScope,
+          cursor: url.searchParams.get("after"),
+          forceLive,
+          customerMetaAdLibraryToken,
+          executionContext: cloudflare?.ctx,
+          hydratePersisted: Boolean(session),
+        })
+      : {
+          result: await (
+            await import("~/lib/ad-source.server")
+          ).searchAdsViaSourceResolver(
+            env,
+            normalizeSavedQuery(parsed.mode, parsed.filters),
+            url.searchParams.get("after"),
+            {
+              purpose: "public_search",
+              forceLive,
+              ...(customerMetaAdLibraryToken
+                ? { customerMetaAdLibraryToken }
+                : {}),
+            },
+          ),
+          query: normalizeSavedQuery(parsed.mode, parsed.filters),
+          searchScope,
+          displayDomain: competitorWebsite.host,
+          relevanceApplied: false,
+        };
+  } catch (error) {
+    emitFunnelEvent(env, request, {
+      name: "funnel_search_preview_error",
+      errorKind: funnelErrorKindFrom(error),
+    });
+    throw error;
+  }
 
   const waitUntil = cloudflare?.ctx?.waitUntil?.bind(cloudflare?.ctx);
-  const {
-    result: hydratedResult,
-    selectedAd,
-    selectionEnrichmentPending,
-  } = await prepareSearchResultSelection(
-    env,
-    searchExecution.result,
-    url.searchParams.get("selected"),
-    {
-      enrichSelected: Boolean(session) && !providerDeny.enabled,
-      hydratePersisted: Boolean(session),
-      // WP-11: paint base ad immediately; OCR/landing/translation finish via waitUntil.
-      ...(typeof waitUntil === "function" ? { waitUntil } : {}),
-    },
-  );
+  let hydratedResult: Awaited<ReturnType<typeof prepareSearchResultSelection>>["result"];
+  let selectedAd: Awaited<ReturnType<typeof prepareSearchResultSelection>>["selectedAd"];
+  let selectionEnrichmentPending: boolean;
+  try {
+    const prepared = await prepareSearchResultSelection(
+      env,
+      searchExecution.result,
+      url.searchParams.get("selected"),
+      {
+        enrichSelected: Boolean(session) && !providerDeny.enabled,
+        hydratePersisted: Boolean(session),
+        // WP-11: paint base ad immediately; OCR/landing/translation finish via waitUntil.
+        ...(typeof waitUntil === "function" ? { waitUntil } : {}),
+      },
+    );
+    hydratedResult = prepared.result;
+    selectedAd = prepared.selectedAd;
+    selectionEnrichmentPending = Boolean(prepared.selectionEnrichmentPending);
+  } catch (error) {
+    emitFunnelEvent(env, request, {
+      name: "funnel_search_preview_error",
+      errorKind: funnelErrorKindFrom(error),
+    });
+    throw error;
+  }
+
+  const resultCountBucket = bucketResultCount(hydratedResult.ads.length);
+  if (resultCountBucket) {
+    emitFunnelEvent(env, request, {
+      name: "funnel_search_preview_result",
+      resultCountBucket,
+    });
+  }
 
   // WHAT-TO-STEAL cost design: computed synchronously (small model, ~1-2s) and
   // only for signed-in users on fresh (cache-miss), non-demo searches with >=3

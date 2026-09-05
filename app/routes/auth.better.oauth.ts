@@ -47,6 +47,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
     provider: providerValue,
     redirectTo,
   });
+  if (mode === "signup") {
+    const { emitFunnelEvent } = await import("~/lib/funnel-measurement.server");
+    emitFunnelEvent(env, request, { name: "funnel_signup_start" });
+  }
   const headers = new Headers();
   appendBetterAuthSetCookieHeaders(headers, oauthStart.headers);
   throw redirect(oauthStart.url, { headers });

@@ -88,6 +88,14 @@ export interface AppEnv {
   MONITORING_FANOUT_GLOBAL?: string;
   /** Owner-documented internal workspace user id for fan-out pilot proof (never a customer id). */
   MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID?: string;
+  /**
+   * Explicit opt-in gate for first-party funnel measurement (see
+   * docs/funnel-measurement-spec.md). Only the exact value "true" enables
+   * anonymous funnel events; absent, empty, or any other value keeps
+   * collection off. Collection additionally requires all spec §8 rollout
+   * gates to pass before this is ever set.
+   */
+  FUNNEL_MEASUREMENT_ENABLED?: string;
   MONITORING_FANOUT_MAX_INFLIGHT?: string;
   MONITORING_ORCHESTRATION_LEASE_MS?: string;
   MONITORING_ORCHESTRATION_MAX_AGE_MS?: string;
