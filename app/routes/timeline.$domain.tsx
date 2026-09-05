@@ -94,7 +94,10 @@ export async function loader({
   // read FAILURE is different — the timeline might have entries once D1
   // recovers, so that degrades to the noindex shell below, never a 410.
   if (!loadFailed && loaded.entries.length === 0) {
-    throw new Response("Gone", { status: 410 });
+    throw Response.json(
+      { domain: brand.domain, brandName: brand.displayName },
+      { status: 410, statusText: "Gone" },
+    );
   }
 
   const canonicalPath = `/timeline/${brand.domain}`;
