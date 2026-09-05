@@ -62,10 +62,17 @@ import {
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
 import {
+  formatAdCreativeTextValue,
+  formatAdvertiserIdentityExplanation,
   formatAdvertiserLabel,
+  formatAdvertiserNextStep,
   formatCaptureMethodLabel,
+  formatLandingPageCaptureStatusLabel,
   formatLandingPageFormValue,
+  formatLandingPageHeadlineUnavailable,
+  formatLandingPageNextStep,
   formatLandingPageSignalValue,
+  formatLandingPageUnavailableExplanation,
 } from "~/lib/landing-page-display";
 import { buildSearchAnswer, type SearchStealSummary } from "~/lib/search-answer";
 import {
@@ -93,7 +100,6 @@ import {
   formatEmptyResultHeadline,
   formatHookLabel,
   formatOfferLabel,
-  formatProofCaptureLabel,
   formatResultsPanelTitle,
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
@@ -1330,6 +1336,12 @@ export default function SearchRoute() {
   const selectedLongevity = selectedAd ? formatAdLongevityLabel(selectedAd) : null;
   const selectedRunning =
     selectedAd?.activeStatusObserved !== false && Boolean(selectedAd?.active);
+  // Truthful field states for the selected pane: a blank advertiser or
+  // headline means the source did not carry it, never that the search query
+  // or watchlist name stands in for it.
+  const selectedAdvertiserConfirmed = Boolean(selectedAd?.advertiser?.trim());
+  const selectedLandingPageHeadline =
+    selectedAd?.landingPage?.rawHeadline?.trim() || null;
 
   useEffect(() => {
     if (new URLSearchParams(location.search).has("selected")) {
@@ -1904,6 +1916,16 @@ export default function SearchRoute() {
                   }
                 />
 
+                {!selectedAdvertiserConfirmed ? (
+                  <p className="f9-wk-small">
+                    {formatAdvertiserIdentityExplanation()}{" "}
+                    {formatAdvertiserNextStep({
+                      adSnapshotUrl: selectedAd.adSnapshotUrl,
+                      landingPageUrl: selectedAd.landingPageUrl,
+                    })}
+                  </p>
+                ) : null}
+
                 <div className="f9-wk-creative">
                   <AdThumb ad={selectedAd} />
                   <h3 className="f9-wk-creative-head">
@@ -1918,7 +1940,12 @@ export default function SearchRoute() {
                 <p className="f9-wk-prov">
                   <span>{formatSearchSourceLabel(visibleResult)}</span>
                   <span>{formatSearchFreshnessLabel(visibleResult)}</span>
-                  <span>{formatProofCaptureLabel(selectedAd)}</span>
+                  <span>
+                    {formatLandingPageCaptureStatusLabel({
+                      landingPageUrl: selectedAd.landingPageUrl,
+                      capturedAt: selectedAd.landingPage?.capturedAt,
+                    })}
+                  </span>
                 </p>
                 {selectedAd.domainMatch?.reason ? (
                   <p className="f9-wk-quote">{selectedAd.domainMatch.reason}</p>
@@ -1927,7 +1954,7 @@ export default function SearchRoute() {
                 <DetailBlock kicker="What the ad says">
                   <DetailFacts
                     rows={[
-                      { key: "Hook", value: selectedAd.hook },
+                      { key: "Hook", value: formatHookLabel(selectedAd.hook) },
                       ...(selectedAdAngle
                         ? [
                             {
@@ -1940,7 +1967,10 @@ export default function SearchRoute() {
                         key: "Offer",
                         value: formatOfferDisplay(selectedAd.offer),
                       },
-                      { key: "CTA", value: selectedAd.cta },
+                      {
+                        key: "CTA",
+                        value: formatAdCreativeTextValue(selectedAd.cta),
+                      },
                       {
                         key: "Format",
                         value: formatCreativeFormatLabel(selectedAd.format),
@@ -1953,7 +1983,12 @@ export default function SearchRoute() {
                             },
                           ]
                         : []),
-                      { key: "Language", value: selectedAd.languageLabel },
+                      {
+                        key: "Language",
+                        value: formatAdCreativeTextValue(
+                          selectedAd.languageLabel,
+                        ),
+                      },
                       {
                         key: "Destination",
                         value: selectedAd.destinationType,
@@ -1980,11 +2015,29 @@ export default function SearchRoute() {
 
                 <DetailBlock kicker="Landing page">
                   <h4 className="f9-wk-blk-head">
-                    {selectedAd.landingPage?.rawHeadline ??
+                    {selectedLandingPageHeadline ??
                       (selectionEnrichmentUiPending
                         ? "Analyzing creative…"
-                        : "Headline not captured yet")}
+                        : formatLandingPageHeadlineUnavailable(
+                            selectedAd.landingPage,
+                          ))}
                   </h4>
+                  {!selectedLandingPageHeadline &&
+                  !selectionEnrichmentUiPending ? (
+                    <>
+                      <p className="f9-wk-small">
+                        {formatLandingPageUnavailableExplanation(
+                          selectedAd.landingPage,
+                        )}
+                      </p>
+                      <p className="f9-wk-small">
+                        {formatLandingPageNextStep({
+                          landingPageUrl: selectedAd.landingPageUrl,
+                          adSnapshotUrl: selectedAd.adSnapshotUrl,
+                        })}
+                      </p>
+                    </>
+                  ) : null}
                   <DetailFacts
                     rows={[
                       {
@@ -2025,6 +2078,12 @@ export default function SearchRoute() {
                   ) : (
                     <p className="f9-wk-small">
                       No landing-page link found on this ad.
+                      {selectedLandingPageHeadline
+                        ? ` ${formatLandingPageNextStep({
+                            landingPageUrl: selectedAd.landingPageUrl,
+                            adSnapshotUrl: selectedAd.adSnapshotUrl,
+                          })}`
+                        : ""}
                     </p>
                   )}
                 </DetailBlock>

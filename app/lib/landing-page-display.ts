@@ -3,6 +3,7 @@ import type {
   CaptureMethod,
   DeliveryAttemptStatus,
   DeliveryChannel,
+  LandingPageSnapshotData,
   WebhookReconciliationStatus,
   WatchEventStatus,
   WatchEventType,
@@ -26,6 +27,84 @@ export function formatCaptureMethodLabel(captureMethod: CaptureMethod | null | u
   }
 
   return "Not checked yet";
+}
+
+// The anonymous /search selected pane presents evidence, not speculation.
+// These helpers turn a missing field into an explicit field-specific state:
+// what was checked or not checked, and what the visitor can do next. A null
+// field stays unavailable — it never becomes a guess, a search term, or a
+// watchlist name.
+export function formatLandingPageHeadlineUnavailable(
+  landingPage: Pick<LandingPageSnapshotData, "captureMethod"> | null | undefined,
+) {
+  return landingPage?.captureMethod
+    ? "Headline not found on the checked page."
+    : "Headline not read — the landing page was not checked for this ad.";
+}
+
+export function formatLandingPageUnavailableExplanation(
+  landingPage: Pick<LandingPageSnapshotData, "captureMethod"> | null | undefined,
+) {
+  return landingPage?.captureMethod
+    ? "The page was checked, but no headline appeared in what was captured. The other signals below come from that same check."
+    : "The landing page was not checked for this ad, so no headline, offer, or CTA was read from the destination. Nothing here is guessed.";
+}
+
+export function formatLandingPageNextStep(input: {
+  landingPageUrl: string | null | undefined;
+  adSnapshotUrl: string | null | undefined;
+}) {
+  if (input.landingPageUrl) {
+    return "Open the destination to check the current headline and offer yourself.";
+  }
+
+  if (input.adSnapshotUrl) {
+    return "Open this ad in the Meta Ad Library to find its destination.";
+  }
+
+  return "Re-run this search later — a fresh result may include the destination.";
+}
+
+export function formatAdvertiserIdentityExplanation() {
+  return "The advertiser name could not be read from this ad's source, so none is shown. The search term is not used as the advertiser.";
+}
+
+export function formatAdvertiserNextStep(input: {
+  adSnapshotUrl: string | null | undefined;
+  landingPageUrl: string | null | undefined;
+}) {
+  if (input.adSnapshotUrl) {
+    return "Open this ad in the Meta Ad Library to see who ran it.";
+  }
+
+  if (input.landingPageUrl) {
+    return "Open the destination to see who runs it.";
+  }
+
+  return "Re-run this search later — a fresh result may confirm the advertiser.";
+}
+
+export function formatLandingPageCaptureStatusLabel(input: {
+  landingPageUrl: string | null | undefined;
+  capturedAt: string | null | undefined;
+}) {
+  if (input.capturedAt) {
+    const capturedAt = new Date(input.capturedAt);
+    if (!Number.isNaN(capturedAt.getTime())) {
+      return `Landing page checked ${capturedAt.toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })}`;
+    }
+  }
+
+  return input.landingPageUrl
+    ? "Landing page link found — page not checked"
+    : "No landing-page destination available";
+}
+
+export function formatAdCreativeTextValue(value: string | null | undefined) {
+  return value?.trim() || "Not detected";
 }
 
 export function formatLandingPageSignalValue(value: string | null | undefined) {
