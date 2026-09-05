@@ -106,11 +106,15 @@ describe("BreadcrumbList on /switch/* pages (issue #1463)", () => {
 
 describe("BreadcrumbList on category / top-level pages (issue #1463)", () => {
   it.each([
-    ["sneaker-resale", ["Home", "Sneaker resale"]],
-    ["capture-rules", ["Home", "Capture rules"]],
-    ["ad-aggression", ["Home", "Ad Aggression Score"]],
-  ])("%s carries a Home → page trail and visible nav", async (route, names) => {
-    const markup = await renderDefault(route);
+    // sneaker-resale's loader now resolves the live indexable /ads/:domain
+    // cluster links (issue #1547 accept 4); the breadcrumb test renders the
+    // route directly, so it supplies the empty set the loader would return on
+    // a sitemap hiccup.
+    ["sneaker-resale", ["Home", "Sneaker resale"], { indexableAdsLinks: [] }],
+    ["capture-rules", ["Home", "Capture rules"], undefined],
+    ["ad-aggression", ["Home", "Ad Aggression Score"], undefined],
+  ])("%s carries a Home → page trail and visible nav", async (route, names, data) => {
+    const markup = await renderDefault(route, data);
     expect(crumbNames(itemsOf(breadcrumb(markup)))).toEqual(names);
     expect(markup).toContain('<nav aria-label="Breadcrumb"');
   });
