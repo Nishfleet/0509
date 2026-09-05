@@ -62,12 +62,14 @@ import {
 } from "~/lib/landing-pages.server";
 import { compensateUncommittedProofArtifacts } from "~/lib/proof-artifact-retention.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
+import { recordCtaPipelineStageCounts } from "~/lib/cta-pipeline-stage-counts.server";
 import {
   createLandingPagePipelineCounters,
   flushLandingPagePipelineCounters,
   recordDiffStage,
   recordExtractStage,
   recordFetchStage,
+  recordValidityStage,
   type LandingPagePipelineCounters,
 } from "~/lib/landing-page-pipeline-instrumentation.server";
 import {
@@ -3799,6 +3801,14 @@ async function evaluateSelectiveProofCandidates(
           snapshot: null,
           failureDetail,
         });
+        // Issue #1565: the capture-validity gate ran and rejected the capture
+        // (error/challenge/cookie wall). Record the bail-out so the per-stage
+        // funnel shows validity as the drop point, not the diff.
+        recordValidityStage(
+          pipelineCounters,
+          failedClassification.status,
+          failedClassification.reason,
+        );
         await assertOrchestratedWatchlistRunLease(env, input.runId, {
           orchestrationToken: input.lease?.processingToken,
         });
@@ -3922,6 +3932,15 @@ async function evaluateSelectiveProofCandidates(
           readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
           false,
       });
+      // Issue #1565: record the capture-validity gate outcome. "succeeded"
+      // and "suppressed" both mean the page was real (gate passed); only
+      // "capture_failed" is a bail-out — but this branch always has a
+      // snapshot, so the gate passed here.
+      recordValidityStage(
+        pipelineCounters,
+        classification.status,
+        classification.reason,
+      );
 
       const proofCaptureId = await createProofCapture(env, {
         proofTargetId: persistedProofTarget.id,
@@ -4075,6 +4094,9 @@ async function evaluateSelectiveProofCandidates(
       // the loop (success, bail-out continue, or thrown error) so no bail-out
       // goes unlogged.
       flushLandingPagePipelineCounters(pipelineCounters);
+      // Issue #1565: persist the per-stage funnel into D1 so the bail-out
+      // point is queryable, not just logged. Best-effort — never throws.
+      await recordCtaPipelineStageCounts(env, pipelineCounters);
     }
   }
 
@@ -4364,6 +4386,13 @@ async function evaluateDirectWebsiteProofCandidate(
         snapshot: null,
         failureDetail,
       });
+      // Issue #1565: record the capture-validity bail-out (error/challenge/
+      // cookie wall) so the per-stage funnel attributes the drop to validity.
+      recordValidityStage(
+        pipelineCounters,
+        failedClassification.status,
+        failedClassification.reason,
+      );
       await assertOrchestratedWatchlistRunLease(env, input.runId, {
         orchestrationToken: input.lease?.processingToken,
       });
@@ -4491,6 +4520,14 @@ async function evaluateDirectWebsiteProofCandidate(
         readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
         false,
     });
+    // Issue #1565: record the capture-validity gate outcome for the
+    // direct-website path. This branch always has a snapshot, so the gate
+    // passed (succeeded or suppressed).
+    recordValidityStage(
+      pipelineCounters,
+      directWebsiteClassification.status,
+      directWebsiteClassification.reason,
+    );
 
     const proofCaptureId = await createProofCapture(env, {
       proofTargetId: persistedProofTarget.id,
@@ -4679,6 +4716,8 @@ async function evaluateDirectWebsiteProofCandidate(
     // Issue #949: emit the per-check stage counter on every path (success,
     // early return, or thrown error) so no bail-out goes unlogged.
     flushLandingPagePipelineCounters(pipelineCounters);
+    // Issue #1565: persist the per-stage funnel into D1 (best-effort).
+    await recordCtaPipelineStageCounts(env, pipelineCounters);
   }
 }
 
