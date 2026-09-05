@@ -102,23 +102,18 @@ export interface BrandPageRefreshOutcome {
  */
 export function selectBrandPageRefreshTargets(
   candidates: readonly BrandPageRefreshCandidate[],
-  options: { staleAfterMs: number; maxPerPass: number; now: Date = new Date() },
+  options: { staleAfterMs: number; maxPerPass: number; now?: Date },
 ): BrandPageRefreshTarget[] {
-  const seen = new Set<string>();
   /** Dedup by domain; keep only the NEWEST row per domain. */
   const newestByDomain = new Map<string, BrandPageRefreshCandidate>();
   for (const candidate of candidates) {
-    if (seen.has(candidate.domain)) {
-      continue;
-    }
-    seen.add(candidate.domain);
     const previous = newestByDomain.get(candidate.domain);
     if (!previous || candidate.fetchedAt > previous.fetchedAt) {
       newestByDomain.set(candidate.domain, candidate);
     }
   }
 
-  const nowMs = options.now.getTime();
+  const nowMs = (options.now ?? new Date()).getTime();
   const stale: BrandPageRefreshTarget[] = [];
   for (const candidate of newestByDomain.values()) {
     const fetchedMs = Date.parse(candidate.fetchedAt);
@@ -126,7 +121,7 @@ export function selectBrandPageRefreshTargets(
       continue;
     }
     const ageMs = nowMs - fetchedMs;
-    if (ageMs < options.staleAfterMs) {
+    if (ageMs <= options.staleAfterMs) {
       continue;
     }
     stale.push({

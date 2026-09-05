@@ -168,8 +168,8 @@ describe("scheduled observation gap check", () => {
     expect(sendOperatorAlertEmailDetailed).toHaveBeenCalledWith(
       env,
       expect.objectContaining({
-        subject: "0509 scheduled-work gap: 4 unhealthy",
-        idempotencyKey: "scheduled-observation-gap:15:initial",
+        subject: "0509 scheduled-work gap: 5 unhealthy",
+        idempotencyKey: "scheduled-observation-gap:31:initial",
       }),
     );
   });

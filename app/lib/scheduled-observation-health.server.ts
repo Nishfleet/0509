@@ -7,6 +7,10 @@ export const SCHEDULED_OBSERVATION_ALERT_THROTTLE_MS = 6 * 60 * 60 * 1000;
 export const SCHEDULED_OBSERVATION_DEADLINES = Object.freeze([
   { cron: "0 */3 * * *", maxAgeMs: 4 * 60 * 60 * 1000 },
   { cron: "17 */6 * * *", maxAgeMs: 7 * 60 * 60 * 1000 },
+  // WP-50: dedicated brand-page refresh — same gap-check window as the
+  // six-hourly warmup because the brand-page refresh is hosted on the
+  // 12-hourly cadence and shares the same health/deadline contract.
+  { cron: "37 */12 * * *", maxAgeMs: 14 * 60 * 60 * 1000 },
   { cron: "0 4 * * *", maxAgeMs: 26 * 60 * 60 * 1000 },
   { cron: "0 5 * * MON", maxAgeMs: 8 * 24 * 60 * 60 * 1000 },
 ]);

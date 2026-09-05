@@ -108,7 +108,7 @@ describe("scheduled observation health-state migration", () => {
     `).run(
       "scheduled_observation_gap",
       "2026-07-30T12:00:00.000Z",
-      16,
+      32,
       "2026-07-30T12:00:00.000Z",
       "accepted",
     )).toThrow();
