@@ -48,24 +48,23 @@ export function buildIdleSearchResult(): SearchResponse {
 }
 
 /**
- * Page-level H1 for the public /search route. When the visitor lands from a
- * shared keyword link (`?q=` or `?query=`) with a country scope, the heading
- * names the brand and the market the search actually ran in. The idle page
- * keeps the generic "Find competitor ads" title. The all-countries value
- * (country=all) renders as "across all countries" — plain buyer language for
- * the unscoped default scope, which never claims a single market.
+ * Page-level H1 for the public /search route. The heading names the buyer's
+ * intent — "What {Brand} is running on Meta" — so a first-time visitor who
+ * searched `nike facebook ads` reads a headline about Nike's Meta ads, not a
+ * URL parameter they never typed. The country scope never lives in the H1;
+ * it renders as a small annotation under the H1
+ * (`formatSearchScopeAnnotation`). The idle page keeps the generic "Find
+ * competitor ads" title. (issue #1502: the prior "{Brand} ads across all
+ * countries" H1 mirrored the technical country-scope filter instead of buyer
+ * language.)
  */
-export function formatSearchCommandTitle(
-  query: string,
-  country: string,
-): string {
+export function formatSearchCommandTitle(query: string): string {
   const trimmed = query.trim();
   if (!trimmed) {
     return "Find competitor ads";
   }
   const brand = titleCaseSearchTerm(trimmed);
-  const scope = formatSearchPageScope(country);
-  return scope ? `${brand} ads ${scope}` : `${brand} ads`;
+  return `What ${brand} is running on Meta`;
 }
 
 /**
@@ -87,6 +86,22 @@ export function formatSearchPageScope(
     return "across all countries";
   }
   return formatSearchMarketScope(country);
+}
+
+/**
+ * Sentence-cased country-scope annotation for the small context line under
+ * the /search H1. The H1 itself never carries the country scope (issue
+ * #1502); this is where it lives instead — "Across all countries" for the
+ * unscoped default, "In India" for a named market, null when no country was
+ * supplied. Wraps `formatSearchPageScope` and capitalizes the first letter
+ * so the annotation reads as a standalone line, not a trailing clause.
+ */
+export function formatSearchScopeAnnotation(
+  country: string | null | undefined,
+): string | null {
+  const scope = formatSearchPageScope(country);
+  if (!scope) return null;
+  return scope.charAt(0).toUpperCase() + scope.slice(1);
 }
 
 function titleCaseSearchTerm(value: string): string {
