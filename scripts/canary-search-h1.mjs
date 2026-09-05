@@ -98,14 +98,10 @@ export function extractSearchH1(html) {
   if (!match) return null;
   return (
     match[1]
-      // strip any nested tags (links, spans) inside the H1
+      // strip any nested tags (links, spans) inside the H1. The banned
+      // country-scope phrases contain no HTML entities, so no entity decoding
+      // is needed for the verdict; the raw inner text is compared verbatim.
       .replace(/<[^>]+>/g, "")
-      .replace(/&amp;/gi, "&")
-      .replace(/&quot;/gi, '"')
-      .replace(/&#x27;|&#39;/gi, "'")
-      .replace(/&lt;/gi, "<")
-      .replace(/&gt;/gi, ">")
-      .replace(/&nbsp;/gi, " ")
       .trim()
       .toLowerCase()
   );
