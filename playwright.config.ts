@@ -95,9 +95,12 @@ export default defineConfig({
       // endpoint (one succeeded + one capture_failed capture), loads
       // /app/watchlists/:id as a signed-in workspace user, and asserts the
       // human reason label renders with no raw reason-code token.
+      // Issue #1487 activation-first-brief spec is self-contained: it boots
+      // its own isolated dev server (the shared webServer never sets
+      // SIGNUP_FIRST_BRIEF_ENABLED, so the surface under test would be dark).
       name: "workspace",
       testDir: "./tests/e2e",
-      testMatch: /watchlist-run-history\.spec\.ts/,
+      testMatch: /(watchlist-run-history|activation-first-brief)\.spec\.ts/,
       timeout: 60_000,
       use: {
         ...devices["Desktop Chrome"],
