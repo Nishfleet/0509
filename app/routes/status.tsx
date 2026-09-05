@@ -3,6 +3,7 @@ import type { LinksFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+import { getPublicStatusCounters } from "~/lib/public-status-counters.server";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
   canonicalLinks,
@@ -12,7 +13,10 @@ import {
 } from "~/lib/seo";
 
 const description =
-  "Configuration and scope information for Five to Nine; this page is not a live provider-health monitor.";
+  "Configuration and scope information and live monitoring facts for Five to Nine; this page does not measure live search, email, billing, or provider availability.";
+
+const degradedDescription =
+  "Configuration and scope information for Five to Nine. Live monitoring facts are unavailable right now; this page does not measure live search, email, billing, or provider availability.";
 
 export const links: LinksFunction = () => canonicalLinks("/status");
 
@@ -28,27 +32,81 @@ export async function loader({ context }: LoaderFunctionArgs) {
   const cloudflare = getOptionalCloudflareContext(context);
   const env = cloudflare?.env;
 
+  const asOf = new Date().toISOString();
+  let counters = null;
+  let measurementsUnavailable = !env;
+  if (env) {
+    try {
+      counters = await getPublicStatusCounters(env);
+    } catch {
+      counters = null;
+      measurementsUnavailable = true;
+    }
+  }
+
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: asOf,
+    asOf,
     appServed: Boolean(env),
     commercialLaunch: env ? publicCommercialLaunchSummary(env) : null,
+    monitoring: counters,
+    measurementsUnavailable,
   };
 }
 
 export default function StatusRoute() {
   const data = useLoaderData<typeof loader>();
+  const monitoring = data.monitoring;
+  const asOf = data.asOf;
+  const measurementsUnavailable = data.measurementsUnavailable;
+
+  const intro = measurementsUnavailable
+    ? "Configuration and scope information for Five to Nine. Live monitoring facts are unavailable right now; this page does not measure live search, email, billing, or provider availability."
+    : "Configuration and scope information and live monitoring facts for Five to Nine; this page does not measure live search, email, billing, or provider availability.";
 
   return (
     <PublicDocShell
       kicker="Status"
       title="Five to Nine service status."
-      intro="This page provides configuration and scope information, not a live provider-health monitor. It does not measure live search, email, billing, or provider availability."
+      intro={intro}
     >
       <script
         {...jsonLdScriptProps(
-          webPageJsonLd({ name: "Status | Five to Nine", description, pathname: "/status" }),
+          webPageJsonLd({
+            name: "Status | Five to Nine",
+            description: measurementsUnavailable ? degradedDescription : description,
+            pathname: "/status",
+          }),
         )}
       />
+
+      <PublicDocBlock title="Monitoring health">
+        <dl className="proof-trail-list">
+          {monitoring ? (
+            <>
+              <div>
+                <dt>Watchlist runs in the last 24 hours</dt>
+                <dd>{monitoring.runsInLast24h.toLocaleString()} — as of {asOf}</dd>
+              </div>
+              <div>
+                <dt>Failed watchlist runs in the last 24 hours</dt>
+                <dd>{monitoring.failedRunsInLast24h.toLocaleString()} — as of {asOf}</dd>
+              </div>
+              <div>
+                <dt>Last watchlist run</dt>
+                <dd>{monitoring.lastWatchlistRunAt ?? "no runs recorded yet"} — as of {asOf}</dd>
+              </div>
+              <div>
+                <dt>Last digest sent</dt>
+                <dd>{monitoring.lastDigestSentAt ?? "no digests sent yet"} — as of {asOf}</dd>
+              </div>
+            </>
+          ) : (
+            <p>Measurements unavailable right now.</p>
+          )}
+        </dl>
+      </PublicDocBlock>
+
       <PublicDocBlock title="Core surfaces">
         <dl className="proof-trail-list">
           <div>
