@@ -357,6 +357,9 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // (issue #1481) — each is a duplicate that canonicalizes to its more
   // specific sibling (visualping-ad-library / foreplay-spyder), which stays
   // listed. The loser routes remain registered so the pages still render 200.
+  // Their locale-prefixed variants (/de/compare/visualping, ...) left too:
+  // the slugs are out of BUYER_SURFACE_SEGMENT_CHILD_SLUGS.compare, so the
+  // generated locale child set below excludes them.
   sitemapPaths: [
     "/", "/search", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
     "/compare/visualping-ad-library", "/compare/spyland",
@@ -382,7 +385,8 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
       `/${locale}/ad-aggression`,
     ]),
     // Locale-prefixed compare/switch child routes (issue #1563) — 5 locales
-    // × 13 children. Each re-exports the EN sibling with canonical→EN and the
+    // × 11 children (the two canonicalized compare losers left under
+    // issue #1481). Each re-exports the EN sibling with canonical→EN and the
     // buyer-surface hreflang cluster.
     ...BUYER_SURFACE_LOCALE_IDS.flatMap((locale) =>
       BUYER_SURFACE_CHILD_PATHS.map((child) => `/${locale}${child}`),
