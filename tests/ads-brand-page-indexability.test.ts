@@ -143,9 +143,9 @@ async function runLoader(domain: string, env: Record<string, unknown>) {
   } as never);
 }
 
-function sitemapRow(payload: unknown): SitemapCacheRow {
+function sitemapRow(payload: unknown, domain = "nykaa.com"): SitemapCacheRow {
   return {
-    cache_key: "search-v2:domain:nykaa.com:exact:meta_library_browser:all:page-1",
+    cache_key: `search-v2:domain:${domain}:exact:meta_library_browser:all:page-1`,
     provider: "meta_library_browser",
     route_context: "public_search",
     payload_json: JSON.stringify(payload),
@@ -209,6 +209,93 @@ describe("issue #1442 — indexability is decoupled from the 14-day Aggression w
     const now = new Date();
 
     expect(brandPageRowHasVerifiedAds(row, "nykaa.com")).toBe(false);
+    expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([]);
+  });
+});
+
+/**
+ * A verified-linked ad whose landing domain is `notion.so`.
+ *
+ * `notion.so` is a two-part PUBLIC-SUFFIX registrable domain (country-code TLD
+ * `.so`), so it exercises a different registrable-domain parse path than a
+ * conventional `example.com` — the exact shape that must not silently fall out
+ * of the sitemap indexability filter (issue #1431). Only one verified ad,
+ * first-seen 2 days ago (below the 14-day window), so the Aggression score is
+ * deferred but indexability must survive.
+ */
+function verifiedNotionAd(): AdRecord {
+  return {
+    metaAdId: "meta-notion-1",
+    advertiser: "Notion",
+    body: "Your connected workspace.",
+    previewHeadline: "Notion — everything in one place",
+    previewSubhead: "Docs, wikis and projects",
+    hook: "Organize your work",
+    offer: "Free for individuals",
+    cta: "Get started",
+    format: "image",
+    languageLabel: "English",
+    destinationType: "website",
+    landingPageUrl: "https://notion.so/product",
+    adSnapshotUrl: "https://cdn.example.com/meta-notion-1.png",
+    countries: ["all"],
+    platforms: ["Facebook"],
+    firstSeenAt: isoAgo(2 * DAY_MS),
+    lastSeenAt: null,
+    active: true,
+    researchSummary: "Summary",
+    source: "meta_library_browser",
+    analysisFields: [],
+    domainMatch: {
+      level: "registrable_domain",
+      reason: "Landing page matches notion.so",
+      matchedDomain: "notion.so",
+    },
+  };
+}
+
+describe("issue #1431 — the /ads/notion.so brand page is indexable and in the sitemap", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+  afterEach(() => {
+    vi.doUnmock("~/lib/context.server");
+    vi.doUnmock("~/lib/data.server");
+    vi.doUnmock("~/lib/ad-source.server");
+    vi.doUnmock("~/lib/meta-library-browser.server");
+    vi.doUnmock("~/lib/meta-api.server");
+    vi.doUnmock("~/lib/rate-limit.server");
+    vi.doUnmock("~/lib/offer-timeline.server");
+  });
+
+  it("renders a populated /ads/notion.so WITHOUT noindex", async () => {
+    const env = installBrandPageMocks(
+      cacheEntry(payloadFor([verifiedNotionAd()])),
+    );
+
+    const result = await runLoader("notion.so", env);
+
+    // Notion runs real verified-linked ads on notion.so, so the page is
+    // populated and must NOT carry the anti-thin-content noindex.
+    expect(result.verifiedLinkCount).toBe(1);
+    expect(result.noindex).toBe(false);
+  });
+
+  it("includes a populated /ads/notion.so in the sitemap", () => {
+    const row = sitemapRow(payloadFor([verifiedNotionAd()]), "notion.so");
+    const now = new Date();
+
+    expect(brandPageRowHasVerifiedAds(row, "notion.so")).toBe(true);
+    expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([
+      "/ads/notion.so",
+    ]);
+  });
+
+  it("keeps a 0-verified-ads /ads/notion.so out of the sitemap", () => {
+    const row = sitemapRow(payloadFor([unverifiedTextMatchAd()]), "notion.so");
+    const now = new Date();
+
+    expect(brandPageRowHasVerifiedAds(row, "notion.so")).toBe(false);
     expect(indexableBrandPageEntriesFromRows([row], now).map((e) => e.path)).toEqual([]);
   });
 });
