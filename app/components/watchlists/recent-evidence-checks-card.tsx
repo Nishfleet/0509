@@ -39,7 +39,7 @@ export function RecentEvidenceChecksCard({
           renderedAt={data.renderedAt}
         />
       ) : null,
-      missingLabel: "no successful evidence check yet",
+      missingLabel: "no successful proof capture yet",
     },
   ];
 

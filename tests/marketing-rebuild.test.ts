@@ -178,7 +178,7 @@ describe("marketing rebuild", () => {
       "75 competitors — top 25 checked every 3 hours, the rest every 6 hours",
     );
     expect(marketingRoute).toContain("valueMathLabel");
-    expect(marketingRoute).toContain("Check packs");
+    expect(marketingRoute).toContain("Proof capture packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');
     expect(marketingRoute).toContain('className="f9-plan-badge">Recommended</em>');
     expect(marketingRoute).not.toContain("Proof-first monitoring");
@@ -238,12 +238,12 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("highest queue priority");
   });
 
-  it("uses customer-facing check language for top-ups and included usage", () => {
-    expect(marketingRoute).toContain("Purchased checks never expire");
-    expect(marketingRoute).toContain("Included checks reset every month");
+  it("uses customer-facing proof-capture language for packs and included usage", () => {
+    expect(marketingRoute).toContain("Proof captures never expire");
+    expect(marketingRoute).toContain("Included captures are generous and reset every month");
     expect(marketingRoute).toContain("Scheduled scans are included with your plan");
     expect(marketingRoute).toContain("proof-backed capture");
-    expect(marketingRoute).toContain("500 extra checks");
+    expect(marketingRoute).toContain("500 extra proof captures");
     expect(marketingRoute).not.toContain("Record packs");
     expect(marketingRoute).not.toContain("record packs");
     expect(marketingRoute).not.toContain("saved change records");

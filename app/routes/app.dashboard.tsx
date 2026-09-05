@@ -689,16 +689,16 @@ export default function AppDashboardRoute() {
         <FeedbackStrip
           actions={
             <Link className="f9-wk-lnk" to="/app/billing?source=evidence#top-ups">
-              Review check packs <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+              Review proof capture packs <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           }
           label="Evidence usage"
           tone="bad"
         >
           {proofUsage.warningLevel === "exhausted"
-            ? "You've used all your evidence checks. "
-            : "You've used over 80% of your evidence checks. "}
-          {proofUsage.used} of {proofUsage.limit} checks used in the current billing period.
+            ? "You've used all your proof captures. "
+            : "You've used over 80% of your proof captures. "}
+          {proofUsage.used} of {proofUsage.limit} proof captures used in the current billing period.
           {proofUsage.upgradeTarget
             ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
             : " Add an overflow pack before the next busy campaign."}
@@ -888,12 +888,12 @@ export default function AppDashboardRoute() {
             to="/app/watchlists"
           />
           <RuledRow
-            name="Evidence checks"
+            name="Proof captures"
             plain
             say={
               proofUsage.limit
-                ? `${proofUsage.used} of ${proofUsage.limit} checks used in the current billing period.`
-                : `${successfulProofs} checks have succeeded so far.`
+                ? `${proofUsage.used} of ${proofUsage.limit} proof captures used in the current billing period.`
+                : `${successfulProofs} proof captures have succeeded so far.`
             }
             status={
               proofUsage.limit

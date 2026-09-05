@@ -720,14 +720,14 @@ export default function BillingRoute() {
             </span>
           </div>
           <div className="f9-wk-workrow">
-            <strong>Checks (this month)</strong>
+            <strong>Proof captures (this month)</strong>
             <span>
               {data.proofUsage.limit > 0 ? (
                 <>
                   {data.proofUsage.includedUsed ?? data.proofUsage.used} of{" "}
                   {data.proofUsage.baseLimit} included used
                   {data.proofUsage.topUpRemaining && data.proofUsage.topUpRemaining > 0
-                    ? ` · ${data.proofUsage.topUpRemaining} purchased checks remaining`
+                    ? ` · ${data.proofUsage.topUpRemaining} purchased captures remaining`
                     : ""}
                   {data.proofUsage.periodStart && data.proofUsage.periodEnd ? (
                     <>
@@ -755,7 +755,7 @@ export default function BillingRoute() {
             <div className="f9-wk-workrow" key={`${grant.skuSlug ?? "grant"}-${grant.grantedAt}`}>
               <strong>Purchased pack</strong>
               <span>
-                {grant.credits} checks from {topUpPackName(grant.skuSlug, grant.credits)} — never expire
+                {grant.credits} proof captures from {topUpPackName(grant.skuSlug, grant.credits)} — never expire
               </span>
             </div>
           ))}
@@ -769,10 +769,10 @@ export default function BillingRoute() {
       <article className="f9-acct-section" id="top-ups">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-wk-kick">Check packs</span>
+            <span className="f9-wk-kick">Proof capture packs</span>
             <h2>Top up busy weeks without changing plans</h2>
             <p className="f9-wk-dim">
-              Purchased checks never expire. They add check volume only; they do not
+              Purchased proof captures never expire. They add capture volume only; they do not
               change watchlist limits, cadence, or plan features.
             </p>
           </div>
@@ -1301,7 +1301,7 @@ function topUpPackName(skuSlug: string | null | undefined, credits: number) {
   if (skuSlug && isTopUpDisplayKey(skuSlug)) {
     return TOP_UP_PACK_DISPLAY[skuSlug].name;
   }
-  return `${credits.toLocaleString("en-IN")} check pack`;
+  return `${credits.toLocaleString("en-IN")} proof capture pack`;
 }
 
 function isTopUpDisplayKey(value: string): value is keyof typeof TOP_UP_PACK_DISPLAY {

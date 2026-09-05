@@ -1402,9 +1402,9 @@ describe("billing page", () => {
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
     expect(markup).toContain("200 of 250 included used");
-    expect(markup).toContain("500 purchased checks remaining");
-    expect(markup).toContain("Burst Pack");
-    expect(markup).toContain("500 checks from Burst Pack — never expire");
+    expect(markup).toContain("500 purchased captures remaining");
+    expect(markup).toContain("Proof Pack — 500");
+    expect(markup).toContain("500 proof captures from Proof Pack — 500 — never expire");
     expect(markup).not.toContain("burst_500_v1");
     expect(markup).toContain("never expire");
   });

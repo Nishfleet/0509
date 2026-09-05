@@ -68,13 +68,13 @@ export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: 
   const subject = `Your ${monthLabel} recap — ${input.changesCaught} change${input.changesCaught === 1 ? "" : "s"} caught`;
   const preheader = `${input.changesCaught} changes, ${input.evidenceCaptured} evidence captures on ${input.plan}.`;
   // Lead with the hero number the subscription paid for. When a month caught no
-  // changes but still ran evidence checks, headline the checks instead of a
+  // changes but still ran proof captures, headline the captures instead of a
   // deflating "0".
   const heroValue = input.changesCaught > 0 ? input.changesCaught : input.evidenceCaptured;
   const heroLabel =
     input.changesCaught > 0
       ? `competitor change${input.changesCaught === 1 ? "" : "s"} caught in ${escapeHtml(monthLabel)}`
-      : `evidence check${input.evidenceCaptured === 1 ? "" : "s"} run in ${escapeHtml(monthLabel)}`;
+      : `proof capture${input.evidenceCaptured === 1 ? "" : "s"} saved in ${escapeHtml(monthLabel)}`;
   const statRow = (label: string, value: string) => `
         <tr>
           <td style="padding: 12px 0; border-top: 1px solid #eef1f6; color: #5b6577; font-size: 14px;">${label}</td>
@@ -96,7 +96,7 @@ export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: 
       <p style="margin: 0 0 16px;">Here's what Five to Nine watched for you this month.</p>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 24px;">
         ${statRow("Changes caught", `${input.changesCaught}`)}
-        ${statRow("Evidence checks used", checksValue)}
+        ${statRow("Proof captures saved", checksValue)}
         ${statRow("Most active competitor", topValue)}
       </table>
       <p style="margin: 0 0 20px;">
@@ -116,8 +116,8 @@ export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: 
     `Here's what Five to Nine caught for you in ${monthLabel}.`,
     `Changes caught: ${input.changesCaught}`,
     input.includedAllowance > 0
-      ? `Evidence checks used: ${input.evidenceCaptured} of ${input.includedAllowance} included.`
-      : `Evidence captures: ${input.evidenceCaptured}.`,
+      ? `Proof captures saved: ${input.evidenceCaptured} of ${input.includedAllowance} included.`
+      : `Proof captures: ${input.evidenceCaptured}.`,
     input.topCompetitorName
       ? `Most active competitor: ${input.topCompetitorName} (${input.topCompetitorChanges} changes).`
       : "No single competitor dominated this month.",

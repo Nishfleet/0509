@@ -257,7 +257,7 @@ describe("getWorkspaceReadiness", () => {
       topUpGrants: [
         {
           skuSlug: "burst_500_v1",
-          packName: "Burst Pack",
+          packName: "Proof Pack — 500",
           remainingCredits: 500,
           grantedAt: now,
           expiresAt: null,
@@ -408,7 +408,7 @@ describe("getWorkspaceReadiness", () => {
 
     expect(firstProof).toMatchObject({
       status: "ready",
-      detail: "1 successful evidence check recorded.",
+      detail: "1 successful proof capture recorded.",
     });
     expect(readiness.counts.successfulProofs).toBe(1);
   });
