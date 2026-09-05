@@ -361,7 +361,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // the slugs are out of BUYER_SURFACE_SEGMENT_CHILD_SLUGS.compare, so the
   // generated locale child set below excludes them.
   sitemapPaths: [
-    "/", "/search", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
+    "/", "/search", "/brands", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
     "/compare/visualping-ad-library", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
     "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief",

@@ -57,12 +57,14 @@ import { BrandChangeTimeline } from "~/components/ads/brand-change-timeline";
 import { BrandScoreCard } from "~/components/ads/brand-score-card";
 import { BrandStatLine } from "~/components/ads/brand-stat-line";
 import { BrandTicker } from "~/components/ads/brand-ticker";
+import { BrowseTrackedCompetitors } from "~/components/ads-internal-links";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { CAPTURE_RULES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
 import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
+import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 import type {
   BrandChangeEvent,
   BrandIntelTeaser,
@@ -158,6 +160,19 @@ export interface BrandPageLoaderData {
    * the page's ads are actually from. Null on the cache-miss shell.
    */
   adLibraryCountry: string | null;
+  /**
+   * Other indexable /ads/:domain pages this page cross-links to (issue
+   * #1417). The sitemap's /ads pages were orphans — they linked to /compare,
+   * /switch, /search, /pricing and /competitor-monitoring but never to each
+   * other, so Google discovered them only via the sitemap with no internal
+   * link equity flowing between brand pages. This deterministic set of up to
+   * four OTHER indexable brand pages (the current domain always excluded,
+   * see pickRelatedBrandLinks) restores the cross-links. Empty on a cache
+   * hiccup or a single-brand sitemap — the section hides in that case. The
+   * `BrowseTrackedCompetitors` component renders these, always backed by a
+   * link to the /brands hub so every brand page also reaches the full list.
+   */
+  relatedBrands: IndexableAdsLink[];
   noindex: boolean;
   canonicalPath: string;
   /**
@@ -290,6 +305,27 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     : null;
   const emergencyNoindex = env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0";
 
+  // Issue #1417: the sitemap's /ads/:domain pages were orphaned — none
+  // linked to another /ads page, so a buyer landing on /ads/nike.com could
+  // not discover /ads/adidas.com without going back to search, and Google
+  // saw no internal link equity flowing between brand pages. Load the other
+  // indexable brand-page links (the same sitemap indexability signal) and
+  // pick this page's deterministic "Related brands" set. Cache-only: one
+  // bounded D1 read; a hiccup degrades to [] (the section hides) rather
+  // than 500ing the brand page or triggering any paid operation.
+  let relatedBrands: IndexableAdsLink[] = [];
+  try {
+    const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
+    const { pickRelatedBrandLinks } = await import("~/lib/ads-internal-links");
+    const allLinks = await loadIndexableAdsInternalLinks(env);
+    relatedBrands = pickRelatedBrandLinks(allLinks, brand.domain);
+  } catch (error) {
+    console.warn("Brand page related-brands load failed; omitting cross-links.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    relatedBrands = [];
+  }
+
   // Attribution analytics (score, teaser, change feed, ownership) derive ONLY
   // from creatives with verified link evidence. Ads the provider returned as
   // text-mention / provider candidates may be real creatives, but they are not
@@ -358,6 +394,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     offerTimelineEntries,
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
+    relatedBrands,
     canonicalPath: `/ads/${brand.domain}`,
     captureFailuresSummary,
   };
@@ -1127,6 +1164,20 @@ function BrandAdsResults({
           </section>
         );
       })()}
+
+      {/* 6b. RELATED BRANDS — issue #1417. The /ads/:domain pages were
+          orphans: none linked to any other /ads page, so a buyer who landed
+          on /ads/nike.com could not find /ads/adidas.com without going back
+          to search, and Google saw no internal link equity between brand
+          pages. This section cross-links this page to a deterministic set of
+          OTHER indexable brand pages (the current domain is always excluded)
+          plus the /brands hub, so every sitemap /ads page carries at least
+          one internal link to another /ads page. Hidden only when no other
+          indexable brand pages exist (single-brand sitemap or a cache
+          hiccup) — it never invents a brand. */}
+      {data.relatedBrands.length > 0 ? (
+        <BrowseTrackedCompetitors links={data.relatedBrands} />
+      ) : null}
 
       {/* 7. CLOSER */}
       <section className="f9-ads-closer">

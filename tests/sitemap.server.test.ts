@@ -13,7 +13,7 @@ import {
 import { fingerprintSavedQuery, normalizeSavedQuery, parseSearchParams } from "~/lib/normalize";
 import { buildSearchV2CacheKey } from "~/lib/search-v2.server";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
-import { NOINDEX_ACTION_SURFACES, SITEMAP_PATHS } from "~/lib/seo";
+import { NOINDEX_ACTION_SURFACES, SITEMAP_PATHS, SITEMAP_STATIC_ENTRIES } from "~/lib/seo";
 import routes from "~/routes";
 import {
   brandDomainFromSitemapCacheRow,
@@ -1067,5 +1067,17 @@ describe("SITEMAP_PATHS", () => {
     }
     expect(SITEMAP_PATHS).not.toContain("/auth/signup");
     expect(NOINDEX_ACTION_SURFACES).toContain("/auth/signup");
+  });
+
+  it("lists the /brands hub (issue #1417) as a static sitemap path and inside the built XML", () => {
+    // The hub is the browse surface that links the otherwise-orphaned /ads/*
+    // pages — it must be crawlable, and the sitemap build must include it.
+    expect(SITEMAP_PATHS).toContain("/brands");
+    const entry = SITEMAP_STATIC_ENTRIES.find((e) => e.path === "/brands");
+    expect(entry).toBeTruthy();
+    expect(entry?.changefreq).toBe("weekly");
+    expect(entry?.priority).toBe("0.6");
+    const xml = buildSitemapXml([], []);
+    expect(xml).toContain("<loc>https://0509.io/brands</loc>");
   });
 });
