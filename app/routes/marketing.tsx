@@ -890,8 +890,8 @@ export default function MarketingRoute() {
           <span className="ld-kicker">Zero-noise monitoring</span>
           <h2>Signal, not noise.</h2>
           <p>
-            Ad-spy tools drown teams in &ldquo;new ad&rdquo; pings. Five to Nine alerts you when
-            something actually moved — and tells you what it checked when nothing did.
+            Five to Nine starts with a baseline, alerts once per change, and sends a heartbeat
+            when nothing moves — so you see what changed and what was checked.
           </p>
         </div>
         <div className="ld-quiet-grid ld-reveal" aria-label="Zero-noise monitoring points">
