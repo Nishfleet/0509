@@ -25,6 +25,16 @@ import type {
 /** Recovery window for the client-side "search checks recovered" hint. */
 const SEARCH_DELAY_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
 
+/** Honest copy for a completed 0-row search (BET 10 / §3.6): the search
+ *  finished and found no verified ad, which is not evidence the competitor
+ *  is inactive. This is the message a buyer sees at the no_results dead-end,
+ *  and it must never be replaced by a false cause ("coverage may be
+ *  incomplete", "checks are delayed", "still coming"). Shared by the visible
+ *  empty state and the sr-only status region so a screen-reader user hears
+ *  exactly what a sighted user reads. */
+export const NO_RESULTS_HONEST_COPY =
+  "This is not evidence that the competitor is inactive; this search did not verify a connected ad.";
+
 export function buildIdleSearchResult(): SearchResponse {
   return {
     ads: [],
@@ -666,6 +676,17 @@ export function formatSearchResultsAnnouncement(
   if (options.retryCursor) {
     const availabilityVerb = resultCount === 1 ? "remains" : "remain";
     return `${resultCount} search ${resultLabel} ${availabilityVerb} available. Fresh checks for more results are delayed. Retry when ready.`;
+  }
+
+  // A completed 0-row search (discoveryEmptyReason === "no_results") is not
+  // evidence the competitor is inactive. The honest reason wins the status
+  // region over any delayed/warming cause — a buyer at this dead-end must not
+  // be told "coverage may be incomplete" or "checks are delayed" for a real
+  // brand that simply had no verified ad in this search. This also covers the
+  // healthy 0-row case below, so the honest sentence is the single message for
+  // every completed no_results state.
+  if (result.discoveryEmptyReason === "no_results" && resultCount === 0) {
+    return NO_RESULTS_HONEST_COPY;
   }
 
   if (isDelayedDiscoveryStatus(result.discoveryStatus)) {
