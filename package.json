@@ -17,6 +17,7 @@
     "build": "node scripts/build-production.mjs",
     "cf-typegen": "WRANGLER_WRITE_LOGS=false wrangler types",
     "canary:proof": "node scripts/launch-readiness-canary.mjs",
+    "canary:digest-headline-ratio": "node scripts/canary-digest-headline-ratio.mjs",
     "canary:proof-screenshot-rate": "node scripts/canary-proof-screenshot-rate.mjs",
     "canary:billing": "node scripts/dodo-billing-canary.mjs",
     "canary:pricing": "node scripts/dodo-pricing-canary.mjs",
