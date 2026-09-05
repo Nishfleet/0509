@@ -531,8 +531,10 @@ export const SITEMAP_PATHS = [
     `/${locale}/trust`,
     `/${locale}/compare`,
     // BET 5 compare + BET 8 switch child routes (issue #1563): every
-    // locale ships the same 13 child surfaces, with canonicals pointing
+    // locale ships the same 11 child surfaces, with canonicals pointing
     // back at EN so the locale cluster cannot fragment search ranking.
+    // The /compare/visualping and /compare/foreplay duplicates are out of
+    // the child set (issue #1481) so no locale variant stays indexed.
     ...BUYER_SURFACE_CHILD_PATHS.map((child) => `/${locale}${child}`),
     // First-value search funnel + trust surfaces (issue 1578). Search is
     // the strongest first-value purchase-intent moment, so the localised
