@@ -923,6 +923,24 @@ function BrandAdsResults({
             signupPath={signupPath}
             totalCount={totalCount}
           />
+
+          {/* AD-AGGRESSION METHODOLOGY FOOTER — "/ad-aggression" cross-link
+              (issue #1552). The Ad Aggression Score card is the page's named
+              differentiator, but the score alone is a number with no
+              explanation for the buyer landing from an SEO query. This footer
+              points that curiosity at the public formula — a link magnet that
+              converts the score into trust. Shown only on populated pages (≥1
+              verified-linked ad), which is exactly when the score can render;
+              a matched-but-unverified wall has no score to explain. Internal
+              nav, same tab. */}
+          {data.verifiedLinkCount > 0 ? (
+            <p className="f9-wk-dim f9-ads-wall-foot">
+              {"The Ad Aggression Score comes from a public formula, not a black box. "}
+              <Link to={AD_AGGRESSION_METHODOLOGY_PATH}>
+                How the Ad Aggression Score is calculated
+              </Link>
+            </p>
+          ) : null}
         </div>
       </section>
 

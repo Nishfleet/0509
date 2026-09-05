@@ -89,6 +89,9 @@ describe("email case-file design system (issue #1556)", () => {
     // Case-file frame.
     expect(shell).toContain(`background-color:${EMAIL_CASE_BONE}`);
     expect(shell).toContain("No proof, no claim.");
+    // Digest footer links the public capture-validity rules page (issue #1546).
+    expect(shell).toContain('href="https://0509.io/capture-rules"');
+    expect(shell).toMatch(/<a href="https:\/\/0509\.io\/capture-rules"[^>]*>What we refuse to alert on<\/a>/);
     // Honesty stamps: fresh verified evidence is "Live".
     expect(model.html).toContain(">Live<");
     // Proof-strip parity: the change row carries its source link.
