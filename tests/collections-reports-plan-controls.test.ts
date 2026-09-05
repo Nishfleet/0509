@@ -209,16 +209,6 @@ describe("collection plan controls", () => {
     expect(markup).toContain("Create share link");
     expect(markup).not.toContain("Upgrade to Agency to share");
   });
-
-  it("offers a rename form pre-filled with the collection name", async () => {
-    const markup = await renderCollections("free");
-
-    expect(markup).toContain("Rename collection");
-    expect(markup).toContain("name=\"intent\" value=\"rename-collection\"");
-    expect(markup).toContain("name=\"collectionId\" value=\"collection-1\"");
-    expect(markup).toContain('name="name"');
-    expect(markup).toContain('value="Launch proof"');
-  });
 });
 
 describe("collection share action", () => {
@@ -238,7 +228,6 @@ describe("collection share action", () => {
       createCollectionWithinLimit: vi.fn(),
       createShareLink,
       getCollection: vi.fn().mockResolvedValue(collection),
-      renameCollection: vi.fn(),
       updateCollectionItem: vi.fn(),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
