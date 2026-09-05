@@ -7,8 +7,58 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // feat/funnel-seo test surface. Kept in its own file (and its own describe
 // blocks) so parallel branches touching marketing tests do not conflict.
 
+// Idle pre-search loader payload for the route-render structured data test.
+// Mirrors the shape the loader returns before any query is submitted.
+const idleSearchLoaderData = {
+  mode: "advertiser",
+  filters: {
+    query: "",
+    country: "all",
+    platform: "all",
+    creativeType: "all",
+    status: "all",
+    firstSeenFrom: "",
+    lastSeenFrom: "",
+  },
+  fingerprint: "",
+  result: {
+    ads: [],
+    nextCursor: null,
+    source: "demo",
+    provider: "demo",
+    cacheStatus: "none",
+    discoveryStatus: "disabled",
+    discoverySummary: null,
+    discoveryFailureClass: null,
+  },
+  selectedAd: null,
+  stealSummary: null,
+  selectionEnrichmentPending: false,
+  collections: [],
+  plan: null,
+  session: null,
+  competitorWebsite: {
+    raw: "",
+    normalizedUrl: null,
+    host: null,
+    displayName: null,
+    searchTerm: null,
+    error: null,
+  },
+  trackingRole: "competitor",
+  inputError: null,
+  searchScope: "exact",
+  displayDomain: null,
+  relevanceApplied: false,
+  watchedWatchlist: null,
+  showPresenceNav: false,
+};
+
+let searchLoaderData: typeof idleSearchLoaderData;
+
 beforeEach(() => {
   vi.resetModules();
+  searchLoaderData = idleSearchLoaderData;
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
@@ -19,8 +69,21 @@ beforeEach(() => {
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
         React.createElement("form", props, children),
+      // Router-hook stubs so the public /search route renders to static
+      // markup without a Router context (DashboardShell is also mocked away).
+      useActionData: () => undefined,
+      useLoaderData: () => searchLoaderData,
+      useLocation: () => ({ pathname: "/search", search: "", hash: "" }),
+      useNavigate: () => vi.fn(),
+      useNavigation: () => ({ state: "idle", formData: null, location: null }),
+      useRevalidator: () => ({ state: "idle", revalidate: vi.fn() }),
+      useRouteLoaderData: () => ({ session: null }),
     };
   });
+  vi.doMock("~/components/dashboard-shell", () => ({
+    DashboardShell: ({ children }: { children?: React.ReactNode }) =>
+      createElement("main", null, children),
+  }));
 });
 
 afterEach(() => {
@@ -136,6 +199,57 @@ describe("structured data (JSON-LD)", () => {
     expect(marketingSource).toContain("jsonLdScriptProps(organizationJsonLd())");
     expect(marketingSource).toContain("jsonLdScriptProps(webSiteJsonLd())");
     expect(marketingSource).toContain("faqPageJsonLd([");
+  });
+
+  it("renders one truthful WebPage entity on /search with no unsupported claims", async () => {
+    const { default: SearchRoute } = await import("~/routes/search");
+    const markup = renderToStaticMarkup(createElement(SearchRoute));
+
+    // Exactly one safe application/ld+json script in the rendered markup.
+    const ldJsonScripts =
+      markup.match(/<script type="application\/ld\+json">/g) ?? [];
+    expect(ldJsonScripts).toHaveLength(1);
+
+    const payload = markup.match(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+    )?.[1];
+    expect(payload).toBeDefined();
+    // Escaping: the payload must never close the script element itself.
+    expect(payload).not.toContain("</script>");
+
+    const entity = JSON.parse(payload!);
+    expect(entity["@context"]).toBe("https://schema.org");
+    expect(entity["@type"]).toBe("WebPage");
+    expect(entity.name).toBe("Search competitor Meta ads free | Five to Nine");
+    expect(entity.description).toBe(
+      "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.",
+    );
+    expect(entity.url).toBe("https://0509.io/search");
+
+    // The existing Five to Nine WebSite/Organization relationship.
+    expect(entity.isPartOf).toEqual({
+      "@type": "WebSite",
+      name: "Five to Nine",
+      url: "https://0509.io",
+    });
+    expect(entity.publisher).toEqual({
+      "@type": "Organization",
+      name: "Five to Nine",
+      url: "https://0509.io",
+    });
+
+    // The entity says only what the page shows: no prices, no fabricated
+    // results, no provider guarantees, no FAQ/SoftwareApplication claims.
+    expect(payload).not.toMatch(/price/i);
+    expect(payload).not.toMatch(/[$₹€£]\s?\d/);
+    expect(payload).not.toContain("SoftwareApplication");
+    expect(payload).not.toContain("FAQPage");
+    expect(payload).not.toContain("offers");
+
+    // Keep the entity description coupled to the route's meta description.
+    const searchSource = readFileSync("app/routes/search.tsx", "utf8");
+    expect(searchSource).toContain("description: searchDescription");
+    expect(searchSource).toContain('pathname: "/search"');
   });
 });
 
