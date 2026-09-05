@@ -51,6 +51,7 @@ import { Link, redirect, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useState } from "react";
 
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import { AdCreative } from "~/components/ads/ad-creative";
 import { BrandAdWall } from "~/components/ads/brand-ad-wall";
 import { BrandChangeTimeline } from "~/components/ads/brand-change-timeline";
@@ -612,6 +613,26 @@ export default function BrandAdsRoute() {
         />
       ) : null}
       <MarketingNav />
+
+      {/*
+       * Visible breadcrumb navigation + matching BreadcrumbList JSON-LD
+       * (issues #1547 accept 5, #1418). Home > Ads (the /search browse
+       * surface, since no /brands hub exists yet — see #1417) > Brand. Only
+       * on indexable pages, so the structured data never ships on an honest
+       * noindex page (cache-miss 301s away; stale/demo/emergency-brake
+       * entries still render the wall but must not rank) — matching the
+       * WebPage/Service/FAQPage block above, which is also gated on
+       * `!data.noindex`.
+       */}
+      {!data.noindex ? (
+        <Breadcrumbs
+          items={[
+            { name: "Home", pathname: "/" },
+            { name: "Ads", pathname: "/search" },
+            { name: data.brandName, pathname: data.canonicalPath },
+          ]}
+        />
+      ) : null}
 
       {data.hasCachedAds ? (
         <BrandAdsResults data={data} liveSearchPath={liveSearchPath} signupPath={signupPath} />

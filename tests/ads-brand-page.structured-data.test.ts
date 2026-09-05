@@ -156,15 +156,25 @@ describe("/ads/:domain JSON-LD", () => {
     expect(markup).toContain("Common questions about Nike&#x27;s ads");
     expect(markup).toContain("How is Nike's Ad Aggression Score calculated?");
 
+    // Issue #1547 (accept 5) / #1418: the indexable /ads page now also ships a
+    // visible breadcrumb + BreadcrumbList JSON-LD (Home → Ads → Brand), so an
+    // indexable cached page carries four blocks: WebPage, Service, FAQPage,
+    // BreadcrumbList. Assertion count only grows — no /ads assertion is removed.
     const blocks = parseLdJsonBlocks(markup);
-    expect(blocks).toHaveLength(3);
+    expect(blocks).toHaveLength(4);
 
     const webPages = blocks.filter((block) => block["@type"] === "WebPage");
     const services = blocks.filter((block) => block["@type"] === "Service");
     const faqPages = blocks.filter((block) => block["@type"] === "FAQPage");
+    const breadcrumbs = blocks.filter((block) => block["@type"] === "BreadcrumbList");
     expect(webPages).toHaveLength(1);
     expect(services).toHaveLength(1);
     expect(faqPages).toHaveLength(1);
+    expect(breadcrumbs).toHaveLength(1);
+
+    const breadcrumb = breadcrumbs[0] as Record<string, unknown>;
+    const crumbItems = (breadcrumb.itemListElement as Array<Record<string, unknown>>) ?? [];
+    expect(crumbItems.map((item) => item.name)).toEqual(["Home", "Ads", "Nike"]);
 
     const service = services[0] ?? {};
     expect(service["@context"]).toBe("https://schema.org");
