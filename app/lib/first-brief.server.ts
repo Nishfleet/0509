@@ -273,9 +273,20 @@ async function deliverFirstBrief(
     hasPreviousBrief: false,
     previousBriefItemCount: null,
   });
-  return Array.isArray(delivery.details)
+  const delivered = Array.isArray(delivery.details)
     ? delivery.details.some((attempt) => attempt.status === "sent")
     : delivery.attempts > 0;
+  if (delivered) {
+    try {
+      const { emitFunnelFirstBriefEmailSent } = await import(
+        "~/lib/funnel-measurement.server"
+      );
+      emitFunnelFirstBriefEmailSent(env);
+    } catch {
+      // Measurement must never fail the first-brief email path.
+    }
+  }
+  return delivered;
 }
 
 /**
