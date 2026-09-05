@@ -35,6 +35,7 @@ function mockReactRouter(loaderData: unknown) {
       Link: ({ children, to, ...props }: MockLinkProps) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+      useLocation: vi.fn().mockReturnValue({ pathname: "/competitor-monitoring" }),
       useRouteLoaderData: vi.fn().mockReturnValue({
         pricingPlans: [],
         usageBundles: [],

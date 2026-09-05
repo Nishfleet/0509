@@ -122,9 +122,12 @@ describe("BL-031 — the page budgets", () => {
     // audience branches that can never both render.
     const filled = [...route.matchAll(/className="f9-wk-btn"/g)];
     expect(filled).toHaveLength(3);
+    // Locale-aware search path (issue #1578): the filled search command stays
+    // on the same surface (`/search` for EN, `/{locale}/search` under a locale
+    // prefix) instead of hardcoding `/search`.
     expect(route).toContain(`<SubmitButton
               className="f9-wk-btn"
-              getAction="/search"`);
+              getAction={searchPath}`);
     expect(route).toContain(`<Link className="f9-wk-btn" to={signupTrackingPath}>`);
     expect(route).toContain(`className="f9-wk-btn"
                       intent="create-watchlist"`);
