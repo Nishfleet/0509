@@ -31,6 +31,19 @@ export const SIX_DOMAINS = Object.freeze([
 export const DEFAULT_BASE_URL = "https://0509.io";
 export const SEARCH_TIER_CANARY_USER_AGENT = "0509-search-tier-canary/1.0";
 
+// Known separate-issue alias gaps: a brand whose ads land on a domain the
+// identity resolver cannot yet connect to the bare brand keyword, so a bare
+// `q=<brand>` search renders every row Unmatched even though the tier-label
+// path is healthy. This is NOT a #1452 tier-label regression — it is the named
+// alias gap's symptom — so a blanket-Unmatched result for one of these keys is
+// reported as a WARNING, not a canary failure. A dead-end (0 rows) for a
+// known-gap domain still fails the canary: the guard's core promise is "0
+// dead-end empty states", and an alias gap never produces a dead-end.
+// Remove the entry the moment the named issue lands and the domain flips to
+// verified/likely; leaving a stale entry here would silently mask a real
+// future regression on that domain.
+export const KNOWN_ALIAS_GAPS = Object.freeze(new Map([["oura", "Nishfleet/0509#1427"]]));
+
 // A cold domain can return a warming page (0 rows) on the first hit. The six
 // brands are well-known with cached results, so a single retry after a short
 // wait clears the transient warming state without burning the anonymous
@@ -154,13 +167,40 @@ export async function probeKeywordTier({
 
 /**
  * @param {KeywordTierProbe[]} results
- * @returns {{ pass: boolean, failures: KeywordTierProbe[] }}
+ * @returns {{
+ *   pass: boolean,
+ *   failures: KeywordTierProbe[],
+ *   knownGaps: { probe: KeywordTierProbe, issue: string }[],
+ * }}
  */
 export function evaluateSixDomainTiers(results) {
-  const failures = results.filter(
-    (r) => r.tierCounts.verified + r.tierCounts.likely === 0,
-  );
-  return { pass: failures.length === 0, failures };
+  const failures = [];
+  const knownGaps = [];
+  for (const probe of results) {
+    if (probe.tierCounts.verified + probe.tierCounts.likely > 0) {
+      continue;
+    }
+    // 0 verified/likely. A dead-end (0 rows, not warming) is always a failure,
+    // even for a known alias gap — the guard's core promise is "0 dead-end
+    // empty states", and an alias gap never empties the page. A persistent 429
+    // (rowCount 0, rateLimited) lands here too and correctly fails the canary:
+    // the run could not confirm the domain.
+    if (probe.rowCount === 0 && !probe.isWarming) {
+      failures.push(probe);
+      continue;
+    }
+    // Rows present but all Unmatched. A known alias gap is a WARNING (the
+    // tier-label path is healthy; the mislabel is the named issue's symptom),
+    // not a canary failure. An unknown domain blanket-Unmatched is a real
+    // tier-label regression and fails.
+    const gapIssue = KNOWN_ALIAS_GAPS.get(probe.keyword);
+    if (gapIssue) {
+      knownGaps.push({ probe, issue: gapIssue });
+    } else {
+      failures.push(probe);
+    }
+  }
+  return { pass: failures.length === 0, failures, knownGaps };
 }
 
 /**
@@ -169,7 +209,7 @@ export function evaluateSixDomainTiers(results) {
  *   fetchImpl?: typeof fetch,
  *   sleepImpl?: (ms: number) => Promise<void>,
  * }} [input]
- * @returns {Promise<{ baseUrl: string, results: KeywordTierProbe[], verdict: { pass: boolean, failures: KeywordTierProbe[] } }>}
+ * @returns {Promise<{ baseUrl: string, results: KeywordTierProbe[], verdict: { pass: boolean, failures: KeywordTierProbe[], knownGaps: { probe: KeywordTierProbe, issue: string }[] } }>}
  */
 export async function runCanary({
   baseUrl = DEFAULT_BASE_URL,
@@ -220,7 +260,19 @@ async function main() {
   }
   emitLine("");
   if (verdict.pass) {
-    emitLine("PASS: all six domains returned at least one verified or likely row");
+    if (verdict.knownGaps.length === 0) {
+      emitLine("PASS: all six domains returned at least one verified or likely row");
+    } else {
+      emitLine(
+        `PASS: all six domains returned rows (0 dead-ends); ${verdict.knownGaps.length} known alias gap(s) warned, not failed:`,
+      );
+      for (const gap of verdict.knownGaps) {
+        const t = gap.probe.tierCounts;
+        emitLine(
+          `  - ${gap.probe.keyword}: ${t.verified} verified / ${t.likely} likely / ${t.unmatched} unmatched — tracked by ${gap.issue}`,
+        );
+      }
+    }
     process.exit(0);
   }
   emitLine("FAIL: the following domains returned 0 verified/likely rows:");
