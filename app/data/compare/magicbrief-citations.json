@@ -1,0 +1,20 @@
+{
+  "competitor": "magicbrief",
+  "productName": "MagicBrief",
+  "sources": [
+    {
+      "id": "magicbrief-faqs",
+      "href": "https://magicbrief.com/faqs",
+      "label": "MagicBrief FAQ",
+      "checked": "2026-08-28",
+      "claim": "MagicBrief announced its wind-down and closed on 31 July 2026; Insights can export as CSV until shutdown, while Inspire collections have no bulk export."
+    },
+    {
+      "id": "magicbrief-acquisition",
+      "href": "https://magicbrief.com/post/magicbrief-canva-acquisition",
+      "label": "MagicBrief's Canva acquisition post",
+      "checked": "2026-08-28",
+      "claim": "MagicBrief was acquired by Canva; the successor product is Canva Grow, sold inside Canva Business."
+    }
+  ]
+}

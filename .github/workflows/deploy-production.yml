@@ -1,0 +1,690 @@
+name: Deploy production
+
+on:
+  # Auto-deploy on green (Nish, 2026-08-25): every push to main runs the same
+  # exact-SHA deploy job with the merged commit. Required checks (Gitleaks,
+  # codex-node-checks, required-verifier-integrity, semgrep) are already
+  # enforced by branch protection on the PR that produced the merge, so the
+  # push-triggered deploy runs the full release gate (backup-proof two-clock
+  # check, verifier integrity, typecheck, tests, restore evidence, post-deploy
+  # canaries) without any human button. The authorize job's `push)` branch and
+  # ci-verify-production-candidate.sh's `push)` case were already wired for
+  # this event — they pin GITHUB_SHA (the merge commit) and require empty
+  # dispatch inputs, so no gate is weakened.
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact main commit authorized for production deployment
+        required: true
+        type: string
+      backup_proof_status:
+        description: Production D1 recovery-proof policy for this exact release
+        required: true
+        default: required
+        type: choice
+        options:
+          - required
+          - deferred
+      deferred_backup_authorization:
+        description: Exact-SHA Nish acceptance; empty unless backup proof is deferred
+        required: false
+        type: string
+      bootstrap_previous_success_sha:
+        # One-time bootstrap only. GitHub scopes workflow-run history to the
+        # repository, so the 2026-08-19 rename (nish3451/0509 ->
+        # Nishfleet/0509) reset deploy-production.yml to zero successful runs
+        # and the last-successful-deploy chain lost its anchor: no deploy can
+        # succeed without a prior success, and no prior success can exist
+        # without a successful deploy. This input names the genuinely last
+        # deployed main commit so the chain can restart. The verifier accepts
+        # it ONLY while GitHub reports zero successful runs, ignores it
+        # outright once real history exists, and requires it to be an
+        # ancestor of the deployed commit - so it cannot weaken the gate.
+        description: One-time chain bootstrap; empty unless GitHub has zero successful deploys
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: 0509-production-provider-mutations
+  cancel-in-progress: false
+  # Deploy-latest (Nish, 2026-08-25): without `queue: max`, GitHub cancels
+  # older PENDING runs in this group when a new run enters, while the
+  # currently RUNNING deploy continues uninterrupted. This gives "deploy
+  # latest" semantics — superseded queued deploys cancel, the newest queued
+  # deploy runs after the current one finishes — without ever interrupting a
+  # deploy mid-flight (cancel-in-progress: false). The running deploy ships
+  # its exact pinned SHA; the next deploy ships the newer one.
+  #
+  # The d1-backup-r2 and d1-remote-restore-evidence workflows keep their own
+  # `queue: max`, so a backup entering the group preserves queued runs; only
+  # a deploy entering cancels superseded queued work. A queued nightly backup
+  # cancelled by a push deploy re-runs the next night, and the deploy's
+  # generate_restore_evidence job creates fresh evidence inline if the proof
+  # is stale, so no gate is weakened.
+
+permissions: {}
+
+jobs:
+  authorize_release:
+    name: Authorize exact production candidate
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      sha: ${{ steps.authorize.outputs.sha }}
+      backup_proof_status: ${{ steps.authorize.outputs.backup_proof_status }}
+    steps:
+      - name: Authorize release request
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          BACKUP_PROOF_STATUS: ${{ inputs.backup_proof_status || 'required' }}
+          DEFERRED_BACKUP_AUTHORIZATION: ${{ inputs.deferred_backup_authorization || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          case "$GITHUB_EVENT_NAME" in
+            push)
+              test -z "$EXPECTED_SHA"
+              test "$BACKUP_PROOF_STATUS" = "required"
+              test -z "$DEFERRED_BACKUP_AUTHORIZATION"
+              ;;
+            workflow_dispatch)
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              # Dispatch resolution: the authorized candidate is the exact
+              # commit the dispatcher CI-verified, not the run head.
+              # GITHUB_SHA is main's tip when the run was created, which can
+              # be newer than the dispatched candidate if main advanced
+              # between dispatch and run start (2026-08-13: 2c6cc3eb
+              # dispatched, run created on 0932e554 - the equality gate then
+              # failed before doing anything, and auto-deploy only retried on
+              # the next hourly tick). Emit the dispatched candidate as the
+              # pin; pin_candidate's CAS confirms it is still reachable from
+              # live main before anything ships.
+              GITHUB_SHA="$EXPECTED_SHA"
+              case "$BACKUP_PROOF_STATUS" in
+                required)
+                  test -z "$DEFERRED_BACKUP_AUTHORIZATION"
+                  ;;
+                deferred)
+                  test "$GITHUB_ACTOR" = "nish3451"
+                  test "$DEFERRED_BACKUP_AUTHORIZATION" = "nish-accepted-no-backup-proof:$EXPECTED_SHA"
+                  ;;
+                *)
+                  exit 1
+                  ;;
+              esac
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          printf 'backup_proof_status=%s\n' "$BACKUP_PROOF_STATUS" >> "$GITHUB_OUTPUT"
+
+  pin_candidate:
+    name: Pin exact production candidate
+    if: needs.authorize_release.result == 'success'
+    needs: authorize_release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.pin.outputs.sha }}
+      backup_proof_status: ${{ needs.authorize_release.outputs.backup_proof_status }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify and pin exact main candidate
+        id: pin
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
+          EMIT_PINNED_SHA: "1"
+          GH_TOKEN: ${{ github.token }}
+          # The pin CAS follows the authorize job's dispatch resolution: on a
+          # workflow_dispatch the pinned candidate is the dispatched expected
+          # SHA (not the run head), and the provider CAS confirms it is still
+          # an ancestor of live main before anything ships. Fail-closed on
+          # every other CAS failure, including a rewind/rewrite of main.
+        run: ./scripts/ci-verify-production-candidate.sh
+
+  prepare_remote_restore_evidence:
+    name: Prepare D1 remote restore evidence
+    if: needs.pin_candidate.result == 'success'
+    needs: pin_candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      backup_proof_status: ${{ needs.pin_candidate.outputs.backup_proof_status }}
+      evidence_valid: ${{ steps.verify_evidence.outputs.restore_evidence_available }}
+    env:
+      PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+      BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pin_candidate.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify pinned candidate before deploy work
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance: pin_candidate already verified this
+          # exact SHA and this job checks out and works on exactly
+          # PINNED_SHA, so a mid-run move of main must not fail the run.
+          # Every other CAS failure stays fail-closed.
+          TOLERATE_MAIN_DRIFT: "1"
+        run: ./scripts/ci-verify-production-candidate.sh
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      # Single source of truth for create + upload-artifact + cleanup.
+      # jobs.<job_id>.env cannot use the runner context; bind via GITHUB_ENV.
+      - name: Bind restore evidence archive path
+        if: env.BACKUP_PROOF_STATUS == 'required'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
+          printf 'RESTORE_EVIDENCE_ARCHIVE=%s\n' "$archive" >> "$GITHUB_ENV"
+      - if: env.BACKUP_PROOF_STATUS == 'required'
+        run: npm ci --ignore-scripts
+      - if: env.BACKUP_PROOF_STATUS == 'required'
+        run: node scripts/validate-d1-backup.mjs
+      - name: Bind a clean exact-main candidate manifest
+        if: env.BACKUP_PROOF_STATUS == 'required'
+        # (backgrounded lanes redirect stdin to /dev/null).
+        run: ./scripts/ci-bind-remote-restore-candidate.sh
+      - name: Verify pre-generated exact R2 restore evidence
+        id: verify_evidence
+        if: env.BACKUP_PROOF_STATUS == 'required'
+        env:
+          D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          # Same one-time chain bootstrap as the release gate. This step runs
+          # the identical verifier against a PRE-GENERATED artifact, so
+          # without the anchor it cannot classify the release at all: the
+          # verifier exits 2 (infrastructure failure) on all three attempts
+          # and the job hard-stops, instead of returning a verdict and
+          # falling through to generating fresh evidence. Run 32232488597
+          # failed exactly here. With the anchor the step reaches a real
+          # verdict, which is the behaviour every non-bootstrap deploy gets.
+          BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ${{ inputs.bootstrap_previous_success_sha || '' }}
+        run: ./scripts/ci-prepare-remote-restore-evidence.sh
+      - name: Preserve private restore evidence for this deploy only
+        if: env.BACKUP_PROOF_STATUS == 'required' && steps.verify_evidence.outputs.restore_evidence_available == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
+          path: ${{ env.RESTORE_EVIDENCE_ARCHIVE }}
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 8
+      - name: Remove local restore evidence archive
+        if: always() && env.BACKUP_PROOF_STATUS == 'required'
+        shell: bash
+        run: rm -f -- "$RESTORE_EVIDENCE_ARCHIVE"
+
+  generate_restore_evidence:
+    name: Generate D1 remote restore evidence
+    # Runs only when the preparation job found no verified pre-generated
+    # evidence for this exact pinned candidate. It performs the same fresh
+    # backup + isolated remote restore drill as the D1 remote restore evidence
+    # workflow, on a fresh GitHub-hosted machine under the protected production
+    # environment, and publishes the evidence for the deploy job's exact
+    # verifier. This removes the deploy's dependency on a separate workflow
+    # having run at this SHA first: the first deploy of a new migration-bearing
+    # or restore-critical main commit generates its own exact evidence instead
+    # of hard-failing.
+    if: >-
+      needs.prepare_remote_restore_evidence.outputs.backup_proof_status == 'required' &&
+      needs.prepare_remote_restore_evidence.outputs.evidence_valid == 'false'
+    needs:
+      - pin_candidate
+      - prepare_remote_restore_evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+    env:
+      D1_DATABASE_NAME: "0509"
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
+      PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pin_candidate.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized evidence checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$PINNED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
+      - name: Reconfirm frozen main before evidence mutation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance: this job exists only to publish evidence
+          # for the exact SHA pin_candidate already verified, and it checks
+          # out exactly PINNED_SHA. A mid-run move of main does not change the
+          # SHA the evidence belongs to, so drift must not fail the run.
+          # Every other CAS failure stays fail-closed.
+          TOLERATE_MAIN_DRIFT: "1"
+        run: ./scripts/ci-verify-provider-main-cas.sh
+      - name: Create fresh backup and prove an isolated remote restore
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
+          D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
+          D1_REMOTE_RESTORE_MAX_SQL_BYTES: ${{ vars.D1_REMOTE_RESTORE_MAX_SQL_BYTES }}
+        run: |
+          set -euo pipefail
+          umask 077
+          node scripts/d1-remote-restore-evidence.mjs \
+            --output test-results/d1-remote-restore-evidence.json
+      - name: Remove run-scoped plaintext backup files
+        if: always()
+        run: node scripts/d1-backup-local-cleanup.mjs
+      - name: Archive permission-preserving restore evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(stat -c '%a' test-results/d1-remote-restore-evidence.json)" = "600"
+          tar --format=posix -czf \
+            "test-results/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz" \
+            -C test-results \
+            d1-remote-restore-evidence.json
+      - name: Preserve private restore evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
+          path: test-results/d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}.tar.gz
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 8
+
+  cleanup_restore_evidence:
+    name: Confirm scratch D1 cleanup
+    # Mirrors the drill workflow's independent cleanup job: deletes every exact
+    # scratch database from this run, including any left by a hard-killed
+    # generation attempt, so a lost runner cannot park production data.
+    if: >-
+      always() &&
+      needs.prepare_remote_restore_evidence.result == 'success' &&
+      needs.prepare_remote_restore_evidence.outputs.backup_proof_status == 'required' &&
+      needs.prepare_remote_restore_evidence.outputs.evidence_valid == 'false'
+    needs:
+      - pin_candidate
+      - prepare_remote_restore_evidence
+      - generate_restore_evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+    env:
+      D1_DATABASE_NAME: "0509"
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
+      PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pin_candidate.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized cleanup checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$PINNED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: npm ci --ignore-scripts
+      - name: Delete every exact scratch database from this run
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
+        run: node scripts/d1-remote-restore-evidence.mjs --cleanup-only
+  deploy:
+    name: Deploy Worker
+    if: >-
+      needs.pin_candidate.result == 'success' &&
+      needs.prepare_remote_restore_evidence.result == 'success' &&
+      always() &&
+      (
+        needs.generate_restore_evidence.result == 'success' ||
+        needs.generate_restore_evidence.result == 'skipped'
+      ) &&
+      (
+        needs.cleanup_restore_evidence.result == 'success' ||
+        needs.cleanup_restore_evidence.result == 'skipped'
+      )
+    needs:
+      - pin_candidate
+      - prepare_remote_restore_evidence
+      - generate_restore_evidence
+      - cleanup_restore_evidence
+    runs-on: ubuntu-latest
+    # Budget: 180m maximum deploy-window wait + 60m conservative pipeline +
+    # 30m cancellation/release slack = 270m. With cancel-in-progress: false,
+    # a queued deploy cannot drain until the running job (including its lock
+    # wait) finishes, so stacked pushes may each consume this full budget.
+    timeout-minutes: 270
+    environment:
+      name: production
+      url: https://0509.io
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
+    env:
+      PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+      BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pin_candidate.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Verify pinned candidate before repository and secret work
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance: pin_candidate already verified this
+          # exact SHA and the deploy ships exactly PINNED_SHA, so a mid-run
+          # move of main must not fail the run after the gate validated the
+          # pinned candidate. Every other CAS failure stays fail-closed.
+          TOLERATE_MAIN_DRIFT: "1"
+        run: ./scripts/ci-verify-production-candidate.sh
+
+      - name: Verify Cloudflare deploy secrets
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          missing=()
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            missing+=("CLOUDFLARE_ACCOUNT_ID")
+          fi
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            missing+=("CLOUDFLARE_API_TOKEN")
+          fi
+          if [ -z "${CANARY_BYPASS_TOKEN:-}" ]; then
+            missing+=("CANARY_BYPASS_TOKEN")
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Missing required GitHub secret(s): %s\n' "${missing[*]}" >&2
+            printf 'Add them as repository or production-environment secrets so every main push deploys automatically.\n' >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium firefox webkit
+
+      - name: Typecheck
+        env:
+          # Same fix ci.yml already carries, which this workflow never got:
+          # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while
+          # this project's composite TypeScript build needs more headroom.
+          # Without it every production deploy aborts here with exit 134
+          # (heap limit reached) - three in a row on 2026-08-11, which left
+          # 32 merged commits sitting undeployed.
+          # Keep it below MemoryHigh/MemoryMax so systemd still fails closed.
+          NODE_OPTIONS: --max-old-space-size=2048
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Materialize private remote-restore evidence
+        if: env.BACKUP_PROOF_STATUS == 'required'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
+          path: test-results/remote-restore-download
+
+      - name: Verify and extract private remote-restore evidence
+        if: env.BACKUP_PROOF_STATUS == 'required'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          umask 077
+          archives=(test-results/remote-restore-download/*.tar.gz)
+          [ "${#archives[@]}" -eq 1 ]
+          [ "$(tar -tzf "${archives[0]}")" = "d1-remote-restore-evidence.json" ]
+          [[ "$(tar -tvzf "${archives[0]}")" = -* ]]
+          tar -xOzf "${archives[0]}" \
+            d1-remote-restore-evidence.json \
+            > test-results/d1-remote-restore-evidence.json
+          chmod 600 test-results/d1-remote-restore-evidence.json
+          rm -rf -- test-results/remote-restore-download
+
+      - name: Reconfirm frozen main before provider mutation
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+          # The full verification gate (typecheck, tests, restore evidence)
+          # already passed for this exact pinned SHA, and the deploy ships
+          # exactly PINNED_SHA. If main moved mid-run, record the drift and
+          # continue with the verified SHA instead of killing the run after a
+          # fully green gate. Every other CAS failure stays fail-closed.
+          TOLERATE_MAIN_DRIFT: "1"
+        run: ./scripts/ci-verify-production-candidate.sh
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
+          D1_REMOTE_RESTORE_EVIDENCE_PATH: ${{ needs.pin_candidate.outputs.backup_proof_status == 'required' && 'test-results/d1-remote-restore-evidence.json' || '' }}
+          BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          # One-time last-successful-deploy chain bootstrap after the repo
+          # rename wiped run history. Threaded to the release gate only; the
+          # verifier ignores it the moment GitHub reports a real successful
+          # run, and validates it as an ancestor of the deployed commit.
+          BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ${{ inputs.bootstrap_previous_success_sha || '' }}
+          CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
+        run: npm run deploy
+
+      - name: Synchronize private canary token
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
+          CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
+        run: |
+          set -euo pipefail
+          # Runs AFTER `wrangler deploy` (deploy-production-plan.mjs ships the
+          # pinned SHA via classic `wrangler deploy`). Classic `wrangler secret
+          # put` requires the worker's latest version to be deployed; before
+          # the deploy it failed with "Secret edit failed. You attempted to
+          # modify a secret, but the latest version of your Worker isn't
+          # currently deployed." (run 32854505876, and 6 wrong auto-reverts
+          # followed). `wrangler versions secret put` avoids that prerequisite
+          # but re-fetches the worker and reparses multipart FormData, which
+          # broke with "Failed to parse body as FormData" (run 31514742997).
+          # Reordering so deploy runs first is the path that keeps both the
+          # classic secret command and the classic deploy command working:
+          # `wrangler deploy` makes the latest version the deployed version,
+          # then `wrangler secret put` updates the secret on it. Secrets
+          # persist across deploys, so the worker keeps the previous canary
+          # token through the deploy and this step syncs the new value after.
+          printf '%s' "$CANARY_BYPASS_TOKEN" |
+            ./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509
+
+      - name: Verify complete release evidence set
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          readiness=(test-results/deploy-readiness-*.json)
+          wrangler=(test-results/wrangler-deploy-output-*.jsonl)
+          rollback=(test-results/worker-rollback-target-*.json)
+          gate_c=(test-results/gate-c-*.json)
+          production_soak=(test-results/production-soak-*.json)
+
+          # The authoritative deploy-readiness manifest is the single
+          # deploy-readiness-<pid>-<hex>.json written by the release gate. The
+          # deploy-readiness-local-release-<project>.json files are side-effects
+          # of the cross_browser_risk_proof step, which became a non-blocking
+          # diagnostic on 2026-07-20 and is allowed to fail partway on starved
+          # runners — so it emits an unstable subset (0-4) of its per-project
+          # manifests. Counting all deploy-readiness-*.json and requiring >= 5
+          # therefore FAILED genuinely-successful deploys once that diagnostic
+          # stopped completing (runs 29767292426 / 29804405475 produced only 3:
+          # the real manifest + firefox + webkit). Prove the authoritative
+          # manifest exists (exactly one) without depending on the flaky
+          # diagnostic's output — stricter than the old >= 5, not weaker.
+          authoritative_readiness=()
+          for manifest in "${readiness[@]}"; do
+            case "$manifest" in
+              test-results/deploy-readiness-local-release-*.json) ;;
+              *) authoritative_readiness+=("$manifest") ;;
+            esac
+          done
+
+          [ "${#authoritative_readiness[@]}" -eq 1 ]
+          [ "${#wrangler[@]}" -eq 1 ]
+          [ "${#rollback[@]}" -eq 1 ]
+          [ "${#gate_c[@]}" -eq 1 ]
+          [ -n "$(find test-results/gate-b-artifacts -type f -print -quit)" ]
+
+          case "$BACKUP_PROOF_STATUS" in
+            required)
+              [ "${#production_soak[@]}" -eq 1 ]
+              node scripts/gate-c-soak.mjs verify-start --journal "${production_soak[0]}"
+              ;;
+            deferred)
+              [ "${#production_soak[@]}" -eq 0 ]
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+
+      - name: Archive permission-preserving release evidence
+        if: success() && env.BACKUP_PROOF_STATUS == 'required'
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          node scripts/release-evidence-archive.mjs create \
+            --output "test-results/production-release-evidence-${PINNED_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
+
+      - name: Preserve release evidence
+        if: success() && env.BACKUP_PROOF_STATUS == 'required'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Preserve private immediate Gate C evidence
+        if: success() && env.BACKUP_PROOF_STATUS == 'deferred'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gate-c-proof-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/gate-c-*.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Preserve failed release diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: production-release-diagnostics-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/deploy-readiness-*.json
+            test-results/gate-b-manifest-*.json
+            test-results/gate-b-artifacts/**
+            test-results/wrangler-deploy-output-*.jsonl
+            test-results/worker-rollback-target-*.json
+            test-results/gate-c-*.json
+            test-results/production-soak-*.json
+          if-no-files-found: warn
+          retention-days: 90

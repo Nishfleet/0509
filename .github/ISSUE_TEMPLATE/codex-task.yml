@@ -1,0 +1,32 @@
+name: Codex task
+description: Give Codex a bounded 0509 task in plain English.
+title: "codex: "
+labels:
+  - "codex:build"
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What should change?
+      description: Say the business outcome in plain English.
+      placeholder: "Example: Make the public search page explain when results are cached versus fresh."
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Useful context
+      description: Paste links, screenshots, customer notes, or anything Codex should consider.
+    validations:
+      required: false
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk level
+      description: Pick the closest option.
+      options:
+        - Normal product/UI fix
+        - Revenue, auth, billing, alerts, or production risk
+        - Not sure
+    validations:
+      required: true

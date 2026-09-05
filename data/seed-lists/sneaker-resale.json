@@ -1,0 +1,32 @@
+{
+  "cluster": "sneaker-resale",
+  "asOf": "2026-09-01",
+  "sourceNote": "Market signal 2026-09-01 sneaker-resale cluster (issue #1547): \"sneaker-resale cluster (SneakerPing 59.5% below retail + high-engagement Nike demand thread)\". Brands = the market-signal cluster names plus established sneaker/resale Meta advertisers, so the publisher can prove which domains actually carry verified/likely ad coverage before a page ships.",
+  "domains": [
+    { "domain": "nike.com", "brand": "Nike" },
+    { "domain": "stockx.com", "brand": "StockX" },
+    { "domain": "goat.com", "brand": "GOAT" },
+    { "domain": "saucony.com", "brand": "Saucony" },
+    { "domain": "asics.com", "brand": "ASICS" },
+    { "domain": "hoka.com", "brand": "Hoka" },
+    { "domain": "on.com", "brand": "On" },
+    { "domain": "adidas.com", "brand": "adidas" },
+    { "domain": "puma.com", "brand": "PUMA" },
+    { "domain": "newbalance.com", "brand": "New Balance" },
+    { "domain": "reebok.com", "brand": "Reebok" },
+    { "domain": "crocs.com", "brand": "Crocs" },
+    { "domain": "footlocker.com", "brand": "Foot Locker" },
+    { "domain": "zappos.com", "brand": "Zappos" },
+    { "domain": "dsw.com", "brand": "DSW" },
+    { "domain": "vans.com", "brand": "Vans" },
+    { "domain": "converse.com", "brand": "Converse" },
+    { "domain": "underarmour.com", "brand": "Under Armour" },
+    { "domain": "stadiumgoods.com", "brand": "Stadium Goods" },
+    { "domain": "flightclub.com", "brand": "Flight Club" },
+    { "domain": "kickscrew.com", "brand": "KICKS CREW" },
+    { "domain": "solesavy.com", "brand": "SoleSavy" },
+    { "domain": "jdsports.com", "brand": "JD Sports" },
+    { "domain": "finishline.com", "brand": "Finish Line" },
+    { "domain": "sneakerping.com", "brand": "SneakerPing" }
+  ]
+}

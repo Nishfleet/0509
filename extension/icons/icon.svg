@@ -1,0 +1,9 @@
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Five to Nine mark: a clock reading 05:09 in ink on bone, green pivot.
+       Hour hand at 154.5deg (5h09), minute hand at 54deg (9 min). -->
+  <rect x="0" y="0" width="128" height="128" rx="28" fill="#f4f1e8" />
+  <circle cx="64" cy="64" r="40" fill="none" stroke="#171611" stroke-width="9" />
+  <line x1="64" y1="64" x2="73.5" y2="83.9" stroke="#171611" stroke-width="9" stroke-linecap="round" />
+  <line x1="64" y1="64" x2="88.3" y2="46.4" stroke="#171611" stroke-width="9" stroke-linecap="round" />
+  <circle cx="64" cy="64" r="7" fill="#16c47f" />
+</svg>

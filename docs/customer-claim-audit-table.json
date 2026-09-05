@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "auditId": "BET10-CLAIM-AUDIT-2026-08-25",
+  "generatedAt": "2026-09-04T22:50:00Z",
+  "bet": "BET 10 — Say only what is true (claim/reality reconciliation)",
+  "part": "3 of 3 — audit registry verification (refreshed 2026-09-04 for the funnel flip-to-off decision, issue #1278)",
+  "siblingRegistry": "docs/customer-claim-surface-registry.json",
+  "auditBasis": "Every public sentence maps to a live query or test that passes, or to a copy change that brings the sentence back in line with the data. Claims that depend on a Nish-reserved decision are flagged without being resolved.",
+  "resultLegend": {
+    "pass": "the mapped query/test runs and confirms the claim against live code or live data",
+    "fail_copy_change_needed": "the mapped query/test runs and the live data does not support the claim as written; the copy must change",
+    "pass_code_data_pending": "the code-level test passes, but the live-data query is pending a populated table and is tracked separately",
+    "nish_reserved": "the claim depends on a decision only Nish can make (e.g. funnel-measurement); flagged, not resolved"
+  },
+  "claims": [
+    {
+      "claimId": "AUDIT-CADENCE-PAID-3-6H",
+      "registryClaim": "PLAN-CADENCE",
+      "text": "Paid plans run scheduled checks every 3–6 hours: Scout every 6 hours, Starter every 3 hours, and Agency every 3 hours for its first 25 watchlists with the rest every 6 hours.",
+      "surface": "homepage product FAQ, competitor-monitoring category FAQ, marketing how-step 02",
+      "liveQueryOrTest": "tests/plan-entitlements.test.ts → 'includes Scout only on the six-hour regular scan slots', 'gives Agency 25 priority scan slots; overflow only on 6h-aligned runs (WP-37)', 'schedules free exactly once per week'; tests/pricing.test.ts → 'keeps plan caps generous but finite' (6-hour scans, 3-hour scans, Top 25 every 3 hours)",
+      "currentResult": "pass",
+      "resultDetail": "Unit tests assert getPlanEntitlements('scout').scheduledScanCadence === 'every_6h', starter/agency === 'every_3h', agency.priorityScanSlots === 25, and shouldScheduleWatchlistInRegularScan gates overflow to 6h-aligned ticks. 8/8 key test files green on 2026-08-25.",
+      "betOrCopyChange": "bet 1 (the monitoring cadence contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-CADENCE-FREE-WEEKLY",
+      "registryClaim": "PLAN-CADENCE",
+      "text": "Free: watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1 Collection. No card required.",
+      "surface": "pricing section note, homepage final CTA",
+      "liveQueryOrTest": "tests/plan-entitlements.test.ts → 'gives free one watchlist, one Collection, and one evidence check on a weekly rhythm', 'schedules free exactly once per week: only the Monday 03:00 UTC tick'",
+      "currentResult": "pass",
+      "resultDetail": "Free entitlements: watchlists=1, collections=1, includedEvidenceChecksPerMonth=1, scheduledScanCadence='weekly', digestCadence='weekly'. Weekly scan gates to Monday 03:00 UTC only.",
+      "betOrCopyChange": "bet 1 (the monitoring cadence contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-DIGEST-CADENCE",
+      "registryClaim": "PLAN-CADENCE",
+      "text": "Your brief groups meaningful changes with source-linked proof and one next review — daily on Starter and Agency, weekly on Scout.",
+      "surface": "homepage how-step 03",
+      "liveQueryOrTest": "tests/plan-entitlements.test.ts → 'gives Starter daily and weekly digests'; tests/pricing.test.ts → 'keeps plan caps generous but finite' (Weekly Brief on Scout, Daily + weekly Briefs on Starter/Agency)",
+      "currentResult": "pass",
+      "resultDetail": "scout.digestCadence='weekly', starter.digestCadence='daily_and_weekly', agency.digestCadence='daily_and_weekly'. planAllowsDigestCadence gates daily to starter+agency only.",
+      "betOrCopyChange": "bet 1 (the monitoring cadence contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-INSTANT-ALERTS",
+      "registryClaim": "PLAN-CADENCE",
+      "text": "Starter and Agency can also turn on instant alerts, so a confirmed change emails you as soon as a check finds it instead of waiting for the brief.",
+      "surface": "homepage product FAQ, competitor-monitoring category FAQ",
+      "liveQueryOrTest": "tests/plan-entitlements.test.ts → 'gates agency-only capabilities' + STARTER_FEATURES/AGENCY_FEATURES include 'high_priority_alerts'; tests/instant-alert-delivery-claims.test.ts, tests/instant-delivery-claim-integration.test.ts",
+      "currentResult": "pass",
+      "resultDetail": "high_priority_alerts is in STARTER_FEATURES and AGENCY_FEATURES; absent from SCOUT_FEATURES and FREE_FEATURES. Instant-alert delivery claim tests pass.",
+      "betOrCopyChange": "bet 1 (the monitoring cadence contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-PLAN-LIMITS",
+      "registryClaim": "PLAN-FEATURE-CATALOG",
+      "text": "Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team seats, API/MCP access, client reports, and shared report branding.",
+      "surface": "pricing billing FAQ, pricing plan detail",
+      "liveQueryOrTest": "tests/pricing.test.ts → 'keeps plan caps generous but finite' (75 active watchlists, 250 Collections, Top 25 every 3 hours); tests/plan-entitlements.test.ts → 'gives Agency 25 priority scan slots', 'gates agency-only capabilities'",
+      "currentResult": "pass",
+      "resultDetail": "agency.watchlists=75, collections=250, includedEvidenceChecksPerMonth=2500, workspaceSeats=3, features include api_access/mcp_access/client_reports/agency_branding.",
+      "betOrCopyChange": "bet 1 (the monitoring cadence contract) + bet 4 (the plan-gated feature catalog)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-PRICING-DODO-LOCALIZED",
+      "registryClaim": "BILLING-PORTAL-PLAN-CHANGE",
+      "text": "Published plan prices are shown on this page. Checkout shows the exact amount in your local currency, loaded from Dodo Payments at preview time.",
+      "surface": "pricing billing FAQ, pricing section",
+      "liveQueryOrTest": "tests/pricing.test.ts → 'publishes the real per-plan USD prices on the plan labels', 'publishes real per-pack USD prices on the bundle labels'; tests/dodo-pricing.server.test.ts, tests/pricing.route.test.ts, tests/marketing-pricing-latency.test.ts",
+      "currentResult": "pass",
+      "resultDetail": "Plan monthlyLabel/yearlyLabel publish USD list prices ($11/$59/$199 monthly, 8x annual; proof packs $59/$179/$599) via PUBLISHED_PLAN_PRICES_USD/PUBLISHED_BUNDLE_PRICES_USD. Checkout amounts are never hardcoded — the live Dodo preview overrides the anchors in the buyer's currency. Region pricing dropped in migration 0016.",
+      "betOrCopyChange": "bet 4 (the plan-gated feature catalog)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-PROOF-CAPTURE-ACCOUNTING",
+      "registryClaim": "CHECK-PACK-SEMANTICS",
+      "text": "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with page text, the original link, and a screenshot when the capture includes one. Included proof captures reset every month and do not roll over. Purchased proof captures never expire and carry over until you use them.",
+      "surface": "pricing evidence-usage note, billing FAQ",
+      "liveQueryOrTest": "tests/pricing.test.ts → 'states the customer-facing proof capture accounting contract', 'offers paid proof capture packs for temporary spikes'; tests/billing-policy-copy.test.ts",
+      "currentResult": "pass",
+      "resultDetail": "EVIDENCE_USAGE_CUSTOMER_COPY constant matches the rendered copy. Usage bundles (burst_500/campaign_2000/scale_7500) exist with 'never expire' copy.",
+      "betOrCopyChange": "bet 4 (the plan-gated feature catalog)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-PUBLIC-SURFACES-ONLY",
+      "registryClaim": "PRESENCE-SOURCE-COVERAGE",
+      "text": "Public surfaces only: the Meta Ad Library — the same public archive anyone can open in a browser — plus the public landing pages those ads link to. Five to Nine never logs in to anything and never reads anything behind a login.",
+      "surface": "homepage product FAQ, competitor-monitoring category FAQ, competitor-monitoring wedge point 03",
+      "liveQueryOrTest": "tests/marketing-rebuild.test.ts → 'keeps unsupported social and internal implementation claims out of homepage copy'; tests/competitor-monitoring-category.test.ts → 'positions the Meta-only ad scope against multi-platform ad-library aggregators'; app/lib/ad-source.server.ts (browser scraping primary, Meta API fallback, honest demo mode)",
+      "currentResult": "pass",
+      "resultDetail": "Public copy asserts Meta Ad Library + public landing pages only. ad-source.server.ts reads public surfaces; no login path. Tests confirm no unsupported-source claims leak into public copy.",
+      "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-META-ONLY-SCOPE",
+      "registryClaim": "PRESENCE-SOURCE-COVERAGE",
+      "text": "Five to Nine monitors the Meta Ad Library only — other platforms' ad libraries are out of scope.",
+      "surface": "homepage product FAQ, competitor-monitoring category FAQ",
+      "liveQueryOrTest": "tests/competitor-monitoring-category.test.ts → 'positions the Meta-only ad scope against multi-platform ad-library aggregators'; tests/marketing-rebuild.test.ts → 'keeps unsupported social and internal implementation claims out of homepage copy'",
+      "currentResult": "pass",
+      "resultDetail": "Copy explicitly scopes to Meta Ad Library only and names other platforms as out of scope. Tests assert the scoping language is present and no multi-platform-aggregator claim leaks.",
+      "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-PROOF-BRIEF-REAL",
+      "registryClaim": "SEO-CANONICAL-INDEXING",
+      "text": "Every row above is a real capture. Open the source link and check it yourself — saved watches attach page text and original links, plus a screenshot when the capture includes one.",
+      "surface": "homepage proof brief trail note, competitor-monitoring proof brief trail note",
+      "liveQueryOrTest": "tests/marketing-proof-brief.test.tsx → 'renders a truthful non-empty value for every decision-summary field from real captures', 'never labels the brief or its evidence as sample or illustrative', 'links every source-trail row to a real public source page', 'renders the honest no-live-proof state when no real capture exists'; tests/public-routes-no-sample-proof.test.ts",
+      "currentResult": "pass",
+      "resultDetail": "loadPublicProofBrief reads only the discovery cache; demo/sample entries are never returned; null renders the honest 'no live proof yet' state. 7/7 marketing-proof-brief tests green.",
+      "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-SEARCH-PREVIEW-FRESHNESS",
+      "registryClaim": "SOURCE-STATUS-FRESHNESS",
+      "text": "We label source, freshness, coverage, cached results, and proof freshness separately.",
+      "surface": "homepage hero honest note, competitor-monitoring hero honest note",
+      "liveQueryOrTest": "tests/search-live-claim.test.tsx → /search promise-audit gating (idle copy never says 'right now'; cached/stale/demo results keep source/freshness labels; fresh/live wording only on proven fresh-live capture); tests/discovery-customer-copy.test.ts",
+      "currentResult": "pass",
+      "resultDetail": "isProvenFreshLiveCapture gates 'right now' wording to a proven fresh-live cache miss only. Cached/stale/demo results carry data-f9-result-source and data-f9-result-cache-status labels.",
+      "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-QUIET-PERIOD-HEARTBEAT",
+      "registryClaim": "PLAN-CADENCE",
+      "text": "When a field moves you hear about it once. The same field stays quiet for 48 hours unless it changes again. Quiet periods still send a heartbeat — 'All quiet — 24 ads checked' — so silence always means we looked and nothing moved.",
+      "surface": "homepage quiet signals, competitor-monitoring wedge point 02",
+      "liveQueryOrTest": "tests/monitoring.test.ts (quiet-period dedupe + heartbeat); tests/plan-monitoring.test.ts; app/lib/monitoring.server.ts (48h dedupe window, heartbeat on quiet runs)",
+      "currentResult": "pass",
+      "resultDetail": "monitoring.server.ts implements the 48-hour per-field dedupe and the quiet-run heartbeat. monitoring tests pass.",
+      "betOrCopyChange": "bet 1 (the monitoring cadence contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-SAVES-SCREENSHOTS",
+      "registryClaim": "PLAN-FEATURE-CATALOG",
+      "text": "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then files source-linked proof and change alerts before your next meeting. ... saves page text and the source link — plus a screenshot when the capture includes one — and files the brief.",
+      "surface": "homepage meta description, homepage hero deck, competitor-monitoring meta description, competitor-monitoring hero deck, pricing evidence-usage copy, compare/magicbrief migration FAQ",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts → honest screenshot copy (no unconditional 'saves the screenshots' / 'sends screenshot evidence'); tests/proof-screenshot.server.test.ts (key shape); tests/monitoring-landing-page-snapshot.test.ts (snapshot+artifact persistence). Live D1 (2026-08-27): 115/631 succeeded proof_capture rows carry screenshot_artifact_key (18%); 0/34 succeeded in the rolling 48h window. Copy matches that coverage.",
+      "currentResult": "pass",
+      "resultDetail": "Public copy no longer promises a screenshot on every confirmed change. Live production D1 on 2026-08-27 still shows 115/631 succeeded rows with a screenshot key (18%) and 0/34 in the last 48h, so the sentence now says source-linked proof always and a screenshot only when the capture includes one. Code path tests still prove screenshotArtifactKey is persisted when the renderer produces one.",
+      "betOrCopyChange": "copy changed 2026-08-27 — scoped the screenshot promise to capture-includes-one until screenshot_artifact_key coverage is proven on new succeeded rows",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-LANDING-PAGE-CHANGE-HISTORY",
+      "registryClaim": "PLAN-FEATURE-CATALOG",
+      "text": "Landing-page change history as scheduled watches complete.",
+      "surface": "pricing Starter/Agency feature list",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts → pricing feature string is forward-looking (no 'with screenshots' promise); tests/monitoring-landing-page-snapshot.test.ts → 'persists a fresh capture as a versioned landing_page_snapshot row with all fields'. Live D1 (2026-08-27): SELECT COUNT(*) FROM landing_page_snapshot = 0.",
+      "currentResult": "pass",
+      "resultDetail": "Live production D1 on 2026-08-27 still has 0 landing_page_snapshot rows. The Starter/Agency feature list no longer promises a populated screenshot history; it says the trail fills as scheduled watches complete, which matches an empty table plus a working persist path.",
+      "betOrCopyChange": "copy changed 2026-08-27 — feature label is forward-looking until landing_page_snapshot has ≥1 row from a real scheduled watch",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-NO-ACCOUNT-NEEDED",
+      "registryClaim": "CUSTOMER-ROUTE-CATALOG",
+      "text": "No account needed. Preview one competitor now. / Public search preview is free — no account.",
+      "surface": "homepage hero honest note, homepage final CTA, competitor-monitoring hero honest note",
+      "liveQueryOrTest": "tests/marketing-rebuild.test.ts → 'labels public search as a coverage-qualified preview before account'; tests/search-live-claim.test.tsx (anonymous /search renders without session); app/routes.ts (search route is public, no auth guard)",
+      "currentResult": "pass",
+      "resultDetail": "/search is a public route with no auth guard. Anonymous request renders results with source/freshness labels. Tests confirm the preview-before-account copy.",
+      "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-MIGRATION-SELF-SERVE",
+      "registryClaim": "COMPARE-MIGRATION-AFTERNOON",
+      "text": "For competitor-list migration and change monitoring, yes: your tracked brands import as watchlists, and paid plans check them every 3–6 hours with source-linked proof. For browsing saved creative collections and boards, no — that saved work does not transfer, and Five to Nine's library is narrower and change-focused.",
+      "surface": "compare/magicbrief migration FAQ",
+      "liveQueryOrTest": "tests/marketing-magicbrief-cta.test.ts; tests/customer-claim-surface-registry.test.ts → COMPARE-MIGRATION-AFTERNOON removedTextCheck (no 'in an afternoon' promise); app/routes/compare.magicbrief.tsx (MIGRATION_SIGNUP_PATH self-serve, no time promise)",
+      "currentResult": "pass",
+      "resultDetail": "The 'in an afternoon' promise was removed (registry status removed_from_product_contract). The migration FAQ honestly scopes what transfers (watchlist brands) and what does not (creative collections/boards). No time guarantee.",
+      "betOrCopyChange": "bet 4 (the plan-gated feature catalog) — the removed afternoon promise is the copy change already made",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-DELIVERY-CHANNEL-EMAIL",
+      "registryClaim": "DELIVERY-CHANNEL-GATES",
+      "text": "Paid plans run scheduled checks every 3–6 hours and email you the proof.",
+      "surface": "homepage final CTA",
+      "liveQueryOrTest": "tests/plan-entitlements.test.ts (email_delivery in scout/starter/agency features, absent from free); tests/delivery-attempt-public.test.ts; tests/digest-delivery-claims.test.ts; app/lib/delivery.server.ts (Cloudflare Email Service send_email binding)",
+      "currentResult": "pass",
+      "resultDetail": "email_delivery is in SCOUT/STARTER/AGENCY_FEATURES, absent from FREE_FEATURES. delivery.server.ts uses the Cloudflare Email Service EMAIL binding. Delivery claim tests pass.",
+      "betOrCopyChange": "bet 4 (the plan-gated feature catalog)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-COMPETITOR-MONITORING-CATEGORY",
+      "registryClaim": "SEO-CANONICAL-INDEXING",
+      "text": "Competitor monitoring software that watches Meta ads and landing pages, then files source-linked proof when something changes. Free preview, no account.",
+      "surface": "competitor-monitoring meta description, competitor-monitoring hero",
+      "liveQueryOrTest": "tests/competitor-monitoring-category.test.ts → 'carries a truthful title, description, and canonical', 'emits WebPage JSON-LD matching the visible title and description', 'is included in the public sitemap'; tests/seo.test.ts → 'publishes the public funnel surfaces in the sitemap'",
+      "currentResult": "pass",
+      "resultDetail": "Category page is in SITEMAP_PATHS, carries canonical + WebPage JSON-LD matching visible copy. The description now files source-linked proof rather than promising screenshot evidence on every change (AUDIT-SAVES-SCREENSHOTS).",
+      "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract); screenshot wording scoped with AUDIT-SAVES-SCREENSHOTS on 2026-08-27",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-FUNNEL-MEASUREMENT",
+      "registryClaim": "CUSTOMER-ROUTE-CATALOG",
+      "text": "(public-doc claim) Funnel collection is NOT live: ga-metrics.md says 'Collection is NOT live' and the privacy surface makes no measurement claim.",
+      "surface": "docs/ga-metrics.md, docs/funnel-measurement-decision-2026-08.md, docs/customer-claim-surface-registry.json → rows AUDIT-FUNNEL-MEASUREMENT",
+      "liveQueryOrTest": "wrangler.jsonc → FUNNEL_MEASUREMENT_ENABLED is \"0\" (flag off in production config since 2026-09-04, issue #1278); docs/ga-metrics.md → 'Still required before enablement' reads 'Enablement deferred; flag currently off in production.'; tests/funnel-measurement.test.ts → committed-config guard asserts the flag is \"0\" and the gate turns on only for exact 1/true/yes/on",
+      "currentResult": "nish_reserved",
+      "resultDetail": "RESOLVED FOR THE DOC-CONFIG CONTRADICTION (2026-09-04, issue #1278): decision Path B flip-to-off was taken — production config now sets FUNNEL_MEASUREMENT_ENABLED=0, matching docs/ga-metrics.md 'Collection is NOT live'. Docs and config agree again. The remaining [NISH] decision is the inverse one: re-enabling funnel measurement once the spec §8 gates (privacy/legal review, owner approval incl. retention period, policy-surface copy, post-enable canary) clear. That re-enablement is recorded in docs/funnel-measurement-decision-2026-08.md and tracked in issue #1590 — the gate stays off until Nish chooses to clear it.",
+      "betOrCopyChange": "nish-reserved — re-enabling funnel measurement after the §8 gates are cleared is Nish's decision (privacy + product direction); the contradiction itself was resolved by flipping the flag to off pending that decision; tracked in issue #1590",
+      "nishReserved": true
+    },
+    {
+      "claimId": "AUDIT-OUTSIDE-MARKET-CLAIMS",
+      "registryClaim": "SEO-CANONICAL-INDEXING",
+      "text": "Every outside claim carries its source URL and the date we checked it, in the sources section below. Vendor pages change, so each quote is scoped to the date it was checked.",
+      "surface": "competitor-monitoring category promises, complaints, sources section, category FAQ",
+      "liveQueryOrTest": "tests/competitor-monitoring-category.test.ts → 'states explicit source and freshness limits for every market claim', 'renders the new noise-triage entrants as sourced promise cards'; app/routes/competitor-monitoring.tsx (categoryPromises/categoryComplaints each carry domain + check date + source URL)",
+      "currentResult": "pass",
+      "resultDetail": "Every categoryPromises/categoryComplaints entry carries a source URL and a check date (e.g. 'panoramata.co — checked 2026-08-08'). Tests assert each market claim card has a source link and freshness limit.",
+      "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-HOME-BRANDPAGE-COUNT-PARITY",
+      "registryClaim": "SOURCE-STATUS-FRESHNESS",
+      "text": "The home page proof brief and the /ads/:domain page for the same brand report the same ad total for the same day — the home never re-derives a capped subset count the brand page does not show.",
+      "surface": "homepage proof brief case-board and /api/demo-proof vs /ads/nykaa.com brand page",
+      "liveQueryOrTest": "tests/homepage-vs-brandpage-count-parity.test.tsx — frozen-now assertions that the home brief adCount equals the brand page wall total (verifiedLinkCount + unverifiedMatchCount) and that both loaders resolve the same discovery-cache key",
+      "currentResult": "pass",
+      "resultDetail": "2026-08-30 live snap: home said 12 of 12 while /ads/nykaa.com wall read 24 (3 brand-owned, 6 verified links, 18 unverified matches) — same brand, same day, two totals. Fix (issue 1468): buildPublicProofBrief counts the full usable snapshot and every home proof-brief surface resolves visitor country through the shared /ads ladder into loadBrandPageCacheSnapshot, so both totals come from one cache row.",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation): code and copy change — the capped 12-ad subset count is gone; the home print and the brand page wall count the same snapshot",
+      "nishReserved": false
+    }
+  ],
+  "summary": {
+    "totalClaims": 21,
+    "pass": 20,
+    "failCopyChangeNeeded": 0,
+    "nishReserved": 1,
+    "passCodeDataPending": 0,
+    "copyChangesNeeded": [],
+    "nishReservedOpen": [
+      "AUDIT-FUNNEL-MEASUREMENT — docs and config now agree (flag flipped to off 2026-09-04, issue #1278); re-enabling funnel measurement once the spec §8 gates clear is Nish's decision (privacy + product direction), tracked in issue #1590."
+    ]
+  }
+}

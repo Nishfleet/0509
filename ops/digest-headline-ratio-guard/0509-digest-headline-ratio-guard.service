@@ -1,0 +1,33 @@
+[Unit]
+Description=0509 BET 1 digest headline-ratio regression guard
+Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
+# Independent of any GitHub Actions runner: the guard must keep firing while
+# every runner is busy or offline, and its failure must reach journald + a
+# watchdog even when GitHub's scheduled-cron lottery would skip it.
+
+[Service]
+Type=oneshot
+# The guard reads production D1 via wrangler, so it runs as the owner of the
+# sanctioned Cloudflare token (not a DynamicUser like the secrets-less
+# liveness probe). It maintains its own origin/main-synced checkout under
+# ~/.local/state/0509-digest-headline-ratio/checkout — the shared products
+# checkout carries other agents' uncommitted work and is not auto-synced.
+User=nish
+Group=nish
+# node/npm live under the nish user's toolchain (~/.local/bin), not in
+# /usr/bin, and systemd's default service PATH omits them. The provision
+# script resolves the real node bin dir and substitutes __NODE_BIN_DIR__
+# below; the run script also fails loud with the resolved PATH if npm is
+# still missing.
+Environment=PATH=__NODE_BIN_DIR__:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/0509-digest-headline-ratio-guard/0509-digest-headline-ratio-guard-run.sh
+# First run after install (or after a package-lock bump) does a clone +
+# `npm ci` before the one aggregated D1 read; steady-state runs are seconds.
+# 30 minutes bounds a wedged install without false-failing a cold start.
+TimeoutStartSec=1800
+# A fired guard must leave the unit failed for watchers; do not restart into
+# a tight failure loop.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
