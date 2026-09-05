@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   SIX_DOMAINS,
+  KNOWN_ALIAS_GAPS,
   evaluateSixDomainTiers,
   probeKeywordTier,
   runCanary,
@@ -92,6 +93,67 @@ describe("search.tier.canary", () => {
     expect(verdict.failures.map((f) => f.keyword)).toEqual(["allbirds"]);
   });
 
+  it("KNOWN_ALIAS_GAPS names oura and points at the owning issue", () => {
+    expect(KNOWN_ALIAS_GAPS.get("oura")).toBe("Nishfleet/0509#1427");
+    // A known gap must still be one of the six probed domains, so the carve-out
+    // never widens the probe set.
+    expect(SIX_DOMAINS).toContain("oura");
+  });
+
+  it("evaluateSixDomainTiers warns (does not fail) on a known alias gap with blanket-unmatched rows", () => {
+    const results = SIX_DOMAINS.map((keyword) => ({
+      keyword,
+      status: 200,
+      rowCount: keyword === "oura" ? 24 : 2,
+      tierCounts:
+        keyword === "oura"
+          ? { verified: 0, likely: 0, unmatched: 24 }
+          : { verified: 1, likely: 1, unmatched: 0 },
+      headline: keyword === "oura" ? "24 unverified keyword matches" : "1 verified ad",
+      isWarming: false,
+    }));
+    const verdict = evaluateSixDomainTiers(results);
+    expect(verdict.pass).toBe(true);
+    expect(verdict.failures).toEqual([]);
+    expect(verdict.knownGaps.map((g) => g.probe.keyword)).toEqual(["oura"]);
+    expect(verdict.knownGaps[0].issue).toBe("Nishfleet/0509#1427");
+  });
+
+  it("evaluateSixDomainTiers still fails a known alias gap domain on a dead-end (0 rows)", () => {
+    const results = SIX_DOMAINS.map((keyword) => ({
+      keyword,
+      status: 200,
+      rowCount: keyword === "oura" ? 0 : 2,
+      tierCounts:
+        keyword === "oura"
+          ? { verified: 0, likely: 0, unmatched: 0 }
+          : { verified: 1, likely: 1, unmatched: 0 },
+      headline: keyword === "oura" ? "No verified ads" : "1 verified ad",
+      isWarming: false,
+    }));
+    const verdict = evaluateSixDomainTiers(results);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.failures.map((f) => f.keyword)).toEqual(["oura"]);
+    expect(verdict.knownGaps).toEqual([]);
+  });
+
+  it("evaluateSixDomainTiers fails an unknown domain that blanket-unmatches (not masked by the carve-out)", () => {
+    const results = SIX_DOMAINS.map((keyword) => ({
+      keyword,
+      status: 200,
+      rowCount: 2,
+      tierCounts:
+        keyword === "notion"
+          ? { verified: 0, likely: 0, unmatched: 2 }
+          : { verified: 1, likely: 1, unmatched: 0 },
+      headline: keyword === "notion" ? "2 unverified" : "1 verified ad",
+      isWarming: false,
+    }));
+    const verdict = evaluateSixDomainTiers(results);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.failures.map((f) => f.keyword)).toEqual(["notion"]);
+  });
+
   it("runCanary fails when any domain dead-ends", async () => {
     const fetchImpl = async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
@@ -117,6 +179,31 @@ describe("search.tier.canary", () => {
     };
     const { verdict } = await runCanary({ baseUrl: "https://0509.io", fetchImpl });
     expect(verdict.pass).toBe(true);
+  });
+
+  it("runCanary passes with a warned known gap when oura blanket-unmatches and the other five verify (live shape)", async () => {
+    const fetchImpl = async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const q = url.searchParams.get("q") ?? "";
+      if (q === "oura") {
+        // Live shape: 24 rows, all Unmatched (the #1427 oura.com<->ouraring.com alias gap).
+        return mockFetchResponse(
+          htmlForRows(
+            Array.from({ length: 24 }, () => ({
+              tier: "unmatched",
+              summary: "Oura ring ad",
+            })),
+          ),
+        );
+      }
+      return mockFetchResponse(
+        htmlForRows([{ tier: "verified", summary: `${q} ad` }]),
+      );
+    };
+    const { verdict } = await runCanary({ baseUrl: "https://0509.io", fetchImpl });
+    expect(verdict.pass).toBe(true);
+    expect(verdict.failures).toEqual([]);
+    expect(verdict.knownGaps.map((g) => g.probe.keyword)).toEqual(["oura"]);
   });
 
   it("probeKeywordTier retries a 429 and succeeds on the next attempt", async () => {
