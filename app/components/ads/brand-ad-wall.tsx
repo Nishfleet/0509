@@ -33,6 +33,7 @@ export function BrandAdWall({
   domain,
   fresh,
   signupPath,
+  partnerCampaignAdIds = [],
   now = new Date(),
 }: {
   ads: AdRecord[];
@@ -40,16 +41,24 @@ export function BrandAdWall({
   domain: string;
   fresh: boolean;
   signupPath: string;
+  /**
+   * metaAdIds of verified-linked creatives that are NOT the brand's own
+   * (partner/creator/reseller campaigns under a different Meta Page ID). These
+   * render a "via partner" pill so the buyer sees the disambiguation
+   * (issue #1566).
+   */
+  partnerCampaignAdIds?: string[];
   now?: Date;
 }) {
   const ordered = [...ads].sort((a, b) => (adLongevityDays(b, now) ?? 0) - (adLongevityDays(a, now) ?? 0));
   const visible = ordered.slice(0, WALL_VISIBLE_ADS);
   const remaining = Math.max(0, totalCount - visible.length);
+  const partnerSet = new Set(partnerCampaignAdIds);
 
   return (
     <div className="f9-ads-wall">
       {visible.map((ad) => (
-        <BrandAdCard ad={ad} key={ad.metaAdId} now={now} />
+        <BrandAdCard ad={ad} key={ad.metaAdId} now={now} isPartner={partnerSet.has(ad.metaAdId)} />
       ))}
       {remaining > 0 ? (
         <article className="f9-ads-card f9-ads-card-more">
@@ -66,7 +75,7 @@ export function BrandAdWall({
   );
 }
 
-function BrandAdCard({ ad, now }: { ad: AdRecord; now: Date }) {
+function BrandAdCard({ ad, now, isPartner }: { ad: AdRecord; now: Date; isPartner: boolean }) {
   const longevityDays = adLongevityDays(ad, now);
   const longevityLabel = formatAdLongevityLabel(ad, now);
   const strong = longevityDays !== null && longevityDays >= STRONG_LONGEVITY_DAYS;
@@ -105,6 +114,9 @@ function BrandAdCard({ ad, now }: { ad: AdRecord; now: Date }) {
           ) : null}
           {ad.variantCount && ad.variantCount > 1 ? (
             <span className="f9-ads-pill">{`×${ad.variantCount} variants`}</span>
+          ) : null}
+          {isPartner ? (
+            <span className="f9-ads-pill f9-ads-pill-partner">via partner</span>
           ) : null}
         </div>
       </div>

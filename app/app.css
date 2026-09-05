@@ -7614,6 +7614,12 @@ reds soften --- */
   color: var(--green-ink);
   font-weight: 600;
 }
+.f9-ads-pill-partner {
+  background: var(--amber-wash);
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+}
 .f9-ads-card-more {
   border: 2px dashed var(--ink);
   background: var(--green-wash);

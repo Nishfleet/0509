@@ -118,6 +118,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     // capture carries verified link evidence by default.
     verifiedLinkCount: 6,
     unverifiedMatchCount: 0,
+    partnerCampaignAdIds: [],
     teaser,
     aggression,
     changeEvents,
@@ -312,6 +313,27 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("What changed this week");
     // The rest of the page still renders.
     expect(markup).toContain("All 6 ads, on the wall");
+  });
+
+  it("labels a partner campaign with a 'via partner' pill so the buyer sees the disambiguation (issue #1566)", async () => {
+    // ad-0 is a verified-linked creative that is NOT the brand's own (a
+    // partner/creator campaign under a different Meta Page ID). The loader
+    // exposes it in partnerCampaignAdIds and the wall must label it.
+    const markup = await render(
+      populated({
+        ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
+        verifiedLinkedAds: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
+        brandOwnedAdCount: 5,
+        partnerCampaignAdIds: ["ad-0"],
+      }),
+    );
+
+    expect(markup).toContain("via partner");
+  });
+
+  it("renders no 'via partner' pill when every verified-linked ad is the brand's own", async () => {
+    const markup = await render(populated({ partnerCampaignAdIds: [] }));
+    expect(markup).not.toContain("via partner");
   });
 
   it("hides Offer timeline entirely when there are no stored offer states", async () => {

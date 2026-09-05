@@ -260,26 +260,17 @@ const MS_PER_DAY = 86_400_000;
  *
  *  1. `domainMatch.level` evidence from the search-v2 pipeline:
  *     `verified_advertiser_domain` (the advertiser's own domain matched the
- *     searched domain) or `verified_entity` (advertiser name carries a known
- *     brand identity alias and the landing page matches). Landing-page-only
- *     levels (`exact_hostname`, `registrable_domain`, `verified_alias`) are
- *     deliberately NOT enough — they prove a connection, not ownership.
- *  2. The advertiser page name carries the brand's own registrable domain as
- *     a token (e.g. "Nykaa Beauty — nykaa.com").
- *  3. The advertiser page name carries the brand's label as a whole word
- *     (e.g. "Nykaa", "Nykaa Fashion") — the official-page naming convention.
- *     Known boundary: a seller page named with the brand label ("Nykaa
- *     Outlet") counts as the brand's, matching the ad-card display and the
- *     search product's advertiser-alias convention; advertisers with
- *     unrelated names never count.
- *  4. The advertiser page name folds to the brand's stem after dropping
- *     spaces/punctuation (e.g. "Sugar Cosmetics" → "sugarcosmetics",
- *     "Bombay Shaving Company" → "bombayshavingcompany", "Ridge Wallet" →
- *     "ridgewallet", "H&M" → "hm"). Meta page names are space-separated while
- *     the domain label is the concatenated stem, so the whole-word check
- *     above misses them. The fold is EXACT equality, never a substring, so
- *     "Nykaam" does not count as "Nykaa" (issue #1428).
- *  5. The creative lands on the brand's own regional domain — same stem,
+ *     searched domain) or `verified_entity` (advertiser name folds EXACTLY to
+ *     the brand stem and a known brand identity alias confirms the link).
+ *     Landing-page-only levels (`exact_hostname`, `registrable_domain`,
+ *     `verified_alias`) are deliberately NOT enough — they prove a
+ *     connection, not ownership.
+ *  2. The ad's Meta Page ID (`advertiserPageId`) matches the brand's own page
+ *     ID, inferred from the capture as the page that lands on the brand's
+ *     exact registrable domain (issue #1566). This is the primary signal: a
+ *     partner/creator campaign under a DIFFERENT page ID is never the brand's
+ *     own, no matter what its name says.
+ *  3. The creative lands on the brand's own regional domain — same stem,
  *     geographic ccTLD, main site on .com/.net/.org (e.g. ridgewallet.ca /
  *     .eu / .co.uk for ridgewallet.com). A page that sends traffic to a
  *     domain only the brand controls IS the brand's own ad, even when the
@@ -288,24 +279,55 @@ const MS_PER_DAY = 86_400_000;
  *     `adHasVerifiedDomainLink` already trusts for the "links to" claim,
  *     narrowed to the regional-property helper so a collapsed-label or
  *     open-ccTLD variant alone does not prove the advertiser IS the brand.
+ *  4. The creative lands on the brand's exact registrable domain (the brand's
+ *     own main site), trusted only when the ad's own page ID cannot
+ *     disambiguate (null) or matches the brand's own page.
  *
  * Anything else (unrelated advertiser pages that merely link to the brand,
  * text-only matches, blank advertiser names) is NOT counted, so the page never
  * claims the brand runs ads it cannot attribute.
+ *
+ * Issue #1566: brand-owned attribution is decided by the advertiser's IDENTITY
+ * (Meta Page ID) or by the exact normalized domain the ad lands on — never by
+ * a substring of the advertiser's name. A content-creator or affiliate campaign
+ * whose name merely mentions the brand ("Juan Dussán with Notion") is a
+ * DIFFERENT advertiser (a different Meta Page ID) and must not count as the
+ * brand's own, even though the name contains the brand label as a whole word.
  */
-export function adIsBrandOwned(ad: AdRecord, brandDomain: string): boolean {
+export function adIsBrandOwned(
+  ad: AdRecord,
+  brandDomain: string,
+  brandPageIds: ReadonlySet<string> = new Set(),
+): boolean {
+  // 1. Verified entity / advertiser-domain evidence from the search-v2
+  //    pipeline. `verified_entity` requires the advertiser name to fold
+  //    EXACTLY to the brand stem AND an identity alias to confirm the link
+  //    (never a substring); `verified_advertiser_domain` means the
+  //    advertiser's own website is the brand's domain. Both prove the
+  //    advertiser IS the brand, so they are trusted for ownership.
   const matchLevel = ad.domainMatch?.level;
   if (matchLevel === "verified_advertiser_domain" || matchLevel === "verified_entity") {
     return true;
   }
 
-  // An ad whose landing page is the brand's own regional domain (same stem,
-  // geographic ccTLD) is the brand's own ad — the advertiser sends traffic to
-  // a domain only the brand controls. Covers brands whose Meta page name does
-  // not fold to the domain stem (e.g. "The Ridge" landing on ridgewallet.ca
-  // for ridgewallet.com, issue #1428). Reuses the same regional-property
-  // helper adHasVerifiedDomainLink trusts for the "links to" claim, so a
-  // deploy repairs pre-classified cache rows without a recrawl.
+  // 2. Meta Page ID match — the ad was run by the brand's own Meta page. The
+  //    brand's own page ID(s) are collected from the capture (see
+  //    collectBrandPageIds): the advertiserPageId of the ad(s) that land on
+  //    the brand's exact registrable domain. A partner/creator campaign under
+  //    a DIFFERENT page ID is never the brand's own, no matter what its name
+  //    says.
+  if (ad.advertiserPageId && brandPageIds.has(String(ad.advertiserPageId))) {
+    return true;
+  }
+
+  // 3. An ad whose landing page is the brand's own regional domain (same
+  //    stem, geographic ccTLD) is the brand's own ad — the advertiser sends
+  //    traffic to a domain only the brand controls. Covers brands whose Meta
+  //    page name does not fold to the domain stem (e.g. "The Ridge" landing
+  //    on ridgewallet.ca for ridgewallet.com, issue #1428). Reuses the same
+  //    regional-property helper adHasVerifiedDomainLink trusts for the
+  //    "links to" claim, so a deploy repairs pre-classified cache rows
+  //    without a recrawl.
   const regionalHost = extractHostname(ad.landingPageUrl);
   if (regionalHost) {
     const regionalRegistrable = registrableDomainFromHostname(brandDomain);
@@ -314,41 +336,78 @@ export function adIsBrandOwned(ad: AdRecord, brandDomain: string): boolean {
     }
   }
 
-  const advertiser = (ad.advertiser ?? "").trim();
-  if (!advertiser) {
-    return false;
-  }
-  const normalized = advertiser.toLowerCase();
-
-  const registrable = registrableDomainFromHostname(brandDomain);
-  if (registrable && wordBoundaryMatch(normalized, registrable)) {
-    return true;
-  }
-
-  // Meta advertiser page names are space-separated ("Sugar Cosmetics",
-  // "Bombay Shaving Company", "Ridge Wallet", "H&M") while the domain label
-  // is the concatenated stem. The whole-word check below misses these because
-  // the stem is not a contiguous token in the spaced name. A fold-based exact
-  // match (both sides stripped of spaces/punctuation) recognizes the brand's
-  // own page without over-matching substrings ("Nykaam" → "nykaam" ≠ "nykaa").
-  // Issue #1428: without this, a brand's own ads frame as "other advertisers"
-  // on the indexed /ads/:domain surface.
-  if (advertiserNameMatchesBrandStem(advertiser, brandDomain)) {
-    return true;
-  }
-
-  // Short labels ("my", "in") are too ambiguous to trust for ownership.
-  const label = registrable?.split(".")[0];
-  if (label && label.length >= 3 && wordBoundaryMatch(normalized, label)) {
-    return true;
+  // 4. Exact normalized domain on the landing page — the ad lands on the
+  //    brand's own main site. Trusted only when the ad's own page ID cannot
+  //    disambiguate (null) or matches the brand's own page. A partner ad
+  //    that lands on the brand's domain under a DIFFERENT page ID is NOT the
+  //    brand's own.
+  if (adLandsOnBrandExactDomain(ad, brandDomain)) {
+    if (!ad.advertiserPageId) {
+      return true;
+    }
+    if (brandPageIds.has(String(ad.advertiserPageId))) {
+      return true;
+    }
   }
 
   return false;
 }
 
+/**
+ * The brand's own Meta Page ID(s), inferred from the capture. The brand's own
+ * page is the one that (a) lands on the brand's exact registrable domain AND
+ * (b) whose advertiser name folds EXACTLY to the brand stem ("Nykaa" →
+ * "nykaa", "H&M" → "hm") — never a substring, so a partner campaign named
+ * "…with Nykaa" is not mistaken for the brand's own page. Once the brand's
+ * page ID is known, per-ad attribution is purely by Meta Page ID (issue
+ * #1566).
+ */
+export function collectBrandPageIds(ads: AdRecord[], brandDomain: string): Set<string> {
+  const ids = new Set<string>();
+  for (const ad of ads) {
+    if (
+      ad.advertiserPageId &&
+      adLandsOnBrandExactDomain(ad, brandDomain) &&
+      advertiserNameMatchesBrandStem(ad.advertiser ?? "", brandDomain)
+    ) {
+      ids.add(String(ad.advertiserPageId));
+    }
+  }
+  return ids;
+}
+
+/**
+ * The metaAdIds of the cached creatives the brand itself runs, computed once
+ * so the loader can derive both the count and the partner-campaign set from a
+ * single pass.
+ */
+export function brandOwnedAdIdSet(ads: AdRecord[], brandDomain: string): Set<string> {
+  const brandPageIds = collectBrandPageIds(ads, brandDomain);
+  const owned = new Set<string>();
+  for (const ad of ads) {
+    if (adIsBrandOwned(ad, brandDomain, brandPageIds)) {
+      owned.add(ad.metaAdId);
+    }
+  }
+  return owned;
+}
+
 /** How many of the cached creatives are ads the brand itself runs. */
 export function countBrandOwnedAds(ads: AdRecord[], brandDomain: string): number {
-  return ads.filter((ad) => adIsBrandOwned(ad, brandDomain)).length;
+  return brandOwnedAdIdSet(ads, brandDomain).size;
+}
+
+/** Does the ad's landing page sit on the brand's exact registrable domain? */
+function adLandsOnBrandExactDomain(ad: AdRecord, brandDomain: string): boolean {
+  const host = extractHostname(ad.landingPageUrl);
+  if (!host) {
+    return false;
+  }
+  const brandRegistrable = registrableDomainFromHostname(brandDomain);
+  if (!brandRegistrable) {
+    return false;
+  }
+  return registrableDomainFromHostname(host) === brandRegistrable;
 }
 
 /**
@@ -418,15 +477,6 @@ function extractHostname(value: string | null | undefined): string | null {
   } catch {
     return null;
   }
-}
-
-/** Whole-word (case-insensitive) containment: "Nykaa" matches "Nykaa Fashion", not "Nykaam". */
-function wordBoundaryMatch(haystack: string, needle: string): boolean {
-  return new RegExp(`(^|[^a-z0-9])${escapeRegExp(needle)}($|[^a-z0-9])`).test(haystack);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
