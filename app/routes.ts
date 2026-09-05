@@ -107,6 +107,16 @@ export default [
     route("changelog", "routes/$locale.changelog.tsx"),
     route("trust", "routes/$locale.trust.tsx"),
     route("compare", "routes/$locale.compare.tsx"),
+    // First-value search funnel + supporting trust/proof surfaces (issue
+    // #1578): search is THE first purchase-intent moment, so the localised
+    // buyer must not be flung back to EN mid-funnel. Each child re-exports
+    // the EN route so the functional surface stays in lockstep; only the
+    // canonical (EN) + hreflang cluster differ, and the page's search entry
+    // points funnel to the locale-prefixed `/search`.
+    route("search", "routes/$locale.search.tsx"),
+    route("competitor-monitoring", "routes/$locale.competitor-monitoring.tsx"),
+    route("capture-rules", "routes/$locale.capture-rules.tsx"),
+    route("ad-aggression", "routes/$locale.ad-aggression.tsx"),
   ]),
   route("team/accept", "routes/team.accept.tsx"),
 	route("share/:token/pdf", "routes/share.$token.pdf.ts"),

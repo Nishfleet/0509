@@ -512,6 +512,14 @@ export const SITEMAP_PATHS = [
     `/${locale}/changelog`,
     `/${locale}/trust`,
     `/${locale}/compare`,
+    // First-value search funnel + trust surfaces (issue #1578). Search is
+    // the strongest first-value purchase-intent moment, so the localised
+    // funnel must be crawlable and locale-targetable end to end — not just
+    // the compare/marketing surfaces #1501 already shipped.
+    `/${locale}/search`,
+    `/${locale}/competitor-monitoring`,
+    `/${locale}/capture-rules`,
+    `/${locale}/ad-aggression`,
   ]),
   // Canonical Ad Aggression Score formula page (issue #1263). The old
   // /methodology/ad-aggression-score path now 301-redirects here so any

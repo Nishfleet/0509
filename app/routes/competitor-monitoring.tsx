@@ -1,4 +1,4 @@
-import { Form, Link, useLoaderData } from "react-router";
+import { Form, Link, useLoaderData, useLocation } from "react-router";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
@@ -16,6 +16,7 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { localeSearchPathname } from "~/lib/locale-markets";
 
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
@@ -241,6 +242,14 @@ export const categoryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
 export default function CompetitorMonitoringCategoryRoute() {
   const { proofBrief, indexableAdsLinks = [] } = useLoaderData<typeof loader>();
   const structuredFaq = faqPageJsonLd(categoryFaqEntries);
+  // The search funnel entry points funnel a localised visitor to
+  // `/{locale}/search` (issue #1578, accept #3), not EN `/search`, so the
+  // first-value search moment stays inside the localized surface set.
+  const location = useLocation();
+  const searchPath = localeSearchPathname(location.pathname);
+  // The "try the live search preview" trial links carry a canned query; keep
+  // them inside the locale prefix so a localised visitor stays in the funnel.
+  const searchTrialPath = publicSearchTrialPath.replace(/^\/search/, searchPath);
 
   return (
     <main className="f9-home">
@@ -271,7 +280,7 @@ export default function CompetitorMonitoringCategoryRoute() {
           one — then files the brief.
         </p>
 
-        <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
+        <Form className="ld-command" method="get" action={searchPath} aria-label="Public search preview">
           <input
             aria-label="Competitor website"
             name="website"
@@ -368,7 +377,7 @@ export default function CompetitorMonitoringCategoryRoute() {
               : "A brief groups one competitor's real captured changes — hooks, offers, CTAs, sources, and freshness — into one decision. Live proof appears here after the first scan; preview what it looks like with the search preview."}
           </p>
           <div className="ld-proof-actions">
-            <Link to={publicSearchTrialPath}>Try the live search preview</Link>
+            <Link to={searchTrialPath}>Try the live search preview</Link>
             <a href="#faq">Category FAQ</a>
           </div>
         </div>
@@ -476,7 +485,7 @@ export default function CompetitorMonitoringCategoryRoute() {
                 scheduled watch.
               </p>
               <div className="ld-proof-actions">
-                <Link to={publicSearchTrialPath}>Run the search preview</Link>
+                <Link to={searchTrialPath}>Run the search preview</Link>
                 <Link to="/auth/signup">Create an account</Link>
               </div>
             </article>
@@ -541,7 +550,7 @@ export default function CompetitorMonitoringCategoryRoute() {
           See what a check looks like <span aria-hidden="true">→</span>
         </h2>
         <p className="ld-pricing-note">
-          Paste a competitor website into the <Link to="/search">search preview</Link> — no
+          Paste a competitor website into the <Link to={searchPath}>search preview</Link> — no
           account needed. Questions about coverage on your competitors? Email{" "}
           <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll answer honestly.
         </p>

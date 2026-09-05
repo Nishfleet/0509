@@ -130,6 +130,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
+import { localeSearchPathname } from "~/lib/locale-markets";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
 
@@ -1037,6 +1038,12 @@ export default function SearchRoute() {
     string | null
   >(null);
   const locationSearchParams = new URLSearchParams(location.search);
+  // The path the search funnel points its internal "run / retry a search"
+  // entry points at (issue #1578, accept #3). EN renders at `/search`; under
+  // a buyer-surface locale prefix this is `/{locale}/search`, so a localised
+  // buyer completing the first-value funnel stays inside the localized
+  // surface set instead of being flung back to EN mid-journey.
+  const searchPath = localeSearchPathname(location.pathname);
   const [resultSort, setResultSort] = useState<SearchResultSort>(
     () =>
       parseSearchResultSort(locationSearchParams.get("sort")) ||
@@ -1186,7 +1193,7 @@ export default function SearchRoute() {
   // cannot leave the button disabled forever.
   const commandNavigationTarget =
     navigation.state === "loading" &&
-    navigation.location?.pathname === "/search"
+    navigation.location?.pathname === searchPath
       ? (navigation.location.search ?? "")
       : null;
   // A committed validation error describes the PREVIOUS submission, not the
@@ -1251,12 +1258,14 @@ export default function SearchRoute() {
   );
   // Shared card href for the result list and keyboard Enter — preserves the
   // per-ad source cursor semantics of the reconciled accumulation state.
-  const resultCardHref = (metaAdId: string) =>
-    buildSearchResultHref(
+  const resultCardHref = (metaAdId: string) => {
+    const href = buildSearchResultHref(
       scopedSearchParams,
       metaAdId,
       visibleAccumulated.adCursorById.get(metaAdId) ?? null,
     );
+    return searchPath === "/search" ? href : href.replace(/^\/search/, searchPath);
+  };
 
   // Keyboard basics (workflow-friction pass): j/k or arrows highlight, Enter
   // opens, s quick-saves, ? toggles the hints popover. Listeners skip typing
@@ -1401,7 +1410,7 @@ export default function SearchRoute() {
     const target = navigation.location?.search ?? "";
     const isInFlightIdleSearch =
       navigation.state === "loading" &&
-      navigation.location?.pathname === "/search" &&
+      navigation.location?.pathname === searchPath &&
       target !== "" &&
       !hasSearchQuery;
     setSearchNavigationRecovery(null);
@@ -1464,7 +1473,7 @@ export default function SearchRoute() {
   const isLoadingMore = Boolean(
     loadMoreParams &&
     navigation.state !== "idle" &&
-    navigation.location?.pathname === "/search" &&
+    navigation.location?.pathname === searchPath &&
     new URLSearchParams(navigation.location.search).get("after") === nextCursor,
   );
   const recoveredFromDiscoveryFailure =
@@ -1688,7 +1697,7 @@ export default function SearchRoute() {
             </label>
             <SubmitButton
               className="f9-wk-btn"
-              getAction="/search"
+              getAction={searchPath}
               pending={commandNavigationPending}
               pendingLabel="Searching…"
             >
@@ -2106,7 +2115,7 @@ export default function SearchRoute() {
                             &rsaquo;
                           </span>
                         </Link>
-                        <Link className="f9-wk-lnk" to="/search">
+                        <Link className="f9-wk-lnk" to={searchPath}>
                           Try another domain{" "}
                           <span aria-hidden="true" className="f9-wk-chev">
                             &rsaquo;
@@ -2144,7 +2153,7 @@ export default function SearchRoute() {
                         ) : null}
                         <Link
                           className="f9-wk-lnk"
-                          to={`/search?${broaderSearchParams.toString()}`}
+                          to={`${searchPath}?${broaderSearchParams.toString()}`}
                         >
                           Search broader matches for “
                           {displayDomain.split(".")[0] ?? displayDomain}”{" "}
@@ -2152,7 +2161,7 @@ export default function SearchRoute() {
                             &rsaquo;
                           </span>
                         </Link>
-                        <Link className="f9-wk-lnk" to="/search">
+                        <Link className="f9-wk-lnk" to={searchPath}>
                           Try another domain{" "}
                           <span aria-hidden="true" className="f9-wk-chev">
                             &rsaquo;
@@ -2198,12 +2207,12 @@ export default function SearchRoute() {
                     }
                     className="f9-wk-more-results"
                     method="get"
-                    action="/search"
+                    action={searchPath}
                   >
                     <SearchQueryFields params={loadMoreParams} />
                     <SubmitButton
                       className="f9-wk-lnk"
-                      getAction="/search"
+                      getAction={searchPath}
                       match={{ after: loadMoreParams.get("after") ?? "" }}
                       pendingLabel="Loading…"
                     >
