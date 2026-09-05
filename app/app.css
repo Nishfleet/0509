@@ -12563,6 +12563,43 @@ textarea.f9-wk-in {
   padding-left: var(--wk-pad);
 }
 
+/* Issue 1554 — switch-target cross-link card, above the fold on /search.
+   Sits one step off the page, same ground as a row hover, so it reads as a
+   distinct handoff without becoming a card that competes with the results.
+   The link keeps the working-page accent. */
+.f9-switch-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin-top: var(--wk-pad);
+  padding: 16px var(--wk-pad);
+  margin-right: calc(var(--wk-pad) * -1);
+  margin-left: calc(var(--wk-pad) * -1);
+  background: var(--wk-sunk);
+  color: var(--wk-fill);
+  font-family: var(--f9-font);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.f9-switch-cta-head {
+  margin: 0;
+  font-weight: 650;
+}
+
+.f9-switch-cta-copy {
+  margin: 0;
+  color: var(--wk-band);
+}
+
+.f9-switch-cta .f9-wk-lnk {
+  color: var(--f9-green);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .f9-results-panel > .f9-wk-rows.is-bleed {
   margin: 0;
 }
