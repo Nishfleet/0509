@@ -48,18 +48,36 @@ export function parseExactLoopbackOrigin(value) {
 }
 
 /**
+ * Environment flag the local release server declares to keep its boot
+ * loopback-only and free of the Cloudflare Vite DevTools inspector. The vite
+ * config (vite.config.ts) turns it into `inspectorPort: false`, which stops
+ * @cloudflare/vite-plugin from calling `os.networkInterfaces()` while searching
+ * for a free inspector port — the call that throws
+ * `uv_interface_addresses ... system error 97` (EAFNOSUPPORT) on the hardened
+ * self-hosted runners.
+ */
+export const LOCAL_RELEASE_SERVER_NO_INSPECTOR_ENV = "E2E_VITE_NO_INSPECTOR";
+export const LOCAL_RELEASE_SERVER_NO_INSPECTOR_VALUE = "1";
+
+/**
  * @param {string} origin
  * @returns {string}
  */
 export function buildLocalReleaseServerCommand(origin) {
   const parsed = parseExactLoopbackOrigin(origin);
-  const server = `E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} ./node_modules/.bin/react-router dev --host 127.0.0.1 --port ${parsed.port} --strictPort`;
-  // The self-hosted verify runners intermittently fail the dev server at boot
-  // with `uv_interface_addresses returned Unknown system error 97`
-  // (EAFNOSUPPORT) while Vite enumerates interfaces for its startup banner.
-  // It is environmental and transient — a second attempt starts cleanly.
+  const server = `E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} ${LOCAL_RELEASE_SERVER_NO_INSPECTOR_ENV}=${LOCAL_RELEASE_SERVER_NO_INSPECTOR_VALUE} ./node_modules/.bin/react-router dev --host 127.0.0.1 --port ${parsed.port} --strictPort`;
+  // The hardened self-hosted verify runners fail `os.networkInterfaces()` at
+  // dev-server boot with `uv_interface_addresses ... system error 97`
+  // (EAFNOSUPPORT). On a loopback-only host the only boot-time caller is
+  // @cloudflare/vite-plugin, which enumerates interfaces to find a free DevTools
+  // inspector port (getInputInspectorPort -> getPorts -> getLocalHosts). The
+  // command declares the no-inspector contract above
+  // (E2E_VITE_NO_INSPECTOR=1 -> `inspectorPort: false` in vite.config.ts), so
+  // the plugin skips interface enumeration entirely instead of dying before the
+  // first journey.
   //
-  // Retry ONLY a fast boot failure. If the server stayed up for
+  // The bounded retry below remains only as a safety net for OTHER fast boot
+  // failures. It retries ONLY a fast boot failure. If the server stayed up for
   // LOCAL_RELEASE_SERVER_BOOT_SECONDS or longer, its exit is a real result
   // (Playwright tearing it down, or a genuine crash) and is passed straight
   // through. This cannot mask a server that starts and then misbehaves.

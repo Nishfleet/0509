@@ -8,6 +8,8 @@ const {
   buildLocalReleaseServerRetryScript,
   LOCAL_RELEASE_SERVER_BOOT_SECONDS,
   LOCAL_RELEASE_SERVER_MAX_ATTEMPTS,
+  LOCAL_RELEASE_SERVER_NO_INSPECTOR_ENV,
+  LOCAL_RELEASE_SERVER_NO_INSPECTOR_VALUE,
   LOCAL_RELEASE_SERVER_RETRY_DELAY_SECONDS,
   createLocalReleaseServerIdentity,
   isLocalReleaseServerIdentity,
@@ -16,9 +18,12 @@ const {
   resolveLocalReleaseRunTimeout,
 } = await import("../scripts/local-release-server.mjs");
 
-function runRetryScript(exitCodes: number[], runtimes: number[]) {
+function runRetryScript(exitCodes: number[], runtimes: number[], stderrLines: string[][] = []) {
   const serverCases = exitCodes
-    .map((exitCode, index) => `${index + 1}) printf 'invoke:%s\\n' "$attempt"; return ${exitCode};;`)
+    .map((exitCode, index) => {
+      const stderr = (stderrLines[index] ?? []).map((line) => `printf '%s\\n' '${line}' >&2;`).join(" ");
+      return `${index + 1}) ${stderr} printf 'invoke:%s\\n' "$attempt"; return ${exitCode};;`;
+    })
     .join(" ");
   const clockEndCommand = `${runtimes
     .map((runtime, index) => `${index === 0 ? "if" : "elif"} [ "$attempt" -eq ${index + 1} ]; then printf '%s' '${runtime}';`)
@@ -115,6 +120,27 @@ describe("local release proof server identity", () => {
     expect(command).toContain("APP_ORIGIN=http://127.0.0.1:43127");
     expect(command).toContain("--port 43127 --strictPort");
     expect(command).not.toContain("4179");
+  });
+
+  it("declares the loopback-only, no-inspector contract so the dev server never enumerates interfaces at boot", () => {
+    const command = buildLocalReleaseServerCommand("http://127.0.0.1:43127");
+    expect(command).toContain(
+      `${LOCAL_RELEASE_SERVER_NO_INSPECTOR_ENV}=${LOCAL_RELEASE_SERVER_NO_INSPECTOR_VALUE}`,
+    );
+    expect(command).toContain("E2E_TEST_MODE=1");
+    expect(command).toContain("--host 127.0.0.1");
+    expect(command).toContain("--strictPort");
+  });
+
+  it("retries the known interface-enumeration failure and still exits nonzero when the environment stays unsupported", () => {
+    const signature = ["uv_interface_addresses returned Unknown system error 97", "Error: EAFNOSUPPORT"];
+    const result = runRetryScript([1, 1, 1], [5, 5, 5], [signature, signature, signature]);
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("invoke:1\npause:3\ninvoke:2\npause:3\ninvoke:3\n");
+    expect(result.stderr).toContain("attempt 1/3");
+    expect(result.stderr).toContain("attempt 2/3");
+    expect(result.stderr).toContain("uv_interface_addresses");
+    expect(result.stderr).not.toContain("attempt 3/3");
   });
 
   it("retries a fast failure once, then returns a successful server exit", () => {

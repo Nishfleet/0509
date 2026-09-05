@@ -10,6 +10,16 @@ const require = createRequire(import.meta.url);
 const reactRouterDevRoot = path.dirname(require.resolve("@react-router/dev/package.json"));
 const e2ePersistPath = process.env.E2E_PERSIST_PATH ?? ".wrangler/e2e-state";
 const isE2ETestMode = String(process.env.E2E_TEST_MODE) === "1";
+// The local release server runs a loopback-only, inspector-disabled contract
+// (scripts/local-release-server.mjs). @cloudflare/vite-plugin only calls
+// os.networkInterfaces() at boot to find a free DevTools inspector port
+// (getInputInspectorPort -> getPorts -> getLocalHosts). That call throws
+// `uv_interface_addresses ... system error 97` (EAFNOSUPPORT) on the hardened
+// self-hosted runners, killing the server before the first journey. Setting
+// `inspectorPort: false` skips that path deterministically instead of relying
+// on retries, and the E2E proof never used the inspector anyway.
+const isE2ELoopbackContract =
+  isE2ETestMode || process.env.E2E_VITE_NO_INSPECTOR === "1";
 const isBl034Capture = String(process.env.BL034_CAPTURE) === "1";
 const isVerificationLane = Boolean(process.env.DEPLOY_WINDOW_VERIFY_SLOT);
 const e2eOrigin = process.env.APP_ORIGIN ?? "http://127.0.0.1:4179";
@@ -40,6 +50,7 @@ export default defineConfig(({ mode }) => ({
                   },
                 }
               : {}),
+            ...(isE2ELoopbackContract ? { inspectorPort: false } : {}),
             persistState: isE2ETestMode ? { path: e2ePersistPath } : true,
             viteEnvironment: { name: "ssr" },
           }),
