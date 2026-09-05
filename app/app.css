@@ -3755,6 +3755,21 @@ one signal-green accent.
   .f9-home .ld-final .f9-email-cta { flex-direction: column; }
 }
 
+@media (max-width: 435px) {
+  /* Three account actions cannot share row 1 with the wordmark below ~436px
+     (Sign in + Open app + the Get started pill need ~258px plus the ~128px
+     wordmark). Capping the actions row to 160px makes it wrap: the two text
+     links stay on the first line and the signup pill drops to a right-aligned
+     second line, so the wordmark never slides under the actions. Touch
+     targets stay ≥44px and nothing overflows horizontally. */
+  .ld-nav-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 6px;
+    max-width: 160px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .ld-rec::before { animation: none; }
 }

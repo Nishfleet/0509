@@ -63,12 +63,17 @@ export function AuthForm({
       <p>
         {showSentRecovery
           ? isSignup
-            ? "We sent a setup link. Open it to verify and create the account."
+            ? "Open the setup link to verify and create the account. If it doesn't arrive within a couple of minutes, check spam or promotions — then use Resend link below."
             : "If an account exists for that address, the sign-in link is on the way."
           : isSignup
-            ? "Use a work email. After verification, you can add a competitor and start tracking."
+            ? "Use a work email. We'll send a setup link to that inbox — open it to verify and create the account, then add your first competitor."
             : "Enter your work email and we'll send a one-time link to your inbox."}
       </p>
+      {isSignup && !showSentRecovery ? (
+        <p>
+          The link usually arrives within a minute or two. If it doesn't, check spam or promotions — then send again.
+        </p>
+      ) : null}
 
       {showSentRecovery ? (
         <div className="f9-auth-form" aria-live="polite">
