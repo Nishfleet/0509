@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+// @ts-expect-error plain .mjs ops script — no type declarations; the parity
+// assertions below are the contract.
+import {
+  buildSampleQuery,
+  eventTypesFromCountRows,
+  measure as canaryMeasure,
+  rollingSignal as canaryRollingSignal,
+} from "../scripts/canary-digest-headline-ratio.mjs";
 import {
   DIGEST_HEADLINE_GUARD_RATIO,
   DIGEST_HEADLINE_ROLLING_DAYS,
@@ -140,5 +148,109 @@ describe("brief.headline.signal — headlineRatioSignal 7-day rolling guard", ()
     const signal = headlineRatioSignal([]);
     expect(signal.sampledDays).toBe(0);
     expect(signal.guardFired).toBe(false);
+  });
+
+  it("keeps days with zero headline-stream items out of the rolling mean", () => {
+    // A churn-only day is the common case, not a regression: the brief
+    // correctly collapsed every item into the counted footnote. Counting it
+    // as ratio 0 would false-fire the guard on real data.
+    const churnOnlyDay = measurement("2026-09-01", 0);
+    churnOnlyDay.headlineItemCount = 0;
+    churnOnlyDay.landingPageCount = 0;
+    churnOnlyDay.adChurnCount = 12;
+    const healthy = Array.from({ length: DIGEST_HEADLINE_ROLLING_DAYS }, (_, i) =>
+      measurement(`2026-09-${String(2 + i).padStart(2, "0")}`, 1),
+    );
+    const signal = headlineRatioSignal([churnOnlyDay, ...healthy]);
+    expect(signal.sampledDays).toBe(DIGEST_HEADLINE_ROLLING_DAYS);
+    expect(signal.rollingRatio).toBe(1);
+    expect(signal.guardFired).toBe(false);
+  });
+});
+
+describe("digest.headline.ratio — scheduled canary mirror (scripts/canary-digest-headline-ratio.mjs)", () => {
+  // The ops canary is plain .mjs and cannot import the TS rerank module, so it
+  // mirrors the classification. These tests pin the mirror against the real
+  // builder path so the two cannot silently drift.
+
+  it("classifies a mixed fixture identically to the real rerank", () => {
+    const eventTypes = [
+      "landing_page_offer_changed",
+      "landing_page_cta_changed",
+      "landing_page_url_changed",
+      "landing_page_headline_changed",
+      "landing_page_form_changed",
+      "ad_new",
+      "ad_new",
+      "ad_inactive",
+      "website_page_changed",
+    ];
+    const scriptMeasure = canaryMeasure(eventTypes, "2026-09-05");
+    const libMeasure = measureDigestHeadline(
+      eventTypes.map((eventType, i) => item(eventType, `ev-${i}`)),
+      "2026-09-05",
+    );
+    expect(scriptMeasure.landingPageCount).toBe(libMeasure.landingPageCount);
+    expect(scriptMeasure.headlineItemCount).toBe(libMeasure.headlineItemCount);
+    expect(scriptMeasure.adChurnCount).toBe(libMeasure.adChurnCount);
+    expect(scriptMeasure.ratio).toBe(libMeasure.ratio);
+  });
+
+  it("applies the same rolling-window rule as the lib (vacuous days excluded)", () => {
+    const series = [
+      { periodStart: "2026-08-30", headlineItemCount: 0, landingPageCount: 0, adChurnCount: 9, ratio: 0 },
+      ...Array.from({ length: 7 }, (_, i) => ({
+        periodStart: `2026-08-${String(31 - i).padStart(2, "0")}`,
+        headlineItemCount: 8,
+        landingPageCount: 8,
+        adChurnCount: 2,
+        ratio: 1,
+      })),
+    ];
+    const scriptSignal = canaryRollingSignal(series);
+    const libSignal = headlineRatioSignal(
+      series.map((m) => ({
+        periodStart: m.periodStart,
+        headlineItemCount: m.headlineItemCount,
+        landingPageCount: m.landingPageCount,
+        adChurnCount: m.adChurnCount,
+        ratio: m.ratio,
+      })),
+    );
+    expect(scriptSignal.guardFired).toBe(libSignal.guardFired);
+    expect(scriptSignal.rollingRatio).toBeCloseTo(libSignal.rollingRatio, 6);
+    expect(scriptSignal.sampledDays).toBe(libSignal.sampledDays);
+  });
+
+  it("samples the last window of DELIVERED digest items, not raw watch events", () => {
+    const cutoff = "2026-09-04T09:53:00.000Z";
+    const query = buildSampleQuery(cutoff);
+    // The measurement surface is digest_item (the persisted cohort) gated by a
+    // sent delivery_attempt — EXISTS so multi-channel delivery cannot
+    // double-count a run's items.
+    expect(query).toContain("FROM digest_item");
+    expect(query).toContain("delivery_attempt");
+    expect(query).toContain("da.status = 'sent'");
+    expect(query).toContain("da.lane = 'customer'");
+    expect(query).toContain(cutoff);
+    expect(query).not.toContain("FROM watch_event");
+  });
+
+  it("expands aggregate count rows back into the exact item mix", () => {
+    const eventTypes = eventTypesFromCountRows([
+      { event_type: "landing_page_cta_changed", n: 3 },
+      { event_type: "ad_new", n: 2 },
+      { event_type: "landing_page_offer_changed", n: 1 },
+      { event_type: "", n: 4 },
+      { event_type: "ad_inactive", n: 0 },
+    ]);
+    expect(eventTypes).toEqual([
+      "landing_page_cta_changed",
+      "landing_page_cta_changed",
+      "landing_page_cta_changed",
+      "ad_new",
+      "ad_new",
+      "landing_page_offer_changed",
+    ]);
   });
 });
