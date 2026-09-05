@@ -16,8 +16,8 @@ import {
   landingPageTypeWeight,
   rerankDigestBrief,
   whyThisMattersScoreForRecord,
-  type DigestRerankItem,
 } from "~/lib/digest-rerank";
+import type { DigestTrustItem } from "~/lib/proof-classification";
 import type {
   WatchEventRecord,
   WorkspaceDeliveryConfigRecord,
@@ -99,7 +99,7 @@ function digestItem(
       sourceStatus: "scan_backed",
       confirmedAt: "2026-07-13T00:00:00.000Z",
     },
-  } satisfies DigestRerankItem & { title: string; watchlistName: string };
+  } satisfies DigestTrustItem;
 }
 
 const DIGEST_INPUT_BASE = {
