@@ -300,6 +300,20 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     ? snapshotAds.filter((ad) => adHasVerifiedDomainLink(ad, brand.domain))
     : [];
 
+  // The wall needs every record to carry its OWN verified signal (accept:
+  // "consume the distinction via the existing AdRecord shape — do not pass
+  // booleans by prop drilling"). Annotate a wall copy so BrandAdCard can show
+  // a glanceable "Verified link" badge and order verified cards first, while
+  // the original snapshot records the score and change feed derive from stay
+  // pristine (their shape is unchanged, only the enriched copy is passed to
+  // the wall).
+  const verifiedLinkedIds = new Set(verifiedLinkedAds.map((a) => a.metaAdId));
+  const wallAds = snapshotAds.map((ad) =>
+    verifiedLinkedIds.has(ad.metaAdId)
+      ? { ...ad, linkVerifiedDomain: brand.domain }
+      : ad,
+  );
+
   // The Ad Aggression Score (0–100, four public sub-scores) is the page's
   // named differentiator (category-research §1.2). It renders ONLY when the
   // capture has at least one verified-linked ad AND the observed window
@@ -325,7 +339,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     domain: brand.domain,
     brandName: brand.displayName,
     hasCachedAds: Boolean(snapshot),
-    ads: snapshotAds,
+    ads: wallAds,
     verifiedLinkedAds,
     checkedAgo: freshness?.checkedAgo ?? null,
     lastCheckedAt: snapshot?.fetchedAt ?? null,
@@ -916,6 +930,12 @@ function BrandAdsResults({
   const adWord = totalCount === 1 ? "ad" : "ads";
   const watchLabel = `Watch ${data.domain}`;
   const allBrandOwned = totalCount > 0 && data.brandOwnedAdCount === totalCount;
+  // Wall title: when the wall mixes verified-link and search-only creatives,
+  // report BOTH counts so the header is honest in the same breath the cards
+  // separate visually (accept #2). When every card is one kind, keep the
+  // existing single-count form.
+  const splitWallMixes =
+    data.verifiedLinkCount > 0 && data.unverifiedMatchCount > 0;
   // Headline ownership speaks about the verified-linked capture only.
   // Unverified wall matches must not flip the H1 into split "X of these Y"
   // copy when every verified-linked creative is the brand's own.
@@ -1037,7 +1057,11 @@ function BrandAdsResults({
               <span className="f9-ads-sec-eyebrow">
                 {data.freshForLiveClaim ? "Running right now" : "From the last check"}
               </span>
-              <h2 id="brand-wall-title">{`All ${totalCount} ${adWord}, on the wall`}</h2>
+              <h2 id="brand-wall-title">{
+                splitWallMixes
+                  ? `All ${totalCount} ${adWord} — ${data.verifiedLinkCount} verified, ${data.unverifiedMatchCount} matched the search`
+                  : `All ${totalCount} ${adWord}, on the wall`
+              }</h2>
             </div>
             <span className="f9-ads-sec-meta">
               {data.checkedAgo
