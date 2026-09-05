@@ -6,16 +6,17 @@ import { SITEMAP_PATHS } from "~/lib/seo";
 import routes from "~/routes";
 import { readFileSync } from "node:fs";
 
-// The 13 /compare/* product pages the hub links to. Must stay in sync with
-// SITEMAP_PATHS and routes.ts — the canary guards all three together.
+// The indexed /compare/* product pages the hub links to. The two generic
+// duplicates (/compare/visualping, /compare/foreplay) canonicalize to their
+// more specific siblings and are intentionally out of the hub AND must stay in
+// sync with SITEMAP_PATHS and routes.ts — the canary guards all three together
+// (issue #1481). Routes still register the losers so they render 200.
 const COMPARE_PAGES = [
   "compare/magicbrief",
   "compare/meta-ad-library",
-  "compare/visualping",
   "compare/visualping-ad-library",
   "compare/spyland",
   "compare/pulzifi",
-  "compare/foreplay",
   "compare/foreplay-spyder",
   "compare/panoramata",
   "compare/adspyder",

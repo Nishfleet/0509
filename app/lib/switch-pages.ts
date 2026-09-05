@@ -318,7 +318,7 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
           "Visualping watches any public URL. Five to Nine is built around competitor ads and landing pages, not generic website pixels.",
       },
     ],
-    relatedComparePath: "/compare/visualping",
+    relatedComparePath: "/compare/visualping-ad-library",
     extraSection: {
       kicker: "No phantom changes",
       heading: "What we refuse to alert on.",

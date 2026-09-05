@@ -177,11 +177,11 @@ describe("shared marketing footer", () => {
       "/terms",
       "/compare/magicbrief",
       "/compare/meta-ad-library",
-      "/compare/visualping",
+      // Generic /compare/visualping and /compare/foreplay are not in the
+      // footer (issue #1481): duplicates canonicalizing to the two below.
       "/compare/visualping-ad-library",
       "/compare/spyland",
       "/compare/pulzifi",
-      "/compare/foreplay",
       "/compare/foreplay-spyder",
       "/compare/panoramata",
       "/compare/adspyder",
