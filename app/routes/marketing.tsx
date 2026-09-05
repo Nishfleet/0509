@@ -19,6 +19,7 @@ import { noPricingPreview, pricingPreviewWithinBound } from "~/lib/pricing-previ
 import type { RootLoaderData } from "~/root";
 import { pickFeaturedAdsInternalLink, type IndexableAdsLink } from "~/lib/ads-internal-links";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
+import { dedupeTickerBodies } from "~/lib/ticker-dedup";
 
 export { planIntentPath, valueMathLabel, billingFaqJsonLdEntries } from "~/components/pricing-section";
 export type { LocalPricingPreview } from "~/components/pricing-section";
@@ -394,7 +395,14 @@ export default function MarketingRoute() {
     };
   }, []);
 
-  const tickerEvents = buildTickerEvents(proofBrief);
+  const tickerEvents = dedupeTickerBodies(
+    // Spread the tuple before dedup so the row element type stays a plain
+    // union (a `readonly` 2-vs-3-tuple union over-constrains generic
+    // inference). Dedup is a no-op on today's static rows but stays wired so
+    // the home belt would never repeat a body if it ever sources ad text.
+    [...buildTickerEvents(proofBrief)],
+    (event) => event[1],
+  );
 
   const tickerRun = (
     <span className="ld-ticker-run">
