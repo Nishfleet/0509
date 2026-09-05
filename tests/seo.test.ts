@@ -34,13 +34,16 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain(
       "<loc>https://0509.io/compare/meta-ad-library</loc>",
     );
-    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/visualping</loc>");
+    // /compare/visualping and /compare/foreplay are canonicalized duplicates
+    // of their more specific siblings and are DROPPED from the sitemap (issue
+    // #1481). Only the winners stay listed.
+    expect(sitemap?.body).not.toContain("<loc>https://0509.io/compare/visualping</loc>");
     expect(sitemap?.body).toContain(
       "<loc>https://0509.io/compare/visualping-ad-library</loc>",
     );
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/spyland</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/pulzifi</loc>");
-    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/foreplay</loc>");
+    expect(sitemap?.body).not.toContain("<loc>https://0509.io/compare/foreplay</loc>");
     expect(sitemap?.body).toContain(
       "<loc>https://0509.io/compare/foreplay-spyder</loc>",
     );

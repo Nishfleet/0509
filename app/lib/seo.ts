@@ -31,6 +31,22 @@ export function canonicalLinks(pathname: string) {
 }
 
 /**
+ * Canonical consolidation for the duplicate /compare/* pairs (issue #1481).
+ *
+ * Every entry maps a loser URL to the winner it must canonicalize to. The
+ * winners (`visualping-ad-library`, `foreplay-spyder`) name the narrower
+ * buyer intent, so the generic `vs Visualping` / `vs Foreplay` pages point
+ * their `rel="canonical"` at them. Losers stay live HTTP-200 pages (existing
+ * backlinks and /switch links keep working) but carry the winner canonical
+ * and are dropped from the sitemap, so Google consolidates each pair instead
+ * of splitting PageRank between two near-identical SERP targets.
+ */
+export const COMPARE_CANONICAL_TARGETS: Readonly<Record<string, string>> = {
+  "/compare/visualping": "/compare/visualping-ad-library",
+  "/compare/foreplay": "/compare/foreplay-spyder",
+};
+
+/**
  * Reciprocal hreflang set for the sneaker-resale cluster, including self and
  * x-default (English). Google ignores one-way annotations.
  * https://developers.google.com/search/docs/specialty/international/localized-versions
@@ -455,11 +471,13 @@ export const SITEMAP_PATHS = [
   "/compare",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
-  "/compare/visualping",
+  // /compare/visualping and /compare/foreplay are DROPPED from the sitemap
+  // (issue #1481): each is a duplicate of its more specific sibling
+  // (visualping-ad-library / foreplay-spyder) and canonicals to it. The
+  // winner of each pair stays listed below.
   "/compare/visualping-ad-library",
   "/compare/spyland",
   "/compare/pulzifi",
-  "/compare/foreplay",
   "/compare/foreplay-spyder",
   "/compare/panoramata",
   "/compare/adspyder",
@@ -580,11 +598,9 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/compare": { changefreq: "weekly", priority: "0.8" },
   "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/compare/meta-ad-library": { changefreq: "weekly", priority: "0.7" },
-  "/compare/visualping": { changefreq: "weekly", priority: "0.7" },
   "/compare/visualping-ad-library": { changefreq: "weekly", priority: "0.7" },
   "/compare/spyland": { changefreq: "weekly", priority: "0.7" },
   "/compare/pulzifi": { changefreq: "weekly", priority: "0.7" },
-  "/compare/foreplay": { changefreq: "weekly", priority: "0.7" },
   "/compare/foreplay-spyder": { changefreq: "weekly", priority: "0.7" },
   "/compare/panoramata": { changefreq: "weekly", priority: "0.7" },
   "/compare/adspyder": { changefreq: "weekly", priority: "0.7" },

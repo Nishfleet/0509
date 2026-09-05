@@ -11,6 +11,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  COMPARE_CANONICAL_TARGETS,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -28,7 +29,11 @@ export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.serv
 const pageDescription =
   "Visualping monitors public pages for visual, text, and element changes. Five to Nine is built around competitor ad and landing-page moves with source-backed proof.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/visualping");
+// Duplicate of /compare/visualping-ad-library (#1481): the generic vs-page
+// canonicalizes to the narrower ad-library comparison and is absent from the
+// sitemap. The page still renders HTTP 200 so existing links never 404.
+export const links: LinksFunction = () =>
+  canonicalLinks(COMPARE_CANONICAL_TARGETS["/compare/visualping"]);
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
