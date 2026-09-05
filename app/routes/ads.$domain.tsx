@@ -229,6 +229,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     computeBrandPageAggressionScore,
     loadBrandPageCacheSnapshot,
     resolveBrandPageFreshness,
+    resolveCanonicalBrandPageDomain,
   } = await import("~/lib/brand-page.server");
   const { defaultCountryForVisitor } = await import("~/lib/countries");
   const { loadOfferTimeline } = await import("~/lib/offer-timeline.server");
@@ -238,6 +239,34 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   );
 
   let snapshot: Awaited<ReturnType<typeof loadBrandPageCacheSnapshot>> = null;
+
+  // Issue #1446 — an alias brand page (the natural base domain a buyer types,
+  // e.g. ridge.com / oura.com) must not compete with its populated product
+  // page for the same brand's ads and link equity. When the canonical (product)
+  // page is actually populated, 301 the alias onto it (consolidating sitemap
+  // and link equity); when it is NOT populated we fall through and render the
+  // alias normally — the anti-thin-content guard keeps a weak alias page
+  // noindex, and we never redirect to an empty target (criterion 4).
+  const canonicalResolution = resolveCanonicalBrandPageDomain(brand.domain);
+  if (canonicalResolution.isAlias && canonicalResolution.canonical !== brand.domain) {
+    let canonicalSnapshot: Awaited<ReturnType<typeof loadBrandPageCacheSnapshot>> = null;
+    try {
+      canonicalSnapshot = await loadBrandPageCacheSnapshot(env, {
+        domain: canonicalResolution.canonical,
+        visitorCountry,
+      });
+    } catch (error) {
+      // A canonical-alias cache-read hiccup must degrade to the normal alias
+      // render path, never a 500 and never a live-provider fallback.
+      console.warn("Brand page canonical alias cache read failed; falling through.", {
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
+    if (canonicalSnapshot) {
+      throw redirect(`/ads/${encodeURIComponent(canonicalResolution.canonical)}`, 301);
+    }
+  }
+
   try {
     snapshot = await loadBrandPageCacheSnapshot(env, {
       domain: brand.domain,
