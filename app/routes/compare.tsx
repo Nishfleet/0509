@@ -31,7 +31,17 @@ const COMPARE_PAGES = [
   { slug: "adspyder", label: "Five to Nine vs AdSpyder", href: "/compare/adspyder" },
 ] as const;
 
-export default function CompareIndexRoute() {
+export default function CompareIndexRoute({
+  localePrefix,
+}: { localePrefix?: string } = {}) {
+  // Locale-prefixed compare hubs (issue #1563) pass their locale prefix so a
+  // non-EN visitor following the index stays in the locale (hrefs like
+  // `/de/compare/magicbrief` instead of `/compare/magicbrief`). EN `/compare`
+  // passes `undefined` and keeps the bare `/compare/*` children exactly as
+  // before.
+  const hrefFor = (page: (typeof COMPARE_PAGES)[number]) =>
+    localePrefix ? `${localePrefix}${page.href}` : page.href;
+
   return (
     <main className="f9-home">
       <script
@@ -70,7 +80,7 @@ export default function CompareIndexRoute() {
         <ul className="ld-compare-hub" aria-label="Compare pages">
           {COMPARE_PAGES.map((page) => (
             <li key={page.slug}>
-              <Link to={page.href}>{page.label}</Link>
+              <Link to={hrefFor(page)}>{page.label}</Link>
             </li>
           ))}
         </ul>

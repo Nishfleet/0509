@@ -107,6 +107,26 @@ export default [
     route("changelog", "routes/$locale.changelog.tsx"),
     route("trust", "routes/$locale.trust.tsx"),
     route("compare", "routes/$locale.compare.tsx"),
+    // BET 5 compare child routes + BET 8 switch child routes under every
+    // locale prefix (issue #1563). Each re-exports the EN sibling's meta and
+    // component so the locale cluster stays in lockstep with the EN surface;
+    // canonical consolidates on the EN /compare/<vendor> (or /switch/<vendor>)
+    // per #1562's canonicalisation rule. Before this the locale hub links 200'd
+    // but every locale-prefixed child 404'd, so a non-EN visitor following /
+    // de/compare to a vendor fell back to English or hit a dead route.
+    route("compare/magicbrief", "routes/$locale.compare.magicbrief.tsx"),
+    route("compare/meta-ad-library", "routes/$locale.compare.meta-ad-library.tsx"),
+    route("compare/visualping", "routes/$locale.compare.visualping.tsx"),
+    route("compare/visualping-ad-library", "routes/$locale.compare.visualping-ad-library.tsx"),
+    route("compare/spyland", "routes/$locale.compare.spyland.tsx"),
+    route("compare/pulzifi", "routes/$locale.compare.pulzifi.tsx"),
+    route("compare/foreplay", "routes/$locale.compare.foreplay.tsx"),
+    route("compare/foreplay-spyder", "routes/$locale.compare.foreplay-spyder.tsx"),
+    route("compare/panoramata", "routes/$locale.compare.panoramata.tsx"),
+    route("compare/adspyder", "routes/$locale.compare.adspyder.tsx"),
+    route("switch/magicbrief", "routes/$locale.switch.magicbrief.tsx"),
+    route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),
+    route("switch/visualping", "routes/$locale.switch.visualping.tsx"),
   ]),
   route("team/accept", "routes/team.accept.tsx"),
 	route("share/:token/pdf", "routes/share.$token.pdf.ts"),
