@@ -93,7 +93,8 @@ import type { AppEnv } from "~/lib/env.server";
 import { snapshotRowHasCompleteProof, type LandingPageSnapshotRow } from "~/lib/offer-timeline.server";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
-import { renderSitemapXml, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
+import { renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
+import { BUYER_SURFACE_LOCALE_IDS, type BuyerSurfaceLocaleId } from "~/lib/locale-markets";
 import type { AdRecord } from "~/lib/types";
 
 /**
@@ -439,17 +440,58 @@ function isMissingSitemapTableError(error: unknown): boolean {
 }
 
 /**
+ * Static sitemap entries scoped to a single buyer-surface locale: only paths
+ * rooted under `/<locale>/` (issue #1561). Each `/<locale>/sitemap.xml` is a
+ * pure static feed — brand (`/ads/:domain`) and timeline (`/timeline/:domain`)
+ * entries are EN-prefixed and belong to the root sitemap only, so they never
+ * leak into a locale feed and can never duplicate a root `<loc>`.
+ */
+export function staticSitemapEntriesForLocale(
+  locale: BuyerSurfaceLocaleId,
+): readonly SitemapEntry[] {
+  const prefix = `/${locale}/`;
+  return SITEMAP_STATIC_ENTRIES.filter((entry) => entry.path.startsWith(prefix));
+}
+
+/**
+ * Full locale-scoped sitemap body for one buyer-surface locale. Purely static
+ * (no D1 read) — the only locales that ever serve a locale sitemap are
+ * `BUYER_SURFACE_LOCALE_IDS` (de, ja, pt-br, fr, es), gated by the worker.
+ */
+export function buildLocaleSitemapXml(locale: BuyerSurfaceLocaleId): string {
+  return renderSitemapXml(staticSitemapEntriesForLocale(locale));
+}
+
+/**
+ * Sitemap file shape consumed by workers/app.ts for a locale-prefixed
+ * `/<locale>/sitemap.xml`. Same cache policy as the root sitemap.
+ */
+export async function publicLocaleSitemapFile(
+  locale: BuyerSurfaceLocaleId,
+): Promise<{ body: string; contentType: string; cacheControl: string }> {
+  return {
+    body: buildLocaleSitemapXml(locale),
+    contentType: "application/xml; charset=utf-8",
+    cacheControl: "public, max-age=3600",
+  };
+}
+
+/**
  * Full production sitemap body: static funnel entries first (with changefreq
  * and priority), then the dynamic indexable brand-page entries (with lastmod
  * from their cache fetched_at), then the dynamic indexable /timeline/:domain
- * entries (with lastmod from their newest snapshot capture).
+ * entries (with lastmod from their newest snapshot capture). The root feed
+ * deliberately EXCLUDES every buyer-surface locale-prefixed path (those live
+ * only in their own `/<locale>/sitemap.xml` — see
+ * `ROOT_SITEMAP_STATIC_ENTRIES` in app/lib/seo.ts) so no URL is listed twice
+ * across the root and locale sitemaps (issue #1561).
  */
 export function buildSitemapXml(
   brandEntries: readonly SitemapEntry[],
   timelineEntries: readonly SitemapEntry[] = [],
 ): string {
   return renderSitemapXml([
-    ...SITEMAP_STATIC_ENTRIES,
+    ...ROOT_SITEMAP_STATIC_ENTRIES,
     ...brandEntries,
     ...timelineEntries,
   ]);

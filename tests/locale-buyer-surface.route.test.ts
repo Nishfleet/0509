@@ -8,6 +8,7 @@ import {
   isBuyerSurfaceLocaleId,
 } from "~/lib/locale-markets";
 import { buyerSurfaceHreflangLinks, publicSeoFileForPathname } from "~/lib/seo";
+import { buildLocaleSitemapXml } from "~/lib/sitemap.server";
 
 beforeEach(() => {
   vi.resetModules();
@@ -133,27 +134,30 @@ describe("locale buyer-surface layout (issue #1501)", () => {
 });
 
 describe("locale buyer-surface sitemap + worker wiring", () => {
-  it("includes every buyer-surface locale subpath (except / and /sitemap.xml)", () => {
-    const sitemap = publicSeoFileForPathname("/sitemap.xml");
-    expect(sitemap).not.toBeNull();
-    const body = sitemap?.body ?? "";
+  it("each /<locale>/sitemap.xml includes every buyer-surface locale subpath (except / and /sitemap.xml)", () => {
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+      const body = buildLocaleSitemapXml(locale);
+      expect(body).toContain("<urlset");
       for (const path of BUYER_SURFACE_PATHS) {
         if (path === "/" || path === "/sitemap.xml") continue;
         const expected = `<loc>https://0509.io/${locale}${path}</loc>`;
-        expect(body, `sitemap missing ${expected}`).toContain(expected);
+        expect(body, `${locale} sitemap missing ${expected}`).toContain(expected);
       }
     }
   });
 
-  it("serves the same sitemap body for /<locale>/sitemap.xml", () => {
-    const en = publicSeoFileForPathname("/sitemap.xml");
-    expect(en).not.toBeNull();
-    // Worker-level wiring guarantees the same body for /<locale>/sitemap.xml
-    // (see workers/app.ts). The lib helper only renders /sitemap.xml, so
-    // verify the body is reusable as-is by checking key cluster entries.
-    expect(en?.body).toContain("<urlset");
-    expect(en?.body).toContain(`<loc>https://0509.io/de/pricing</loc>`);
+  it("serves a LOCALE-SCOPED body for /<locale>/sitemap.xml, never the root body", () => {
+    // Issue #1561: the locale sitemaps used to mirror the root byte-for-byte
+    // (each listed all 102 URLs with no locale filter), fragmenting crawl
+    // budget and splitting PageRank. Now each locale sitemap carries ONLY
+    // /<locale>/-prefixed URLs, and the root feed excludes them entirely.
+    const en = buildLocaleSitemapXml("de");
+    expect(en).toContain("<urlset");
+    expect(en).toContain(`<loc>https://0509.io/de/pricing</loc>`);
+    // The root body contains the EN (non-prefixed) /pricing, not /de/pricing.
+    const root = publicSeoFileForPathname("/sitemap.xml")?.body ?? "";
+    expect(root).toContain("<loc>https://0509.io/pricing</loc>");
+    expect(root).not.toContain("<loc>https://0509.io/de/pricing</loc>");
   });
 });
 

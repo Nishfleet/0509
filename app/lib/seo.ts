@@ -768,6 +768,25 @@ export const SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] = SITEMAP_PATHS.map
 );
 
 /**
+ * Root sitemap static entries: the EN funnel set MINUS every buyer-surface
+ * locale-prefixed path (issue #1561). Each `/<locale>/...` path lives only in
+ * its own `/<locale>/sitemap.xml` (see `staticSitemapEntriesForLocale` in
+ * app/lib/sitemap.server.ts), so a URL is never listed twice across the root
+ * and locale sitemaps — which would fragment crawl budget and split PageRank
+ * across byte-identical duplicates. `/ja/sneaker-resale` and
+ * `/pt-br/sneaker-resale` are covered by their served `/ja/sitemap.xml` /
+ * `/pt-br/sitemap.xml`; `/de/sneaker-resale` by `/de/sitemap.xml`. The bare
+ * `/{locale}` index is (and stays) absent — its canonical points at `/`.
+ */
+export const ROOT_SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] =
+  SITEMAP_STATIC_ENTRIES.filter(
+    (entry) =>
+      !BUYER_SURFACE_LOCALE_IDS.some((locale) =>
+        entry.path.startsWith(`/${locale}/`),
+      ),
+  );
+
+/**
  * Render a sitemap urlset from an ordered entry list. Single builder shared by
  * the static fallback (`SITEMAP_XML` below, used when there is no D1 / no
  * dynamic data) and the production sitemap, which appends dynamic /ads/:domain
@@ -808,7 +827,7 @@ ${urlBlocks.join("\n")}
 // bounded cache read at sitemap-render time (see app/lib/sitemap.server.ts);
 // sitemap generation never triggers live discovery. This static XML is the
 // no-DB fallback only.
-const SITEMAP_XML = renderSitemapXml(SITEMAP_STATIC_ENTRIES);
+const SITEMAP_XML = renderSitemapXml(ROOT_SITEMAP_STATIC_ENTRIES);
 
 // Keep /share/ CRAWLABLE on purpose: shared reports are de-indexed via the
 // `x-robots-tag: noindex, nofollow` header set in workers/security-headers.ts,
