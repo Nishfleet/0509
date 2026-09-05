@@ -41,7 +41,7 @@ describe("competitor monitoring category page", () => {
     const source = readFileSync(routePath, "utf8");
 
     expect(source).toContain("f9-home");
-    expect(source).toContain("<MarketingNav />");
+    expect(source).toMatch(/<MarketingNav\b[^>]*\/>/);
     expect(source).toContain("<MarketingFooter />");
     expect(source).toContain('className="ld-hero"');
     expect(source).not.toContain('<footer className="ld-footer">');

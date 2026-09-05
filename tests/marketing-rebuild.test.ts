@@ -150,7 +150,7 @@ describe("marketing rebuild", () => {
   });
 
   it("uses the Five to Nine wordmark and icon-style CTA arrows", () => {
-    expect(marketingRoute).toContain("<MarketingNav />");
+    expect(marketingRoute).toMatch(/<MarketingNav\b[^>]*\/>/);
     expect(marketingNav).toContain("<BrandWordmark meta={MARKETING_TAGLINE} />");
     expect(brandWordmark).toContain("<span>five</span>");
     expect(brandWordmark).toContain('className="f9-wordmark-bridge">to</span>');
@@ -292,7 +292,7 @@ describe("marketing rebuild", () => {
   });
 
   it("keeps the primary marketing destinations reachable on narrow screens", () => {
-    expect(marketingRoute).toContain("<MarketingNav />");
+    expect(marketingRoute).toMatch(/<MarketingNav\b[^>]*\/>/);
     expect(marketingNav).toContain('aria-label="Primary"');
     expect(marketingNav).toContain("Search preview");
     expect(marketingNav).toContain("Proof brief");

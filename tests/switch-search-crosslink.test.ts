@@ -142,7 +142,11 @@ describe("/search switch-target card", () => {
     const markup = renderToStaticMarkup(createElement(SearchRoute));
 
     expect(markup).not.toMatch(/Switching from visualping/i);
-    expect(markup).not.toMatch(/\/switch\/visualping/);
+    // The card is the conditional surface (issue 1554); the always-present
+    // /switch/* nav strip (issue 1466) legitimately links every switch page
+    // regardless of the searched domain, so target the card container only.
+    expect(markup).not.toMatch(/class="f9-switch-cta"/);
+    expect(markup).not.toMatch(/utm_campaign=switch_to_0509/);
   });
 });
 

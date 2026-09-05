@@ -108,27 +108,28 @@ describe("MarketingNav (shared public nav)", () => {
 		const adspyder = readFileSync("app/routes/compare.adspyder.tsx", "utf8");
 		const switchLanding = readFileSync("app/components/switch-landing.tsx", "utf8");
 
-		expect(marketing).toContain("<MarketingNav />");
-		expect(magicbrief).toContain("<MarketingNav />");
-		expect(metaLibrary).toContain("<MarketingNav />");
-		expect(visualping).toContain("<MarketingNav />");
-		expect(visualpingAdLibrary).toContain("<MarketingNav />");
-		expect(spyland).toContain("<MarketingNav />");
-		expect(pulzifi).toContain("<MarketingNav />");
-		expect(foreplay).toContain("<MarketingNav />");
-		expect(foreplaySpyder).toContain("<MarketingNav />");
-		expect(panoramata).toContain("<MarketingNav />");
-		expect(adspyder).toContain("<MarketingNav />");
-		expect(switchLanding).toContain("<MarketingNav />");
+		expect(marketing).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(magicbrief).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(metaLibrary).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(visualping).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(visualpingAdLibrary).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(spyland).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(pulzifi).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(foreplay).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(foreplaySpyder).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(panoramata).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(adspyder).toMatch(/<MarketingNav\b[^>]*\/>/);
+		expect(switchLanding).toMatch(/<MarketingNav\b[^>]*\/>/);
 
 		// The legal/doc shell no longer improvises its own chrome: its header IS
-		// MarketingNav, so the tagline and the Pricing/Search/Sign in links are
-		// byte-identical and no public section is stranded.
+		// MarketingNav with switch links suppressed, so the tagline and the
+		// Pricing/Search/Sign in links are byte-identical and no public section
+		// is stranded.
 		await mockRouter();
 		const { MarketingNav } = await import("~/components/marketing-nav");
 		const { PublicDocHeader } = await import("~/components/public-doc-shell");
 		expect(renderToStaticMarkup(createElement(PublicDocHeader))).toBe(
-			renderToStaticMarkup(createElement(MarketingNav)),
+			renderToStaticMarkup(createElement(MarketingNav, { showSwitchLinks: false })),
 		);
 	});
 });
