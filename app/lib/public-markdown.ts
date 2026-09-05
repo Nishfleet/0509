@@ -33,10 +33,12 @@ const PUBLIC_MARKDOWN_PATH_SET = new Set<string>(PUBLIC_MARKDOWN_PATHS);
 // a path there without describing it here is a type error. Dynamic /ads/:domain
 // brand pages are appended at request time from the same indexable set the
 // sitemap emits — see buildLlmsText — so noindex shells never appear here.
-const LLMS_PAGE_DETAILS: Record<
-  (typeof SITEMAP_PATHS)[number],
-  { title: string; description: string }
-> = {
+// No type annotation: TS infers the literal object type (all actual keys).
+// The _llmsDetailsCoverSitemap check below restores the guarantee that every
+// SITEMAP_PATHS entry has a description here. A plain Record<SITEMAP_PATHS[number], …>
+// annotation was loosened because it rejected non-sitemap locale entries kept
+// as dead data (issue #1570 removed locale paths from SITEMAP_PATHS).
+const LLMS_PAGE_DETAILS = {
   "/": {
     title: "Five to Nine",
     description:
@@ -719,6 +721,14 @@ const LLMS_PAGE_DETAILS: Record<
     description: "Terms of service.",
   },
 };
+
+// Compile-time check: every sitemap path has llms.txt details here. The
+// Record<string, …> annotation above allows extra non-sitemap entries (locale
+// pages kept as dead data); this assertion restores the guarantee that no
+// SITEMAP_PATHS entry is missing a description (issue #1570).
+const _llmsDetailsCoverSitemap: {
+  [K in (typeof SITEMAP_PATHS)[number]]: { title: string; description: string };
+} = LLMS_PAGE_DETAILS;
 
 export const LLMS_PAGES = SITEMAP_PATHS.map((path) => ({
   path,

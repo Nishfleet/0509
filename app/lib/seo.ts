@@ -1,4 +1,4 @@
-import { BUYER_SURFACE_CHILD_PATHS, BUYER_SURFACE_LOCALE_IDS, SNEAKER_RESALE_MARKETS } from "~/lib/locale-markets";
+import { BUYER_SURFACE_LOCALE_IDS, SNEAKER_RESALE_MARKETS } from "~/lib/locale-markets";
 import {
   PUBLISHED_BUNDLE_PRICES_EUR,
   PUBLISHED_FREE_PLAN_OFFER,
@@ -58,12 +58,12 @@ export function sneakerResaleHreflangLinks() {
   return [
     ...SNEAKER_RESALE_MARKETS.map((market) => ({
       rel: "alternate" as const,
-      hrefLang: market.hreflang,
+      hreflang: market.hreflang,
       href: canonicalUrl(market.pathname),
     })),
     {
       rel: "alternate" as const,
-      hrefLang: "x-default",
+      hreflang: "x-default",
       href: canonicalUrl("/sneaker-resale"),
     },
   ];
@@ -88,12 +88,12 @@ export function buyerSurfaceHreflangLinks(splat: string) {
   return [
     ...BUYER_SURFACE_LOCALE_IDS.map((locale) => ({
       rel: "alternate" as const,
-      hrefLang: locale,
+      hreflang: locale,
       href: canonicalUrl(splat === "" ? `/${locale}` : `/${locale}/${splat}`),
     })),
     {
       rel: "alternate" as const,
-      hrefLang: "x-default",
+      hreflang: "x-default",
       href: canonicalUrl(enPath),
     },
   ];
@@ -647,37 +647,17 @@ export const SITEMAP_PATHS = [
   "/de/sneaker-resale",
   "/ja/sneaker-resale",
   "/pt-br/sneaker-resale",
-  // Locale-prefixed buyer-surface cluster (issue #1501). Each locale ships
-  // the same set of buyer surfaces the EN locale serves; canonicals point
-  // back at the EN version so duplicate content does not fragment search
-  // ranking. Built from `BUYER_SURFACE_LOCALE_IDS` so a new locale added
-  // there automatically widens the cluster without a separate edit. The
-  // bare `/{locale}` index (e.g. `/de`) is intentionally NOT in this list:
-  // it carries the same canonical as `/`, so listing it twice would emit a
-  // duplicate `<loc>` for the same canonical target.
-  ...BUYER_SURFACE_LOCALE_IDS.flatMap((locale) => [
-    `/${locale}/pricing`,
-    `/${locale}/help`,
-    `/${locale}/docs`,
-    `/${locale}/api/docs`,
-    `/${locale}/status`,
-    `/${locale}/changelog`,
-    `/${locale}/trust`,
-    `/${locale}/compare`,
-    // BET 5 compare + BET 8 switch child routes (issue #1563): every
-    // locale ships the same 11 child surfaces, with canonicals pointing
-    // back at EN so the locale cluster cannot fragment search ranking.
-    // The /compare/visualping and /compare/foreplay duplicates are out of
-    // the child set (issue #1481) so no locale variant stays indexed.
-    ...BUYER_SURFACE_CHILD_PATHS.map((child) => `/${locale}${child}`),
-    // First-value search funnel + trust surfaces (issue 1578). Search is
-    // the strongest first-value purchase-intent moment, so the localised
-    // funnel must be crawlable and locale-targetable end to end.
-    `/${locale}/search`,
-    `/${locale}/competitor-monitoring`,
-    `/${locale}/capture-rules`,
-    `/${locale}/ad-aggression`,
-  ]),
+  // Issue #1570: the locale-prefixed buyer-surface cluster (`/de/pricing`,
+  // `/ja/help`, `/de/compare/magicbrief`, `/de/search`, `/de/ads/nike.com`,
+  // ...) was REMOVED from the sitemap. Those pages serve byte-identical
+  // English copy with `lang="en"` and `canonical` -> the EN twin, so
+  // listing them as dozens of distinct `<loc>` entries told Google they
+  // were dozens of indexable surfaces — a duplicate-content doorway
+  // pattern that burned crawl budget and split PageRank. They stay
+  // reachable (200, canonical->EN) but are no longer advertised as
+  // indexable. The genuinely translated sneaker-resale cluster
+  // (`/de/sneaker-resale` etc., listed above) stays in the sitemap because
+  // its content differs per locale.
   // Canonical Ad Aggression Score formula page (issue #1263). The old
   // /methodology/ad-aggression-score path now 301-redirects here so any
   // indexed link keeps its equity; /proof is the legacy capture-rules
@@ -733,38 +713,6 @@ export interface SitemapEntry {
  * timestamp, and inventing one would be a false freshness claim. Dynamic
  * /ads/:domain brand pages carry a real lastmod from their cache fetched_at.
  */
-/**
- * Locale-prefixed buyer-surface cluster (issue #1501): each locale in
- * `BUYER_SURFACE_LOCALE_IDS` ships the same set of buyer surfaces the EN
- * locale serves, with the same priority/changefreq tier as the EN entry.
- * The bare `/<locale>` index intentionally carries no entry — its canonical
- * is `/` and listing it twice would emit a duplicate `<loc>` for the same
- * canonical target.
- */
-const LOCALE_BUYER_SURFACE_PRIORITY: Record<string, { changefreq: string; priority: string }> =
-  Object.fromEntries(
-    BUYER_SURFACE_LOCALE_IDS.flatMap((locale) => [
-      [`/${locale}/pricing`, { changefreq: "weekly", priority: "0.8" }],
-      [`/${locale}/help`, { changefreq: "monthly", priority: "0.5" }],
-      [`/${locale}/docs`, { changefreq: "monthly", priority: "0.5" }],
-      [`/${locale}/api/docs`, { changefreq: "monthly", priority: "0.5" }],
-      [`/${locale}/status`, { changefreq: "monthly", priority: "0.5" }],
-      [`/${locale}/changelog`, { changefreq: "weekly", priority: "0.6" }],
-      [`/${locale}/trust`, { changefreq: "yearly", priority: "0.3" }],
-      [`/${locale}/compare`, { changefreq: "weekly", priority: "0.8" }],
-      // Compare/switch child pages mirror the EN child tier (weekly, 0.7).
-      ...BUYER_SURFACE_CHILD_PATHS.map((child) => [
-        `/${locale}${child}`,
-        { changefreq: "weekly", priority: "0.7" },
-      ] as const),
-      // First-value search funnel + supporting trust/proof surfaces (issue 1578).
-      [`/${locale}/search`, { changefreq: "weekly", priority: "0.9" }],
-      [`/${locale}/competitor-monitoring`, { changefreq: "weekly", priority: "0.8" }],
-      [`/${locale}/capture-rules`, { changefreq: "monthly", priority: "0.5" }],
-      [`/${locale}/ad-aggression`, { changefreq: "monthly", priority: "0.6" }],
-    ]),
-  );
-
 const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
   "/": { changefreq: "daily", priority: "1.0" },
   "/search": { changefreq: "weekly", priority: "0.9" },
@@ -797,7 +745,6 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/trust": { changefreq: "yearly", priority: "0.3" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },
   "/terms": { changefreq: "yearly", priority: "0.3" },
-  ...LOCALE_BUYER_SURFACE_PRIORITY,
 };
 
 export const SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] = SITEMAP_PATHS.map(
