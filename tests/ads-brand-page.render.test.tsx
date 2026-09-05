@@ -517,10 +517,13 @@ describe("/ads/:domain — Case File render", () => {
       populated({ brandOwnedAdCount: 0, checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
 
-    // No brand-owned claim anywhere — the headline attributes to the domain.
+    // No brand-owned claim anywhere. The score card renders (the capture has
+    // verified link evidence), so the headline speaks the verified "linking
+    // to" phrasing, never the hedged "pointing at" (issue #1447).
     expect(stale).toContain("The last check found ");
     expect(stale).toContain("6 Meta ads");
-    expect(stale).toContain("pointing at nike.com");
+    expect(stale).toContain("linking to nike.com");
+    expect(stale).not.toContain("pointing at nike.com");
     expect(stale).toContain("nike.com · on record");
     expect(stale).not.toContain("Nike was running ");
     expect(stale).not.toContain("Nike is running ");
@@ -528,7 +531,8 @@ describe("/ads/:domain — Case File render", () => {
 
     // Fresh capture: same attribution, honest present tense for the capture.
     expect(fresh).toContain("6 Meta ads");
-    expect(fresh).toContain("are pointing at nike.com right now.");
+    expect(fresh).toContain("are linking to nike.com right now.");
+    expect(fresh).not.toContain("are pointing at nike.com");
     expect(fresh).toContain("Other advertisers are testing");
     expect(fresh).toContain("nike.com · live");
 
@@ -538,6 +542,40 @@ describe("/ads/:domain — Case File render", () => {
     );
     expect(stale).toContain("The advertisers linking to nike.com will change their next ad.");
     expect(stale).not.toContain("Nike's real ads");
+  });
+
+  it("regression: the description hedge and the Aggression Score card are mutually exclusive (issue #1447)", async () => {
+    // The two states of the /ads/:domain page must never co-occur: a page
+    // that renders the score card (verified link evidence exists) must not
+    // say "could not verify" in its description, and a page whose description
+    // hedges must not render the score card. This is the gate that would have
+    // caught the merged hedge PR (hedge added to the verified none-brand-owned
+    // state while the score card kept rendering on it).
+    const scored = await render(populated({ brandOwnedAdCount: 0 }));
+    const strip = await render(
+      populated({
+        brandOwnedAdCount: 0,
+        verifiedLinkCount: 6,
+        aggression: null,
+        changeEvents: [],
+      }),
+    );
+
+    // State 1 — score card renders: no hedge anywhere (description JSON-LD
+    // ships from the same brandPageDescription as the meta description).
+    expect(scored).toContain("f9-ads-score-num");
+    expect(scored).not.toContain("could not verify from the cached capture");
+    // H1 pairing: verified "linking to" H1, never the hedged "pointing at".
+    const scoredH1 = scored.match(/<h1[^>]*id="brand-ads-title"[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "";
+    expect(scoredH1).toContain("linking to nike.com");
+    expect(scoredH1).not.toContain("pointing at nike.com");
+
+    // State 2 — no score card (the cache-miss strip): hedge present, no score.
+    expect(strip).not.toContain("f9-ads-score-num");
+    expect(strip).toContain("could not verify from the cached capture");
+    const stripH1 = strip.match(/<h1[^>]*id="brand-ads-title"[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "";
+    expect(stripH1).toContain("pointing at nike.com");
+    expect(stripH1).not.toContain("linking to nike.com");
   });
 
   it("names the split when the cache mixes the brand's own ads with other advertisers'", async () => {
