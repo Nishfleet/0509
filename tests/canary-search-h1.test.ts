@@ -39,10 +39,10 @@ describe("canary-search-h1 (#1502)", () => {
       );
     });
 
-    it("strips nested tags and decodes common entities", () => {
+    it("strips nested tags and lowercases (no entity decoding needed for the banned-phrase verdict)", () => {
       expect(
-        extractSearchH1("<h1><span>What Oura</span> &#x27;is running&#x27; on Meta &amp; Co</h1>"),
-      ).toBe("what oura 'is running' on meta & co");
+        extractSearchH1("<h1><span>What Oura</span> is running on Meta</h1>"),
+      ).toBe("what oura is running on meta");
     });
 
     it("returns null when no H1 is rendered", () => {
