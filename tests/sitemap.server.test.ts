@@ -1049,10 +1049,14 @@ describe("SITEMAP_PATHS", () => {
   });
 
   it("keeps restored money pages in the sitemap and signup out", () => {
+    // /compare/foreplay and /compare/visualping were restored as money pages
+    // (#944/#945) and are now canonicalized duplicates of their more specific
+    // siblings (issue #1481) — the sitemap lists the winners instead. The
+    // losers still render HTTP 200 from their registered routes.
     const moneyPages = [
       "/pricing",
-      "/compare/foreplay",
-      "/compare/visualping",
+      "/compare/foreplay-spyder",
+      "/compare/visualping-ad-library",
       "/compare/pulzifi",
       "/compare/spyland",
     ] as const;
