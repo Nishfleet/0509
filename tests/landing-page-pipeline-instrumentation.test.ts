@@ -7,6 +7,7 @@ import {
   recordExtractStage,
   recordFetchStage,
   recordRenderStage,
+  recordValidityStage,
 } from "~/lib/landing-page-pipeline-instrumentation.server";
 
 describe("landing-page pipeline instrumentation (issue #949)", () => {
@@ -21,6 +22,8 @@ describe("landing-page pipeline instrumentation (issue #949)", () => {
     expect(counters.fetch.outcome).toBeNull();
     expect(counters.fetch.reasonCode).toBeNull();
     expect(counters.render.outcome).toBe("not_attempted");
+    expect(counters.validity.outcome).toBeNull();
+    expect(counters.validity.reasonCode).toBeNull();
     expect(counters.extract.ctaFound).toBe(false);
     expect(counters.extract.priceFound).toBe(false);
     expect(counters.extract.formPresent).toBe(false);
@@ -53,6 +56,29 @@ describe("landing-page pipeline instrumentation (issue #949)", () => {
     recordRenderStage(counters, "succeeded");
     expect(counters.render.outcome).toBe("succeeded");
     expect(counters.render.reasonCode).toBeNull();
+  });
+
+  it("records the capture-validity gate outcome (issue #1565)", () => {
+    const counters = createLandingPagePipelineCounters({
+      scanId: "scan-1",
+      watchlistId: "watch-1",
+      adId: null,
+      extractorVersion: "lp-signals-v5",
+    });
+
+    // "succeeded" and "suppressed" both mean the page was real (gate passed);
+    // only "capture_failed" is a bail-out.
+    recordValidityStage(counters, "succeeded", null);
+    expect(counters.validity.outcome).toBe("passed");
+    expect(counters.validity.reasonCode).toBeNull();
+
+    recordValidityStage(counters, "suppressed", "maintenance_window");
+    expect(counters.validity.outcome).toBe("passed");
+    expect(counters.validity.reasonCode).toBe("maintenance_window");
+
+    recordValidityStage(counters, "capture_failed", "cookie_wall");
+    expect(counters.validity.outcome).toBe("failed");
+    expect(counters.validity.reasonCode).toBe("cookie_wall");
   });
 
   it("records the extract stage field presence", () => {
