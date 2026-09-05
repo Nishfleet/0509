@@ -91,6 +91,20 @@ export default defineConfig({
       },
     },
     {
+      // Issue #1476 run-history proof: seeds a watchlist via the J3 replay
+      // endpoint (one succeeded + one capture_failed capture), loads
+      // /app/watchlists/:id as a signed-in workspace user, and asserts the
+      // human reason label renders with no raw reason-code token.
+      name: "workspace",
+      testDir: "./tests/e2e",
+      testMatch: /watchlist-run-history\.spec\.ts/,
+      timeout: 60_000,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: localBaseURL,
+      },
+    },
+    {
       name: "local-release",
       testMatch: journeyReleaseMatch,
       // Canonical release proof per-test budget. The shared vps-verify
