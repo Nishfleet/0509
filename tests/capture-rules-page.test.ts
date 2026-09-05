@@ -146,4 +146,34 @@ describe("capture-rules page lock (#1264)", () => {
     expect(trustRoute).not.toMatch(/Alerts are backed by captured page text, source links, and screenshots/);
     expect(trustRoute).toMatch(/screenshot joins the proof when the[\s\n]+capture includes one/);
   });
+
+  it("emits FAQPage JSON-LD covering every visible rule block", async () => {
+    const routeSource = readFileSync("app/routes/capture-rules.tsx", "utf8");
+
+    // The route must import the shared FAQPage helper and render it against an
+    // entry list derived from the public rules, so a reversion of the
+    // structured data (or a rule added with no FAQ entry) fails CI.
+    expect(routeSource).toContain("faqPageJsonLd");
+    expect(routeSource).toContain("faqPageJsonLd(captureRulesFaqEntries)");
+    expect(routeSource).toContain("CAPTURE_VALIDITY_PUBLIC_RULES.map");
+
+    // The FAQ entry list must stay in lockstep with the visible rule set: one
+    // entry per rule (title/question = verbatim rule title, answer = the
+    // refused+why copy), plus the guarantee and the "What still alerts" framing.
+    const { captureRulesFaqEntries } = await import("~/routes/capture-rules");
+
+    const questions = new Set(captureRulesFaqEntries.map((entry) => entry.question));
+    expect(captureRulesFaqEntries[0].question).toBe("The guarantee");
+    expect(captureRulesFaqEntries[captureRulesFaqEntries.length - 1].question).toBe(
+      "What still alerts",
+    );
+    expect(captureRulesFaqEntries.length).toBe(CAPTURE_VALIDITY_PUBLIC_RULES.length + 2);
+
+    for (const rule of CAPTURE_VALIDITY_PUBLIC_RULES) {
+      expect(questions).toContain(rule.title);
+      const entry = captureRulesFaqEntries.find((e) => e.question === rule.title)!;
+      expect(entry.answer).toContain(rule.refused);
+      expect(entry.answer).toContain(rule.why);
+    }
+  });
 });
