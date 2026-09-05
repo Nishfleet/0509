@@ -64,6 +64,8 @@
     "scripts/safe-command-output.mjs",
     "scripts/market-signal-snapshot.mjs",
     "scripts/validate-market-signal-report.mjs",
+    "scripts/search-latency-probe.mjs",
+    "scripts/search-latency-regression-guard.mjs",
     "tests/**/*",
     "extension/lib/**/*.mjs",
     "app/**/*",
