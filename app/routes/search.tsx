@@ -29,7 +29,6 @@ import {
 } from "~/components/public-route-state";
 import { SearchResultRow } from "~/components/search/result-row";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
-import { SwitchCtaCard } from "~/components/switch-cta-card";
 import { SubmitButton } from "~/components/submit-button";
 import {
   DetailBlock,
@@ -135,7 +134,6 @@ import {
 } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import { resolveSearchBrandPageDomain } from "~/lib/ads-internal-links";
-import { switchPageForDomain } from "~/lib/switch-pages";
 import { localeSearchPathname } from "~/lib/locale-markets";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
@@ -284,7 +282,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       searchScope: "exact" as const,
       displayDomain: null,
       brandPageLink: null,
-      switchPage: null,
       relevanceApplied: false,
       watchedWatchlist: null,
       ...navFlags,
@@ -315,7 +312,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       searchScope: "exact" as const,
       displayDomain: null,
       brandPageLink: null,
-      switchPage: null,
       relevanceApplied: false,
       watchedWatchlist: null,
       ...navFlags,
@@ -499,7 +495,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           searchScope: "exact" as const,
           displayDomain: null,
           brandPageLink: null,
-          switchPage: null,
           relevanceApplied: false,
           watchedWatchlist: null,
           ...navFlags,
@@ -528,7 +523,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       searchScope: "exact" as const,
       displayDomain: null,
       brandPageLink: null,
-      switchPage: null,
       relevanceApplied: false,
       watchedWatchlist: null,
       ...navFlags,
@@ -721,14 +715,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const brandPageLink = brandPageCandidate
     ? await resolveIndexableBrandPageLinkForDomain(env, brandPageCandidate)
     : null;
-  // Issue 1554 cross-link: when the same searched brand domain is a known
-  // switch target (MagicBrief / Panoramata / Visualping), surface its /switch/*
-  // destination as a card above the fold so the switch page is discoverable at
-  // the highest-intent moment. Matched server-side from the resolved domain
-  // only — never a `<label>.com` guess from the query text.
-  const switchPage = brandPageCandidate
-    ? switchPageForDomain(brandPageCandidate)
-    : null;
 
   return {
     mode: parsed.mode,
@@ -751,7 +737,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     searchScope: searchExecution.searchScope,
     displayDomain: searchExecution.displayDomain,
     brandPageLink,
-    switchPage,
     relevanceApplied: searchExecution.relevanceApplied,
     inputError: null,
     watchedWatchlist,
@@ -1941,14 +1926,6 @@ export default function SearchRoute() {
                   visibleResult.provider ?? visibleResult.source
                 }
               >
-                {data.switchPage ? (
-                  /* Issue 1554: switch-target cross-link card, above the fold.
-                     Same resolved brand domain as the /ads/:domain sitelink —
-                     a buyer searching a known switch target at the
-                     first-value moment sees the honest /switch/* destination
-                     instead of having to discover it through outreach. */
-                  <SwitchCtaCard page={data.switchPage} />
-                ) : null}
                 <div className="f9-wk-sec-head">
                   <div className="f9-wk-sec-headings">
                     {/* ONE heading per state. The empty and delayed states

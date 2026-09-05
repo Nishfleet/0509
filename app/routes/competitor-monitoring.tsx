@@ -17,7 +17,6 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
-import { SWITCH_PAGES, SWITCH_SLUGS } from "~/lib/switch-pages";
 import { localeSearchPathname } from "~/lib/locale-markets";
 
 const publicSearchTrialPath =
@@ -554,36 +553,6 @@ export default function CompetitorMonitoringCategoryRoute() {
       </section>
 
       <BrowseTrackedCompetitors links={indexableAdsLinks} />
-
-      <section className="ld-quiet" id="switching">
-        <div className="ld-section-head">
-          <span className="ld-kicker">Leaving a competitor monitoring tool?</span>
-          <h2>Switching to 0509?</h2>
-          <p>
-            If you are coming from a tool that closed or lost the plot on
-            noise, the honest switch pages spell out what moves over, what
-            stays behind, and where the evidence comes from — linked from the
-            same category this page sells into.
-          </p>
-        </div>
-        <div className="ld-quiet-grid" aria-label="Switch pages">
-          {SWITCH_SLUGS.map((slug) => {
-            const page = SWITCH_PAGES[slug];
-            return (
-              <article key={slug}>
-                <span className="ld-kicker">{page.ctaBrand}</span>
-                <h3>
-                  <Link to={page.pathname}>Switching from {page.productName}</Link>
-                </h3>
-                <p>{page.cardLine}</p>
-                <p className="ld-trail-note" role="note">
-                  <Link to={page.pathname}>See the switch page →</Link>
-                </p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
 
       <section className="ld-quiet" id="by-industry">
         <div className="ld-section-head">
