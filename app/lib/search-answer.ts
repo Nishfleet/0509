@@ -390,13 +390,21 @@ function buildCompleteSearchAnswer(input: {
     };
   }
 
-  // Keyword search (`?q=goat` with no `?website=`): the visitor typed a brand
-  // stem, not a domain, so no ad here is verified to be the brand they meant.
-  // The thegoatco.au mouth-tape ad is the load-bearing wrong-brand case — it
-  // contains the stem "goat" but is a different company from goat.com. These
-  // results are unverified keyword candidates, never verified ads. The
-  // next-action link points at the most-likely intended domain so the visitor
-  // can run a verified search instead of accepting keyword matches as proof.
+  // Keyword search (`?q=goat` with no `?website=`). Two shapes, chosen by
+  // what the result actually carries:
+  //
+  // Legacy/v1 results (no tier metadata) and results where nothing connected
+  // to the brand keep the goat.com wall: the visitor typed a brand stem, no
+  // brand website was searched, so every row is an unverified keyword
+  // candidate — never verified ads. The thegoatco.au mouth-tape ad is the
+  // load-bearing wrong-brand case — it contains the stem "goat" but is a
+  // different company from goat.com.
+  //
+  // Results that DO carry v2 tier metadata and resolved at least one
+  // verified/likely row (issue #1452: q=oura resolves through the brand
+  // fallback) must say so: the headline states the verified/likely/unmatched
+  // counts from the payload instead of a stale "N unverified keyword
+  // matches" string that contradicts the tier-labelled rows below it.
   const keywordStem = input.query?.trim() || null;
   if (!input.isDomainSearch && keywordStem) {
     const suggestedDomain = suggestVerifiedSearchDomain(keywordStem);
@@ -406,6 +414,36 @@ function buildCompleteSearchAnswer(input: {
           href: buildVerifiedSearchHref(suggestedDomain, input.country),
         }
       : null;
+    const carriesTierMetadata =
+      typeof result.verifiedCount === "number" ||
+      typeof result.likelyCount === "number" ||
+      typeof result.unmatchedCount === "number" ||
+      result.ads.some((ad) => Boolean(ad.domainMatch));
+    const tiers = carriesTierMetadata ? resolveResultTierCounts(result) : null;
+    const resolvedBrandRows = tiers ? tiers.verified + tiers.likely : 0;
+    if (tiers && resolvedBrandRows > 0) {
+      return {
+        state: "keyword",
+        title: withMarketScope(
+          `${tiers.verified} verified, ${tiers.likely} likely, ${tiers.unmatched} unmatched for "${keywordStem}"`,
+          input.country,
+          marketScopeOptions,
+        ),
+        summary:
+          "Rows connected to the brand's website are verified or likely; the rest are candidates with no brand connection.",
+        facts: [
+          { label: "Verified ads", value: String(tiers.verified), detail: `Connected to the brand behind "${keywordStem}"` },
+          { label: "Likely matches", value: String(tiers.likely), detail: tiers.likely > 0 ? "Brand-name match; website link not captured" : "No brand-name matches" },
+          { label: "Unmatched candidates", value: String(tiers.unmatched), detail: tiers.unmatched > 0 ? "Returned by the source with no brand connection" : "No unmatched candidates" },
+          landingFact,
+          { label: "Source", value: sourceLabel, detail: formatCacheDetail(result.cacheStatus) },
+        ],
+        note: suggestedDomain
+          ? `Want the full verified list? Search by website — ${suggestedDomain} — to confirm which ads are linked to it.`
+          : null,
+        nextAction,
+      };
+    }
     return {
       state: "keyword",
       title: withMarketScope(

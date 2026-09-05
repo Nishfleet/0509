@@ -201,7 +201,7 @@ function formatProbeLine(probe) {
 }
 
 /**
- * @param {number} ms
+ * @param {string} line
  */
 function emitLine(line) {
   writeSync(1, `${line}\n`);

@@ -863,4 +863,121 @@ describe("buildSearchAnswer market scope", () => {
       expect(answer.nextAction).toBeNull();
     });
   });
+
+  // Issue #1452 — the keyword verdict must be count-honest. When the v2
+  // post-filter attached tier labels and at least one row resolved
+  // verified/likely (q=oura via the brand fallback, q=allbirds via landing
+  // domains), the headline states the verified/likely/unmatched counts from
+  // the payload instead of a stale "N unverified keyword matches" string
+  // that contradicts the tier-labelled rows below it. Legacy results (no
+  // tier metadata) and all-unmatched results keep the goat.com wall copy.
+  describe("keyword verdict — count-honest headline when tiers resolved (#1452)", () => {
+    const ouraRows = (): AdRecord[] => [
+      ad({
+        metaAdId: "oura-1",
+        advertiser: "ŌURA",
+        landingPageUrl: "https://ouraring.com/store",
+        domainMatch: { level: "verified_alias", reason: "Landing page matches ouraring.com, a product site for oura.com", matchedDomain: "ouraring.com" },
+      }),
+      ad({
+        metaAdId: "oura-2",
+        advertiser: "ŌURA",
+        landingPageUrl: "https://ouraring.com/rim",
+        domainMatch: { level: "verified_alias", reason: "Landing page matches ouraring.com, a product site for oura.com", matchedDomain: "ouraring.com" },
+      }),
+      ad({
+        metaAdId: "oura-3",
+        advertiser: "Some Seller",
+        landingPageUrl: null,
+        domainMatch: { level: "unverified_provider_candidate", reason: "Returned for “oura” by the Meta source", matchedDomain: null },
+      }),
+    ];
+
+    const tieredResult = () => ({
+      ...response({ ads: ouraRows() }),
+      searchIntent: "text" as const,
+      verifiedCount: 2,
+      likelyCount: 0,
+      unmatchedCount: 1,
+    });
+
+    it("states the verified/likely/unmatched counts in the title", () => {
+      const answer = buildSearchAnswer({
+        result: tieredResult(),
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "oura",
+        country: "all",
+      });
+
+      expect(answer.title).toContain("2 verified");
+      expect(answer.title).toContain("0 likely");
+      expect(answer.title).toContain("1 unmatched");
+      expect(answer.title).toContain("oura");
+      expect(answer.title).not.toContain("unverified keyword match");
+    });
+
+    it("carries the real tier values into the facts, not a hardcoded 0", () => {
+      const answer = buildSearchAnswer({
+        result: tieredResult(),
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "oura",
+        country: "all",
+      });
+
+      const verifiedFact = answer.facts.find((f) => f.label === "Verified ads");
+      const likelyFact = answer.facts.find((f) => f.label === "Likely matches");
+      const unmatchedFact = answer.facts.find((f) => f.label === "Unmatched candidates");
+      expect(verifiedFact?.value).toBe("2");
+      expect(likelyFact?.value).toBe("0");
+      expect(unmatchedFact?.value).toBe("1");
+    });
+
+    it("still names the market in the count-honest title", () => {
+      const answer = buildSearchAnswer({
+        result: tieredResult(),
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "oura",
+        country: "India",
+      });
+
+      expect(answer.title).toContain("in India");
+    });
+
+    it("keeps the unverified wall copy when tiers exist but nothing resolved", () => {
+      // A v2 result where every row is labelled but none connected to the
+      // brand (the goat.com case once tier labels land) must keep the
+      // goat.com wall — "0 verified" rows are never headlined as resolved.
+      const allUnmatched = (): AdRecord[] => [
+        ad({
+          metaAdId: "goat-mouth-tape",
+          advertiser: "The GOAT",
+          landingPageUrl: "https://thegoatco.au/products/mouth-tape",
+          domainMatch: { level: "unverified_provider_candidate", reason: "Returned for “goat” by the Meta source", matchedDomain: null },
+        }),
+      ];
+      const answer = buildSearchAnswer({
+        result: {
+          ...response({ ads: allUnmatched() }),
+          searchIntent: "text" as const,
+          verifiedCount: 0,
+          likelyCount: 0,
+          unmatchedCount: 1,
+        },
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "goat",
+        country: "all",
+      });
+
+      expect(answer.title).toContain("unverified keyword match");
+      expect(answer.title).not.toContain("verified, ");
+    });
+  });
 });
