@@ -73,6 +73,34 @@ function navBlocks(markup: string): string[] {
   return blocks;
 }
 
+async function renderMarketingNav(): Promise<string> {
+  vi.doMock("react-router", async () => {
+    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const React = await import("react");
+    return {
+      ...actual,
+      Link: mockLink(React),
+      useRouteLoaderData: () => undefined,
+    };
+  });
+  const { MarketingNav } = await import("~/components/marketing-nav");
+  return renderToStaticMarkup(createElement(MarketingNav));
+}
+
+async function renderMarketingNavOptedOut(): Promise<string> {
+  vi.doMock("react-router", async () => {
+    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const React = await import("react");
+    return {
+      ...actual,
+      Link: mockLink(React),
+      useRouteLoaderData: () => undefined,
+    };
+  });
+  const { MarketingNav } = await import("~/components/marketing-nav");
+  return renderToStaticMarkup(createElement(MarketingNav, { showSwitchLinks: false }));
+}
+
 async function renderMarketing(): Promise<string> {
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
@@ -209,26 +237,27 @@ async function renderSearch(): Promise<string> {
 }
 
 describe("switch-page nav coverage (issue #1466)", () => {
-  it.each(SWITCH_SLUGS)(
-    "MarketingNav embeds the /switch/%s link inside the ld-nav-links primary nav region",
-    async (slug) => {
-      vi.doMock("react-router", async () => {
-        const actual = await vi.importActual<typeof import("react-router")>("react-router");
-        const React = await import("react");
-        return {
-          ...actual,
-          Link: mockLink(React),
-          useRouteLoaderData: () => undefined,
-        };
-      });
-      const { MarketingNav } = await import("~/components/marketing-nav");
-      const markup = renderToStaticMarkup(createElement(MarketingNav));
-      const primaryNav = markup.match(/<nav[^>]*aria-label="Primary"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? "";
+  it("MarketingNav surfaces all three switch pages in the primary nav region when enabled", async () => {
+    const markup = await renderMarketingNav();
+    const primaryNav = markup.match(/<nav[^>]*aria-label="Primary"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? "";
 
-      expect(primaryNav).toContain(`href="${SWITCH_PAGES[slug].pathname}"`);
-      expect(primaryNav).toContain(`from ${SWITCH_PAGES[slug].productName}`);
-    },
-  );
+    for (const slug of SWITCH_SLUGS) {
+      const page = SWITCH_PAGES[slug];
+      expect(primaryNav).toContain(`href="${page.pathname}"`);
+      expect(primaryNav).toContain(`from ${page.productName}`);
+    }
+  });
+
+  it("MarketingNav hides switch links when a surface opts out", async () => {
+    const markup = await renderMarketingNavOptedOut();
+    const primaryNav = markup.match(/<nav[^>]*aria-label="Primary"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? "";
+
+    for (const slug of SWITCH_SLUGS) {
+      const page = SWITCH_PAGES[slug];
+      expect(primaryNav).not.toContain(`href="${page.pathname}"`);
+      expect(primaryNav).not.toContain(`from ${page.productName}`);
+    }
+  });
 
   it("renders a 'from MagicBrief' link in a primary nav region on /", async () => {
     const markup = beforeFooter(await renderMarketing());

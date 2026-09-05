@@ -4051,7 +4051,7 @@ one signal-green accent.
 /* Switch-page links in the primary nav (issue #1466). The three "from <tool>"
    links sit inside .ld-nav-links so they share the nav's scroll/wrap behavior:
    a single non-wrapping scrollable row at ≤860px on .f9-home, wrapping on
-   legal pages. No hover/JS — always visible in the nav region. */
+   surfaces whose nav wraps. No hover/JS — plain server links. */
 .ld-nav-links .ld-nav-switch {
   white-space: nowrap;
 }

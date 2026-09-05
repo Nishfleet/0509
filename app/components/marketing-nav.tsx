@@ -12,6 +12,11 @@ import type { RootLoaderData } from "~/root";
  */
 export const MARKETING_TAGLINE = "Competitor change monitoring";
 
+export interface MarketingNavProps {
+  /** Show the three /switch/* "from <tool>" links in the primary nav (default true). */
+  showSwitchLinks?: boolean;
+}
+
 /**
  * THE single public header for every public surface — landing, /ads/* brand
  * pages, and the legal/doc shell (via `PublicDocHeader`). One canonical link
@@ -29,7 +34,7 @@ export const MARKETING_TAGLINE = "Competitor change monitoring";
  * visitors (and crawlers) get /auth/login?redirectTo=%2Fapp — the same final
  * URL the app guard would redirect to, without the redirect hop.
  */
-export function MarketingNav() {
+export function MarketingNav({ showSwitchLinks = true }: MarketingNavProps) {
   const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
 
   return (
@@ -46,11 +51,16 @@ export function MarketingNav() {
         <Link to="/help">Help</Link>
         <Link to="/docs">Docs</Link>
         <Link to="/status">Status</Link>
-        {/* Switch-page links in the primary nav so a buyer who lands on any
-            public surface reaches /switch/* in one click without a footer
-            scroll (issue #1466). Visible at 360–1440px — the nav is a
-            scrollable row at ≤860px and wraps on legal pages, no hover/JS. */}
-        <SwitchFromLinks />
+        {showSwitchLinks ? (
+          <>
+            {/* Switch-page links in the primary nav so a buyer who lands on any
+                public surface reaches /switch/* in one click without a footer
+                scroll (issue #1466). Surfaces that already render the H1 strip
+                (/search, /competitor-monitoring) or the legal/doc shell opt out
+                via showSwitchLinks={false}. No hover/JS — plain server links. */}
+            <SwitchFromLinks />
+          </>
+        ) : null}
       </nav>
 
       <nav className="ld-nav-actions" aria-label="Account">

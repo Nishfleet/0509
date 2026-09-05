@@ -7,8 +7,9 @@ import { SWITCH_PAGES, SWITCH_SLUGS, type SwitchSlug } from "~/lib/switch-pages"
  * of truth (`SWITCH_PAGES`). Used two ways (issue #1466):
  *
  * 1. Inline `{SwitchFromLinks}` — the bare link list, embedded inside
- *    `MarketingNav`'s `ld-nav-links` so the switch pages sit in the primary
- *    nav region of every public surface that uses `MarketingNav`.
+ *    `MarketingNav`'s `ld-nav-links` when a surface passes
+ *    `showSwitchLinks`. Opted-out surfaces rely on `MarketingFooter` or the
+ *    H1 strip for switch-page reachability (issue #1466).
  * 2. `<SwitchFromStrip>` — the same links wrapped in a `<nav>` cross-link
  *    strip rendered directly under the H1 on `/search` and
  *    `/competitor-monitoring`, the two high-traffic BET 5 surfaces whose

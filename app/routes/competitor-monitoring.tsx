@@ -266,7 +266,7 @@ export default function CompetitorMonitoringCategoryRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav showSwitchLinks={false} />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },
