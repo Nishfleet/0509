@@ -139,37 +139,6 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup.match(/f9-evidence-cta--rank1/g)?.length ?? 0).toBe(1);
   });
 
-  it("offers the Library as the activation surface when a user has no collection", async () => {
-    await mockRouter(baseDashboardData());
-
-    const { default: AppDashboardRoute } =
-      await import("~/routes/app.dashboard");
-    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
-
-    // Workspace-memory activation (issue #1557): the compounding layer is
-    // invisible until a user already has a collection, so a brand-new account
-    // should see the Library as an honest first step instead of nothing.
-    expect(markup).toContain('href="/app/collections"');
-    expect(markup).toContain("Start a collection");
-    expect(markup).not.toContain("Saved examples");
-  });
-
-  it("labels an existing collection as Saved examples, not activation copy", async () => {
-    await mockRouter(
-      baseDashboardData({
-        collections: [{ id: "collection-1", name: "Rival ads" }],
-      }),
-    );
-
-    const { default: AppDashboardRoute } =
-      await import("~/routes/app.dashboard");
-    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
-
-    expect(markup).toContain("Saved examples");
-    expect(markup).toContain('href="/app/collections"');
-    expect(markup).not.toContain("Start a collection");
-  });
-
   it("keeps the filed brief reachable while setup still has another step", async () => {
     await mockRouter(
       baseDashboardData({

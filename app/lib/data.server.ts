@@ -247,7 +247,6 @@ export {
   createCollection,
   createCollectionWithinLimit,
   type CreateCollectionWithinLimitResult,
-  renameCollection,
   listCollectionItemsPage,
   listCollectionItems,
   updateCollectionItem,

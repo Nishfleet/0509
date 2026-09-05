@@ -1094,20 +1094,7 @@ export default function AppDashboardRoute() {
               status={`${collections.length} saved`}
               to="/app/collections"
             />
-          ) : (
-            /* Workspace-memory activation (issue #1557): a brand-new account
-               reaches the compounding layer — a Library collection — without
-               already having one. The "Saved examples" row only rendered when
-               a collection existed, so the surface was invisible until after
-               the user had already created one. Honest copy, real first step. */
-            <RuledRow
-              name="Library"
-              plain
-              say="Start a collection and keep the ads, notes and evidence links you want."
-              status="Start"
-              to="/app/collections"
-            />
-          )}
+          ) : null}
           {retentionMoves.slice(0, 3).map((nudge) => (
             <RuledRow
               key={nudge.id}
