@@ -146,7 +146,7 @@ describe("BET 9 chosen hero direction (#1173)", () => {
     const strip = proofStrip(markup);
 
     expect(strip.length).toBeGreaterThan(0);
-    expect(strip).toContain("Live proof");
+    expect(strip).toContain("On record");
     expect(strip).toContain("We saved the proof");
     expect(strip).toContain("nykaa.com");
     expect(strip).toContain("Unlock the secret to radiant");
