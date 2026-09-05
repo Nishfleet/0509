@@ -17,11 +17,12 @@ import { SubmitButton } from "~/components/submit-button";
 import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
-import { readDigestIntelligence } from "~/lib/change-intelligence";
+import { readDigestIntelligence, buildDigestAccountability } from "~/lib/change-intelligence";
 import { toPublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import { formatWatchEventTypeLabel } from "~/lib/landing-page-display";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
 import { classifyDigestItemSource } from "~/lib/proof-classification";
+import { readTriageFromDigestSummary } from "~/lib/watch-period-triage";
 
 export const meta = () => [{ title: "Briefs | Five to Nine" }];
 
@@ -39,7 +40,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { PLAN_LIMITS, getUserPlan } = await import("~/lib/plan.server");
   const { getDigest, listDeliveryAttempts, listDigests } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const { workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { workspaceUserId, ownerName } = await requireWorkspaceSession(env, request);
   const plan = await getUserPlan(env, workspaceUserId);
 
   if (!PLAN_LIMITS[plan].digests) {
@@ -81,6 +82,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       : [],
     canAccessDigests: true,
     plan,
+    // E2 (named owner): the workspace owner identity is the brief's
+    // accountable reviewer. Null renders the truthful "Workspace owner" role
+    // label — ownership never silently disappears from the surface.
+    ownerName,
   };
 }
 
@@ -152,6 +157,11 @@ export default function DigestsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const plan = "plan" in data && data.plan ? data.plan : "free";
+  // E2 (named owner): the workspace owner identity from the loader is the
+  // accountable reviewer for every filed brief. Absent (pre-E2 loader
+  // fixtures / sessions without a stored name) renders the truthful
+  // "Workspace owner" role label via the shared accountability builder.
+  const ownerName = "ownerName" in data && data.ownerName ? data.ownerName : null;
   const canExport = canUsePlanFeature(plan, "export_csv") && canUsePlanFeature(plan, "export_json");
   const canShare = canUsePlanFeature(plan, "share_links");
   const [searchParams] = useSearchParams();
@@ -311,6 +321,12 @@ export default function DigestsRoute() {
             selected={selectedFilters}
           />
 
+          <BriefAccountabilityPanel
+            ownerName={ownerName}
+            items={data.selectedDigest.items}
+            summary={data.selectedDigest.summary}
+          />
+
           <DesignedDigestBrief
             actions={
               <>
@@ -380,6 +396,55 @@ export default function DigestsRoute() {
         </section>
       )}
     </DashboardPage>
+  );
+}
+
+/**
+ * E2 (named owner): the brief's accountable reviewer, materiality reason, and
+ * next action — rendered by the route so every filed brief is owned and
+ * actionable, never an ownerless feed. Uses the same isomorphic builders as
+ * the digest email, so app and email tell the same truthful story. Missing
+ * ownership renders the explicit "No accountable reviewer on record" state
+ * through the shared resolver; it is never silently dropped.
+ */
+function BriefAccountabilityPanel({
+  ownerName,
+  items,
+  summary,
+}: {
+  ownerName: string | null;
+  items: Array<{
+    watchlistName?: string;
+    title?: string;
+    metadata?: Record<string, unknown>;
+  }>;
+  summary?: Record<string, unknown> | null;
+}) {
+  const accountability = buildDigestAccountability({
+    reviewerName: ownerName,
+    ownerFallbackLabel: "Workspace owner",
+    items,
+    triage: readTriageFromDigestSummary(summary),
+  });
+  const rows = [
+    { key: "Accountable reviewer", value: accountability.reviewer.label },
+    { key: "Why this matters", value: accountability.materialityReason },
+    { key: "Next action", value: accountability.nextAction },
+  ];
+  return (
+    <section aria-labelledby="brief-accountability-title" className="f9-wk-sec">
+      <h2 className="f9-wk-kick" id="brief-accountability-title">
+        Reviewer &amp; next action
+      </h2>
+      <dl className="f9-wk-dl">
+        {rows.map((row) => (
+          <div className="f9-wk-contents" key={row.key}>
+            <dt>{row.key}</dt>
+            <dd>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 

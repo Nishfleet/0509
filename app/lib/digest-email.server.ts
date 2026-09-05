@@ -1,4 +1,6 @@
 import {
+  buildDigestAccountability,
+  type DigestAccountability,
   type DigestCadence,
   digestCadenceLabel,
   readDigestIntelligence,
@@ -93,6 +95,13 @@ export interface DigestEmailInput {
   supportEmail: string;
   supportMailto: string;
   unsubscribeUrl: string | null;
+  // E2 (named owner): role label used when the recipient identity is
+  // unavailable. Defaults to "Workspace owner" — the digest recipient is the
+  // account owner, so the role attribution is truthful even without a stored
+  // name. Pass null only when even that attribution cannot be claimed; the
+  // email then renders an explicit unavailability state instead of a generic
+  // digest.
+  ownerFallbackLabel?: string | null;
   // Free-plan digests carry one tasteful upgrade line in the footer area.
   // Absent or empty renders nothing — paid digests are byte-identical.
   upgradeNote?: string | null;
@@ -132,6 +141,9 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const trendLines =
     input.cadence === "weekly" ? buildDigestTrendRollups(input.items) : [];
 	const strategyParagraph = input.strategyParagraph?.trim() || null;
+  // E2: one named reviewer, one materiality reason, one next action on every
+  // brief — never an ownerless feed.
+  const accountability = digestAccountabilityFor(input);
 
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
@@ -143,6 +155,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
         <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
         <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
       </div>
+      ${renderAccountabilityBlockHtml(accountability)}
       ${renderTrendSectionHtml(trendLines)}
       <h2 style="${EMAIL_H2_STYLE}">Top moves</h2>
       ${renderTopMoveGroupsHtml(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl)}
@@ -166,6 +179,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     `Priority mix: ${priorityMixLabel(priorityMix)}`,
     `Evidence mix: ${proofMixLabel(proofMix)}`,
+    ...renderAccountabilityBlockText(accountability),
     ...renderTrendSectionText(trendLines),
     "",
     "Top moves:",
@@ -268,6 +282,9 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     ? `<p style="margin: 0 0 16px; color: #475467;">${renderTriageRecordText(triage, input.timeZone)}</p>`
     : "";
   const recordText = triage ? renderTriageRecordText(triage, input.timeZone) : null;
+  // E2: quiet periods carry the same named-owner, materiality, next-action
+  // contract as changed periods.
+  const accountability = digestAccountabilityFor(input);
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
@@ -279,6 +296,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
         and reviewed ${heartbeat.adsSeen} ad${heartbeat.adsSeen === 1 ? "" : "s"}. Completed checks found no action-worthy movement across the sources that ran.
       </p>
       ${recordHtml}
+      ${renderAccountabilityBlockHtml(accountability)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
       </p>
@@ -295,6 +313,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors reviewed ${heartbeat.adsSeen} ads. Completed checks found no action-worthy movement across the sources that ran.`,
     ...(recordText ? ["", recordText] : []),
+    ...renderAccountabilityBlockText(accountability),
     "",
     `Review digest history: ${input.fullDigestUrl}`,
     ...renderUpgradeNoteText(input),
@@ -360,6 +379,9 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ? `<p style="margin: 0 0 16px; color: #475467;">Held back: ${escapeHtml(triage.suppressionReasons.join("; "))}.</p>`
       : "";
   const recordText = renderTriageRecordText(triage, input.timeZone);
+  // E2: incomplete and routine-only periods carry the same named-owner,
+  // materiality, next-action contract as changed and quiet periods.
+  const accountability = digestAccountabilityFor(input);
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
@@ -369,6 +391,7 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(checksLine)}</p>
       ${suppressionHtml}
       <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(recordText)}</p>
+      ${renderAccountabilityBlockHtml(accountability)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View the full brief</a>
       </p>
@@ -388,6 +411,7 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ? [`Held back: ${triage.suppressionReasons.join("; ")}.`]
       : []),
     recordText,
+    ...renderAccountabilityBlockText(accountability),
     "",
     `View the full brief: ${input.fullDigestUrl}`,
     ...renderUpgradeNoteText(input),
@@ -402,6 +426,44 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
     html,
     text,
   };
+}
+
+/**
+ * E2 (named owner): every digest email carries one accountable reviewer, one
+ * materiality reason, and one next action. The reviewer defaults to the
+ * truthful role label "Workspace owner" when the recipient name is not
+ * stored; only an explicit `ownerFallbackLabel: null` renders the failure
+ * state ("No accountable reviewer on record") — a generic ownerless digest
+ * is never sent silently.
+ */
+function digestAccountabilityFor(input: DigestEmailInput): DigestAccountability {
+  return buildDigestAccountability({
+    reviewerName: input.name,
+    ownerFallbackLabel:
+      input.ownerFallbackLabel === undefined ? "Workspace owner" : input.ownerFallbackLabel,
+    items: input.items,
+    triage: input.heartbeat?.triage ?? null,
+  });
+}
+
+function renderAccountabilityBlockHtml(accountability: DigestAccountability) {
+  return `
+      <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
+        <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Reviewer &amp; next action</p>
+        <p style="margin: 0 0 6px;"><strong>Accountable reviewer:</strong> ${escapeHtml(accountability.reviewer.label)}</p>
+        <p style="margin: 0 0 6px;"><strong>Why this matters:</strong> ${escapeHtml(accountability.materialityReason)}</p>
+        <p style="margin: 0;"><strong>Next action:</strong> ${escapeHtml(accountability.nextAction)}</p>
+      </div>
+  `;
+}
+
+function renderAccountabilityBlockText(accountability: DigestAccountability): string[] {
+  return [
+    "Reviewer & next action:",
+    `Accountable reviewer: ${accountability.reviewer.label}`,
+    `Why this matters: ${accountability.materialityReason}`,
+    `Next action: ${accountability.nextAction}`,
+  ];
 }
 
 function renderTriageRecordText(

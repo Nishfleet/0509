@@ -1,4 +1,5 @@
 import { safeTimeZone } from "~/lib/safe-timezone";
+import { isDigestDecisionCandidate } from "~/lib/proof-classification";
 import type { AdRecord, AnalysisFieldInput, WatchEventRecord, WatchEventType } from "~/lib/types";
 
 export type DigestCadence = "daily" | "weekly";
@@ -289,4 +290,162 @@ function stringOr(value: unknown, fallback: string): string;
 function stringOr(value: unknown, fallback: null): string | null;
 function stringOr(value: unknown, fallback: string | null) {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+/* ============================================================================
+   Named owner, materiality, and next action (E2 increment).
+
+   Every customer-facing brief/digest representation — the app brief and the
+   digest email — carries exactly one accountable reviewer, a non-empty
+   human-readable materiality reason, and one next action. The three builders
+   below are isomorphic (no `.server`), so the app route and the email render
+   the same truthful story from the same raw inputs:
+
+   - reviewer: the already-available workspace owner/recipient identity is
+     used verbatim; an absent name falls back to the role label the product
+     contract supports ("Workspace owner" — the digest recipient is the
+     account owner); only when even that attribution cannot be claimed does
+     the resolution become an explicit unavailable state that renderers must
+     show, never silently hide.
+   - materiality: derived from the filed items (counts, competitor span, top
+     move, priority band) or, for periods without items, the shared triage
+     explanation — never invented from untrusted event text.
+   - next action: the top move's sourced recommended action, the shared
+     triage next action, or an honest no-op line for legacy quiet periods.
+
+   No person is ever invented from event text; event titles/watchlist names
+   appear only as sourced evidence and are escaped by each renderer.
+   ========================================================================== */
+
+export interface DigestMaterialitySourceItem {
+  watchlistName?: string;
+  title?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DigestAccountabilityTriage {
+  explanation?: string | null;
+  nextAction?: string | null;
+}
+
+export interface DigestReviewerResolution {
+  /** Display label: the named person, the role fallback, or the failure state. */
+  label: string;
+  state: "named" | "workspace_owner" | "unavailable";
+}
+
+export interface DigestAccountability {
+  reviewer: DigestReviewerResolution;
+  /** Non-empty human-readable materiality reason for the period. */
+  materialityReason: string;
+  /** One truthful next action for the period. */
+  nextAction: string;
+}
+
+export function resolveDigestReviewer(input: {
+  reviewerName?: string | null;
+  ownerFallbackLabel?: string | null;
+}): DigestReviewerResolution {
+  const name = stringOr(input.reviewerName, null);
+  if (name) {
+    return { label: name, state: "named" };
+  }
+  const fallback = stringOr(input.ownerFallbackLabel, null);
+  if (fallback) {
+    return { label: fallback, state: "workspace_owner" };
+  }
+  return {
+    label: "No accountable reviewer on record",
+    state: "unavailable",
+  };
+}
+
+export function buildDigestMaterialityReason(input: {
+  items?: DigestMaterialitySourceItem[] | null;
+  triage?: DigestAccountabilityTriage | null;
+}): string {
+  const items = input.items ?? [];
+  if (items.length > 0) {
+    const countLabel = `${items.length} change${items.length === 1 ? "" : "s"}`;
+    const competitorCount = uniqueNonEmpty(
+      items.map((item) => item.watchlistName),
+    ).length;
+    const competitorLabel = `${competitorCount} competitor${competitorCount === 1 ? "" : "s"}`;
+    const top = topMaterialityItem(items);
+    if (top) {
+      const band = readDigestIntelligence(top.metadata).priorityBand;
+      const name = stringOr(top.watchlistName, "Competitor");
+      const title = stringOr(top.title, "Change detected");
+      return `${countLabel} across ${competitorLabel}; the top move is ${name}: ${title} (${band}).`;
+    }
+    return `${countLabel} across ${competitorLabel}; nothing verified yet this window.`;
+  }
+  const explanation = stringOr(input.triage?.explanation, null);
+  if (explanation) {
+    return explanation;
+  }
+  // Legacy/defensive quiet periods: the checks ran and found nothing, so the
+  // honest materiality is the absence of action-worthy movement.
+  return "No action-worthy movement across the sources that ran.";
+}
+
+export function resolveDigestNextAction(input: {
+  items?: DigestMaterialitySourceItem[] | null;
+  triage?: DigestAccountabilityTriage | null;
+}): string {
+  const items = input.items ?? [];
+  const top = items.length > 0 ? topMaterialityItem(items) : null;
+  if (top) {
+    return readDigestIntelligence(top.metadata).recommendedAction;
+  }
+  const nextAction = stringOr(input.triage?.nextAction, null);
+  if (nextAction) {
+    return nextAction;
+  }
+  return "Nothing new to act on — we check again at the next scheduled scan.";
+}
+
+export function buildDigestAccountability(input: {
+  reviewerName?: string | null;
+  ownerFallbackLabel?: string | null;
+  items?: DigestMaterialitySourceItem[] | null;
+  triage?: DigestAccountabilityTriage | null;
+}): DigestAccountability {
+  return {
+    reviewer: resolveDigestReviewer(input),
+    materialityReason: buildDigestMaterialityReason(input),
+    nextAction: resolveDigestNextAction(input),
+  };
+}
+
+/**
+ * Highest-ranked decision candidate among the items — the same ranking the
+ * digest email uses for top moves, so every surface agrees on "the top move".
+ * Only completed, customer-trustable observations may rank.
+ */
+function topMaterialityItem(items: DigestMaterialitySourceItem[]) {
+  return (
+    items
+      .map((item, index) => ({
+        item,
+        index,
+        intelligence: readDigestIntelligence(item.metadata),
+      }))
+      .filter((entry) => isDigestDecisionCandidate(entry.item))
+      .sort((a, b) => {
+        const scoreA = a.intelligence.priorityScore ?? -1;
+        const scoreB = b.intelligence.priorityScore ?? -1;
+        return scoreB - scoreA || a.index - b.index;
+      })[0]?.item ?? null
+  );
+}
+
+function uniqueNonEmpty(values: Array<string | null | undefined>) {
+  return [
+    ...new Set(
+      values
+        .map((value) => stringOr(value, null))
+        .filter((value): value is string => value !== null),
+    ),
+  ];
 }

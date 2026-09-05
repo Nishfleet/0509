@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildDigestAccountability,
+  resolveDigestReviewer,
+} from "~/lib/change-intelligence";
+import {
   buildDigestEmail,
   buildScanTroubleEmail,
   digestItemDeepLink,
   groupTopMovesByWatchlist,
   type DigestEmailHeartbeat,
   type DigestEmailHeartbeatTriage,
+  type DigestEmailInput,
 } from "~/lib/digest-email.server";
 
 describe("buildScanTroubleEmail", () => {
@@ -891,6 +896,285 @@ describe("zero-noise triage digest emails (2026-08-06)", () => {
 		expect(email.html).toContain("Verified evidence");
 		expect(email.html).toContain("Suggested next action:");
 		expect(email.text).toContain("Suggested next action:");
+	});
+});
+
+describe("named owner, materiality reason, and next action (E2)", () => {
+	function accountabilityInput(overrides: Partial<DigestEmailInput> = {}): DigestEmailInput {
+		return {
+			name: "Priya",
+			periodStart: "2026-06-01T00:00:00.000Z",
+			periodEnd: "2026-06-08T00:00:00.000Z",
+			cadence: "weekly",
+			timeZone: "UTC",
+			fullDigestUrl: "https://0509.io/app/digests",
+			manageFrequencyUrl: "https://0509.io/app/notifications",
+			supportEmail: "support@0509.io",
+			supportMailto: "mailto:support@0509.io",
+			unsubscribeUrl: null,
+			items: [digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed")],
+			...overrides,
+		};
+	}
+
+	function allQuietHeartbeat(): DigestEmailHeartbeat {
+		return {
+			runs: 7,
+			watchlistsChecked: 4,
+			adsSeen: 128,
+			triage: {
+				status: "all_quiet",
+				label: "All quiet",
+				explanation:
+					"Checks completed and nothing changed across the sources that ran.",
+				checkedAt: "2026-06-08T04:00:00.000Z",
+				checksCompleted: 7,
+				suppressedChanges: 0,
+				suppressionReasons: [],
+				nextAction: "We check again at the next scheduled scan.",
+				noActionLine: "No action needed — nothing new to act on.",
+			},
+		};
+	}
+
+	it.each([
+		[
+			"price",
+			digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+			"1 change across 1 competitor; the top move is Nykaa: Landing page offer changed (High priority).",
+		],
+		[
+			"CTA",
+			digestItem("boAt", "CTA changed", 80, "scan_backed"),
+			"1 change across 1 competitor; the top move is boAt: CTA changed (Medium priority).",
+		],
+		[
+			"cosmetic-only",
+			digestItem("Plum", "Headline changed", 40, "scan_backed"),
+			"1 change across 1 competitor; the top move is Plum: Headline changed (Low priority).",
+		],
+	])(
+		"carries a materiality reason, one accountable reviewer, and one next action for a %s change",
+		(_label, item, expectedReason) => {
+			const email = buildDigestEmail({ ...accountabilityInput(), items: [item] });
+
+			expect(email.html).toContain("Reviewer &amp; next action");
+			expect(email.html).toContain("Accountable reviewer:</strong> Priya");
+			expect(email.html).toContain(`Why this matters:</strong> ${expectedReason}`);
+			expect(email.html).toContain(
+				"Next action:</strong> Review before the next campaign decision.",
+			);
+			expect(email.text).toContain("Accountable reviewer: Priya");
+			expect(email.text).toContain(`Why this matters: ${expectedReason}`);
+			expect(email.text).toContain("Next action: Review before the next campaign decision.");
+		},
+	);
+
+	it("carries materiality, owner, and next action on an all-quiet period", () => {
+		const email = buildDigestEmail({
+			...accountabilityInput(),
+			items: [],
+			heartbeat: allQuietHeartbeat(),
+		});
+
+		expect(email.html).toContain("Accountable reviewer:</strong> Priya");
+		expect(email.html).toContain(
+			"Why this matters:</strong> Checks completed and nothing changed across the sources that ran.",
+		);
+		expect(email.html).toContain(
+			"Next action:</strong> We check again at the next scheduled scan.",
+		);
+		expect(email.text).toContain("Accountable reviewer: Priya");
+		expect(email.text).toContain(
+			"Why this matters: Checks completed and nothing changed across the sources that ran.",
+		);
+		expect(email.text).toContain("Next action: We check again at the next scheduled scan.");
+	});
+
+	it("carries materiality, owner, and next action on a failed-check period", () => {
+		const email = buildDigestEmail({
+			...accountabilityInput(),
+			items: [],
+			heartbeat: {
+				runs: 7,
+				watchlistsChecked: 4,
+				adsSeen: 128,
+				triage: {
+					status: "evidence_failed",
+					label: "Evidence check failed",
+					explanation:
+						"An evidence check couldn't finish, so nothing is confirmed yet.",
+					checkedAt: null,
+					checksCompleted: 6,
+					suppressedChanges: 0,
+					suppressionReasons: [],
+					nextAction:
+						"We'll retry at the next scheduled check. If it persists, email support and we'll dig in.",
+					noActionLine: "No change is confirmed without proof.",
+				},
+			},
+		});
+
+		expect(email.html).toContain("Accountable reviewer:</strong> Priya");
+		expect(email.html).toContain(
+			"Why this matters:</strong> An evidence check couldn&#039;t finish, so nothing is confirmed yet.",
+		);
+		expect(email.text).toContain("Next action: We'll retry at the next scheduled check.");
+		expect(email.html).not.toContain("All quiet");
+	});
+
+	it("carries the honest materiality and next action on a legacy heartbeat without triage", () => {
+		const email = buildDigestEmail({
+			...accountabilityInput(),
+			name: "Owner",
+			items: [],
+			heartbeat: { runs: 3, watchlistsChecked: 2, adsSeen: 42 },
+		});
+
+		expect(email.html).toContain("Accountable reviewer:</strong> Owner");
+		expect(email.html).toContain(
+			"Why this matters:</strong> No action-worthy movement across the sources that ran.",
+		);
+		expect(email.html).toContain(
+			"Next action:</strong> Nothing new to act on — we check again at the next scheduled scan.",
+		);
+		expect(email.html).not.toContain("No action needed");
+	});
+
+	it("falls back to the truthful Workspace owner role label when the name is missing", () => {
+		const email = buildDigestEmail({ ...accountabilityInput(), name: "" });
+
+		expect(email.html).toContain("Accountable reviewer:</strong> Workspace owner");
+		expect(email.text).toContain("Accountable reviewer: Workspace owner");
+	});
+
+	it("renders an explicit visible failure state when ownership is unavailable — never a generic digest", () => {
+		const email = buildDigestEmail({
+			...accountabilityInput(),
+			name: "",
+			ownerFallbackLabel: null,
+		});
+
+		expect(email.html).toContain(
+			"Accountable reviewer:</strong> No accountable reviewer on record",
+		);
+		expect(email.text).toContain("Accountable reviewer: No accountable reviewer on record");
+		expect(email.html).toContain("Why this matters:");
+		expect(email.html).toContain("Next action:");
+		expect(email.html).not.toContain("Workspace owner");
+	});
+
+	it("escapes untrusted event text in the materiality line and never treats it as a person", () => {
+		const email = buildDigestEmail({
+			...accountabilityInput(),
+			items: [
+				{
+					watchlistName: "<Nykaa>",
+					eventType: "ad_new",
+					title: "<script>alert(1)</script>",
+					summary: "Untrusted event text.",
+					createdAt: "2026-06-08T00:00:00.000Z",
+					metadata: {
+						priorityScore: 90,
+						priorityBand: "High priority",
+						recommendedAction: "Review the change.",
+						proofTrail: "Verified from a page snapshot",
+						sourceStatus: "proof_backed",
+					},
+				},
+			],
+		});
+
+		expect(email.html).toContain("Accountable reviewer:</strong> Priya");
+		expect(email.html).toContain(
+			"Why this matters:</strong> 1 change across 1 competitor; the top move is &lt;Nykaa&gt;: &lt;script&gt;alert(1)&lt;/script&gt; (High priority).",
+		);
+		expect(email.html).not.toContain("<script>alert(1)</script>");
+	});
+});
+
+describe("digest accountability builders (E2)", () => {
+	it("resolves a named reviewer, the workspace-owner fallback, and the unavailable failure state", () => {
+		expect(
+			resolveDigestReviewer({ reviewerName: "Priya", ownerFallbackLabel: "Workspace owner" }),
+		).toEqual({ label: "Priya", state: "named" });
+		expect(
+			resolveDigestReviewer({ reviewerName: "", ownerFallbackLabel: "Workspace owner" }),
+		).toEqual({ label: "Workspace owner", state: "workspace_owner" });
+		expect(
+			resolveDigestReviewer({ reviewerName: "   ", ownerFallbackLabel: "Workspace owner" }),
+		).toEqual({ label: "Workspace owner", state: "workspace_owner" });
+		expect(
+			resolveDigestReviewer({ reviewerName: null, ownerFallbackLabel: null }),
+		).toEqual({ label: "No accountable reviewer on record", state: "unavailable" });
+	});
+
+	it("derives materiality from the top-ranked move across competitors", () => {
+		const accountability = buildDigestAccountability({
+			reviewerName: "Priya",
+			ownerFallbackLabel: "Workspace owner",
+			items: [
+				digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+				digestItem("boAt", "CTA changed", 80, "scan_backed"),
+				digestItem("Mamaearth", "Headline changed", 40, "scan_backed"),
+			],
+			triage: null,
+		});
+
+		expect(accountability.reviewer).toEqual({ label: "Priya", state: "named" });
+		expect(accountability.materialityReason).toBe(
+			"3 changes across 3 competitors; the top move is Nykaa: Landing page offer changed (High priority).",
+		);
+		expect(accountability.nextAction).toBe("Review before the next campaign decision.");
+	});
+
+	it("ranks only decision candidates as the top move", () => {
+		const accountability = buildDigestAccountability({
+			reviewerName: null,
+			ownerFallbackLabel: "Workspace owner",
+			items: [
+				{
+					watchlistName: "Nykaa",
+					title: "High score but unverified",
+					metadata: {
+						priorityScore: 99,
+						priorityBand: "High priority",
+						eventStatus: "proof_pending",
+					},
+				},
+				{
+					watchlistName: "boAt",
+					title: "Verified lower score",
+					metadata: {
+						priorityScore: 70,
+						priorityBand: "Medium priority",
+						sourceStatus: "scan_backed",
+					},
+				},
+			],
+			triage: null,
+		});
+
+		expect(accountability.materialityReason).toContain("boAt: Verified lower score");
+		expect(accountability.materialityReason).not.toContain("Nykaa: High score but unverified");
+	});
+
+	it("uses the triage explanation and next action for periods without items", () => {
+		const accountability = buildDigestAccountability({
+			reviewerName: null,
+			ownerFallbackLabel: "Workspace owner",
+			items: [],
+			triage: {
+				explanation: "An evidence check couldn't finish, so nothing is confirmed yet.",
+				nextAction: "We'll retry at the next scheduled check.",
+			},
+		});
+
+		expect(accountability.materialityReason).toBe(
+			"An evidence check couldn't finish, so nothing is confirmed yet.",
+		);
+		expect(accountability.nextAction).toBe("We'll retry at the next scheduled check.");
+		expect(accountability.reviewer).toEqual({ label: "Workspace owner", state: "workspace_owner" });
 	});
 });
 
