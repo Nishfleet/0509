@@ -14,6 +14,8 @@ const FUNNEL_OPERATIONS = [
   "funnel_signup_start_magicbrief",
   "funnel_pricing_free_card_clicked",
   "funnel_first_brief_viewed",
+  "funnel_activation_scan_started",
+  "funnel_first_brief_email_sent",
 ];
 
 function emittedFunnelRecords(logSpy: MockInstance): Record<string, unknown>[] {
@@ -130,6 +132,84 @@ describe("funnel first-brief viewed", () => {
     emitFunnelFirstBriefViewed({}, makeFunnelRequest());
     const gpc = new Request("http://localhost/", { headers: { "sec-gpc": "1" } });
     emitFunnelFirstBriefViewed({ FUNNEL_MEASUREMENT_ENABLED: "1" }, gpc);
+    expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
+  });
+});
+
+describe("funnel activation events (BET 7, issue #1487)", () => {
+  let logSpy: MockInstance;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("emits activation_scan_started with the workspace activation shape", async () => {
+    const { emitFunnelActivationScanStarted } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelActivationScanStarted(
+      { FUNNEL_MEASUREMENT_ENABLED: "1" },
+      makeFunnelRequest(),
+    );
+    const [record] = emittedFunnelRecords(logSpy) as [
+      { operation: string; message: string; details: Record<string, string> },
+    ];
+    expect(record.operation).toBe("funnel_activation_scan_started");
+    expect(record.details.route).toBe("activation");
+    expect(record.details.account_scope).toBe("workspace");
+    expect(Object.keys(record.details).sort()).toEqual(
+      ["account_scope", "event_id", "route"].sort(),
+    );
+    expect(JSON.stringify(record.details)).not.toMatch(
+      /watchlist|competitor|workspace_id|@/i,
+    );
+    expect(JSON.stringify(record)).not.toMatch(/@/);
+  });
+
+  it("suppresses activation_scan_started when the gate is off or GPC is set", async () => {
+    const { emitFunnelActivationScanStarted } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelActivationScanStarted({}, makeFunnelRequest());
+    const gpc = new Request("http://localhost/", { headers: { "sec-gpc": "1" } });
+    emitFunnelActivationScanStarted(
+      { FUNNEL_MEASUREMENT_ENABLED: "1" },
+      gpc,
+    );
+    expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
+  });
+
+  it("emits first_brief_email_sent without a request (async delivery path)", async () => {
+    const { emitFunnelFirstBriefEmailSent } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelFirstBriefEmailSent({ FUNNEL_MEASUREMENT_ENABLED: "1" });
+    const [record] = emittedFunnelRecords(logSpy) as [
+      { operation: string; message: string; details: Record<string, string> },
+    ];
+    expect(record.operation).toBe("funnel_first_brief_email_sent");
+    expect(record.details.route).toBe("activation");
+    expect(record.details.account_scope).toBe("workspace");
+    expect(Object.keys(record.details).sort()).toEqual(
+      ["account_scope", "event_id", "route"].sort(),
+    );
+    // The fixed message names "email" (safe generic word); the privacy
+    // surface is details: no watchlist identity, competitor, or an address.
+    expect(JSON.stringify(record.details)).not.toMatch(
+      /watchlist|competitor|workspace_id|@/i,
+    );
+    expect(JSON.stringify(record)).not.toMatch(/@/);
+  });
+
+  it("suppresses first_brief_email_sent when the gate is off", async () => {
+    const { emitFunnelFirstBriefEmailSent } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelFirstBriefEmailSent({});
     expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
   });
 });
