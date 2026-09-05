@@ -139,7 +139,7 @@ describe("watchlists bulk competitor import", () => {
         current: 3,
         limit: 10,
       });
-    const queueFirstWatchlistScan = vi.fn();
+    const queueFirstWatchlistScanForSignupFirstBrief = vi.fn();
 
     vi.doMock("~/lib/auth.server", () => authModule());
     vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
@@ -152,8 +152,7 @@ describe("watchlists bulk competitor import", () => {
       upsertWorkspaceBranding: vi.fn(),
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
-      queueFirstWatchlistScan,
-      queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
+      queueFirstWatchlistScanForSignupFirstBrief,
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({
@@ -177,7 +176,7 @@ describe("watchlists bulk competitor import", () => {
     );
 
     expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(2);
-    expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(2);
+    expect(queueFirstWatchlistScanForSignupFirstBrief).toHaveBeenCalledTimes(2);
     expect(completeUserOnboarding).not.toHaveBeenCalled();
   });
 
@@ -190,14 +189,10 @@ describe("watchlists bulk competitor import", () => {
       limit: 10,
     });
     const queueFirstWatchlistScanForSignupFirstBrief = vi.fn();
-    const queueFirstWatchlistScan = vi.fn();
 
     vi.doMock("~/lib/auth.server", () => authModule());
     vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({
-        SIGNUP_FIRST_BRIEF_ENABLED: "1",
-        FUNNEL_MEASUREMENT_ENABLED: "1",
-      })),
+      getEnv: vi.fn(() => ({ FUNNEL_MEASUREMENT_ENABLED: "1" })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       completeUserOnboarding: vi.fn(),
@@ -208,7 +203,6 @@ describe("watchlists bulk competitor import", () => {
       upsertWorkspaceBranding: vi.fn(),
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
-      queueFirstWatchlistScan,
       queueFirstWatchlistScanForSignupFirstBrief,
     }));
     vi.doMock("~/lib/plan.server", () => ({
@@ -232,7 +226,6 @@ describe("watchlists bulk competitor import", () => {
     );
 
     expect(queueFirstWatchlistScanForSignupFirstBrief).toHaveBeenCalledTimes(1);
-    expect(queueFirstWatchlistScan).not.toHaveBeenCalled();
     const records = logSpy.mock.calls
       .map((call) => call[0])
       .filter((line): line is string => typeof line === "string")

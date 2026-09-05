@@ -131,14 +131,6 @@ export interface AppEnv {
   PRESENCE_RSS_ROLLOUT?: string;
   /** Digest delivery rollout: disabled | internal | pilot | ga. Defaults to disabled (notifications off). */
   PRESENCE_DIGEST_ROLLOUT?: string;
-  /**
-   * BET 7 — same-session first brief. When true, the onboarding watchlist
-   * creation queues the activation scan with a `signup_first_brief` reason and
-   * redirects to `/app/onboard?step=first-brief`, which renders the captured
-   * brief inline. Default off for the first 48h post-merge (rollback is a flag
-   * flip, not a code revert). See issue #1276.
-   */
-  SIGNUP_FIRST_BRIEF_ENABLED?: string;
   /** HMAC secret for one-time OAuth transactions (32+ bytes). Fail closed when missing. */
   PRESENCE_OAUTH_STATE_SECRET?: string;
   /** Owner-documented internal workspace user id for presence pilot (never a customer id). */
@@ -206,11 +198,6 @@ function parseEnvFlag(value: string | undefined) {
 /** Full-Site Watch gate. When false, no site scans run and nothing writes. */
 export function isFullSiteWatchEnabled(env: AppEnv) {
   return parseEnvFlag(env.FULLSITE_WATCH_ENABLED);
-}
-
-/** BET 7 — same-session first brief gate (issue #1276). Default off. */
-export function isSignupFirstBriefEnabled(env: AppEnv) {
-  return parseEnvFlag(env.SIGNUP_FIRST_BRIEF_ENABLED);
 }
 
 export function emailFromAddress(env: AppEnv) {

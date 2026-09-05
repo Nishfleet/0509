@@ -191,7 +191,7 @@ describe("same-session first brief (issue #1487)", () => {
 
     const { loader } = await import("~/routes/app.onboard");
     const data = (await loader({
-      context: { cloudflare: { env: { SIGNUP_FIRST_BRIEF_ENABLED: "1" } } },
+      context: { cloudflare: { env: {} } },
       params: {},
       request: new Request("http://localhost/app/onboard?step=first-brief"),
     } as never)) as Awaited<ReturnType<typeof loader>>;

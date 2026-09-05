@@ -330,6 +330,7 @@ describe("setup checklist actions", () => {
       brandName: null,
       brandWebsite: "https://mybrand.example",
     });
+    const queueFirstWatchlistScanForSignupFirstBrief = vi.fn();
 
     vi.doMock("~/lib/auth.server", () => authModuleFromSession({
         user: {
@@ -349,6 +350,9 @@ describe("setup checklist actions", () => {
       createSavedQuery: vi.fn(),
       createWatchlistWithinLimit,
       upsertWorkspaceBranding,
+    }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      queueFirstWatchlistScanForSignupFirstBrief,
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({
@@ -373,7 +377,13 @@ describe("setup checklist actions", () => {
             body: formData,
           }),
         } as never),
-      "/app/watchlists?watchlist=watch-1",
+      "/app/onboard?step=first-brief",
+    );
+
+    expect(queueFirstWatchlistScanForSignupFirstBrief).toHaveBeenCalledWith(
+      {},
+      undefined,
+      expect.objectContaining({ id: "watch-1" }),
     );
 
     expect(createWatchlistWithinLimit).toHaveBeenCalledWith(
@@ -658,7 +668,7 @@ describe("setup checklist actions", () => {
         limit: 3,
       });
     const listWatchlists = vi.fn().mockResolvedValue([]);
-    const queueFirstWatchlistScan = vi.fn();
+    const queueFirstWatchlistScanForSignupFirstBrief = vi.fn();
     const upsertAgentMemory = vi.fn().mockResolvedValue({
       id: "memory-1",
     });
@@ -718,8 +728,7 @@ describe("setup checklist actions", () => {
       upsertWorkspaceBranding,
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
-      queueFirstWatchlistScan,
-      queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
+      queueFirstWatchlistScanForSignupFirstBrief,
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({
@@ -754,7 +763,7 @@ describe("setup checklist actions", () => {
             body: formData,
           }),
         } as never),
-      "/app?setup=market-desk&created=2",
+      "/app/onboard?step=first-brief",
     );
 
     expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(2);
@@ -816,7 +825,7 @@ describe("setup checklist actions", () => {
         },
       },
     });
-    expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(2);
+    expect(queueFirstWatchlistScanForSignupFirstBrief).toHaveBeenCalledTimes(2);
     expect(upsertWorkspaceBranding).toHaveBeenCalledWith({}, "user-1", {
       brandWebsite: "https://mybrand.example",
     });
@@ -833,7 +842,7 @@ describe("setup checklist actions", () => {
         current: 1,
         limit: plan === "free" ? 1 : 3,
       });
-      const queueFirstWatchlistScan = vi.fn();
+      const queueFirstWatchlistScanForSignupFirstBrief = vi.fn();
       const upsertClientRoom = vi.fn();
 
       vi.doMock("~/lib/auth.server", () => authModuleFromSession({
@@ -858,8 +867,7 @@ describe("setup checklist actions", () => {
         upsertWorkspaceBranding: vi.fn(),
       }));
       vi.doMock("~/lib/monitoring.server", () => ({
-        queueFirstWatchlistScan,
-        queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
+        queueFirstWatchlistScanForSignupFirstBrief,
       }));
       vi.doMock("~/lib/plan.server", () => ({
         checkPlanLimit: vi.fn().mockResolvedValue({
@@ -920,8 +928,7 @@ describe("setup checklist actions", () => {
       upsertWorkspaceBranding: vi.fn(),
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
-      queueFirstWatchlistScan,
-      queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
+      queueFirstWatchlistScanForSignupFirstBrief,
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({

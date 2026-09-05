@@ -17,15 +17,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const source = new URL(request.url);
 
-  // BET 7 (issue #1276): the same-session first brief. When the feature flag
-  // is on and the user lands on ?step=first-brief, render the inline brief
-  // instead of redirecting to the dashboard. The flag defaults off; the
-  // redirect below remains the path for everyone else.
+  // BET 7 (issue #1276/#1487): the same-session first brief. When the user
+  // lands on ?step=first-brief, render the inline brief instead of redirecting
+  // to the dashboard. The first-brief onboarding flow is now default-on.
   if (source.searchParams.get("step") === "first-brief") {
-    const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
-    if (isSignupFirstBriefEnabled(env)) {
-      return firstBriefLoader(env, context, request);
-    }
+    return firstBriefLoader(env, context, request);
   }
 
   if (requestHasCompatCookie(request)) {

@@ -194,9 +194,7 @@ export async function handleSetupChecklistAction(
     }
 
     const { createWatchlistWithinLimit, upsertAgentMemory, upsertClientRoom } = await import("~/lib/data.server");
-    const { queueFirstWatchlistScan, queueFirstWatchlistScanForSignupFirstBrief } = await import("~/lib/monitoring.server");
-    const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
-    const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
+    const { queueFirstWatchlistScanForSignupFirstBrief } = await import("~/lib/monitoring.server");
     const clientRoomContextRequested = rowsToCreate.some((row) => Boolean(row.client));
     let clientRoomEntitled = false;
     if (clientRoomContextRequested) {
@@ -233,11 +231,7 @@ export async function handleSetupChecklistAction(
       if (result.status === "created" && !queuedWatchlistIds.has(watchlist.id)) {
         queuedWatchlistIds.add(watchlist.id);
         createdCount += 1;
-        if (signupFirstBriefEnabled) {
-          await queueFirstWatchlistScanForSignupFirstBrief(scanEnv, cloudflare?.ctx, watchlist);
-        } else {
-          await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, watchlist);
-        }
+        await queueFirstWatchlistScanForSignupFirstBrief(scanEnv, cloudflare?.ctx, watchlist);
       }
     }
 
@@ -268,12 +262,10 @@ export async function handleSetupChecklistAction(
       };
     }
 
-    if (signupFirstBriefEnabled) {
-      const { emitFunnelActivationScanStarted } = await import(
-        "~/lib/funnel-measurement.server"
-      );
-      emitFunnelActivationScanStarted(env, request);
-    }
+    const { emitFunnelActivationScanStarted } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelActivationScanStarted(env, request);
 
     if (importSurface === "watchlists") {
       throw redirect(`/app/watchlists?imported=${createdCount}`);
@@ -282,10 +274,7 @@ export async function handleSetupChecklistAction(
     await saveOptionalBrandWebsite();
     await completeUserOnboarding(env, session.user.id);
 
-    if (signupFirstBriefEnabled) {
-      throw redirect(`/app/onboard?step=first-brief`);
-    }
-    throw redirect(`/app?setup=market-desk&created=${createdCount}`);
+    throw redirect(`/app/onboard?step=first-brief`);
   }
 
   if (intent === "create-watchlist") {
@@ -365,27 +354,18 @@ export async function handleSetupChecklistAction(
       };
     }
 
-    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
-    const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
-    const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
+    const { queueFirstWatchlistScanForSignupFirstBrief } = await import("~/lib/monitoring.server");
     const watchlist = watchlistResult.watchlist;
     try {
-      if (signupFirstBriefEnabled) {
-        const { queueFirstWatchlistScanForSignupFirstBrief } = await import(
-          "~/lib/monitoring.server"
-        );
-        await queueFirstWatchlistScanForSignupFirstBrief(
-          scanEnv,
-          cloudflare?.ctx,
-          watchlist,
-        );
-        const { emitFunnelActivationScanStarted } = await import(
-          "~/lib/funnel-measurement.server"
-        );
-        emitFunnelActivationScanStarted(env, request);
-      } else {
-        await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, watchlist);
-      }
+      await queueFirstWatchlistScanForSignupFirstBrief(
+        scanEnv,
+        cloudflare?.ctx,
+        watchlist,
+      );
+      const { emitFunnelActivationScanStarted } = await import(
+        "~/lib/funnel-measurement.server"
+      );
+      emitFunnelActivationScanStarted(env, request);
     } catch {
       return {
         ok: false,
@@ -399,10 +379,7 @@ export async function handleSetupChecklistAction(
     await saveOptionalBrandWebsite();
     await completeUserOnboarding(env, session.user.id);
 
-    if (signupFirstBriefEnabled) {
-      throw redirect(`/app/onboard?step=first-brief`);
-    }
-    throw redirect(watchlist ? `/app/watchlists?watchlist=${watchlist.id}` : "/app/watchlists");
+    throw redirect(`/app/onboard?step=first-brief`);
   }
 
   if (intent === "finish") {

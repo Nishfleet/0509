@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  appOrigin,
-  isSignupFirstBriefEnabled,
-  isWhatsAppWebhookConfigured,
-} from "~/lib/env.server";
+import { appOrigin, isWhatsAppWebhookConfigured } from "~/lib/env.server";
 
 describe("appOrigin", () => {
   it("prefers BETTER_AUTH_URL when configured", () => {
@@ -54,28 +50,5 @@ describe("isWhatsAppWebhookConfigured", () => {
         WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify",
       }),
     ).toBe(true);
-  });
-});
-
-describe("isSignupFirstBriefEnabled", () => {
-  // Regression guard for issue #1416: the BET 7 first-brief feature was built
-  // and tested (#1276) but never enabled because SIGNUP_FIRST_BRIEF_ENABLED
-  // was absent from wrangler.jsonc. parseEnvFlag must return true for "1" and
-  // false when the flag is missing, so the flag cannot silently disappear
-  // again — a missing flag means a new free signup waits up to 7 days for
-  // their first value (BET 7).
-  it("is off when the flag is absent and on only for parseEnvFlag truthy values", () => {
-    expect(isSignupFirstBriefEnabled({})).toBe(false);
-    expect(isSignupFirstBriefEnabled({ SIGNUP_FIRST_BRIEF_ENABLED: "0" })).toBe(false);
-    expect(isSignupFirstBriefEnabled({ SIGNUP_FIRST_BRIEF_ENABLED: "false" })).toBe(false);
-    expect(isSignupFirstBriefEnabled({ SIGNUP_FIRST_BRIEF_ENABLED: "" })).toBe(false);
-    expect(isSignupFirstBriefEnabled({ SIGNUP_FIRST_BRIEF_ENABLED: "1" })).toBe(true);
-    expect(isSignupFirstBriefEnabled({ SIGNUP_FIRST_BRIEF_ENABLED: "true" })).toBe(true);
-    expect(isSignupFirstBriefEnabled({ SIGNUP_FIRST_BRIEF_ENABLED: "on" })).toBe(true);
-    expect(isSignupFirstBriefEnabled({ SIGNUP_FIRST_BRIEF_ENABLED: "yes" })).toBe(true);
-  });
-
-  it("treats whitespace-padded truthy values as enabled", () => {
-    expect(isSignupFirstBriefEnabled({ SIGNUP_FIRST_BRIEF_ENABLED: " 1 " })).toBe(true);
   });
 });

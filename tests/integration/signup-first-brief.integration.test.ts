@@ -176,7 +176,6 @@ describe("/app/onboard?step=first-brief against real D1 (issue #1276)", () => {
     seededUserId = seeded.userId;
 
     const result = await callOnboardLoader({
-      SIGNUP_FIRST_BRIEF_ENABLED: "1",
       FUNNEL_MEASUREMENT_ENABLED: "1",
     });
 
@@ -209,7 +208,6 @@ describe("/app/onboard?step=first-brief against real D1 (issue #1276)", () => {
 
     // No digest, no scan completion — the loader should return waiting.
     const result = await callOnboardLoader({
-      SIGNUP_FIRST_BRIEF_ENABLED: "1",
       FUNNEL_MEASUREMENT_ENABLED: "1",
     });
 
@@ -218,19 +216,6 @@ describe("/app/onboard?step=first-brief against real D1 (issue #1276)", () => {
     const data = result.data as SignupFirstBriefLoaderData;
     expect(data.step).toBe("first-brief");
     expect(data.status).toBe("waiting");
-  });
-
-  it("redirects to /app when the flag is off (default)", async () => {
-    const userId = await seedUser(uid("user"));
-    seededUserId = userId;
-
-    const result = await callOnboardLoader({}, "http://localhost/app/onboard?step=first-brief");
-
-    // Flag off → the loader falls through to the default redirect path.
-    expect(result.kind).toBe("response");
-    if (result.kind !== "response") throw new Error("expected redirect");
-    expect(result.response.status).toBe(301);
-    expect(result.response.headers.get("Location")).toContain("/app");
   });
 
   it("buildSignupFirstBriefPayload resolves ad enrichment from real D1", async () => {

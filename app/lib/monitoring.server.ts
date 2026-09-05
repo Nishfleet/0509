@@ -1603,16 +1603,15 @@ export function queueFirstWatchlistScan(
 }
 
 /**
- * BET 7 (issue #1276): the same-session first-brief activation path. Queues
- * the existing activation scan with a `signup_first_brief` reason so the
+ * BET 7 (issue #1276/#1487): the same-session first-brief activation path.
+ * Queues the existing activation scan with a `signup_first_brief` reason so the
  * Workflow payload and the `first_brief_signup_capture_queued` log line carry
- * the activation origin. The scan itself, the first-brief filing, and the
- * email delivery are unchanged — this only adds the reason and the gate.
+ * the activation origin. The scan itself, the first-brief filing, and the email
+ * delivery are unchanged — this only adds the reason. This is now the default
+ * path for every first watchlist created during onboarding.
  *
  * Returns true when a scan was queued (or already in flight), false when the
- * watchlist was already scanned or missing. The gate (`SIGNUP_FIRST_BRIEF_ENABLED`,
- * default off) is checked by the caller before reaching here so the redirect
- * target stays the caller's decision.
+ * watchlist was already scanned or missing.
  */
 export async function queueFirstWatchlistScanForSignupFirstBrief(
   env: AppEnv,
