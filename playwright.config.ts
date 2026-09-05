@@ -84,7 +84,7 @@ export default defineConfig({
       // `home-hero-viewport` (BET 9 / #1277) locks the first-viewport hero
       // composition on the same local fixture server.
       testMatch:
-          /(local-authenticated|surface-audit|home-hero-viewport|bl030-capture|bl031-capture|bl032-capture|bl033a-capture|bl033b-capture|bl034-capture|bl037-capture|bl038-capture|bl039-capture|bl040-capture|bl041-capture|bl042-capture)\.spec\.ts/,
+          /(local-authenticated|surface-audit|home-hero-viewport|mobile-ticker-overflow|bl030-capture|bl031-capture|bl032-capture|bl033a-capture|bl033b-capture|bl034-capture|bl037-capture|bl038-capture|bl039-capture|bl040-capture|bl041-capture|bl042-capture)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,
