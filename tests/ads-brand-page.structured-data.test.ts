@@ -86,6 +86,7 @@ function cachedIndexable(overrides: Partial<BrandPageLoaderData> = {}): BrandPag
     brandOwnedAdCount: 6,
     verifiedLinkCount: 6,
     unverifiedMatchCount: 0,
+    partnerCampaignAdIds: [],
     teaser: {
       totalCount: 6,
       activeCount: 6,

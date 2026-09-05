@@ -127,6 +127,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     brandOwnedAdCount: 6,
     verifiedLinkCount: 6,
     unverifiedMatchCount: 0,
+    partnerCampaignAdIds: [],
     teaser,
     aggression,
     changeEvents,
