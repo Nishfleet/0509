@@ -19,6 +19,7 @@ import { noPricingPreview, pricingPreviewWithinBound } from "~/lib/pricing-previ
 import type { RootLoaderData } from "~/root";
 import { pickFeaturedAdsInternalLink, type IndexableAdsLink } from "~/lib/ads-internal-links";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
+import { dedupeTickerBodies } from "~/lib/ticker-dedup";
 
 export { planIntentPath, valueMathLabel, billingFaqJsonLdEntries } from "~/components/pricing-section";
 export type { LocalPricingPreview } from "~/components/pricing-section";
@@ -394,7 +395,10 @@ export default function MarketingRoute() {
     };
   }, []);
 
-  const tickerEvents = buildTickerEvents(proofBrief);
+  const tickerEvents = dedupeTickerBodies(
+    buildTickerEvents(proofBrief),
+    (event) => event[1],
+  );
 
   const tickerRun = (
     <span className="ld-ticker-run">
