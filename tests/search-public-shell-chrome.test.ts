@@ -62,17 +62,14 @@ describe("/search public shell chrome", () => {
     const { DashboardShell } = await import("~/components/dashboard-shell");
 
     const markup = renderToStaticMarkup(
-      createElement(
-        DashboardShell,
-        {
-          accountDetail: "Find competitor ads",
-          accountLabel: "Search",
-          accountTitle: "Five to Nine",
-          isPublic: true,
-          pageClassName: "f9-find-page",
-        },
-        createElement("p", null, "Results"),
-      ),
+      createElement(DashboardShell, {
+        accountDetail: "Find competitor ads",
+        accountLabel: "Search",
+        accountTitle: "Five to Nine",
+        isPublic: true,
+        pageClassName: "f9-find-page",
+        children: createElement("p", null, "Results"),
+      }),
     );
 
     // Scope to the public rail so the assertion cannot be satisfied by a
