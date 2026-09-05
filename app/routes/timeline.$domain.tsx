@@ -25,6 +25,7 @@ import {
   breadcrumbJsonLd,
   canonicalUrl,
   jsonLdScriptProps,
+  offerTimelineDatasetJsonLd,
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
@@ -172,6 +173,33 @@ export default function OfferTimelineRoute() {
                     pathname: data.canonicalPath,
                   },
                 ],
+              }),
+            )}
+          />
+          {/*
+           * Dataset JSON-LD (issue 964): the timeline is the citable,
+           * uncopyable change-ledger asset. datePublished/dateModified come
+           * from the first and last stored snapshot timestamps the page
+           * already renders; license is the operating terms the footer
+           * links; distribution points answer engines at this same URL as
+           * HTML. Emitted only on indexable timelines — a noindex shell
+           * never carries it.
+           */}
+          <script
+            {...jsonLdScriptProps(
+              offerTimelineDatasetJsonLd({
+                brandName: data.brandName,
+                domain: data.domain,
+                description: `Dated offer states for ${data.domain}: headline, CTA, and price, with page text and a screenshot when we stored one.`,
+                pathname: data.canonicalPath,
+                datePublished:
+                  data.entries.length > 0
+                    ? data.entries[0]?.capturedAt ?? null
+                    : null,
+                dateModified:
+                  data.entries.length > 0
+                    ? data.entries[data.entries.length - 1]?.capturedAt ?? null
+                    : null,
               }),
             )}
           />
