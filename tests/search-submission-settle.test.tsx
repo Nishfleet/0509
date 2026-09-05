@@ -191,6 +191,51 @@ const enrichmentPendingLoaderData: Record<string, unknown> = {
   selectionEnrichmentPending: true,
 };
 
+const emptyDomainResult = {
+  ads: [],
+  nextCursor: null,
+  source: "meta_library_browser",
+  provider: "meta_library_browser",
+  cacheStatus: "hit",
+  discoveryStatus: "healthy",
+  discoverySummary: null,
+  discoveryFailureClass: null,
+};
+
+const emptyDomainCompetitor = {
+  raw: "fresh-empty.example",
+  normalizedUrl: "https://fresh-empty.example",
+  host: "fresh-empty.example",
+  displayName: "fresh-empty.example",
+  searchTerm: "fresh-empty.example",
+  error: null,
+};
+
+const emptyDomainScopedLoaderData: Record<string, unknown> = {
+  ...idleLoaderData,
+  filters: {
+    ...idleLoaderData.filters,
+    query: "fresh-empty.example",
+    country: "India",
+  },
+  fingerprint: "fp-fresh-empty-scoped",
+  result: emptyDomainResult,
+  competitorWebsite: emptyDomainCompetitor,
+  displayDomain: "fresh-empty.example",
+  relevanceApplied: true,
+  searchScope: "exact",
+};
+
+const emptyDomainUnscopedLoaderData: Record<string, unknown> = {
+  ...emptyDomainScopedLoaderData,
+  filters: {
+    ...idleLoaderData.filters,
+    query: "fresh-empty.example",
+    country: "all",
+  },
+  fingerprint: "fp-fresh-empty-unscoped",
+};
+
 const warmingLoaderData: Record<string, unknown> = {
   ...idleLoaderData,
   filters: { ...idleLoaderData.filters, query: "nykaa.com" },
@@ -311,6 +356,62 @@ describe("public search submission settle", () => {
     const text = markup.replace(/<[^>]+>/g, " ");
     const words = text.split(/\s+/).filter(Boolean).length;
     expect(words).toBeGreaterThanOrEqual(250);
+  });
+
+  it("gives a completed empty search exactly one re-search affordance — all countries when the check ran scoped", async () => {
+    // Issue 1376 / BL-031: the finished zero-ad state keeps the honest
+    // "not evidence" copy and offers ONE way forward — a re-run of the
+    // same search, not a link farm.
+    loaderData = emptyDomainScopedLoaderData;
+    locationObj = {
+      pathname: "/search",
+      search:
+        "?website=fresh-empty.example&mode=advertiser&query=fresh-empty.example&country=India&trackingRole=competitor",
+      hash: "",
+    };
+    navigationState = { state: "idle", location: null };
+
+    const markup = await renderMarkup();
+
+    expect(markup).toContain("not evidence that the competitor is inactive");
+    expect(markup).not.toContain("Search broader matches");
+    expect(markup).not.toContain("Try another domain");
+    expect(markup).not.toContain("View monitoring setup");
+    // The mocked Link drops text children (see the file header), so the
+    // affordance is asserted by href shape: exactly one anchor, same
+    // website, same query, the country widened to all.
+    const acts = markup.match(
+      /<div class="f9-wk-acts">([\s\S]*?)<\/div>/,
+    )?.[1];
+    expect(acts?.match(/<a /g)).toHaveLength(1);
+    expect(acts).toContain("country=all");
+    expect(acts).toContain("website=fresh-empty.example");
+    expect(acts).toContain("query=fresh-empty.example");
+    expect(acts).not.toContain("country=India");
+    expect(acts).not.toContain("broader=1");
+  });
+
+  it("gives a completed empty search exactly one re-search affordance — the brand stem as a keyword when unscoped", async () => {
+    loaderData = emptyDomainUnscopedLoaderData;
+    locationObj = {
+      pathname: "/search",
+      search:
+        "?website=fresh-empty.example&mode=advertiser&query=fresh-empty.example&country=all&trackingRole=competitor",
+      hash: "",
+    };
+    navigationState = { state: "idle", location: null };
+
+    const markup = await renderMarkup();
+
+    expect(markup).toContain("not evidence that the competitor is inactive");
+    const acts = markup.match(
+      /<div class="f9-wk-acts">([\s\S]*?)<\/div>/,
+    )?.[1];
+    expect(acts?.match(/<a /g)).toHaveLength(1);
+    expect(acts).toContain("mode=keyword");
+    expect(acts).toContain("query=fresh-empty&amp;");
+    expect(acts).not.toContain("website=");
+    expect(acts).not.toContain("broader=1");
   });
 
   it("renders results or the error for the committed target and enables submit even when useNavigation still says loading", async () => {

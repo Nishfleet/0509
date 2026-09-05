@@ -1507,6 +1507,48 @@ export default function SearchRoute() {
         })
       : null;
 
+  // BL-031 (issue 1376): a completed zero-ad search gets exactly ONE way
+  // forward, and it re-points the same search — a wider market when a
+  // country filter narrowed the check, else the brand stem as a keyword.
+  // The "not evidence" note already says what the empty means; the page
+  // does not scatter three links under it. A delayed or refused check is
+  // not a finished empty and keeps its own recovery row.
+  const completedEmptySearch =
+    visibleAds.length === 0 &&
+    (searchAnswer?.state === "no_verified" ||
+      searchAnswer?.state === "empty");
+  const emptySearchKeywordStem =
+    (displayDomain ?? data.filters.query ?? "").split(".")[0]?.trim() || null;
+  let emptySearchNextAction: { label: string; href: string } | null = null;
+  if (completedEmptySearch) {
+    if (data.filters.country && data.filters.country !== ALL_COUNTRIES_VALUE) {
+      const allCountriesParams = withTrackingContext(
+        buildSearchParams({
+          mode: data.mode,
+          filters: { ...data.filters, country: ALL_COUNTRIES_VALUE },
+        }),
+        competitorWebsite.raw,
+        trackingRole,
+      );
+      emptySearchNextAction = {
+        label: `Search all countries for “${
+          displayDomain ?? data.filters.query
+        }”`,
+        href: `${searchPath}?${allCountriesParams.toString()}`,
+      };
+    } else if (emptySearchKeywordStem) {
+      const keywordParams = buildSearchParams({
+        mode: "keyword",
+        filters: { ...data.filters, query: emptySearchKeywordStem },
+      });
+      keywordParams.set("trackingRole", trackingRole);
+      emptySearchNextAction = {
+        label: `Search “${emptySearchKeywordStem}” as a keyword`,
+        href: `${searchPath}?${keywordParams.toString()}`,
+      };
+    }
+  }
+
   // BL-031: the refine panel is a disclosure that stays SHUT until the visitor
   // actually has filters on, so the pre-search screen is one field and one
   // button instead of a six-control form page. The count is written into the
@@ -2123,7 +2165,27 @@ export default function SearchRoute() {
                         </Link>
                       </div>
                     ) : isDomainSearch && !isBroaderScope ? (
-                      <div className="f9-wk-acts">
+                      completedEmptySearch && emptySearchNextAction ? (
+                        /* Issue 1376: a finished empty search offers ONE
+                           next action — a re-run of the same search with a
+                           different country, or the brand stem as a
+                           keyword — beside the "not evidence" note. The
+                           three-link row (broader / another domain /
+                           monitoring setup) and the track shortcut belong
+                           to states that still have something to act on. */
+                        <div className="f9-wk-acts">
+                          <Link
+                            className="f9-wk-lnk"
+                            to={emptySearchNextAction.href}
+                          >
+                            {emptySearchNextAction.label}{" "}
+                            <span aria-hidden="true" className="f9-wk-chev">
+                              &rsaquo;
+                            </span>
+                          </Link>
+                        </div>
+                      ) : (
+                        <div className="f9-wk-acts">
                         {rootData.session ? (
                           <Form className="f9-quick-track-form" method="post">
                             <input
@@ -2173,7 +2235,8 @@ export default function SearchRoute() {
                             &rsaquo;
                           </span>
                         </Link>
-                      </div>
+                        </div>
+                      )
                     ) : null}
                   </div>
                 )}
@@ -2663,10 +2726,9 @@ export default function SearchRoute() {
                 Nothing searched yet
               </p>
               <p className="f9-wk-lede">
-                Paste a competitor website and press See ads. We check the Meta
-                Ad Library for their ads, capture the offer from their landing
-                page, and keep the capture — so the next time that offer moves,
-                you can prove it.
+                Paste a competitor website and press See ads — we check the
+                Meta Ad Library for their ads and keep the capture, so the
+                next time the offer moves, you can prove it.
               </p>
               <div className="f9-wk-acts">
                 <Link className="f9-wk-lnk" to="/#demo">
