@@ -1189,7 +1189,7 @@ describe("watchlists route rendering", () => {
     expect(markup).not.toContain("f9-evidence-detail-head");
     expect(markup).not.toContain("f9-evidence-status-strip");
 
-    // The tab bar is real navigation: five links, fixed order, the active one
+    // The tab bar is real navigation: six links, fixed order, the active one
     // marked with aria-current and not by ink alone (brief §10).
     expect(markup).toContain('aria-label="Competitor sections"');
     for (const [label, href] of [
@@ -1197,6 +1197,7 @@ describe("watchlists route rendering", () => {
       ["Evidence", "/app/watchlists?watchlist=watch-1&amp;tab=evidence"],
       ["Creative", "/app/watchlists?watchlist=watch-1&amp;tab=creative"],
       ["Delivery", "/app/watchlists?watchlist=watch-1&amp;tab=delivery"],
+      ["Library", "/app/watchlists?watchlist=watch-1&amp;tab=library"],
       ["Setup", "/app/watchlists?watchlist=watch-1&amp;tab=setup"],
     ]) {
       expect(markup).toContain(`href="${href}"`);

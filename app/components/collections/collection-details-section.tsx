@@ -55,6 +55,43 @@ export function CollectionDetailsSection({
       </div>
 
       <div aria-label="Collection actions" className="f9-library-actions">
+        <CollectionDisclosure
+          className="f9-library-rename"
+          group={COLLECTION_PANEL_GROUP}
+          summary="Rename collection"
+        >
+          <Form className="f9-save-stack" method="post">
+            <input name="intent" type="hidden" value="rename-collection" />
+            <input name="collectionId" type="hidden" value={collection.id} />
+            <label className="f9-wk-field">
+              <span className="f9-wk-lab">Name</span>
+              <input
+                className="f9-wk-in"
+                defaultValue={collection.name}
+                name="name"
+                required
+                type="text"
+              />
+            </label>
+            <label className="f9-wk-field">
+              <span className="f9-wk-lab">Description</span>
+              <input
+                className="f9-wk-in"
+                defaultValue={collection.description ?? ""}
+                name="description"
+                type="text"
+              />
+            </label>
+            <SubmitButton
+              className="f9-wk-lnk"
+              intent="rename-collection"
+              pendingLabel="Saving…"
+            >
+              Save name
+            </SubmitButton>
+          </Form>
+        </CollectionDisclosure>
+
         {canOpenReport ? (
           <Link
             className="f9-wk-lnk"

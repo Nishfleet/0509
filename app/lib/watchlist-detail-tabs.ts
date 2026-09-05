@@ -27,6 +27,7 @@ export type WatchlistDetailTabId =
   | "evidence"
   | "creative"
   | "delivery"
+  | "library"
   | "setup";
 
 /** Fixed order, brief §6.4. Never reordered per plan, per state or per user. */
@@ -35,6 +36,7 @@ export const WATCHLIST_DETAIL_TABS: readonly WatchlistDetailTabDefinition[] = [
   { id: "evidence", label: "Evidence", panelLabel: "Evidence" },
   { id: "creative", label: "Creative", panelLabel: "Creative" },
   { id: "delivery", label: "Delivery", panelLabel: "Delivery" },
+  { id: "library", label: "Library", panelLabel: "Library" },
   { id: "setup", label: "Setup", panelLabel: "Setup" },
 ];
 

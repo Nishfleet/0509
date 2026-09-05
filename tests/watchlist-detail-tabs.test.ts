@@ -15,6 +15,7 @@ describe("competitor detail tabs (brief §6.4)", () => {
       "evidence",
       "creative",
       "delivery",
+      "library",
       "setup",
     ]);
     expect(WATCHLIST_DETAIL_TABS.map((tab) => tab.label)).toEqual([
@@ -22,6 +23,7 @@ describe("competitor detail tabs (brief §6.4)", () => {
       "Evidence",
       "Creative",
       "Delivery",
+      "Library",
       "Setup",
     ]);
   });

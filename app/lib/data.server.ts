@@ -249,6 +249,7 @@ export {
   type CreateCollectionWithinLimitResult,
   listCollectionItemsPage,
   listCollectionItems,
+  updateCollection,
   updateCollectionItem,
   addAdToCollection,
   addExternalProofToCollection,

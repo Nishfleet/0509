@@ -82,6 +82,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     getWatchlist,
     getWatchlistDeliveryConfig,
     getWorkspaceDeliveryConfig,
+    listCollections,
     listDeliveryAttempts,
     listDeliveryTargets,
     listEventCandidates,
@@ -132,6 +133,11 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
   const selectedWatchlistPromise = requestedWatchlistId
     ? getWatchlist(env, requestedWatchlistId, workspaceUserId)
     : Promise.resolve(null);
+  // Workspace memory activation (#1557): the competitor detail's Library tab
+  // surfaces "save captured ad to collection" and "add external evidence
+  // link", so the loader carries the workspace's collections on every load.
+  // Best-effort — a failure degrades to an empty list, never a 500.
+  const collectionsPromise = listCollections(env, workspaceUserId).catch(() => [] as Awaited<ReturnType<typeof listCollections>>);
   const now = new Date();
   const captureWindowResult = loadWatchBoardCaptureWindow(
     env,
@@ -153,6 +159,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     selectedWatchlist,
     captureWindowResultValue,
     workspaceDeliveryConfigRecord,
+    collections,
   ] = await Promise.all([
     watchlistsPromise,
     resolveCommercialAdSourceStatus(env).then(toCustomerDiscoveryStatus),
@@ -170,6 +177,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     // check" renders in the viewer's zone, and the two would disagree with
     // /app/dashboard.
     getWorkspaceDeliveryConfig(env, workspaceUserId),
+    collectionsPromise,
   ]);
   const captureWindow = captureWindowResultValue.captureWindow;
   const captureWindowDegraded = captureWindowResultValue.degraded;
@@ -222,6 +230,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
       plan,
       whatsappAvailable,
       showPresenceNav,
+      collections,
       creativeWall: [] as Awaited<ReturnType<typeof listCreativeWallAds>>,
       trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
       dossier: null as Awaited<ReturnType<typeof buildCompetitorDossier>> | null,
@@ -357,6 +366,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     plan,
     whatsappAvailable,
     showPresenceNav,
+    collections,
     creativeWall,
     trendDailyActivity,
     dossier,

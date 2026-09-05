@@ -527,6 +527,37 @@ export async function deleteCollection(env: AppEnv, userId: string, collectionId
   return Number(result.meta?.changes ?? 0) > 0;
 }
 
+/**
+ * Rename a collection (and optionally update its description).
+ * Ownership-scoped: a row that does not belong to `userId` is not modified,
+ * and the caller can tell the two cases apart by the returned null.
+ */
+export async function updateCollection(
+  env: AppEnv,
+  userId: string,
+  collectionId: string,
+  input: { name: string; description?: string | null },
+): Promise<CollectionRecord | null> {
+  const name = input.name.trim();
+  if (!name) {
+    return null;
+  }
+  const description = input.description?.trim() ?? null;
+  const timestamp = nowIso();
+  const db = ensureDb(env);
+  const result = await db
+    .prepare(
+      "UPDATE collection SET name = ?, description = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+    )
+    .bind(name, description, timestamp, collectionId, userId)
+    .run();
+
+  if (Number(result.meta?.changes ?? 0) === 0) {
+    return null;
+  }
+  return getCollection(env, collectionId, userId);
+}
+
 export async function deleteCollectionItem(env: AppEnv, userId: string, itemId: string) {
   const db = ensureDb(env);
   const result = await db
