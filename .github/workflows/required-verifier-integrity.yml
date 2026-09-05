@@ -1,0 +1,259 @@
+name: Required verifier integrity
+
+# Independent, base-branch-owned integrity gate for the 0509 required
+# verifiers (sol-sweep product-ci/0509-required-verifiers-self-certify-
+# without-independent-approval).
+#
+# Defect closed: PR #694 changed both workflows that produce the only required
+# contexts (Gitleaks, codex-node-checks), received successful checks produced
+# by that same candidate, had zero reviews, and merged. Branch protection
+# required neither approval nor conversation resolution, so a candidate could
+# redefine its own verifier and self-certify.
+#
+# This workflow runs on pull_request_target, i.e. it executes the BASE branch's
+# bytes with a base-branch-scoped token: it never checks out candidate code and
+# never runs a candidate-controlled script. Every input (changed files, review
+# states, reviewer permissions, head commit date, head sha, attestation
+# comments and their authors' permissions) is read through the GitHub API in
+# the base branch's context, so a candidate cannot shape the evidence about
+# itself. If a candidate changes a protected verifier definition
+# (ci.yml, secret-scan.yml, this workflow, the gate's decision scripts, or the
+# production deploy-authorization chain: deploy-production.yml,
+# finalize-production-soak.yml, scripts/ci-verify-production-candidate.sh,
+# scripts/ci-verify-provider-main-cas.sh), the job FAILS unless the PR carries
+# a current APPROVED review from a repository administrator/maintainer other
+# than the PR author, OR a current sole-admin attestation comment (below).
+# Any API failure fails closed.
+#
+# Sole-admin attestation path (owner decision, Nish, 2026-08-20)
+# -------------------------------------------------------------
+# Nishfleet/0509 has exactly ONE collaborator, and GitHub forbids approving
+# your own pull request. The independent-review requirement above is therefore
+# structurally unsatisfiable on this repository: with no second remedy, every
+# protected change is permanently blocked, which pushes real work toward
+# `gh pr merge --admin` bypasses and destroys the very audit trail this gate
+# exists to create.
+#
+# The chosen remedy is NOT to allow self-approval. It is an explicit, loud,
+# recorded attestation. A repository ADMIN posts a pull-request comment whose
+# ENTIRE body is exactly:
+#
+#     verifier-attest: <40-hex current head sha>
+#
+# The gate then PASSES and says so unmistakably: a `::warning::` annotation
+# plus a job-summary entry naming the attesting admin, the attested sha, and
+# the fact that no independent reviewer was involved.
+#
+# Properties that keep this honest:
+#   * Admin permission is resolved through the collaborator-permission API in
+#     the context step below, never from `author_association` (which an
+#     outside contributor can carry as an OWNER/MEMBER-looking value) and
+#     never from a candidate file. `maintain` is NOT sufficient here: the
+#     sole-admin path requires full admin.
+#   * The attested sha must equal the PR's CURRENT head sha, so pushing any
+#     new commit invalidates every prior attestation automatically — the same
+#     "current, not stale" property the review path gets from timestamps.
+#   * The comment body must match exactly (after trimming surrounding
+#     whitespace and CRs); prose that merely mentions the phrase cannot
+#     attest.
+#   * The independent-review path is tried FIRST and stays first-class. The
+#     moment a second admin/maintainer exists on this repository, that path is
+#     the only one that should be used and this one should be deleted.
+#
+# Hygiene contract (test_required_context_hygiene.py): the required job has NO
+# job-level `if:` (authorizer is a step), no `continue-on-error`, no trailing
+# `|| true` swallow, and no mutable verifier (`uses:` must be a pinned SHA or
+# absent; this job uses only the runner-provided `gh` CLI and shell tools).
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  merge_group:
+
+# Supersede-cancel per PR. Without this the workflow was the single largest
+# consumer of the shared `vps-verify` runner pool: every synchronize queued
+# another run and none ever cancelled, so 64 of 80 queued runs on 2026-08-21
+# belonged to this workflow across 38 branches. That starved `Deploy
+# production` (same runner labels) for 1h14m+ behind 79 jobs while 29 merged
+# PRs sat unshipped. Grouping by PR number (NOT github.ref, which under
+# pull_request_target resolves to the base branch and would collapse every
+# open PR into one mutually-cancelling group) matches the behaviour ci.yml
+# and secret-scan.yml already rely on: only a superseded run for the SAME PR
+# is cancelled, and the newest run always reports the required context.
+concurrency:
+  group: required-verifier-integrity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  required-verifier-integrity:
+    name: required-verifier-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Authorize exact verification candidate
+        id: authorize
+        shell: bash
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad GITHUB_SHA: $GITHUB_SHA" >&2; exit 1; }
+          case "$GITHUB_EVENT_NAME" in
+            pull_request_target)
+              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+              # Self-hosted runners on pull_request_target may set GITHUB_REF to
+              # either refs/pull/N/merge (hosted behavior) or refs/heads/<branch>
+              # (when the runner checks out the head branch directly). Accept both
+              # forms and additionally validate the PR number, head SHA, and base
+              # ref via the explicit event fields so a runner cannot be tricked
+              # into evaluating a different PR or branch.
+              case "$GITHUB_REF" in
+                refs/pull/[1-9]*[0-9]*/merge) ;;
+                refs/heads/*) ;;
+                *) echo "unexpected GITHUB_REF: $GITHUB_REF" >&2; exit 1 ;;
+              esac
+              # PR_NUMBER, HEAD_SHA, and BASE_REF must be well-formed (non-empty,
+              # PR number a positive integer, head SHA 40 lowercase hex, base ref
+              # a non-empty branch name). Any malformed field fails closed.
+              [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "bad PR_NUMBER: $PR_NUMBER" >&2; exit 1; }
+              [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad HEAD_SHA: $HEAD_SHA" >&2; exit 1; }
+              test -n "$BASE_REF" || { echo "empty BASE_REF" >&2; exit 1; }
+              ;;
+            merge_group)
+              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]] || { echo "unexpected GITHUB_REF: $GITHUB_REF" >&2; exit 1; }
+              ;;
+            *)
+              echo "unexpected GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME" >&2; exit 1
+              ;;
+          esac
+
+      - name: Resolve candidate context through the GitHub API
+        id: context
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+          # Authoritative PR changed-file list. `gh api --paginate` applies
+          # --jq PER PAGE and concatenates the per-page results, so when a PR
+          # exceeds one page (>100 items) the raw output is N back-to-back
+          # arrays, which is not a single valid JSON document and would crash
+          # `--argjson` below. Emit one object per line (--jq '.[] | …') and
+          # then slurp the whole stream into one array so the result is always
+          # a single array regardless of page count. Applies to every
+          # paginated fetch in this step.
+          files_json="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
+            --jq '.[] | {filename, previous_filename}' | jq -s .)"
+          # Authoritative review list (states include DISMISSED so dismissals
+          # can never masquerade as approvals).
+          reviews_json="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews?per_page=100" \
+            --jq '.[] | {state, submitted_at, user: (.user.login // ""), commit_id}' | jq -s .)"
+          # Head commit date proves an approval is current, not stale.
+          head_date="$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq '.commit.committer.date // ""')"
+          # Sole-admin attestation comments (paginated). Only comments whose
+          # ENTIRE body (after trimming surrounding whitespace and CRs) is
+          # exactly `verifier-attest: <40-hex>` are considered candidates;
+          # prose that merely mentions the phrase is ignored, and no other
+          # comment shape can reach the decision logic. Filtering here also
+          # bounds the permission lookups below to the handful of logins that
+          # actually attested, rather than every commenter on the PR.
+          comments_json="$(gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" \
+            --jq '.[] | {body: (.body // ""), user: (.user.login // "")}' | jq -s .)"
+          attestations_json="$(printf '%s' "$comments_json" | jq -c '
+            [ .[]
+              | . as $c
+              | ($c.body | gsub("\r"; "") | sub("^\\s+"; "") | sub("\\s+$"; "")) as $b
+              | select($b | test("^verifier-attest: [0-9a-fA-F]{40}$"))
+              | {user: $c.user, sha: ($b | sub("^verifier-attest: "; "") | ascii_downcase)}
+            ]')"
+          # Reviewer AND attesting-commenter permissions resolved from the
+          # collaborator-permission API, never from a label, an
+          # author_association, a comment body, or a candidate file.
+          perms_file="$RUNNER_TEMP/perms.tsv"
+          : > "$perms_file"
+          logins="$( { printf '%s' "$reviews_json" | jq -r '.[].user | select(. != "")'; \
+                       printf '%s' "$attestations_json" | jq -r '.[].user | select(. != "")'; } \
+                     | sort -u )"
+          for login in $logins; do
+            perm="$(gh api "repos/$REPO/collaborators/$login/permission" --jq '.permission')"
+            printf '%s\t%s\n' "$login" "$perm" >> "$perms_file"
+          done
+          perms_json="$(awk -F'\t' 'NF==2 {print}' "$perms_file" | jq -Rn \
+            '[inputs | split("\t") | select(length==2) | {key: .[0], value: .[1]}] | from_entries')"
+          jq -n \
+            --arg author "$AUTHOR" \
+            --arg head_commit_date "$head_date" \
+            --arg head_sha "$HEAD_SHA" \
+            --argjson files "$files_json" \
+            --argjson reviews "$reviews_json" \
+            --argjson attestations "$attestations_json" \
+            --argjson permissions "$perms_json" \
+            --argjson protected '[
+              ".github/workflows/ci.yml",
+              ".github/workflows/secret-scan.yml",
+              ".github/workflows/required-verifier-integrity.yml",
+              ".github/scripts/required-verifier-integrity.sh",
+              ".github/scripts/test-required-verifier-integrity.sh",
+              ".github/workflows/deploy-production.yml",
+              ".github/workflows/finalize-production-soak.yml",
+              "scripts/ci-verify-production-candidate.sh",
+              "scripts/ci-verify-provider-main-cas.sh"
+            ]' \
+            '{author: $author, head_commit_date: $head_commit_date, head_sha: $head_sha,
+              files: $files, reviews: $reviews, attestations: $attestations,
+              permissions: $permissions, protected_files: $protected}' \
+            > "$RUNNER_TEMP/context-bundle.json"
+
+      - name: Evaluate required-verifier integrity
+        id: evaluate
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          # The decision logic is fetched from the BASE branch's current ref
+          # (never from the candidate tree), so the candidate cannot run its
+          # own script. The default-branch ref (not base.sha) is used because
+          # base.sha is the PR-creation-time base commit and can predate the
+          # gate's landing for PRs that were already open; the workflow YAML
+          # GitHub evaluates for pull_request_target is the base branch's
+          # current file, so the current ref is the matching source of truth.
+          script="$RUNNER_TEMP/required-verifier-integrity.sh"
+          gh api "repos/$REPO/contents/.github/scripts/required-verifier-integrity.sh?ref=$BASE_REF" \
+            --jq '.content' | base64 -d > "$script"
+          test -s "$script"
+          bash "$script" < "$RUNNER_TEMP/context-bundle.json"
+
+      - name: Run deterministic fixture regression
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/test-required-verifier-integrity.sh"
+          gh api "repos/$REPO/contents/.github/scripts/test-required-verifier-integrity.sh?ref=$BASE_REF" \
+            --jq '.content' | base64 -d > "$fixture"
+          test -s "$fixture"
+          bash "$fixture"

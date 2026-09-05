@@ -1,0 +1,37 @@
+{
+  "product": "Five to Nine",
+  "launchState": "pilot-readiness",
+  "verified": [
+    "public search route exists",
+    "authenticated workspace exists",
+    "watchlists, collections, digests, reports, share/export flows exist",
+    "health endpoints respond on 0509.in, www.0509.in, and api.0509.in"
+  ],
+  "blocked": [
+    {
+      "gate": "fresh commercial discovery",
+      "evidence": "production canary reports login_wall and cached live results",
+      "customerCopy": "Fresh discovery is a launch gate; cached results are labeled."
+    },
+    {
+      "gate": "self-serve billing",
+      "evidence": "Dodo 0509 pricing preview exists but stays unavailable until brand id, product ids, API key, and signed webhooks are verified",
+      "customerCopy": "Pilot access is activated manually until checkout is verified."
+    },
+    {
+      "gate": "customer WhatsApp delivery",
+      "evidence": "delivery code exists, but customer rollout requires opt-in, template, provider, and webhook verification",
+      "customerCopy": "Email-first pilot delivery."
+    }
+  ],
+  "sampleProofEvents": [
+    {
+      "competitor": "Meesho",
+      "observedChange": "COD offer remains visible while pricing changed",
+      "dateObserved": "2026-05-13",
+      "sourceStatus": "cached_live",
+      "whyItMatters": "Offer movement may affect COD-heavy acquisition messaging.",
+      "recommendedAction": "Review the saved proof before changing client copy."
+    }
+  ]
+}

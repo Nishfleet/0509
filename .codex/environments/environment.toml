@@ -1,0 +1,52 @@
+# TRACKED ON PURPOSE. KEEP IN SYNC WITH THE CODEX APP SETTINGS PANE.
+version = 1
+name = "0509"
+
+[setup]
+script = "./scripts/codex/setup-worktree.sh"
+
+[[actions]]
+name = "Repo Status"
+icon = "run"
+command = '"$HOME/.local/bin/repo-status"'
+
+[[actions]]
+name = "Start Task Worktree"
+icon = "run"
+command = './scripts/codex/start-task-worktree.sh'
+
+[[actions]]
+name = "Normalize Base Checkout"
+icon = "run"
+command = './scripts/codex/normalize-base-checkout.sh'
+
+[[actions]]
+name = "Checkpoint Before Work"
+icon = "run"
+command = '"$HOME/.local/bin/checkpoint-repo" before'
+
+[[actions]]
+name = "Checkpoint After Work"
+icon = "run"
+command = '"$HOME/.local/bin/checkpoint-repo" after'
+
+[[actions]]
+name = "Dev Server"
+icon = "run"
+command = 'npm run dev'
+
+[[actions]]
+name = "Build"
+icon = "run"
+command = 'npm run build'
+
+[[actions]]
+name = "Test"
+icon = "run"
+command = 'npm run test'
+
+[[actions]]
+name = "Typecheck"
+icon = "run"
+command = 'npm run typecheck'
+
