@@ -108,10 +108,12 @@ for (const viewport of viewports) {
     // A valid `?website=` landing names the brand in the H1 (sitelink
     // first-value fix, #1132 / #1314): a first-time visitor sees whose ads
     // they are looking at instead of the idle "Find competitor ads" title.
-    // The anonymous/all-countries scope reads in plain buyer language.
+    // Issue #1502: the H1 names the buyer's intent ("What Nykaa is running on
+    // Meta") and the country scope renders as a small annotation under the
+    // H1, not in the heading itself.
     await expect(
       page.getByRole("heading", {
-        name: "Nykaa ads across all countries",
+        name: "What Nykaa is running on Meta",
       }),
     ).toBeVisible();
     const searchSubmit = page.getByRole("button", { name: "See ads" });
