@@ -4,7 +4,12 @@
 software in 2026" ranking — the current-month on-call listing item
 [scout, risk: green] [traction]
 
-**Status:** PREPARED — ready to send; single send step remains. This document
+**Status:** NEEDS-NISH — prepared and ready to send; the single send step
+remains and requires the owner. **NEEDS-NISH: send the prepared email below
+from `support@0509.io` to `hello@ad-stack.ai`.** (No repo-local outbound mail
+path exists to fire the email — the only sender is the production Worker's
+`send_email` binding, unsuitable for a one-off vendor email — so this is a
+human owner action.) This document
 contains the complete submission for the ad-stack.ai journal
 (`https://ad-stack.ai`), grounded in the venue's own submission guidance
 (About page + FAQ, fetched 2026-08-11) and the repo's canonical product copy.
@@ -63,8 +68,11 @@ not a claim we overstate.
 
 ## Submission status (recorded 2026-08-11)
 
-**PREPARED — ready to send; the send step itself is the only remaining
+**NEEDS-NISH — ready to send; the send step itself is the only remaining
 action.** Recorded 2026-08-11:
+
+**NEEDS-NISH: send the prepared email from `support@0509.io` to
+`hello@ad-stack.ai`.**
 
 - **No account, form, or payment required** — unlike SaaSHub/AlternativeTo
   there is no registration, and unlike BetaList there is no paid tier. The
@@ -83,7 +91,7 @@ action.** Recorded 2026-08-11:
   submission for the next quarterly re-test, not a confirmed placement; do
   not record it as "listed" until the venue replies or the re-test publishes.
 
-- **Re-verified 2026-08-21** (lane-3 freshness pass, ten days after the
+- **NEEDS-NISH reconfirmed 2026-08-21** (lane-3 freshness pass, ten days after the
   2026-08-11 prep landed on main via PR #628): the venue's submission path
   (About page + FAQ Q-04), no-pay-to-play rule (About page + FAQ Q-01),
   quarterly re-test cadence (FAQ Q-03), essay URL, and eight-tool ranking
