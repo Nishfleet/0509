@@ -10,7 +10,7 @@ import {
   type CompareCitations,
   type CompareClaimCard,
 } from "~/components/compare-citations";
-import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
 
@@ -30,6 +30,8 @@ export const meta: MetaFunction = () =>
     title: "Five to Nine vs Pulzifi",
     description: pageDescription,
     pathname: "/compare/pulzifi",
+    ogImageUrl: compareSocialCardUrl("pulzifi"),
+    ogImageAlt: "Five to Nine vs Pulzifi comparison card",
   });
 
 const pulzifiStrengths: readonly CompareClaimCard[] = [
