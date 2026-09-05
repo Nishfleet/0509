@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  EMAIL_CASE_CARD,
   EMAIL_SURFACE_BG,
   EMAIL_TEXT_MUTED,
   EMAIL_TEXT_PRIMARY,
@@ -70,13 +71,13 @@ describe("email-template.server", () => {
     expect(withoutUnsub).not.toContain(">Unsubscribe<");
   });
 
-  it("renderEmailContentSurface forces light surfaces for body builders", () => {
+  it("renderEmailContentSurface forces the case-file card surface for email-brief builders", () => {
     const html = renderEmailContentSurface("<p>Digest body</p>", {
       color: "#1d2433",
       fontSize: "15px",
     });
 
-    expect(html).toContain(`background-color: ${EMAIL_SURFACE_BG}`);
+    expect(html).toContain(`background-color: ${EMAIL_CASE_CARD}`);
     expect(html).toContain("color: #1d2433");
     expect(html).toContain("font-size: 15px");
     expect(html).toContain("<p>Digest body</p>");

@@ -18,6 +18,17 @@ import {
   providerAcceptedAt,
   sendCloudflareEmail,
 } from "~/lib/delivery-email-core.server";
+import {
+  EMAIL_CASE_BUTTON_STYLE,
+  EMAIL_CASE_CARD_STYLE,
+  EMAIL_CASE_EYEBROW_STYLE,
+  EMAIL_CASE_INK,
+  EMAIL_CASE_INK_FAINT,
+  EMAIL_CASE_INK_SOFT,
+  EMAIL_CASE_LINE,
+  EMAIL_DISPLAY_FONT,
+  EMAIL_MONO_FONT,
+} from "~/lib/email-template.server";
 import type { AppEnv } from "~/lib/env.server";
 import { getIncludedEvidenceAllowance, parsePlanFamily } from "~/lib/plan-entitlements";
 import { getUserPlan } from "~/lib/plan.server";
@@ -77,8 +88,8 @@ export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: 
       : `proof capture${input.evidenceCaptured === 1 ? "" : "s"} run in ${escapeHtml(monthLabel)}`;
   const statRow = (label: string, value: string) => `
         <tr>
-          <td style="padding: 12px 0; border-top: 1px solid #eef1f6; color: #5b6577; font-size: 14px;">${label}</td>
-          <td style="padding: 12px 0; border-top: 1px solid #eef1f6; color: #0b1220; font-size: 14px; text-align: right; font-weight: 600;">${value}</td>
+          <td style="font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT}; padding: 12px 0; border-top: 1px dotted ${EMAIL_CASE_LINE};">${label}</td>
+          <td style="font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK}; padding: 12px 0; border-top: 1px dotted ${EMAIL_CASE_LINE}; text-align: right; font-weight: 600;">${value}</td>
         </tr>`;
   const checksValue =
     input.includedAllowance > 0
@@ -88,23 +99,23 @@ export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: 
     ? `${escapeHtml(input.topCompetitorName)} · ${input.topCompetitorChanges} change${input.topCompetitorChanges === 1 ? "" : "s"}`
     : "No single leader";
   const html = `
-    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
+    <div style="font-family: Inter, system-ui, sans-serif; background-color: #fffdf8; color: #171611; font-size: 15px; line-height: 1.6;">
       <p style="margin: 0 0 12px;">${greeting}</p>
-      <p style="margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Your ${escapeHtml(monthLabel)} recap</p>
-      <p style="margin: 0; font-size: 44px; line-height: 1.05; font-weight: 700; letter-spacing: -1.5px; color: #0b1220;">${heroValue}</p>
-      <p style="margin: 4px 0 20px; font-size: 18px; line-height: 1.3; letter-spacing: -0.3px; color: #0b1220;">${heroLabel}</p>
-      <p style="margin: 0 0 16px;">Here's what Five to Nine watched for you this month.</p>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 24px;">
-        ${statRow("Changes caught", `${input.changesCaught}`)}
-        ${statRow("Proof captures used", checksValue)}
-        ${statRow("Most active competitor", topValue)}
-      </table>
+      <p style="${EMAIL_CASE_EYEBROW_STYLE}">Your ${escapeHtml(monthLabel)} recap</p>
+      <p style="margin: 0 0 4px; font-family: ${EMAIL_DISPLAY_FONT}; font-size: 44px; line-height: 1.05; font-weight: 800; letter-spacing: -1px; color: ${EMAIL_CASE_INK};">${heroValue}</p>
+      <p style="margin: 0 0 20px; font-size: 18px; line-height: 1.3; letter-spacing: -0.3px; color: ${EMAIL_CASE_INK}; font-weight: 700;">${heroLabel}</p>
+      <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">Here's what Five to Nine watched for you this month. No proof, no claim — every count below is computed from stored captures.</p>
+      <div style="${EMAIL_CASE_CARD_STYLE}">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0;">
+          ${statRow("Changes caught", `${input.changesCaught}`)}
+          ${statRow("Proof captures used", checksValue)}
+          ${statRow("Most active competitor", topValue)}
+        </table>
+      </div>
       <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.billingUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 15px;">
-          Review usage &amp; billing
-        </a>
+        <a href="${escapeHtml(input.billingUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Review usage &amp; billing</a>
       </p>
-      <p style="margin: 0; color: #5b6577; font-size: 13px;">
+      <p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">
         Counts are for this calendar month (UTC). Billing shows a rolling 30-day
         window, so the two views can differ slightly.
       </p>
@@ -122,6 +133,7 @@ export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: 
       ? `Most active competitor: ${input.topCompetitorName} (${input.topCompetitorChanges} changes).`
       : "No single competitor dominated this month.",
     "",
+    "Every count above is computed from stored captures. No proof, no claim.",
     `Review usage: ${input.billingUrl}`,
   ].join("\n");
 
@@ -453,6 +465,7 @@ async function sendOneMonthlyRecap(
     text: model.text,
     tag: "monthly_recap",
     unsubscribeUrl,
+    theme: "case-file",
   });
 
   const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {
