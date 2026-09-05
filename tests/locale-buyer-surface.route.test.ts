@@ -32,6 +32,11 @@ describe("locale buyer-surface layout (issue #1501)", () => {
       "routes/$locale.changelog.tsx",
       "routes/$locale.trust.tsx",
       "routes/$locale.compare.tsx",
+      // First-value search funnel + supporting trust surfaces (issue #1578).
+      "routes/$locale.search.tsx",
+      "routes/$locale.competitor-monitoring.tsx",
+      "routes/$locale.capture-rules.tsx",
+      "routes/$locale.ad-aggression.tsx",
     ]) {
       expect(routes, `routes.ts missing ${child}`).toContain(child);
     }
@@ -69,7 +74,7 @@ describe("locale buyer-surface layout (issue #1501)", () => {
     // hreflang entry pointing at themselves plus every sibling locale and
     // the EN x-default. Self- and x-default canonicals are emitted
     // alongside hreflang by `canonicalLinks(...)` in each child file.
-    for (const splat of ["", "pricing", "help", "docs", "api/docs", "status", "changelog", "trust", "compare"]) {
+    for (const splat of ["", "pricing", "help", "docs", "api/docs", "status", "changelog", "trust", "compare", "search", "competitor-monitoring", "capture-rules", "ad-aggression"]) {
       const entries = buyerSurfaceHreflangLinks(splat);
       // Every buyer-surface locale contributes a self-link; the EN
       // x-default follows. Self-link count equals the cluster size.
@@ -101,6 +106,16 @@ describe("locale buyer-surface layout (issue #1501)", () => {
     const { default: changelogRoute } = await import("~/routes/$locale.changelog");
     const { default: trustRoute } = await import("~/routes/$locale.trust");
     const { default: compareRoute } = await import("~/routes/$locale.compare");
+    const { default: localeSearchRoute } = await import("~/routes/$locale.search");
+    const { default: localeCompetitorMonitoringRoute } = await import(
+      "~/routes/$locale.competitor-monitoring"
+    );
+    const { default: localeCaptureRulesRoute } = await import(
+      "~/routes/$locale.capture-rules"
+    );
+    const { default: localeAdAggressionRoute } = await import(
+      "~/routes/$locale.ad-aggression"
+    );
     expect(typeof indexRoute).toBe("function");
     expect(typeof pricingRoute).toBe("function");
     expect(typeof helpRoute).toBe("function");
@@ -110,6 +125,10 @@ describe("locale buyer-surface layout (issue #1501)", () => {
     expect(typeof changelogRoute).toBe("function");
     expect(typeof trustRoute).toBe("function");
     expect(typeof compareRoute).toBe("function");
+    expect(typeof localeSearchRoute).toBe("function");
+    expect(typeof localeCompetitorMonitoringRoute).toBe("function");
+    expect(typeof localeCaptureRulesRoute).toBe("function");
+    expect(typeof localeAdAggressionRoute).toBe("function");
   });
 });
 

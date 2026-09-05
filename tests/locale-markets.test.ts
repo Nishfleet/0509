@@ -140,6 +140,11 @@ describe("buyer-surface locale cluster (issue #1501)", () => {
     expect(matchBuyerSurfaceSplat("changelog")).toBe("changelog");
     expect(matchBuyerSurfaceSplat("trust")).toBe("trust");
     expect(matchBuyerSurfaceSplat("compare")).toBe("compare");
+    // First-value search funnel + supporting trust surfaces (issue #1578).
+    expect(matchBuyerSurfaceSplat("search")).toBe("search");
+    expect(matchBuyerSurfaceSplat("competitor-monitoring")).toBe("competitor-monitoring");
+    expect(matchBuyerSurfaceSplat("capture-rules")).toBe("capture-rules");
+    expect(matchBuyerSurfaceSplat("ad-aggression")).toBe("ad-aggression");
     // Sub-paths that aren't a registered buyer surface (e.g. /compare/magicbrief
     // is its own named route, not part of the cluster) must 404 so the
     // cluster stays bounded.
