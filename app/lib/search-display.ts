@@ -72,9 +72,8 @@ export function formatSearchCommandTitle(
  * H1 scope phrase for a shared `/search` URL. Named markets stay "in India"
  * / "in United States". `country=all` renders as "across all countries" —
  * plain buyer language for the top-of-funnel default, which still never
- * implies a single market. (/ads/:domain keeps the source-honest "the Meta
- * Ad Library's all-countries query" wall phrasing; the /search H1 is the
- * first-value surface, so it speaks plainly, issue #1461.)
+ * implies a single market. (/ads/:domain names the same scope as "Meta's
+ * global ad library" on its ad-wall surface, issue #1464.)
  */
 export function formatSearchPageScope(
   country: string | null | undefined,
