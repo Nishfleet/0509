@@ -233,6 +233,42 @@ async function countCollections(env: AppEnv, userId: string) {
   return Number(row?.count ?? 0);
 }
 
+/**
+ * Rename a collection the user owns. Returns the updated record, or null if
+ * the collection does not exist or belongs to someone else.
+ */
+export async function renameCollection(
+  env: AppEnv,
+  userId: string,
+  collectionId: string,
+  name: string,
+): Promise<CollectionRecord | null> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("Collection name cannot be empty.");
+  }
+
+  const timestamp = nowIso();
+  const result = await run(
+    env,
+    `
+      UPDATE collection
+      SET name = ?, updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `,
+    trimmed,
+    timestamp,
+    collectionId,
+    userId,
+  );
+
+  if (Number(result.meta?.changes ?? 0) === 0) {
+    return null;
+  }
+
+  return getCollection(env, collectionId, userId);
+}
+
 export async function listCollectionItemsPage(
   env: AppEnv,
   collectionId: string,
