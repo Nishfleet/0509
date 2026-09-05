@@ -252,6 +252,15 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("saved change records");
     expect(marketingRoute).not.toContain("per saved record");
     expect(marketingRoute).not.toMatch(/checks never expire|per check|extra checks|checks\/month/);
+    // The FAQ JSON-LD must mirror the rendered "What uses proof captures?" answer
+    // verbatim so search engines and the page agree on the metering unit; the
+    // rollout patch explicitly drops the "checks" verb from the JSON-LD too.
+    expect(marketingRoute).toContain('"What uses proof captures?"');
+    expect(marketingRoute).toContain('"Do unused proof captures roll over?"');
+    expect(marketingRoute).toContain(
+      "A proof capture is used when Five to Nine saves a confirmed change",
+    );
+    expect(marketingRoute).toContain("carry over until you use them");
   });
 
   it("has incinerated the stale lower-page system", () => {
