@@ -2,6 +2,7 @@ import { Form, Link } from "react-router";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
@@ -147,6 +148,13 @@ export default function CompareMagicBriefRoute() {
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
       <MarketingNav />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Competitor monitoring", pathname: "/competitor-monitoring" },
+          { name: "MagicBrief", pathname: "/compare/magicbrief" },
+        ]}
+      />
 
       <section className="ld-hero">
         <p className="ld-case">

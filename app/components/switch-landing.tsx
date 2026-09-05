@@ -3,6 +3,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import { canonicalLinks, faqPageJsonLd, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import type { SwitchPage, SwitchSource } from "~/lib/switch-pages";
 
@@ -182,6 +183,13 @@ export function SwitchLanding({ page }: { page: SwitchPage }) {
         <script {...jsonLdScriptProps(faqPageJsonLd(page.faqEntries))} />
       ) : null}
       <MarketingNav />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Competitor monitoring", pathname: "/competitor-monitoring" },
+          { name: `Switch from ${page.productName}`, pathname: page.pathname },
+        ]}
+      />
       <SwitchHero page={page} />
       <SwitchComplaint page={page} />
       <SwitchBoundary page={page} />
