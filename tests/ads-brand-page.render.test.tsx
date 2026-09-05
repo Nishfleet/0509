@@ -210,17 +210,19 @@ describe("/ads/:domain — Case File render", () => {
     );
   });
 
-  it("names the all-countries view as a single ALL-countries query, not worldwide coverage", async () => {
+  it("names the all-countries view in plain buyer language, not worldwide coverage", async () => {
     const markup = await render(populated({ adLibraryCountry: "all countries" }));
 
-    // The wall source line names the single all-countries query — it must
-    // not claim worldwide coverage ("across all countries").
+    // The wall source line names the source in plain buyer language — the
+    // API-jargon "all-countries query" never renders (issue #1464), and the
+    // copy must not claim worldwide coverage ("across all countries").
     expect(markup).toContain(
-      "real creatives from the Meta Ad Library&#x27;s all-countries query · cached about 2 hours ago",
+      "real creatives from Meta&#x27;s global ad library · cached about 2 hours ago",
     );
     expect(markup).toContain(
-      '"description":"See 6 Meta ads from Nike (nike.com), from a public check of the Meta Ad Library\'s all-countries query about 2 hours ago. Get an email when their ads or offer change."',
+      '"description":"See 6 Meta ads from Nike (nike.com), from a public check of Meta\'s global ad library about 2 hours ago. Get an email when their ads or offer change."',
     );
+    expect(markup).not.toContain("all-countries query");
     // The false worldwide claim never renders on any surface.
     expect(markup).not.toContain("across all countries");
     // No single country is implied anywhere in the source lines.
@@ -228,30 +230,33 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("the public India Ad Library");
   });
 
-  it("regression: adLibrarySourcePhrase never revives the worldwide claim", async () => {
+  it("regression: adLibrarySourcePhrase stays buyer language and never revives the worldwide claim", async () => {
     const { adLibrarySourcePhrase, publicAdLibrarySourcePhrase } = await import(
       "~/routes/ads.$domain"
     );
 
     // The all-countries value is a single `country=ALL` query, not a union
-    // of every market — the phrase must name it as one query and must never
-    // bring back "across all countries".
+    // of every market — the phrase names the global library in plain buyer
+    // language (issue #1464) and must never bring back the "all-countries
+    // query" jargon or the "across all countries" worldwide claim.
     expect(adLibrarySourcePhrase("all countries")).toBe(
-      "the Meta Ad Library's all-countries query",
+      "Meta's global ad library",
     );
+    expect(adLibrarySourcePhrase("all countries")).not.toContain("all-countries query");
     expect(adLibrarySourcePhrase("all countries")).not.toContain("across all countries");
     // The null fallback (no country on the snapshot) gets the same honest
     // phrasing rather than implying worldwide coverage.
-    expect(adLibrarySourcePhrase(null)).toBe("the Meta Ad Library's all-countries query");
+    expect(adLibrarySourcePhrase(null)).toBe("Meta's global ad library");
     expect(adLibrarySourcePhrase(null)).not.toContain("across all countries");
 
     // The public closer-line variant follows the same rule.
     expect(publicAdLibrarySourcePhrase("all countries")).toBe(
-      "the public Meta Ad Library's all-countries query",
+      "Meta's public global ad library",
     );
+    expect(publicAdLibrarySourcePhrase("all countries")).not.toContain("all-countries query");
     expect(publicAdLibrarySourcePhrase("all countries")).not.toContain("across all countries");
     expect(publicAdLibrarySourcePhrase(null)).toBe(
-      "the public Meta Ad Library's all-countries query",
+      "Meta's public global ad library",
     );
 
     // Named-country copy is unchanged.
