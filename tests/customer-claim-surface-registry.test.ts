@@ -23,6 +23,10 @@ import {
 } from "~/lib/plan-entitlements";
 import { PRESENCE_SOURCE_IDS } from "~/lib/presence-types";
 import { PUBLIC_MARKDOWN_PATHS } from "~/lib/public-markdown";
+import {
+  BUYER_SURFACE_CHILD_PATHS,
+  BUYER_SURFACE_LOCALE_IDS,
+} from "~/lib/locale-markets";
 import { SITEMAP_PATHS, NOINDEX_ACTION_SURFACES } from "~/lib/seo";
 
 type RegistryEntry = {
@@ -367,6 +371,12 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
       `/${locale}/trust`,
       `/${locale}/compare`,
     ]),
+    // Locale-prefixed compare/switch child routes (issue #1563) — 5 locales
+    // × 13 children. Each re-exports the EN sibling with canonical→EN and the
+    // buyer-surface hreflang cluster.
+    ...BUYER_SURFACE_LOCALE_IDS.flatMap((locale) =>
+      BUYER_SURFACE_CHILD_PATHS.map((child) => `/${locale}${child}`),
+    ),
     "/capture-rules", "/ad-aggression", "/pricing", "/help", "/docs", "/api/docs",
     "/status", "/changelog", "/trust", "/privacy", "/terms",
   ],
