@@ -6,7 +6,11 @@ import {
   searchAdsViaSourceResolver,
 } from "~/lib/ad-source.server";
 import { hydrateAdsWithPersistedCreatives } from "~/lib/ad-persistence.server";
-import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
+import {
+  foldDomainLabel,
+  parseSearchInputFromWebsiteField,
+  registrableDomainFromHostname,
+} from "~/lib/search-query";
 import {
   applySearchV2PostFilter,
   buildSearchV2CacheKey,
@@ -25,7 +29,7 @@ import {
 } from "~/lib/search-rollout.server";
 import type { CompetitorWebsiteState } from "~/lib/competitor-website";
 import type { BrowserJobPlanTier } from "~/lib/browser-job-telemetry.server";
-import type { NormalizedSavedQuery, SearchFilters, SearchResponse } from "~/lib/types";
+import type { AdRecord, NormalizedSavedQuery, SearchFilters, SearchResponse } from "~/lib/types";
 
 export interface ExecuteSearchOptions {
   env: AppEnv;
@@ -223,14 +227,17 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
  * - When the keyword resolves to a recognizable brand/domain
  *   (`q=notion.com`), the existing v2 post-filter classifies rows against
  *   that domain (verified / likely / unmatched), matching `/ads/:domain`.
- * - When it is a genuine text keyword (`q=notion`, `q=goat`), every row is
- *   labelled `unmatched` (a provider candidate with no brand connection) so
- *   the row still states its confidence instead of hiding it.
+ * - When it is a genuine text keyword (`q=notion`, `q=allbirds`), the brand
+ *   is inferred from the result set's landing pages and, if necessary, from
+ *   a `.com` fallback, then the v2 post-filter classifies the rows. If
+ *   inference fails or the brand cannot be resolved, every row is labelled
+ *   `unmatched` (a provider candidate with no brand connection) so the row
+ *   still states its confidence instead of hiding it.
  *
  * Reuses `search-v2.server` and `search-domain-match.server` only; no new
- * classifier, no D1 schema change. A failed identity resolution for a
- * domain-like keyword falls back to the unmatched labelling so the search
- * never breaks on a network hiccup.
+ * classifier, no D1 schema change. A failed identity resolution for an
+ * inferred domain falls back to the unmatched labelling so the search never
+ * breaks on a network hiccup.
  */
 export async function attachKeywordSearchDomainMatch(
   env: AppEnv,
@@ -242,10 +249,10 @@ export async function attachKeywordSearchDomainMatch(
     return result;
   }
 
-  const queryIntent = parseSearchInputFromWebsiteField(queryText);
-  if (queryIntent.intent === "domain" && queryIntent.registrableDomain) {
+  const candidate = resolveKeywordSearchDomainCandidate(queryText, result.ads);
+  if (candidate) {
     try {
-      const context = await buildSearchV2Context(queryText, scope);
+      const context = await buildSearchV2Context(candidate, scope);
       if (context) {
         return await applySearchV2PostFilter(env, result, context);
       }
@@ -256,7 +263,7 @@ export async function attachKeywordSearchDomainMatch(
     }
   }
 
-  // Bare keyword (or a domain-like keyword whose context could not be built):
+  // Bare keyword (or a domain whose context could not be built):
   // no brand website was searched, so nothing connects a provider row to a
   // brand. Every row is an unmatched candidate — still a row, labelled as
   // such, never a silent unlabelled list.
@@ -277,6 +284,82 @@ export async function attachKeywordSearchDomainMatch(
     likelyCount: 0,
     unmatchedCount: ads.length,
   };
+}
+
+const BRAND_KEYWORD_MAX_LENGTH = 30;
+
+function isBrandLikeKeyword(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length < 3 || trimmed.length > BRAND_KEYWORD_MAX_LENGTH) {
+    return false;
+  }
+  // A brand keyword is a single token without spaces, URL paths, or TLDs.
+  if (/[\s/@?:#]/.test(trimmed) || /\.[a-z]{2,}$/i.test(trimmed)) {
+    return false;
+  }
+  return /^[a-zA-Z0-9]+(?:[-_][a-zA-Z0-9]+)*$/.test(trimmed);
+}
+
+function extractLandingPageRegistrableDomain(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return registrableDomainFromHostname(parsed.hostname);
+  } catch {
+    return null;
+  }
+}
+
+function resolveKeywordSearchDomainCandidate(queryText: string, ads: AdRecord[]): string | null {
+  const queryIntent = parseSearchInputFromWebsiteField(queryText);
+  if (queryIntent.intent === "domain" && queryIntent.registrableDomain) {
+    return queryText;
+  }
+
+  if (!isBrandLikeKeyword(queryText)) {
+    return null;
+  }
+
+  const queryStem = foldDomainLabel(queryText);
+  if (!queryStem || queryStem.length < 3) {
+    return null;
+  }
+
+  // Prefer a registrable domain that already appears in the result set and
+  // whose label matches the brand keyword. This catches notion.so, mamaearth.in,
+  // and nike.com without assuming any particular TLD, and it safely ignores
+  // unrelated resellers (e.g. allbirds results landing on goldwin.co.jp).
+  const counts = new Map<string, number>();
+  for (const ad of ads) {
+    const registrable = extractLandingPageRegistrableDomain(ad.landingPageUrl);
+    if (!registrable) continue;
+    const label = registrable.split(".")[0] ?? "";
+    if (foldDomainLabel(label) === queryStem) {
+      counts.set(registrable, (counts.get(registrable) ?? 0) + 1);
+    }
+  }
+
+  let bestDomain: string | null = null;
+  let bestCount = 0;
+  for (const [domain, count] of counts) {
+    if (count > bestCount) {
+      bestCount = count;
+      bestDomain = domain;
+    }
+  }
+
+  if (bestDomain) {
+    return bestDomain;
+  }
+
+  // No matching landing page in the result set: fall back to the canonical
+  // `.com` domain for the brand keyword. The v2 post-filter still handles
+  // regional TLDs, stem extensions (ouraring.com for oura.com), and likely
+  // brand-name matches for the right brand.
+  return `${queryText.toLowerCase().trim()}.com`;
 }
 
 export type SearchCacheProbeOptions = Omit<ExecuteSearchOptions, "forceLive">;
