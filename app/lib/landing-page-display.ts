@@ -16,6 +16,69 @@ export function formatAdvertiserLabel(advertiser: string | null | undefined) {
   return trimmed ? trimmed : "Advertiser unconfirmed";
 }
 
+// The selected-evidence pane explains the identity gap in full when the
+// advertiser is missing, and never substitutes the search query or watchlist
+// name. Returns null when the advertiser is recorded, so callers render the
+// note only when identity is genuinely unavailable.
+export function formatAdvertiserIdentityNote(
+  advertiser: string | null | undefined,
+): string | null {
+  if (advertiser?.trim()) {
+    return null;
+  }
+  return "This ad's identity is unconfirmed: the source this result came from did not record an advertiser name, and we never guess who ran an ad. Run a fresh search to try to capture it.";
+}
+
+export interface LandingPageHeadlineState {
+  /** The headline to render in the pane heading. */
+  heading: string;
+  /**
+   * Field-specific explanation when the headline is unavailable: what was
+   * checked or not checked and what the visitor can do next. Null when the
+   * heading is the real source-backed value.
+   */
+  note: string | null;
+}
+
+// The selected-evidence pane shows the exact captured headline when one
+// exists; otherwise it shows a state that says what was checked (or not) and
+// what the visitor can do next — never an unexplained "not captured yet"
+// placeholder presented as usable evidence.
+export function formatLandingPageHeadlineState(input: {
+  rawHeadline: string | null | undefined;
+  hasCapturedLandingPage: boolean;
+  landingPageUrl: string | null | undefined;
+  enrichmentPending: boolean;
+}): LandingPageHeadlineState {
+  const headline = input.rawHeadline?.trim();
+  if (headline) {
+    return { heading: headline, note: null };
+  }
+
+  if (input.enrichmentPending) {
+    return { heading: "Analyzing creative…", note: null };
+  }
+
+  if (input.hasCapturedLandingPage) {
+    return {
+      heading: "Headline not detected",
+      note: "No headline was found in the captured snapshot. Run a fresh search to try to capture one.",
+    };
+  }
+
+  if (input.landingPageUrl) {
+    return {
+      heading: "No landing page captured",
+      note: "The destination link is recorded, but its page text wasn't checked, so there's no headline to show. Open the link below to check the page yourself, or run a fresh search.",
+    };
+  }
+
+  return {
+    heading: "No landing page to check",
+    note: "This ad carried no destination link, so there was nothing to capture. A fresh search may surface a version with a destination.",
+  };
+}
+
 export function formatCaptureMethodLabel(captureMethod: CaptureMethod | null | undefined) {
   if (captureMethod === "landing_page_fetch") {
     return "Page text checked";

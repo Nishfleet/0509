@@ -62,9 +62,11 @@ import {
 } from "~/lib/countries";
 import { formatOfferDisplay } from "~/lib/analysis-display";
 import {
+  formatAdvertiserIdentityNote,
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
   formatLandingPageFormValue,
+  formatLandingPageHeadlineState,
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
 import { buildSearchAnswer, type SearchStealSummary } from "~/lib/search-answer";
@@ -1217,6 +1219,21 @@ export default function SearchRoute() {
   const selectionEnrichmentUiPending =
     Boolean(data.selectionEnrichmentPending) &&
     selectionEnrichmentRevalidatedFor !== selectionEnrichmentKey;
+  // The selected-evidence pane states: the advertiser identity note only when
+  // identity is genuinely unavailable, and the headline state only when the
+  // captured headline cannot be shown. Both are pure display logic — the raw
+  // record is never rewritten.
+  const advertiserIdentityNote = selectedAd
+    ? formatAdvertiserIdentityNote(selectedAd.advertiser)
+    : null;
+  const selectedHeadlineState = selectedAd
+    ? formatLandingPageHeadlineState({
+        rawHeadline: selectedAd.landingPage?.rawHeadline,
+        hasCapturedLandingPage: Boolean(selectedAd.landingPage),
+        landingPageUrl: selectedAd.landingPageUrl,
+        enrichmentPending: selectionEnrichmentUiPending,
+      })
+    : null;
   const nextCursor = visibleResult.nextCursor;
   const retryingCursor = visibleAccumulated.retryCursor;
   const loadMoreParams = nextCursor
@@ -1903,6 +1920,9 @@ export default function SearchRoute() {
                     </>
                   }
                 />
+                {advertiserIdentityNote ? (
+                  <p className="f9-wk-quote">{advertiserIdentityNote}</p>
+                ) : null}
 
                 <div className="f9-wk-creative">
                   <AdThumb ad={selectedAd} />
@@ -1927,7 +1947,7 @@ export default function SearchRoute() {
                 <DetailBlock kicker="What the ad says">
                   <DetailFacts
                     rows={[
-                      { key: "Hook", value: selectedAd.hook },
+                      { key: "Hook", value: formatHookLabel(selectedAd.hook) },
                       ...(selectedAdAngle
                         ? [
                             {
@@ -1940,7 +1960,7 @@ export default function SearchRoute() {
                         key: "Offer",
                         value: formatOfferDisplay(selectedAd.offer),
                       },
-                      { key: "CTA", value: selectedAd.cta },
+                      { key: "CTA", value: formatLandingPageSignalValue(selectedAd.cta) },
                       {
                         key: "Format",
                         value: formatCreativeFormatLabel(selectedAd.format),
@@ -1980,11 +2000,11 @@ export default function SearchRoute() {
 
                 <DetailBlock kicker="Landing page">
                   <h4 className="f9-wk-blk-head">
-                    {selectedAd.landingPage?.rawHeadline ??
-                      (selectionEnrichmentUiPending
-                        ? "Analyzing creative…"
-                        : "Headline not captured yet")}
+                    {selectedHeadlineState?.heading}
                   </h4>
+                  {selectedHeadlineState?.note ? (
+                    <p className="f9-wk-small">{selectedHeadlineState.note}</p>
+                  ) : null}
                   <DetailFacts
                     rows={[
                       {
