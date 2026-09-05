@@ -24,7 +24,7 @@ import {
   seedRun,
   seedUser,
   seedWatchlist,
-} from "./fixtures";
+} from "../fixtures";
 
 /**
  * Integration test for the capture-validity classifier (issue #1399).
