@@ -4,7 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { Breadcrumbs } from "~/components/breadcrumbs";
-import { canonicalLinks, faqPageJsonLd, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { canonicalLinks, faqPageJsonLd, jsonLdScriptProps, publicSeoMeta, switchSocialCardUrl, webPageJsonLd } from "~/lib/seo";
 import type { SwitchPage, SwitchSource } from "~/lib/switch-pages";
 
 export function switchPageLinks(page: SwitchPage): LinksFunction {
@@ -17,6 +17,8 @@ export function switchPageMeta(page: SwitchPage): MetaFunction {
       title: page.title,
       description: page.description,
       pathname: page.pathname,
+      ogImageUrl: switchSocialCardUrl(page.slug),
+      ogImageAlt: `Switch from ${page.productName} to Five to Nine`,
     });
 }
 

@@ -12,6 +12,7 @@ import {
 } from "~/components/compare-citations";
 import {
   canonicalLinks,
+  compareSocialCardUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -34,6 +35,8 @@ export const meta: MetaFunction = () =>
     title: pageTitle,
     description: pageDescription,
     pathname: "/compare/visualping-ad-libraries",
+    ogImageUrl: compareSocialCardUrl("visualping-ad-libraries"),
+    ogImageAlt: "Five to Nine vs Visualping for ad libraries comparison card",
   });
 
 const visualpingStrengths: readonly CompareClaimCard[] = [
