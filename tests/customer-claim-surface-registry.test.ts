@@ -23,10 +23,6 @@ import {
 } from "~/lib/plan-entitlements";
 import { PRESENCE_SOURCE_IDS } from "~/lib/presence-types";
 import { PUBLIC_MARKDOWN_PATHS } from "~/lib/public-markdown";
-import {
-  BUYER_SURFACE_CHILD_PATHS,
-  BUYER_SURFACE_LOCALE_IDS,
-} from "~/lib/locale-markets";
 import { SITEMAP_PATHS, NOINDEX_ACTION_SURFACES } from "~/lib/seo";
 
 type RegistryEntry = {
@@ -348,18 +344,16 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // /methodology/ad-aggression-score to /ad-aggression (issue #1263). The old
   // path now 301-redirects; the sitemap lists the canonical one only so we
   // never index a redirect target alongside its origin.
-  // 2026-09: Locale-prefixed buyer-surface cluster expanded to de, ja,
-  // pt-br, fr, es (issue #1501). Each locale ships the same set of
-  // buyer surfaces the EN locale serves with canonical→EN so duplicate
-  // content does not fragment search ranking.
-  // Product UI stays English; these are indexable marketing surfaces only.
-  // 2026-09: /compare/visualping and /compare/foreplay left the sitemap
-  // (issue #1481) — each is a duplicate that canonicalizes to its more
-  // specific sibling (visualping-ad-library / foreplay-spyder), which stays
-  // listed. The loser routes remain registered so the pages still render 200.
-  // Their locale-prefixed variants (/de/compare/visualping, ...) left too:
-  // the slugs are out of BUYER_SURFACE_SEGMENT_CHILD_SLUGS.compare, so the
-  // generated locale child set below excludes them.
+  // 2026-09: Locale-prefixed buyer-surface cluster exists at /de/pricing etc.
+  // but is intentionally NOT in the sitemap (issue #1570). Those pages serve
+  // byte-identical English copy with lang="en" and canonical→EN, so listing
+  // them as dozens of distinct indexable surfaces would be a duplicate-content
+  // doorway pattern. They stay reachable (200, canonical→EN) but are only
+  // advertised through the EN pages plus their reciprocal hreflang cluster.
+  // This covers the marketing cluster, the compare/switch child routes
+  // (issue #1563), the search/trust funnel (issue #1578), and the
+  // programmatic /ads/:domain pages (issue #1562) — all serve English copy.
+  // The genuinely translated sneaker-resale cluster stays in the sitemap.
   sitemapPaths: [
     "/", "/search", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
     "/compare/visualping-ad-library", "/compare/spyland",
@@ -368,29 +362,6 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",
     "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale",
     "/pt-br/sneaker-resale",
-    // Locale-prefixed buyer-surface cluster (issue #1501) — generated below.
-    // Expanded with the first-value search funnel + trust surfaces (issue #1578).
-    ...["de", "ja", "pt-br", "fr", "es"].flatMap((locale) => [
-      `/${locale}/pricing`,
-      `/${locale}/help`,
-      `/${locale}/docs`,
-      `/${locale}/api/docs`,
-      `/${locale}/status`,
-      `/${locale}/changelog`,
-      `/${locale}/trust`,
-      `/${locale}/compare`,
-      `/${locale}/search`,
-      `/${locale}/competitor-monitoring`,
-      `/${locale}/capture-rules`,
-      `/${locale}/ad-aggression`,
-    ]),
-    // Locale-prefixed compare/switch child routes (issue #1563) — 5 locales
-    // × 11 children (the two canonicalized compare losers left under
-    // issue #1481). Each re-exports the EN sibling with canonical→EN and the
-    // buyer-surface hreflang cluster.
-    ...BUYER_SURFACE_LOCALE_IDS.flatMap((locale) =>
-      BUYER_SURFACE_CHILD_PATHS.map((child) => `/${locale}${child}`),
-    ),
     "/capture-rules", "/ad-aggression", "/pricing", "/help", "/docs", "/api/docs",
     "/status", "/changelog", "/trust", "/privacy", "/terms",
   ],
