@@ -137,10 +137,8 @@ export default function CompareVisualpingAdLibraryRoute() {
         <p className="ld-deck-copy">
           Visualping's Meta Ad Library playbook is real: paste the library URL, get visual diffs,
           on plans from free to $350. Five to Nine is the other job — domain paste, commercial-field
-          diffs, and honest status labels so a phantom render is not sold as a competitor move. For
-          the generic website-monitor comparison, see{" "}
-          <Link to="/compare/visualping">Five to Nine vs Visualping</Link>. Competitor prices on this
-          page are public list prices as of August 2026 — check the vendor's site for current plans.
+          diffs, and honest status labels so a phantom render is not sold as a competitor move.
+          Competitor prices on this page are public list prices as of August 2026 — check the vendor's site for current plans.
         </p>
 
         <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
