@@ -61,4 +61,46 @@ Targeted suite (the files this change owns):
 
 (files: `tests/market-signal-workflow.test.ts`, `tests/market-signal-snapshot.test.ts`, `tests/lane-evidence-collision.test.ts`)
 
+## Addendum — continuation after #890 merged (2026-08-23 ~01:45 IST)
+
+PR #890 merged to main as `1d3267d6` (2026-08-23 01:23:12 +0530). Verification dispatch
+run `32595052170` executed EXACTLY that SHA and still failed in `Commit snapshot to main`:
+
+```
+2026-08-22T19:52:52.6693427Z pull request create failed: GraphQL: GitHub Actions is not permitted to create or approve pull requests (createPullRequest)
+2026-08-22T19:52:52.6814778Z ##[error]Process completed with exit code 1.
+```
+
+D1 generate succeeded again (commit `6a4f1451` force-pushed to
+`automation/market-signal-snapshot-20260822`), but PR creation itself was denied, so no
+snapshot PR exists and `ops/market-signal/0509-market-signal.json` remains absent from
+main (contents API → 404 verified). The blocker has moved from code (old `gh` /
+missing `GH_TOKEN` — fixed by #890, proven working: generate + branch push both green)
+to a repository setting:
+
+```
+$ gh api repos/nish3451/0509/actions/permissions/workflow
+{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}
+```
+
+"Allow GitHub Actions to create and approve pull requests" is OFF on Nishfleet/0509.
+No change inside the §2 files can grant `github-actions[bot]` `createPullRequest`, so per
+spec §3-A row 4 this continuation STOPs: **no code PR opened, item NOT retired** (the next
+scheduled run fails identically until the setting flips). This addendum stays uncommitted
+on purpose — an evidence-only PR is forbidden for a STOP outcome.
+
+Exact unblocking actions for Nish (either suffices):
+
+1. Nishfleet/0509 → Settings → Actions → General → tick "Allow GitHub Actions to create
+   and approve pull requests". REST equivalent (repo admin):
+   `gh api -X PUT repos/Nishfleet/0509/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true`
+   Caveat: an org-level Actions policy can also gate this (org endpoint returned 403 for
+   current token scopes); check org Settings → Actions if the repo toggle alone is not enough.
+2. OR wire a PAT (contents:write + pull_requests:write) as a repo/environment secret and
+   use it as `GH_TOKEN` in the two `gh` steps of `.github/workflows/market-signal-snapshot.yml`.
+
+State left behind: no queued/in-progress snapshot runs at close (nothing to adopt); no
+third dispatch fired (identical failure is deterministic until unblocked); zero repo file
+modifications by this continuation besides this local evidence record.
+
 PACKET COMPLETE
