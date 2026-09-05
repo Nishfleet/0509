@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-// @ts-expect-error plain .mjs ops script — no type declarations; the parity
-// assertions below are the contract.
 import {
   buildSampleQuery,
   eventTypesFromCountRows,
@@ -198,12 +196,14 @@ describe("digest.headline.ratio — scheduled canary mirror (scripts/canary-dige
 
   it("applies the same rolling-window rule as the lib (vacuous days excluded)", () => {
     const series = [
-      { periodStart: "2026-08-30", headlineItemCount: 0, landingPageCount: 0, adChurnCount: 9, ratio: 0 },
+      { periodStart: "2026-08-30", headlineItemCount: 0, landingPageCount: 0, adChurnCount: 9, otherCount: 0, totalItemCount: 9, ratio: 0 },
       ...Array.from({ length: 7 }, (_, i) => ({
         periodStart: `2026-08-${String(31 - i).padStart(2, "0")}`,
         headlineItemCount: 8,
         landingPageCount: 8,
         adChurnCount: 2,
+        otherCount: 0,
+        totalItemCount: 10,
         ratio: 1,
       })),
     ];
