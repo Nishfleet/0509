@@ -42,7 +42,15 @@ export function BrandAdWall({
   signupPath: string;
   now?: Date;
 }) {
-  const ordered = [...ads].sort((a, b) => (adLongevityDays(b, now) ?? 0) - (adLongevityDays(a, now) ?? 0));
+  const ordered = [...ads].sort((a, b) => {
+    // Verified-link cards lead the wall (accept #2: "the verified set
+    // renders first"); within each group keep the proven-runners-first
+    // longevity ordering so the two rules never conflict.
+    const aVerified = a.linkVerifiedDomain ? 1 : 0;
+    const bVerified = b.linkVerifiedDomain ? 1 : 0;
+    if (aVerified !== bVerified) return bVerified - aVerified;
+    return (adLongevityDays(b, now) ?? 0) - (adLongevityDays(a, now) ?? 0);
+  });
   const visible = ordered.slice(0, WALL_VISIBLE_ADS);
   const remaining = Math.max(0, totalCount - visible.length);
 
@@ -88,6 +96,15 @@ function BrandAdCard({ ad, now }: { ad: AdRecord; now: Date }) {
     <article className="f9-ads-card">
       <AdCreative ad={ad} savedLabel={savedLabel} />
       <div className="f9-ads-card-body">
+        {ad.linkVerifiedDomain ? (
+          <span
+            className="f9-ads-verified-badge"
+            data-verified-link={ad.linkVerifiedDomain}
+          >
+            <span aria-hidden="true" className="f9-ads-verif-dot" />
+            Verified link
+          </span>
+        ) : null}
         <span className="f9-ads-card-adv">
           <span aria-hidden="true" className="f9-ads-card-sw" />
           {destination ? `${advertiser} · ${destination}` : advertiser}

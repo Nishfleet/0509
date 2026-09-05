@@ -631,6 +631,55 @@ describe("/ads/:domain — Case File render", () => {
     );
   });
 
+  it("mixes verified and search-only cards with a per-card signal, split header, and verified-first order", async () => {
+    // Mirrors live notion.so: a wall where only some creatives carry verified
+    // link evidence. The loader annotates the wall copies with
+    // linkVerifiedDomain; BrandAdCard must badge exactly those, the header
+    // must report BOTH counts, and the verified cards must render first.
+    const ads = [
+      ad({ metaAdId: "ad-v1", advertiser: "Notion", linkVerifiedDomain: "nike.com" }),
+      ad({ metaAdId: "ad-v2", advertiser: "T-Pain with Notion", linkVerifiedDomain: "nike.com" }),
+      ad({ metaAdId: "ad-s1", advertiser: "Notion Press Publishing", landingPageUrl: null }),
+      ad({ metaAdId: "ad-s2", advertiser: "Notion Fan Club", landingPageUrl: null }),
+      ad({ metaAdId: "ad-s3", advertiser: "Notion Templates", landingPageUrl: null }),
+    ];
+    const markup = await render(
+      populated({
+        ads,
+        verifiedLinkedAds: ads.slice(0, 2),
+        brandOwnedAdCount: 2,
+        verifiedLinkCount: 2,
+        unverifiedMatchCount: 3,
+      }),
+    );
+
+    // (a) The header reports both verified and search-only counts.
+    expect(markup).toContain(
+      "All 5 ads — 2 verified, 3 matched the search",
+    );
+
+    // (b) The badge appears only on the two verified cards (never on the
+    // search-only ones), rendered FIRST so the verified set leads the wall.
+    const badgeCount = (markup.match(/f9-ads-verified-badge/g) ?? []).length;
+    expect(badgeCount).toBe(2);
+    const firstBadge = markup.indexOf("f9-ads-verified-badge");
+    const firstSearchOnly = markup.indexOf("Notion Press Publishing");
+    expect(firstBadge).toBeGreaterThan(-1);
+    expect(firstSearchOnly).toBeGreaterThan(-1);
+    expect(firstBadge).toBeLessThan(firstSearchOnly);
+    // The search-only cards must NOT carry the verified badge anywhere in
+    // their card markup (each keeps only the "Notion Press Publishing"
+    // advertiser label unbadged).
+    const searchOnlyCardStart = markup.indexOf("Notion Press Publishing");
+    const nextBadgeAfterSearchOnly = markup.indexOf(
+      "f9-ads-verified-badge",
+      searchOnlyCardStart,
+    );
+    // Only the two verified cards are badged at all, so nothing after the
+    // first search-only card is badged (badge count above is already 2).
+    expect(nextBadgeAfterSearchOnly).toBe(-1);
+  });
+
   it("never claims ads POINT AT the domain when no creative has verified link evidence", async () => {
     const stale = await render(
       populated({
@@ -672,8 +721,14 @@ describe("/ads/:domain — Case File render", () => {
   });
 
   it("counts only verified-linked creatives in linking language when the capture mixes matches", async () => {
+    // One verified creative leads the wall (annotated by the loader as
+    // linkVerifiedDomain); five search-only matches follow.
+    const ads = Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` }));
+    ads[0] = { ...ads[0], linkVerifiedDomain: "nike.com" };
     const stale = await render(
       populated({
+        ads,
+        verifiedLinkedAds: [ads[0]],
         brandOwnedAdCount: 1,
         verifiedLinkCount: 1,
         unverifiedMatchCount: 5,
@@ -691,8 +746,12 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).toContain(
       "Another 5 ads matched the search without a verified link to nike.com.",
     );
-    // The wall still carries every cached creative.
-    expect(stale).toContain("All 6 ads, on the wall");
+    // The wall still carries every cached creative; the mixed header reports
+    // BOTH counts and the single verified card leads it badged.
+    expect(stale).toContain("All 6 ads — 1 verified, 5 matched the search");
+    expect((stale.match(/f9-ads-verified-badge/g) ?? []).length).toBe(1);
+    expect(stale.indexOf("f9-ads-verified-badge")).toBeGreaterThan(-1);
+    expect(stale.indexOf("f9-ads-verified-badge")).toBeLessThan(stale.indexOf("Nike · nike.com"));
   });
 
   it("omits 'by other advertisers' in the closer when every verified linking creative is the brand's own (unverified matches only)", async () => {
