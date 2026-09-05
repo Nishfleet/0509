@@ -54,13 +54,17 @@ install_files() {
   systemctl daemon-reload
 }
 
+smoke_dir=""
+cleanup_smoke() {
+  [[ -n "${smoke_dir}" ]] && rm -rf -- "${smoke_dir}"
+}
+trap cleanup_smoke EXIT
+
 smoke_probe() {
   # Run the probe once as the service would (dynamic user, fresh state dir) and
   # require a clean exit. LIVENESS_STATE_DIR override keeps the smoke probe's
   # evidence separate from the live stream.
-  local smoke_dir
   smoke_dir="$(mktemp -d -t 0509-liveness-smoke.XXXXXX)"
-  trap 'rm -rf "${smoke_dir}"' RETURN
   if ! LIVENESS_STATE_DIR="${smoke_dir}" \
     "${INSTALL_ROOT}/0509-liveness-probe.sh"; then
     die "smoke probe failed; refusing to enable the timer (see journalctl -u 0509-liveness.service)"
