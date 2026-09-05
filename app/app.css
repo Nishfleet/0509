@@ -7652,6 +7652,25 @@ reds soften --- */
   color: var(--green-ink);
   font-weight: 600;
 }
+/* Glanceable "Verified link" signal on /ads/:domain wall cards (issue #1474):
+   the wall's own f9-ads-pill chip, filled green so it reads as proof at a
+   glance — inverted against the transparent-bordered metadata pills, the same
+   way f9-ads-pill-strong inverts the neutral pill. It leads the card body so
+   a buyer can tell at a glance which card the Ad Aggression Score is built
+   from. `data-verified-link` carries the brand domain for the prod-public
+   Playwright assertion. Shares the pill's square shape: the design-system
+   ratchet counts new raw border-radius as legacy debt, so the badge mints no
+   radius of its own. */
+.f9-ads-pill.f9-ads-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  align-self: flex-start;
+  background: var(--green-ink);
+  border-color: var(--green-ink);
+  color: var(--green-wash);
+  font-weight: 600;
+}
 .f9-ads-card-more {
   border: 2px dashed var(--ink);
   background: var(--green-wash);
