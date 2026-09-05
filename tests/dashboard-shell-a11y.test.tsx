@@ -144,8 +144,9 @@ describe("DashboardShell accessibility (WP-43)", () => {
     const navLinks = links.filter(({ text }) => text !== "");
 
     // Every public destination is reachable exactly once: Home, Search,
-    // Pricing and Help ride the icon rail; Docs and Sign in ride the footer.
-    for (const href of ["/", "/search", "/#pricing", "/help", "/docs", "/auth/login"]) {
+    // Compare, Pricing and Help ride the icon rail; Docs, Sign in and Sign up
+    // ride the footer.
+    for (const href of ["/", "/search", "/compare", "/pricing", "/help", "/docs", "/auth/login", "/auth/signup"]) {
       expect(navLinks.filter((link) => link.href === href)).toHaveLength(1);
     }
   });
