@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 
 import { AuthForm } from "~/components/auth-form";
 import { BrandWordmark } from "~/components/brand-wordmark";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 
 const loginDescription =
   "Sign in to access saved competitors, alerts, reports, and useful ad examples in Five to Nine.";
@@ -112,6 +112,19 @@ export default function LoginRoute() {
 
   return (
     <main className="f9-auth-page">
+      {/* Truthful WebPage structured data, mirroring /status, /help, /docs:
+          only what this shell shows — its head title, its description, and
+          its canonical URL. Markup only; session and magic-link behavior are
+          untouched. */}
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({
+            name: "Sign in | Five to Nine",
+            description: loginDescription,
+            pathname: "/auth/login",
+          }),
+        )}
+      />
       <div className="f9-container f9-auth-layout">
         <section className="f9-auth-story">
           <Link className="f9-brand f9-auth-brand" to="/" aria-label="Five to Nine home">
