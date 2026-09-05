@@ -24,7 +24,7 @@ const COMPARE_PAGES = [
   // /compare/visualping and /compare/foreplay are not linked here (issue
   // #1481): both are duplicates that canonicalize to their more specific
   // sibling below, so the hub surfaces one URL per vendor pair.
-  { slug: "visualping-ad-library", label: "Five to Nine vs Visualping for ad libraries", href: "/compare/visualping-ad-library" },
+  { slug: "visualping-ad-libraries", label: "Five to Nine vs Visualping for ad libraries", href: "/compare/visualping-ad-libraries" },
   { slug: "spyland", label: "Five to Nine vs Spyland", href: "/compare/spyland" },
   { slug: "pulzifi", label: "Five to Nine vs Pulzifi", href: "/compare/pulzifi" },
   { slug: "foreplay-spyder", label: "Five to Nine vs Foreplay Spyder", href: "/compare/foreplay-spyder" },

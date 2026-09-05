@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 const COMPARE_PAGES = [
   "compare/magicbrief",
   "compare/meta-ad-library",
-  "compare/visualping-ad-library",
+  "compare/visualping-ad-libraries",
   "compare/spyland",
   "compare/pulzifi",
   "compare/foreplay-spyder",

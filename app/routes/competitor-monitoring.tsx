@@ -184,6 +184,36 @@ const categoryComplaints = [
   },
 ] as const;
 
+// Direct /compare/* pages for the tools named in the category above (issue
+// 1548). Each comparison is honest and source-backed; these anchor the
+// "captures the alternative" intent with a Five to Nine vs <vendor> page.
+const compareVendors = [
+  {
+    name: "Panoramata",
+    path: "/compare/panoramata",
+    label: "Five to Nine vs Panoramata",
+    oneLiner: "Panoramata's breadth (ads, pages, emails) against our source-proofed offer-and-landing-page diffs.",
+  },
+  {
+    name: "Foreplay Spyder",
+    path: "/compare/foreplay-spyder",
+    label: "Five to Nine vs Foreplay Spyder",
+    oneLiner: "Foreplay Spyder archives ads and screenshots; we diff the offer, price, and CTA behind each new ad",
+  },
+  {
+    name: "AdSpyder",
+    path: "/compare/adspyder",
+    label: "Five to Nine vs AdSpyder",
+    oneLiner: "AdSpyder's searchable creative library against a change-evidence trail with source links.",
+  },
+  {
+    name: "Visualping",
+    path: "/compare/visualping-ad-libraries",
+    label: "Five to Nine vs Visualping for ad libraries",
+    oneLiner: "Visualping's URL-and-pixel playbook against a domain paste and a semantic offer diff with no phantom changes.",
+  },
+] as const;
+
 // Product claims. These trace to shipped behavior already verified on the
 // homepage (app/routes/marketing.tsx product FAQ) and the docs — weaker honest
 // phrasing beats a stronger claim; nothing here is new.
@@ -365,6 +395,28 @@ export default function CompetitorMonitoringCategoryRoute() {
               <span className="ld-step">{item.step}</span>
               <h3>{item.title}</h3>
               <p>{item.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="ld-quiet" id="compare">
+        <div className="ld-section-head">
+          <span className="ld-kicker">Five to Nine vs the tools in this category</span>
+          <h2>Each comparison, argued honestly.</h2>
+          <p>
+            Every page names what the tool does well, where it stops, and what Five to Nine adds —
+            with the vendor's own claims cited and checked.
+          </p>
+        </div>
+        <div className="ld-quiet-grid" aria-label="Direct comparisons with category tools">
+          {compareVendors.map((vendor) => (
+            <article key={vendor.path}>
+              <span className="ld-kicker">vs {vendor.name}</span>
+              <h3>
+                <Link to={vendor.path}>{vendor.label}</Link>
+              </h3>
+              <p>{vendor.oneLiner}</p>
             </article>
           ))}
         </div>

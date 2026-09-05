@@ -10,7 +10,7 @@ const PINNED_COMPARED_PRODUCT: Record<string, string> = {
   "compare.magicbrief": "MagicBrief",
   "compare.meta-ad-library": "Meta Ad Library",
   "compare.visualping": "Visualping",
-  "compare.visualping-ad-library": "Visualping",
+  "compare.visualping-ad-libraries": "Visualping",
   "compare.spyland": "Spyland",
   "compare.pulzifi": "Pulzifi",
   "compare.foreplay": "Foreplay",
