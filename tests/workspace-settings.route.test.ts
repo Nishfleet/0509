@@ -182,6 +182,8 @@ describe("workspace settings route components", () => {
     expect(markup).toContain("Create API key");
     expect(markup).toContain("Allow approved account actions");
     expect(markup).toContain("/api/v1/watchlists/");
+    expect(markup).toContain("MCP setup");
+    expect(markup).toContain('href="/mcp/setup"');
     expect(markup).not.toContain("Ad Library API page");
     expect(markup).not.toContain("Slack delivery");
     expect(markup).not.toContain("Sensitive changes");
