@@ -77,6 +77,7 @@ import { formatCaptureAttemptReasonLabel } from "~/lib/capture-attempt-reason-co
 import type { CaptureAttemptReasonCode } from "~/lib/capture-attempt-reason-code";
 import {
   adsPageServiceJsonLd,
+  adsSocialCardUrl,
   brandPageTimelineHasPart,
   breadcrumbListJsonLd,
   canonicalUrl,
@@ -609,9 +610,21 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 
   const title = brandPageTitle(loaderData);
   const description = brandPageDescription(loaderData);
+  const score = loaderData.aggression?.score ?? null;
+  const ogImageUrl = adsSocialCardUrl(loaderData.domain, loaderData.brandName, score);
+  const ogImageAlt =
+    score !== null
+      ? `${loaderData.brandName} Meta ads — Ad Aggression Score ${score} — Five to Nine`
+      : `${loaderData.brandName} Meta ads — Five to Nine`;
 
   return [
-    ...publicSeoMeta({ title, description, pathname: loaderData.canonicalPath }),
+    ...publicSeoMeta({
+      title,
+      description,
+      pathname: loaderData.canonicalPath,
+      ogImageUrl,
+      ogImageAlt,
+    }),
     // links() cannot see route params in this router version, so the
     // canonical tag ships as a meta-descriptor link instead.
     { tagName: "link", rel: "canonical", href: canonicalUrl(loaderData.canonicalPath) },
