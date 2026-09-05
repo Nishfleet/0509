@@ -120,6 +120,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     unverifiedMatchCount: 0,
     teaser,
     aggression,
+    observationDays: null,
     changeEvents,
     offerTimelineEntries: [],
     adLibraryCountry: "India",
