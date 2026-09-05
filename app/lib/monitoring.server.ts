@@ -70,6 +70,7 @@ import {
   recordFetchStage,
   type LandingPagePipelineCounters,
 } from "~/lib/landing-page-pipeline-instrumentation.server";
+import { recordCtaPipelineStageCounts } from "~/lib/cta-pipeline-stage-counts.server";
 import {
   CommercialDiscoveryError,
   resolveCommercialDiscoveryProvider,
@@ -4075,6 +4076,9 @@ async function evaluateSelectiveProofCandidates(
       // the loop (success, bail-out continue, or thrown error) so no bail-out
       // goes unlogged.
       flushLandingPagePipelineCounters(pipelineCounters);
+      // Issue #1565: persist the per-stage funnel into D1 so the bail-out
+      // point is queryable, not just logged. Best-effort — never throws.
+      await recordCtaPipelineStageCounts(env, pipelineCounters);
     }
   }
 
@@ -4679,6 +4683,8 @@ async function evaluateDirectWebsiteProofCandidate(
     // Issue #949: emit the per-check stage counter on every path (success,
     // early return, or thrown error) so no bail-out goes unlogged.
     flushLandingPagePipelineCounters(pipelineCounters);
+    // Issue #1565: persist the per-stage funnel into D1 (best-effort).
+    await recordCtaPipelineStageCounts(env, pipelineCounters);
   }
 }
 
