@@ -36,6 +36,13 @@ export type LandingPageDiffStatus =
   | "invalidated"
   | "skipped_no_snapshot";
 
+// Issue #1565: the capture-validity gate sits between fetch and extract. Its
+// outcome is the `classifyCaptureValidity` status, collapsed to a pass/fail
+// for the per-stage funnel: a "succeeded" or "suppressed" capture is a real
+// page (the gate passed); only "capture_failed" is an error/challenge/cookie
+// wall bail-out. Null when the gate never ran (e.g. fetch bailed first).
+export type LandingPageValidityOutcome = "passed" | "failed";
+
 export interface LandingPagePipelineScanContext {
   /** Stable scan identity (e.g. proofRequestKey) — never the raw URL. */
   scanId: string;
@@ -55,6 +62,13 @@ export interface LandingPagePipelineCounters {
   };
   render: {
     outcome: LandingPageRenderOutcome;
+    reasonCode: string | null;
+  };
+  // Issue #1565: the capture-validity gate (classifyCaptureValidity). Outcome
+  // is null until the gate runs; "failed" records an error/challenge/cookie
+  // wall bail-out, "passed" records a real page (succeeded or suppressed).
+  validity: {
+    outcome: LandingPageValidityOutcome | null;
     reasonCode: string | null;
   };
   extract: {
@@ -109,6 +123,7 @@ export function createLandingPagePipelineCounters(
     context,
     fetch: { outcome: null, reasonCode: null },
     render: { outcome: "not_attempted", reasonCode: null },
+    validity: { outcome: null, reasonCode: null },
     extract: {
       ctaFound: false,
       priceFound: false,
@@ -143,6 +158,20 @@ export function recordRenderStage(
 ) {
   counters.render.outcome = outcome;
   counters.render.reasonCode = reasonCode;
+}
+
+// Issue #1565: record the capture-validity gate outcome. `status` is the raw
+// `CaptureValidityStatus` from classifyCaptureValidity; "succeeded" and
+// "suppressed" both mean the gate passed (the page was real), only
+// "capture_failed" is a bail-out. The reasonCode is the classifier's internal
+// reason (e.g. the CAPTURE_VALIDITY_REASON_CODES vocabulary).
+export function recordValidityStage(
+  counters: LandingPagePipelineCounters,
+  status: "succeeded" | "capture_failed" | "suppressed",
+  reasonCode: string | null = null,
+) {
+  counters.validity.outcome = status === "capture_failed" ? "failed" : "passed";
+  counters.validity.reasonCode = reasonCode;
 }
 
 export function recordExtractStage(
@@ -214,6 +243,9 @@ export function flushLandingPagePipelineCounters(
       extractorVersion: counters.context.extractorVersion,
       fetch: counters.fetch,
       render: counters.render,
+      // Issue #1565: capture-validity gate outcome + bail reason.
+      validity: counters.validity,
+      validity_passed: counters.validity.outcome === "passed",
       extract: {
         ctaFound: counters.extract.ctaFound,
         priceFound: counters.extract.priceFound,
