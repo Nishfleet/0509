@@ -868,8 +868,27 @@ async function callTool(
   }
 
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
-  const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+  const { requireExportFeature, requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const workspaceUserId = await resolveWorkspaceDataUserId(env, apiKey.userId);
+
+  // BET 6: JSON reads of account-owned data are the free + Scout read surface
+  // (`api_access`). Slack-ready exports remain Starter+ (`export_slack_ready`),
+  // mirroring the REST route gate — "Writes and exports on Starter+". MCP never
+  // carries a CSV format, so json covers the free read and slack is the export.
+  const mcpExportToolNames = new Set([
+    "get_collection_export",
+    "get_watchlist_export",
+    "get_digest_export",
+  ]);
+  if (mcpExportToolNames.has(name) && format === "slack") {
+    const exportGate = await requireExportFeature(env, workspaceUserId, format);
+    if (!exportGate.ok) {
+      return {
+        ok: false,
+        message: "Slack export is not included in your current plan. Read-only JSON access is available on Free and Scout.",
+      };
+    }
+  }
 
   if (isWriteToolName(name)) {
     const actionsGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_account_actions");
