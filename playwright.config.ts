@@ -76,6 +76,18 @@ export default defineConfig({
       },
     },
     {
+      // BET 2 (issue 1482): the streaming three-tier e2e — runs the Vitest
+      // regression test as a subprocess and asserts the tier-badge markup
+      // contract on synthetic DOM. Same pattern as search-landing-page-capture.
+      name: "search-streaming-three-tier",
+      testDir: "./tests/e2e",
+      testMatch: /search-streaming-three-tier\.spec\.ts/,
+      timeout: 60_000,
+      use: {
+        ...devices["Desktop Chrome"],
+      },
+    },
+    {
       name: "local-auth",
       // Landing-language live-proof captures ride the same local fixture
       // server and skip themselves unless their package flag is set, so
