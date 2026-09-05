@@ -34,7 +34,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
 
   const asOf = new Date().toISOString();
   let counters = null;
-  let measurementsUnavailable = false;
+  let measurementsUnavailable = !env;
   if (env) {
     try {
       counters = await getPublicStatusCounters(env);

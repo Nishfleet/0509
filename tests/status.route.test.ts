@@ -112,7 +112,7 @@ describe("status route", () => {
     expect(markup).not.toContain("private canary");
     expect(markup).not.toContain("secret-token");
     expect(markup).not.toContain("hooks.slack.com");
-    expect(markup).toContain("configuration and scope information");
+    expect(markup).toContain("Configuration and scope information and live monitoring facts");
     expect(markup).toContain("does not measure live search, email, billing, or provider availability");
     expect(markup).not.toMatch(/(?:search|checkout|billing|email delivery) (?:is|are) available/i);
     expect(markup).not.toContain("Available for checking competitor ads");
@@ -186,6 +186,9 @@ describe("status route", () => {
     expect(result.monitoring).toBeNull();
     expect(result.measurementsUnavailable).toBe(true);
 
+    // Re-import the module so the render uses the degraded loader data, not a
+    // stale react-router mock cached from an earlier test.
+    vi.resetModules();
     await mockRouter(() => ({
       generatedAt: "2026-09-04T09:00:00.000Z",
       asOf: "2026-09-04T09:30:00.000Z",
