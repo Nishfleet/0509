@@ -4089,8 +4089,14 @@ one signal-green accent.
 
 @media (max-width: 600px) {
   .ld-switch-from {
+    align-items: center;
     gap: 6px 10px;
     margin-bottom: 10px;
+  }
+  .ld-switch-from-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
   }
 }
 
