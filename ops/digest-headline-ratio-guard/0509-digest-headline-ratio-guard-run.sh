@@ -39,6 +39,15 @@ fail() {
   exit 2
 }
 
+# node/npm live under the nish user's toolchain (~/.local/bin), not in
+# /usr/bin, and systemd services get a minimal default PATH. The service file
+# sets Environment=PATH=<node bin dir>:... at provision time; verify both
+# resolve and fail loud with the resolved PATH if either is still missing so
+# a mis-provisioned unit cannot silently skip the guard.
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  fail "node/npm not resolvable on PATH; resolved PATH=${PATH}"
+fi
+
 [[ -f "${CF_TOKEN_FILE}" ]] || fail "sanctioned CF token file missing: ${CF_TOKEN_FILE}"
 
 mkdir -p "${STATE_DIR}"

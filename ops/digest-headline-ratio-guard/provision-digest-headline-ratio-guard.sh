@@ -37,14 +37,41 @@ require_root() {
   [[ "$(id -u)" -eq 0 ]] || die "run as root"
 }
 
+# node/npm live under the nish user's toolchain (~/.local/bin), not in
+# /usr/bin, and systemd's default service PATH omits them. Discover the real
+# node bin dir from the nish login shell so the installed service's
+# Environment=PATH is deterministic; fall back to the known location.
+resolve_node_bin_dir() {
+  local dir=""
+  dir="$(sudo -u nish bash -lc 'command -v node' 2>/dev/null || true)"
+  if [[ -n "${dir}" ]]; then
+    dir="$(dirname "$(readlink -f "${dir}")")"
+  fi
+  if [[ -z "${dir}" || ! -x "${dir}/node" ]]; then
+    dir="/home/nish/.local/bin"
+  fi
+  if [[ ! -x "${dir}/node" ]]; then
+    die "could not resolve the nish user's node bin dir (node not found under ${dir})"
+  fi
+  printf '%s' "${dir}"
+}
+
 install_files() {
+  local node_bin_dir tmp
+  node_bin_dir="$(resolve_node_bin_dir)"
   install -d -o root -g root -m 0755 "${INSTALL_ROOT}"
   install -o root -g root -m 0755 \
     "${SOURCE_DIR}/0509-digest-headline-ratio-guard-run.sh" \
     "${INSTALL_ROOT}/0509-digest-headline-ratio-guard-run.sh"
-  install -o root -g root -m 0644 \
-    "${SOURCE_DIR}/0509-digest-headline-ratio-guard.service" \
+  # Substitute the resolved node bin dir into the service's Environment=PATH
+  # so the unit resolves node/npm deterministically regardless of systemd's
+  # default service PATH.
+  tmp="$(mktemp)"
+  sed "s|__NODE_BIN_DIR__|${node_bin_dir}|g" \
+    "${SOURCE_DIR}/0509-digest-headline-ratio-guard.service" > "${tmp}"
+  install -o root -g root -m 0644 "${tmp}" \
     /etc/systemd/system/0509-digest-headline-ratio-guard.service
+  rm -f "${tmp}"
   install -o root -g root -m 0644 \
     "${SOURCE_DIR}/0509-digest-headline-ratio-guard.timer" \
     /etc/systemd/system/0509-digest-headline-ratio-guard.timer

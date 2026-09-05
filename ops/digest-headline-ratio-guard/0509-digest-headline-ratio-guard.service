@@ -14,6 +14,12 @@ Type=oneshot
 # checkout carries other agents' uncommitted work and is not auto-synced.
 User=nish
 Group=nish
+# node/npm live under the nish user's toolchain (~/.local/bin), not in
+# /usr/bin, and systemd's default service PATH omits them. The provision
+# script resolves the real node bin dir and substitutes __NODE_BIN_DIR__
+# below; the run script also fails loud with the resolved PATH if npm is
+# still missing.
+Environment=PATH=__NODE_BIN_DIR__:/usr/local/bin:/usr/bin:/bin
 ExecStart=/opt/0509-digest-headline-ratio-guard/0509-digest-headline-ratio-guard-run.sh
 # First run after install (or after a package-lock bump) does a clone +
 # `npm ci` before the one aggregated D1 read; steady-state runs are seconds.
