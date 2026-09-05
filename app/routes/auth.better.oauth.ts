@@ -41,6 +41,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
     throw redirect(`/auth/${mode}?error=request_invalid`);
   }
 
+  // Anonymous funnel observation (default-off; see
+  // app/lib/funnel-measurement.server.ts). Signup-start covers the OAuth
+  // branch of the spec's signup event; emitted once the validated OAuth
+  // attempt is about to reach the provider.
+  if (mode === "signup") {
+    const { emitFunnelSignupStart } = await import("~/lib/funnel-measurement.server");
+    emitFunnelSignupStart(env, request);
+  }
+
   const oauthStart = await startBetterAuthSocialSignIn(env, request, {
     loginHint: email,
     mode,

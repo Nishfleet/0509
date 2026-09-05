@@ -67,6 +67,14 @@ export interface AppEnv {
   /** Local release-proof guard. Never configure this in preview or production. */
   E2E_PROVIDER_NETWORK_DENY?: string;
   E2E_TEST_MODE?: string;
+  /**
+   * Explicit opt-in for the first-party anonymous funnel measurement layer
+   * (docs/funnel-measurement-spec.md). Absent or any non-true value means
+   * collection is off; it can never be enabled accidentally by a missing
+   * variable. The spec's legal-review and retention-period gates remain
+   * unpassed, so production must not set this.
+   */
+  FUNNEL_MEASUREMENT_ENABLED?: string;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
   LAUNCH_CANARY_EMAIL?: string;
   ALLOW_PLATFORM_META_API_FALLBACK?: string;
@@ -187,6 +195,10 @@ export function emailFromSender(env: AppEnv): EmailAddress {
 
 export function isEmailSendingConfigured(env: AppEnv) {
   return Boolean(env.EMAIL && emailFromAddress(env));
+}
+
+export function isFunnelMeasurementEnabled(env: AppEnv) {
+  return parseEnvFlag(env.FUNNEL_MEASUREMENT_ENABLED);
 }
 
 export function isWhatsAppProviderConfigured(env: AppEnv) {

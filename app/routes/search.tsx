@@ -447,6 +447,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       })()
     : null;
 
+  // Anonymous funnel observation (default-off; see
+  // app/lib/funnel-measurement.server.ts). Anonymous visitors only, and never
+  // on selection reruns of an already committed search. Fire-and-forget: the
+  // search response never depends on measurement.
+  const funnelMeasurement = !session
+    ? await import("~/lib/funnel-measurement.server")
+    : null;
+  if (funnelMeasurement && !url.searchParams.get("selected")) {
+    funnelMeasurement.emitFunnelSearchPreviewSubmit(env, request);
+  }
   const useSearchV2 =
     Boolean(competitorWebsite.raw) &&
     (shouldApplySearchV2(env) || shouldRunSearchV2Shadow(env));
@@ -484,6 +494,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       };
 
   const waitUntil = cloudflare?.ctx?.waitUntil?.bind(cloudflare?.ctx);
+
+  // Coarse outcome for the anonymous funnel layer: a warming response is not a
+  // final outcome yet (a later revalidation emits it); a degraded/failure
+  // class is an error; anything else is a result with a bounded count bucket.
+  if (funnelMeasurement && !url.searchParams.get("selected")) {
+    const funnelResult = searchExecution.result;
+    if (funnelResult.discoveryProgress !== "warming") {
+      const failureKind =
+        funnelResult.discoveryFailureClass ??
+        (funnelResult.discoveryStatus === "degraded" ? "degraded" : null);
+      if (failureKind) {
+        funnelMeasurement.emitFunnelSearchPreviewError(env, request, failureKind);
+      } else {
+        funnelMeasurement.emitFunnelSearchPreviewResult(
+          env,
+          request,
+          funnelResult.ads.length,
+        );
+      }
+    }
+  }
   const {
     result: hydratedResult,
     selectedAd,

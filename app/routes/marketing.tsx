@@ -44,10 +44,16 @@ export const meta: MetaFunction = () =>
 
 const noPricingPreview = { available: false } as const;
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const env = getEnv(context);
+
+  // Anonymous funnel observation layer (default-off, see
+  // app/lib/funnel-measurement.server.ts). Fire-and-forget: the homepage
+  // response never depends on measurement.
+  const { emitFunnelHomeView } = await import("~/lib/funnel-measurement.server");
+  emitFunnelHomeView(env, request);
 
   return {
     // Keep the document request provider-independent. The client hydrates

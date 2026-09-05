@@ -91,6 +91,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return signupActionError("send_failed", { email, name, redirectTo });
   }
 
+  // Anonymous funnel observation (default-off; see
+  // app/lib/funnel-measurement.server.ts). Emitted only once the validated
+  // signup attempt actually reached the magic-link provider.
+  const { emitFunnelSignupStart } = await import("~/lib/funnel-measurement.server");
+  emitFunnelSignupStart(env, request);
+
   const next = new URL("/auth/signup", request.url);
   next.searchParams.set("sent", "1");
   next.searchParams.set("email", email);

@@ -34,9 +34,52 @@ Run on production D1 read-only; do not export PII to docs.
 
 ## Funnel measurement status
 
-Specification only: see [docs/funnel-measurement-spec.md](./funnel-measurement-spec.md).
-The funnel remains manual with no automated collection until the rollout gates in that
-spec pass. No event logging or instrumentation is enabled by the spec itself.
+First-party anonymous funnel events are **shipped but disabled by default**:
+see [docs/funnel-measurement-spec.md](./funnel-measurement-spec.md) and the
+implementation in `app/lib/funnel-measurement.server.ts`.
+
+### Shipped behavior (no collection enabled)
+
+- Default-off: events are emitted only when `FUNNEL_MEASUREMENT_ENABLED` is
+  explicitly set to a truthy value (`1`/`true`/`yes`/`on`). Absent, empty, or
+  any other value keeps collection off. This variable is not set in
+  production.
+- Request-scoped anonymous events only, written through the approved structured
+  JSON log mechanism (`app/lib/log.server.ts`) with `funnel_*` operations:
+  `funnel_home_view`, `funnel_search_preview_submit`,
+  `funnel_search_preview_result`, `funnel_search_preview_error`,
+  `funnel_signup_start`. Fields are limited to the spec's allowlist
+  (`route`, server `event_id`, server `timestamp`, coarse
+  `result_count_bucket`, coarse `error_kind`, `account_scope: anonymous`).
+- GPC (`Sec-GPC: 1` / `GPC: 1`) suppresses every event. DNT is not treated as
+  an opt-out. Signed-in search activity emits nothing (the funnel is
+  anonymous-only).
+- No cookies, localStorage, visitor/session ids, IP, UA, referrer, query text,
+  or any client-supplied value ever enters an event.
+
+### Remaining gates (all unpassed — no production collection)
+
+- Legal/privacy review is not complete.
+- The final retention period is not owner-approved.
+- Owner approval to enable collection is not granted.
+- Policy-surface parity review (privacy/terms copy) has not shipped.
+
+Production collection starts only when the operator sets
+`FUNNEL_MEASUREMENT_ENABLED` **and** the gates above pass.
+
+### Operator readout
+
+`/api/funnel-measurement` (canary-token-gated like `/api/launch-readiness`):
+- Reports the runtime gate truth: `collection` (`enabled`/`disabled`),
+  `eventNames`, `gates` (all reported as unpassed today).
+- Reports read-only daily aggregate counts of the derived activation measures
+  (`dailyDerivedMetrics`: signup completions, first watchlists, first proofs)
+  counted directly off existing D1 business tables (`user`, `watchlist`,
+  `proof_capture`) — never logged as events, never stored separately.
+- Anonymous event counts are **not** queryable from the worker runtime: those
+  events live only in structured JSON logs (Cloudflare Workers observability).
+  `days` is clamped to 1–30 (default 14).
+
 
 ## Canary metrics (private)
 

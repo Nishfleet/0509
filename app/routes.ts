@@ -48,6 +48,7 @@ export default [
   route("api/presence/oauth/linkedin/callback", "routes/api.presence.oauth.linkedin.callback.ts"),
   route("api/launch-readiness", "routes/api.launch-readiness.ts"),
   route("api/launch-readiness/canary", "routes/api.launch-readiness.canary.ts"),
+  route("api/funnel-measurement", "routes/api.funnel-measurement.ts"),
   route("api/e2e/j3/replay", "routes/api.e2e.j3.replay.ts"),
   route("api/e2e/j4/replay", "routes/api.e2e.j4.replay.ts"),
   route("api/e2e/billing/replay", "routes/api.e2e.billing.replay.ts"),
