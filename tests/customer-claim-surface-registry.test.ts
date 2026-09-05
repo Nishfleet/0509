@@ -361,6 +361,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale",
     "/pt-br/sneaker-resale",
     // Locale-prefixed buyer-surface cluster (issue #1501) — generated below.
+    // Expanded with the first-value search funnel + trust surfaces (issue #1578).
     ...["de", "ja", "pt-br", "fr", "es"].flatMap((locale) => [
       `/${locale}/pricing`,
       `/${locale}/help`,
@@ -370,6 +371,10 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
       `/${locale}/changelog`,
       `/${locale}/trust`,
       `/${locale}/compare`,
+      `/${locale}/search`,
+      `/${locale}/competitor-monitoring`,
+      `/${locale}/capture-rules`,
+      `/${locale}/ad-aggression`,
     ]),
     // Locale-prefixed compare/switch child routes (issue #1563) — 5 locales
     // × 13 children. Each re-exports the EN sibling with canonical→EN and the
