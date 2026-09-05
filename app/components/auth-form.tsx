@@ -63,10 +63,10 @@ export function AuthForm({
       <p>
         {showSentRecovery
           ? isSignup
-            ? "We sent a setup link. Open it to verify and create the account."
+            ? "We sent a setup link to that inbox. Open it to verify and create the account. If it hasn't arrived within a few minutes, check spam and promotions folders first — then hit Resend link or use a different email."
             : "If an account exists for that address, the sign-in link is on the way."
           : isSignup
-            ? "Use a work email. After verification, you can add a competitor and start tracking."
+            ? "Use a work email. We'll email a setup link to that address — open it to create the account, then add your first competitor."
             : "Enter your work email and we'll send a one-time link to your inbox."}
       </p>
 
@@ -126,6 +126,13 @@ export function AuthForm({
               ? "Send setup link"
               : "Send sign-in link"}
         </button>
+
+        {isSignup ? (
+          <p className="f9-wk-mt1">
+            After you send, check that inbox: the setup link usually arrives within a
+            couple of minutes. If it's slow, check spam and promotions folders first.
+          </p>
+        ) : null}
 
         {showSecondaryAuth ? (
           <div className="f9-auth-oauth">

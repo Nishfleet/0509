@@ -3598,7 +3598,7 @@ one signal-green accent.
 @media (max-width: 860px) {
   .ld-nav {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 10px;
     padding: 14px 20px;
   }
@@ -3634,11 +3634,17 @@ one signal-green accent.
     text-align: center;
   }
 
+  /* The three account actions (Sign in, Sign up, Open app) can exceed the
+     compact row on small phones. The brand keeps its natural width and the
+     actions column takes the leftover space, wrapping right-aligned, so the
+     row never overflows and every touch target stays ≥44px. */
   .ld-nav-actions {
     grid-column: 2;
     grid-row: 1;
     justify-self: end;
-    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px 10px;
     font-size: 0.86rem;
   }
 
