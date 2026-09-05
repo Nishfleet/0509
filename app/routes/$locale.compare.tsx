@@ -18,5 +18,10 @@ export const links: LinksFunction = () => [
 export default function LocaleCompareRoute() {
   const params = useParams<{ locale?: string }>();
   const localePrefix = params.locale ? `/${params.locale}` : undefined;
-  return <CompareRoute localePrefix={localePrefix} />;
+  return (
+    <>
+      <div data-debug-params={JSON.stringify(params)} />
+      <CompareRoute localePrefix={localePrefix} />
+    </>
+  );
 }
