@@ -147,7 +147,7 @@ describe("adsPageServiceJsonLd", () => {
 });
 
 describe("/ads/:domain JSON-LD", () => {
-  it("emits FAQPage, Service and WebPage on a cached, indexable brand page", async () => {
+  it("emits BreadcrumbList, FAQPage, Service and WebPage on a cached, indexable brand page", async () => {
     const data = cachedIndexable();
     const markup = await render(data);
 
@@ -157,14 +157,33 @@ describe("/ads/:domain JSON-LD", () => {
     expect(markup).toContain("How is Nike's Ad Aggression Score calculated?");
 
     const blocks = parseLdJsonBlocks(markup);
-    expect(blocks).toHaveLength(3);
+    expect(blocks).toHaveLength(4);
 
+    const breadcrumbs = blocks.filter((block) => block["@type"] === "BreadcrumbList");
     const webPages = blocks.filter((block) => block["@type"] === "WebPage");
     const services = blocks.filter((block) => block["@type"] === "Service");
     const faqPages = blocks.filter((block) => block["@type"] === "FAQPage");
+    expect(breadcrumbs).toHaveLength(1);
     expect(webPages).toHaveLength(1);
     expect(services).toHaveLength(1);
     expect(faqPages).toHaveLength(1);
+
+    const breadcrumb = breadcrumbs[0] ?? {};
+    expect(breadcrumb["@context"]).toBe("https://schema.org");
+    const items = (breadcrumb.itemListElement as Array<Record<string, unknown>>) ?? [];
+    expect(items.map((i) => i["@type"])).toEqual(["ListItem", "ListItem", "ListItem"]);
+    expect(items.map((i) => i["position"])).toEqual([1, 2, 3]);
+    expect(items.map((i) => i["name"])).toEqual(["Five to Nine", "Ads", "Nike"]);
+    expect(items.map((i) => i["item"])).toEqual([
+      "https://0509.io/",
+      "https://0509.io/search",
+      "https://0509.io/ads/nike.com",
+    ]);
+    // The visible breadcrumb nav matches the JSON-LD trail.
+    expect(markup).toContain('aria-label="Breadcrumb"');
+    expect(markup).toContain("Five to Nine");
+    expect(markup).toContain('href="/search"');
+    expect(markup).toMatch(/aria-current="page">Nike</);
 
     const service = services[0] ?? {};
     expect(service["@context"]).toBe("https://schema.org");
