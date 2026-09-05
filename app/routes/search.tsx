@@ -107,7 +107,12 @@ import {
   withSearchScope,
   withTrackingContext,
 } from "~/lib/search-display";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
@@ -1402,6 +1407,18 @@ export default function SearchRoute() {
       userName={rootData.session?.user.name}
     >
       <DashboardPage className="f9-wk-page">
+        {/* Truthful WebPage structured data: same name/description the document
+            head already carries, nothing the page does not show. No result
+            counts, rankings, prices, or live-provider claims. */}
+        <script
+          {...jsonLdScriptProps(
+            webPageJsonLd({
+              name: "Search competitor Meta ads free | Five to Nine",
+              description: searchDescription,
+              pathname: "/search",
+            }),
+          )}
+        />
         <WorkingHeader
           context={headerContext}
           title="Find competitor ads"
