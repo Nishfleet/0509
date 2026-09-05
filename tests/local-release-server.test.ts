@@ -1,11 +1,15 @@
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { describe, expect, it } from "vitest";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 // @ts-ignore JavaScript release-server module is intentionally exercised through Vitest.
 const {
   buildLocalReleaseServerCommand,
   buildLocalReleaseServerRetryScript,
+  LOCAL_RELEASE_NETWORK_SHIM_PATH,
   LOCAL_RELEASE_SERVER_BOOT_SECONDS,
   LOCAL_RELEASE_SERVER_MAX_ATTEMPTS,
   LOCAL_RELEASE_SERVER_RETRY_DELAY_SECONDS,
@@ -49,6 +53,28 @@ function listenOnLoopback(server: ReturnType<typeof createServer>, port = 0) {
 function closeServer(server: ReturnType<typeof createServer>) {
   return new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
 }
+
+let shimFixtureDir: string | undefined;
+function writeShimFixture(name: string, body: string) {
+  shimFixtureDir ??= mkdtempSync(join(tmpdir(), "local-release-shim-"));
+  const file = join(shimFixtureDir, name);
+  writeFileSync(file, body, "utf8");
+  return file;
+}
+
+function runShimHarness(preloadOptions: string, script: string) {
+  const nodeOptions = [preloadOptions, `--import ${LOCAL_RELEASE_NETWORK_SHIM_PATH}`]
+    .filter(Boolean)
+    .join(" ");
+  return spawnSync(process.execPath, ["-e", script], {
+    env: { ...process.env, NODE_OPTIONS: nodeOptions },
+    encoding: "utf8",
+  });
+}
+
+afterAll(() => {
+  if (shimFixtureDir) rmSync(shimFixtureDir, { recursive: true, force: true });
+});
 
 describe("local release proof server identity", () => {
   it("accepts only an exact unprivileged IPv4 loopback origin", () => {
@@ -168,5 +194,84 @@ describe("local release proof server identity", () => {
     for (const value of ["0", "59999", "1200001", "not-a-number"]) {
       expect(() => resolveLocalReleaseRunTimeout(value)).toThrow("invalid_local_release_timeout");
     }
+  });
+});
+
+describe("local release proof network shim contract", () => {
+  it("preloads the interface shim on the strict-port server command", () => {
+    const command = buildLocalReleaseServerCommand("http://127.0.0.1:43127");
+    expect(command).toContain(`NODE_OPTIONS="--import ${LOCAL_RELEASE_NETWORK_SHIM_PATH}`);
+    expect(LOCAL_RELEASE_NETWORK_SHIM_PATH.endsWith("scripts/local-release-network-shim.mjs")).toBe(true);
+    expect(command).toContain("--host 127.0.0.1 --port 43127 --strictPort");
+  });
+
+  it("preserves inherited NODE_OPTIONS flags alongside the shim preload", () => {
+    vi.stubEnv("NODE_OPTIONS", "--max-old-space-size=2048");
+    try {
+      const command = buildLocalReleaseServerCommand("http://127.0.0.1:43127");
+      expect(command).toContain(
+        `NODE_OPTIONS="--import ${LOCAL_RELEASE_NETWORK_SHIM_PATH} --max-old-space-size=2048"`,
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("returns an empty interface map for the uv_interface_addresses EAFNOSUPPORT failure", () => {
+    const failingPreload = writeShimFixture(
+      "fail-interface-enumeration.cjs",
+      `"use strict";
+const os = require("node:os");
+os.networkInterfaces = () => {
+  const error = new Error("uv_interface_addresses returned Unknown system error 97");
+  error.code = "EAFNOSUPPORT";
+  error.errno = 97;
+  error.syscall = "uv_interface_addresses";
+  throw error;
+};
+`,
+    );
+    const result = runShimHarness(
+      `--require ${failingPreload}`,
+      "process.stdout.write(JSON.stringify(require('node:os').networkInterfaces()))",
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe("{}");
+  });
+
+  it("passes through healthy interface enumeration unchanged", () => {
+    const healthy = runShimHarness(
+      "",
+      "process.stdout.write(String(Object.keys(require('node:os').networkInterfaces()).length))",
+    );
+    const unshimmed = spawnSync(
+      process.execPath,
+      ["-e", "process.stdout.write(String(Object.keys(require('node:os').networkInterfaces()).length))"],
+      { encoding: "utf8" },
+    );
+    expect(healthy.status).toBe(0);
+    expect(healthy.stdout.trim()).toBe(unshimmed.stdout.trim());
+    expect(Number(healthy.stdout.trim())).toBeGreaterThan(0);
+  });
+
+  it("rethrows unrelated interface errors instead of masking them", () => {
+    const unrelatedPreload = writeShimFixture(
+      "fail-unrelated.cjs",
+      `"use strict";
+const os = require("node:os");
+os.networkInterfaces = () => {
+  const error = new Error("unrelated failure");
+  error.code = "EIO";
+  error.syscall = "read";
+  throw error;
+};
+`,
+    );
+    const result = runShimHarness(
+      `--require ${unrelatedPreload}`,
+      "require('node:os').networkInterfaces()",
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("unrelated failure");
   });
 });

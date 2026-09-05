@@ -1,9 +1,24 @@
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:net";
+import { fileURLToPath } from "node:url";
 
 const MIN_UNPRIVILEGED_PORT = 1024;
 const MAX_PORT = 65_535;
 const SERVER_ID_PATTERN = /^local-[a-f0-9]{32}$/u;
+
+/**
+ * Absolute path to the preload that transparently bypasses the hardened
+ * runners' `uv_interface_addresses` EAFNOSUPPORT interface enumeration
+ * failure, which otherwise kills the Cloudflare Vite plugin at boot.
+ */
+export const LOCAL_RELEASE_NETWORK_SHIM_PATH = fileURLToPath(
+  new URL("./local-release-network-shim.mjs", import.meta.url),
+);
+
+/** @returns {string} NODE_OPTIONS flag that preloads the network shim. */
+export function localReleaseNetworkShimImport() {
+  return `--import ${LOCAL_RELEASE_NETWORK_SHIM_PATH}`;
+}
 
 /**
  * @param {unknown} value
@@ -53,11 +68,15 @@ export function parseExactLoopbackOrigin(value) {
  */
 export function buildLocalReleaseServerCommand(origin) {
   const parsed = parseExactLoopbackOrigin(origin);
-  const server = `E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} ./node_modules/.bin/react-router dev --host 127.0.0.1 --port ${parsed.port} --strictPort`;
+  const inheritedNodeOptions = process.env.NODE_OPTIONS ? ` ${process.env.NODE_OPTIONS}` : "";
+  const server = `E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} NODE_OPTIONS="${localReleaseNetworkShimImport()}${inheritedNodeOptions}" ./node_modules/.bin/react-router dev --host 127.0.0.1 --port ${parsed.port} --strictPort`;
   // The self-hosted verify runners intermittently fail the dev server at boot
   // with `uv_interface_addresses returned Unknown system error 97`
-  // (EAFNOSUPPORT) while Vite enumerates interfaces for its startup banner.
-  // It is environmental and transient — a second attempt starts cleanly.
+  // (EAFNOSUPPORT) while Vite enumerates interfaces for the Cloudflare
+  // plugin's inspector port. NODE_OPTIONS preloads a transparent shim that
+  // returns an empty interface map for that exact enumeration failure, so the
+  // loopback-only server boots instead of dying before the first journey.
+  // Genuine failures still propagate through the shim.
   //
   // Retry ONLY a fast boot failure. If the server stayed up for
   // LOCAL_RELEASE_SERVER_BOOT_SECONDS or longer, its exit is a real result
