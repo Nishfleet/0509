@@ -159,15 +159,19 @@ describe("sneaker-resale locale landing pages", () => {
     expect(routes).toContain('route("sneaker-resale", "routes/sneaker-resale.tsx")');
     expect(routes).toContain('route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx")');
 
+    // Issue #1561: the EN /sneaker-resale stays in the root sitemap; the
+    // locale sneaker-resale pages live ONLY in their own /<locale>/sitemap.xml.
     const { publicSeoFileForPathname } = await import("~/lib/seo");
+    const { buildLocaleSitemapXml } = await import("~/lib/sitemap.server");
     const sitemap = publicSeoFileForPathname("/sitemap.xml");
-    for (const path of [
-      "/sneaker-resale",
-      "/de/sneaker-resale",
-      "/ja/sneaker-resale",
-      "/pt-br/sneaker-resale",
-    ]) {
-      expect(sitemap?.body).toContain(`<loc>https://0509.io${path}</loc>`);
+    expect(sitemap?.body).toContain(`<loc>https://0509.io/sneaker-resale</loc>`);
+    expect(sitemap?.body).not.toContain(`<loc>https://0509.io/de/sneaker-resale</loc>`);
+    for (const [locale, path] of [
+      ["de", "/de/sneaker-resale"],
+      ["ja", "/ja/sneaker-resale"],
+      ["pt-br", "/pt-br/sneaker-resale"],
+    ] as const) {
+      expect(buildLocaleSitemapXml(locale)).toContain(`<loc>https://0509.io${path}</loc>`);
     }
   });
 

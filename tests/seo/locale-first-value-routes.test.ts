@@ -9,8 +9,8 @@ import {
 } from "~/lib/locale-markets";
 import {
   buyerSurfaceHreflangLinks,
-  publicSeoFileForPathname,
 } from "~/lib/seo";
+import { buildLocaleSitemapXml } from "~/lib/sitemap.server";
 
 // First-value search funnel + supporting trust surfaces that must serve 200
 // under every buyer-surface locale prefix (issue #1578).
@@ -84,14 +84,15 @@ describe("locale first-value search funnel (issue #1578)", () => {
     }
   });
 
-  it("lists all 20 locale first-value URLs in the sitemap so Google can locale-target them", () => {
-    const sitemap = publicSeoFileForPathname("/sitemap.xml");
-    expect(sitemap).not.toBeNull();
-    const body = sitemap?.body ?? "";
+  it("lists all 20 locale first-value URLs in each locale sitemap so Google can locale-target them", () => {
+    // Issue #1561: the first-value locale URLs live in the LOCALE sitemap
+    // (/<locale>/sitemap.xml), not the root — the root no longer lists any
+    // locale-prefixed URL.
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+      const body = buildLocaleSitemapXml(locale);
       for (const route of LOCALE_FIRST_VALUE_ROUTES) {
         const loc = `<loc>https://0509.io/${locale}/${route}</loc>`;
-        expect(body, `sitemap missing ${loc}`).toContain(loc);
+        expect(body, `locale sitemap missing ${loc}`).toContain(loc);
       }
     }
   });
