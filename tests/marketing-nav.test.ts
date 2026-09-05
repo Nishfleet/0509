@@ -35,6 +35,7 @@ const SHARED_LINKS = [
 	{ href: "/status", label: "Status" },
 	{ href: "/auth/login", label: "Sign in" },
 	{ href: "/app", label: "Open app" },
+	{ href: "/auth/signup", label: "Sign up" },
 ];
 
 describe("MarketingNav (shared public nav)", () => {
@@ -49,8 +50,10 @@ describe("MarketingNav (shared public nav)", () => {
 		}
 		expect(MARKETING_TAGLINE).toBe("Competitor change monitoring");
 		expect(markup).toContain(MARKETING_TAGLINE);
-		// Single account CTA — the "Create account" vs "Open app" split is retired.
-		expect(markup).not.toContain("Create account");
+		// The retired "Create account" vs "Open app" split stays retired — the
+		// nav exposes a plain "Sign up" pill CTA (checked via SHARED_LINKS above)
+		// alongside Sign in and Open app instead.
+		expect(markup).toContain('class="ld-nav-pill"');
 	});
 
 	it("is the header used by landing, both compare pages, and the legal doc shell", async () => {
