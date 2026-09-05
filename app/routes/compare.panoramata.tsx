@@ -2,6 +2,7 @@ import { Form, Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
   Cite,
@@ -125,6 +126,13 @@ export default function ComparePanoramataRoute() {
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
       <MarketingNav />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Competitor monitoring", pathname: "/competitor-monitoring" },
+          { name: "Panoramata", pathname: "/compare/panoramata" },
+        ]}
+      />
 
       <section className="ld-hero">
         <p className="ld-case">

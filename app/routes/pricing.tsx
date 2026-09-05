@@ -2,6 +2,7 @@ import { useLoaderData, useRouteLoaderData } from "react-router";
 import type { HeadersArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
   PricingSection,
@@ -83,6 +84,12 @@ export default function PricingRoute() {
         )}
       />
       <MarketingNav />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Pricing", pathname: "/pricing" },
+        ]}
+      />
       <PricingSection
         headingLevel="h1"
         commercialLaunch={commercialLaunch}

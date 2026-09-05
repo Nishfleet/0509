@@ -1,6 +1,7 @@
 import { Form, Link } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
   SNEAKER_RESALE_MARKETS,
@@ -47,6 +48,15 @@ export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId
       />
       <script {...jsonLdScriptProps(faqPageJsonLd(copy.faq))} />
       <MarketingNav />
+      <Breadcrumbs
+        items={[
+          {
+            name: "Home",
+            pathname: market.id === "en" ? "/" : `/${market.id}`,
+          },
+          { name: "Sneaker resale", pathname: market.pathname },
+        ]}
+      />
 
       <section className="ld-hero">
         <p className="ld-case">
