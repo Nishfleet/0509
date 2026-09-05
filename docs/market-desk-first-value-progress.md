@@ -61,7 +61,7 @@ The first-session outcome is: within five minutes, a paying customer has a usefu
 - Build Market Desk Brief as a derived server document first, not a new persistent table.
 - Keep client-ready reports proof-strict; scan-backed and proof-pending items can appear in app review states, not as proven client claims.
 - Add answer-led search as a pure summary layer over already-hydrated search results; do not alter provider discovery or verified-domain matching logic unless a test proves a mismatch.
-- Treat MagicBrief migration as generic competitor-list import unless a real export format is supplied. The public MagicBrief shutdown guidance says analytics reports can export CSV, while other saved work may require manual recreation.
+- Treat MagicBrief migration as generic competitor-list import unless a real export format is supplied. The public MagicBrief shutdown guidance says analytics reports can export CSV, while other saved work may require manual recreation. The supported-input contract, field dispositions, and manual fallback are documented in [`docs/magicbrief-migration.md`](./magicbrief-migration.md) and locked to the parser by `tests/magicbrief-migration.test.ts`.
 - Keep Presence smoke blocked as an owner action until `PRESENCE_INTERNAL_WORKSPACE_ID` is configured.
 
 ## Current Owner Actions
