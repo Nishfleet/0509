@@ -137,8 +137,7 @@ export default function CompareForeplaySpyderRoute() {
           Foreplay Spyder watches a competitor's new Meta ads and landing pages on Foreplay plans
           listed from $59 to $459 a month. It is a strong archive. Five to Nine is for the before
           and after, with a source link. Competitor prices on this page are public list prices as of
-          August 2026 — check the vendor's site for current plans. For the broader creative-platform
-          comparison, see <Link to="/compare/foreplay">Five to Nine vs Foreplay</Link>.
+          August 2026 — check the vendor's site for current plans.
         </p>
 
         <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
