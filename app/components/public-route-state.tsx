@@ -1,5 +1,5 @@
-import { Link, useRevalidator } from "react-router";
-import { useEffect, useState } from "react";
+import { Link, useLocation, useRevalidator } from "react-router";
+import { useEffect, useMemo, useState } from "react";
 
 import { RouteSkeleton } from "~/components/route-skeleton";
 import { mapCustomerRouteError } from "~/lib/customer-route-error";
@@ -73,60 +73,134 @@ export function PublicSearchError({ error }: { error: unknown }) {
   );
 }
 
+const RATE_LIMIT_SESSION_KEY = "f9.search.rateLimit";
+
+function formatCountdown(totalSeconds: number) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+interface RateLimitErrorData {
+  error: string;
+  message?: string;
+  retryAfter?: number;
+}
+
 /**
  * Rate-limit error state for anonymous /search.
  *
- * Shows the policy (20 requests per 10 minutes per IP), a countdown derived
- * from the Retry-After header, and a working "Try again" button that
- * re-triggers the search without a full page reload. The countdown updates
- * client-side every 10 seconds; on reaching zero it auto-revalidates so the
- * page returns to results state once the limit window clears.
+ * Shows the policy (20 requests / 10 min / IP), an absolute retry time, and a
+ * minute:second countdown. The "Try again" button is disabled until the window
+ * clears, then submits a form that carries the original q/country parameters so
+ * the user is not forced to re-type. The original search state is also written
+ * to sessionStorage for sign-in recovery.
  */
 export function PublicSearchRateLimitError({ error }: { error: unknown }) {
-  const revalidator = useRevalidator();
+  const location = useLocation();
 
-  // Extract retryAfter from the thrown response body (set by the loader).
-  const retryAfterFromError =
-    error && typeof error === "object" && "data" in error
-      ? (error as { data?: { retryAfter?: number } }).data?.retryAfter
-      : null;
-
-  const [secondsRemaining, setSecondsRemaining] = useState<number | null>(
-    retryAfterFromError ?? null,
+  const searchParams = useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search],
   );
 
-  // Countdown timer: decrement by 10 every 10 seconds so the visible value
-  // matches the per-tick granularity the spec asks for. Using Math.max keeps
-  // a stale value (e.g. a Retry-After already past) pinned at 0 instead of
-  // drifting negative.
+  const query = searchParams.get("q") ?? searchParams.get("query") ?? "";
+  const country = searchParams.get("country") ?? "all";
+
+  const data = useMemo<RateLimitErrorData | null>(() => {
+    if (!error || typeof error !== "object") return null;
+    if (!("data" in error)) return null;
+    const maybe = (error as { data?: unknown }).data;
+    if (!maybe || typeof maybe !== "object") return null;
+    return maybe as RateLimitErrorData;
+  }, [error]);
+
+  const baseMessage =
+    data?.message ??
+    "You’ve hit the search limit. Wait a moment and try again.";
+
+  const initialSeconds =
+    typeof data?.retryAfter === "number" ? Math.max(0, data.retryAfter) : 0;
+
+  const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
+
   useEffect(() => {
-    if (secondsRemaining === null || secondsRemaining <= 0) return;
+    if (secondsRemaining <= 0) return;
     const timer = setInterval(() => {
-      setSecondsRemaining((prev) =>
-        prev === null || prev <= 10 ? 0 : prev - 10,
-      );
-    }, 10_000);
+      setSecondsRemaining((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
     return () => clearInterval(timer);
   }, [secondsRemaining]);
 
-  // Auto-revalidate when countdown reaches zero so the page leaves the rate-
-  // limit state as soon as the limiter's window clears.
   useEffect(() => {
-    if (secondsRemaining === 0) {
-      revalidator.revalidate();
+    if (typeof window === "undefined" || !window.sessionStorage) return;
+    try {
+      window.sessionStorage.setItem(
+        RATE_LIMIT_SESSION_KEY,
+        JSON.stringify({
+          q: query,
+          query,
+          country,
+          search: location.search,
+          pathname: location.pathname,
+        }),
+      );
+    } catch {
+      // sessionStorage is optional; fail silently.
     }
-  }, [secondsRemaining, revalidator]);
+  }, [query, country, location.search, location.pathname]);
 
-  const minutes = secondsRemaining !== null
-    ? Math.ceil(secondsRemaining / 60)
-    : null;
-  const minuteLabel = minutes !== null
-    ? `${minutes} minute${minutes !== 1 ? "s" : ""}`
-    : null;
-  const countdownCopy = minuteLabel
-    ? `Retry in ${minuteLabel} (${secondsRemaining}s)`
-    : "Retry window open — Try again to refresh results.";
-  const message = `20 requests per 10 minutes per IP — ${countdownCopy}`;
+  const canRetry = secondsRemaining <= 0;
+
+  const retryAt = useMemo(() => {
+    if (secondsRemaining <= 0) return null;
+    return new Date(Date.now() + secondsRemaining * 1000);
+  }, [secondsRemaining]);
+
+  const retryTimeLabel = useMemo(() => {
+    if (!retryAt) return null;
+    return retryAt.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  }, [retryAt]);
+
+  const countdownLabel = useMemo(() => {
+    if (secondsRemaining <= 0) return null;
+    return formatCountdown(secondsRemaining);
+  }, [secondsRemaining]);
+
+  const message = useMemo(() => {
+    const cleanBase = baseMessage
+      .replace(/(\s*—\s*)?wait a few minutes and try again\.?$/i, "")
+      .trim();
+    if (retryTimeLabel && countdownLabel) {
+      return `${cleanBase} — Try again at ${retryTimeLabel} (${countdownLabel} remaining)`;
+    }
+    return cleanBase;
+  }, [baseMessage, retryTimeLabel, countdownLabel]);
+
+  const buttonLabel =
+    secondsRemaining > 0 && countdownLabel
+      ? `Try again in ${countdownLabel}`
+      : "Try again";
+
+  const retryPath = useMemo(() => {
+    const params = new URLSearchParams();
+    for (const [key, value] of searchParams) {
+      params.set(key, value);
+    }
+    const queryString = params.toString();
+    return `${location.pathname}${queryString ? `?${queryString}` : ""}`;
+  }, [location.pathname, searchParams]);
+
+  const signInRedirect = useMemo(
+    () => `/auth/login?redirectTo=${encodeURIComponent(retryPath)}`,
+    [retryPath],
+  );
+
+  const retryAtIso = retryAt?.toISOString() ?? null;
 
   return (
     <DashboardShell
@@ -141,20 +215,47 @@ export function PublicSearchRateLimitError({ error }: { error: unknown }) {
         className="f9-dash-state f9-dash-state-error"
         role="alert"
         tabIndex={-1}
+        data-f9-search-query={query}
+        data-f9-search-country={country}
+        data-f9-search-retry-at={retryAtIso ?? undefined}
       >
         <h2>Too many searches</h2>
-        <p data-testid="rate-limit-message">{message}</p>
+        <p data-testid="rate-limit-message" suppressHydrationWarning>
+          {message}
+        </p>
+        <form
+          id="f9-rate-limit-retry"
+          method="get"
+          action={location.pathname}
+          hidden
+        >
+          {Array.from(searchParams.entries()).map(([name, value]) => (
+            <input
+              key={`${name}-${value}`}
+              type="hidden"
+              name={name}
+              value={value}
+            />
+          ))}
+        </form>
         <div className="f9-inline-actions">
           <button
             className="f9-wk-btn"
-            disabled={revalidator.state === "loading"}
-            onClick={() => revalidator.revalidate()}
-            type="button"
+            data-retry-seconds={
+              secondsRemaining > 0 ? secondsRemaining : undefined
+            }
+            data-retry-url={retryPath}
+            disabled={!canRetry}
+            form="f9-rate-limit-retry"
+            type="submit"
           >
-            {revalidator.state === "loading" ? "Retrying…" : "Try again"}
+            {buttonLabel}
           </button>
           <Link className="f9-wk-btn-quiet" to="/">
             Back to Five to Nine
+          </Link>
+          <Link className="f9-wk-btn-quiet" to={signInRedirect}>
+            Sign in for more searches
           </Link>
         </div>
       </div>
