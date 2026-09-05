@@ -116,6 +116,7 @@ import {
   hasRecentSearchDelay,
   isDelayedDiscoveryStatus,
   mergeSearchAccumulationState,
+  NO_RESULTS_HONEST_COPY,
   resolveRecoveredSearchKey,
   resolveResultTierCounts,
   type SearchAccumulationState,
@@ -2047,7 +2048,14 @@ export default function SearchRoute() {
                      next. No dimmed specimen — a diagram of the thing the
                      visitor does not have yet is the v3 ornament habit. */
                   <div className="f9-wk-empty">
-                    {isSearchWarming ? (
+                    {visibleResult.discoveryEmptyReason === "no_results" ? (
+                      /* Honest dead-end (issue 1569): a completed 0-row search
+                         is not evidence the competitor is inactive. The honest
+                         reason wins over any warming/delayed cause so a buyer
+                         at this dead-end is never told "coverage may be
+                         incomplete" or "still checking" for a real brand. */
+                      <p className="f9-wk-note">{NO_RESULTS_HONEST_COPY}</p>
+                    ) : isSearchWarming ? (
                       <div aria-live="polite" role="status">
                         {warmingPollExhausted ? (
                           /* Honest end state: the check outlived the 60s
