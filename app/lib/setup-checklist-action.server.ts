@@ -268,6 +268,13 @@ export async function handleSetupChecklistAction(
       };
     }
 
+    if (signupFirstBriefEnabled) {
+      const { emitFunnelActivationScanStarted } = await import(
+        "~/lib/funnel-measurement.server"
+      );
+      emitFunnelActivationScanStarted(env, request);
+    }
+
     if (importSurface === "watchlists") {
       throw redirect(`/app/watchlists?imported=${createdCount}`);
     }
@@ -372,6 +379,10 @@ export async function handleSetupChecklistAction(
           cloudflare?.ctx,
           watchlist,
         );
+        const { emitFunnelActivationScanStarted } = await import(
+          "~/lib/funnel-measurement.server"
+        );
+        emitFunnelActivationScanStarted(env, request);
       } else {
         await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, watchlist);
       }

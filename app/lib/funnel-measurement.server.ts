@@ -40,7 +40,9 @@ export type FunnelEventKind =
   | "locale_segment_view_de"
   | "locale_segment_view_ja"
   | "locale_segment_view_pt_br"
-  | "first_brief_viewed";
+  | "first_brief_viewed"
+  | "activation_scan_started"
+  | "first_brief_email_sent";
 
 export type FunnelRoute =
   | "home"
@@ -94,6 +96,8 @@ const FUNNEL_ROUTES: Record<FunnelEventKind, FunnelRoute> = {
   locale_segment_view_ja: "sneaker_resale",
   locale_segment_view_pt_br: "sneaker_resale",
   first_brief_viewed: "activation",
+  activation_scan_started: "activation",
+  first_brief_email_sent: "activation",
 };
 
 const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
@@ -114,6 +118,8 @@ const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
   locale_segment_view_ja: "funnel_locale_segment_view_ja",
   locale_segment_view_pt_br: "funnel_locale_segment_view_pt_br",
   first_brief_viewed: "funnel_first_brief_viewed",
+  activation_scan_started: "funnel_activation_scan_started",
+  first_brief_email_sent: "funnel_first_brief_email_sent",
 };
 
 const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
@@ -134,6 +140,8 @@ const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
   locale_segment_view_ja: "Anonymous Japanese sneaker-resale page view",
   locale_segment_view_pt_br: "Anonymous Brazilian Portuguese sneaker-resale page view",
   first_brief_viewed: "First brief viewed in session",
+  activation_scan_started: "Activation scan started for a signup workspace",
+  first_brief_email_sent: "First brief email dispatched",
 };
 
 const LOCALE_SEGMENT_VIEW_KIND: Record<SneakerResaleLocaleId, FunnelEventKind> = {
@@ -220,18 +228,37 @@ interface FunnelEventExtra {
   errorKind?: FunnelErrorKind;
 }
 
-function emitFunnelEvent(env: AppEnv, request: Request, kind: FunnelEventKind, extra: FunnelEventExtra = {}) {
+/**
+ * Account/workspace-scoped activation events. `first_brief_email_sent` can
+ * fire from the async delivery path (no user request exists), so its scope is
+ * resolved from the kind, never from the presence of a request.
+ */
+const WORKSPACE_SCOPED_KINDS = new Set<FunnelEventKind>([
+  "first_brief_viewed",
+  "activation_scan_started",
+  "first_brief_email_sent",
+]);
+
+function emitFunnelEvent(
+  env: AppEnv,
+  kind: FunnelEventKind,
+  extra: FunnelEventExtra = {},
+  request?: Request,
+) {
   if (!funnelMeasurementEnabled(env)) {
     return;
   }
-  if (isGpcOptOut(request)) {
+  // GPC is a request-header signal. A server-initiated background event
+  // (async delivery) carries no request, so there is no header to honor; the
+  // field allowlist and account-scope rules still apply unchanged.
+  if (request && isGpcOptOut(request)) {
     return;
   }
 
   const details: Record<string, string> = {
     event_id: crypto.randomUUID(),
     route: FUNNEL_ROUTES[kind],
-    account_scope: kind === "first_brief_viewed" ? "workspace" : "anonymous",
+    account_scope: WORKSPACE_SCOPED_KINDS.has(kind) ? "workspace" : "anonymous",
   };
   if (extra.resultCount !== undefined) {
     details.result_count_bucket = bucketForResultCount(extra.resultCount);
@@ -246,27 +273,27 @@ function emitFunnelEvent(env: AppEnv, request: Request, kind: FunnelEventKind, e
 }
 
 export function emitFunnelHomeView(env: AppEnv, request: Request) {
-  emitFunnelEvent(env, request, "home_view");
+  emitFunnelEvent(env, "home_view", {}, request);
 }
 
 export function emitFunnelSearchSubmit(env: AppEnv, request: Request) {
-  emitFunnelEvent(env, request, "search_preview_submit");
+  emitFunnelEvent(env, "search_preview_submit", {}, request);
 }
 
 export function emitFunnelSearchResult(env: AppEnv, request: Request, resultCount: number) {
-  emitFunnelEvent(env, request, "search_preview_result", { resultCount });
+  emitFunnelEvent(env, "search_preview_result", { resultCount }, request);
 }
 
 export function emitFunnelSearchError(env: AppEnv, request: Request, errorKind: FunnelErrorKind) {
-  emitFunnelEvent(env, request, "search_preview_error", { errorKind });
+  emitFunnelEvent(env, "search_preview_error", { errorKind }, request);
 }
 
 export function emitFunnelSignupStart(env: AppEnv, request: Request) {
-  emitFunnelEvent(env, request, "signup_start");
+  emitFunnelEvent(env, "signup_start", {}, request);
 }
 
 export function emitFunnelMigrationView(env: AppEnv, request: Request) {
-  emitFunnelEvent(env, request, "migration_view");
+  emitFunnelEvent(env, "migration_view", {}, request);
 }
 
 /**
@@ -282,8 +309,9 @@ export function emitFunnelSignupStartFromMigrationReferrer(
 ) {
   emitFunnelEvent(
     env,
-    request,
     fromMigrationReferrer ? "signup_start_magicbrief" : "signup_start",
+    {},
+    request,
   );
 }
 
@@ -296,7 +324,7 @@ export function emitFunnelLocaleSegmentView(
   request: Request,
   locale: SneakerResaleLocaleId,
 ) {
-  emitFunnelEvent(env, request, LOCALE_SEGMENT_VIEW_KIND[locale]);
+  emitFunnelEvent(env, LOCALE_SEGMENT_VIEW_KIND[locale], {}, request);
 }
 
 /**
@@ -310,21 +338,41 @@ export function emitFunnelSignupStartFromAllowlistedSource(
   source: string | null,
 ) {
   if (source === MAGICBRIEF_MIGRATION_SOURCE) {
-    emitFunnelEvent(env, request, "signup_start_magicbrief");
+    emitFunnelEvent(env, "signup_start_magicbrief", {}, request);
     return;
   }
   if (source === PRICING_FREE_SIGNUP_SOURCE) {
-    emitFunnelEvent(env, request, "pricing_free_card_clicked");
+    emitFunnelEvent(env, "pricing_free_card_clicked", {}, request);
     return;
   }
   const localeMarket = sneakerResaleMarketForSignupSource(source);
   if (localeMarket) {
-    emitFunnelEvent(env, request, LOCALE_SIGNUP_KIND[localeMarket.id]);
+    emitFunnelEvent(env, LOCALE_SIGNUP_KIND[localeMarket.id], {}, request);
     return;
   }
-  emitFunnelEvent(env, request, "signup_start");
+  emitFunnelEvent(env, "signup_start", {}, request);
 }
 
 export function emitFunnelFirstBriefViewed(env: AppEnv, request: Request) {
-  emitFunnelEvent(env, request, "first_brief_viewed");
+  emitFunnelEvent(env, "first_brief_viewed", {}, request);
+}
+
+/**
+ * BET 7 (issue #1487): the onboarding flow queued the first activation scan
+ * for a signup workspace. Fires inside the same request that created the
+ * watchlist, so the standard GPC opt-out applies. Coarse workspace-scoped
+ * count only — no watchlist id, competitor name, or URL ever reaches a record.
+ */
+export function emitFunnelActivationScanStarted(env: AppEnv, request: Request) {
+  emitFunnelEvent(env, "activation_scan_started", {}, request);
+}
+
+/**
+ * BET 7 (issue #1487): the "Your first brief" email was dispatched (digest
+ * path with firstBrief: true). May fire without a request from the async
+ * scan-completion delivery path, so GPC does not apply there (no request
+ * header exists); the field allowlist and workspace scope are unchanged.
+ */
+export function emitFunnelFirstBriefEmailSent(env: AppEnv) {
+  emitFunnelEvent(env, "first_brief_email_sent");
 }
