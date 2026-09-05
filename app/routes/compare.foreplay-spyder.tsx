@@ -3,6 +3,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import {
   Cite,
   CompareCitationsFooter,
@@ -125,6 +126,13 @@ export default function CompareForeplaySpyderRoute() {
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
       <MarketingNav />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Competitor monitoring", pathname: "/competitor-monitoring" },
+          { name: "Foreplay Spyder", pathname: "/compare/foreplay-spyder" },
+        ]}
+      />
 
       <section className="ld-hero">
         <p className="ld-case">

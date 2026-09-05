@@ -79,7 +79,12 @@ export default [
   route("compare/magicbrief", "routes/compare.magicbrief.tsx"),
   route("compare/meta-ad-library", "routes/compare.meta-ad-library.tsx"),
   route("compare/visualping", "routes/compare.visualping.tsx"),
+  // Singular visualping-ad-library is a canonicalized loser (issue #1548):
+  // the page the issue names is the plural /compare/visualping-ad-libraries,
+  // so the winner moves there and this URL stays HTTP 200 canonicalizing to
+  // it (the #1481 loser pattern) so no existing link 404s.
   route("compare/visualping-ad-library", "routes/compare.visualping-ad-library.tsx"),
+  route("compare/visualping-ad-libraries", "routes/compare.visualping-ad-libraries.tsx"),
   route("compare/spyland", "routes/compare.spyland.tsx"),
   route("compare/pulzifi", "routes/compare.pulzifi.tsx"),
   route("compare/foreplay", "routes/compare.foreplay.tsx"),
@@ -120,6 +125,7 @@ export default [
     route("compare/meta-ad-library", "routes/$locale.compare.meta-ad-library.tsx"),
     route("compare/visualping", "routes/$locale.compare.visualping.tsx"),
     route("compare/visualping-ad-library", "routes/$locale.compare.visualping-ad-library.tsx"),
+    route("compare/visualping-ad-libraries", "routes/$locale.compare.visualping-ad-libraries.tsx"),
     route("compare/spyland", "routes/$locale.compare.spyland.tsx"),
     route("compare/pulzifi", "routes/$locale.compare.pulzifi.tsx"),
     route("compare/foreplay", "routes/$locale.compare.foreplay.tsx"),
