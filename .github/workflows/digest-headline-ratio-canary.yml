@@ -1,0 +1,111 @@
+name: Digest headline-ratio canary
+
+# Always-on BET 1 regression guard (issue #1451). The brief's central promise
+# is that its headline items are commercial-field changes (the five
+# landing_page_* types) and that creative churn is collapsed to a single
+# counted footnote line. This cron runs the digest-headline-ratio canary
+# (`scripts/canary-digest-headline-ratio.mjs`) daily, samples the delivered
+# brief's headline mix, and fires a regression guard (files an issue pinging
+# #972) when the 7-day rolling headline ratio drops below the 50% floor — so a
+# merge that re-leaks churn into headlines or drops landing_page_* out of the
+# headline stream is caught in the rolling window it lands. The rule itself is
+# unit-tested under `tests/digest-headline-ratio.test.ts`.
+#
+# Filing an issue is a designed, successful outcome: the guard detected a
+# regression and recorded it loudly. The job stays green after the issue is
+# filed so a regression does not double its own detection with a GitHub
+# failure alert (same pattern as the auto-revert halt). A guard that could not
+# file its issue fails loud instead.
+#
+# The daily summary CSV is uploaded as an artifact every run so the headline
+# mix stays observable without writing back to main (which would churn CI on
+# every scheduled push).
+on:
+  schedule:
+    # Daily 06:23 UTC — after the morning digest delivery window.
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: digest-headline-ratio-canary
+  cancel-in-progress: false
+
+jobs:
+  headline-ratio:
+    name: digest-headline-ratio
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run digest-headline-ratio canary
+        id: canary
+        env:
+          REPORT_PATH: /tmp/digest-headline-ratio-report.json
+        run: |
+          # The canary exits 1 when the guard fires; the verdict is read back
+          # from REPORT_PATH (tee already wrote it), so tolerate the exit here
+          # and let the file-an-issue step decide. A report that cannot be
+          # produced still fails the step (|| true must not mask an empty file).
+          node scripts/canary-digest-headline-ratio.mjs --json --no-commit | tee "$REPORT_PATH" || true
+          test -s "$REPORT_PATH"
+          echo "guard_fired=$(node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            console.log(JSON.parse(readFileSync(process.env.REPORT_PATH, "utf8")).guardFired ? "true" : "false");
+          ')" >> "$GITHUB_OUTPUT"
+          echo "rolling_ratio=$(node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            console.log(JSON.parse(readFileSync(process.env.REPORT_PATH, "utf8")).rollingRatio);
+          ')" >> "$GITHUB_OUTPUT"
+          echo "period_start=$(node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            console.log(JSON.parse(readFileSync(process.env.REPORT_PATH, "utf8")).periodStart);
+          ')" >> "$GITHUB_OUTPUT"
+          echo "digest_headline_ratio_report_written"
+
+      - name: File regression guard issue when the 7-day rolling ratio drops below 50%
+        if: steps.canary.outputs.guard_fired == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ROLLING: ${{ steps.canary.outputs.rolling_ratio }}
+          PERIOD: ${{ steps.canary.outputs.period_start }}
+        run: |
+          set -euo pipefail
+          num="$(gh issue list --repo "$REPO" --state open --label digest-headline-ratio-guard \
+            --json number --jq '.[0].number // empty' 2>/dev/null || true)"
+          body="The 7-day rolling digest headline ratio fell below the 50% guard floor.
+
+          - Period: $PERIOD
+          - Rolling headline ratio: $ROLLING
+          - Guard rule: at least 60% of brief headline items are \`landing_page_*\` events; the always-on guard fires below 50% (issue #1451).
+          - See #972. The digest builder's headline rule lives in \`app/lib/digest-rerank.ts\`; the guard is \`scripts/canary-digest-headline-ratio.mjs\`.
+
+          A merge is regressing the central BET 1 promise. Investigate the digest builder / change-intelligence before more deliveries."
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$REPO" --body "$body"
+          else
+            gh issue create --repo "$REPO" --title "DIGEST HEADLINE RATIO GUARD: rolling ratio below 50%" \
+              --body "$body" --label digest-headline-ratio-guard
+          fi
+          # Filed = designed outcome; stay green.
+          exit 0
+
+      - name: Upload daily summary CSV
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: digest-headline-ratio-daily-summary
+          path: ops/digest-headline-ratio/daily-summary.csv
+          if-no-files-found: ignore
