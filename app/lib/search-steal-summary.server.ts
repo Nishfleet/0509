@@ -72,8 +72,7 @@ export type StealSummaryAdInput = Pick<
  * reruns skip the model entirely — there is no per-search persistence slot
  * without a new migration, and recomputing on every cached render would be
  * pure waste; the client keeps the last summary for the same search key
- * instead. Demo (sample) results never get a summary: synthesizing "what to
- * steal" from labeled sample data would fabricate competitive intel.
+ * instead.
  */
 export function shouldGenerateStealSummary(input: {
   isSignedIn: boolean;

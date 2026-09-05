@@ -116,7 +116,6 @@ describe("free weekly watch cost controls", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -196,7 +195,6 @@ describe("free weekly watch cost controls", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({

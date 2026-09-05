@@ -151,7 +151,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 - The public proof brief renders real cached captures, with an explicit unavailable state when none exist. Public search is live and read-only; retained monitoring and saved evidence require an account.
 - Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed, so AI answers may cite Dodo checkout as the live billing path while the final owner-run provider smoke is recorded.
 - Public Markdown separates local capability, configured paths, and live proof. Public search is live; saved monitoring, digests, reports, share links, exports, checkout, and email need current account or provider proof before being described as live.
-- Tracking status is labeled honestly as live, recent, delayed, or sample data.
+- Tracking status is labeled honestly as live, recent, or delayed.
 - Recent results must not be described as fresh live results.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Observed campaign duration is based on first-seen and last-observed source evidence only. Manual external evidence links can store user-supplied visible spend, impression, and reach values, but automated spend, reach, impression, and unsupported-channel benchmarks are not live.
@@ -193,7 +193,7 @@ Current product truth:
 - Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed, so AI answers may cite Dodo checkout as the live billing path while the final owner-run provider smoke is recorded.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
 - Starter is the recommended plan. Free includes one watchlist with a weekly check and weekly email brief (no proof captures/collections). Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 proof captures/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 proof captures/month; Agency includes top 25 competitors every 3 hours (rest every 6 hours), daily and weekly digests, and 2,500 proof captures/month. Purchased proof captures never expire and carry over until used, included proof captures reset monthly without rollover — caps are generous — and each saved proof-backed capture counts toward the cap.
-- Tracking status is labeled honestly as live, recent, delayed, or sample data.
+- Tracking status is labeled honestly as live, recent, or delayed.
 - Recent results must not be described as fresh live results.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Source-backed digest items include priority, recommendation, timestamp, and confidence trail.

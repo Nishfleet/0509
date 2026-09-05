@@ -135,7 +135,7 @@ export function customerDiscoverySummary(
   const raw = summary?.trim();
   if (!raw) return null;
   const safeSummaryPattern =
-    /^(?:Live ad checks are ready\.|Live ad checks aren't configured yet, so searches show labeled sample data\.|Live ad checks are unavailable right now\. Review source access before relying on fresh results\.|Live ad checks need refreshed source access\. Review source access, then retry\.|Live ad checks are temporarily delayed; a backup check is filling in\.|Live ad checks are temporarily delayed(?:, so we're showing your most recent results\.)? We'll retry (?:automatically|in about \d+\s*(?:s|m|h|d|seconds?|minutes?|hours?|days?))\.(?: — results refresh as soon as checks recover\.)?|The visual ad check is temporarily delayed\. We'll retry automatically — results refresh as soon as checks recover\.|The ad check took longer than expected\. We'll retry automatically — results refresh as soon as checks recover\.|The ad source is briefly limiting checks\. We'll retry (?:automatically|in about \d+\s*(?:s|m|h|d|seconds?|minutes?|hours?|days?))\. Results refresh as soon as checks recover\.|We're checking this competitor now\. Results should appear shortly\.)$/i;
+    /^(?:Live ad checks are ready\.|Live ad checks aren't configured yet, so searches can't run a fresh check\.|Live ad checks are unavailable right now\. Review source access before relying on fresh results\.|Live ad checks need refreshed source access\. Review source access, then retry\.|Live ad checks are temporarily delayed; a backup check is filling in\.|Live ad checks are temporarily delayed(?:, so we're showing your most recent results\.)? We'll retry (?:automatically|in about \d+\s*(?:s|m|h|d|seconds?|minutes?|hours?|days?))\.(?: — results refresh as soon as checks recover\.)?|The visual ad check is temporarily delayed\. We'll retry automatically — results refresh as soon as checks recover\.|The ad check took longer than expected\. We'll retry automatically — results refresh as soon as checks recover\.|The ad source is briefly limiting checks\. We'll retry (?:automatically|in about \d+\s*(?:s|m|h|d|seconds?|minutes?|hours?|days?))\. Results refresh as soon as checks recover\.|We're checking this competitor now\. Results should appear shortly\.)$/i;
   if (safeSummaryPattern.test(raw)) {
     return raw;
   }
@@ -178,7 +178,7 @@ export function customerDiscoverySummary(
     return "Live ad checks are temporarily delayed. We'll retry automatically — results refresh as soon as checks recover.";
   }
   if (/No live commercial discovery provider is configured/i.test(raw)) {
-    return "Live ad checks aren't configured yet, so searches show labeled sample data.";
+    return "Live ad checks aren't configured yet, so searches can't run a fresh check.";
   }
   return safeDiscoverySummary("degraded", raw, null);
 }

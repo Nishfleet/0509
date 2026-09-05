@@ -591,7 +591,7 @@ describe("getWorkspaceReadiness", () => {
       },
       adSource: {
         resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue({
-          status: "degraded",
+          status: "disabled",
           provider: "meta_api",
           mode: "diagnostic",
           summary: "No live commercial discovery provider is configured.",

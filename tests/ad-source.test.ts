@@ -67,7 +67,6 @@ describe("interactive Meta pagination honesty", () => {
       .mockRejectedValueOnce(new Error("page 2 unavailable"));
     vi.doMock("~/lib/meta-api.server", () => ({
       searchAds,
-      demoSearch: vi.fn(),
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       MetaApiError: class MetaApiError extends Error {},
     }));
@@ -123,7 +122,6 @@ describe("interactive Meta pagination honesty", () => {
 
     vi.doMock("~/lib/meta-api.server", () => ({
       searchAds,
-      demoSearch: vi.fn(),
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       MetaApiError: class MetaApiError extends Error {},
     }));
@@ -198,7 +196,6 @@ describe("interactive Meta pagination honesty", () => {
     const before = Date.now();
     vi.doMock("~/lib/meta-api.server", () => ({
       searchAds: vi.fn().mockRejectedValue(new Error("upstream opaque failure")),
-      demoSearch: vi.fn(),
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       MetaApiError: class MetaApiError extends Error {},
     }));
@@ -264,7 +261,6 @@ describe("interactive Meta pagination honesty", () => {
 
     vi.doMock("~/lib/meta-api.server", () => ({
       searchAds,
-      demoSearch: vi.fn(),
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       MetaApiError: class MetaApiError extends Error {},
     }));
@@ -486,7 +482,6 @@ describe("searchAdsViaSourceResolver", () => {
   it("serves an explicitly marked local fixture cache without touching browser or API providers", async () => {
     const browserSearch = vi.fn();
     const metaApiSearch = vi.fn();
-    const demoSearch = vi.fn();
     const payload = {
       ads: [{ metaAdId: "e2e-nykaa-live-1" }],
       nextCursor: null,
@@ -516,7 +511,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch,
       MetaApiError: class MetaApiError extends Error {},
     }));
 
@@ -625,9 +619,13 @@ describe("searchAdsViaSourceResolver", () => {
           adSnapshotUrl: "https://www.facebook.com/ads/library/?id=platform-token-result-1",
           countries: ["India"],
           platforms: ["Instagram"],
-          firstLevel: "Sale",
-          searchable: "Nykaa Sale nykaa.com",
+          firstSeenAt: null,
+          lastSeenAt: null,
+          active: true,
+          researchSummary: "Platform Meta API token fixture",
           source: "meta_api",
+          analysisFields: [],
+          tags: [],
         },
       ],
       nextCursor: null,
@@ -643,8 +641,17 @@ describe("searchAdsViaSourceResolver", () => {
       }),
     );
     vi.doMock("~/lib/meta-api.server", () => ({
+      MetaApiError: class MetaApiError extends Error {},
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
+    }));
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: vi.fn(),
+      // Earlier tests mock this module without the export, and vi.doMock
+      // state leaks across the file; pin it so the interactive-depth helper
+      // never throws mid-search here.
+      getInteractiveMetaApiExtraPages: () => 0,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
 
     const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
@@ -673,6 +680,76 @@ describe("searchAdsViaSourceResolver", () => {
     expect(result.provider).toBe("meta_api");
     expect(result.source).toBe("meta_api");
     expect(result.ads[0].metaAdId).toBe("platform-token-result-1");
+  });
+
+  it("returns an honest not-configured response for public search when no provider is configured", async () => {
+    vi.doMock("cloudflare:workers", () => ({ env: {} }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn(),
+      getDiscoveryProviderState: vi.fn(),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {} as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search" },
+    );
+
+    // Never a fabricated demo dataset: the honest end state says fresh checks
+    // cannot run until a real source is configured.
+    expect(result).toMatchObject({
+      ads: [],
+      provider: "meta_api",
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoverySummary: expect.stringContaining(
+        "No live commercial discovery provider is configured",
+      ),
+      discoveryFailureClass: "provider_unavailable",
+    });
+  });
+
+  it("still fails loudly for non-public callers when no provider is configured", async () => {
+    vi.doMock("cloudflare:workers", () => ({ env: {} }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    await expect(
+      searchAdsViaSourceResolver(
+        {} as never,
+        {
+          mode: "advertiser",
+          filters: {
+            query: "nykaa",
+            country: "India",
+            platform: "all",
+            creativeType: "all",
+            status: "all",
+            firstSeenFrom: "",
+            lastSeenFrom: "",
+          },
+        },
+        null,
+        { purpose: "watchlist_scan" },
+      ),
+    ).rejects.toThrow("No commercial discovery provider is configured");
   });
 
   it("uses a customer-owned Meta token when the caller provides one", async () => {
@@ -717,7 +794,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
 
@@ -750,9 +826,6 @@ describe("searchAdsViaSourceResolver", () => {
       }),
       expect.anything(),
       null,
-      expect.objectContaining({
-        allowDemoFallback: false,
-      }),
     );
     expect(result.provider).toBe("meta_api");
     expect(result.source).toBe("meta_api");
@@ -816,7 +889,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -912,7 +984,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -1027,7 +1098,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -1132,7 +1202,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -1760,7 +1829,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -1834,7 +1902,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -1894,7 +1961,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
 
@@ -1941,7 +2007,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -2011,7 +2076,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -2055,9 +2119,6 @@ describe("searchAdsViaSourceResolver", () => {
       }),
       expect.anything(),
       null,
-      expect.objectContaining({
-        allowDemoFallback: false,
-      }),
     );
     expect(result).toMatchObject({
       provider: "meta_api",
@@ -2087,7 +2148,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
 
@@ -2153,7 +2213,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -2251,7 +2310,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: MockMetaApiError,
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -2342,7 +2400,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -2430,7 +2487,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -2506,7 +2562,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -2594,7 +2649,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -2666,7 +2720,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
 
@@ -2716,7 +2769,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
 
@@ -4268,7 +4320,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     const upsertDiscoveryCacheEntry = vi.fn();
@@ -4314,9 +4365,6 @@ describe("searchAdsViaSourceResolver", () => {
       }),
       expect.anything(),
       null,
-      expect.objectContaining({
-        allowDemoFallback: false,
-      }),
     );
     expect(result).toMatchObject({
       provider: "meta_api",
@@ -4364,7 +4412,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -4422,7 +4469,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -4671,7 +4717,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -4728,9 +4773,6 @@ describe("searchAdsViaSourceResolver", () => {
       }),
       expect.anything(),
       null,
-      expect.objectContaining({
-        allowDemoFallback: false,
-      }),
     );
     expect(upsertDiscoveryCacheEntry.mock.calls.at(-1)?.[1]).toMatchObject({
       cacheKey: expect.stringContaining(":customer_meta:"),
@@ -5150,7 +5192,6 @@ describe("searchAdsViaSourceResolver", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters,
       searchAds: apiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -5321,7 +5362,7 @@ describe("hasFreshDiscoveryCacheEntry", () => {
     ).resolves.toBe(false);
   });
 
-  it("reports false in explicit demo mode", async () => {
+  it("returns false when no discovery provider is configured", async () => {
     const getDiscoveryCacheEntry = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
       getDiscoveryCacheEntry,
@@ -5381,7 +5422,6 @@ describe("browser-job attribution correlation (migration 0075)", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -5480,7 +5520,6 @@ describe("browser-job attribution correlation (migration 0075)", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -5605,7 +5644,6 @@ describe("browser-job attribution correlation (migration 0075)", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -5710,7 +5748,6 @@ describe("browser-job attribution correlation (migration 0075)", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -5842,7 +5879,6 @@ describe("browser-job attribution correlation (migration 0075)", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -5959,7 +5995,6 @@ describe("browser-job attribution correlation (migration 0075)", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -6039,7 +6074,6 @@ describe("browser-job attribution correlation (migration 0075)", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -6119,7 +6153,6 @@ describe("browser-job attribution correlation (migration 0075)", () => {
     vi.doMock("~/lib/meta-api.server", () => ({
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
-      demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
     }));
     vi.doMock("~/lib/data.server", () => ({

@@ -25,7 +25,12 @@ import {
 } from "~/lib/search-rollout.server";
 import type { CompetitorWebsiteState } from "~/lib/competitor-website";
 import type { BrowserJobPlanTier } from "~/lib/browser-job-telemetry.server";
-import type { NormalizedSavedQuery, SearchFilters, SearchResponse } from "~/lib/types";
+import type {
+  AdDiscoveryProvider,
+  NormalizedSavedQuery,
+  SearchFilters,
+  SearchResponse,
+} from "~/lib/types";
 
 export interface ExecuteSearchOptions {
   env: AppEnv;
@@ -62,9 +67,17 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
   const shadowDomainV2 = Boolean(options.competitorWebsite.raw) && shouldRunSearchV2Shadow(options.env);
   const legacyQuery = normalizeSavedQuery(options.parsed.mode, options.parsed.filters);
   const startedAt = Date.now();
-  const provider = resolveCommercialDiscoveryProvider(options.env, {
-    customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
-  });
+  let provider: AdDiscoveryProvider;
+  try {
+    provider = resolveCommercialDiscoveryProvider(options.env, {
+      customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+    });
+  } catch {
+    // Providerless env: the resolver returns the honest not-configured state
+    // for public search, so pre-resolving here must not crash first. The
+    // neutral label only feeds a v2 cache key that is never read in that path.
+    provider = "meta_api";
+  }
   const resolverOptions = {
     purpose: "public_search" as const,
     forceLive: options.forceLive,

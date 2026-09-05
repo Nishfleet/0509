@@ -150,7 +150,7 @@ describe("workspace settings route components", () => {
       connection: null,
       canManageSourceAccess: true,
       discoveryStatus: {
-        status: "demo",
+        status: "disabled",
         summary: "Tracking status will appear after the first check.",
       },
     });

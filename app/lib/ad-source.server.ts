@@ -225,7 +225,11 @@ export function resolveCommercialDiscoveryProvider(
     return "meta_library_browser";
   }
 
-  if (resolveCustomerOwnedMetaToken(env, options)) {
+  // A configured Meta token always means the meta_api provider exists. Whether
+  // it may serve customer-facing searches (vs diagnostic-only status) is
+  // governed downstream by resolveCustomerOwnedMetaToken's platform-token
+  // exception gate — never by fabricating demo data here.
+  if (resolveCustomerOwnedMetaToken(env, options) || env.META_AD_LIBRARY_TOKEN?.trim()) {
     return "meta_api";
   }
 
@@ -382,7 +386,7 @@ export async function resolveCommercialAdSourceStatus(
   }
 
   return {
-    status: "degraded",
+    status: "disabled",
     provider: "meta_api",
     mode: "diagnostic",
     summary:
@@ -407,9 +411,16 @@ export async function hasFreshDiscoveryCacheEntry(
   > = {},
 ): Promise<boolean> {
   const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
-  const provider = resolveCommercialDiscoveryProvider(effectiveEnv, {
-    customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
-  });
+  // No configured provider means no capture can exist, so there cannot be a
+  // fresh entry for one — answer false instead of throwing.
+  let provider: AdDiscoveryProvider;
+  try {
+    provider = resolveCommercialDiscoveryProvider(effectiveEnv, {
+      customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+    });
+  } catch {
+    return false;
+  }
   if (!effectiveEnv.DB) {
     return false;
   }
@@ -455,14 +466,36 @@ export async function searchAdsViaSourceResolver(
   options: SearchAdsViaSourceOptions = {},
 ): Promise<SearchResponse> {
   const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
-  const provider = resolveCommercialDiscoveryProvider(effectiveEnv, {
-    customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
-  });
+  const routeContext = options.purpose ?? "public_search";
+  let provider: AdDiscoveryProvider;
+  try {
+    provider = resolveCommercialDiscoveryProvider(effectiveEnv, {
+      customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+    });
+  } catch (error) {
+    // No configured provider means no capture can exist — the honest public
+    // end state for a search is a clear not-configured response, never a
+    // fabricated demo dataset and never a crash. Authenticated callers
+    // (watchlist scans, warmups) still fail loudly so operators notice.
+    if (routeContext === "public_search") {
+      return {
+        ads: [],
+        nextCursor: null,
+        source: "meta_api",
+        provider: "meta_api",
+        cacheStatus: "miss",
+        discoveryStatus: "degraded",
+        discoverySummary:
+          "No live commercial discovery provider is configured. The app is running without a Meta Ad Library connection.",
+        discoveryFailureClass: "provider_unavailable",
+      };
+    }
+    throw error;
+  }
   const hasCustomerMetaToken = Boolean(options.customerMetaAdLibraryToken?.trim());
   const metaApiToken = resolveCustomerOwnedMetaToken(effectiveEnv, {
     customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
   });
-  const routeContext = options.purpose ?? "public_search";
   const forceLive = options.forceLive === true;
   const acceptCacheYoungerThanMs =
     typeof options.acceptCacheYoungerThanMs === "number" &&

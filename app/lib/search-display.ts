@@ -362,6 +362,13 @@ export function formatDiscoverySummary(result: SearchResponse) {
     return null;
   }
 
+  // Providerless environments surface the raw operator summary; map it to
+  // calm customer copy instead of leaking it verbatim ("sample data" is
+  // gone — the honest line says fresh checks can't run).
+  if (/no live commercial discovery provider is configured/i.test(result.discoverySummary)) {
+    return customerDiscoverySummary(result.discoverySummary);
+  }
+
   if (
     result.ads.length > 0 &&
     /no cached results are available/i.test(result.discoverySummary)

@@ -49,7 +49,7 @@ describe("customerDiscoverySummary", () => {
 		],
 		[
 			"No live commercial discovery provider is configured.",
-			"Live ad checks aren't configured yet, so searches show labeled sample data.",
+			"Live ad checks aren't configured yet, so searches can't run a fresh check.",
 		],
 	])("maps %s to calm customer copy", (input, expected) => {
 		expect(customerDiscoverySummary(input)).toBe(expected);

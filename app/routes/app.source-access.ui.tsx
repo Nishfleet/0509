@@ -269,7 +269,9 @@ function formatDiscoveryStatus(status: string): {
     return { label: "Needs attention", tone: "bad" };
   }
   if (status === "disabled") {
-    return { label: "Unavailable", tone: "bad" };
+    // No source is configured yet (providerless environment) — a setup
+    // nudge, not a failure.
+    return { label: "Needs setup", tone: "bad" };
   }
   return { label: "Needs attention", tone: "bad" };
 }
