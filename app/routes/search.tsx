@@ -108,6 +108,11 @@ import {
   withTrackingContext,
 } from "~/lib/search-display";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  funnelErrorKind,
+  funnelResultCountBucket,
+  recordFunnelEvent,
+} from "~/lib/funnel-measurement.server";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
@@ -263,6 +268,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       watchedWatchlist: null,
       ...navFlags,
     };
+  }
+
+  // Anonymous search-intent boundary (funnel spec §3.1): a logged-out visitor
+  // with a query has submitted the public preview. Gated by env flag + GPC
+  // inside the helper; default-off. Emitted before rate-limit enforcement so
+  // throttled submissions still count as intent.
+  if (!session && parsed.filters.query) {
+    recordFunnelEvent(env, request, {
+      operation: "funnel_search_preview_submit",
+      route: "search_preview",
+    });
   }
 
   // One parallel wave for the independent per-account lookups (customer Meta
@@ -526,6 +542,34 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const filtersForForms = verifiedAdvertiserPageId
     ? { ...parsed.filters, pageId: verifiedAdvertiserPageId }
     : parsed.filters;
+
+  // Anonymous outcome boundary (funnel spec §3.1): a logged-out preview that
+  // reached the search execution emits exactly one outcome event — a coarse
+  // result-count bucket on success or a coarse error kind on failure. Gated by
+  // env flag + GPC inside the helper; default-off. Failure classes not in the
+  // funnel allowlist produce no event.
+  if (!session) {
+    const failureClass = hydratedResult.discoveryFailureClass ?? null;
+    if (failureClass) {
+      const errorKind = funnelErrorKind(failureClass);
+      if (errorKind) {
+        recordFunnelEvent(env, request, {
+          operation: "funnel_search_preview_error",
+          route: "search_preview",
+          errorKind,
+        });
+      }
+    } else {
+      const resultCountBucket = funnelResultCountBucket(hydratedResult.ads.length);
+      if (resultCountBucket) {
+        recordFunnelEvent(env, request, {
+          operation: "funnel_search_preview_result",
+          route: "search_preview",
+          resultCountBucket,
+        });
+      }
+    }
+  }
 
   return {
     mode: parsed.mode,

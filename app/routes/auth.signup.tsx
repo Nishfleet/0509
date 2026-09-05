@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 
 import { AuthForm } from "~/components/auth-form";
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { recordFunnelEvent } from "~/lib/funnel-measurement.server";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const signupDescription =
@@ -37,6 +38,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       : null;
   const error = signupErrorMessage(url.searchParams.get("error"));
   const oauthProviders = enabledBetterAuthOAuthProviders(env);
+
+  // Anonymous signup-initiation boundary (funnel spec §3.1): an anonymous
+  // visitor rendering the signup page has begun signup. The post-submit
+  // confirmation render (?sent=1) is not a new start and is skipped. Gated by
+  // env flag + GPC inside the helper; default-off.
+  if (!linkSent) {
+    recordFunnelEvent(env, request, { operation: "funnel_signup_start", route: "signup" });
+  }
 
   return {
     redirectTo,

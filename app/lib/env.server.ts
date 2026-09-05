@@ -67,6 +67,13 @@ export interface AppEnv {
   /** Local release-proof guard. Never configure this in preview or production. */
   E2E_PROVIDER_NETWORK_DENY?: string;
   E2E_TEST_MODE?: string;
+  /**
+   * Explicit server-side gate for anonymous funnel measurement
+   * (docs/funnel-measurement-spec.md §8). Only exactly "1" enables; absent or
+   * any other value keeps collection off. No production configuration of this
+   * flag exists — the rollout gates are unpassed.
+   */
+  FUNNEL_MEASUREMENT_ENABLED?: string;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
   LAUNCH_CANARY_EMAIL?: string;
   ALLOW_PLATFORM_META_API_FALLBACK?: string;

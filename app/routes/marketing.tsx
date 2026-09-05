@@ -22,6 +22,7 @@ import {
   webSiteJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
+import { recordFunnelEvent } from "~/lib/funnel-measurement.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { RootLoaderData } from "~/root";
 
@@ -44,10 +45,18 @@ export const meta: MetaFunction = () =>
 
 const noPricingPreview = { available: false } as const;
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const env = getEnv(context);
+
+  // Anonymous homepage-reach boundary (funnel spec §3.1): gated by env flag +
+  // GPC inside the helper; default-off. Never emitted for non-GET requests.
+  // Static import: the helper graph must load before the loader body so the
+  // homepage never blocks on measurement code.
+  if (request.method.toUpperCase() === "GET") {
+    recordFunnelEvent(env, request, { operation: "funnel_home_view", route: "home" });
+  }
 
   return {
     // Keep the document request provider-independent. The client hydrates

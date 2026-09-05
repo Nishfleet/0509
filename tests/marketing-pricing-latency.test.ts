@@ -40,6 +40,7 @@ describe("marketing pricing latency", () => {
       const result = await Promise.race([
         loader({
           context: { cloudflare: { env: {} } },
+          request: new Request("http://localhost/"),
         } as never),
         timeoutPromise,
       ]);
