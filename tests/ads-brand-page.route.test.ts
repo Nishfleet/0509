@@ -22,7 +22,8 @@ const baseAd: AdRecord = {
   format: "image",
   languageLabel: "English",
   destinationType: "website",
-  landingPageUrl: null,
+  landingPageUrl: "https://www.nykaa.com/glow",
+  advertiserPageId: "111",
   adSnapshotUrl: "https://cdn.example.com/meta-nykaa-1.png",
   countries: ["all"],
   platforms: ["Instagram"],
@@ -406,8 +407,8 @@ describe("/ads/:domain loader", () => {
         payload: {
           ads: [
             baseAd,
-            { ...baseAd, metaAdId: "meta-reseller-1", advertiser: "BeautyDeals Hub" },
-            { ...baseAd, metaAdId: "meta-reseller-2", advertiser: "BeautyDeals Hub" },
+            { ...baseAd, metaAdId: "meta-reseller-1", advertiser: "BeautyDeals Hub", advertiserPageId: "222" },
+            { ...baseAd, metaAdId: "meta-reseller-2", advertiser: "BeautyDeals Hub", advertiserPageId: "222" },
           ],
           nextCursor: null,
           source: "meta_library_browser",
