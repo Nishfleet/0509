@@ -4,6 +4,7 @@ import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-rout
 import { MarketingNav } from "~/components/marketing-nav";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { SwitchFromStrip } from "~/components/switch-from-links";
 import { BrowseTrackedCompetitors } from "~/components/ads-internal-links";
 import type { AppEnv } from "~/lib/env.server";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
@@ -280,6 +281,7 @@ export default function CompetitorMonitoringCategoryRoute() {
         <h1 className="ld-wall ld-wall-compact">
           Monitoring software that files the proof, not just the pings.
         </h1>
+        <SwitchFromStrip />
         <p className="ld-deck-copy">
           Most competitor monitoring tools alert you when something appears. Five to Nine
           watches competitors&rsquo; Meta ads and landing pages on a schedule, and when something

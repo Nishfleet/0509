@@ -4048,6 +4048,52 @@ one signal-green accent.
 .f9-home .f9-growth-pricing h1,
 .f9-home .f9-growth-pricing h2 { color: var(--ld-ink); }
 
+/* Switch-page links in the primary nav (issue #1466). The three "from <tool>"
+   links sit inside .ld-nav-links so they share the nav's scroll/wrap behavior:
+   a single non-wrapping scrollable row at ≤860px on .f9-home, wrapping on
+   legal pages. No hover/JS — always visible in the nav region. */
+.ld-nav-links .ld-nav-switch {
+  white-space: nowrap;
+}
+
+/* Inline cross-link strip under the H1 on /search and /competitor-monitoring
+   (issue #1466). A small always-visible row of the three "from <tool>" links,
+   mirroring the .ld-hero-callouts pattern on the home page. No JS, no hover,
+   no auth — plain server-rendered links visible 360–1440px. */
+.ld-switch-from {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+}
+
+.ld-switch-from-label {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ld-ink-soft);
+}
+
+.ld-switch-from-link {
+  color: var(--ld-ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ld-switch-from-link:hover {
+  color: var(--ld-ink);
+}
+
+@media (max-width: 600px) {
+  .ld-switch-from {
+    gap: 6px 10px;
+    margin-bottom: 10px;
+  }
+}
+
 /* ============================================================
    Public funnel reskin — "Caught in the act" system extended to
    /search, /auth/*, legal, error, and shared-report pages.

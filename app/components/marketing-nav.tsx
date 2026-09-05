@@ -1,6 +1,7 @@
 import { Link, useRouteLoaderData } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { SwitchFromLinks } from "~/components/switch-from-links";
 import { appLinkTarget } from "~/lib/app-link";
 import type { RootLoaderData } from "~/root";
 
@@ -45,6 +46,11 @@ export function MarketingNav() {
         <Link to="/help">Help</Link>
         <Link to="/docs">Docs</Link>
         <Link to="/status">Status</Link>
+        {/* Switch-page links in the primary nav so a buyer who lands on any
+            public surface reaches /switch/* in one click without a footer
+            scroll (issue #1466). Visible at 360–1440px — the nav is a
+            scrollable row at ≤860px and wraps on legal pages, no hover/JS. */}
+        <SwitchFromLinks />
       </nav>
 
       <nav className="ld-nav-actions" aria-label="Account">

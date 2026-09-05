@@ -28,6 +28,7 @@ import {
   PublicSearchRateLimitError,
 } from "~/components/public-route-state";
 import { SearchResultRow } from "~/components/search/result-row";
+import { SwitchFromStrip } from "~/components/switch-from-links";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SubmitButton } from "~/components/submit-button";
 import {
@@ -1691,6 +1692,7 @@ export default function SearchRoute() {
           title={commandTitle}
           titleId="search-command-title"
         />
+        <SwitchFromStrip />
 
         {/* The command band. DNA §2: the input is a frame, its label sits
             above it as a micro-label, and the page's ONE filled button is the
