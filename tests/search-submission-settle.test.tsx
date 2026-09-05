@@ -15,7 +15,13 @@ import type { AdRecord } from "~/lib/types";
 // cause fix derives the See ads pending state from the in-flight GET target
 // vs the committed location.search, and the 90s long-horizon recovery gives
 // the idle pre-search page an escape hatch (a fresh page load to the exact
-// in-flight target) when that navigation cannot settle.
+// in-flight target) when that navigation cannot settle. The candidate-5
+// settle probe closes the gap between "server request settled" and the 90s
+// recovery: while the submit is pending on an uncommitted target, the route
+// watches the browser's resource timing for the in-flight target request and
+// re-issues the navigation to the exact target the moment it settles (a warm
+// discovery-cache hit server-side), so the committed results render instead
+// of a full grace window of "Searching…".
 //
 // Markup assertions use renderToStaticMarkup (the existing route-render style)
 // because mounting the results row through createRoot twice in one worker
@@ -37,6 +43,7 @@ let navigationState: {
   location?: { pathname: string; search: string } | null;
 };
 let revalidatorRef: { state: string; revalidate: ReturnType<typeof vi.fn> };
+let navigateRef: ReturnType<typeof vi.fn>;
 
 function mockRouter() {
   vi.doMock("react-router", async () => {
@@ -55,7 +62,7 @@ function mockRouter() {
       useActionData: () => undefined,
       useLoaderData: () => loaderData,
       useLocation: () => locationObj,
-      useNavigate: () => vi.fn(),
+      useNavigate: () => navigateRef,
       useNavigation: () => navigationState,
       useRevalidator: () => revalidatorRef,
       useRouteLoaderData: () => ({ session: null }),
@@ -243,6 +250,7 @@ async function mountRoute() {
 beforeEach(() => {
   vi.useFakeTimers();
   revalidatorRef = { state: "idle", revalidate: vi.fn() };
+  navigateRef = vi.fn();
   loaderData = idleLoaderData;
   locationObj = { pathname: "/search", search: "", hash: "" };
   navigationState = { state: "idle", location: null };
@@ -268,6 +276,15 @@ describe("public search submission settle", () => {
       "~/routes/search"
     );
     expect(SEARCH_NAVIGATION_SETTLE_GRACE_MS).toBe(90_000);
+  });
+
+  it("probes for a settled target request every 2 seconds while the submit is stuck", async () => {
+    const { SEARCH_NAVIGATION_SETTLE_PROBE_INTERVAL_MS } = await import(
+      "~/routes/search"
+    );
+    // Bounded and fast: far below the 90s long-horizon recovery so a settled
+    // request commits results within one cadence of the browser observing it.
+    expect(SEARCH_NAVIGATION_SETTLE_PROBE_INTERVAL_MS).toBe(2_000);
   });
 
   it("keeps See ads pending while a new GET navigation to /search is loading", async () => {
@@ -443,5 +460,225 @@ describe("public search submission settle", () => {
       vi.advanceTimersByTime(4_000);
     });
     expect(revalidatorRef.revalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("probes the settled-but-uncommitted target request and re-navigates to commit results instead of staying on Searching…", async () => {
+    // The observed live failure: the committed page is still the idle
+    // pre-search form ("Nothing searched yet"), useNavigation keeps reporting
+    // loading toward the submitted target, and the target request itself has
+    // settled (its response finished) without the router committing it.
+    loaderData = idleLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: TARGET_SEARCH },
+    };
+
+    const { container, root, SearchRoute } = await mountRoute();
+
+    expect(
+      container.querySelector('button[type="submit"]')?.textContent,
+    ).toContain("Searching…");
+    expect(container.textContent).toContain("Nothing searched yet");
+    expect(navigateRef).not.toHaveBeenCalled();
+
+    // The target request settles: its resource timing entry appears after the
+    // probe armed (the entry is the browser's record that the request ended).
+    const targetEntries = [
+      {
+        name: `http://localhost:3000/search${TARGET_SEARCH}`,
+        startTime: performance.now(),
+      },
+    ];
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue(
+      targetEntries as unknown as PerformanceResourceTiming[],
+    );
+
+    // Within one probe cadence of settlement the route re-issues the
+    // navigation to the EXACT in-flight target (a warm cache hit server-side).
+    await act(async () => {
+      vi.advanceTimersByTime(2_000);
+    });
+    expect(navigateRef).toHaveBeenCalledTimes(1);
+    expect(navigateRef).toHaveBeenCalledWith(`/search${TARGET_SEARCH}`);
+
+    // The re-navigation commits the real loader result for the target; the
+    // page renders it and the submit leaves Searching….
+    loaderData = resultsLoaderData;
+    locationObj = { pathname: "/search", search: TARGET_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+    await act(async () => {
+      root.render(createElement(SearchRoute));
+    });
+
+    expect(container.textContent).toContain("Festive glow");
+    expect(container.textContent).not.toContain("Nothing searched yet");
+    const button = container.querySelector('button[type="submit"]');
+    expect(button?.textContent).toContain("See ads");
+    expect(button?.hasAttribute("disabled")).toBe(false);
+    expect(button?.getAttribute("aria-busy")).not.toBe("true");
+    expect(container.textContent).not.toContain("Searching…");
+  });
+
+  it("renders the committed error for the settled-but-uncommitted target and re-enables submit", async () => {
+    // Same settled-but-stale shape as above, but the loader's committed answer
+    // for the target is an actionable validation error, not results.
+    loaderData = errorLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: ERROR_SEARCH },
+    };
+
+    const { container, root, SearchRoute } = await mountRoute();
+
+    expect(
+      container.querySelector('button[type="submit"]')?.textContent,
+    ).toContain("Searching…");
+
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([
+      {
+        name: `http://localhost:3000/search${ERROR_SEARCH}`,
+        startTime: performance.now(),
+      },
+    ] as unknown as PerformanceResourceTiming[]);
+
+    await act(async () => {
+      vi.advanceTimersByTime(2_000);
+    });
+    expect(navigateRef).toHaveBeenCalledTimes(1);
+    expect(navigateRef).toHaveBeenCalledWith(`/search${ERROR_SEARCH}`);
+
+    // The re-navigation commits the loader's honest error; the error renders
+    // and the submit is usable again. No fabricated results anywhere.
+    loaderData = errorLoaderData;
+    locationObj = { pathname: "/search", search: ERROR_SEARCH, hash: "" };
+    navigationState = { state: "idle", location: null };
+    await act(async () => {
+      root.render(createElement(SearchRoute));
+    });
+
+    expect(container.textContent).toContain(
+      "That website looks incomplete. Add the full domain, like brand.com.",
+    );
+    expect(container.textContent).not.toContain("Festive glow");
+    const button = container.querySelector('button[type="submit"]');
+    expect(button?.textContent).toContain("See ads");
+    expect(button?.hasAttribute("disabled")).toBe(false);
+    expect(button?.getAttribute("aria-busy")).not.toBe("true");
+    expect(container.textContent).not.toContain("Searching…");
+  });
+
+  it("keeps a genuinely still-pending navigation pending: no settled request, no probe", async () => {
+    loaderData = idleLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: TARGET_SEARCH },
+    };
+
+    const { container } = await mountRoute();
+
+    // The request is still in flight: no resource timing entry has appeared.
+    await act(async () => {
+      vi.advanceTimersByTime(2_000 * 20);
+    });
+
+    expect(navigateRef).not.toHaveBeenCalled();
+    expect(
+      container.querySelector('button[type="submit"]')?.textContent,
+    ).toContain("Searching…");
+    expect(container.textContent).toContain("Nothing searched yet");
+  });
+
+  it("does not treat a timing entry from before the probe armed as settlement (no false success)", async () => {
+    loaderData = idleLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: TARGET_SEARCH },
+    };
+
+    // The timing entry predates this navigation (e.g. the visitor once loaded
+    // the same target URL directly, or a previous attempt left an entry).
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([
+      {
+        name: `http://localhost:3000/search${TARGET_SEARCH}`,
+        startTime: performance.now() - 10_000,
+      },
+    ] as unknown as PerformanceResourceTiming[]);
+
+    const { container } = await mountRoute();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2_000 * 10);
+    });
+
+    expect(navigateRef).not.toHaveBeenCalled();
+    expect(
+      container.querySelector('button[type="submit"]')?.textContent,
+    ).toContain("Searching…");
+  });
+
+  it("does not settle the submit from a different target's completed request (no false success)", async () => {
+    loaderData = idleLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: TARGET_SEARCH },
+    };
+
+    // Some other /search request settled — not the in-flight target.
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([
+      {
+        name: `http://localhost:3000/search${ERROR_SEARCH}`,
+        startTime: performance.now(),
+      },
+    ] as unknown as PerformanceResourceTiming[]);
+
+    const { container } = await mountRoute();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2_000 * 10);
+    });
+
+    expect(navigateRef).not.toHaveBeenCalled();
+    expect(
+      container.querySelector('button[type="submit"]')?.textContent,
+    ).toContain("Searching…");
+  });
+
+  it("probes a stuck target at most once per page, even if later requests also settle", async () => {
+    loaderData = idleLoaderData;
+    locationObj = { pathname: "/search", search: "", hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: TARGET_SEARCH },
+    };
+
+    const { container } = await mountRoute();
+
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([
+      {
+        name: `http://localhost:3000/search${TARGET_SEARCH}`,
+        startTime: performance.now(),
+      },
+    ] as unknown as PerformanceResourceTiming[]);
+
+    // First settled tick: the probe fires once.
+    await act(async () => {
+      vi.advanceTimersByTime(2_000);
+    });
+    expect(navigateRef).toHaveBeenCalledTimes(1);
+
+    // The navigation is still stuck in the mock (committed page unchanged), so
+    // the probe interval keeps ticking — but it must not re-navigate.
+    await act(async () => {
+      vi.advanceTimersByTime(2_000 * 10);
+    });
+    expect(navigateRef).toHaveBeenCalledTimes(1);
+    expect(
+      container.querySelector('button[type="submit"]')?.textContent,
+    ).toContain("Searching…");
   });
 });

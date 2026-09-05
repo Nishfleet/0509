@@ -140,6 +140,14 @@ const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
 // forces a fresh page load to the exact target URL. Exported so tests can pin
 // the exact grace window.
 export const SEARCH_NAVIGATION_SETTLE_GRACE_MS = 90_000;
+// Candidate-5 settle probe cadence: while the See ads submit is pending on a
+// /search GET navigation that has not committed, the route watches the
+// browser's resource timing for the in-flight target request and, the moment
+// that request settles, re-issues the navigation to the exact target (a warm
+// discovery-cache hit or lease wait server-side — never a second scrape) so
+// the committed results render instead of a full grace window of "Searching…".
+// Exported so tests can pin the exact probe cadence.
+export const SEARCH_NAVIGATION_SETTLE_PROBE_INTERVAL_MS = 2_000;
 
 const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
@@ -862,6 +870,13 @@ export default function SearchRoute() {
   const [searchNavigationRecovery, setSearchNavigationRecovery] = useState<
     string | null
   >(null);
+  // Candidate-5 settle probe bookkeeping: `performance.now()` when the probe
+  // armed for the current in-flight target (entries that started earlier are
+  // stale, e.g. a previous attempt or a directly loaded URL), and the set of
+  // targets already probed so a stuck navigation retries at most once per
+  // target string instead of hammering the loader every probe tick.
+  const settleProbeArmedAtRef = useRef<number | null>(null);
+  const settleProbedTargetsRef = useRef<Set<string>>(new Set());
   const locationSearchParams = new URLSearchParams(location.search);
   const [resultSort, setResultSort] = useState<SearchResultSort>(
     () =>
@@ -1179,6 +1194,62 @@ export default function SearchRoute() {
     navigation.location?.search,
     hasSearchQuery,
   ]);
+
+  // Candidate-5 settle probe: the See ads submit is pending only while a
+  // /search GET navigation targets a URL the router has not committed. When
+  // that navigation never commits even though the server request settled —
+  // the observed live failure, where the target request completes while the
+  // DOM stays on "Searching…" / "Nothing searched yet" — the router exposes
+  // no settlement signal, so watch the browser's own resource timing for the
+  // in-flight target request instead. The moment a timing entry for the exact
+  // target appears (the request settled, so the discovery cache is warm), the
+  // probe re-issues the navigation to the same target: server-side that is a
+  // cache hit (or a lease wait for the in-flight scrape), never a second
+  // scrape, and the router commits the real loader result — or its honest
+  // error — instead of stranding the visitor for the full 90s grace window.
+  // A genuinely still-pending request produces no timing entry, so the probe
+  // stays quiet and the navigation keeps pending until it commits or the
+  // long-horizon recovery takes over. One probe per target string per page.
+  useEffect(() => {
+    if (!commandNavigationPending || commandNavigationTarget === null) {
+      settleProbeArmedAtRef.current = null;
+      return;
+    }
+    const target = commandNavigationTarget;
+    if (settleProbedTargetsRef.current.has(target)) {
+      return;
+    }
+    if (settleProbeArmedAtRef.current === null) {
+      settleProbeArmedAtRef.current = performance.now();
+    }
+    const armedAt = settleProbeArmedAtRef.current;
+    const probeUrl = `/search${target}`;
+    const timer = setInterval(() => {
+      // One probe per target per page: the interval stays armed until the
+      // navigation commits or the effect tears down, so guard the tick itself.
+      if (settleProbedTargetsRef.current.has(target)) {
+        return;
+      }
+      if (
+        typeof performance === "undefined" ||
+        typeof performance.getEntriesByType !== "function"
+      ) {
+        return;
+      }
+      const settled = Array.from(performance.getEntriesByType("resource")).some(
+        (entry) =>
+          entry.startTime >= armedAt &&
+          (entry.name === probeUrl || entry.name.endsWith(probeUrl)),
+      );
+      if (!settled) {
+        return;
+      }
+      settleProbedTargetsRef.current.add(target);
+      settleProbeArmedAtRef.current = null;
+      navigate(probeUrl);
+    }, SEARCH_NAVIGATION_SETTLE_PROBE_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [commandNavigationPending, commandNavigationTarget, navigate]);
 
   // WP-11: single revalidation ~4s after deferred selection enrichment starts.
   // FIX-13: only one shot per selection key — if still pending after that,
