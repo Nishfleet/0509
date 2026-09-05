@@ -21,27 +21,6 @@ name: Required verifier integrity
 # administrator/maintainer other than the PR author. Any API failure fails
 # closed.
 #
-# Provider-bound merge-context reporting: the gate job's implicit Actions check
-# run attaches to the HEAD SHA, but branch protection evaluates required checks
-# against the PR MERGE commit. The final step therefore explicitly creates the
-# "required-verifier-integrity" check run on the merge-commit SHA via the
-# Checks API using GITHUB_TOKEN (the GitHub Actions GitHub App, app_id 15368,
-# the SAME provider branch protection binds the context to). The candidate can
-# never create this check itself: creating a check run requires a GitHub App
-# token with checks:write, which only the base-branch-owned Actions run holds,
-# and the check is only created after the base-branch decision logic PASSES.
-# On any failure the step creates a FAILING check on the merge SHA, so the
-# required context is always present on the evaluated commit and always
-# reflects the gate — it can never be absent (absent fails branch protection)
-# and can never be green without the independent authorization path.
-#
-# Runner note: this gate runs on the shared vps-verify self-hosted pool (the
-# only runners this repo has). It is a tiny API+logic job (seconds), so it
-# completes as soon as a runner frees up. The merge-binding guarantee does not
-# depend on runner speed: the required context is always reported on the merge
-# SHA (green only after the base-branch gate passes, red otherwise), so a merge
-# can never be certified by an absent or stale context.
-#
 # Hygiene contract (test_required_context_hygiene.py): the required job has NO
 # job-level `if:` (authorizer is a step), no `continue-on-error`, no trailing
 # `|| true` swallow, and no mutable verifier (`uses:` must be a pinned SHA or
@@ -54,7 +33,6 @@ on:
 permissions:
   contents: read
   pull-requests: read
-  checks: write
 
 jobs:
   required-verifier-integrity:
@@ -64,7 +42,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      checks: write
     steps:
       - name: Authorize exact verification candidate
         id: authorize
@@ -134,7 +111,9 @@ jobs:
             --argjson reviews "$reviews_json" \
             --argjson permissions "$perms_json" \
             --argjson protected '[
-              ".github/workflows/",
+              ".github/workflows/ci.yml",
+              ".github/workflows/secret-scan.yml",
+              ".github/workflows/required-verifier-integrity.yml",
               ".github/scripts/required-verifier-integrity.sh",
               ".github/scripts/test-required-verifier-integrity.sh"
             ]' \
@@ -177,71 +156,3 @@ jobs:
             --jq '.content' | base64 -d > "$fixture"
           test -s "$fixture"
           bash "$fixture"
-
-      - name: Report provider-bound merge-context check run
-        # Branch protection evaluates required checks against the PR MERGE
-        # commit, not the head SHA the implicit Actions job check attaches to.
-        # This step ALWAYS runs (success or failure of the gate above) and
-        # reports the required "required-verifier-integrity" check on the
-        # merge-commit SHA: green when the base-branch gate passed, red when
-        # any gate step failed or this reporting itself fails. The required
-        # context is therefore always present on the evaluated commit and
-        # always reflects the gate — it can never be absent and can never be
-        # green without the independent authorization path.
-        #
-        # The check is created via the Checks API with GITHUB_TOKEN (the GitHub
-        # Actions GitHub App, app_id 15368 — the exact provider branch
-        # protection binds the context to). The candidate cannot create this
-        # check itself: check creation requires a GitHub App token with
-        # checks:write, which only this base-branch-owned run holds. The merge
-        # SHA is resolved from the refs/pull/N/merge ref, never from
-        # candidate-controlled input.
-        id: report
-        if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          GATE_RESULT: ${{ (steps.evaluate.conclusion == 'success' && steps.authorize.conclusion == 'success') && 'pass' || 'fail' }}
-        run: |
-          set -euo pipefail
-          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
-          # Resolve the merge commit GitHub would create for this PR. The
-          # refs/pull/N/merge ref is maintained by GitHub and is the commit the
-          # PR's required checks are evaluated against.
-          merge_sha="$(gh api "repos/$REPO/git/refs/pull/$PR_NUMBER/merge" --jq '.object.sha' 2>/dev/null \
-            || gh api "repos/$REPO/git/ref/pull/$PR_NUMBER/merge" --jq '.object.sha')"
-          [[ "$merge_sha" =~ ^[0-9a-f]{40}$ ]]
-          if [[ "$GATE_RESULT" == "pass" ]]; then
-            conclusion="success"
-            title="Required-verifier integrity gate passed"
-            summary="Independent base-branch gate verified the candidate against the required verifier definitions; merge-context check reported on $merge_sha."
-          else
-            conclusion="failure"
-            title="Required-verifier integrity gate failed"
-            summary="The independent base-branch gate did not pass for this candidate (or the gate could not complete); merge-context check reported on $merge_sha."
-          fi
-          # Idempotent: if a prior run already reported this exact SHA, GitHub
-          # keeps the newest run with this name on the commit; a newer report
-          # supersedes an older one, which is correct because only a
-          # base-branch gate run produces it.
-          gh api "repos/$REPO/check-runs" \
-            -f name="required-verifier-integrity" \
-            -f head_sha="$merge_sha" \
-            -f status="completed" \
-            -f conclusion="$conclusion" \
-            -f started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -f completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -f output[title]="$title" \
-            -f output[summary]="$summary" \
-            --jq '.id' > "$RUNNER_TEMP/reported-check-run-id"
-          test -s "$RUNNER_TEMP/reported-check-run-id"
-          printf 'merge_sha=%s\n' "$merge_sha" >> "$GITHUB_OUTPUT"
-          # If the gate failed, fail the job too so the implicit head-SHA check
-          # also reports failure (belt and braces: both evaluated surfaces red).
-          if [[ "$GATE_RESULT" != "pass" ]]; then
-            exit 1
-          fi

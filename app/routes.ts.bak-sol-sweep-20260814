@@ -64,10 +64,6 @@ export default [
   route("ads/:domain", "routes/ads.$domain.tsx"),
   route("compare/magicbrief", "routes/compare.magicbrief.tsx"),
   route("compare/meta-ad-library", "routes/compare.meta-ad-library.tsx"),
-  // Legacy marketing paths that 301 to their homepage anchors (#demo /
-  // #pricing) — see the route files for why they must never 404.
-  route("sample-brief", "routes/marketing.sample-brief.tsx"),
-  route("pricing", "routes/marketing.pricing.tsx"),
   route("team/accept", "routes/team.accept.tsx"),
 	route("share/:token/pdf", "routes/share.$token.pdf.ts"),
   route("share/:token", "routes/share.$token.tsx"),

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 type PublicControlTarget = {
   action: string;
@@ -9,39 +9,6 @@ type PublicControlTarget = {
   tag: string;
   target: string;
 };
-
-// Same-origin responses at 4xx/5xx are defects unless a test explicitly
-// asserts them (e.g. the invalid-share 404). Recorded per test and asserted
-// at the end so a dead route can never hide behind a page that "renders".
-const badResponseLog = new Map<string, Array<{ status: number; url: string }>>();
-
-function recordBadResponses(page: Page, testName: string) {
-  page.on("response", (response) => {
-    if (response.status() >= 400 && response.url().startsWith("https://0509.io/")) {
-      const existing = badResponseLog.get(testName) ?? [];
-      existing.push({ status: response.status(), url: response.url() });
-      badResponseLog.set(testName, existing);
-    }
-  });
-}
-
-// Keep response tracking tied to the describe block's pages. The map is
-// keyed by test title; the per-test record + teardown assertion below make
-// the defect visible on the test that produced it.
-test.beforeEach(async ({ page }, testInfo) => {
-  recordBadResponses(page, testInfo.title);
-});
-
-test.afterEach(async ({ page }, testInfo) => {
-  // AfterEach teardown has no page assertion; the response log is the check.
-  void page;
-  const bad = badResponseLog.get(testInfo.title) ?? [];
-  badResponseLog.delete(testInfo.title);
-  if (bad.length > 0) {
-    // Surfaced as an assertion failure on the test that produced them.
-    expect(bad, `${testInfo.title}: unexpected same-origin error responses`).toEqual([]);
-  }
-});
 
 async function expectNoHorizontalOverflow(page: import("@playwright/test").Page) {
   const overflow = await page.evaluate(() =>
@@ -368,42 +335,6 @@ test.describe("public production-safe E2E smoke", () => {
       "yearly",
     );
     await expectNoHorizontalOverflow(page);
-  });
-
-  test("legacy marketing routes 301 to their homepage anchor instead of 404", async ({ page, baseURL, request }) => {
-    // sol-sweep defect product-live/0509-sample-brief-and-pricing-public-routes-404:
-    // /sample-brief and /pricing served the 404 page for anyone reaching them
-    // from /sitemap, search engines, old marketing emails, or share links.
-    // They now 301 to the homepage anchors (#demo / #pricing) so the routes
-    // are never dead public surfaces. /plans and every /compare/* page are
-    // asserted reachable too — old links must never land on the 404 page.
-    const redirects: Array<{ from: string; to: string }> = [];
-    for (const path of ["/sample-brief", "/pricing"]) {
-      const response = await request.get(new URL(path, baseURL).toString(), { maxRedirects: 0 });
-      expect(response.status(), `${path} must redirect, not 404`).toBe(301);
-      const location = response.headers()["location"] ?? "";
-      const target = new URL(location, baseURL);
-      expect(target.origin).toBe(new URL(baseURL).origin);
-      redirects.push({ from: path, to: `${target.pathname}${target.hash}` });
-    }
-
-    // The redirect targets must be the homepage anchors the page itself
-    // advertises (#demo and #pricing), not a dead redirect chain.
-    await gotoPublicPage(page, "/");
-    for (const { from, to } of redirects) {
-      expect(to, `${from} must point at a homepage anchor`).toMatch(/^\/#(demo|pricing)$/);
-      const id = to.slice(2);
-      await expect(page.locator(`#${id}`)).toBeVisible();
-    }
-
-    // Every other legacy marketing path must resolve to a live page. /plans
-    // was never a route; keep it asserted so it cannot silently 404 later.
-    const reachablePaths = ["/plans", "/compare/magicbrief", "/compare/meta-ad-library"];
-    for (const path of reachablePaths) {
-      const response = await request.get(new URL(path, baseURL).toString(), { maxRedirects: 0 });
-      expect(response.status(), `${path} must not 404`).not.toBe(404);
-      expect(response.status(), `${path} must not hard-fail`).toBeLessThan(500);
-    }
   });
 
   test("public buttons and links route to valid actions without sending side effects", async ({ page, baseURL, request }) => {

@@ -22,14 +22,8 @@
 # }
 #
 # Rule (fail closed):
-#   * If no protected verifier definition changed (by filename, previous
-#     filename, or directory prefix), PASS.
-#   * A protected entry ending in "/" protects the whole subtree: e.g.
-#     ".github/workflows/" covers every workflow file, including new files a
-#     candidate could add to impersonate the required-verifier-integrity
-#     context with a workflow of their own (same app_id, same name — branch
-#     protection cannot distinguish them, so the whole directory must be
-#     independently approved).
+#   * If no protected verifier definition changed (by filename or
+#     previous_filename), PASS.
 #   * If a protected verifier definition changed, PASS only when the reviews
 #     list contains a CURRENT independent approval: state == APPROVED,
 #     reviewer != PR author, reviewer permission is admin or maintain, and
@@ -95,17 +89,10 @@ def main():
             return fail(["context bundle file entry is not an object"])
         name = f.get("filename")
         prev = f.get("previous_filename")
-        for candidate in (name, prev):
-            if not candidate:
-                continue
-            # Exact-path match, or directory-prefix match: a protected entry
-            # ending in "/" protects the whole subtree (e.g. ".github/workflows/"
-            # covers every workflow file, including new ones a candidate could
-            # add to impersonate the required-verifier-integrity context).
-            if candidate in protected or any(
-                candidate.startswith(p) for p in protected if p.endswith("/")
-            ):
-                protected_changed.append(candidate)
+        if name in protected:
+            protected_changed.append(name)
+        if prev in protected:
+            protected_changed.append(prev)
 
     if not protected_changed:
         print("PASS: no protected verifier definition changed")

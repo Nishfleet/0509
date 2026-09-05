@@ -59,7 +59,7 @@ FIXTURE_SRC='{
   "files": [{"filename": "app/routes/app.clients.tsx", "previous_filename": None}],
   "reviews": [],
   "permissions": {},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "01-ordinary"
 run_fixture "ordinary PR passes" PASS "$WORK_DIR/01-ordinary.json"
@@ -71,7 +71,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
   "reviews": [],
   "permissions": {},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "02-unapproved"
 run_fixture "unapproved verifier edit fails" FAIL "$WORK_DIR/02-unapproved.json"
@@ -83,7 +83,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/secret-scan.yml", "previous_filename": None}],
   "reviews": [{"state": "COMMENTED", "submitted_at": "2026-08-13T17:10:00Z", "user": "alice"}],
   "permissions": {"alice": "admin"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "03-commented"
 run_fixture "commented-only verifier edit fails" FAIL "$WORK_DIR/03-commented.json"
@@ -95,7 +95,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
   "reviews": [{"state": "APPROVED", "submitted_at": "2026-08-13T17:10:00Z", "user": "alice"}],
   "permissions": {"alice": "admin"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "04-approved"
 run_fixture "approved verifier edit passes" PASS "$WORK_DIR/04-approved.json"
@@ -107,7 +107,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
   "reviews": [{"state": "APPROVED", "submitted_at": "2026-08-13T17:10:00Z", "user": "nish3451"}],
   "permissions": {"nish3451": "admin"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "05-self"
 run_fixture "self-approval fails" FAIL "$WORK_DIR/05-self.json"
@@ -119,7 +119,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
   "reviews": [{"state": "APPROVED", "submitted_at": "2026-08-13T16:00:00Z", "user": "alice"}],
   "permissions": {"alice": "admin"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "06-stale"
 run_fixture "stale approval fails" FAIL "$WORK_DIR/06-stale.json"
@@ -131,7 +131,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
   "reviews": [{"state": "DISMISSED", "submitted_at": "2026-08-13T17:10:00Z", "user": "alice"}],
   "permissions": {"alice": "admin"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "07-dismissed"
 run_fixture "dismissed approval fails" FAIL "$WORK_DIR/07-dismissed.json"
@@ -143,7 +143,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
   "reviews": [{"state": "APPROVED", "submitted_at": "2026-08-13T17:10:00Z", "user": "bob"}],
   "permissions": {"bob": "write"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "08-write"
 run_fixture "write-permission approval fails" FAIL "$WORK_DIR/08-write.json"
@@ -155,7 +155,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
   "reviews": [{"state": "APPROVED", "submitted_at": "2026-08-13T17:10:00Z", "user": "carol"}],
   "permissions": {"carol": "maintain"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "09-maintain"
 run_fixture "maintainer-permission approval passes" PASS "$WORK_DIR/09-maintain.json"
@@ -165,7 +165,7 @@ run_fixture "maintainer-permission approval passes" PASS "$WORK_DIR/09-maintain.
 FIXTURE_SRC='{
   "author": "nish3451",
   "head_commit_date": "2026-08-13T17:00:00Z",
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"],
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"],
   "files": [{"filename": "app/routes/file%d.tsx" % i, "previous_filename": None} for i in range(119)] + [{"filename": ".github/workflows/secret-scan.yml", "previous_filename": None}],
   "reviews": [{"state": "COMMENTED", "submitted_at": "2026-08-13T17:01:00Z", "user": "bot%d" % i} for i in range(140)] + [{"state": "APPROVED", "submitted_at": "2026-08-13T17:10:00Z", "user": "alice"}] + [{"state": "COMMENTED", "submitted_at": "2026-08-13T17:01:00Z", "user": "tailbot%d" % i} for i in range(9)],
   "permissions": {"alice": "admin"}
@@ -180,7 +180,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/ci-copy.yml", "previous_filename": ".github/workflows/ci.yml"}],
   "reviews": [],
   "permissions": {},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "11-rename"
 run_fixture "rename into protected path fails" FAIL "$WORK_DIR/11-rename.json"
@@ -192,7 +192,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/required-verifier-integrity.yml", "previous_filename": None}],
   "reviews": [],
   "permissions": {},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "12-self-edit"
 run_fixture "integrity workflow self-edit fails" FAIL "$WORK_DIR/12-self-edit.json"
@@ -204,7 +204,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/scripts/required-verifier-integrity.sh", "previous_filename": None}],
   "reviews": [],
   "permissions": {},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "13-script-edit"
 run_fixture "decision script self-edit fails" FAIL "$WORK_DIR/13-script-edit.json"
@@ -220,7 +220,7 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
   "reviews": [{"state": "APPROVED", "submitted_at": "2026-08-13T17:10:00Z", "user": "alice"}],
   "permissions": {"alice": "admin"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "15-no-head-date"
 run_fixture "missing head date fails closed" FAIL "$WORK_DIR/15-no-head-date.json"
@@ -232,122 +232,10 @@ FIXTURE_SRC='{
   "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}, {"filename": ".github/workflows/secret-scan.yml", "previous_filename": None}],
   "reviews": [{"state": "APPROVED", "submitted_at": "2026-08-13T17:10:00Z", "user": "alice"}],
   "permissions": {"alice": "admin"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
+  "protected_files": [".github/workflows/ci.yml", ".github/workflows/secret-scan.yml", ".github/workflows/required-verifier-integrity.yml", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
 }'
 build_bundle "16-multi"
 run_fixture "multi-file verifier change with approval passes" PASS "$WORK_DIR/16-multi.json"
-
-# 17. Self-certification attack (PR #694/#702 shape): the candidate changes BOTH
-#     required verifier workflows (ci.yml and secret-scan.yml — the exact files
-#     that produce the Gitleaks and codex-node-checks required contexts), has NO
-#     independent approval (zero reviews, only the author), and would therefore
-#     certify its own verifier definitions. The gate MUST fail: a candidate can
-#     never reach the green merge-context report without the independent
-#     authorization path.
-FIXTURE_SRC='{
-  "author": "attacker",
-  "head_commit_date": "2026-08-13T17:00:00Z",
-  "files": [
-    {"filename": ".github/workflows/ci.yml", "previous_filename": None},
-    {"filename": ".github/workflows/secret-scan.yml", "previous_filename": None}
-  ],
-  "reviews": [],
-  "permissions": {},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
-}'
-build_bundle "17-self-certify"
-run_fixture "candidate self-certification of required verifiers fails" FAIL "$WORK_DIR/17-self-certify.json"
-
-# 18. Self-certification attack with an author-only review: the candidate approves
-#     its own verifier edit (the ONLY reviewer is the PR author). The gate must
-#     fail — the "approval" is not independent. This is the exact case where a
-#     candidate would try to green the merge-context check by reviewing itself.
-FIXTURE_SRC='{
-  "author": "attacker",
-  "head_commit_date": "2026-08-13T17:00:00Z",
-  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
-  "reviews": [{"state": "APPROVED", "submitted_at": "2026-08-13T17:10:00Z", "user": "attacker"}],
-  "permissions": {"attacker": "admin"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
-}'
-build_bundle "18-self-approve"
-run_fixture "candidate self-approval of required verifiers fails" FAIL "$WORK_DIR/18-self-approve.json"
-
-# 19. Impersonation of the gate's own workflow: the candidate edits the gate
-#     workflow itself (required-verifier-integrity.yml) to weaken the rule, with
-#     no independent approval. The gate must fail — the protected list includes
-#     the gate's own workflow, so a candidate cannot redefine the gate that
-#     reports the required merge-context check.
-FIXTURE_SRC='{
-  "author": "attacker",
-  "head_commit_date": "2026-08-13T17:00:00Z",
-  "files": [{"filename": ".github/workflows/required-verifier-integrity.yml", "previous_filename": None}],
-  "reviews": [],
-  "permissions": {},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
-}'
-build_bundle "19-gate-impersonation"
-run_fixture "candidate impersonation of gate workflow fails" FAIL "$WORK_DIR/19-gate-impersonation.json"
-
-# 20. Full self-certification with a forged-looking approval: the candidate gets a
-#     stale approval (before the head commit) from an admin, then pushes the
-#     verifier edit after it. The gate must fail — the approval is not current,
-#     so the candidate cannot certify a verifier change it pushed after approval.
-FIXTURE_SRC='{
-  "author": "attacker",
-  "head_commit_date": "2026-08-13T18:00:00Z",
-  "files": [{"filename": ".github/workflows/ci.yml", "previous_filename": None}],
-  "reviews": [{"state": "APPROVED", "submitted_at": "2026-08-13T17:00:00Z", "user": "alice"}],
-  "permissions": {"alice": "admin"},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
-}'
-build_bundle "20-stale-forged-approval"
-run_fixture "stale approval cannot certify post-approval verifier edit" FAIL "$WORK_DIR/20-stale-forged-approval.json"
-
-# 21. Check-impersonation via a NEW workflow file: a candidate adds a brand-new
-#     workflow (.github/workflows/evil.yml) that requests checks:write and would
-#     create a green "required-verifier-integrity" check on the merge SHA (same
-#     github-actions app_id 15368, same name — branch protection cannot tell the
-#     difference). The gate MUST fail: ".github/workflows/" is protected as a
-#     directory, so adding ANY workflow file without independent approval is
-#     blocked. This is the exact self-certification vector the provider-bound
-#     context alone cannot stop.
-FIXTURE_SRC='{
-  "author": "attacker",
-  "head_commit_date": "2026-08-13T17:00:00Z",
-  "files": [{"filename": ".github/workflows/evil.yml", "previous_filename": None}],
-  "reviews": [],
-  "permissions": {},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
-}'
-build_bundle "21-new-workflow-impersonation"
-run_fixture "candidate check-impersonation via new workflow fails" FAIL "$WORK_DIR/21-new-workflow-impersonation.json"
-
-# 22. Rename of a NON-protected workflow file INTO .github/workflows/ (new path)
-#     without approval -> FAIL (directory prefix catches the new filename).
-FIXTURE_SRC='{
-  "author": "attacker",
-  "head_commit_date": "2026-08-13T17:00:00Z",
-  "files": [{"filename": ".github/workflows/evil.yml", "previous_filename": "scripts/evil.yml"}],
-  "reviews": [],
-  "permissions": {},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
-}'
-build_bundle "22-rename-into-workflows"
-run_fixture "rename into .github/workflows/ fails" FAIL "$WORK_DIR/22-rename-into-workflows.json"
-
-# 23. Sanity: a NON-workflow file change (ordinary app code) with the directory
-#     prefix still PASSES (the directory protection does not over-block app code).
-FIXTURE_SRC='{
-  "author": "nish3451",
-  "head_commit_date": "2026-08-13T17:00:00Z",
-  "files": [{"filename": "app/routes/app.clients.tsx", "previous_filename": None}],
-  "reviews": [],
-  "permissions": {},
-  "protected_files": [".github/workflows/", ".github/scripts/required-verifier-integrity.sh", ".github/scripts/test-required-verifier-integrity.sh"]
-}'
-build_bundle "23-non-workflow-sanity"
-run_fixture "non-workflow file change still passes" PASS "$WORK_DIR/23-non-workflow-sanity.json"
 
 echo ""
 if [[ $FAIL_COUNT -eq 0 ]]; then

@@ -25,6 +25,11 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain(
       "<url><loc>https://0509.io/compare/meta-ad-library</loc></url>",
     );
+    // Legacy marketing routes that now 301 to homepage anchors are still
+    // listed so crawlers learn the canonical home anchor instead of treating
+    // the old URLs as dead.
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/sample-brief</loc></url>");
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/pricing</loc></url>");
   });
 
 	it("disallows auth-only surfaces in robots.txt but keeps /share crawlable", () => {
