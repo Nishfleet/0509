@@ -70,6 +70,14 @@ export default defineConfig(async ({ mode }) => ({
                       ...(process.env.SIGNUP_FIRST_BRIEF_ENABLED
                         ? { SIGNUP_FIRST_BRIEF_ENABLED: process.env.SIGNUP_FIRST_BRIEF_ENABLED }
                         : {}),
+                      // Forwarded from the BET 7 activation e2e spec so the
+                      // local server emits the allowlisted funnel events the
+                      // spec asserts (issue #1487). Absent by default — the
+                      // funnel gate stays off for ordinary local E2E runs,
+                      // matching production while #1590 is pending.
+                      ...(process.env.FUNNEL_MEASUREMENT_ENABLED
+                        ? { FUNNEL_MEASUREMENT_ENABLED: process.env.FUNNEL_MEASUREMENT_ENABLED }
+                        : {}),
                       ...(isBl034Capture
                         ? { PRESENCE_WEBSITE_ROLLOUT: "pilot" }
                         : {}),
