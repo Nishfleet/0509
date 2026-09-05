@@ -62,6 +62,32 @@ export function whyThisMattersScore(item: DigestRerankItem): number {
   return weight + readPriorityScore(item);
 }
 
+/**
+ * Why-this-matters score for a live watch event (WatchEventRecord): the same
+ * type weight that leads the brief plus the record's 0-100 importance score —
+ * the priority component digest items carry as metadata.priorityScore. A
+ * missing or non-finite importance contributes -1 so an unscored record never
+ * clears a positive gate.
+ */
+export function whyThisMattersScoreForRecord(input: {
+  eventType?: string;
+  importanceScore?: number;
+}): number {
+  const importance = input.importanceScore;
+  return whyThisMattersScore({
+    eventType: input.eventType,
+    metadata:
+      typeof importance === "number" && Number.isFinite(importance)
+        ? { priorityScore: importance }
+        : undefined,
+  });
+}
+
+/** The type weight of a landing-page headline event (0 for everything else). */
+export function landingPageTypeWeight(eventType?: string): number {
+  return WHY_THIS_MATTERS_TYPE_WEIGHT[eventType ?? ""] ?? 0;
+}
+
 export function isAdChurnEventType(eventType?: string): eventType is WatchEventType {
   return !!eventType && AD_CHURN_SET.has(eventType);
 }

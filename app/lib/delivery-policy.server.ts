@@ -1,13 +1,19 @@
 import type {
   DeliveryChannel,
+  DeliveryLane,
   DeliveryQuietHours,
   EffectiveDeliveryConfig,
   NormalizedSensitivityMode,
   WatchEventRecord,
+  WatchEventType,
   WatchlistDeliveryConfigRecord,
   WorkspaceDeliveryConfigRecord,
-  DeliveryLane,
 } from "~/lib/types";
+import {
+  isLandingPageHeadlineEventType,
+  landingPageTypeWeight,
+  whyThisMattersScoreForRecord,
+} from "~/lib/digest-rerank";
 import { safeTimeZone } from "~/lib/safe-timezone";
 
 const INSTANT_THRESHOLDS: Record<NormalizedSensitivityMode, number> = {
@@ -170,28 +176,60 @@ function resolveAllowedChannels(config: EffectiveDeliveryConfig): DeliveryChanne
   return channels;
 }
 
+/**
+ * Full why-this-matters threshold for one mode: the event type's weight plus
+ * the mode's importance gate. Because landing-page type weights (500-1000)
+ * dwarf the 0-100 gates, `score >= threshold` on the full score is exactly
+ * `importanceScore >= gate` for landing_page_* events — the gate keeps its
+ * established magnitudes while the comparison uses the same weighted score
+ * that orders the brief. Non-landing event types return Infinity: whatever
+ * their score, they are never instant-eligible.
+ */
+function whyThisMattersInstantThreshold(
+  eventType: WatchEventType,
+  sensitivityMode: NormalizedSensitivityMode,
+  overrideGate?: number,
+) {
+  if (!isLandingPageHeadlineEventType(eventType)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return (
+    landingPageTypeWeight(eventType) +
+    (overrideGate ?? INSTANT_THRESHOLDS[sensitivityMode])
+  );
+}
+
 function clearsInstantRule(
   lane: DeliveryLane,
   event: WatchEventRecord,
   sensitivityMode: NormalizedSensitivityMode,
 ) {
-  // BET 1: creative churn (ad_new / ad_inactive) never fires an instant alert
-  // on its own. It only ever appears as a counted line in the digest brief, so
-  // a bare new-ad ping can never interrupt the customer regardless of score or
-  // sensitivity mode.
-  if (event.eventType === "ad_new" || event.eventType === "ad_inactive") {
-    return false;
-  }
-
-  const threshold = INSTANT_THRESHOLDS[sensitivityMode];
+  // BET 1 (issue 1483): instant alerts are a landing-page privilege only. A
+  // bare ad_new / ad_inactive ping can never interrupt the customer — it only
+  // ever reaches the counted digest footnote, whatever its score or the
+  // sensitivity mode — and website_page_* events are not an instant-alert
+  // class either. The why-this-matters score gates magnitude: below the
+  // per-mode threshold even a landing change stays quiet.
+  const score = whyThisMattersScoreForRecord(event);
+  const threshold = whyThisMattersInstantThreshold(
+    event.eventType,
+    sensitivityMode,
+  );
 
   if (lane === "customer") {
     if (event.status === "confirmed") {
-      return event.importanceScore >= threshold;
+      return score >= threshold;
     }
 
     if (event.status === "detected" || event.status === "proof_pending") {
-      return event.importanceScore >= PROVISIONAL_CUSTOMER_THRESHOLD;
+      return (
+        score >=
+        whyThisMattersInstantThreshold(
+          event.eventType,
+          sensitivityMode,
+          PROVISIONAL_CUSTOMER_THRESHOLD,
+        )
+      );
     }
 
     return false;
@@ -202,7 +240,7 @@ function clearsInstantRule(
     event.status === "proof_pending" ||
     event.status === "proof_failed"
   ) {
-    return event.importanceScore >= threshold;
+    return score >= threshold;
   }
 
   return false;
