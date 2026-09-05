@@ -114,7 +114,11 @@ describe("locale buyer-surface layout (issue #1501)", () => {
 });
 
 describe("locale buyer-surface sitemap + worker wiring", () => {
-  it("includes every buyer-surface locale subpath (except / and /sitemap.xml)", () => {
+  it("excludes every buyer-surface locale subpath from the sitemap (issue #1570)", () => {
+    // The buyer-surface cluster serves byte-identical English copy with
+    // canonical -> EN. Sitemapping 43 locale `<loc>` entries advertised
+    // them as 43 indexable surfaces — a duplicate-content doorway pattern.
+    // They stay reachable (200, canonical->EN) but are no longer sitemapped.
     const sitemap = publicSeoFileForPathname("/sitemap.xml");
     expect(sitemap).not.toBeNull();
     const body = sitemap?.body ?? "";
@@ -122,9 +126,13 @@ describe("locale buyer-surface sitemap + worker wiring", () => {
       for (const path of BUYER_SURFACE_PATHS) {
         if (path === "/" || path === "/sitemap.xml") continue;
         const expected = `<loc>https://0509.io/${locale}${path}</loc>`;
-        expect(body, `sitemap missing ${expected}`).toContain(expected);
+        expect(body, `sitemap must not list ${expected}`).not.toContain(expected);
       }
     }
+    // The genuinely translated sneaker-resale cluster STAYS in the sitemap.
+    expect(body).toContain(`<loc>https://0509.io/de/sneaker-resale</loc>`);
+    expect(body).toContain(`<loc>https://0509.io/ja/sneaker-resale</loc>`);
+    expect(body).toContain(`<loc>https://0509.io/pt-br/sneaker-resale</loc>`);
   });
 
   it("serves the same sitemap body for /<locale>/sitemap.xml", () => {
@@ -132,9 +140,10 @@ describe("locale buyer-surface sitemap + worker wiring", () => {
     expect(en).not.toBeNull();
     // Worker-level wiring guarantees the same body for /<locale>/sitemap.xml
     // (see workers/app.ts). The lib helper only renders /sitemap.xml, so
-    // verify the body is reusable as-is by checking key cluster entries.
+    // verify the body is reusable as-is by checking the EN entries are
+    // present (the locale subpaths are intentionally gone — issue #1570).
     expect(en?.body).toContain("<urlset");
-    expect(en?.body).toContain(`<loc>https://0509.io/de/pricing</loc>`);
+    expect(en?.body).toContain(`<loc>https://0509.io/pricing</loc>`);
   });
 });
 

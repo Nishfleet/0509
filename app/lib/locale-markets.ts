@@ -122,18 +122,15 @@ export function sneakerResaleMarketForPathname(pathname: string): SneakerResaleM
   return MARKET_BY_PATH.get(withoutTrailingSlash) ?? null;
 }
 
-/**
- * Locales that ship the full buyer-surface cluster, with the values the
- * `<html lang>` attribute expects. Single source of truth so the root layout
- * (which calls `htmlLangForPathname`) and the splat route can never drift.
- */
-const BUYER_SURFACE_HTML_LANG: Record<BuyerSurfaceLocaleId, string> = {
-  de: "de",
-  ja: "ja",
-  "pt-br": "pt-BR",
-  fr: "fr",
-  es: "es",
-};
+// NOTE(issue #1570): the buyer-surface cluster (`/de/pricing`, `/ja/help`,
+// ...) serves byte-identical English copy — it is NOT translated. A page
+// must not declare a language its content does not speak (WCAG 3.2.6
+// html-lang; Google duplicate-content doorway signal), so buyer-surface
+// locale paths report `lang="en"` and are removed from the locale sitemap
+// set. The genuinely translated sneaker-resale cluster (`/de/sneaker-resale`
+// etc.) keeps its locale lang tag below. `BUYER_SURFACE_HTML_LANG` is
+// intentionally gone: it existed only to feed `htmlLangForPathname`, and
+// that function now returns `"en"` for every buyer-surface path.
 
 /**
  * Buyer-surface locale prefix extracted from a pathname, if any. Used by
@@ -180,9 +177,13 @@ function buyerSurfaceLocaleForPathname(pathname: string): BuyerSurfaceLocaleId |
 }
 
 export function htmlLangForPathname(pathname: string): string {
-  const buyerSurfaceLocale = buyerSurfaceLocaleForPathname(pathname);
-  if (buyerSurfaceLocale) {
-    return BUYER_SURFACE_HTML_LANG[buyerSurfaceLocale];
+  // Issue #1570: buyer-surface locale paths (`/de/pricing`, `/ja/help`, ...)
+  // serve untranslated English copy. They must declare `lang="en"` so a
+  // page never claims a language its content does not speak (WCAG 3.2.6
+  // html-lang) and so Google does not see 43 fake-locale doorway duplicates.
+  // The genuinely translated sneaker-resale cluster keeps its locale lang.
+  if (buyerSurfaceLocaleForPathname(pathname)) {
+    return "en";
   }
   return sneakerResaleMarketForPathname(pathname)?.htmlLang ?? "en";
 }
