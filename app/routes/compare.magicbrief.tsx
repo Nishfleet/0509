@@ -7,7 +7,7 @@ import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const pageDescription =
-  "Moving from MagicBrief? What transfers to Five to Nine, what's different, and how we can help migrate your collections and watchlists.";
+  "Moving from MagicBrief? Bring your competitor list — plain domains, URLs, or a CSV — and we set up your watchlists. Collections, boards, and analytics history aren't imported; we'll help you move person to person.";
 
 export const links: LinksFunction = () => canonicalLinks("/compare/magicbrief");
 
@@ -20,16 +20,34 @@ export const meta: MetaFunction = () =>
 
 const transfers = [
   {
-    theirs: "Saved ad library and boards",
-    ours: "Collections — save winning ads with notes and tags, share with clients",
+    theirs: "Competitor lists",
+    ours: "Watchlists — paste one domain, URL, or brand name per line, or upload a CSV. We create the watchlists and start tracking changes with screenshots, page text, and links saved as evidence.",
   },
   {
-    theirs: "Brand tracking",
-    ours: "Watchlists — regular checks with screenshots, page text, and links saved as evidence",
+    theirs: "CSV notes, tags, and clients",
+    ours: "Import context — the notes, tags, and client columns in your CSV are saved on each watchlist as workspace memory.",
   },
   {
     theirs: "Creative inspiration browsing",
-    ours: "Search preview — paste a competitor website and inspect available Meta ads with source and freshness labels, no account needed",
+    ours: "Search preview — paste a competitor website and inspect available Meta ads with source and freshness labels, no account needed.",
+  },
+] as const;
+
+const notImported = [
+  {
+    title: "Collections and boards",
+    detail:
+      "Saved ad libraries, boards, and saved creative evidence — screenshots, saved ads, links — aren't portable through the generic competitor import. Five to Nine doesn't migrate them.",
+  },
+  {
+    title: "Analytics and report history",
+    detail:
+      "Spend, impressions, reach, charts, and report dates aren't imported. Keep your original export and recreate any numbers you need in your own reports.",
+  },
+  {
+    title: "Historical screenshots",
+    detail:
+      "Past evidence isn't preserved. Going forward, watchlist scans save fresh screenshots, page text, and links as evidence inside Five to Nine.",
   },
 ] as const;
 
@@ -61,10 +79,12 @@ export default function CompareMagicBriefRoute() {
           <span>Migration guide — MagicBrief → Five to Nine</span>
         </p>
         <h1 className="ld-wall ld-wall-compact">
-          Moving from MagicBrief? Bring your saved work. Gain the receipts.
+          Moving from MagicBrief? Bring your competitor list. Gain the receipts.
         </h1>
         <p className="ld-deck-copy">
-          If your current tool is winding down or just winding you up, email{" "}
+          A plain competitor list — domains, URLs, or brand names — becomes watchlists that
+          save each change with screenshots, page text, and links as evidence. Collections,
+          boards, and analytics history don&rsquo;t transfer automatically: email{" "}
           <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll help you move, person to
           person.
         </p>
@@ -100,6 +120,26 @@ export default function CompareMagicBriefRoute() {
 
       <section className="ld-quiet">
         <div className="ld-section-head">
+          <span className="ld-kicker">Not imported</span>
+          <h2>What stays in your MagicBrief export.</h2>
+        </div>
+        <div className="ld-quiet-grid">
+          {notImported.map((item) => (
+            <article key={item.title}>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+            </article>
+          ))}
+        </div>
+        <p className="ld-pricing-note">
+          No full MagicBrief export contract is verified: MagicBrief&rsquo;s export options are
+          partial and may require manual recreation, so check what you can download at
+          magicbrief.com before you leave.
+        </p>
+      </section>
+
+      <section className="ld-quiet">
+        <div className="ld-section-head">
           <span className="ld-kicker">The honest differences</span>
           <h2>Not a clone. A different bet.</h2>
         </div>
@@ -119,8 +159,10 @@ export default function CompareMagicBriefRoute() {
         </h2>
         <p className="ld-pricing-note">
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> with your MagicBrief export (or just
-          a list of brands you tracked) and we&rsquo;ll set up your collections and watchlists with
-          you. Plans from the <Link to="/#pricing">pricing page</Link> — the public search preview stays free
+          a list of brands you tracked) and we&rsquo;ll set up your watchlists with you, person to
+          person. Anything the import doesn&rsquo;t carry — collections, boards, historical
+          evidence — we&rsquo;ll help you recreate inside Five to Nine. Plans from the{" "}
+          <Link to="/#pricing">pricing page</Link> — the public search preview stays free
           either way.
         </p>
       </section>
