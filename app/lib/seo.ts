@@ -1,4 +1,4 @@
-import { BUYER_SURFACE_LOCALE_IDS, SNEAKER_RESALE_MARKETS } from "~/lib/locale-markets";
+import { BUYER_SURFACE_CHILD_PATHS, BUYER_SURFACE_LOCALE_IDS, SNEAKER_RESALE_MARKETS } from "~/lib/locale-markets";
 import {
   PUBLISHED_BUNDLE_PRICES_EUR,
   PUBLISHED_FREE_PLAN_OFFER,
@@ -512,6 +512,10 @@ export const SITEMAP_PATHS = [
     `/${locale}/changelog`,
     `/${locale}/trust`,
     `/${locale}/compare`,
+    // BET 5 compare + BET 8 switch child routes (issue #1563): every
+    // locale ships the same 13 child surfaces, with canonicals pointing
+    // back at EN so the locale cluster cannot fragment search ranking.
+    ...BUYER_SURFACE_CHILD_PATHS.map((child) => `/${locale}${child}`),
   ]),
   // Canonical Ad Aggression Score formula page (issue #1263). The old
   // /methodology/ad-aggression-score path now 301-redirects here so any
@@ -587,6 +591,11 @@ const LOCALE_BUYER_SURFACE_PRIORITY: Record<string, { changefreq: string; priori
       [`/${locale}/changelog`, { changefreq: "weekly", priority: "0.6" }],
       [`/${locale}/trust`, { changefreq: "yearly", priority: "0.3" }],
       [`/${locale}/compare`, { changefreq: "weekly", priority: "0.8" }],
+      // Compare/switch child pages mirror the EN child tier (weekly, 0.7).
+      ...BUYER_SURFACE_CHILD_PATHS.map((child) => [
+        `/${locale}${child}`,
+        { changefreq: "weekly", priority: "0.7" },
+      ] as const),
     ]),
   );
 
