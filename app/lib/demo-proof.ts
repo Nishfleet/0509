@@ -1,3 +1,13 @@
+export const SAMPLE_FIELD_UNAVAILABLE = "Not available in this sample";
+
+// Every proof field on the public sample brief renders through this guard so a
+// missing fixture value shows an explicit unavailable state instead of a blank
+// definition. The live product never runs this path: authenticated briefs come
+// from saved evidence, not from the sample fixture.
+export function sampleField(value: string | null | undefined): string {
+  return value && value.trim() ? value : SAMPLE_FIELD_UNAVAILABLE;
+}
+
 export const demoProof = {
   generatedAt: "sample",
   status: "sample_only",

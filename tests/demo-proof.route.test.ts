@@ -28,6 +28,46 @@ describe("demo proof API", () => {
     expect(JSON.stringify(body.exports)).not.toContain("slackMarkdown");
   });
 
+  it("serves only non-empty, link-free source-trail evidence", async () => {
+    const { loader } = await import("~/routes/api.demo-proof");
+    const response = await loader({
+      request: new Request("https://0509.io/api/demo-proof"),
+    } as never);
+    const body = (await response.json()) as DemoProofResponse;
+
+    expect(body.proofTrail.length).toBeGreaterThanOrEqual(1);
+    for (const item of body.proofTrail) {
+      expect(item.signal.trim()).not.toBe("");
+      expect(item.evidence.trim()).not.toBe("");
+      expect(item.source.trim()).not.toBe("");
+      expect(item.evidence).not.toMatch(/https?:\/\//i);
+      expect(item.source).not.toMatch(/https?:\/\//i);
+    }
+    expect(JSON.stringify(body)).not.toMatch(/https?:\/\//i);
+  });
+
+  it("serves every decision-summary field as a non-empty value", async () => {
+    const { loader } = await import("~/routes/api.demo-proof");
+    const response = await loader({
+      request: new Request("https://0509.io/api/demo-proof"),
+    } as never);
+    const body = (await response.json()) as DemoProofResponse;
+
+    const digest = body.digestPreview;
+    for (const field of [
+      digest.subject,
+      digest.whatChanged,
+      digest.whyItMatters,
+      digest.priority,
+      digest.proofStatus,
+      digest.source,
+      digest.freshness,
+      digest.recommendedMove,
+    ]) {
+      expect(field.trim()).not.toBe("");
+    }
+  });
+
   it("returns markdown for agent and buyer review", async () => {
     const { loader } = await import("~/routes/api.demo-proof");
     const response = await loader({
