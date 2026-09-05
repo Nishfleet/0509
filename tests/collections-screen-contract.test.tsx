@@ -229,6 +229,7 @@ describe("collections disclosures and switcher (live DOM)", () => {
     expect(panelGroups).toEqual([
       "f9-collection-item", // the item's editor
       "f9-collection-panel", // Export
+      "f9-collection-panel", // Rename
       "f9-collection-panel", // Add an evidence link
       "f9-collection-panel", // New collection
     ]);
