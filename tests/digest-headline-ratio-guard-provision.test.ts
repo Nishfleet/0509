@@ -1,5 +1,4 @@
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -43,6 +42,23 @@ describe("digest-headline-ratio guard provision PATH resolution", () => {
     expect(node.stdout.trim()).toMatch(/\/node$/);
     expect(npm.status).toBe(0);
     expect(npm.stdout.trim()).toMatch(/\/npm$/);
+  });
+
+  it("picks a node bin dir containing BOTH node and npm executables", () => {
+    // Regression coverage for the host failure mode: a lone `node` binary can
+    // exist in a dir with no npm (this host has a stale root-owned
+    // /usr/local/bin/node and an empty ~/.bash_profile that hides ~/.local/bin
+    // from login shells). The resolver must choose a dir where BOTH tools are
+    // executable, not the first dir where `command -v node` resolves.
+    const res = spawnSync("bash", [PROVISION, "--resolve-path"], {
+      encoding: "utf8",
+    });
+    expect(res.status).toBe(0);
+    const nodeBinDir = res.stdout.trim().split(":")[0];
+    for (const bin of ["node", "npm"]) {
+      const check = spawnSync("test", ["-x", `${nodeBinDir}/${bin}`]);
+      expect(check.status).toBe(0);
+    }
   });
 
   it("renders the service unit with the discovered node bin dir substituted", () => {
