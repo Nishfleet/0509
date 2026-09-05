@@ -37,6 +37,8 @@ describe("locale buyer-surface layout (issue #1501)", () => {
       "routes/$locale.competitor-monitoring.tsx",
       "routes/$locale.capture-rules.tsx",
       "routes/$locale.ad-aggression.tsx",
+      // Programmatic /ads/:domain locale pages (issue #1562).
+      "routes/$locale.ads.$domain.tsx",
     ]) {
       expect(routes, `routes.ts missing ${child}`).toContain(child);
     }
@@ -116,6 +118,9 @@ describe("locale buyer-surface layout (issue #1501)", () => {
     const { default: localeAdAggressionRoute } = await import(
       "~/routes/$locale.ad-aggression"
     );
+    const { default: localeAdsDomainRoute } = await import(
+      "~/routes/$locale.ads.$domain"
+    );
     expect(typeof indexRoute).toBe("function");
     expect(typeof pricingRoute).toBe("function");
     expect(typeof helpRoute).toBe("function");
@@ -129,6 +134,7 @@ describe("locale buyer-surface layout (issue #1501)", () => {
     expect(typeof localeCompetitorMonitoringRoute).toBe("function");
     expect(typeof localeCaptureRulesRoute).toBe("function");
     expect(typeof localeAdAggressionRoute).toBe("function");
+    expect(typeof localeAdsDomainRoute).toBe("function");
   });
 });
 

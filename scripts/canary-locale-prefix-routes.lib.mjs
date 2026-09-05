@@ -46,6 +46,20 @@ export const ROUTES = [
   "/compare",
 ];
 
+// Brand domains the locale-prefix canary probes for the programmatic
+// /ads/:domain surface (issue #1562). The #1501 cluster covered the core
+// buyer surfaces but NOT /ads/:domain, so every locale-prefixed brand page
+// 404'd. These are the populated brands from the issue's `verify:` block —
+// an `/ads/:domain` entry that stops serving 200 under a locale prefix is a
+// regression the same way a missing core surface is. Each is probed under
+// every locale prefix, so `probes = |locales| * (|ROUTES| + |BRAND_DOMAINS|)`.
+export const BRAND_DOMAINS = [
+  "nike.com",
+  "allbirds.com",
+  "nykaa.com",
+  "stockx.com",
+];
+
 /**
  * Build the URL the canary probes for a single (locale, route) pair.
  * Strips trailing slashes from `baseUrl` so a misconfigured
@@ -53,8 +67,7 @@ export const ROUTES = [
  * The bare `/` route is the cluster's `/{locale}` index, so the
  * concatenation collapses to `${baseUrl}/${locale}` with no trailing
  * slash.
- */
-/**
+ *
  * @param {string} baseUrl
  * @param {string} locale
  * @param {string} route
@@ -118,8 +131,17 @@ export async function probe(url, timeoutMs, fetchImpl = globalThis.fetch) {
  */
 export async function runCanary(options) {
   const probes = [];
+  // Static buyer-surface routes plus one probe per populated /ads/:domain
+  // brand (issue #1562). `/ads/<domain>` routes probe a real populated
+  // brand page: the locale-prefixed version must serve 200 exactly as the
+  // EN version does, or a buyer landing from a non-US comparison page hits
+  // a dead Ad Aggression Score page.
+  const routesWithBrands = [
+    ...ROUTES,
+    ...BRAND_DOMAINS.map((domain) => `/ads/${domain}`),
+  ];
   for (const locale of LOCALE_PREFIXES) {
-    for (const route of ROUTES) {
+    for (const route of routesWithBrands) {
       const url = probeUrl(options.baseUrl, locale, route);
       const result = await probe(url, options.timeoutMs ?? DEFAULT_TIMEOUT_MS, options.fetchImpl);
       probes.push({ locale, route, url, ...result });
