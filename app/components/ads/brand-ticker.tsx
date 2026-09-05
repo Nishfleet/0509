@@ -1,4 +1,5 @@
 import { adLongevityDays } from "~/lib/ad-display";
+import { dedupeTickerBodies } from "~/lib/ticker-dedup";
 import type { AdRecord } from "~/lib/types";
 
 const TICKER_MAX_ITEMS = 6;
@@ -22,15 +23,22 @@ export function BrandTicker({
   fresh: boolean;
   now?: Date;
 }) {
-  const items = ads
-    .filter((ad) => (ad.previewHeadline?.trim() || ad.hook?.trim()))
-    .slice(0, TICKER_MAX_ITEMS)
-    .map((ad) => ({
-      id: ad.metaAdId,
-      time: tickerTime(ad, now, fresh),
-      event: ad.previewHeadline?.trim() || ad.hook?.trim() || "",
-      source: sourceLabel(ad.source),
-    }));
+  // Build the full candidate set first, then dedup by body so the first
+  // cycle never repeats the same headline (issue #1496). Slicing AFTER dedup
+  // means the 6 visible slots are 6 distinct bodies when the wall has ≥6
+  // distinct bodies — a wall with fewer distinct bodies renders an honestly
+  // shorter strip rather than padding it with repeats.
+  const items = dedupeTickerBodies(
+    ads
+      .filter((ad) => (ad.previewHeadline?.trim() || ad.hook?.trim()))
+      .map((ad) => ({
+        id: ad.metaAdId,
+        time: tickerTime(ad, now, fresh),
+        event: ad.previewHeadline?.trim() || ad.hook?.trim() || "",
+        source: sourceLabel(ad.source),
+      })),
+    (item) => item.event,
+  ).slice(0, TICKER_MAX_ITEMS);
 
   if (items.length === 0) return null;
 
