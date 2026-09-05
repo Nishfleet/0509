@@ -365,8 +365,8 @@ describe("buildSearchAnswer", () => {
 
     expect(answer).toMatchObject({
       state: "no_verified",
-      title: "No verified ads found for boat-lifestyle.com",
-      summary: "Returned ads were not connected to this website through advertiser or landing-page evidence.",
+      title: "No verified ads for boat-lifestyle.com — 1 unmatched candidate",
+      summary: "These ads matched your search but we couldn't verify they belong to the brand. Confirm a likely one before treating it as proof.",
       note: "This is not evidence that the competitor is inactive; it only means this search did not verify a connected ad.",
     });
     expect(answer.facts).toContainEqual({
@@ -422,8 +422,8 @@ describe("buildSearchAnswer", () => {
 
     expect(answer).toMatchObject({
       state: "no_verified",
-      title: "No verified ads found for boat-lifestyle.com",
-      summary: expect.stringContaining("brand-name matches are below"),
+      title: "No verified ads for boat-lifestyle.com — 1 likely match, 1 unmatched candidate",
+      summary: "These ads matched your search but we couldn't verify they belong to the brand. Confirm a likely one before treating it as proof.",
     });
     expect(answer.facts).toContainEqual({
       label: "Likely matches",
@@ -449,8 +449,8 @@ describe("buildSearchAnswer", () => {
 
     expect(answer).toMatchObject({
       state: "no_verified",
-      title: "No verified ads found for boat-lifestyle.com",
-      summary: "Returned ads were not connected to this website through advertiser or landing-page evidence.",
+      title: "No verified ads for boat-lifestyle.com — 1 unmatched candidate",
+      summary: "These ads matched your search but we couldn't verify they belong to the brand. Confirm a likely one before treating it as proof.",
     });
   });
 
@@ -858,8 +858,10 @@ describe("buildSearchAnswer market scope", () => {
       });
 
       // Domain search with 0 verified → no_verified state, not keyword.
+      // BET 2 (issue 1482): candidates exist, so the headline names the
+      // tiers instead of the "No verified ads found" dead-end copy.
       expect(answer.state).toBe("no_verified");
-      expect(answer.title).toContain("No verified ads found for goat.com");
+      expect(answer.title).toContain("No verified ads for goat.com —");
       expect(answer.nextAction).toBeNull();
     });
   });
