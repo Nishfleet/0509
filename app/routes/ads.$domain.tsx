@@ -70,7 +70,7 @@ import type {
   BrandIntelTeaser,
   BrandPageAggression,
 } from "~/lib/brand-page.server";
-import { countBrandOwnedAds } from "~/lib/brand-page.server";
+import { brandOwnedAdIdSet } from "~/lib/brand-page.server";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 import type { CaptureFailuresSummary } from "~/lib/offer-timeline.server";
 import { formatCaptureAttemptReasonLabel } from "~/lib/capture-attempt-reason-code";
@@ -134,6 +134,14 @@ export interface BrandPageLoaderData {
    * on the wall but are described as "matching the search", never as linking.
    */
   unverifiedMatchCount: number;
+  /**
+   * metaAdIds of the verified-linked creatives that are NOT the brand's own —
+   * partner, creator, reseller, or affiliate campaigns that link to the domain
+   * under a different advertiser (a different Meta Page ID). The ad wall labels
+   * these with a "via partner" pill so a buyer can see the disambiguation
+   * (issue #1566).
+   */
+  partnerCampaignAdIds: string[];
   teaser: BrandIntelTeaser | null;
   aggression: BrandPageAggression | null;
   /**
@@ -371,6 +379,8 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   const noindex =
     emergencyNoindex || !snapshot || !snapshot.freshForIndexing || verifiedLinkedAds.length === 0;
 
+  const brandOwnedSet = brandOwnedAdIdSet(verifiedLinkedAds, brand.domain);
+
   return {
     domain: brand.domain,
     brandName: brand.displayName,
@@ -380,9 +390,12 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     checkedAgo: freshness?.checkedAgo ?? null,
     lastCheckedAt: snapshot?.fetchedAt ?? null,
     freshForLiveClaim: freshness?.freshForLiveClaim ?? false,
-    brandOwnedAdCount: countBrandOwnedAds(verifiedLinkedAds, brand.domain),
+    brandOwnedAdCount: brandOwnedSet.size,
     verifiedLinkCount: verifiedLinkedAds.length,
     unverifiedMatchCount: snapshotAds.length - verifiedLinkedAds.length,
+    partnerCampaignAdIds: verifiedLinkedAds
+      .filter((ad) => !brandOwnedSet.has(ad.metaAdId))
+      .map((ad) => ad.metaAdId),
     teaser: snapshot ? buildBrandIntelTeaser(verifiedLinkedAds, now) : null,
     aggression,
     // Honest "N/14 days so far" for the score card when the score is
@@ -1113,6 +1126,7 @@ function BrandAdsResults({
             fresh={data.freshForLiveClaim}
             signupPath={signupPath}
             totalCount={totalCount}
+            partnerCampaignAdIds={data.partnerCampaignAdIds}
           />
 
           {/* AD-AGGRESSION METHODOLOGY FOOTER — "/ad-aggression" cross-link
