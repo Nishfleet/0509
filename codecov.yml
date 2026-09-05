@@ -1,0 +1,48 @@
+# Codecov configuration — diff-coverage floor (quality-first-recos.md §1.1, item #2).
+#
+# 0509 is a public repo on a free GitHub org plan, so GitHub's native coverage
+# merge-protection rule (Code Quality subscription, Enterprise/Team) is not
+# available. Codecov's `patch` status check is the free substitute on public
+# repos and does exactly the diff-coverage job: it assesses whether each line
+# adjusted in a pull request is covered by tests.
+#
+# Phase: EVALUATE (informational). Nothing here blocks a merge yet. The
+# `codecov/patch` and `codecov/project` contexts report honestly but pass
+# regardless of the number, so the fleet can see the data before any gate
+# binds. Per the recos, the patch context becomes a REQUIRED check via the
+# branch-protection API only AFTER 3 consecutive PRs show it reporting
+# reliably — that verification plan lives in the PR body that introduced this
+# file. Do not flip `informational: false` without that evidence.
+#
+# Coverage source: `@vitest/coverage-v8` on the `node` vitest project only.
+# The `workers` project (real workerd) cannot produce V8 coverage, so changes
+# to `workers/**` files will not appear in any lcov report and will read as
+# uncovered to the patch check. That is a known limitation during evaluate;
+# the transition-to-required plan must exclude `workers/**` from the patch
+# target or accept the gap.
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  status:
+    project:
+      default:
+        # No-drop: target is the base branch's current coverage (auto), and any
+        # decrease (threshold 0%) is flagged. Informational during evaluate so
+        # it reports without blocking.
+        informational: true
+        target: auto
+        threshold: 0%
+    patch:
+      default:
+        # Diff-scoped floor: 75% of changed lines must be covered. Informational
+        # during evaluate; the recos say ratchet to the observed p25 after the
+        # 7-day evaluate window, not open at 80% (agents would route around 80%
+        # with assertion-free tests).
+        informational: true
+        target: 75%
+        threshold: 0%
+
+comment:
+  layout: "condensed-header, diff, files"
+  require_changes: true
