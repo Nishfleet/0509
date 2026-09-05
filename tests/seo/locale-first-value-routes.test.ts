@@ -67,32 +67,34 @@ describe("locale first-value search funnel (issue #1578)", () => {
       const siblings = buyerSurfaceHreflangLinks(route);
       // self + every sibling locale + x-default.
       expect(siblings).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 1);
-      expect(siblings.find((s) => s.hrefLang === "x-default")?.href).toBe(
+      expect(siblings.find((s) => s.hreflang === "x-default")?.href).toBe(
         `https://0509.io/${route}`,
       );
     }
   });
 
-  it("reports the correct <html lang> for every locale × first-value route", () => {
+  it("reports <html lang>=\"en\" for every locale × first-value route (byte-identical English, issue #1570)", () => {
+    // Issue #1570: first-value locale routes serve byte-identical English copy
+    // (they re-export the EN component), so htmlLangForPathname returns "en".
+    // No page may declare a language its content does not speak.
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-      const expectedLang = locale === "pt-br" ? "pt-BR" : locale;
       for (const route of LOCALE_FIRST_VALUE_ROUTES) {
-        expect(htmlLangForPathname(`/${locale}/${route}`), `/${locale}/${route}`).toBe(
-          expectedLang,
-        );
+        expect(htmlLangForPathname(`/${locale}/${route}`), `/${locale}/${route}`).toBe("en");
       }
     }
   });
 
-  it("lists all 20 locale first-value URLs in each locale sitemap so Google can locale-target them", () => {
-    // Issue #1561: the first-value locale URLs live in the LOCALE sitemap
-    // (/<locale>/sitemap.xml), not the root — the root no longer lists any
-    // locale-prefixed URL.
+  it("does NOT list locale first-value URLs in any sitemap (byte-identical English, issue #1570)", () => {
+    // Issue #1570: first-value locale routes serve byte-identical English copy
+    // with lang="en" and canonical→EN, so they are excluded from both the root
+    // sitemap and the locale sitemaps to avoid a duplicate-content doorway
+    // pattern. They stay reachable (200, canonical→EN) but are not advertised
+    // as distinct indexable surfaces.
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const body = buildLocaleSitemapXml(locale);
       for (const route of LOCALE_FIRST_VALUE_ROUTES) {
         const loc = `<loc>https://0509.io/${locale}/${route}</loc>`;
-        expect(body, `locale sitemap missing ${loc}`).toContain(loc);
+        expect(body, `locale sitemap should not list ${loc}`).not.toContain(loc);
       }
     }
   });

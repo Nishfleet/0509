@@ -25,17 +25,13 @@ type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
  * (a) a real registered route under `:locale` (so the router serves 200, not
  * 404), (b) backed by a `$locale.*.tsx` file that re-exports the EN sibling's
  * component and meta with canonical→EN + the buyer-surface hreflang cluster,
- * (c) mapped by `htmlLangForPathname` to the locale's `<html lang>` (de→de,
- * ja→ja, pt-br→pt-BR, fr→fr, es→es), and (d) listed in the public sitemap.
+ * (c) mapped by `htmlLangForPathname` to `<html lang="en">` (issue #1570:
+ * the content is byte-identical English, so no page may declare a language
+ * its content does not speak), and (d) NOT listed in the public sitemap
+ * (issue #1570: byte-identical English pages with canonical→EN are excluded
+ * to avoid a duplicate-content doorway pattern).
  * A missing cell on any axis is the exact 404 the issue shipped to close.
  */
-const HTML_LANG_BY_LOCALE: Record<string, string> = {
-  de: "de",
-  ja: "ja",
-  "pt-br": "pt-BR",
-  fr: "fr",
-  es: "es",
-};
 
 /** Flatten every route entry's file path from the routes.ts config. */
 function collectRouteFiles(nodes: unknown[]): string[] {
@@ -149,7 +145,7 @@ describe("locale compare/switch child routes (issue #1563)", () => {
       expect(hreflang).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 1);
       expect(hreflang).toContainEqual({
         rel: "alternate",
-        hrefLang: "x-default",
+        hreflang: "x-default",
         href: `https://0509.io${child}`,
       });
 
@@ -172,23 +168,32 @@ describe("locale compare/switch child routes (issue #1563)", () => {
     expect(markup).toMatch(/<h1/);
   });
 
-  it("maps every locale × child pathname to the locale's <html lang> (no cell regresses to en)", () => {
+  it("maps every locale × child pathname to <html lang>=\"en\" (byte-identical English, issue #1570)", () => {
+    // Issue #1570: locale child routes re-export the EN sibling's component
+    // verbatim, so the content is English. A page must not declare a language
+    // its content does not speak — htmlLangForPathname returns "en" for every
+    // locale child path. The genuinely translated sneaker-resale cluster is
+    // the only locale surface that keeps its real locale lang.
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       for (const child of BUYER_SURFACE_CHILD_PATHS) {
         expect(
           htmlLangForPathname(`/${locale}${child}`),
           `lang for /${locale}${child}`,
-        ).toBe(HTML_LANG_BY_LOCALE[locale]);
+        ).toBe("en");
       }
     }
   });
 
-  it("lists all 55 locale child URLs in the public sitemap", () => {
+  it("does NOT list locale child URLs in the public sitemap (byte-identical English, issue #1570)", () => {
+    // Issue #1570: locale child routes serve byte-identical English copy with
+    // lang="en" and canonical→EN, so listing them as distinct indexable
+    // surfaces would be a duplicate-content doorway pattern. They stay
+    // reachable (200, canonical→EN) but are excluded from the sitemap.
     expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(11);
     expect(BUYER_SURFACE_LOCALE_IDS).toHaveLength(5);
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       for (const child of BUYER_SURFACE_CHILD_PATHS) {
-        expect(SITEMAP_PATHS as readonly string[]).toContain(`/${locale}${child}`);
+        expect(SITEMAP_PATHS as readonly string[]).not.toContain(`/${locale}${child}`);
       }
     }
   });
