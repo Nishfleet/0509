@@ -34,9 +34,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
-    # one 180m total budget shared between its lane slot and the deploy gate.
-    timeout-minutes: 270
+    # 30m bounds the whole required-check cycle on a hosted runner. The
+    # observed green cycle is ~2-3m (install 4s, build 8s, test ~70s, typecheck
+    # ~40s); 30m is ~10x that, covering a slow cache-miss install and the
+    # single vitest forks-worker startup retry in ci-vitest-run.sh without
+    # holding a hosted runner for hours on a hang. The prior 270m cap was set
+    # for the deleted deploy-window-lock lane budget and is stale.
+    timeout-minutes: 30
     steps:
       - name: Authorize exact verification candidate
         # Fork guard as a step, not a job: it refuses fork PRs and unapproved
