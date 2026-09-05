@@ -16902,3 +16902,45 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   font-size: 0.875rem;
   margin: 0 0 12px;
 }
+
+/* Visible breadcrumb navigation (issue #1463). Rendered by the shared
+   <Breadcrumbs> component alongside its BreadcrumbList JSON-LD so the visible
+   Home → Category → Page trail and Google's rich-result crumb stay in lockstep.
+   Tones borrow the `.ld-case` eyebrow vocabulary (mono, uppercase, ink-soft)
+   and the site separators, so the trail reads as page chrome, not a second
+   headline. Inline-block <ol>/<li> keeps one clickable target per crumb. */
+.f9-breadcrumbs {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.f9-breadcrumbs ol {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.f9-breadcrumbs li {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+}
+.f9-breadcrumbs li + li::before {
+  content: " › ";
+  color: var(--ld-ink, var(--ink));
+  opacity: 0.45;
+  padding: 0 0.25em;
+}
+.f9-breadcrumbs a {
+  color: var(--ld-ink-soft, var(--ink-soft));
+  text-decoration: none;
+}
+.f9-breadcrumbs a:hover {
+  color: var(--ld-ink, var(--ink));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.f9-breadcrumbs [aria-current="page"] {
+  color: var(--ld-ink-soft, var(--ink-soft));
+}

@@ -2,6 +2,7 @@ import { Form, Link, useLoaderData, useLocation } from "react-router";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { BrowseTrackedCompetitors } from "~/components/ads-internal-links";
 import type { AppEnv } from "~/lib/env.server";
@@ -265,6 +266,12 @@ export default function CompetitorMonitoringCategoryRoute() {
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
       <MarketingNav />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Competitor monitoring", pathname: "/competitor-monitoring" },
+        ]}
+      />
 
       <section className="ld-hero">
         <p className="ld-case">

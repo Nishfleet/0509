@@ -1,5 +1,6 @@
 import type { LinksFunction, MetaFunction } from "react-router";
 
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
   CAPTURE_RULES_PUBLIC_PATH,
@@ -49,6 +50,12 @@ export default function CaptureRulesRoute() {
             pathname: CAPTURE_RULES_PUBLIC_PATH,
           }),
         )}
+      />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Capture rules", pathname: CAPTURE_RULES_PUBLIC_PATH },
+        ]}
       />
       <PublicDocBlock title="The guarantee">
         <p>
