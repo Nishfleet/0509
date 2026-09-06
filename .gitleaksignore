@@ -17,13 +17,11 @@
 # Gitleaks check can pass.
 b157f14f3a2989221dc52cc87a3ff1ace8f4327f:ops/netcup-browser/tests/server.test.mjs:generic-api-key:19
 
-# Fake Stripe live-key string in a release-hydration-bridge test fixture. The
-# value is a hardcoded, obviously-fake dummy (a literal Stripe live-key prefix
-# followed by a short abc/123 sequence) embedded in a simulated console-error
-# message used to verify the hydration bridge redacts secrets: the test asserts
-# the captured message does NOT contain the live-key prefix and DOES contain
-# "[redacted]". It is not a credential and never was. This entry suppresses the
-# historical scan hit in the fleet-salvage commit 1f285a08 (banked uncommitted
-# work for unit pi-issue-0509-1752) so the required Gitleaks check can pass for
-# every PR whose fetch-depth:0 checkout walks that ref.
+# Fake Stripe-shaped dummy (sk_live_ prefix + 12 chars) in the hydration
+# redaction test fixture of tests/release-hydration-bridge.test.ts, salvage
+# commit 1f285a08 on wip/pi-issue-0509-1752-20260906T115133Z. The test asserts
+# the value gets REDACTED (`not.toContain("sk_live_")`); it was never a
+# credential. The PR scan walks every ref of the fetch-depth:0 checkout, so
+# this one commit failed the required Gitleaks check on every open PR
+# (0509#1792). Exact commit:file:rule:line, same shape as b157f14f.
 1f285a08bba6194b26325946a14a6beef4d81a02:tests/release-hydration-bridge.test.ts:stripe-access-token:89

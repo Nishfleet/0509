@@ -292,6 +292,7 @@ export interface SignupFirstBriefPayload {
  */
 export type SignupFirstBriefLoaderData =
   | { step: "first-brief"; status: "waiting"; watchlistName: string | null }
+  | { step: "first-brief"; status: "no_ads"; watchlistName: string | null }
   | { step: "first-brief"; status: "ready"; brief: SignupFirstBriefPayload };
 
 /**
