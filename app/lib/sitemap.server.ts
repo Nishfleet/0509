@@ -30,9 +30,13 @@
  *        backs indexable thin content, so those stay out — the loader
  *        self-noindexes them; this gate keeps them out of the sitemap so the
  *        two agree.
- *   2. Alias domains are never listed: the route 301-redirects them to their
- *      canonical (product) brand page, so they are no longer distinct
- *      indexable URLs (issue #1446 criterion 3).
+ *   2. Alias domains are excluded only when the route actually 301-redirects
+ *      them to their canonical (product) brand page — i.e. only when that
+ *      canonical is itself a populated indexable row in the same set. A
+ *      populated indexable alias whose canonical is a cache-miss (absent
+ *      from these rows) is NOT redirected by the route, so it is still a
+ *      distinct indexable URL and stays listed (issue #1446 criterion 3).
+ *      Exclusion must mirror the redirect firing, never be unconditional.
  *   3. Domain recovery is strictly lossless-only: a row maps to a brand page
  *      ONLY when its cache key or payload carries the registrable domain
  *      (search-v2 domain keys embed it; v2 payloads carry searchIntent +
@@ -89,6 +93,7 @@ import {
   deriveBrandPageLookupForCountry,
   isBrandPageAliasDomain,
   normalizeBrandPageDomain,
+  resolveCanonicalBrandPageDomain,
   BRAND_PAGE_FRESH_FOR_INDEXING_MS,
 } from "~/lib/brand-page.server";
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
@@ -325,6 +330,50 @@ export function indexableBrandPageEntriesFromRows(
 ): SitemapEntry[] {
   const seen = new Set<string>();
   const entries: SitemapEntry[] = [];
+  // First pass (issue #1446 criterion 3 fix): find the canonical domains that
+  // would actually back a route-level 301. The route redirects an alias only
+  // when its canonical snapshot is populated, so the alias exclusion below
+  // must be conditional on that — NOT unconditional. A canonical is populated
+  // indexable here when its own row passes every gate the sitemap uses to
+  // list a page; a populated indexable alias whose canonical is a cache-miss
+  // (absent from these rows) stays listed instead of silently dropping.
+  const populatedCanonicals = new Set<string>();
+  const populatedCanonicalSeen = new Set<string>();
+  for (const row of rows) {
+    if (!isIndexableBrandPageRow(row, now)) {
+      continue;
+    }
+    // The page reads only the resolved provider's rows; anything else would
+    // render the noindex shell while the sitemap claimed an indexable page.
+    if (options.provider !== undefined && row.provider !== options.provider) {
+      continue;
+    }
+    const domain = brandDomainFromSitemapCacheRow(row);
+    if (!domain || populatedCanonicalSeen.has(domain)) {
+      continue;
+    }
+    // A canonical target is never itself an alias (aliases map onto it; it
+    // resolves to itself), so alias rows are never registered as canonicals.
+    if (isBrandPageAliasDomain(domain)) {
+      continue;
+    }
+    const lookupKeys = brandPageLookupCacheKeysForSitemap(
+      options.provider ?? row.provider,
+      domain,
+      options.useDomainV2 ?? true,
+    );
+    if (!lookupKeys.has(row.cache_key)) {
+      continue;
+    }
+    // A canonical must be populated (≥1 verified-linked ad) to back a real
+    // redirect the way the route decides it (a thin canonical self-noindexes).
+    if (!brandPageRowHasVerifiedAds(row, domain)) {
+      continue;
+    }
+    populatedCanonicalSeen.add(domain);
+    populatedCanonicals.add(domain);
+  }
+
   for (const row of rows) {
     if (!isIndexableBrandPageRow(row, now)) {
       continue;
@@ -339,9 +388,16 @@ export function indexableBrandPageEntriesFromRows(
       continue;
     }
     // Issue #1446 criterion 3: an alias page 301-redirects to its canonical
-    // brand page, so it is no longer a distinct indexable URL — never list it.
+    // brand page, so it is no longer a distinct indexable URL. Exclusion is
+    // conditional — it fires ONLY when the canonical is itself a populated
+    // indexable row (the case where the route actually redirects the alias).
+    // When the canonical is a cache-miss/empty, the route renders the alias
+    // normally, so a populated indexable alias must stay listed here.
     if (isBrandPageAliasDomain(domain)) {
-      continue;
+      const canonical = resolveCanonicalBrandPageDomain(domain).canonical;
+      if (populatedCanonicals.has(canonical)) {
+        continue;
+      }
     }
     // Lookup parity: the row's key must be exactly what the page derives for
     // this domain under the current rollout posture and an always-tried

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdRecord } from "~/lib/types";
 import type { BrandPageLoaderData } from "~/routes/ads.$domain";
 import { indexableBrandPageEntriesFromRows } from "~/lib/sitemap.server";
+import { BRAND_PAGE_CANONICAL_ALIASES } from "~/lib/brand-page.server";
+import { hostnamesMatchBrandStemExtension } from "~/lib/search-query";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -317,5 +319,34 @@ describe("sitemap excludes alias brand-page domains (issue #1446 criterion 3)", 
     const paths = entries.map((e) => e.path);
     expect(paths).toContain("/ads/ouraring.com");
     expect(paths).not.toContain("/ads/oura.com");
+  });
+
+  it("keeps a populated alias listed when its canonical page is a cache-miss (route does NOT redirect)", () => {
+    // Only the alias ridge.com row is present; the canonical ridgewallet.com
+    // is a cache-miss (absent from these rows). The route renders ridge.com
+    // rather than 301 it (it only redirects onto a POPULATED canonical), so
+    // the populated indexable alias is genuinely indexable and MUST stay in
+    // the sitemap — dropping it here would silently de-list a live 200 page.
+    const rows = [indexableRow("ridge.com")];
+    const entries = indexableBrandPageEntriesFromRows(rows, new Date(), {
+      provider: "meta_library_browser",
+      useDomainV2: true,
+    });
+
+    const paths = entries.map((e) => e.path);
+    expect(paths).toContain("/ads/ridge.com");
+  });
+});
+
+describe("canonical alias table is grounded in the #1428 stem matcher (issue #1446)", () => {
+  it("every curated alias folds to its canonical as a #1428 stem extension", () => {
+    const entries = Object.entries(BRAND_PAGE_CANONICAL_ALIASES);
+    expect(entries.length).toBeGreaterThan(0);
+    for (const [alias, canonical] of entries) {
+      expect(
+        hostnamesMatchBrandStemExtension(canonical, { registrableDomain: alias }),
+        `expected ${alias} → ${canonical} to fold as a #1428 stem extension of the alias`,
+      ).toBe(true);
+    }
   });
 });

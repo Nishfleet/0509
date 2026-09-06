@@ -132,13 +132,16 @@ export function isReservedBrandPageDomain(host: string): boolean {
  * version of the brand while the real set sits one registrable domain over.
  *
  * Each row maps an alias registrable domain to its canonical (product) brand
- * page. The relationship is the existing folded stem-extension identity from
- * #1428 (`hostnamesMatchBrandStemExtension`: the canonical label folds to the
- * alias stem plus a product word — "ridge" + "wallet" = ridgewallet.com,
- * "oura" + "ring" = ouraring.com), kept as a curated table because the loader
- * cannot enumerate a stem's unknown extensions at request time. The route
- * 301-redirects the alias to the canonical page; the sitemap lists only the
- * canonical page so an alias never splits crawl budget. Render/route logic
+ * page. The pairs are CURATED to match the folded stem-extension identity
+ * from #1428 (`hostnamesMatchBrandStemExtension`: the canonical label folds to
+ * the alias stem plus a product word — "ridge" + "wallet" = ridgewallet.com,
+ * "oura" + "ring" = ouraring.com) — selected by hand because a loader cannot
+ * enumerate a stem's unknown extensions at request time — and every entry is
+ * verified against that stem matcher by a guard test, so a future pair that
+ * does NOT fold as a stem-extension of its alias is rejected. The route
+ * 301-redirects the alias to the canonical page; the sitemap excludes an
+ * alias only when the redirect fires (the canonical is itself a populated
+ * indexable row) so an alias never splits crawl budget. Render/route logic
  * only — no D1 change.
  */
 export const BRAND_PAGE_CANONICAL_ALIASES: Readonly<Record<string, string>> = {
