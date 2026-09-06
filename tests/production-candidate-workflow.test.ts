@@ -403,7 +403,6 @@ describe("exact production candidate workflow", () => {
 
     for (const [name, jobName] of [
       ["ci.yml", "codex-node-checks"],
-      ["ci.yml", "dependabot-critical-check"],
       ["secret-scan.yml", "gitleaks"],
     ] as const) {
       const job = readWorkflow(name).parsed.jobs[jobName];

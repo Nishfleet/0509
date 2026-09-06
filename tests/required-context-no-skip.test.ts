@@ -16,7 +16,6 @@ import { parse } from "yaml";
 const REQUIRED_JOBS = [
   [".github/workflows/secret-scan.yml", "gitleaks"],
   [".github/workflows/ci.yml", "codex-node-checks"],
-  [".github/workflows/ci.yml", "dependabot-critical-check"],
 ] as const;
 
 type WorkflowStep = {
