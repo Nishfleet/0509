@@ -1,4 +1,3 @@
-import { useParams } from "react-router";
 import type { LinksFunction } from "react-router";
 import CompareRoute, { meta } from "./compare";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
@@ -11,12 +10,12 @@ export const links: LinksFunction = () => [
 ];
 
 // Compare hub under a locale prefix (`/de/compare`, ...). Re-exports the EN
-// hub's meta and component, and passes the matched locale prefix so the hub's
-// child links resolve to `/de/compare/<vendor>` instead of the EN
-// `/compare/<vendor>` (issue #1563, accept #3) — a non-EN visitor following
-// the index stays in the locale rather than falling back to English.
-export default function LocaleCompareRoute() {
-  const params = useParams<{ locale?: string }>();
-  const localePrefix = params.locale ? `/${params.locale}` : undefined;
-  return <CompareRoute localePrefix={localePrefix} />;
-}
+// hub's meta, links contract (canonical→EN + buyer-surface hreflang cluster),
+// and component verbatim. No prop may cross this route-module boundary: at
+// build time `@react-router/dev` wraps the default export in
+// `withComponentProps`, which renders it with only the route props
+// (`params`, `loaderData`, `actionData`, `matches`) and silently drops any
+// caller-supplied prop — a `localePrefix` prop passed here never reached the
+// component in the built app (issue #1563). `compare.tsx` therefore resolves
+// the matched `:locale` param via `useParams` internally.
+export default CompareRoute;

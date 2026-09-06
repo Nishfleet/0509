@@ -218,4 +218,27 @@ describe("locale compare/switch child routes (issue #1563)", () => {
       );
     }
   });
+
+  it("never passes props across the route-module boundary (withComponentProps drops them)", () => {
+    // Structural guard for the issue #1563 failure mode: at build time
+    // `@react-router/dev` wraps every route module's default export in
+    // `withComponentProps`, which renders the component with only the route
+    // props (`params`, `loaderData`, `actionData`, `matches`) and silently
+    // discards any caller-supplied props. Unit tests import the unwrapped
+    // source module, so a JSX prop like `<CompareRoute localePrefix={...} />`
+    // works here but is a no-op in the built app — production `/de/compare`
+    // emitted bare EN `/compare/<slug>` links. Guard both halves: the locale
+    // child module must not hand any prop to an imported route component,
+    // and the EN component must resolve the locale itself via `useParams`.
+    const localeChild = readFileSync("app/routes/$locale.compare.tsx", "utf8");
+    expect(
+      localeChild,
+      "$locale.compare.tsx must not pass JSX props to an imported route component — withComponentProps drops them in the built app",
+    ).not.toMatch(/<[A-Z][A-Za-z]*\s+[a-zA-Z]+=/);
+    const enModule = readFileSync("app/routes/compare.tsx", "utf8");
+    expect(
+      enModule,
+      "compare.tsx must resolve the locale prefix internally via useParams so it survives the build-time withComponentProps wrapper",
+    ).toContain("useParams");
+  });
 });
