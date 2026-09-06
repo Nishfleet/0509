@@ -87,6 +87,14 @@ export default {
 
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
     if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {
+      if (url.pathname === "/sitemap.xml") {
+        // Dynamic brand-page entries: bounded cache-only D1 reads with the
+        // unchanged static sitemap as the fallback (the sitemap must never
+        // depend on D1 health). Lazy import keeps scheduled-only loads free
+        // of the D1/SEO module graph.
+        const { publicSitemapFile } = await import("../app/lib/brand-page-sitemap.server");
+        return publicFileResponse(request, await publicSitemapFile(env));
+      }
       return publicFileResponse(request, publicSeoFile);
     }
 

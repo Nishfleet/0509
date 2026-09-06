@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { publicSeoFileForPathname } from "~/lib/seo";
+import { publicSeoFileForPathname, SITEMAP_PATHS, sitemapXmlForPathnames } from "~/lib/seo";
 
 describe("public SEO files", () => {
   it("publishes the public funnel surfaces in the sitemap", () => {
@@ -75,5 +75,42 @@ describe("public SEO files", () => {
     expect(skill).not.toContain("Slack delivery");
     expect(skill).not.toContain("configured Slack target");
     expect(skill).toContain("Email is the verified automated delivery channel for launch.");
+  });
+});
+
+describe("sitemapXmlForPathnames (dynamic brand-page sitemap builder)", () => {
+  it("emits every SITEMAP_PATHS entry and appends extra pathnames in order", () => {
+    const xml = sitemapXmlForPathnames(["/ads/nykaa.com", "/ads/zara.com"]);
+
+    for (const path of SITEMAP_PATHS) {
+      // canonicalUrl("/") keeps the trailing slash; all other paths are bare.
+      expect(xml).toContain(
+        `<url><loc>https://0509.io${path === "/" ? "/" : path}</loc></url>`,
+      );
+    }
+    expect(xml).toContain("<url><loc>https://0509.io/ads/nykaa.com</loc></url>");
+    expect(xml).toContain("<url><loc>https://0509.io/ads/zara.com</loc></url>");
+    // Static entries come first, extras after, one <url> per line.
+    expect(xml.indexOf("/ads/nykaa.com")).toBeGreaterThan(xml.indexOf("/terms"));
+    expect(xml.match(/<url>/g)).toHaveLength(SITEMAP_PATHS.length + 2);
+  });
+
+  it("deduplicates extras against the static set and against each other", () => {
+    const xml = sitemapXmlForPathnames(["/search", "/ads/nykaa.com", "/ads/nykaa.com"]);
+
+    expect(xml.match(/<url>/g)).toHaveLength(SITEMAP_PATHS.length + 1);
+    expect(xml.match(/https:\/\/0509\.io\/ads\/nykaa\.com/g)).toHaveLength(1);
+  });
+
+  it("matches the static sitemap byte-for-byte with no extras", () => {
+    expect(sitemapXmlForPathnames()).toBe(publicSeoFileForPathname("/sitemap.xml")?.body);
+  });
+
+  it("escapes loc text so a crafted path can never inject XML markup", () => {
+    const xml = sitemapXmlForPathnames(["/ads/a&b.com", "/ads/<script>.com"]);
+
+    expect(xml).toContain("<loc>https://0509.io/ads/a&amp;b.com</loc>");
+    expect(xml).toContain("<loc>https://0509.io/ads/&lt;script&gt;.com</loc>");
+    expect(xml).not.toContain("&amp;amp;");
   });
 });

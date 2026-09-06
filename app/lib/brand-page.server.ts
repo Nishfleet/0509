@@ -157,9 +157,9 @@ export async function loadBrandPageCacheSnapshot(
 
     const entry = await readDiscoveryCacheEntryCacheOnly(env, {
       provider,
-      ...deriveCacheLookup(env, provider, input.domain, country),
+      ...deriveBrandPageCacheLookup(env, provider, input.domain, country),
     });
-    const snapshot = toUsableSnapshot(entry, now);
+    const snapshot = toUsableBrandPageCacheSnapshot(entry, now);
     if (snapshot) {
       return snapshot;
     }
@@ -482,7 +482,13 @@ export function formatBrandPageCheckedAgo(fetchedAt: string, now: Date = new Dat
   return `about ${days} days ago`;
 }
 
-function candidateCountries(visitorCountry: string): string[] {
+/**
+ * Country fallback order for a brand-page read: the visitor's country first,
+ * then "all", then "United States". Also the source of truth for the dynamic
+ * sitemap's crawler-visible fallback (`candidateCountries("all")`), so the
+ * sitemap and the loader always agree on which country keys are readable.
+ */
+export function candidateCountries(visitorCountry: string): string[] {
   const candidates = [
     visitorCountry?.trim() || ALL_COUNTRIES_VALUE,
     ALL_COUNTRIES_VALUE,
@@ -496,8 +502,14 @@ function candidateCountries(visitorCountry: string): string[] {
  * for this domain + country (see `hasWarmSearchCacheEntry`): the search-v2
  * domain key when the v2 rollout applies, else the legacy fingerprint triple.
  * Shadow mode serves customers from the legacy key, so it maps to legacy here.
+ *
+ * Single source of truth for brand-page key parity: the /ads/:domain loader
+ * reads through this, and the dynamic sitemap (brand-page-sitemap.server.ts)
+ * confirms every candidate domain through this same function so the sitemap
+ * can only ever list a domain whose page the loader would read from that
+ * exact key under the current rollout mode.
  */
-function deriveCacheLookup(
+export function deriveBrandPageCacheLookup(
   env: AppEnv,
   provider: string,
   domain: string,
@@ -537,9 +549,19 @@ function deriveCacheLookup(
   };
 }
 
-type CacheEntry = Awaited<ReturnType<typeof readDiscoveryCacheEntryCacheOnly>>;
+export type BrandPageCacheEntry = Awaited<ReturnType<typeof readDiscoveryCacheEntryCacheOnly>>;
 
-function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot | null {
+/**
+ * Turn one cache row into a usable public snapshot, or null when the entry is
+ * missing, route-incompatible, demo-sourced, ad-less, or older than 30 days.
+ * Shared by the /ads/:domain loader and the dynamic sitemap's exact-key
+ * confirmation, so "would this page render indexable" is decided by one
+ * function.
+ */
+export function toUsableBrandPageCacheSnapshot(
+  entry: BrandPageCacheEntry,
+  now: Date,
+): BrandPageCacheSnapshot | null {
   if (!entry) {
     return null;
   }
