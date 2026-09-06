@@ -268,12 +268,25 @@ describe("public funnel loaders reuse the sitemap indexability filter", () => {
 });
 
 describe("resolveIndexableBrandPageLinkForDomain", () => {
+  // The sitemap entries the mock returns are read at CALL time (not at mock
+  // factory creation time), so a test can swap the set without re-registering
+  // `vi.doMock` for the same module. Re-registering `vi.doMock` for
+  // `~/lib/sitemap.server` inside a test (on top of the beforeEach mock) is
+  // order-dependent under the full unsharded suite: the override can fail to
+  // take effect, the beforeEach set leaks in, and the open-ccTLD fallback
+  // returns null (0509#1576 preview-assert flake). One registration, one
+  // mutable source of truth.
+  let sitemapEntries: { path: string }[];
+
   beforeEach(() => {
+    sitemapEntries = [
+      { path: "/ads/nykaa.com" },
+      { path: "/ads/glossier.com" },
+    ];
     vi.doMock("~/lib/sitemap.server", () => ({
-      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
-        { path: "/ads/nykaa.com" },
-        { path: "/ads/glossier.com" },
-      ]),
+      loadIndexableBrandPageEntries: vi.fn().mockImplementation(() =>
+        Promise.resolve(sitemapEntries),
+      ),
     }));
   });
 
@@ -298,13 +311,11 @@ describe("resolveIndexableBrandPageLinkForDomain", () => {
   });
 
   it("falls back to the open-ccTLD brand page when the resolved domain is its generic-commercial twin (issue #1431)", async () => {
+    sitemapEntries = [
+      { path: "/ads/nykaa.com" },
+      { path: "/ads/notion.so" },
+    ];
     vi.resetModules();
-    vi.doMock("~/lib/sitemap.server", () => ({
-      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
-        { path: "/ads/nykaa.com" },
-        { path: "/ads/notion.so" },
-      ]),
-    }));
     const { resolveIndexableBrandPageLinkForDomain } = await import(
       "~/lib/ads-internal-links.server"
     );
@@ -319,13 +330,11 @@ describe("resolveIndexableBrandPageLinkForDomain", () => {
   });
 
   it("does not fall back to an open-ccTLD page for an unrelated label", async () => {
+    sitemapEntries = [
+      { path: "/ads/nykaa.com" },
+      { path: "/ads/notion.so" },
+    ];
     vi.resetModules();
-    vi.doMock("~/lib/sitemap.server", () => ({
-      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
-        { path: "/ads/nykaa.com" },
-        { path: "/ads/notion.so" },
-      ]),
-    }));
     const { resolveIndexableBrandPageLinkForDomain } = await import(
       "~/lib/ads-internal-links.server"
     );
