@@ -17,6 +17,7 @@ const REQUIRED_JOBS = [
   [".github/workflows/secret-scan.yml", "gitleaks"],
   [".github/workflows/ci.yml", "codex-node-checks"],
   [".github/workflows/ci.yml", "d1-budget-check"],
+  [".github/workflows/ci.yml", "dependabot-critical-check"],
 ] as const;
 
 type WorkflowStep = {
