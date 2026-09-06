@@ -54,4 +54,4 @@ missed it because vitest imports the unwrapped source module and mocks
 
 ## Phases
 
-- [ ] phase 1: fix the compare hub locale-prefix drop + canary guard + evidence record + green gates
+- [x] phase 1: fix the compare hub locale-prefix drop + canary guard + evidence record + green gates
