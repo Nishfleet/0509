@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   classifySeedListVerdict,
+  isSeededBrandDomain,
   PUBLISHER_SEED_LIST_MAX_DOMAINS,
   resolveSeedList,
   SEED_LISTS,
@@ -118,4 +119,30 @@ describe("SEED_LISTS registry", () => {
   it("rejects unknown list names", () => {
     expect(resolveSeedList("not-a-list")).toBeNull();
   });
+});
+
+describe("isSeededBrandDomain (issue #1306 retire-scope guard)", () => {
+  // The /ads/:domain loader uses this to decide whether a thin (0
+  // verified-linked ads) page retires to /search or renders noindex. The
+  // sneaker-resale cluster's marketplace nouns must resolve true so goat.com
+  // retires, while an unrelated thin domain resolves false so #1442's
+  // render-noindex behavior is preserved for direct visitors.
+  it.each([
+    "stockx.com",
+    "goat.com",
+    "nike.com",
+    "saucony.com",
+    "hoka.com",
+    "STOCKX.COM",
+    "goat.com.",
+  ])("recognizes %s as a seeded brand", (domain) => {
+    expect(isSeededBrandDomain(domain)).toBe(true);
+  });
+
+  it.each(["nykaa.com", "notion.so", "oura.com", "", "  ", "example.com"])(
+    "does not recognize %s as a seeded brand (keeps #1442 render-noindex)",
+    (domain) => {
+      expect(isSeededBrandDomain(domain)).toBe(false);
+    },
+  );
 });
