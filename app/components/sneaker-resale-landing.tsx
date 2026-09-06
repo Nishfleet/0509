@@ -21,11 +21,29 @@ import { faqPageJsonLd, jsonLdScriptProps, webPageJsonLd } from "~/lib/seo";
  * without a cached page 301-redirects to `/search` and is intentionally
  * omitted so this section never ships a dead link.
  */
-const SNEAKER_RESALE_BRAND_PAGES: ReadonlyArray<{ name: string; domain: string }> = [
+export const SNEAKER_RESALE_BRAND_PAGES: ReadonlyArray<{ name: string; domain: string }> = [
   { name: "Nike", domain: "nike.com" },
   { name: "Adidas", domain: "adidas.com" },
   { name: "ASOS", domain: "asos.com" },
   { name: "Decathlon", domain: "decathlon.com" },
+  { name: "StockX", domain: "stockx.com" },
+  { name: "Saucony", domain: "saucony.com" },
+  { name: "ASICS", domain: "asics.com" },
+  { name: "Hoka", domain: "hoka.com" },
+  { name: "PUMA", domain: "puma.com" },
+  { name: "New Balance", domain: "newbalance.com" },
+  { name: "Crocs", domain: "crocs.com" },
+  { name: "Foot Locker", domain: "footlocker.com" },
+  { name: "Zappos", domain: "zappos.com" },
+  { name: "DSW", domain: "dsw.com" },
+  { name: "Vans", domain: "vans.com" },
+  { name: "Converse", domain: "converse.com" },
+  { name: "Under Armour", domain: "underarmour.com" },
+  { name: "Stadium Goods", domain: "stadiumgoods.com" },
+  { name: "Flight Club", domain: "flightclub.com" },
+  { name: "KICKS CREW", domain: "kickscrew.com" },
+  { name: "JD Sports", domain: "jdsports.com" },
+  { name: "Finish Line", domain: "finishline.com" },
 ];
 
 export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId }) {
