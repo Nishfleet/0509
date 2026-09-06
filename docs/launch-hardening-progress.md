@@ -20,7 +20,7 @@ Historical release status (2026-06-27; not current Gate A–C truth; current rel
 - PR #251 merged to `main` as `629fb14`; local `main` and `origin/main` were synced after merge.
 - Compatible Worker was deployed to the primary `.io` domains and `.in` redirect compatibility domains; exact provider deployment id omitted.
 - Legacy secondary billing provider removed from active runtime, fresh-start schema, and remote schema: routes, helpers, env typing, tests, active docs, historical setup migrations, lookup index, legacy plan columns, and retired-provider webhook table are gone.
-- Slack and WhatsApp are dormant for GA across customer UI, API v1, MCP, delivery sends, readiness stats, and launch blockers. Email is the verified automated delivery channel.
+- WhatsApp is dormant for GA across customer UI, API v1, MCP, delivery sends, readiness stats, and launch blockers. The legacy Slack export/API/MCP surface is also dormant. Slack and Teams incoming-webhook delivery of confirmed changes is a live Starter+ customer channel (2026-08-12 decision). Email is the verified default automated delivery channel.
 - Dodo checkout, portal, pricing, and webhook paths have explicit timeout/bounded-response handling where touched. Billing canary passed with plan and top-up grant cleanup.
 - Provider/network timeout hardening added for Dodo, Browser Run/Browserless fallback, Meta/customer token checks, landing page/proof fetches, public URL/DNS, robots/domain verification, Slack, WhatsApp, LinkedIn OAuth token exchange, and related hot paths.
 - Trust/backup copy now avoids claiming automated R2 backup proof. Backup validator walks the current repo migration chain through `0060_remove_legacy_billing_provider.sql`.

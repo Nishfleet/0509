@@ -21,7 +21,7 @@ Five to Nine already has the raw machinery for a competitor operations desk: Dod
 | Digest | Retention loop begins | Digests and all-quiet heartbeat exist | Dashboard leads with setup/readiness before Market Desk outcome | Make dashboard first panel the Market Desk Brief |
 | Report | Package proof for a client or team | Report builder and exports exist | No first-brief-to-report handoff | Surface report/client-room CTA from the brief when proof is ready |
 | Client room | Agency handoff | Client rooms exist | Setup does not group imports by client/tag | Support optional CSV tags/client column and suggest room/report |
-| Notifications | Delivery is understandable and safe | Email is verified; Slack/WhatsApp dormant; delivery attempts tracked | Some setup states still feel operational | Keep copy customer-facing: Notifications, Digest, Report |
+| Notifications | Delivery is understandable and safe | Email is verified; Slack/Teams webhook delivery is live Starter+; WhatsApp dormant; delivery attempts tracked | Some setup states still feel operational | Keep copy customer-facing: Notifications, Digest, Report |
 | Billing | Self-serve trust clarity | Billing portal/canary/support fallbacks exist | Portal setting truth remains config-dependent | Keep support fallback where provider setting is not proven |
 | Developer access | Agents help keep desk ready | API/MCP and customer actions exist | Customer promise is buried in technical copy | Frame as Developer access and approved actions |
 | Support | No email-only dead ends for common actions | Support cases and account deletion request exist | Import migration still needs self-serve path | Build generic import; document unsupported MagicBrief fields |

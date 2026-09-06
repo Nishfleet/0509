@@ -153,8 +153,10 @@ Same rules as the Segwise/SaaSHub/BetaList/AlternativeTo/ad-stack
 preparations, sourced from `MEMORY.md`, `README.md`, and the live homepage
 copy (`app/routes/marketing.tsx`):
 
-- **No Slack or WhatsApp delivery claims** — dormant channels, not part of
-  the public offer.
+- **No WhatsApp delivery claims** — WhatsApp is dormant, not part of the
+  public offer. Slack and Teams incoming-webhook delivery of confirmed changes
+  is a live Starter+ channel (2026-08-12 decision); the legacy Slack
+  export/API/MCP surface remains dormant and unclaimed.
 - **No unlimited or real-time monitoring claims** — checks are metered,
   scheduled every 3–6 h on paid plans.
 - **No automated non-Meta ingestion claims** — no TikTok/Google/YouTube/
