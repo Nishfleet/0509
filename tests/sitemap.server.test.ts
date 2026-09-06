@@ -86,10 +86,12 @@ const HTML_KEY = "landing-pages/2026-08-01/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.html
 
 function snapshotRow(overrides: Partial<TimelineSitemapRow> = {}): TimelineSitemapRow {
   return {
+    id: "snap-nykaa-001",
     canonical_url: "https://nykaa.com/glow-serum",
     captured_at: "2026-08-01T10:00:00.000Z",
     artifact_key: HTML_KEY,
     metadata_json: JSON.stringify({ screenshotArtifactKey: SCREENSHOT_KEY }),
+    is_ad_destination: 0,
     ...overrides,
   };
 }
