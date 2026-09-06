@@ -187,13 +187,17 @@ function buildXQuery(
  * @param source the target mention source (`"reddit"` or `"x"`).
  * @param identity optional already-resolved identity enrichment.
  */
-export function buildMentionQuery(
+export function buildMentionQuery<S extends MentionSource>(
   trackedEntity: TrackedEntityInput,
-  source: MentionSource,
+  source: S,
   identity?: MentionQueryIdentityEnrichment,
-): MentionQuery {
+): S extends "reddit" ? RedditMentionQuery : XMentionQuery {
   if (source === "reddit") {
-    return buildRedditQuery(trackedEntity, identity);
+    return buildRedditQuery(trackedEntity, identity) as S extends "reddit"
+      ? RedditMentionQuery
+      : XMentionQuery;
   }
-  return buildXQuery(trackedEntity, identity);
+  return buildXQuery(trackedEntity, identity) as S extends "reddit"
+    ? RedditMentionQuery
+    : XMentionQuery;
 }
