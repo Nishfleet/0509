@@ -34,6 +34,15 @@ export interface LandingPageSnapshotRow {
   metadata_json: string | null;
   capture_method: string | null;
   captured_at: string;
+  /**
+   * True when this snapshot is the landing page of a stored ad (issue
+   * #1729). An ad-destination capture is the ad wall's surface — a booking or
+   * offer page reached through an ad that may belong to another advertiser —
+   * and must never be presented as the brand's own dated offer on the Offer
+   * Timeline. Correlated against `ad_observation` (`ad_id IS NOT NULL`) in
+   * the SQL read.
+   */
+  is_ad_destination: number | null;
 }
 
 export interface OfferTimelineLoad {
@@ -55,31 +64,35 @@ export async function loadOfferTimeline(
       env,
       `
         SELECT
-          id,
-          canonical_url,
-          raw_headline,
-          cta_text,
-          price_text,
-          form_present,
-          artifact_key,
-          metadata_json,
-          capture_method,
-          captured_at
-        FROM landing_page_snapshot
+          s.id,
+          s.canonical_url,
+          s.raw_headline,
+          s.cta_text,
+          s.price_text,
+          s.form_present,
+          s.artifact_key,
+          s.metadata_json,
+          s.capture_method,
+          s.captured_at,
+          EXISTS(
+            SELECT 1 FROM ad_observation ao
+            WHERE ao.landing_page_snapshot_id = s.id AND ao.ad_id IS NOT NULL
+          ) AS is_ad_destination
+        FROM landing_page_snapshot s
         WHERE
-          canonical_url = ?
-          OR canonical_url = ?
-          OR canonical_url = ?
-          OR canonical_url = ?
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-        ORDER BY captured_at ASC, id ASC
+          s.canonical_url = ?
+          OR s.canonical_url = ?
+          OR s.canonical_url = ?
+          OR s.canonical_url = ?
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+        ORDER BY s.captured_at ASC, s.id ASC
         LIMIT ?
       `,
       ...domainUrlBindings(input.domain),
@@ -93,7 +106,14 @@ export async function loadOfferTimeline(
   }
 
   const snapshots = rows
+    // Brand-page gate (issue #1729): a dated offer state must be the brand's
+    // own page — never an ad-destination capture that happens to sit on the
+    // brand's registrable domain (e.g. an affiliate's booking page on a shared
+    // SaaS platform like calendly.com/adflex360/*). Ad-destination rows are
+    // the ad wall's surface and are excluded here so the public ledger shows
+    // the brand's own landing page offers, not a different advertiser's.
     .filter((row) => canonicalUrlBelongsToDomain(row.canonical_url, input.domain))
+    .filter((row) => !row.is_ad_destination)
     .map(rowToSnapshot)
     // Proof gate (issue #1284): a public /timeline/:domain row may only show
     // a competitor state that carries BOTH a stored screenshot artifact AND a
@@ -170,31 +190,35 @@ export async function loadSuppressedOfferTimelineRows(
       env,
       `
         SELECT
-          id,
-          canonical_url,
-          raw_headline,
-          cta_text,
-          price_text,
-          form_present,
-          artifact_key,
-          metadata_json,
-          capture_method,
-          captured_at
-        FROM landing_page_snapshot
+          s.id,
+          s.canonical_url,
+          s.raw_headline,
+          s.cta_text,
+          s.price_text,
+          s.form_present,
+          s.artifact_key,
+          s.metadata_json,
+          s.capture_method,
+          s.captured_at,
+          EXISTS(
+            SELECT 1 FROM ad_observation ao
+            WHERE ao.landing_page_snapshot_id = s.id AND ao.ad_id IS NOT NULL
+          ) AS is_ad_destination
+        FROM landing_page_snapshot s
         WHERE
-          canonical_url = ?
-          OR canonical_url = ?
-          OR canonical_url = ?
-          OR canonical_url = ?
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-          OR canonical_url LIKE ? ESCAPE '\\'
-        ORDER BY captured_at ASC, id ASC
+          s.canonical_url = ?
+          OR s.canonical_url = ?
+          OR s.canonical_url = ?
+          OR s.canonical_url = ?
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+          OR s.canonical_url LIKE ? ESCAPE '\\'
+        ORDER BY s.captured_at ASC, s.id ASC
         LIMIT ?
       `,
       ...domainUrlBindings(input.domain),
