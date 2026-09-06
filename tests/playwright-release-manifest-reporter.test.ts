@@ -84,7 +84,10 @@ function result(
 }
 
 const pngBody = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
-const ariaBody = Buffer.from('- main "0509":\n  - heading "Proof"\n', "utf8");
+const ariaBody = Buffer.from(
+  JSON.stringify([{ role: "main", name: "0509", children: [{ role: "heading", name: "Proof" }] }]),
+  "utf8",
+);
 
 function releaseAttachments(entry: { scenario: string; viewport: string }): Array<{
   name: string;

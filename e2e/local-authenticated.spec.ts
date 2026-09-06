@@ -130,7 +130,7 @@ async function expectNoShellActionRow(page: Page) {
     // working header at all, and a pure signpost legitimately carries no
     // primary — but it may never carry two.
     await expect(page.locator(".f9-wk-head")).toHaveCount(0);
-    expect(await page.locator(".f9-wk-btn:visible").count()).toBeLessThanOrEqual(1);
+    expect(await page.locator(".f9-wk-btn").visible().count()).toBeLessThanOrEqual(1);
     return;
   }
 
@@ -364,7 +364,10 @@ async function expectAppActionControlsWired(page: Page, checkedUrls: Set<string>
   expect(issues).toEqual([]);
 }
 
-test.describe("local authenticated E2E harness", () => {
+// Shared-resource lock (issue #1727): the harness signs in fixture personas
+// and creates a watchlist ("Track Nykaa") against the shared local fixture
+// D1.
+test.describe("local authenticated E2E harness", { lock: "d1" }, () => {
   test("new customer sees setup inside Overview without magic-link login", async ({ page, context, baseURL }) => {
     await signInAs(context, baseURL!, "e2e-free");
     await page.goto("/app");

@@ -85,7 +85,9 @@ const monitoringViewports = [
   { width: 1440, height: 900 },
 ] as const;
 
-test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
+// Shared-resource lock (issue #1727): replay calls mutate the shared local
+// fixture D1 and the same describe runs under five engine projects.
+test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", { lock: "d1" }, () => {
   for (const viewport of monitoringViewports) {
     test(`starter monitoring preserves proof, freshness, and delivery at ${viewport.width}px`, async ({
       page,
@@ -232,120 +234,128 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
     });
   }
 
-  for (const viewport of monitoringViewports) {
-    test(`digest and notifications surfaces preserve accessible delivery announcements and source truth at ${viewport.width}px`, async ({
-      page,
-      context,
-      baseURL,
-    }, testInfo) => {
-      annotateScenario(testInfo, "digest-notifications-accessibility");
-      testInfo.annotations.push({ type: "persona", description: "e2e-starter" });
-      testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
-      await signInAs(context, baseURL!, "e2e-starter");
-      const viewportKey = `${viewport.width}x${viewport.height}`;
-      await expect(runJ3Replay(page, {
-        idempotencyKey: `e2e-j3-delivery-denied-digest-${viewportKey}`,
-        userId: "e2e-starter",
-        scenario: "digest",
-      })).resolves.toMatchObject({
-        providerCalled: false,
-        verifiedRecipientBound: true,
-        attemptCount: 1,
-        status: "failed",
-        webhookStatus: "failed",
-      });
-      await signInAs(context, baseURL!, "e2e-free");
-      await expect(runJ3Replay(page, {
-        idempotencyKey: `e2e-j3-unsubscribe-cas-digest-${viewportKey}`,
-        userId: "e2e-free",
-        scenario: "digest",
-      })).resolves.toMatchObject({
-        unsubscribeWon: true,
-        dispatchStarted: false,
-        attemptStatus: "failed",
-        cleanupVerified: true,
-      });
-      await signInAs(context, baseURL!, "e2e-starter");
-      await expect(runJ3Replay(page, {
-        idempotencyKey: `e2e-j3-recover-digest-${viewportKey}`,
-        userId: "e2e-starter",
-        scenario: "digest",
-      })).resolves.toMatchObject({ cleanupVerified: true, includedUsed: 0 });
-      await expectResponsiveSurface(page, viewport, "/app/digests", "Briefs", [
-        /Brief history/,
-        /Landing page offer changed/,
-        /Email delivery unconfirmed/,
-      ]);
-      await expect(page.getByText("proof", { exact: false }).first()).toBeVisible();
-      await expect(page.getByText("Delivery unconfirmed", { exact: true })).toBeVisible();
-      await expect(page.getByText("No sends recorded yet", { exact: true })).toBeVisible();
-      await expect(page.getByText("Configured email recipient", { exact: true })).toBeVisible();
+  // Native WCAG 2.2 conditions (issue #1727): Playwright 1.63 exposes
+  // reducedMotion / forcedColors / contrast as standalone test options,
+  // so the accessibility scenario runs under the emulated conditions it
+  // gates on instead of hand-rolled page.emulateMedia calls.
+  test.describe("native WCAG 2.2 conditions", () => {
+    test.use({ reducedMotion: "reduce", forcedColors: "active", contrast: "more" });
 
-      await expectResponsiveSurface(page, viewport, "/app/notifications", "Notifications", [
-        /Delivery channel/,
-        /Email/,
-        /Ready/,
-        // #705 addition: Slack and Microsoft Teams incoming webhooks are live
-        // delivery channels for Starter and Agency plans. Email stays the
-        // always-on baseline, so the operator line still names it; WhatsApp
-        // delivery stays dormant and must not surface anywhere.
-        /Webhook delivery/,
-        /Delivery channel: email/,
-      ]);
-      // Every delivery channel announces itself the same way — a name, a
-      // status, and the one next step — so the definition list a screen reader
-      // walks carries exactly the truth the page shows.
-      const deliveryChannels = page.getByRole("region", { name: "Delivery channel", exact: true });
-      await expect(deliveryChannels.getByText("Email", { exact: true })).toBeVisible();
-      await expect(deliveryChannels.getByText("Ready", { exact: true })).toBeVisible();
-      await expect(
-        deliveryChannels.getByText("Briefs go to the account email.", { exact: true }),
-      ).toBeVisible();
-      await expect(deliveryChannels.getByText("Slack", { exact: true })).toBeVisible();
-      await expect(
-        deliveryChannels.getByText("Connect a Slack incoming webhook below.", { exact: true }),
-      ).toBeVisible();
-      await expect(deliveryChannels.getByText("Teams", { exact: true })).toBeVisible();
-      await expect(
-        deliveryChannels.getByText("Connect a Teams incoming webhook below.", { exact: true }),
-      ).toBeVisible();
-      // Not-connected is stated, never implied: this persona has connected no
-      // webhook, so neither Slack nor Teams may read as a working channel.
-      await expect(deliveryChannels.getByText("Not connected", { exact: true })).toHaveCount(2);
+    for (const viewport of monitoringViewports) {
+      test(`digest and notifications surfaces preserve accessible delivery announcements and source truth at ${viewport.width}px`, async ({
+        page,
+        context,
+        baseURL,
+      }, testInfo) => {
+        annotateScenario(testInfo, "digest-notifications-accessibility");
+        testInfo.annotations.push({ type: "persona", description: "e2e-starter" });
+        testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
+        await signInAs(context, baseURL!, "e2e-starter");
+        const viewportKey = `${viewport.width}x${viewport.height}`;
+        await expect(runJ3Replay(page, {
+          idempotencyKey: `e2e-j3-delivery-denied-digest-${viewportKey}`,
+          userId: "e2e-starter",
+          scenario: "digest",
+        })).resolves.toMatchObject({
+          providerCalled: false,
+          verifiedRecipientBound: true,
+          attemptCount: 1,
+          status: "failed",
+          webhookStatus: "failed",
+        });
+        await signInAs(context, baseURL!, "e2e-free");
+        await expect(runJ3Replay(page, {
+          idempotencyKey: `e2e-j3-unsubscribe-cas-digest-${viewportKey}`,
+          userId: "e2e-free",
+          scenario: "digest",
+        })).resolves.toMatchObject({
+          unsubscribeWon: true,
+          dispatchStarted: false,
+          attemptStatus: "failed",
+          cleanupVerified: true,
+        });
+        await signInAs(context, baseURL!, "e2e-starter");
+        await expect(runJ3Replay(page, {
+          idempotencyKey: `e2e-j3-recover-digest-${viewportKey}`,
+          userId: "e2e-starter",
+          scenario: "digest",
+        })).resolves.toMatchObject({ cleanupVerified: true, includedUsed: 0 });
+        await expectResponsiveSurface(page, viewport, "/app/digests", "Briefs", [
+          /Brief history/,
+          /Landing page offer changed/,
+          /Email delivery unconfirmed/,
+        ]);
+        await expect(page.getByText("proof", { exact: false }).first()).toBeVisible();
+        await expect(page.getByText("Delivery unconfirmed", { exact: true })).toBeVisible();
+        await expect(page.getByText("No sends recorded yet", { exact: true })).toBeVisible();
+        await expect(page.getByText("Configured email recipient", { exact: true })).toBeVisible();
 
-      // Source truth for webhook delivery: the exact provider hosts a customer
-      // pastes from, and the confirmed-versus-possible line that stops an alert
-      // overclaiming what a scan actually proved.
-      const webhookDelivery = page.getByRole("region", { name: "Webhook delivery", exact: true });
-      await expect(
-        webhookDelivery.getByRole("heading", { name: "Slack webhook", exact: true }),
-      ).toBeVisible();
-      await expect(
-        webhookDelivery.getByRole("heading", { name: "Teams webhook", exact: true }),
-      ).toBeVisible();
-      await expect(webhookDelivery).toContainText("hooks.slack.com");
-      await expect(webhookDelivery).toContainText("webhook.office.com");
-      await expect(webhookDelivery).toContainText(
-        "Unconfirmed changes are always labelled as possible, never as confirmed.",
-      );
-      // Both connect forms stay reachable by accessible name, not by position.
-      await expect(webhookDelivery.getByRole("textbox", { name: "Webhook URL", exact: true })).toHaveCount(2);
-      await expect(
-        webhookDelivery.getByRole("textbox", { name: "Destination name", exact: true }),
-      ).toHaveCount(2);
-      await expect(webhookDelivery.getByRole("button", { name: "Connect", exact: true })).toHaveCount(2);
-      await expect(page.locator("#f9-main-content")).not.toContainText("WhatsApp");
-      await page.goto("/unsubscribe");
-      await expect(page.getByRole("heading", { name: "This unsubscribe link isn't valid.", exact: true })).toBeVisible();
-      await expect(page.locator("body")).toContainText(/link may be incomplete or expired/i);
-      await expectVisibleKeyboardFocus(page.locator("a").first());
-      await expectNoHorizontalOverflow(page);
-      await expectPhoneTouchTargets(page);
-      await page.goto("/app/notifications");
-      await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-digest", state: "digest-notifications" });
-      annotateFinalUrl(testInfo, page);
-    });
-  }
+        await expectResponsiveSurface(page, viewport, "/app/notifications", "Notifications", [
+          /Delivery channel/,
+          /Email/,
+          /Ready/,
+          // #705 addition: Slack and Microsoft Teams incoming webhooks are live
+          // delivery channels for Starter and Agency plans. Email stays the
+          // always-on baseline, so the operator line still names it; WhatsApp
+          // delivery stays dormant and must not surface anywhere.
+          /Webhook delivery/,
+          /Delivery channel: email/,
+        ]);
+        // Every delivery channel announces itself the same way — a name, a
+        // status, and the one next step — so the definition list a screen reader
+        // walks carries exactly the truth the page shows.
+        const deliveryChannels = page.getByRole("region", { name: "Delivery channel", exact: true });
+        await expect(deliveryChannels.getByText("Email", { exact: true })).toBeVisible();
+        await expect(deliveryChannels.getByText("Ready", { exact: true })).toBeVisible();
+        await expect(
+          deliveryChannels.getByText("Briefs go to the account email.", { exact: true }),
+        ).toBeVisible();
+        await expect(deliveryChannels.getByText("Slack", { exact: true })).toBeVisible();
+        await expect(
+          deliveryChannels.getByText("Connect a Slack incoming webhook below.", { exact: true }),
+        ).toBeVisible();
+        await expect(deliveryChannels.getByText("Teams", { exact: true })).toBeVisible();
+        await expect(
+          deliveryChannels.getByText("Connect a Teams incoming webhook below.", { exact: true }),
+        ).toBeVisible();
+        // Not-connected is stated, never implied: this persona has connected no
+        // webhook, so neither Slack nor Teams may read as a working channel.
+        await expect(deliveryChannels.getByText("Not connected", { exact: true })).toHaveCount(2);
+
+        // Source truth for webhook delivery: the exact provider hosts a customer
+        // pastes from, and the confirmed-versus-possible line that stops an alert
+        // overclaiming what a scan actually proved.
+        const webhookDelivery = page.getByRole("region", { name: "Webhook delivery", exact: true });
+        await expect(
+          webhookDelivery.getByRole("heading", { name: "Slack webhook", exact: true }),
+        ).toBeVisible();
+        await expect(
+          webhookDelivery.getByRole("heading", { name: "Teams webhook", exact: true }),
+        ).toBeVisible();
+        await expect(webhookDelivery).toContainText("hooks.slack.com");
+        await expect(webhookDelivery).toContainText("webhook.office.com");
+        await expect(webhookDelivery).toContainText(
+          "Unconfirmed changes are always labelled as possible, never as confirmed.",
+        );
+        // Both connect forms stay reachable by accessible name, not by position.
+        await expect(webhookDelivery.getByRole("textbox", { name: "Webhook URL", exact: true })).toHaveCount(2);
+        await expect(
+          webhookDelivery.getByRole("textbox", { name: "Destination name", exact: true }),
+        ).toHaveCount(2);
+        await expect(webhookDelivery.getByRole("button", { name: "Connect", exact: true })).toHaveCount(2);
+        await expect(page.locator("#f9-main-content")).not.toContainText("WhatsApp");
+        await page.goto("/unsubscribe");
+        await expect(page.getByRole("heading", { name: "This unsubscribe link isn't valid.", exact: true })).toBeVisible();
+        await expect(page.locator("body")).toContainText(/link may be incomplete or expired/i);
+        await expectVisibleKeyboardFocus(page.locator("a").first());
+        await expectNoHorizontalOverflow(page);
+        await expectPhoneTouchTargets(page);
+        await page.goto("/app/notifications");
+        await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-digest", state: "digest-notifications" });
+        annotateFinalUrl(testInfo, page);
+      });
+    }
+  });
 
   for (const viewport of monitoringViewports) {
     test(`empty, gated, and recovery states remain honest before any delivery action at ${viewport.width}px`, async ({ page, context, baseURL }, testInfo) => {

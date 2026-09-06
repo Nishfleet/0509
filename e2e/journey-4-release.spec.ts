@@ -307,7 +307,9 @@ const reportViewports = [
   { width: 1440, height: 900 },
 ] as const;
 
-test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and client delivery", () => {
+// Shared-resource lock (issue #1727): replay calls mutate the shared local
+// fixture D1 and the same describe runs under five engine projects.
+test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and client delivery", { lock: "d1" }, () => {
   for (const viewport of reportViewports) {
     test(`agency evidence report is client-readable and keyboard reachable at ${viewport.width}px`, async ({
       page,
