@@ -16,3 +16,23 @@
 # suppresses the historical scan hit in commit b157f14f so the required
 # Gitleaks check can pass.
 b157f14f3a2989221dc52cc87a3ff1ace8f4327f:ops/netcup-browser/tests/server.test.mjs:generic-api-key:19
+
+# Fake Stripe test keys in the release-hydration-bridge test, which exercises
+# the secret-redaction path of the hydration bridge. The values
+# "sk_live_secret123" and "sk_live_abc123def456" are deliberately obvious fakes
+# (literal "secret123" / "abc123def456") crafted to look like a Stripe key so
+# the redaction-under-test has something to scrub. They were never credentials.
+# The current tree (tests/release-hydration-bridge.test.ts) no longer carries
+# these strings — they exist only in the three historical commits below, which
+# the full-history Gitleaks scan walks. Suppressed so the required Gitleaks
+# check can pass.
+b884832f7001cbb8d74226b6cdac14958727fa0a:tests/release-hydration-bridge.test.ts:generic-api-key:95
+4065f9693e6821a71b845e71fce31cd605677d43:tests/release-hydration-bridge.test.ts:generic-api-key:95
+6f0a27da29516cfd57644fdd59732d4b260fce16:tests/release-hydration-bridge.test.ts:generic-api-key:95
+1f285a08bba6194b26325946a14a6beef4d81a02:tests/release-hydration-bridge.test.ts:stripe-access-token:89
+
+# Font stack "Bricolage/Inter/Plex" in a design brief, misread by the
+# generic-api-key rule as a slash-delimited credential. It is the typeface list
+# (Bricolage Grotesque / Inter / IBM Plex Mono) for the workspace UI, not a
+# credential. Suppressed so the required Gitleaks check can pass.
+d2adaa81b92a8e52b62fadce5ad21754e87f64ff:docs/FIRSTRUN-DIRECTIONS-2026-07-21.md:generic-api-key:42
