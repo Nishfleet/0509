@@ -42,6 +42,10 @@ const VALE_JSON_PATH = valeJsonArg ? valeJsonArg.slice("--vale-json=".length) : 
 const CEILING_RE = /^Std\.Readability\.SentenceLength\[max\][ \t]*=[ \t]*(\d+)[ \t]*$/m;
 const FLOOR = 30;
 
+/**
+ * @param {string} iniText
+ * @returns {number}
+ */
 export function readCeiling(iniText) {
   const match = iniText.match(CEILING_RE);
   if (!match) {
@@ -52,14 +56,28 @@ export function readCeiling(iniText) {
   return Number(match[1]);
 }
 
+/**
+ * @param {string} iniText
+ * @param {number} next
+ * @returns {string}
+ */
 export function writeCeiling(iniText, next) {
   return iniText.replace(CEILING_RE, `Std.Readability.SentenceLength[max] = ${next}`);
 }
 
+/**
+ * @param {number} current
+ * @param {number} measured
+ * @returns {number}
+ */
 export function nextCeiling(current, measured) {
   return Math.max(FLOOR, Math.min(current, measured));
 }
 
+/**
+ * @param {Record<string, unknown>} report
+ * @returns {number}
+ */
 export function measuredMaxFromValeJson(report) {
   let measured = 0;
   for (const alerts of Object.values(report)) {
@@ -109,7 +127,9 @@ if (invokedDirectly) {
     current = readCeiling(readFileSync(INI_PATH, "utf8"));
     measured = measureTreeMax();
   } catch (err) {
-    console.error(`quality-ratchet: measurement failed — ${err.message}`);
+    console.error(
+      `quality-ratchet: measurement failed — ${err instanceof Error ? err.message : String(err)}`,
+    );
     process.exit(1);
   }
   if (measured < 1) {
