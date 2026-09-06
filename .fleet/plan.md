@@ -1,34 +1,26 @@
-# Plan — Nishfleet/0509#1446 (manager: pi-issue-0509-1446)
+# Plan — Nishfleet/0509 #1498
 
-## Situation (verified live + at branch level, 2026-09-06)
+BET 10 sub: /trust page enumerates "landing-page snapshots" as a stored data
+category while `landing_page_snapshot` has 0 rows in production.
 
-Issue #1446: `/ads/:domain` alias brand pages (ridge.com / oura.com) are not
-redirected/canonicalized to their populated product pages (ridgewallet.com /
-ouraring.com), splitting a brand's verified ads and link equity across two
-competing indexable URLs.
+Path A (preferred, faster): drop the phrase from the /trust data-handled
+enumeration. The timeline route is NOT live (`/timeline/nike.com` → 404), so no
+hedged sentence is shipped — drop the phrase entirely. Copy lives in one place
+(`app/routes/trust.tsx`); the locale route re-exports the same component.
 
-The implementation already exists in this worktree (`claim/issue-1446`) as two
-commits:
-
-- `c2bf5cf1` — canonical alias resolver, route-level 301, sitemap exclusion,
-  and the route-level test `tests/ads-alias-canonical-redirect.test.ts`.
-- `c9ae1487` — restricts alias-landing attribution to the brand's own Meta
-  page id. This is the REQUIRED fix for the real `codex-node-checks` FAIL that
-  closed PR #1714: `tests/integration/brand-attribution.integration.test.ts`
-  line 188 (`expected 2 to be 1`). Verified passing locally with this commit.
-
-PR #1714 (which did NOT include `c9ae1487`) was closed without merge; nothing
-was ever pushed to `origin/claim/issue-1446` (still at `f7e19ebb`, pre-work).
-Manager job: verify green, review the diff, push the branch, open a fresh PR,
-arm auto-merge.
+No D1 schema change. No gate-owned CI path edit.
 
 ## Phases
 
-- [x] phase 1: confirm the canonical-alias implementation + attribution fix
-      are committed and resolve the real CI FAIL
-- [x] phase 2: green verification — route-level test, integration test,
-      full node suite, workers suite, typecheck
-- [x] phase 3: repo checks (sgscan, no agent attribution, exec-review canary)
-- [x] phase 4: push `claim/issue-1446` to origin
-- [x] phase 5: open PR with Verification/run-proof/research/help-first +
-      Closes #1446, reviewer round (product repo: 0509), arm auto-merge
+- [ ] phase 1: drop "landing-page snapshots" from /trust data-handled block + add lock test `tests/trust-page-data-handled-claim.test.ts`
+
+## Acceptance mapping
+
+- accept: Path A — data-handled block no longer lists "landing-page snapshots"
+- accept: lock test renders /trust and asserts the phrase is absent as a stored category
+- accept: copy in one place (trust.tsx) — no surface-by-surface fix
+- accept: no D1 schema change, no gate-owned CI edit
+
+## Reviewer findings
+
+(phase 1 reviewer output recorded here after review)
