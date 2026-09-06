@@ -361,6 +361,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      vulnerability-alerts: read
     timeout-minutes: 10
     steps:
       - name: Authorize exact verification candidate
