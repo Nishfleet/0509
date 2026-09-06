@@ -168,10 +168,31 @@ jobs:
       - name: Scan repository
         run: gitleaks git --redact --verbose
 
+  ci-checklist-gate:
+    name: CI checklist gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify required checkboxes
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/ci-checklist-gate.mjs --body-env PR_BODY
+      - name: Report skipped on non-PR event
+        if: github.event_name != 'pull_request'
+        run: echo 'No PR body on ${{ github.event_name }}; checklist gate skipped.'
+
   tests:
-    # Calls the central reusable PR-checks workflow. The four required check
-    # names (Gitleaks, Semgrep, Shellcheck, systemd-analyze) stay as local
-    # jobs above: a `uses:` job reports as "caller / callee" and would make
+    # Calls the central reusable PR-checks workflow. The required check
+    # names (Gitleaks, Semgrep, Shellcheck, systemd-analyze, CI checklist gate)
+    # stay as local jobs above: a `uses:` job reports as "caller / callee" and
+    # would make
     # those required checks wait forever. scan-secrets is false so gitleaks
     # does not run twice while that required job still exists.
     name: P14 tests
@@ -210,6 +231,7 @@ jobs:
         bash tests/ci-failure-escalation-detector.test.sh
         bash tests/staleness-checker.test.sh
         bash tests/required-check-purity.test.sh
+        bash tests/ci-checklist-gate.test.sh
         bash tests/pi-packet-guard.test.sh
         bash tests/fleet-work-supply-canary.test.sh
         bash tests/scout-futility.test.sh
