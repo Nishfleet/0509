@@ -98,6 +98,11 @@ function installMocks({
     limit: 10,
   }),
   listWatchlists = vi.fn().mockResolvedValue([]),
+  checkPlanLimit = vi.fn(async () => {
+    const current = await (countWatchlists as unknown as () => Promise<number>)();
+    const limit = current >= 10 ? current : 10;
+    return { allowed: current < limit, limit, current };
+  }),
 }: {
   brandWebsite?: string | null;
   seedAutoCompetitors?: ReturnType<typeof vi.fn>;
@@ -105,6 +110,7 @@ function installMocks({
   getUserPlan?: ReturnType<typeof vi.fn>;
   createWatchlistWithinLimit?: ReturnType<typeof vi.fn>;
   listWatchlists?: ReturnType<typeof vi.fn>;
+  checkPlanLimit?: ReturnType<typeof vi.fn>;
 } = {}) {
   const env = { DB: {} } as AppEnv;
   vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => env) }));
@@ -128,11 +134,7 @@ function installMocks({
   vi.doMock("~/lib/plan.server", () => ({
     getUserPlan,
     countWatchlists,
-    checkPlanLimit: vi.fn(async () => {
-      const current = await (countWatchlists as unknown as () => Promise<number>)();
-      const limit = current >= 10 ? current : 10;
-      return { allowed: current < limit, limit, current };
-    }),
+    checkPlanLimit,
   }));
   vi.doMock("~/lib/data.server", () => ({
     createWatchlistWithinLimit,
@@ -591,13 +593,9 @@ describe("bulk-accept-suggested-competitors route action", () => {
       ),
       countWatchlists: vi.fn().mockResolvedValue(1),
       createWatchlistWithinLimit,
-    });
-    // Override checkPlanLimit to a tight limit (planLimit 2, current 1 → 1 slot).
-    vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockResolvedValue("starter"),
-      countWatchlists: vi.fn().mockResolvedValue(1),
+      // Tight limit (planLimit 2, current 1 → 1 slot).
       checkPlanLimit: vi.fn().mockResolvedValue({ allowed: false, limit: 2, current: 1 }),
-    }));
+    });
 
     const result = await runBulkAcceptAction({
       candidateIds: Array.from({ length: 4 }).map((_, index) =>
