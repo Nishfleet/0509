@@ -48,6 +48,15 @@ try {
   }
 
   run("react-router", ["build"]);
+
+  // Guard the Worker's uncompressed bundle size against Cloudflare's 64 MiB
+  // limit. Cloudflare removed the compressed-size cap on 2026-09-04; only the
+  // uncompressed 64 MiB limit applies across all plans. This runs
+  // `wrangler deploy --dry-run` and fails the build if "Total Upload" exceeds
+  // 64 MiB, so an oversize bundle is caught here (CI/preview/deploy) rather
+  // than rejected at platform deploy time. See issue #1733 and
+  // scripts/check-worker-bundle-size.mjs.
+  run("node", ["scripts/check-worker-bundle-size.mjs"]);
 } catch (error) {
   exitCode = error && typeof error.exitCode === "number" ? error.exitCode : 1;
   console.error(error instanceof Error ? error.message : error);
