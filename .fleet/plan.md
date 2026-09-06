@@ -15,3 +15,12 @@ Remove the false "landing-page snapshots" stored-data claim from the /trust "Dat
 - [x] Phase 2 — Single-source check: confirm `$locale.trust.tsx` already re-exports `TrustRoute`; the /trust copy now lives in one place. — DONE (re-exports ./trust; no surface-by-surface edit).
 - [x] Phase 3 — Lock test: add `tests/trust-page-data-handled-claim.test.ts` rendering /trust and asserting the "Data handled" block does NOT contain "landing-page snapshots". — DONE, mirrors brands-route.render.test.tsx.
 - [x] Phase 4 — Run-proof: run the lock test green (vitest) and capture that rendered /trust no longer contains the phrase. — DONE: `npx vitest run --configLoader runner --project node tests/trust-page-data-handled-claim.test.ts` → Test Files 1 passed (1), Tests 1 passed (1).
+
+## Reviewer round (product repo, 0509; step 8)
+Seat resolved via `find_senior_seat` (lib/seat-lib.sh #3121): `openrouter\tdeepseek/deepseek-v4-flash-0731`. `bin/fleet-review-arm-check` exit 0 (round required). One round only.
+Findings → adjudication buckets:
+- Warnings: none.
+- Critical: none.
+- Suggest — lock test positive anchor (`toContain("service logs")`) so the negative claim can't pass vacuously → **Act on** (applied).
+- Suggest — `app/routes/privacy.tsx:54` still lists "landing-page snapshots" (sibling surface) → **Noted**, out of #1498 scope; filed as a new issue.
+- Suggest — regex over string-literal assertion → **Dismissed-with-reason**: the removed copy was exactly that literal string; a lock test on that precise token is intentional.

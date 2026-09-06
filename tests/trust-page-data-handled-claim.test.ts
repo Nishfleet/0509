@@ -37,5 +37,9 @@ describe("/trust — Data handled claim (issue #1498, BET 10 / trust surface)", 
 
     // The "Data handled" block must no longer make the false stored-data claim.
     expect(markup).not.toContain("landing-page snapshots");
+    // Positive anchor: the block itself must render, so the negative assertion
+    // above cannot pass vacuously if the "Data handled" section silently
+    // disappears. (reviewer finding, 0509 #1498)
+    expect(markup).toContain("service logs");
   });
 });
