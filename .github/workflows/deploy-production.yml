@@ -568,6 +568,18 @@ jobs:
         run: npm run deploy
 
       - name: Synchronize private canary token
+        # Best-effort: the worker the deploy just shipped is already live and
+        # its post-deploy release canaries passed before this step runs, so a
+        # failure here must NOT red the whole deploy (which feeds
+        # fleet_main_ci_green and a red-trunk alert on an actually-deployed
+        # main). The failure mode is a Cloudflare Worker-versions race: when
+        # pushes queue deploys back-to-back, a newer commit's wrangler upload
+        # can land between the `wrangler deploy` above and this `wrangler
+        # secret put`, so the "latest version isn't deployed" prerequisite
+        # fails even though our exact pinned SHA is the deployed, canaried
+        # version. The secret persists across deploys, so the worker simply
+        # keeps the previous canary token until the next successful sync.
+        continue-on-error: true
         shell: bash
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

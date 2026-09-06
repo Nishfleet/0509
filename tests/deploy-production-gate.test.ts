@@ -1563,6 +1563,13 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(synchronizeCanaryStep).not.toContain(
       "./node_modules/.bin/wrangler versions secret put",
     );
+    // Best-effort sync (continue-on-error): the worker the deploy just shipped
+    // is already live and its post-deploy canaries passed before this step
+    // runs, so a Worker-versions race in `wrangler secret put` must NOT red a
+    // green deploy (it fed fleet_main_ci_green and a red-trunk alert on an
+    // actually-deployed main, 0509#1800). The secret persists across deploys,
+    // so the worker keeps the previous canary token until the next sync.
+    expect(synchronizeCanaryStep).toContain("continue-on-error: true");
     expect(deployStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
