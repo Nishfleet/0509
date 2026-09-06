@@ -20,7 +20,8 @@ const MAJOR_BRANDS = [
 ];
 
 for (const brand of MAJOR_BRANDS) {
-  test(`${brand.label} search shows at least one verified/likely row, not all Unmatched`, async ({
+  // Shared-resource lock (issue #1727): live external production search.
+  test(`${brand.label} search shows at least one verified/likely row, not all Unmatched`, { lock: "external-api" }, async ({
     page,
   }) => {
     await page.goto(brand.path, { waitUntil: "domcontentloaded" });

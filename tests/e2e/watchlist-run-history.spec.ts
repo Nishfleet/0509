@@ -52,7 +52,9 @@ async function seedRunHistory(page: Page) {
   return body;
 }
 
-test("run history lists the failed capture with its human label and no raw token", async ({
+// Shared-resource lock (issue #1727): seedRunHistory posts to the replay
+// endpoint, which mutates the shared local fixture D1.
+test("run history lists the failed capture with its human label and no raw token", { lock: "d1" }, async ({
   browser,
   baseURL,
 }) => {

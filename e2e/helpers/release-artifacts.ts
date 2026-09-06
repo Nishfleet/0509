@@ -64,7 +64,7 @@ export function releaseArtifactName(
 ): string {
   assertState(prefix, state);
   if (!/^\d{3,4}x\d{3,4}$/u.test(viewport)) throw new Error("release_artifact_viewport_invalid");
-  return `${prefix}-${viewport}-${state}.${kind === "screenshot" ? "png" : "aria.yml"}`;
+  return `${prefix}-${viewport}-${state}.${kind === "screenshot" ? "png" : "aria.json"}`;
 }
 
 export async function attachReleaseStateArtifacts({
@@ -106,11 +106,17 @@ export async function attachReleaseStateArtifacts({
     caret: "hide",
     fullPage: false,
   });
-  const ariaSnapshot = await ariaRoot.ariaSnapshot({
+  // Issue #1727: ariaSnapshotJSON() returns the same tree as ariaSnapshot()
+  // but as a JSON value, so the release evidence is machine-diffable without
+  // a YAML parse step.
+  const ariaSnapshot = await ariaRoot.ariaSnapshotJSON({
     boxes: false,
     mode: "default",
   });
-  if (screenshot.length === 0 || ariaSnapshot.trim().length === 0) {
+  const ariaBody = Buffer.from(JSON.stringify(ariaSnapshot ?? null, null, 2), "utf8");
+  const ariaEmpty =
+    ariaSnapshot == null || (Array.isArray(ariaSnapshot) && ariaSnapshot.length === 0);
+  if (screenshot.length === 0 || ariaEmpty || ariaBody.length === 0) {
     throw new Error("release_artifact_empty");
   }
 
@@ -119,7 +125,7 @@ export async function attachReleaseStateArtifacts({
     contentType: "image/png",
   });
   await testInfo.attach(releaseArtifactName(prefix, viewport, state, "aria"), {
-    body: Buffer.from(ariaSnapshot, "utf8"),
-    contentType: "application/yaml",
+    body: ariaBody,
+    contentType: "application/json",
   });
 }

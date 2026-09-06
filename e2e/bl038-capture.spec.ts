@@ -335,7 +335,9 @@ async function measure(page: Page) {
   });
 }
 
-test.describe("BL-038 live proof", () => {
+// Shared-resource lock (issue #1727): POSTs to /api/e2e/j4/replay, which
+// mutates the shared local fixture D1.
+test.describe("BL-038 live proof", { lock: "d1" }, () => {
   test.skip(!ENABLED, "set BL038_CAPTURE=1 to write the shared-link evidence set");
   test.setTimeout(15 * 60 * 1000);
 
