@@ -14,7 +14,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-permissions: {}
+permissions:
+  vulnerability-alerts: read
 
 env:
   VITEST_TOTAL_SHARDS: "4"
@@ -350,3 +351,85 @@ jobs:
             npx --no-install vitest run --configLoader runner \
               --shard=4/${{ env.VITEST_TOTAL_SHARDS }} \
               --project node
+
+  dependabot-critical-check:
+    # Required context (branch protection). Same no-skip contract as
+    # codex-node-checks: no job-level if:/needs:, authorizer is step 1,
+    # fork PR or unapproved dispatch fails with a real failure.
+    # Queries open critical Dependabot alerts on direct dependencies.
+    name: dependabot-critical-check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      vulnerability-alerts: read
+    timeout-minutes: 10
+    steps:
+      - name: Authorize exact verification candidate
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              test -z "$EXPECTED_SHA"
+              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+              [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
+              ;;
+            workflow_dispatch)
+              test "$GITHUB_REF" = "refs/heads/main"
+              test "$GITHUB_RUN_ATTEMPT" = "1"
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              ;;
+            merge_group)
+              test -z "$EXPECTED_SHA"
+              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.authorize.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized checkout
+        shell: bash
+        env:
+          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - name: Query open critical Dependabot alerts on direct deps
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          alerts=$(gh api \
+            --paginate \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/dependabot/alerts?state=open&severity=critical&dependency_type=direct" \
+            --jq 'length')
+          if [ "$alerts" -gt 0 ]; then
+            echo "::error::Found $alerts open critical Dependabot alert(s) on direct dependencies"
+            gh api \
+              --paginate \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${{ github.repository }}/dependabot/alerts?state=open&severity=critical&dependency_type=direct" \
+              --jq '.[] | "\(.security_vulnerability.package.name) \(.security_vulnerability.severity) \(.security_vulnerability.advisory.ghsa_id) \(.html_url)"'
+            exit 1
+          fi
+          echo "No open critical Dependabot alerts on direct dependencies"
