@@ -128,6 +128,7 @@ const EMPTY_HEADLINE_PATTERNS = Object.freeze([
  * @property {number} firstRowIndex
  * @property {number[]} likelyRowIndices
  * @property {number[]} unmatchedRowIndices
+ * @property {boolean} tierBadgePresent
  */
 
 /**
@@ -151,6 +152,7 @@ const EMPTY_HEADLINE_PATTERNS = Object.freeze([
  * @property {string | null} cacheStatus
  * @property {string | null} emptyReason
  * @property {Record<string, string>} [responseHeaders]
+ * @property {boolean} [tierBadgePresent]
  */
 
 /**
@@ -184,6 +186,12 @@ export function parseSearchResponseHtml(html) {
   // closing `>`) immediately after `f9-wk-row`. The parent container is
   // `f9-wk-rows` (with the trailing `s`), so this anchor is safe.
   const rowRegex = /class="f9-wk-row[ ">\s]/g;
+  // The shipped three-tier model renders one `<span class="f9-tier-badge
+  // is-<tier>">` badge per row (TierBadge in app/components/search/
+  // tier-badge.tsx). Count those directly — the older `f9-wk-say">Tier — `
+  // text-prefix form is kept as a fallback so pages rendered before the
+  // badge shipped (and the historical test fixtures) still parse.
+  const badgeRegex = /class="f9-tier-badge is-(verified|likely|unmatched)"/g;
   const sayRegex = /<span class="f9-wk-say">(Verified|Likely|Unmatched) — /g;
   const firstRowMatch = html.match(/class="f9-wk-row[ ">\s]/);
   const firstRowIndex = firstRowMatch ? firstRowMatch.index ?? -1 : -1;
@@ -193,21 +201,45 @@ export function parseSearchResponseHtml(html) {
   let verifiedCount = 0;
   let likelyCount = 0;
   let unmatchedCount = 0;
-  for (const sayMatch of html.matchAll(sayRegex)) {
-    const tier = sayMatch[1];
-    const offset = sayMatch.index ?? 0;
-    if (tier === "Likely") {
+  let tierBadgePresent = false;
+  for (const badgeMatch of html.matchAll(badgeRegex)) {
+    tierBadgePresent = true;
+    const tier = badgeMatch[1];
+    const offset = badgeMatch.index ?? 0;
+    if (tier === "likely") {
       likelyCount += 1;
       likelyRowIndices.push(offset);
-    } else if (tier === "Unmatched") {
+    } else if (tier === "unmatched") {
       unmatchedCount += 1;
       unmatchedRowIndices.push(offset);
+    } else if (tier === "verified") {
+      verifiedCount += 1;
     }
-    // `Verified` rows render WITHOUT a tier prefix (formatResultTierLabel
-    // returns null for verified rows), so the regex above does not match
-    // them at all. Their count is rowCount - likelyCount - unmatchedCount.
   }
-  verifiedCount = Math.max(0, rowCount - likelyCount - unmatchedCount);
+  if (!tierBadgePresent) {
+    // Fallback: the pre-badge `f9-wk-say">Tier — summary` text prefix.
+    // `Verified` rows rendered WITHOUT a tier prefix here, so their count
+    // is rowCount - likelyCount - unmatchedCount.
+    for (const sayMatch of html.matchAll(sayRegex)) {
+      const tier = sayMatch[1];
+      const offset = sayMatch.index ?? 0;
+      if (tier === "Likely") {
+        likelyCount += 1;
+        likelyRowIndices.push(offset);
+      } else if (tier === "Unmatched") {
+        unmatchedCount += 1;
+        unmatchedRowIndices.push(offset);
+      }
+    }
+    verifiedCount = Math.max(0, rowCount - likelyCount - unmatchedCount);
+  } else {
+    // Badge counts are authoritative; clamp to the rendered row count so a
+    // stray badge outside a row (none today, but defensive) cannot overrun.
+    const badgeTotal = verifiedCount + likelyCount + unmatchedCount;
+    if (badgeTotal > rowCount) {
+      verifiedCount = Math.max(0, rowCount - likelyCount - unmatchedCount);
+    }
+  }
 
   // The section heading is the strongest signal for warming vs empty vs
   // populated. Pull the first match inside the results panel (skip the
@@ -251,6 +283,7 @@ export function parseSearchResponseHtml(html) {
     firstRowIndex,
     likelyRowIndices,
     unmatchedRowIndices,
+    tierBadgePresent,
   };
 }
 
@@ -561,6 +594,7 @@ export async function probeDomain({
         resultSource: null,
         cacheStatus: null,
         emptyReason: null,
+        tierBadgePresent: false,
       };
     }
     lastStatus = response.status;
@@ -587,6 +621,7 @@ export async function probeDomain({
           resultSource: null,
           cacheStatus: null,
           emptyReason: null,
+          tierBadgePresent: false,
         };
       }
       requestStart = null;
@@ -612,6 +647,7 @@ export async function probeDomain({
         resultSource: null,
         cacheStatus: null,
         emptyReason: null,
+        tierBadgePresent: false,
       };
     }
     const { html, firstRowSeenAt } = await readBodyAndFindFirstRow(
@@ -655,6 +691,7 @@ export async function probeDomain({
         cacheStatus: parsed.cacheStatus,
         emptyReason: parsed.emptyReason,
         responseHeaders: lastResponseHeaders,
+        tierBadgePresent: parsed.tierBadgePresent,
       };
     }
     polls += 1;
@@ -678,6 +715,7 @@ export async function probeDomain({
         cacheStatus: parsed.cacheStatus,
         emptyReason: parsed.emptyReason,
         responseHeaders: lastResponseHeaders,
+        tierBadgePresent: parsed.tierBadgePresent,
       };
     }
     await sleepImpl(warmingPollIntervalMs);
@@ -852,6 +890,75 @@ export function evaluateSection18Rerun(results) {
 }
 
 /**
+ * BET 2 three-tier model assertion (issue #1851, `--assert-tier-model`).
+ *
+ * The three-tier render (verified / likely / unmatched) is the systemic fix
+ * for the bare dead-end: a domain whose verified rows the post-filter dropped
+ * to zero still renders its raw candidates as labelled likely/unmatched rows
+ * instead of "No verified ads found". This evaluates two invariants against a
+ * finished probe set:
+ *
+ *   (a) `non_verified_labelled_row_present` — at least one domain with ≥1 raw
+ *       candidate (rowCount > 0) renders a non-verified labelled row
+ *       (likely or unmatched). Proves the tier model surfaces below-verified
+ *       candidates instead of collapsing them to a dead-end.
+ *   (b) `true_zero_candidate_bare_empty` — at least one genuine 0-candidate
+ *       domain (rowCount === 0, not warming) renders the bare empty card
+ *       (emptyReason === "no_results"). Proves the dead-end fires ONLY on a
+ *       real 0-candidate row set, not on a brand whose candidates were merely
+ *       unverified.
+ *
+ * Both checks are over the FULL probe set passed in (the 25-domain cohort
+ * plus the §1.8 rerun, when run from `main`). A run with no 0-candidate
+ * domains (every brand has rows) fails (b) deliberately — the bare empty card
+ * is the contract for a nonsense domain, and the canary's 25-domain set
+ * includes slack.com / tcs.com which are genuine 0-candidate today.
+ * @param {ProbeResult[]} results
+ * @returns {{ pass: boolean, checks: any[] }}
+ */
+export function evaluateTierModel(results) {
+  const withCandidates = results.filter(
+    (r) => r.rowCount > 0 && r.outcome !== "demo_sourced",
+  );
+  const nonVerifiedLabelled = withCandidates.filter(
+    (r) => r.tierCounts.likely + r.tierCounts.unmatched > 0,
+  );
+  const trueZeroBareEmpty = results.filter(
+    (r) =>
+      r.rowCount === 0 &&
+      !r.isWarming &&
+      r.outcome !== "demo_sourced" &&
+      r.emptyReason === "no_results",
+  );
+  const checks = [
+    {
+      name: "tier_model_non_verified_labelled_row_present",
+      ok: nonVerifiedLabelled.length > 0,
+      observed: nonVerifiedLabelled.length,
+      threshold: 1,
+      detail:
+        nonVerifiedLabelled.length > 0
+          ? `domains with a non-verified labelled row: ${nonVerifiedLabelled.map((r) => r.domain).join(", ")}`
+          : "no domain with raw candidates rendered a likely/unmatched labelled row",
+    },
+    {
+      name: "tier_model_true_zero_candidate_bare_empty",
+      ok: trueZeroBareEmpty.length > 0,
+      observed: trueZeroBareEmpty.length,
+      threshold: 1,
+      detail:
+        trueZeroBareEmpty.length > 0
+          ? `genuine 0-candidate domains rendering the bare empty card: ${trueZeroBareEmpty.map((r) => r.domain).join(", ")}`
+          : "no genuine 0-candidate domain rendered the bare empty card",
+    },
+  ];
+  return {
+    pass: checks.every((check) => check.ok),
+    checks,
+  };
+}
+
+/**
  * Human-readable rendering of one probe result, plus a JSON dump for the
  * report file. Splitting the renderer from the probe keeps the run loop
  * testable in isolation.
@@ -940,14 +1047,21 @@ async function main() {
   const baseUrl = args.baseUrl ?? DEFAULT_BASE_URL;
   const spacingMs = args.spacingMs ?? DEFAULT_REQUEST_SPACING_MS;
   const includeRerun = args.includeRerun ?? true;
+  const assertTierModel = args.assertTierModel ?? false;
+  // `--cohort` selects the domain set size. `25` (default) is the BET 2
+  // 25-domain set; `7` is the §1.8 six-domain rerun set. The termination
+  // command in issue #1851 is `--cohort=25 --assert-tier-model`.
+  const cohortSize = args.cohort ?? 25;
+  const cohortDomains =
+    cohortSize === 7 ? SECTION_1_8_RERUN : BET2_DOMAINS;
   emitLine(
-    `BET 2 live verification starting @ ${baseUrl} (n=${BET2_DOMAINS.length}${includeRerun ? ` + ${SECTION_1_8_RERUN.length} rerun` : ""}, spacing=${spacingMs}ms)`,
+    `BET 2 live verification starting @ ${baseUrl} (cohort=${cohortSize}, n=${cohortDomains.length}${includeRerun ? ` + ${SECTION_1_8_RERUN.length} rerun` : ""}, spacing=${spacingMs}ms${assertTierModel ? ", assert-tier-model=on" : ""})`,
   );
   // One limiter for the 25-set AND the §1.8 HTTP rerun. Acquire happens
   // BEFORE the first-card clock starts, so queue time is not product latency.
   const limiter = createRateLimiter();
   const run = await runLiveVerification({
-    domains: BET2_DOMAINS,
+    domains: cohortDomains,
     baseUrl,
     paceRequests: false,
     beforeRequest: () => limiter.acquire(),
@@ -976,12 +1090,27 @@ async function main() {
   const rerunVerdict = rerun
     ? evaluateSection18Rerun(rerun.results)
     : { pass: true, checks: [] };
-  const pass = verdict.pass && rerunVerdict.pass;
+  // The tier-model assertion runs over the full probe set (cohort + rerun)
+  // so a previously-bare-dead-end brand that now has raw candidates (e.g.
+  // allbirds) and a genuine 0-candidate domain (e.g. slack.com) are both in
+  // scope. Skipped unless `--assert-tier-model` is passed.
+  const tierModelVerdict =
+    assertTierModel
+      ? evaluateTierModel([
+          ...run.results,
+          ...(rerun ? rerun.results : []),
+        ])
+      : { pass: true, checks: [] };
+  const pass = verdict.pass && rerunVerdict.pass && tierModelVerdict.pass;
   emitLine("");
   emitLine(formatSummary({ run, rerun }));
   emitLine("");
   emitLine("Termination checks:");
-  for (const check of [...verdict.checks, ...rerunVerdict.checks]) {
+  for (const check of [
+    ...verdict.checks,
+    ...rerunVerdict.checks,
+    ...tierModelVerdict.checks,
+  ]) {
     emitLine(
       `  ${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.detail}`,
     );
@@ -996,7 +1125,11 @@ async function main() {
         : null,
       termination: {
         pass,
-        checks: [...verdict.checks, ...rerunVerdict.checks],
+        checks: [
+          ...verdict.checks,
+          ...rerunVerdict.checks,
+          ...tierModelVerdict.checks,
+        ],
       },
     };
     emitLine("");
@@ -1009,10 +1142,10 @@ async function main() {
 
 /**
  * @param {string[]} argv
- * @returns {{ baseUrl?: string, spacingMs?: number, includeRerun?: boolean, json?: boolean }}
+ * @returns {{ baseUrl?: string, spacingMs?: number, includeRerun?: boolean, json?: boolean, assertTierModel?: boolean, cohort?: number }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ baseUrl?: string, spacingMs?: number, includeRerun?: boolean, json?: boolean }} */
+  /** @type {{ baseUrl?: string, spacingMs?: number, includeRerun?: boolean, json?: boolean, assertTierModel?: boolean, cohort?: number }} */
   const parsed = {};
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -1032,6 +1165,15 @@ function parseCliArgs(argv) {
     }
     if (arg === "--json") {
       parsed.json = true;
+      continue;
+    }
+    if (arg === "--assert-tier-model") {
+      parsed.assertTierModel = true;
+      continue;
+    }
+    if (arg === "--cohort" && argv[i + 1]) {
+      parsed.cohort = Number(argv[i + 1]);
+      i += 1;
       continue;
     }
   }
