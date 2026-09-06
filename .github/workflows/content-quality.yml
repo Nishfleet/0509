@@ -1,0 +1,59 @@
+name: Content quality
+
+# Whole-tree prose gate (issue #1728).
+#
+# Lints every Markdown file in the repository with Vale 3.20.0 using the
+# vendored `Std` package (.vale/styles/Std, MIT — see its NOTICE) extended
+# by the project's own `House` style. Two rules run at `error` level:
+#
+#   House.AISlop — the AI-writing deny-list (extends Std.AISlop; the parent
+#                  is switched off in .vale.ini so each hit reports once).
+#   Std.Readability.SentenceLength — raised to `error` with `max` set in
+#                  .vale.ini and tightened monotonically by
+#                  .github/workflows/quality-ratchet.yml.
+#
+# The gate runs on the whole content tree, not the PR diff: a sentence or
+# token that was legal yesterday stays legal, and the ceiling is the only
+# thing that tightens. Vale exits non-zero on any `error`-level alert.
+#
+# This is a new workflow rather than a ci.yml job because ci.yml is a
+# protected verifier definition (required-verifier-integrity) and this
+# change does not carry the independent review needed to touch it.
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: content-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  vale:
+    name: Vale (whole content tree)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Vale 3.20.0 (pinned release + sha256)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/vale.tar.gz" \
+            https://github.com/vale-cli/vale/releases/download/v3.20.0/vale_3.20.0_Linux_64-bit.tar.gz
+          echo "f59e7030c5d4ace6cf915497d0d076a1699d61e876142765963237e6867c9712  $RUNNER_TEMP/vale.tar.gz" \
+            | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/vale.tar.gz" -C "$RUNNER_TEMP" vale
+          "$RUNNER_TEMP/vale" --version
+          "$RUNNER_TEMP/vale" --version | grep -F "vale version 3.20.0"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Lint whole content tree
+        shell: bash
+        run: vale --minAlertLevel=error --counts .

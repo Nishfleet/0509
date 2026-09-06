@@ -177,7 +177,7 @@ What distinguishes Vercel from other monochrome design systems is its shadow-as-
 - Geist Sans with extreme negative letter-spacing (-2.4px to -2.88px at display) — text as compressed infrastructure
 - Geist Mono for code and technical labels with OpenType `"liga"` globally
 - Shadow-as-border technique: `box-shadow 0px 0px 0px 1px` replaces traditional borders throughout
-- Multi-layer shadow stacks for nuanced depth (border + elevation + ambient in single declarations)
+- Multi-layer shadow stacks for subtle depth (border + elevation + ambient in single declarations)
 - Near-pure white canvas with `#171717` text — not quite black, creating micro-contrast softness
 - Workflow-specific accent colors: Ship Red (`#ff5b4f`), Preview Pink (`#de1d8d`), Develop Blue (`#0a72ef`)
 - Focus ring system using `hsla(212, 100%, 48%, 1)` — a saturated blue for accessibility

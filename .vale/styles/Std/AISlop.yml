@@ -1,0 +1,181 @@
+# Base AI-slop deny-list rule.
+#
+# This is the shared deny-list of AI-writing markers that the project's own
+# `House.AISlop` rule extends. Tokens are drawn from the Wikipedia "Signs of AI
+# writing" list (Aug 2026) and the tbhb/vale-ai-tells v1.31.0 word-lists
+# (MIT). The rule is deliberately conservative: it flags only high-precision
+# AI fingerprints, not ordinary vocabulary, so it stays green on the existing
+# tree. Project-specific additions and removals belong in
+# .vale/styles/House/AISlop.yml (tokens+ / tokens-), and false-positive
+# overrides belong in .vale/config/vocabularies/House/accept.txt.
+extends: existence
+message: "AI-slop: '%s'. Replace with a concrete, specific word."
+level: error
+ignorecase: true
+tokens:
+  # Overused AI vocabulary (tbhb/vale-ai-tells OverusedVocabulary).
+  - delve
+  - delves
+  - delving
+  - delved
+  - intricacies
+  - groundbreaking
+  - seamlessly
+  - streamline
+  - streamlines
+  - streamlining
+  - elevate
+  - elevates
+  - elevating
+  - bolster
+  - bolsters
+  - bolstering
+  - underpins
+  - underpin
+  - underpinning
+  - reimagine
+  - reimagining
+  - reimagines
+  - elucidate
+  - elucidates
+  - elucidating
+  - synergy
+  - synergies
+  - synergistic
+  - holistic
+  - holistically
+  - paradigm
+  - paradigms
+  - unparalleled
+  - catalyst
+  - catalyze
+  - catalyzing
+  - meticulous
+  - meticulously
+  - nuanced
+  - interplay
+  - aforementioned
+  - myriad
+  - plethora
+  - burgeoning
+  - ubiquitous
+  - encompasses
+  - encompassing
+  - endeavor
+  - endeavors
+  - endeavoring
+  - granular
+  - granularity
+  - actionable
+  - impactful
+  - empower
+  - empowers
+  - empowering
+  - empowered
+  - empowerment
+  - proactive
+  - proactively
+  - evolving
+  - comprehensive
+  - comprehensively
+  # AI verb forms (tbhb/vale-ai-tells OverusedVocabularyVerbs).
+  - leverage
+  - leverages
+  - leveraging
+  - navigate
+  - navigates
+  - navigating
+  - showcase
+  - showcases
+  - showcasing
+  - harness
+  - harnesses
+  - harnessing
+  - embark
+  - embarks
+  - embarking
+  - foster
+  - fosters
+  - fostering
+  - spearhead
+  - spearheads
+  - spearheading
+  # AI compound phrases (tbhb/vale-ai-tells AICompoundPhrases).
+  - rich tapestry
+  - tapestry of
+  - intricate tapestry
+  - delicate balance
+  - dynamic interplay
+  - crucial role
+  - pivotal role
+  - instrumental role
+  - cutting-edge
+  - game-changer
+  - game-changing
+  - paradigm shift
+  - sea change
+  - tipping point
+  - watershed moment
+  - double-edged sword
+  - tip of the iceberg
+  - at the forefront
+  - on the cutting edge
+  - paving the way
+  - laid the groundwork
+  - lays the groundwork
+  - sets the stage
+  - set the stage
+  - a testament to
+  - stands as a testament
+  - it remains to be seen
+  - only time will tell
+  - the jury is still out
+  - takes center stage
+  - take center stage
+  # AI filler (tbhb/vale-ai-tells FillerPhrases).
+  - a wide range of
+  - a broad range of
+  - a variety of
+  - an abundance of
+  - a multitude of
+  - countless
+  - numerous
+  - in order to
+  - for the purpose of
+  - with the aim of
+  - serves to
+  - tends to
+  - has the potential to
+  - has the ability to
+  - is capable of
+  - is able to
+  - due to the fact that
+  - the fact that
+  - it is clear that
+  - it is evident that
+  - it is apparent that
+  - it is obvious that
+  - it can be seen that
+  - it can be observed that
+  # AI hedges (tbhb/vale-ai-tells HedgingPhrases).
+  - it is important to note
+  - it is important to understand
+  - it is important to consider
+  - it is important to recognize
+  - it is important to acknowledge
+  - it is important to emphasize
+  - it is important to highlight
+  - it is worth noting
+  - it is worth mentioning
+  - it is worth emphasizing
+  - it is worth highlighting
+  - it is worth pointing out
+  - it is essential to note
+  - it is crucial to note
+  - it is critical to note
+  - it is necessary to note
+  - it should be noted
+  - it should be emphasized
+  - it should be mentioned
+  - it bears mentioning
+  - it goes without saying
