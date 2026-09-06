@@ -132,6 +132,10 @@ export default defineConfig(async ({ mode }) => ({
         "app/routes.ts",
         "**/*.test.{ts,tsx}",
       ],
+      thresholds: {
+        perFile: true,
+        autoUpdate: (previousThreshold) => previousThreshold,
+      },
     },
     projects: [
       {
@@ -153,6 +157,11 @@ export default defineConfig(async ({ mode }) => ({
           // them on node would silently skip the real runtime.
           exclude: [INTEGRATION_TEST_GLOB],
           testTimeout: 10_000,
+          poolOptions: {
+            vm: {
+              enableCompileCache: true,
+            },
+          },
         },
       },
       {
@@ -180,6 +189,28 @@ export default defineConfig(async ({ mode }) => ({
           // Applying 70+ migrations to a fresh local D1 costs more than a unit
           // test's 10s budget on a loaded CI runner.
           testTimeout: 30_000,
+        },
+        {
+          // Browser mode tests for component testing with DOM/ARIA snapshots.
+          // Enabled via `npm run test:browser` or in CI with --project=browser.
+          // Uses happy-dom as the browser environment with trace snapshots
+          // for deterministic DOM/ARIA/screen captures.
+          extends: true,
+          test: {
+            name: "browser",
+            environment: "happy-dom",
+            include: ["tests/**/*.browser.test.{ts,tsx}"],
+            browser: {
+              enabled: true,
+              provider: "playwright",
+              headless: true,
+              instances: [{ browser: "chromium" }],
+            },
+            trace: {
+              snapshots: { dom: true, aria: true, screen: true },
+            },
+            testTimeout: 30_000,
+          },
         },
       },
     ],

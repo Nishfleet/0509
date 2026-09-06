@@ -110,10 +110,10 @@ jobs:
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
               --shard=1/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node --coverage
+              --project node --coverage --repeats=3
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
-              --project workers
+              --project workers --repeats=3
       - name: Typecheck
         env:
           NODE_OPTIONS: --max-old-space-size=2048
@@ -195,7 +195,7 @@ jobs:
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
               --shard=2/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
+              --project node --repeats=3
 
   codex-node-checks-shard-3:
     # Required context (branch protection) — shard 3 of 4. Same no-skip
@@ -272,7 +272,7 @@ jobs:
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
               --shard=3/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
+              --project node --repeats=3
 
   codex-node-checks-shard-4:
     # Required context (branch protection) — shard 4 of 4. Same no-skip
@@ -349,4 +349,4 @@ jobs:
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
               --shard=4/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
+              --project node --repeats=3
