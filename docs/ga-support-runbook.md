@@ -12,7 +12,7 @@
 | Health | `https://0509.io/api/health` | Yes — 200 + `"status":"ok"` |
 | Email proof | `npm run canary:proof` (no `--require-slack`) | Yes |
 | Prod canary | `npm run canary:prod` | Yes |
-| Slack proof | Not a GA gate | No — Slack is dormant and not part of the customer offer |
+| Slack proof | Live Starter+ channel (webhook delivery) | Yes — `isSlackWebhookDeliveryCustomerFacing()`; 2xx acceptance is the delivery proof |
 | UptimeRobot | Dashboard check on `/api/health` | Yes — owner-verified (no API token) |
 | D1 backup validate | `node scripts/validate-d1-backup.mjs` | Yes — CI dry-run |
 

@@ -306,8 +306,10 @@ homepage copy in `app/routes/marketing.tsx`, and AlternativeTo FAQ rules:
   FAQ rule; the URL fields (Official Website, Creator Website) carry links.
 - **No UTM tags on the official website link** — FAQ rule; track via
   referer instead.
-- **No Slack or WhatsApp delivery claims** — both channels are dormant and
-  not part of the public offer.
+- **No WhatsApp delivery claims** — WhatsApp is dormant and not part of the
+  public offer. Slack and Teams incoming-webhook delivery of confirmed changes
+  is a live Starter+ channel (2026-08-12 decision); the legacy Slack
+  export/API/MCP surface remains dormant and unclaimed.
 - **No unlimited monitoring claims** — evidence checks are metered with
   clear monthly caps.
 - **No automated non-Meta ingestion claims** — do not claim automated

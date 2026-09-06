@@ -157,8 +157,10 @@ Subject: `Tool for your ad-intelligence ranking: Five to Nine (competitor ad mon
 Same rules as the SaaSHub/BetaList preparations, sourced from `MEMORY.md`,
 `README.md`, and the live homepage copy (`app/routes/marketing.tsx`):
 
-- **No Slack or WhatsApp delivery claims** — both channels are dormant and
-  not part of the public offer.
+- **No WhatsApp delivery claims** — WhatsApp is dormant and not part of the
+  public offer. Slack and Teams incoming-webhook delivery of confirmed changes
+  is a live Starter+ channel (2026-08-12 decision); the legacy Slack
+  export/API/MCP surface remains dormant and unclaimed.
 - **No unlimited monitoring claims** — evidence checks are metered with
   clear monthly caps.
 - **No automated non-Meta ingestion claims** — do not claim automated
