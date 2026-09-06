@@ -542,6 +542,15 @@ describe("Gate-B Playwright release manifest reporter", () => {
           title: "t",
         }),
       },
+      {
+        type: "reactHydrationErrorDetail",
+        description: JSON.stringify({
+          source: "console",
+          message: "Hydration failed because the server rendered authorization: Bearer abc123secret",
+          url: "/app",
+          title: "t",
+        }),
+      },
     ];
     const { issues, hydrationErrors } = readAnnotations(
       fakeTest("browser-hydration-detail", annotationsForDetail),
@@ -560,6 +569,8 @@ describe("Gate-B Playwright release manifest reporter", () => {
       },
     ]);
     expect(JSON.stringify(hydrationErrors)).not.toContain("hunter2");
+    expect(JSON.stringify(hydrationErrors)).not.toContain("Bearer");
+    expect(JSON.stringify(hydrationErrors)).not.toContain("abc123secret");
   });
 
   it("carries sanitized hydration error detail on the manifest entry", () => {

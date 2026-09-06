@@ -20,7 +20,7 @@ const ANSI_ESCAPE_PATTERN = /\u001b\[[0-?]*[ -/]*[@-~]/gu;
 const CONTROL_CHAR_PATTERN = /[\u0000-\u001f\u007f]/gu;
 // Keep the captured text out of the strict manifest: real and fixture secrets.
 const SECRET_VALUE_PATTERN =
-  /(sk_(?:live|test)_[A-Za-z0-9_-]+|bearer\s+\S+|(?:api[_-]?key|password|secret|token|cookie|authorization)\s*[=:]\s*\S+|secret=[^\s]+|token=[^\s]+)/giu;
+  /sk_(?:live|test)_[A-Za-z0-9_-]+|\bauthorization\s*[=:]\s*(?:bearer\s+)?\S+|\bbearer\s+\S+|(?:\bapi[_-]?key|\bpassword|\bsecret|\btoken|\bcookie|\bkey)\s*[=:]\s*\S+/giu;
 // The reporter's safeHydrationDetailText rejects these, so strip them here to
 // keep the message (e.g. a mismatched <div> from a React #418 line) in the
 // manifest instead of dropping the whole entry.
@@ -37,10 +37,11 @@ function sanitizeHydrationMessage(text: string) {
     .replace(CONTROL_CHAR_PATTERN, " ")
     .replace(MANIFEST_UNSAFE_CHARS, " ")
     .replace(/\s+/gu, " ")
-    .trim()
-    .slice(0, HYDRATION_MESSAGE_LIMIT);
+    .trim();
+  // Redact before truncating so a token spanning the 300-char boundary cannot
+  // leave an unmasked prefix behind.
   const redacted = cleaned.replace(SECRET_VALUE_PATTERN, "[redacted]");
-  return redacted.length > 0 ? redacted : "unavailable";
+  return redacted.length > 0 ? redacted.slice(0, HYDRATION_MESSAGE_LIMIT) : "unavailable";
 }
 
 function safePageUrl(rawUrl: string) {

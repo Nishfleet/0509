@@ -97,6 +97,26 @@ describe("release hydration bridge", () => {
     expect(detail.url).toBe("/app/watchlists?watchlist=e2e-1");
   });
 
+  it("redacts the full Authorization Bearer header without leaking the token", () => {
+    const page = new FakePage();
+    const testInfo = {
+      annotations: [] as Array<{ type: string; description?: string }>,
+      title: "t",
+    };
+    installReleaseHydrationBridge(page as never, testInfo as never);
+
+    page.emit("console", {
+      type: () => "error",
+      text: () => "Hydration failed because the server rendered authorization: Bearer abc123secret",
+    });
+
+    const [detail] = hydrationDetails(testInfo);
+    expect(detail.source).toBe("console");
+    expect(detail.message).not.toContain("Bearer");
+    expect(detail.message).not.toContain("abc123secret");
+    expect(detail.message).toContain("[redacted]");
+  });
+
   it("caps the captured message at 300 characters", () => {
     const page = new FakePage();
     const testInfo = {

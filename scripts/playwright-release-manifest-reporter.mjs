@@ -297,7 +297,7 @@ const TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
 const ANNOTATION_PATTERN = /^[\p{L}\p{N}._:;,+@%#?&=~!$'()*;\-/→× ]{1,128}$/u;
 const URL_TOKEN_PATTERN = /^[A-Za-z0-9._~!?$&'()*+,;=:@%\-/]+$/u;
 const SENSITIVE_QUERY_KEY = /(?:token|secret|password|cookie|authorization|auth|email|key)/iu;
-const SECRET_LIKE_VALUE = /(?:sk_(?:live|test)_|bearer\s+|api[_-]?key|password\s*=|secret\s*=|token\s*=)/iu;
+const SECRET_LIKE_VALUE = /(?:sk_(?:live|test)_|bearer\s+|api[_-]?key|password\s*[=:]|secret\s*[=:]|token\s*[=:]|authorization\s*[=:]|cookie\s*[=:]|\bkey\s*[=:])/iu;
 const ANSI_ESCAPE_PATTERN = /\u001b\[[0-?]*[ -/]*[@-~]/gu;
 const WEB_SERVER_PREFIX_PATTERN = /\[WebServer(?:[^\]]*)\]\s?/gu;
 const HYDRATION_ERROR_PATTERN = /(?:hydration failed because (?:the server rendered|the initial ui does not match)|text content did not match|a tree hydrated but some attributes of the server rendered|this will cause a hydration error|minified react error #418\b)/iu;
