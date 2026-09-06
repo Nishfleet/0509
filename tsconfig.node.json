@@ -70,6 +70,7 @@
     "scripts/search-latency-probe.mjs",
     "scripts/search-latency-regression-guard.mjs",
     "scripts/search-tier-canary.mjs",
+    "scripts/ci-d1-budget-check.lib.mjs",
     "tests/**/*",
     "extension/lib/**/*.mjs",
     "app/**/*",

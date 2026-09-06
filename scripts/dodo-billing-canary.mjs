@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=50 writes=5 runs_per_day=10
 
 import { pathToFileURL } from "node:url";
 
