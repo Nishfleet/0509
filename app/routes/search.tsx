@@ -2071,6 +2071,18 @@ export default function SearchRoute() {
                         See all {data.brandPageLink.name} ads
                       </Link>
                     ) : null}
+                    {/* Issue 1759: the /brands hub must be reachable from
+                        the results view too — a prospect who lands on a
+                        ?q= search (the common search-landing state) can
+                        browse all tracked brands without first opening an
+                        /ads/:domain leaf page. The issue's verify command
+                        greps /search?q=nike&country=all for href="/brands". */}
+                    <Link className="f9-wk-lnk" to="/brands">
+                      Browse all tracked brands{" "}
+                      <span aria-hidden="true" className="f9-wk-chev">
+                        &rsaquo;
+                      </span>
+                    </Link>
                     {visibleAds.length > 1 ? (
                       <label className="f9-wk-field is-inline">
                         <span className="f9-sr-only">Sort results</span>
