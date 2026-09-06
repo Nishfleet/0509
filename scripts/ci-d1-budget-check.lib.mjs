@@ -161,18 +161,17 @@ function indexMetadata(db) {
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
     .all()
     .map((row) => String(/** @type {{ name?: unknown }} */ (row).name));
-  /** @param {unknown} value @returns {string} */
-  const sqlString = (value) => `'${String(value).replace(/'/g, "''")}'`;
+  // Pragma functions take bound parameters — never interpolate into SQL text.
   for (const table of tables) {
     const indexes = db
-      .prepare(`SELECT name, "unique" AS isUnique FROM pragma_index_list(${sqlString(table)})`)
-      .all();
+      .prepare('SELECT name, "unique" AS isUnique FROM pragma_index_list(?)')
+      .all(table);
     for (const index of indexes) {
       const name = String(/** @type {{ name?: unknown }} */ (index).name);
       const isUnique = Number(/** @type {{ isUnique?: unknown }} */ (index).isUnique) === 1;
       const row = db
-        .prepare(`SELECT COUNT(*) AS n FROM pragma_index_info(${sqlString(name)})`)
-        .get();
+        .prepare("SELECT COUNT(*) AS n FROM pragma_index_info(?)")
+        .get(name);
       const columnCount = Number(/** @type {{ n?: unknown }} */ (row)?.n ?? 0);
       meta.set(name, { unique: isUnique, columnCount });
     }
