@@ -1350,9 +1350,10 @@ function cleanText(value: string) {
 
 function decodeHtml(value: string) {
   return value.replace(
-    /&(amp|quot|#39|lt|gt|hellip|#8230|#x2026);/gi,
+    /&(amp|quot|#39|lt|gt|hellip|#8230|#x[0-9a-f]+);/gi,
     (entity) => {
-      switch (entity.toLowerCase()) {
+      const lower = entity.toLowerCase();
+      switch (lower) {
         case "&amp;":
           return "&";
         case "&quot;":
@@ -1363,8 +1364,24 @@ function decodeHtml(value: string) {
           return "<";
         case "&gt;":
           return ">";
-        default:
+        case "&hellip;":
+        case "&#8230;":
           return "…";
+        default: {
+          // Issue #1409: the decoder only knew the single hex entity
+          // &#x2026;, so a hex-encoded apostrophe (&#x27;) survived into
+          // ctaText. Decode any &#x..; here so no `&#x` sequence survives
+          // into extracted_fields_json.ctaText. This is a general hex
+          // decode, not a special case for the one entity.
+          const hex = lower.match(/^&#x([0-9a-f]+);$/);
+          if (hex) {
+            const codePoint = parseInt(hex[1], 16);
+            if (codePoint <= 0x10ffff) {
+              return String.fromCodePoint(codePoint);
+            }
+          }
+          return entity;
+        }
       }
     },
   );
