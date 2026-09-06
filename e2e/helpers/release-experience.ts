@@ -177,9 +177,12 @@ export async function expectSecHeadingsNonZeroWidth(page: Page): Promise<void> {
   // this pins the cause by asserting the headings container keeps a non-zero
   // width whenever the actions are present, on every viewport the journey
   // runs (mobile wraps, desktop has room, tablet is the dead zone).
+  //
+  // Both elements are asserted present (not silently skipped): the empty
+  // state always renders the pair, so a missing .f9-wk-sec-acts would be a
+  // real markup regression and must fail loudly rather than pass the guard.
   const secActs = page.locator(".f9-wk-sec-acts").first();
-  const actsCount = await secActs.count();
-  if (actsCount === 0) return;
+  await expect(secActs, ".f9-wk-sec-acts should be present and visible").toHaveCount(1);
   await expect(secActs, ".f9-wk-sec-acts should be visible").toBeVisible();
   const headings = page.locator(".f9-wk-sec-headings").first();
   await expect(headings, ".f9-wk-sec-headings should be present").toHaveCount(1);
