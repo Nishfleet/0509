@@ -59,8 +59,16 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
   }
 }
 
+// research: This is the minimal additive extension of a REUSE read-only connector surface.
+// The issue (Nishfleet/0509#1378) UNKNOWNS explicitly allow opening the existing `reddit`
+// and `x` connectors as customer mention sources; app/lib/presence-access-gates.server.ts
+// only gates whether a connector has a customer poll path, so widening the predicate here is
+// sufficient. `linkedin` (no general customer poll path — limited competitor self-brand only)
+// stays closed.
+// help-first: Only the predicate changes; the runtime gates in evaluateConnectorAccessGate
+// (rolloutState, credentials, reddit commercial access) still govern whether polling actually runs.
 export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
-  return connectorId === "website" || connectorId === "rss";
+  return connectorId === "website" || connectorId === "rss" || connectorId === "x" || connectorId === "reddit";
 }
 
 export async function evaluateConnectorAccessGate(

@@ -356,14 +356,14 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "x",
       label: SOURCE_LABELS.x,
-      productionStatus: "unavailable",
-      notes: "Requires paid API credentials, rollout decision, and rate-limit approval.",
+      productionStatus: "gated",
+      notes: "X connector wired in. Gated behind PRESENCE_X_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "reddit",
       label: SOURCE_LABELS.reddit,
-      productionStatus: "unavailable",
-      notes: "Requires commercial API access approval and credentials.",
+      productionStatus: "gated",
+      notes: "Reddit connector wired in. Gated behind PRESENCE_REDDIT_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "linkedin",
