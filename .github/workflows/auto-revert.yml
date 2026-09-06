@@ -37,6 +37,10 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # The assertion-step classifier (0509#1576 accept 2) reads the failed run's
+  # jobs via the Actions API. `actions: read` lets the GITHUB_TOKEN fallback
+  # serve that query instead of depending on AUTO_REVERT_PAT alone.
+  actions: read
 
 # Parallel failures serialize: two red workflows for the same push (or two
 # pushes close together) must not race to revert. One at a time, in arrival
