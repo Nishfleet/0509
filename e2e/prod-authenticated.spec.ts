@@ -14,7 +14,10 @@ async function expectAuthenticatedRoute(page: import("@playwright/test").Page, p
   await expect(page.getByRole("heading", { name: "Something went wrong" })).toHaveCount(0);
 }
 
-test.describe("production authenticated smoke with owner-captured auth state", () => {
+// Shared-resource lock (issue #1727): hits the live external production API
+// with the shared owner-captured account — serialize against the other
+// external-API specs.
+test.describe("production authenticated smoke with owner-captured auth state", { lock: "external-api" }, () => {
   test.beforeAll(() => {
     try {
       execFileSync(process.execPath, ["scripts/e2e-validate-auth-state.mjs"], {

@@ -16,7 +16,8 @@ test.use({
   timezoneId: "Pacific/Kiritimati",
 });
 
-test("homepage hydrates with zero React #418 page errors at 360x844", async ({
+// Shared-resource lock (issue #1727): live external production surface.
+test("homepage hydrates with zero React #418 page errors at 360x844", { lock: "external-api" }, async ({
   page,
 }) => {
   const pageErrors: string[] = [];

@@ -54,7 +54,9 @@ async function expectProofImageAccessibleNames(page: Page) {
 }
 
 for (const viewport of viewports) {
-  test(`Gate-B Journey 2: onboarding to search to credible proof (${viewport.name})`, async ({
+  // Shared-resource lock (issue #1727): onboarding writes the shared local
+  // fixture D1 and the same spec runs under five engine projects.
+  test(`Gate-B Journey 2: onboarding to search to credible proof (${viewport.name})`, { lock: "d1" }, async ({
     page,
     context,
     baseURL,
@@ -218,7 +220,7 @@ for (const viewport of viewports) {
     });
   });
 
-  test(`Gate-B Journey 2: onboarding creates the first tracked competitor (${viewport.name})`, async ({
+  test(`Gate-B Journey 2: onboarding creates the first tracked competitor (${viewport.name})`, { lock: "d1" }, async ({
     page,
     context,
     baseURL,
@@ -319,7 +321,9 @@ for (const viewport of viewports) {
   });
 }
 
-test("persistent setup card keeps an empty free workspace honest", async ({
+// Shared-resource lock (issue #1727): same shared local fixture D1 as the
+// journey loop above.
+test("persistent setup card keeps an empty free workspace honest", { lock: "d1" }, async ({
   page,
   context,
   baseURL,

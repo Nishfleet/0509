@@ -145,7 +145,10 @@ async function readBillingState(page: Page, userId: string) {
   return response.body as Record<string, any>;
 }
 
-test.describe("Journey 5 release: plan, checkout, entitlements, billing", () => {
+// Shared-resource lock (issue #1727): the billing replay mutates shared
+// fixture baselines (postflight expects billingReplayBaselines:3) and the
+// same describe runs under five engine projects.
+test.describe("Journey 5 release: plan, checkout, entitlements, billing", { lock: "d1" }, () => {
   for (const viewport of viewports) {
     test(`holds plan boundaries and proves entitlement display (${viewport.name})`, async ({
       page,
