@@ -4912,6 +4912,124 @@ _dispatch_lane_faults() {
     return 1
 }
 
+# --- fast-death error classification (fleet-ops#3766) ----------------------
+# A fast death (pi exits non-zero with 0 tool calls) that matches NO existing
+# detector leaves the seat ledger at health_class=healthy (a probe overwrote
+# it) while pick_seat logged UNUSABLE — the seat flaps between probe-healthy
+# and run-dead every few minutes and each flap burns a claim. The seat
+# retirement rule (2026-09-05) requires citing the ERROR CLASS before any cap
+# change; with no error text nobody can classify the death, so the seat can
+# neither be benched honestly nor cleared. These helpers give every fast death
+# a classifiable literal: session_tool_calls counts the session, classify_death_error
+# reuses the existing matchers to derive an error_class (unknown if none match)
+# plus the raw tail, and _seat_merge_error_class writes last_error_class +
+# bench_reason into the existing ledger file (a field-merge, not a new organ).
+
+# session_tool_calls <session_jsonl_path>
+# Counts completed tool calls in a pi session jsonl. Each toolResult message
+# is one tool call that ran. Returns 0 on parse failure (fail-open).
+session_tool_calls() {
+    local f="${1:-}"
+    [[ -n "$f" && -f "$f" ]] || { printf '0'; return 0; }
+    local n
+    n=$(jq -r 'select(.message.role? == "toolResult") | .message.toolCallId // empty' "$f" 2>/dev/null | grep -c . 2>/dev/null || true)
+    [[ "$n" =~ ^[0-9]+$ ]] || n=0
+    printf '%s' "$n"
+}
+
+# classify_death_error <out_file> <err_file> <session_jsonl>
+# Prints two lines: the error_class and the literal error tail (<=300 chars).
+# Reuses the existing matchers (is_quota_cap_error, is_overload_error,
+# is_spawn_etimeout, is_mid_session_death) so a fast death always carries a
+# classifiable literal. An unclassifiable death is "unknown" with the raw tail.
+classify_death_error() {
+    local out="${1:-}" err="${2:-}" sess="${3:-}"
+    local out_text="" err_text=""
+    [[ -n "$out" && -f "$out" ]] && out_text=$(cat "$out" 2>/dev/null || true)
+    [[ -n "$err" && -f "$err" ]] && err_text=$(cat "$err" 2>/dev/null || true)
+    local cls="unknown"
+    if is_quota_cap_error "$out_text" "$err_text"; then
+        cls="quota_cap"
+    elif is_overload_error "$out_text" "$err_text"; then
+        cls="overload_503"
+    elif is_spawn_etimeout "$out_text" "$err_text"; then
+        cls="spawn_etimeout"
+    elif is_mid_session_death "$err"; then
+        cls="mid_session_death"
+    elif [[ -n "$err_text" ]] && grep -qiE 'spawnSync.*ETIMEDOUT|ETIMEDOUT.*spawnSync' <<<"$err_text" 2>/dev/null; then
+        cls="hang_etimedout"
+    fi
+    # Literal: prefer the session-error line (#3238 surfaces it into err),
+    # then the last non-empty stderr line, then the session jsonl errorMessage.
+    local literal=""
+    if [[ -n "$err_text" ]]; then
+        literal=$(grep -E '^session-error:' <<<"$err_text" 2>/dev/null | tail -1 | sed 's/^session-error: //' | head -c 300 || true)
+    fi
+    if [[ -z "$literal" && -n "$err_text" ]]; then
+        literal=$(grep -vE '^[[:space:]]*$' <<<"$err_text" 2>/dev/null | tail -1 | head -c 300 || true)
+    fi
+    if [[ -z "$literal" && -n "$sess" && -f "$sess" ]]; then
+        literal=$(jq -r 'select(.message.stopReason? == "error") | .message.errorMessage // empty' "$sess" 2>/dev/null | tail -1 | head -c 300 || true)
+    fi
+    [[ -z "$literal" ]] && literal="(no error text captured)"
+    printf '%s\n%s\n' "$cls" "$literal"
+}
+
+# _seat_merge_error_class <provider> <model> <error_class> <bench_reason>
+# Merges last_error_class + bench_reason into the existing seat ledger file
+# (in-place jq edit). Same ledger file the mark_seat_* writers use — a
+# field-merge, not a new organ. Best-effort: a missing ledger or jq failure
+# returns 1, never blocks the caller's exit path.
+_seat_merge_error_class() {
+    local p="$1" m="$2" cls="${3:-unknown}" reason="${4:-}"
+    if ! _seat_key_guard "$p" "$m" "_seat_merge_error_class"; then return 1; fi
+    local path
+    path=$(seat_ledger_path "$p" "$m")
+    [[ -f "$path" ]] || return 1
+    local tmp="$path.errcls.$$.$RANDOM.tmp"
+    if jq --arg ec "$cls" --arg br "$reason" \
+        '.last_error_class=$ec | .bench_reason=$br' "$path" >"$tmp" 2>/dev/null; then
+        chmod 0644 "$tmp" 2>/dev/null || true
+        if mv "$tmp" "$path" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    rm -f "$tmp" 2>/dev/null || true
+    return 1
+}
+
+# _seat_is_benched <provider> <model>
+# Returns 0 if the seat ledger already shows an active bench (a non-healthy
+# health_class, a future bench_until/usable_at, or an unexpired spawn-bench
+# marker), 1 otherwise. Used by the fast-death fallthrough bench (fleet-ops#3766)
+# so it never overwrites a bench a prior detector (hang_bench / quota / overload
+# / mid-session) already wrote — the fallthrough is only for a seat that is
+# genuinely unbenched and flapping.
+_seat_is_benched() {
+    local p="$1" m="$2"
+    local sb_path sb_usable
+    sb_path=$(seat_spawn_bench_path "$p" "$m")
+    if [[ -f "$sb_path" ]]; then
+        sb_usable=$(jq -r '.usable_at // ""' "$sb_path" 2>/dev/null || true)
+        if [[ -n "$sb_usable" ]] && _seat_in_future "$sb_usable"; then
+            return 0
+        fi
+    fi
+    local f hc bench_until usable_at
+    f=$(seat_ledger_path "$p" "$m")
+    [[ -f "$f" ]] || return 1
+    IFS=$'\x1f'$'\n' read -r hc bench_until usable_at < <(
+        jq -r '[(.health_class//""),(.bench_until//""),(.usable_at//"")] | join("\u001f")' "$f" 2>/dev/null || true
+    )
+    [[ -z "$hc" ]] && return 1
+    # Any non-healthy class is a bench (hang_bench / quota_bench / overload_bench
+    # / transient_fault / corpse) — never overwrite it with a fresh spawn-fail.
+    [[ "$hc" != "healthy" ]] && return 0
+    if [[ -n "$bench_until" ]] && _seat_in_future "$bench_until"; then return 0; fi
+    if [[ -n "$usable_at" ]] && _seat_in_future "$usable_at"; then return 0; fi
+    return 1
+}
+
 # --- quota/cap bench (fleet-ops#90) ----------------------------------------
 # A provider that returns a hard cap/quota 429 with an advertised reset window
 # (ClinePass "weekly Clinepass limit ... resets in 1d 11h", devin 15-min 429,
