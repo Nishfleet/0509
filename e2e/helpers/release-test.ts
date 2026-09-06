@@ -32,6 +32,7 @@ export function installReleaseHydrationBridge(
   const onConsole = (message: { type(): string; text(): string }) => {
     if (message.type() !== "error") return;
     if (REACT_HYDRATION_ERROR_PATTERN.test(message.text())) {
+      process.stderr.write(`DEBUG_HYDRATION_CONSOLE_TEXT: ${message.text()}\n`);
       recordHydrationError(testInfo, "console");
     }
   };
