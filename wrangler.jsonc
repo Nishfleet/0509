@@ -90,12 +90,7 @@
   },
   // Secrets configured outside this file via `wrangler secret put`:
   // - CANARY_BYPASS_TOKEN
-  // - WHATSAPP_ACCESS_TOKEN
-  // - WHATSAPP_APP_SECRET
   // - BROWSER_RUN_API_TOKEN
-  // - WHATSAPP_PHONE_NUMBER_ID
-  // - WHATSAPP_TEMPLATE_NAMESPACE
-  // - WHATSAPP_WEBHOOK_VERIFY_TOKEN
   // - DODO_PAYMENTS_API_KEY
   // - BETTER_AUTH_SECRET
   // - BETTER_AUTH_GOOGLE_CLIENT_ID (optional Google credential; not enough to expose Google)
