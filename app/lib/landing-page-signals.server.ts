@@ -1376,7 +1376,13 @@ function decodeHtml(value: string) {
           const hex = lower.match(/^&#x([0-9a-f]+);$/);
           if (hex) {
             const codePoint = parseInt(hex[1], 16);
-            if (codePoint <= 0x10ffff) {
+            // Guard the valid scalar range: >0x10ffff throws in
+            // String.fromCodePoint, and 0xd800-0xdfff is the surrogate
+            // range (a lone surrogate would corrupt downstream JSON/DB).
+            if (
+              codePoint <= 0x10ffff &&
+              !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+            ) {
               return String.fromCodePoint(codePoint);
             }
           }

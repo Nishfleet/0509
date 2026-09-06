@@ -37,4 +37,13 @@ describe("CTA entity decoding (issue #1409)", () => {
     expect(ctaText).toBe("Get Started – It's Free");
     expect(ctaText).not.toMatch(/&#x/);
   });
+
+  it("leaves an out-of-range hex entity untouched (guard behavior)", () => {
+    // 0x110000 is above the valid scalar range; 0xd800 is a lone surrogate.
+    // Both must be left as-is rather than decoded into invalid output.
+    const html =
+      '<button>Build my report &#x110000; &#xd800; now</button>';
+    const { ctaText } = extractLandingPageSignals(html);
+    expect(ctaText).toBe("Build my report &#x110000; &#xd800; now");
+  });
 });
