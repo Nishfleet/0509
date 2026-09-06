@@ -147,6 +147,60 @@ describe("status route", () => {
     expect(markup).toContain("Configuration and scope information and live monitoring facts");
   });
 
+  it("honestly surfaces a stalled digest instead of re-rendering a stale date when monitoring is healthy", async () => {
+    const counters = {
+      lastWatchlistRunAt: "2026-09-06T09:00:04.000Z",
+      runsInLast24h: 24,
+      failedRunsInLast24h: 0,
+      lastDigestSentAt: "2026-06-29T04:00:59.009Z",
+      digestHealth: "stalled" as const,
+    };
+
+    await mockRouter(() => ({
+      generatedAt: "2026-09-06T09:00:00.000Z",
+      asOf: "2026-09-06T09:30:00.000Z",
+      appServed: true,
+      monitoring: counters,
+      measurementsUnavailable: false,
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    // The stale date must not be presented as a live fact beside healthy
+    // monitoring counts (the old "... — as of ..." render).
+    expect(markup).toContain("Digest sends appear stalled.");
+    expect(markup).toContain("2026-06-29T04:00:59.009Z");
+    expect(markup).not.toContain("2026-06-29T04:00:59.009Z — as of");
+  });
+
+  it("renders the raw timestamps honestly when the whole pipeline is silent (unknown digest state)", async () => {
+    const counters = {
+      lastWatchlistRunAt: null,
+      runsInLast24h: 0,
+      failedRunsInLast24h: 0,
+      lastDigestSentAt: "2026-06-29T04:00:59.009Z",
+      digestHealth: "unknown" as const,
+    };
+
+    await mockRouter(() => ({
+      generatedAt: "2026-09-06T09:00:00.000Z",
+      asOf: "2026-09-06T09:30:00.000Z",
+      appServed: true,
+      monitoring: counters,
+      measurementsUnavailable: false,
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    // No stall claim, and no fresh-date illusion: the run counters are 0 and
+    // the digest date is shown with its as-of caveat rather than a fabricated
+    // stall.
+    expect(markup).not.toContain("Digest sends appear stalled.");
+    expect(markup).toContain("2026-06-29T04:00:59.009Z");
+  });
+
   it("loader propagates measured monitoring counters and renders no stale number", async () => {
     const counters = {
       lastWatchlistRunAt: "2026-09-01T03:00:00.000Z",
