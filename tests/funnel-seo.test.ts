@@ -172,6 +172,7 @@ describe("shared marketing footer", () => {
       "/changelog",
       "/competitor-monitoring",
       "/capture-rules",
+      "/brands",
       "/trust",
       "/privacy",
       "/terms",
