@@ -177,7 +177,7 @@ describe("presence source coverage policy", () => {
     expect(gated.find((entry) => entry.sourceId === "x")?.reasonCode).toBe("social_connect_not_in_plan");
   });
 
-  it("keeps mock-only social connectors unavailable without a real customer poll path", async () => {
+  it("marks x as available when rollout and creds are enabled", async () => {
     const entry = await evaluatePresenceSourceCoverage(
       {
         ...baseEnv,
@@ -188,8 +188,7 @@ describe("presence source coverage policy", () => {
       "x",
       "competitor",
     );
-    expect(entry.status).toBe("unavailable");
-    expect(entry.reasonCode).toBe("poll_not_implemented");
+    expect(entry.status).toBe("available");
   });
 
   it("preserves provider-disabled truth before social plan gates", async () => {
@@ -315,6 +314,6 @@ describe("presence source coverage policy", () => {
     expect(docs.find((entry) => entry.sourceId === "website")?.productionStatus).toBe("active");
     expect(docs.find((entry) => entry.sourceId === "youtube")?.productionStatus).toBe("planned");
     expect(docs.find((entry) => entry.sourceId === "amazon")?.productionStatus).toBe("manual_only");
-    expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("unavailable");
+    expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
   });
 });
