@@ -41,3 +41,6 @@ worker-configuration.d.ts
 
 # Operational telemetry cache (e.g. ci-failure-telemetry JSON dumps)
 /.cache/
+
+# Vale quality-ratchet measurement config (created and removed by scripts/quality-ratchet.mjs)
+/.vale-ratchet-measure-*.ini
