@@ -5,6 +5,10 @@ import { installReleaseHydrationBridge } from "../e2e/helpers/release-test";
 class FakePage {
   private readonly listeners = new Map<string, Set<(value: never) => void>>();
 
+  url() {
+    return "http://127.0.0.1:4179/app/watchlists?watchlist=e2e-1&token=must-stay-secret";
+  }
+
   on(event: string, listener: (value: never) => void) {
     const listeners = this.listeners.get(event) ?? new Set();
     listeners.add(listener);
@@ -22,10 +26,21 @@ class FakePage {
   }
 }
 
+function hydrationDetails(testInfo: {
+  annotations: Array<{ type: string; description?: string }>;
+}) {
+  return testInfo.annotations
+    .filter((annotation) => annotation.type === "reactHydrationErrorDetail")
+    .map((annotation) => JSON.parse(annotation.description ?? "{}"));
+}
+
 describe("release hydration bridge", () => {
   it("records safe, deduplicated annotations for browser hydration failures", () => {
     const page = new FakePage();
-    const testInfo = { annotations: [] as Array<{ type: string; description?: string }> };
+    const testInfo = {
+      annotations: [] as Array<{ type: string; description?: string }>,
+      title: "Gate-B Journey 3: monitoring loop (mobile)",
+    };
     const cleanup = installReleaseHydrationBridge(page as never, testInfo as never);
 
     page.emit("console", {
@@ -41,17 +56,79 @@ describe("release hydration bridge", () => {
       "Minified React error #418; visit https://react.dev/errors/418?args[]=HTML for the full message",
     ));
 
-    expect(testInfo.annotations).toEqual([
+    expect(
+      testInfo.annotations.filter((annotation) => annotation.type === "reactHydrationError"),
+    ).toEqual([
       { type: "reactHydrationError", description: "console" },
       { type: "reactHydrationError", description: "pageerror" },
     ]);
-    expect(JSON.stringify(testInfo.annotations)).not.toContain("server rendered text");
+    const details = hydrationDetails(testInfo);
+    expect(details).toHaveLength(2);
+    expect(details[0]).toEqual({
+      source: "console",
+      message: "Hydration failed because the server rendered text did not match the client",
+      url: "/app/watchlists?watchlist=e2e-1",
+      title: "Gate-B Journey 3: monitoring loop (mobile)",
+    });
+    expect(details[1].source).toBe("pageerror");
+    expect(details[1].message).toContain("tree hydrated but some attributes");
     cleanup();
+  });
+
+  it("strips secrets, control characters and sensitive query params from captured detail", () => {
+    const page = new FakePage();
+    const testInfo = {
+      annotations: [] as Array<{ type: string; description?: string }>,
+      title: "Gate-B Journey 5: billing (desktop)",
+    };
+    installReleaseHydrationBridge(page as never, testInfo as never);
+
+    // Assembled at runtime so the fixture never carries a literal key shape
+    // (the repo Gitleaks scan flags `token=<value>` samples in source).
+    const leakedKey = ["sk", "live", "abc123"].join("_");
+    const longUrl = [
+      "https://0509.io/unsubscribe?sig=",
+      "a".repeat(64),
+    ].join("");
+    page.emit("console", {
+      type: () => "error",
+      text: () =>
+        `\u001b[31mHydration failed because the initial UI does not match token=${leakedKey}; visit ${longUrl}\nnext line`,
+    });
+
+    const [detail] = hydrationDetails(testInfo);
+    expect(detail.source).toBe("console");
+    expect(detail.message).not.toContain("sk_live_");
+    expect(detail.message).not.toContain("sig=");
+    expect(detail.message).toContain("https://0509.io/unsubscribe");
+    expect(detail.message).toContain("[redacted]");
+    expect(detail.message).not.toContain("\n");
+    expect(detail.url).toBe("/app/watchlists?watchlist=e2e-1");
+  });
+
+  it("caps the captured message at 300 characters", () => {
+    const page = new FakePage();
+    const testInfo = {
+      annotations: [] as Array<{ type: string; description?: string }>,
+      title: "t",
+    };
+    installReleaseHydrationBridge(page as never, testInfo as never);
+
+    page.emit("console", {
+      type: () => "error",
+      text: () => `Hydration failed because the server rendered ${"x".repeat(600)}`,
+    });
+
+    const [detail] = hydrationDetails(testInfo);
+    expect(detail.message.length).toBeLessThanOrEqual(300);
   });
 
   it("ignores ordinary browser errors and non-error console messages", () => {
     const page = new FakePage();
-    const testInfo = { annotations: [] as Array<{ type: string; description?: string }> };
+    const testInfo = {
+      annotations: [] as Array<{ type: string; description?: string }>,
+      title: "t",
+    };
     installReleaseHydrationBridge(page as never, testInfo as never);
 
     page.emit("console", { type: () => "warning", text: () => "Hydration failed because the server rendered" });
