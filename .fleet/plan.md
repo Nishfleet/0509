@@ -55,3 +55,17 @@ missed it because vitest imports the unwrapped source module and mocks
 ## Phases
 
 - [x] phase 1: fix the compare hub locale-prefix drop + canary guard + evidence record + green gates
+
+## Reviewer round (seat: cursor/cursor-grok-4.6-high)
+
+No critical or warning findings. Two Consider findings recorded, not re-delegated:
+
+- Consider: the structural-guard regex `/<[A-Z][A-Za-z]*\s+[a-zA-Z]+=/` only guards
+  `$locale.compare.tsx`/`compare.tsx` and would miss a spread form
+  (`<CompareRoute {...{localePrefix}}>`) or a future `$locale.switch.tsx` hub with
+  the same bug. Adequate for the current surface (no switch hub; all 5 locale hubs
+  share `$locale.compare.tsx`). Not acted on — no switch hub exists and the guard
+  covers the shipped surface.
+- Consider: the same regex is brittle against the file's own comment — a future
+  edit documenting the bug with a literal JSX example in a comment would falsely
+  fail the guard. Not acted on — the comment currently contains no such literal.
