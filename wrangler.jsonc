@@ -1,0 +1,141 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "0509",
+  "compatibility_date": "2026-03-29",
+  "main": "./workers/app.ts",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
+  "placement": { "mode": "smart" },
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "workflows": [
+    {
+      "name": "0509-monitoring",
+      "binding": "MONITORING_WORKFLOW",
+      "class_name": "MonitoringWorkflow"
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "0509.io",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.0509.io",
+      "custom_domain": true
+    },
+    {
+      "pattern": "api.0509.io",
+      "custom_domain": true
+    },
+    {
+      "pattern": "0509.in",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.0509.in",
+      "custom_domain": true
+    },
+    {
+      "pattern": "api.0509.in",
+      "custom_domain": true
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
+  "triggers": {
+    "crons": ["13 * * * *", "17 */6 * * *", "0 */3 * * *", "0 4 * * *", "0 5 * * MON"]
+  },
+  "vars": {
+    "APP_NAME": "0509",
+    "APP_ORIGIN": "https://0509.io",
+    "AUTH_PROVIDER": "better-auth",
+    "BETTER_AUTH_URL": "https://0509.io",
+    "DODO_0509_ADAPTIVE_CURRENCY": "true",
+    "DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE": "true",
+    "DODO_0509_ENVIRONMENT": "live",
+    "BROWSER_RUN_ACCOUNT_ID": "f670a698e17bf160c8e4679823e68916",
+    "LAUNCH_CANARY_EMAIL": "me@inish.in",
+    "EMAIL_FROM_EMAIL": "alerts@0509.io",
+    "E2E_TEST_MODE": "0",
+    "MONITORING_FANOUT_MODE": "fanout",
+    "MONITORING_FANOUT_GLOBAL": "1",
+    "MONITORING_FANOUT_MAX_INFLIGHT": "8",
+    "MONITORING_ORCHESTRATION_LEASE_MS": "3600000",
+    "MONITORING_ORCHESTRATION_MAX_AGE_MS": "7200000",
+    "MONITORING_CONCURRENCY_SLOT_LEASE_MS": "3600000",
+    "MONITORING_SCHEDULED_BROWSER_MODE": "billing",
+    "BROWSER_RUN_SESSION_REUSE": "0",
+    "SEARCH_ROLLOUT_MODE": "v2",
+    "ADS_DOMAIN_PUBLISHER_CAP": "60",
+    "PRESENCE_WEBSITE_ROLLOUT": "generally_available",
+    "PRESENCE_DIGEST_ROLLOUT": "disabled",
+    "PRESENCE_X_ROLLOUT": "disabled",
+    "PRESENCE_REDDIT_ROLLOUT": "disabled",
+    "PRESENCE_LINKEDIN_ROLLOUT": "disabled",
+    "FUNNEL_MEASUREMENT_ENABLED": "0",
+    "SIGNUP_FIRST_BRIEF_ENABLED": "1"
+  },
+  // Secrets configured outside this file via `wrangler secret put`:
+  // - CANARY_BYPASS_TOKEN
+  // - WHATSAPP_ACCESS_TOKEN
+  // - WHATSAPP_APP_SECRET
+  // - BROWSER_RUN_API_TOKEN
+  // - WHATSAPP_PHONE_NUMBER_ID
+  // - WHATSAPP_TEMPLATE_NAMESPACE
+  // - WHATSAPP_WEBHOOK_VERIFY_TOKEN
+  // - DODO_PAYMENTS_API_KEY
+  // - BETTER_AUTH_SECRET
+  // - BETTER_AUTH_GOOGLE_CLIENT_ID (optional Google credential; not enough to expose Google)
+  // - BETTER_AUTH_GOOGLE_CLIENT_SECRET (optional Google credential; store as secret)
+  // - BETTER_AUTH_MICROSOFT_CLIENT_ID (optional Microsoft credential; not enough to expose Microsoft)
+  // - BETTER_AUTH_MICROSOFT_CLIENT_SECRET (optional Microsoft credential; store as secret)
+  // - BETTER_AUTH_MICROSOFT_ACCOUNT_LINKING_TRUSTED (optional; set true only after accepting same-email Microsoft account linking)
+  // - BETTER_AUTH_MICROSOFT_TENANT_ID (optional; defaults to common)
+  // - BETTER_AUTH_OAUTH_BRANDED_PROVIDERS (optional comma-separated google,microsoft after account chooser branding is verified)
+  // - BETTER_AUTH_TRUSTED_ORIGINS (optional comma-separated preview origins)
+  // - UNSUBSCRIBE_SIGNING_SECRET
+  // - DODO_0509_API_KEY (optional override if 0509 ever needs its own key)
+  // - DODO_0509_BRAND_ID
+  // - DODO_0509_WEBHOOK_SECRET
+  // - DODO_0509_PRODUCT_SCOUT_MONTHLY_ID
+  // - DODO_0509_PRODUCT_SCOUT_YEARLY_ID
+  // - DODO_0509_PRODUCT_STARTER_MONTHLY_ID
+  // - DODO_0509_PRODUCT_STARTER_YEARLY_ID
+  // - DODO_0509_PRODUCT_AGENCY_MONTHLY_ID
+  // - DODO_0509_PRODUCT_AGENCY_YEARLY_ID
+  // - DODO_0509_PRODUCT_PROOF_PACK_500_ID
+  // - DODO_0509_PRODUCT_PROOF_PACK_2000_ID
+  // - DODO_0509_PRODUCT_PROOF_PACK_7500_ID
+  // - MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID (owner-documented pilot workspace; never commit a value)
+  // - PRESENCE_OAUTH_STATE_SECRET (32+ bytes; fail closed when missing)
+  // - PRESENCE_INTERNAL_WORKSPACE_ID (owner-documented internal presence pilot workspace; never commit a value)
+  // - META_TOKEN_ENCRYPTION_SECRET
+  // Email sending uses the Cloudflare Email Service `send_email` binding above —
+  // no API key secret. The active sender is the 0509.io brand address.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "0509",
+      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "LANDING_PAGE_ARTIFACTS",
+      "bucket_name": "0509-landing-page-artifacts"
+    }
+  ]
+}

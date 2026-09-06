@@ -1,0 +1,277 @@
+/* Five to Nine — extension popup. Brand: bone ground, ink text, green accent.
+   No webfonts: IBM Plex Mono resolves only if installed, falling back to the
+   system mono stack; body copy uses the system UI stack. */
+
+:root {
+  --ink: #171611;
+  --ink-soft: #55524a;
+  --ink-faint: #6e6a5e;
+  --line: #e0ddd4;
+  --card: #fffdf8;
+  --bone: #f4f1e8;
+  --green: #16c47f;
+  --green-ink: #064d31;
+  --green-wash: #d9f6e8;
+  --red: #b42318;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 320px;
+  margin: 0;
+  padding: 16px 18px 14px;
+  background: var(--bone);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* Header */
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand-mark {
+  display: inline-flex;
+  color: var(--ink);
+}
+
+.brand-kicker {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--green-ink);
+}
+
+.brand-time {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+/* Main views */
+
+main {
+  padding-top: 14px;
+}
+
+.context-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.context-line strong {
+  color: var(--ink);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pulse-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 0 rgba(22, 196, 127, 0.45);
+  animation: pulse 2.4s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 196, 127, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(22, 196, 127, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(22, 196, 127, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot {
+    animation: none;
+  }
+}
+
+.headline {
+  margin: 0 0 14px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.headline #domain-headline {
+  color: var(--green-ink);
+}
+
+.fallback-note {
+  margin: -6px 0 12px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+/* Actions */
+
+.actions {
+  display: grid;
+  gap: 8px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 700;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.btn-primary {
+  background: var(--ink);
+  color: var(--bone);
+}
+
+.btn-primary .btn-arrow {
+  color: var(--green);
+  transition: transform 160ms ease;
+}
+
+.btn-primary:hover .btn-arrow {
+  transform: translateX(2px);
+}
+
+.btn-secondary {
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-secondary:hover {
+  border-color: rgba(23, 22, 17, 0.28);
+}
+
+.btn:focus-visible,
+.link-tertiary:focus-visible,
+#domain-input:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.link-tertiary {
+  justify-self: center;
+  margin-top: 2px;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--green-ink);
+  text-decoration: underline;
+  text-decoration-color: rgba(6, 77, 49, 0.35);
+  text-underline-offset: 3px;
+}
+
+.link-tertiary:hover {
+  text-decoration-color: var(--green-ink);
+}
+
+/* Fallback input */
+
+.input-label {
+  display: block;
+  margin-bottom: 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+#domain-input {
+  width: 100%;
+  min-height: 42px;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13.5px;
+}
+
+#domain-input::placeholder {
+  color: var(--ink-faint);
+}
+
+#domain-input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 4px rgba(22, 196, 127, 0.12);
+  outline: none;
+}
+
+.input-error {
+  margin: -4px 0 10px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+/* Footer */
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
+.foot-sep {
+  color: var(--line);
+}

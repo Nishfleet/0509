@@ -1,0 +1,229 @@
+name: Daily market-signal D1 snapshot
+
+# Restores the daily 0509 market-signal D1 snapshot after the host cron's
+# wrangler OAuth session expired 2026-08-04T13:26:24Z and could not refresh in
+# a non-interactive cron (no CLOUDFLARE_API_TOKEN there), which left the
+# snapshot stale for five mornings (scout 2026-08-09; see PR #557 for the
+# self-diagnosing failure classifier). This workflow generates the snapshot on
+# a GitHub-hosted runner using the production-environment
+# Cloudflare token secrets and commits it to main, so the host Hermes job
+# never needs a Cloudflare credential at all.
+#
+# History: this job previously required a self-hosted runner because
+# GitHub-hosted jobs were intermittently refused with "recent account payments
+# have failed or your spending limit needs to be increased", which is exactly
+# how the snapshot went stale before. That billing fault is resolved and every
+# workflow in this repository now runs on GitHub-hosted runners (2026-08-23).
+# If hosted jobs start being refused again, this is the first symptom to expect.
+#
+# The commit is a no-op when the snapshot is unchanged.
+#
+# The snapshot is published to a dedicated automation-owned data branch
+# (`automation/market-signal-snapshot`) in the PRIVATE sink repo
+# `Nishfleet/0509-telemetry`, NOT merged to main and NOT pushed to this public
+# repo. The public 0509 repo went public on 2026-08-24; an audit
+# (0509-public-flip-audit.md) found the previous shape had been publishing live
+# traction telemetry (users_total, paid_accounts, plan mix, billing events) as
+# branches in the public repo. Those branches were deleted and this workflow
+# was disabled; it is re-pointed at the private sink so the telemetry never
+# returns to a public surface.
+#
+# Cross-repo push: the workflow's default GITHUB_TOKEN cannot push to another
+# repo, so the publish step writes the deploy key stored as the
+# `TELEMETRY_DEPLOY_KEY` repo secret (a write-enabled deploy key on
+# 0509-telemetry) to a temp file and pushes over SSH with a one-shot ssh
+# commandConfig. The private half never appears in logs: it is written under
+# $RUNNER_TEMP, used once, and unlinked.
+#
+# The branch name and snapshot path are unchanged from the old public-branch
+# shape (`automation/market-signal-snapshot` / `ops/market-signal/0509-market-signal.json`),
+# so Hermes reads the snapshot from the same ref/path -- only the repo changed
+# (see automation/HERMES_MARKET_SIGNAL.md). A human can review the snapshot diff
+# on the private data branch at any time; the publish step writes a job summary
+# pointing at it. A snapshot that cannot be produced or pushed fails the job --
+# never exit 0 on a publish failure.
+on:
+  schedule:
+    # Daily 00:07 UTC = 05:37 IST: before the Hermes morning report reads the
+    # snapshot, and outside the 20:07/20:47 UTC provider-mutation windows.
+    - cron: "7 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: 0509-production-provider-mutations
+  cancel-in-progress: false
+  queue: max
+
+# The snapshot script reads the repository's issue list for the github section
+# of the signal, so the token needs issues: read. Without issues: read the
+# script's `gh api .../issues` call dies with "Resource not accessible by
+# integration (HTTP 403)" (seen on the first three restored runs,
+# 2026-08-12T01:21Z/01:29Z/01:33Z); since #682 the scheduled token carries
+# issues: read, and if a read ever fails again the script degrades to
+# github: { unavailable: true } and the snapshot still publishes.
+# No contents: write and no pull-requests scope: the snapshot no longer lands
+# in this repo at all. It is pushed to the private sink Nishfleet/0509-telemetry
+# with a deploy key (TELEMETRY_DEPLOY_KEY secret), not the GITHUB_TOKEN, so the
+# workflow needs no write scope on this public repo.
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  snapshot:
+    name: Generate and commit market-signal snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    # Scheduled runs execute on the default branch; manual dispatches must also
+    # name main so a branch dispatch cannot push the snapshot from a fork.
+    if: github.ref == 'refs/heads/main'
+    env:
+      SNAPSHOT_PATH: ops/market-signal/0509-market-signal.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+      - name: Refuse empty Cloudflare secrets
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || missing+=(CLOUDFLARE_API_TOKEN)
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || missing+=(CLOUDFLARE_ACCOUNT_ID)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "market_signal_missing_cloudflare_secret: ${missing[*]}" >&2
+            exit 1
+          fi
+          echo "market_signal_cloudflare_secrets_present"
+      - name: Generate market-signal D1 snapshot
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          XDG_CONFIG_HOME: ${{ runner.temp }}/market-signal-wrangler-config
+        run: |
+          unset CF_API_TOKEN CF_API_KEY CF_EMAIL CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL
+          npm run signal:market -- --output "$SNAPSHOT_PATH"
+      - name: Verify snapshot freshness
+        run: |
+          node -e "
+            const fs = require('fs');
+            const snapshot = JSON.parse(fs.readFileSync(process.env.SNAPSHOT_PATH, 'utf8'));
+            const generatedAt = Date.parse(snapshot.generatedAt);
+            if (!Number.isFinite(generatedAt)) {
+              console.error('market_signal_snapshot_invalid: generatedAt missing');
+              process.exit(1);
+            }
+            if (Math.abs(Date.now() - generatedAt) > 60 * 60 * 1000) {
+              console.error('market_signal_snapshot_stale: ' + snapshot.generatedAt);
+              process.exit(1);
+            }
+            console.log('market_signal_snapshot_fresh ' + snapshot.generatedAt);
+          "
+      - name: Publish snapshot to private telemetry sink
+        # Regression guard (issue #1448): a snapshot that cannot be pushed
+        # within 5 minutes fails the run, not just logs. The 2026-08-21 silent
+        # red period went undiagnosed for 12+ days partly because a hung push
+        # could drift inside the job's 30-minute timeout with no named
+        # failure. A step-level 5-minute timeout turns a stuck push (SSH stall,
+        # dead deploy key, network hang) into a loud, fast failure instead of a
+        # slow silent one. The push itself is normally sub-second; 5 minutes is
+        # generous headroom for a cold runner and a large snapshot.
+        timeout-minutes: 5
+        # The snapshot is pushed to the PRIVATE repo Nishfleet/0509-telemetry
+        # on the automation-owned data branch `automation/market-signal-snapshot`,
+        # never to this public repo. The default GITHUB_TOKEN cannot push
+        # cross-repo, so the publish step writes the TELEMETRY_DEPLOY_KEY secret
+        # (a write-enabled deploy key on 0509-telemetry) to a temp file under
+        # $RUNNER_TEMP and pushes over SSH with a one-shot GIT_SSH_COMMAND that
+        # pins that key. The key file is unlinked before the step exits, success
+        # or failure, so it never persists on the runner. A snapshot that cannot
+        # be pushed fails the job -- never exit 0 on a publish failure. The job
+        # summary surfaces the private branch and commit to a human for review;
+        # Hermes reads the snapshot from this branch directly
+        # (automation/HERMES_MARKET_SIGNAL.md).
+        env:
+          TELEMETRY_DEPLOY_KEY: ${{ secrets.TELEMETRY_DEPLOY_KEY }}
+          TELEMETRY_REPO: Nishfleet/0509-telemetry
+        run: |
+          set -euo pipefail
+
+          # Refuse an empty deploy key before writing anything: a missing
+          # secret would otherwise produce an opaque SSH auth failure downstream.
+          if [ -z "${TELEMETRY_DEPLOY_KEY:-}" ]; then
+            echo "market_signal_missing_telemetry_deploy_key" >&2
+            exit 1
+          fi
+
+          # Write the deploy key to a temp file under $RUNNER_TEMP, scoped to
+          # this step, mode 600, and unlink it on exit so it never persists.
+          KEY_FILE="$RUNNER_TEMP/telemetry_deploy_key"
+          printf '%s\n' "$TELEMETRY_DEPLOY_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          trap 'rm -f "$KEY_FILE"' EXIT
+
+          # One-shot SSH command that pins the deploy key and disables any
+          # inherited agent or default identity. StrictHostKeyChecking=accept-new
+          # trusts github.com's host key on first connect (the runner image
+          # already carries it, but this is robust to image drift).
+          export GIT_SSH_COMMAND="ssh -i \"$KEY_FILE\" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=\"$RUNNER_TEMP/telemetry_known_hosts\""
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$SNAPSHOT_PATH"
+          if git diff --cached --quiet; then
+            echo "market_signal_snapshot_unchanged"
+            exit 0
+          fi
+          git commit -m "chore(automation): daily market-signal D1 snapshot $(date -u +%Y-%m-%d)"
+          SNAPSHOT_BRANCH="automation/market-signal-snapshot"
+          # -C resets an existing data branch from a rerun instead of failing;
+          # the branch is automation-owned, so a force push is safe.
+          git switch -C "$SNAPSHOT_BRANCH"
+
+          # Push to the PRIVATE telemetry repo, not this repo's origin. The
+          # deploy key is scoped to 0509-telemetry with write access, so a push
+          # anywhere else fails closed.
+          TELEMETRY_URL="git@github.com:${TELEMETRY_REPO}.git"
+          # Add the telemetry remote pointing at the private repo. --force-if-includes
+          # refuses the push if a remote-only commit has slipped in (e.g. a manual
+          # commit landed on the data branch). If the branch has no upstream yet,
+          # --force creates it; the automation owns the branch so a force push is
+          # safe and the explicit fallback keeps the workflow from dying on the
+          # very first run.
+          set +e
+          git push --force-if-includes "${TELEMETRY_URL}" "HEAD:$SNAPSHOT_BRANCH"
+          push_status=$?
+          set -e
+          if [ "$push_status" -ne 0 ]; then
+            git push --force "${TELEMETRY_URL}" "HEAD:$SNAPSHOT_BRANCH"
+          fi
+
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          BRANCH_URL="https://github.com/${TELEMETRY_REPO}/tree/${SNAPSHOT_BRANCH}"
+          COMMIT_URL="https://github.com/${TELEMETRY_REPO}/commit/${COMMIT_SHA}"
+          echo "market_signal_snapshot_published ${BRANCH_URL}"
+          # Surface the snapshot to a human: the private data branch and commit
+          # are reviewable in the GitHub UI by anyone with read access to
+          # 0509-telemetry, and this job summary records where to look. Hermes
+          # reads the snapshot from this branch directly, so no human merge is
+          # required for the daily signal to flow.
+          {
+            echo "## Market-signal snapshot published (private sink)"
+            echo ""
+            echo "Private repo: \`${TELEMETRY_REPO}\`"
+            echo "Branch: ${BRANCH_URL}"
+            echo "Commit: ${COMMIT_URL}"
+            echo ""
+            echo "The snapshot is pushed to the **private** \`${TELEMETRY_REPO}\` repo on \`${SNAPSHOT_BRANCH}\`, not to this public repo. Hermes reads it from there (see \`automation/HERMES_MARKET_SIGNAL.md\`). Review the diff on the private branch before it feeds the morning report."
+          } >> "$GITHUB_STEP_SUMMARY"

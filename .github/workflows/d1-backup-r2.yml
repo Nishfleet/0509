@@ -1,0 +1,134 @@
+name: D1 backup to R2
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact main commit authorized for the production backup
+        required: true
+        type: string
+  schedule:
+    # Nightly at 01:37 IST, inside the same low-traffic window the restore drill
+    # uses, and 40 minutes ahead of it so a fresh backup exists before the drill
+    # proves a restore. Both share the 0509-production-provider-mutations
+    # concurrency group, so they queue rather than collide.
+    #
+    # This workflow was dispatch-only, and before that ran on push, where it
+    # failed at startup every time: the authorize step below demanded
+    # GITHUB_EVENT_NAME = workflow_dispatch and an expected_sha that a push can
+    # never supply. The push trigger was removed to stop the noise, which left
+    # the repo with no scheduled backup at all - its last successful run was
+    # 2026-07-30. Since then the only thing writing to backups/d1/ has been the
+    # restore-evidence drill, as a side effect.
+    - cron: "7 20 * * *"
+
+concurrency:
+  group: 0509-production-provider-mutations
+  cancel-in-progress: false
+  queue: max
+
+permissions: {}
+
+jobs:
+  authorize_release:
+    name: Authorize exact backup candidate
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      sha: ${{ steps.authorize.outputs.sha }}
+    steps:
+      - name: Authorize backup request
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          # Same shape as d1-remote-restore-evidence.yml: a scheduled run backs
+          # up whatever main is and must NOT carry an expected_sha, so nothing
+          # can smuggle a chosen commit into an unattended run. A manual run
+          # still has to name the exact commit and have it match.
+          case "$GITHUB_EVENT_NAME" in
+            schedule)
+              test -z "$EXPECTED_SHA"
+              ;;
+            workflow_dispatch)
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+  backup:
+    if: needs.authorize_release.result == 'success'
+    needs: authorize_release
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    environment: production
+    permissions:
+      contents: read
+    env:
+      D1_DATABASE_NAME: "0509"
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
+      PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify pinned backup candidate
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
+      - name: Reconfirm frozen main before backup mutation
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance, same rationale as deploy-production.yml's
+          # post-gate reconfirm (#630): this step re-verifies the exact SHA the
+          # authorize step already pinned. A push landing during the run's
+          # npm-ci/lane-acquire window must not abort the unattended nightly
+          # backup - it would leave the night with no fresh proof, which is
+          # exactly what stranded releases on 2026-08-11. The CAS script
+          # records the move loudly and the backup still covers exactly
+          # PINNED_SHA (real main at run start). Every other CAS failure stays
+          # fail-closed, and the schedule's empty-expected_sha contract in
+          # authorize still forbids smuggling a chosen commit.
+          TOLERATE_MAIN_DRIFT: "1"
+        run: ./scripts/ci-verify-production-candidate.sh
+      - name: Run approved D1-to-R2 backup
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
+        run: node scripts/d1-backup-to-r2.mjs
+      - name: Remove run-scoped plaintext backup files
+        if: always()
+        run: node scripts/d1-backup-local-cleanup.mjs

@@ -1,0 +1,202 @@
+name: Auto revert
+
+# Reversibility over gating (Nish, canonical): a merge must be as undoable as
+# a deploy. When a push-to-main CI workflow goes red, this opens a revert PR
+# that restores the last green state with no human. Platform primitives only:
+# `workflow_run` fires on completion; `git revert` builds the undo; armed
+# auto-merge lands it only if the four required checks pass on the revert
+# (restoring green IS the proof the revert is correct). Git itself is the
+# record of last-good — no SHA ledger, no state file, no polling.
+#
+# One level of automatic undo only. If the revert commit itself is red on
+# main, the loop guard files a loud halt issue and stops: a red revert is a
+# structural problem, not a loop. If something else landed between the failing
+# commit and now, the freshness guard files a halt issue naming both SHAs and
+# stops: that is a human-order problem.
+#
+# The revert PR is opened with a PAT (secret AUTO_REVERT_PAT) when wired,
+# otherwise it falls back to the workflow's GITHUB_TOKEN. A PAT-opened PR
+# triggers `pull_request` workflows, so the four required checks report and
+# armed auto-merge fires. AUTO_REVERT_PAT is set on this repo. A GITHUB_TOKEN
+# PR would still build and open the correct revert, but it would sit open and
+# loud until a human (or the PAT) lands it. This is flagged, not silent.
+
+on:
+  workflow_run:
+    # "Deploy production" is wired here (Nish, 2026-08-25) so a failed
+    # auto-deploy-on-green run opens a revert PR the same way a red push-to-main
+    # CI workflow does. The deploy's own rollback_failed_release step handles
+    # the Worker runtime; this handles the source — reverting the merged commit
+    # on main so the next push doesn't re-trigger a failing deploy. The
+    # freshness guard (main HEAD must still equal the failing commit) and the
+    # loop guard (a red revert is a structural stop) apply identically.
+    workflows: ["Secret Scan", "semgrep-actionlint", "backlog-console-refresh test", "Deploy production"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Parallel failures serialize: two red workflows for the same push (or two
+# pushes close together) must not race to revert. One at a time, in arrival
+# order; the freshness guard handles whatever landed in between.
+concurrency:
+  group: auto-revert
+  cancel-in-progress: false
+
+jobs:
+  auto-revert:
+    name: auto-revert
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - name: Checkout main (full history for the revert)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Revert or halt
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_REVERT_PAT || secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          short="$(git rev-parse --short=7 "$HEAD_SHA")"
+          subject="$(git log --format=%s -n 1 "$HEAD_SHA")"
+          parents="$(git rev-list --parents -n 1 "$HEAD_SHA")"
+          merge_flag=()
+          [ "$(printf '%s' "$parents" | wc -w)" -gt 2 ] && merge_flag=(-m 1)
+          gh label create auto-revert-halt --repo "$REPO" --color B60205 \
+            --description "Auto-revert halted — a human must look" --force >/dev/null 2>&1 || true
+          halt () {
+            title="$1"; body="$2"
+            num="$(gh issue list --repo "$REPO" --state open --label auto-revert-halt \
+              --json number --jq '.[0].number // empty' 2>/dev/null || true)"
+            if [ -n "$num" ]; then
+              gh issue comment "$num" --repo "$REPO" --body "$body"
+            else
+              gh issue create --repo "$REPO" --title "$title" --body "$body" --label auto-revert-halt
+            fi
+          }
+          # A halt is a designed, successful outcome: the guard detected a
+          # situation a blind revert would worsen (a red revert, a moved main,
+          # or an infra fault across consecutive commits) and filed an issue so
+          # a human can decide. The filed issue is the signal — the workflow
+          # run must stay green so it does not double a deploy-failure storm
+          # with its own GitHub failure email (0509#1355). halt exits 0 only
+          # AFTER the issue is filed; if `gh issue create`/`comment` fails,
+          # `set -euo pipefail` aborts non-zero before `exit 0` is reached, so
+          # a halt that could not record itself still fails loud.
+          halt_and_exit () {
+            halt "$1" "$2"
+            exit 0
+          }
+          case "$subject" in
+            revert:*|Revert*)
+              halt_and_exit "AUTO-REVERT HALT: revert commit itself is red on main" "The failing run's head commit is itself a revert, so an automatic revert would loop.
+
+          - Failing run: $RUN_NAME — $RUN_URL
+          - Red commit: \`$HEAD_SHA\` — \`$subject\`
+
+          One level of automatic undo only. A red revert is a structural stop; a human must look."
+              ;;
+          esac
+          main_head="$(git rev-parse HEAD)"
+          if [ "$main_head" != "$HEAD_SHA" ]; then
+            halt_and_exit "AUTO-REVERT HALT: main moved after the red commit" "main's HEAD no longer matches the failing commit, so a blind revert could restore the wrong state.
+
+          - Failing run: $RUN_NAME — $RUN_URL
+          - Red commit: \`$HEAD_SHA\` — \`$subject\`
+          - main HEAD now: \`$main_head\`
+
+          Human-order problem; a human must decide the revert order."
+          fi
+          # Repeated-failure guard (Nish, 2026-08-25): if the SAME workflow
+          # also concluded failure for the parent of the red commit, the fault
+          # is infrastructural (deploy pipeline, secrets, provider) rather than
+          # this commit — reverting would just re-trigger the same failure and
+          # the next red run would revert the revert, looping. Halt instead.
+          # Mirrors the loop/freshness guards' style: halt issue + exit 0
+          # (halt is a designed success; the filed issue is the signal).
+          parent_sha="$(git rev-parse --verify "${HEAD_SHA}^" 2>/dev/null || true)"
+          if [ -n "$parent_sha" ]; then
+            parent_failed="$(gh api "repos/$REPO/actions/runs?branch=main&head_sha=$parent_sha" \
+              --paginate --jq '.workflow_runs[]? | select(.name=="'"$RUN_NAME"'") | select(.conclusion=="failure") | .id' 2>/dev/null \
+              | head -n1 || true)"
+            if [ -n "$parent_failed" ]; then
+              halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failing across consecutive commits — infra fault, not this commit" "The same workflow (\`$RUN_NAME\`) also failed on the parent commit, so the failure is infrastructural and reverting this commit would loop.
+
+          - Failing run: $RUN_NAME — $RUN_URL
+          - Red commit: \`$HEAD_SHA\` — \`$subject\`
+          - Parent commit: \`$parent_sha\` (also failed \`$RUN_NAME\`)
+
+          A repeated failure across consecutive commits is an infra fault (deploy pipeline, secrets, provider), not a regression in this commit. A human must look."
+            fi
+          fi
+          failing="$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs" --paginate \
+            --jq '.check_runs[] | select(.conclusion=="failure") | .name' 2>/dev/null \
+            | sort -u | paste -sd', ' - || true)"
+          [ -z "$failing" ] && failing="(see run — no failed check-runs listed by the API)"
+          branch="revert/$short"
+          git config user.name "Nish"
+          git config user.email "257724087+nish3451@users.noreply.github.com"
+          git revert --no-edit "${merge_flag[@]}" "$HEAD_SHA"
+          git checkout -b "$branch"
+          # Pushing the same revert branch twice for the same HEAD_SHA is the
+          # auto-revert "stuck on prior attempt" failure mode: a stale
+          # revert/<short> branch from a previous workflow run is identical
+          # to the new one, so `git push` rejects with
+          # `! [rejected] ... (non-fast-forward)`. The new HEAD is
+          # byte-identical, so a force push is safe; the freshness + loop
+          # guards above already pinned HEAD_SHA as main HEAD, so no other
+          # change can have landed in between.
+          git push origin "$branch" --force-with-lease
+          pr_url="$(gh pr create --repo "$REPO" --base main --head "$branch" \
+            --title "revert: auto-restore green main (reverts $short)" \
+            --body "Automatic revert opened because a push-to-main CI workflow went red.
+
+          - Failing run: $RUN_NAME — $RUN_URL
+          - Reverts commit \`$short\`: \`$subject\`
+          - Failing checks: $failing
+
+          Automatic revert per the reversibility principle (FABLE-VERDICT §17); if this PR fails checks it will sit unmerged and loud.")"
+          pr_number="$(printf '%s' "$pr_url" | sed -n 's|.*/pull/\([0-9][0-9]*\).*|\1|p')"
+          if [ -z "$pr_number" ]; then
+            echo "could not parse PR number from $pr_url" >&2
+            exit 1
+          fi
+          head_sha="$(gh api "repos/$REPO/pulls/$pr_number" --jq '.head.sha')"
+          # The gate-integrity check fires on `pull_request_target: opened`,
+          # BEFORE this attestation comment exists, so the first run of the
+          # gate on a freshly opened auto-revert PR fails as designed — the
+          # bundle has no waiver yet. The auto-revert workflow owns the
+          # waiver marker and posts it immediately, then a label flip below
+          # re-triggers the gate so it picks up the marker on its second
+          # pass. The sha binding makes the waiver invalid after any new
+          # commit, same currency property as the admin attestation.
+          #
+          # The pr_body opener and the git-revert commit subjects are
+          # delivered by this workflow (PR body above; `git revert --no-edit`
+          # produces the `Revert "..."` subject). All three signals are
+          # required by the decision script, and all three originate here,
+          # so this workflow is the only place that can synthesize a
+          # valid auto-revert attestation.
+          printf 'gate-integrity-auto-revert: %s\n' "$head_sha" \
+            | gh pr comment "$pr_number" --repo "$REPO" --body-file -
+          # Toggling the `auto-revert` label fires the `pull_request_target:
+          # labeled` event the gate-integrity workflow listens to, so the
+          # gate re-runs with the attestation comment now in the bundle.
+          # `gh label create --force` exits 0 whether or not the label
+          # already exists, so no `|| true` fallback is needed and the
+          # gate-integrity CI-softener regex stays quiet on this line.
+          gh label create auto-revert --repo "$REPO" --color 0E8A16 \
+            --description "Auto-revert PR — gate-integrity auto-revert waiver applies" --force >/dev/null
+          gh pr edit "$pr_number" --repo "$REPO" --add-label auto-revert >/dev/null
+          gh pr remove-label "$pr_number" --repo "$REPO" --name auto-revert >/dev/null
+          gh pr merge --auto --squash --repo "$REPO" "$branch"

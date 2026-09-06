@@ -1,0 +1,29 @@
+[
+  {
+    "query": "nike",
+    "advertiser": "Nike",
+    "landingPageUrl": "https://www.nike.com/mx/t/air-max",
+    "rawHeadline": "Nike Air Max",
+    "ctaText": "Shop",
+    "priceText": "From $70",
+    "formPresent": false
+  },
+  {
+    "query": "gymshark",
+    "advertiser": "Gymshark",
+    "landingPageUrl": "https://www.gymshark.com/products/crest-hoodie",
+    "rawHeadline": "Crest Hoodie",
+    "ctaText": "Add to bag",
+    "priceText": "£45",
+    "formPresent": false
+  },
+  {
+    "query": "nykaa",
+    "advertiser": "Nykaa",
+    "landingPageUrl": "https://www.nykaa.com/festive-glow",
+    "rawHeadline": "Festive glow sale",
+    "ctaText": "Shop now",
+    "priceText": "Up to 40% off",
+    "formPresent": true
+  }
+]

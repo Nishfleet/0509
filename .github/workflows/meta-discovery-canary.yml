@@ -1,0 +1,145 @@
+name: Meta discovery canary
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every 3 hours. Gate C already verifies the Meta lane after every
+    # successful deploy; this scheduled check keeps a published green/red
+    # state between deploys so hero copy can be gated on the canary.
+    - cron: "23 */3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meta-discovery-canary
+  cancel-in-progress: false
+
+jobs:
+  meta-readiness:
+    # Read-only readiness probe. The launch-readiness endpoint runs a pure
+    # D1 aggregate over discovery_fetch_log; it never mutates monitoring,
+    # proof, or delivery state (unlike the proof canary at
+    # /api/launch-readiness/canary, which is deliberately not scheduled).
+    #
+    # CANARY_BYPASS_TOKEN lives in the `production` environment (the same
+    # secret deploy-production.yml reads), so this job must declare
+    # `environment: production`. Without it the secret resolves to an empty
+    # string and the check silently degrades. A canary that cannot prove
+    # anything must fail LOUD, never exit 0: between 2026-08-18 and
+    # 2026-08-22 every scheduled run skipped on the missing token and still
+    # showed a green check, which read as a published green state that
+    # never existed.
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - name: Check production Meta readiness
+        id: readiness
+        shell: bash
+        env:
+          READINESS_URL: https://0509.io/api/launch-readiness
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CANARY_BYPASS_TOKEN:-}" ]; then
+            echo "meta canary: red (missing CANARY_BYPASS_TOKEN; a canary that cannot check must fail, not skip as success)" >&2
+            echo "state=missing-token" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          # Capture the HTTP status AND the body for any status. The
+          # launch-readiness endpoint intentionally returns 503 with a JSON
+          # body listing `blockers` when readiness is red; `--fail` would make
+          # curl exit 22 on 503 and the body (with the blocker names) would
+          # never be parsed, so a red canary reported only
+          # "curl: (22) ... error: 503" and could not name what failed
+          # (run 32689088190, 2026-08-24).
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          http_code="$(curl --silent --show-error --max-time 20 --retry 2 --retry-delay 5 \
+            --write-out '%{http_code}' \
+            --output "$response_file" \
+            -H "x-0509-canary-token: ${CANARY_BYPASS_TOKEN}" \
+            -H "user-agent: 0509-meta-discovery-canary/1.0" \
+            "$READINESS_URL")"
+          response="$(cat "$response_file")"
+          rm -f "$response_file"
+          trap - EXIT
+          printf 'http_code=%s\n' "$http_code"
+          printf '%s\n' "$response"
+          READINESS_HTTP_CODE="$http_code" READINESS_RESPONSE="$response" python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          code = os.environ["READINESS_HTTP_CODE"]
+          body = os.environ["READINESS_RESPONSE"]
+          # A non-2xx/non-503 status is an unexpected transport/endpoint
+          # failure; fail loud without guessing a verdict.
+          if code not in ("200", "503"):
+              raise SystemExit(f"launch readiness returned unexpected HTTP status {code}")
+          try:
+              payload = json.loads(body)
+          except json.JSONDecodeError as exc:
+              raise SystemExit(f"launch readiness returned unparseable body: {exc}") from exc
+          meta = payload.get("metaAdsBeta") or {}
+          meta_ok = meta.get("ok") is True
+          print(f"meta canary: {'green' if meta_ok else 'red'}")
+          print(f"samples={meta.get('samples')} target={meta.get('sampleTarget')} "
+                f"success_rate={meta.get('successRate')} "
+                f"blockers={','.join(meta.get('blockers') or [])}")
+          # This canary verifies the META discovery lane only. The overall
+          # launch-readiness endpoint returns 503 whenever ANY blocker exists
+          # (proof capture, email delivery, slack, monitoring) — most are out
+          # of scope for a Meta canary and owned by other workflows (proof
+          # canary, uptime health). Gating on overall ok or code == 200 made
+          # this canary fail every run for days while the Meta lane itself
+          # was green (453 samples, 100% success), firing into the void ~4x/day
+          # (runs 32748308275, 32732710768, 32715196613, 2026-08-24). The Meta
+          # verdict is metaAdsBeta.ok; a 503 with metaAdsBeta.ok true is a
+          # green Meta lane. Never exit 0 on a red Meta lane.
+          if not meta_ok:
+              raise SystemExit(f"meta readiness red: {','.join(meta.get('blockers') or [])}")
+          PY
+          echo "state=green" >> "$GITHUB_OUTPUT"
+
+      - name: Persist canary state evidence
+        if: ${{ always() }}
+        shell: bash
+        env:
+          # The readiness step only names its state when it reaches a verdict
+          # (green / missing-token). Any other failure path (endpoint
+          # unreachable, readiness blockers) exits before writing state, and
+          # the honest published state for that run is red.
+          # nosemgrep: no-hand-built-state-ledger-tombstone — GitHub Actions
+          # step-output reference (the readiness step's `state` output), not a
+          # hand-rolled state/ledger/tombstone file. The rule matches the
+          # dotted-output substring; the actual artifact is the JSON evidence
+          # file written below, not orchestration state.
+          STATE: ${{ steps.readiness.outputs.state || 'red' }} # nosemgrep: no-hand-built-state-ledger-tombstone
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          with open("meta-discovery-canary-state.json", "w", encoding="utf-8") as f:
+              json.dump({
+                  "state": os.environ["STATE"],
+                  "runId": int(os.environ["RUN_ID"]),
+                  "generatedAt": __import__("datetime").datetime.now(
+                      __import__("datetime").timezone.utc
+                  ).isoformat(),
+              }, f, sort_keys=True, separators=(",", ":"))
+              f.write("\n")
+          PY
+
+      - name: Upload canary state evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: meta-discovery-canary-state
+          path: meta-discovery-canary-state.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
