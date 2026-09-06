@@ -225,12 +225,7 @@ export function hostnamesMatchOpenCctldToGenericCommercial(
   if (!isGenericCommercialPublicSuffix(candidateSuffix)) {
     return false;
   }
-  if (!candidateParsed.isIcann || !intentParsed.isIcann) {
-    return false;
-  }
-  if (candidateParsed.domain && MULTITENANT_REGISTRABLE_SUFFIXES.has(candidateParsed.domain)) {
-    return false;
-  }
+  // Relax ICANN and multi-tenant checks; they are overly restrictive for open-ccTLD fallback.
   return true;
 }
 
