@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=300 writes=0 runs_per_day=8
 /**
  * Always-on BET 1 headline-ratio regression canary (issue #1451).
  *

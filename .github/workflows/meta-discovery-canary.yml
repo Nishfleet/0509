@@ -1,4 +1,7 @@
 name: Meta discovery canary
+# d1-budget: reads=5000 writes=0 runs_per_day=8
+# The launch-readiness endpoint runs a D1 aggregate over discovery_fetch_log
+# per probe; declared for scripts/ci-d1-budget-check.sh (issue #1731).
 
 on:
   workflow_dispatch:
