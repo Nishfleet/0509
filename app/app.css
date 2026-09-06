@@ -11290,6 +11290,21 @@ a.f9-wk-btn {
   .f9-wk-row.has-lead .f9-wk-row-lead label {
     margin-left: -14px;
   }
+
+  /* Tablet dead zone (641-900px): the split is single-column here but
+     sec-head stays nowrap until 640px, so a wide empty/delayed state whose
+     actions (.f9-wk-sec-acts, flex:none) overflow the column squashed
+     .f9-wk-sec-headings to zero width, keeping the title present in the
+     DOM yet invisible (width:0). Wrap the actions below the title for the
+     whole single-column range, matching the <=640px treatment. */
+  .f9-wk-sec-head {
+    flex-wrap: wrap;
+  }
+
+  .f9-wk-sec-acts {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
 }
 
 @media (max-width: 640px) {
