@@ -666,6 +666,30 @@ if ! heavy_seat=$(pick_seat "" "" 1 2>/dev/null); then
     exit 0
 fi
 
+# Usable seat-slot gate (fleet-ops#3732): capacity slots (RAM/config) are not
+# seat slots. 2026-09-05 21:30-21:33Z this tick claimed 12 issues into a pool
+# whose only usable seat was at its learned cap; every unit died at pick_seat,
+# the claims bounced, and the reclaim counters walked the issues into
+# nish-decision blocks. Count the slots pick_seat would actually fill (same
+# filter chain, no probe, no pick) and never claim more than that.
+# Fails OPEN when the count seam is unavailable (seat-lib without count
+# mode, a stubbed pick_seat, a non-numeric reply): a broken counter must
+# never freeze intake — same rule as the product-first gate below. Only a
+# definite 0 holds claims.
+usable_light_slots=$(PICK_SEAT_COUNT_SLOTS=1 pick_seat "" "" 0 "" light 2>/dev/null || echo "")
+if [[ ! "$usable_light_slots" =~ ^[0-9]+$ ]]; then
+    echo "usable seat-slot count unavailable (pick_seat count mode returned '${usable_light_slots:0:60}'); seat-slot gate fails open, keeping slots=$slots (fleet-ops#3732)"
+    usable_light_slots=$slots
+fi
+if (( usable_light_slots <= 0 )); then
+    echo "no usable seat slot (slots=$slots, usable_light_slots=0); holding claims this tick — gate: no usable seat slot"
+    exit 0
+fi
+if (( usable_light_slots < slots )); then
+    echo "usable seat slots $usable_light_slots < capacity slots $slots; claiming at most $usable_light_slots this tick (fleet-ops#3732)"
+    slots=$usable_light_slots
+fi
+
 # Product-first precedence (fleet-ops#2519): when the queue
 # self-maintenance ratio exceeds PRODUCT_FIRST_SELF_RATIO_MAX (default
 # 0.5), hold the self-maintenance repo (fleet-ops) in the intake buffer —
