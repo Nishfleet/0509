@@ -2026,6 +2026,36 @@ export default function SearchRoute() {
                     ) : null}
                   </div>
                   <div className="f9-wk-sec-acts">
+                    {completedEmptySearch ? (
+                      /* Issue 1568: a finished 0-verified search is a dead-end
+                         card with no next step. The natural "why is this
+                         empty?" answer is the public /capture-rules artifact
+                         (BET 4 — "what we refuse to alert on"), with the
+                         /ad-aggression methodology page as the secondary
+                         "how the score works" handoff. Both pages already
+                         exist; this wires the empty card to them so the
+                         section action container is no longer empty for the
+                         0-verified case. The non-empty (>=1 verified) card
+                         is unchanged — its result list, not copy, drives the
+                         buyer. */
+                      <>
+                        <Link className="f9-wk-lnk" to="/capture-rules">
+                          Read what we refuse to alert on{" "}
+                          <span aria-hidden="true" className="f9-wk-chev">
+                            &rsaquo;
+                          </span>
+                        </Link>
+                        <Link
+                          className="f9-wk-lnk f9-wk-lnk--quiet"
+                          to="/ad-aggression"
+                        >
+                          How the score works{" "}
+                          <span aria-hidden="true" className="f9-wk-chev">
+                            &rsaquo;
+                          </span>
+                        </Link>
+                      </>
+                    ) : null}
                     {data.brandPageLink ? (
                       /* BET 5: the programmatic-SEO destination handoff. The
                          results preview links straight to the indexable public
