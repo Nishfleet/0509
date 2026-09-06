@@ -98,7 +98,20 @@ export default function StatusRoute() {
               </div>
               <div>
                 <dt>Last digest sent</dt>
-                <dd>{monitoring.lastDigestSentAt ?? "no digests sent yet"} — as of {asOf}</dd>
+                {monitoring.digestHealth === "stalled" ? (
+                  <dd>
+                    <strong>Digest sends appear stalled.</strong>{" "}
+                    Monitoring is healthy but no digest has been sent in the last{" "}
+                    7 days (last sent{" "}
+                    {monitoring.lastDigestSentAt ?? "never"}); this is being{" "}
+                    investigated rather than reported as a live date.
+                  </dd>
+                ) : (
+                  <dd>
+                    {monitoring.lastDigestSentAt ?? "no digests sent yet"} — as of{" "}
+                    {asOf}
+                  </dd>
+                )}
               </div>
             </>
           ) : (
