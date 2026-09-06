@@ -2859,6 +2859,12 @@ export default function SearchRoute() {
                     &rsaquo;
                   </span>
                 </Link>
+                <Link className="f9-wk-lnk" to="/brands">
+                  Browse all tracked brands{" "}
+                  <span aria-hidden="true" className="f9-wk-chev">
+                    &rsaquo;
+                  </span>
+                </Link>
               </div>
             </section>
             <details className="f9-search-scope-details">
