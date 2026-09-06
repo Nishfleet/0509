@@ -198,5 +198,5 @@ jobs:
           gh label create auto-revert --repo "$REPO" --color 0E8A16 \
             --description "Auto-revert PR — gate-integrity auto-revert waiver applies" --force >/dev/null
           gh pr edit "$pr_number" --repo "$REPO" --add-label auto-revert >/dev/null
-          gh pr remove-label "$pr_number" --repo "$REPO" --name auto-revert >/dev/null
+          gh pr edit "$pr_number" --repo "$REPO" --remove-label auto-revert >/dev/null
           gh pr merge --auto --squash --repo "$REPO" "$branch"
