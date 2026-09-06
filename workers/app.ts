@@ -2,6 +2,7 @@
 
 import { createRequestHandler, RouterContextProvider } from "react-router";
 
+import { publicSitemapFile } from "../app/lib/brand-page-sitemap.server";
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import { resumePendingDigestScheduleJobsDetailed } from "../app/lib/digest-orchestration.server";
@@ -19,7 +20,7 @@ import {
   PUBLIC_MARKDOWN,
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
-import { publicSeoFileForPathname } from "../app/lib/seo";
+import { publicSeoFileForPathname, type PublicSeoFile } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import {
   observeScheduledTask,
@@ -65,7 +66,7 @@ function markdownResponse(request: Request, body: string): Response {
   );
 }
 
-function publicFileResponse(request: Request, file: NonNullable<ReturnType<typeof publicSeoFileForPathname>>): Response {
+function publicFileResponse(request: Request, file: PublicSeoFile): Response {
   return withSecurityHeaders(
     new Response(request.method === "HEAD" ? null : file.body, {
       headers: {
@@ -85,7 +86,12 @@ export default {
       return withSecurityHeaders(primaryDomainResponse, request);
     }
 
-    const publicSeoFile = publicSeoFileForPathname(url.pathname);
+    // /sitemap.xml is generated dynamically (cache-only D1 read; static
+    // fallback on any failure). Every other public SEO file is static.
+    const publicSeoFile =
+      url.pathname === "/sitemap.xml"
+        ? await publicSitemapFile(env)
+        : publicSeoFileForPathname(url.pathname);
     if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {
       return publicFileResponse(request, publicSeoFile);
     }

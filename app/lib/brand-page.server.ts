@@ -157,9 +157,9 @@ export async function loadBrandPageCacheSnapshot(
 
     const entry = await readDiscoveryCacheEntryCacheOnly(env, {
       provider,
-      ...deriveCacheLookup(env, provider, input.domain, country),
+      ...deriveBrandPageCacheLookup(env, provider, input.domain, country),
     });
-    const snapshot = toUsableSnapshot(entry, now);
+    const snapshot = toUsableBrandPageSnapshot(entry, now);
     if (snapshot) {
       return snapshot;
     }
@@ -496,8 +496,12 @@ function candidateCountries(visitorCountry: string): string[] {
  * for this domain + country (see `hasWarmSearchCacheEntry`): the search-v2
  * domain key when the v2 rollout applies, else the legacy fingerprint triple.
  * Shadow mode serves customers from the legacy key, so it maps to legacy here.
+ *
+ * Exported so the dynamic /sitemap.xml generator can prove a cached row sits
+ * at EXACTLY the key the brand-page loader would read under the current
+ * environment — never a near-miss key derived from an unrelated row.
  */
-function deriveCacheLookup(
+export function deriveBrandPageCacheLookup(
   env: AppEnv,
   provider: string,
   domain: string,
@@ -537,9 +541,19 @@ function deriveCacheLookup(
   };
 }
 
-type CacheEntry = Awaited<ReturnType<typeof readDiscoveryCacheEntryCacheOnly>>;
+export type BrandPageCacheEntry = Awaited<ReturnType<typeof readDiscoveryCacheEntryCacheOnly>>;
 
-function toUsableSnapshot(entry: CacheEntry, now: Date): BrandPageCacheSnapshot | null {
+/**
+ * The loader's single "would this cached row back a real public page?" filter:
+ * public_search route context, non-demo payload source/provider, at least one
+ * non-demo ad, and a valid fetched_at (not future, ≤ 30 days). Exported so the
+ * dynamic /sitemap.xml generator applies EXACTLY the same test the serving
+ * route applies — a sitemap entry must never out-index the page itself.
+ */
+export function toUsableBrandPageSnapshot(
+  entry: BrandPageCacheEntry,
+  now: Date,
+): BrandPageCacheSnapshot | null {
   if (!entry) {
     return null;
   }

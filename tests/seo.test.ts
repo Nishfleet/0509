@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { publicSeoFileForPathname } from "~/lib/seo";
+import { buildSitemapXml, publicSeoFileForPathname } from "~/lib/seo";
 
 describe("public SEO files", () => {
   it("publishes the public funnel surfaces in the sitemap", () => {
@@ -25,6 +25,42 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain(
       "<url><loc>https://0509.io/compare/meta-ad-library</loc></url>",
     );
+  });
+
+  it("keeps the static sitemap free of /ads/* entries (dynamic entries live elsewhere)", () => {
+    const sitemap = publicSeoFileForPathname("/sitemap.xml");
+
+    // Exactly the 13 static paths, all present, none duplicated, no /ads/.
+    const locs = sitemap?.body.match(/<loc>([^<]+)<\/loc>/g) ?? [];
+    expect(locs).toHaveLength(13);
+    expect(new Set(locs).size).toBe(13);
+    expect(sitemap?.body).not.toContain("/ads/");
+    // Deterministic static order: the root first, then the funnel.
+    expect(locs[0]).toBe("<loc>https://0509.io/</loc>");
+    expect(locs[1]).toBe("<loc>https://0509.io/search</loc>");
+  });
+
+  it("builds a deterministic, deduplicated, markup-safe sitemap with dynamic paths", () => {
+    const body = buildSitemapXml(["/ads/nykaa.com", "/ads/amazon.in", "/ads/nykaa.com"]);
+    const first = buildSitemapXml(["/ads/amazon.in", "/ads/nykaa.com"]);
+
+    expect(body).toBe(first);
+    expect(body).toContain("<url><loc>https://0509.io/</loc></url>");
+    // Every static path survives.
+    expect(body).toContain("<url><loc>https://0509.io/terms</loc></url>");
+    // Dynamic entries appended once each, sorted after the static block.
+    expect(body).toContain("<url><loc>https://0509.io/ads/amazon.in</loc></url>");
+    expect(body).toContain("<url><loc>https://0509.io/ads/nykaa.com</loc></url>");
+    expect((body.match(/ads\//g) ?? []).length).toBe(2);
+    const nykaaIndex = body.indexOf("/ads/nykaa.com");
+    const amazonIndex = body.indexOf("/ads/amazon.in");
+    const termsIndex = body.indexOf("/terms</loc>");
+    expect(nykaaIndex).toBeGreaterThan(termsIndex);
+    expect(amazonIndex).toBeGreaterThan(termsIndex);
+    // A hostile path can never break out of the XML element.
+    const hostile = buildSitemapXml(['/ads/evil.com"></loc><loc>https://evil.example']);
+    expect(hostile).toContain("&quot;");
+    expect(hostile).not.toContain("<loc>https://evil.example</loc>");
   });
 
 	it("disallows auth-only surfaces in robots.txt but keeps /share crawlable", () => {
