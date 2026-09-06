@@ -2,16 +2,6 @@
 
 Narrative records moved out of `CLAUDE.md` so per-session guidance stays operational. Entries below preserve the original wording and are organized by the date of the event.
 
-## 2026-09-06
-
-### #1749 capture-validity gate — duplicate of shipped #1399/#953/#1289/#1264 closeout
-
-- #1749 asked for a capture-validity gate before any diff becomes a `watch_event`, `capture_failed` rows with a `failure_reason` enum never emitted as alerts but visible in run history, a public `/capture-rules` page, and an adversarial fixture suite covering 7 failure modes + 1 genuine change. All five acceptance criteria are already met by closed, shipped work: the gate classifier landed under #1399 (`feat(proof): capture-validity classifier gates landing_page_* events (BET 4, #1399)`, commit `63a99654`); the adversarial termination proof under #953 (commit `eecb1b3f`); `capture_failed` visibility in run history and the public reason-code vocabulary (incl. `takedown_restore`) under #1289; the `/capture-rules` public page under #1264 (commit `ab14a4ec`); and the `/search` empty-state cross-link under #1568.
-- The implementation stores failed captures as `proof_capture` rows with `status = 'capture_failed'` and internal `landing_*` reason codes, translated to the public vocabulary (`bot_wall`, `cloudflare_challenge`, `cookie_banner`, `partial_load`, `error_page`, `timeout`, `takedown_restore`, `budget_skip`, `extraction_failed`) by `app/lib/capture-attempt-reason-code.ts`. Timestamp-only edits and rotating banners are suppressed at the event-evaluator layer (`app/lib/watch-event-evaluator.server.ts` churn-stable / ad-slot-stripped hashing), not the capture gate — matching the issue's intent that they produce zero events.
-- Verification on `origin/main` at HEAD `b123b257` (2026-09-06): `npx vitest run --project node tests/capture-validity.test.ts tests/capture-validity-pipeline.test.ts tests/capture-validity-corroboration.test.ts tests/capture-validity-termination.test.ts tests/capture-validity-public-rules.test.ts tests/capture-rules-page.test.ts tests/capture-attempt-reason-code.test.ts tests/run-history-capture-visibility.test.ts` → 8 files, 93 tests passed. The termination suite (`tests/capture-validity-termination.test.ts`) exercises all seven adversarial fixtures (500 error page, Cloudflare challenge, cookie/consent wall, partial SPA shell, site-down/maintenance, timestamp-only edit, rotating banner) + one genuine price edit, asserting zero events from the seven and one confirmed event from the genuine edit — 17 tests passed. The D1 integration test `tests/integration/watchlist-run-capture-attempts.integration.test.ts` (real workerd, real migrations) → 5 tests passed.
-- This PR closes #1749 as a duplicate. No product code, schema, or route changed.
-- Rollback: none — there is no behaviour change to revert. If a real gap in the gate surfaces, file a new issue against the specific failure mode rather than reopening #1749.
-
 ## 2026-08-26
 
 ### #944 production-verification closeout (#1121)
