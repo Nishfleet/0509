@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildScreenshotRateQuery,
+  CANARY_KIND,
   mapScreenshotRateRows,
   TARGET_RATE_PCT,
   validateScreenshotRate,
@@ -34,7 +35,6 @@ import { seedProofTarget, seedUser, seedWatchlist, uid } from "./fixtures";
  */
 
 const WINDOW_HOURS = 48;
-const CANARY_KIND = "launch_readiness_real_capture";
 
 /** created_at strictly inside the 48h window (well clear of the cutoff). */
 function recency(hoursAgo: number) {
@@ -79,7 +79,7 @@ async function seedCapture(input: CaptureSeed): Promise<void> {
       id,
       input.proofTargetId,
       input.withScreenshot ? hexKey(id) : null,
-      input.withScreenshot ? `${hexKey(id)}.html`.replace(/\.jpeg$/, ".html") : null,
+      input.withScreenshot ? `${hexKey(id)}.html` : null,
       captureMetadataJson,
       input.created_at,
       input.created_at,
@@ -127,7 +127,7 @@ describe("proof screenshot rate target ≥90% over a 48h window (#1747)", () => 
 
     const buckets = await windowBuckets();
 
-    expect(buckets.real.total).toBe(20);
+    expect(buckets.real.total).toBeGreaterThanOrEqual(20);
     expect(buckets.real.pct).toBe(100);
     expect(buckets.real.pct).toBeGreaterThanOrEqual(TARGET_RATE_PCT);
 

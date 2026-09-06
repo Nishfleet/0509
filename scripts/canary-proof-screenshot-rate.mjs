@@ -55,7 +55,7 @@ const DEFAULT_ALERT_THRESHOLD_PCT = 80.0;
 const DEFAULT_MIN_SAMPLE = 20;
 
 /** Launch-gate captures whose artifacts cleanup strips after the gate runs. */
-const CANARY_KIND = "launch_readiness_real_capture";
+export const CANARY_KIND = "launch_readiness_real_capture";
 
 /** The capture-path code the guard is protecting (issue acceptance 3c). */
 const CAPTURE_PATH_REF =
