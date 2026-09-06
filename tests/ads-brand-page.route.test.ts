@@ -733,6 +733,82 @@ describe("/ads/:domain indexing flag", () => {
     expect(result.noindex).toBe(true);
   });
 
+  it("301-redirects a seeded brand with 0 verified-linked ads to /search (issue #1306: retire empty marketplace shells)", async () => {
+    // goat.com is a named sneaker-resale seed-list marketplace noun. The
+    // capture pipeline returns one text-mention match, but the homonym /
+    // verification wall (see #1305) prevents any ad from linking to the
+    // goat.com domain — so verifiedLinkedAds is empty and the page would
+    // self-noindex as a thin shell. The issue's accept bar is "populate OR
+    // retire"; populate is not viable today, so the loader retires the URL:
+    // 301 to /search?q=goat.com so a buyer searching "GOAT Meta ads" lands on
+    // a page where they can run a live search, and no noindex empty shell
+    // 200s with marketing chrome.
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [
+            {
+              ...baseAd,
+              metaAdId: "meta-goat-text-1",
+              advertiser: "Marketplace Reseller",
+              landingPageUrl: null,
+              domainMatch: undefined,
+              firstSeenAt: isoAgo(30 * DAY_MS),
+            },
+          ],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const response = await runLoaderRedirect("goat.com", mocks.env);
+
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/search?q=goat.com");
+  });
+
+  it("still renders a populated seeded brand with verified-linked ads (issue #1306: stockx.com control)", async () => {
+    // stockx.com is the same sneaker-resale seed list as goat.com, but it has
+    // verified-linked ads (the populate path succeeded — #1442 made it
+    // indexable). The #1306 retire redirect must NOT fire when
+    // verifiedLinkedAds.length > 0: a populated seeded brand renders its ad
+    // wall and stays indexable. This is the control that proves the redirect
+    // is scoped to the thin case, not a blanket retire of every seeded brand.
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [
+            {
+              ...baseAd,
+              metaAdId: "meta-stockx-1",
+              advertiser: "StockX",
+              landingPageUrl: "https://stockx.com/sneakers",
+              domainMatch: {
+                level: "registrable_domain",
+                reason: "Landing page matches stockx.com",
+                matchedDomain: "stockx.com",
+              },
+              firstSeenAt: isoAgo(30 * DAY_MS),
+            },
+          ],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("stockx.com", mocks.env);
+
+    expect(result.hasCachedAds).toBe(true);
+    expect(result.verifiedLinkCount).toBe(1);
+    expect(result.noindex).toBe(false);
+  });
+
   it("indexes a fresh capture whose verified-linked ad is too recent to score (window < 14 days)", async () => {
     // The 14-day Aggression Score window must NOT gate indexability on a
     // populated page (issue #1442): the verified-linked ad's first-seen is

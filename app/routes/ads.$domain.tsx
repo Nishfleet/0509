@@ -25,6 +25,10 @@
  *     unverified text-mention matches, so the page would ship as indexable
  *     thin content. The wall still renders for a direct visitor; only
  *     indexability is withheld.
+ *   - SEEDED brands (named in data/seed-lists/*.json) with ZERO verified-linked
+ *     ads 301-redirect to /search?q=<domain> instead of rendering the noindex
+ *     thin shell (issue #1306: retire empty marketplace shells — stockx.com /
+ *     goat.com). Non-seeded thin pages still render noindex (#1442).
  *
  * A populated page (at least one verified-linked ad) with a fresh snapshot
  * is indexable EVEN when the Ad Aggression Score is deferred (the observed
@@ -71,6 +75,7 @@ import type {
   BrandPageAggression,
 } from "~/lib/brand-page.server";
 import { brandOwnedAdIdSet } from "~/lib/brand-page.server";
+import { isSeededBrandDomain } from "~/lib/ads-domain-publisher.server";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 import type { CaptureFailuresSummary } from "~/lib/offer-timeline.server";
 import { formatCaptureAttemptReasonLabel } from "~/lib/capture-attempt-reason-code";
@@ -373,6 +378,33 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   const verifiedLinkedAds = snapshot
     ? snapshotAds.filter((ad) => adHasVerifiedDomainLink(ad, brand.domain))
     : [];
+
+  // Issue #1306 — retire empty marketplace shells for seeded brands.
+  //
+  // A seeded brand (one named in a checked-in data/seed-lists/*.json cluster,
+  // e.g. the sneaker-resale marketplace nouns stockx.com / goat.com) that
+  // resolves to a thin wall with ZERO verified-linked ads cannot ship as a
+  // populated brand page: it would render a noindex marketing shell — the
+  // exact "We haven't watched … yet" dead-end the issue names, just with an
+  // unverified match wall instead of the cache-miss shell. The capture
+  // pipeline can see marketplace-adjacent creatives but the homonym / verification
+  // wall (goat.com — see #1305) prevents any from linking to the brand domain,
+  // so populate is not viable today and the page self-noindexes (#1442).
+  //
+  // The issue's accept bar is "populate OR retire". For a seeded brand that
+  // cannot be populated, retire: 301-redirect to /search?q=<domain> so the
+  // buyer lands on a page where they can run a live search immediately, and no
+  // noindex empty shell 200s with marketing chrome. This is the seeded-brand
+  // generalization of #1282's cache-miss redirect.
+  //
+  // Scope is deliberately tight: ONLY seeded brands retire on a thin wall, so
+  // #1442's render-noindex behavior for non-seeded thin pages (a direct visitor
+  // still sees the wall) is preserved. The redirect is self-healing — if a
+  // seeded brand later earns a verified-linked ad (e.g. goat.com after #1305's
+  // verification matures), verifiedLinkedAds.length > 0 and the page renders.
+  if (snapshot && verifiedLinkedAds.length === 0 && isSeededBrandDomain(brand.domain)) {
+    throw redirect(`/search?q=${encodeURIComponent(brand.domain)}`, 301);
+  }
 
   // The wall needs every record to carry its OWN verified signal (accept:
   // "consume the distinction via the existing AdRecord shape — do not pass
