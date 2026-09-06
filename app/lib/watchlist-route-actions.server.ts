@@ -691,6 +691,10 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
     return handleAcceptSuggestedCompetitorAction(env, workspaceUserId, formData);
   }
 
+  if (intent === "bulk-accept-suggested-competitors") {
+    return handleBulkAcceptSuggestedCompetitorsAction(env, workspaceUserId, formData);
+  }
+
   return {
     ok: false,
     message: "We couldn't complete that action. Refresh the page and try again.",
@@ -827,6 +831,114 @@ async function handleAcceptSuggestedCompetitorAction(
     acceptedAdvertiser: row.advertiser,
     watchlistId: result.watchlist.id,
   };
+}
+
+// Auto-competitor-watch Phase 4 (#1372): the bulk-accept action. A filtered
+// subset of suggested candidates is promoted to real watchlists in one
+// plan-capped action via the existing competitor-import bulk path
+// (`buildCompetitorImportPreview` → `createWatchlistWithinLimit`), so a
+// many-advertiser vertical does not hand-add each long-tail candidate through
+// the one-click Phase 2 accept. The shaping + cap enforcement + create loop
+// lives in `auto-competitor-bulk-accept.server.ts`; this handler does the
+// I/O (paid-tier gate, live panel re-validation, plan limit, existing
+// fingerprints) and delegates. Over-cap candidates are returned with a named
+// reason — never silently dropped, never silently admitted (eval 3.5).
+async function handleBulkAcceptSuggestedCompetitorsAction(
+  env: AppEnv,
+  workspaceUserId: string,
+  formData: FormData,
+): Promise<{
+  ok: boolean;
+  error?: "plan_limit_exceeded" | "candidate_unknown";
+  message: string;
+  admittedCount?: number;
+  existingCount?: number;
+  overCapCount?: number;
+  overCapRows?: Array<{ candidateId: string; advertiser: string; reason: string }>;
+  createdWatchlistIds?: string[];
+}> {
+  const { loadSuggestedCompetitorsPanel } = await import(
+    "~/lib/auto-competitor-suggested-loader.server"
+  );
+  const { getUserPlan } = await import("~/lib/plan.server");
+  const { checkPlanLimit } = await import("~/lib/plan.server");
+  const { listWatchlists } = await import("~/lib/data.server");
+  const { bulkAcceptSuggestedCompetitors } = await import(
+    "~/lib/auto-competitor-bulk-accept.server"
+  );
+
+  const candidateIds = [...new Set(formData.getAll("candidateIds").map(String))].filter(Boolean);
+
+  const plan = await getUserPlan(env, workspaceUserId);
+  if (plan === "free") {
+    return {
+      ok: false,
+      error: "plan_limit_exceeded",
+      message:
+        "Auto-discovered competitors are a paid feature — upgrade to add these suggestions.",
+    };
+  }
+
+  // Zero selected candidates is a no-op, not an error (issue requirement).
+  if (candidateIds.length === 0) {
+    return {
+      ok: true,
+      message: "No competitors selected — nothing to add.",
+      admittedCount: 0,
+      existingCount: 0,
+      overCapCount: 0,
+      overCapRows: [],
+      createdWatchlistIds: [],
+    };
+  }
+
+  // Re-validate candidates against the LIVE panel — same honesty guard as
+  // the one-click accept: a stale id must never silently create a watchlist.
+  // Unknown ids are dropped; if every requested id is stale, the action
+  // returns candidate_unknown rather than creating nothing silently.
+  const panel = await loadSuggestedCompetitorsPanel(env, workspaceUserId, plan);
+  const rowsById = new Map((panel?.rows ?? []).map((row) => [row.candidateId, row]));
+  const candidates = candidateIds
+    .map((id) => rowsById.get(id) ?? null)
+    .filter((row): row is NonNullable<typeof row> => row !== null)
+    .map((row) => ({
+      candidateId: row.candidateId,
+      advertiser: row.advertiser,
+      landingPageUrl: row.landingPageUrl,
+      targetCountry: row.targetCountry,
+    }));
+
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      error: "candidate_unknown",
+      message:
+        "Those suggestions are no longer available. Refresh and try again.",
+    };
+  }
+
+  const limit = await checkPlanLimit(env, workspaceUserId, "watchlists");
+
+  // Pass the existing active watchlist fingerprints so the importer can mark
+  // already-watched candidates `existing` at the preview layer. The
+  // createWatchlistWithinLimit INSERT OR IGNORE backstop still catches a
+  // candidate accepted between panel render and bulk accept.
+  const watchlists = await listWatchlists(env, workspaceUserId, { includeInactive: true });
+  const existingFingerprints = watchlists
+    .filter((watchlist) => watchlist.isActive)
+    .map((watchlist) => watchlist.targetFingerprint);
+
+  const country = candidates[0]?.targetCountry ?? "all";
+
+  return bulkAcceptSuggestedCompetitors({
+    env,
+    workspaceUserId,
+    candidates,
+    planLimit: limit.limit,
+    currentCount: limit.current,
+    existingFingerprints,
+    country,
+  });
 }
 
 async function getOwnedWatchlist(
