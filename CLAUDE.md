@@ -115,7 +115,7 @@ npm run dev
 - D1 (Cloudflare SQLite)
 - Optional R2 (artifact storage retention)
 - Cloudflare Email Service (email delivery via the `EMAIL` send_email binding) — replaced Postmark on 2026-06-11; see `app/lib/delivery.server.ts`
-- Dormant WhatsApp Cloud API and Slack webhook code retained behind product gates; email is the verified GA delivery channel
+- WhatsApp Cloud API delivery is dormant (gated off, not claimed); Slack and Teams incoming-webhook delivery is a live Starter+ channel (2026-08-12 decision); the legacy Slack export/API/MCP surface is dormant; email is the verified default GA delivery channel
 - Dodo Payments (live checkout + signed webhooks); legacy secondary payment routes have been removed
 - Cloudflare Browser Rendering (primary ad discovery scrapes the Meta Ad Library; the Meta API token is a gated fallback)
 - Cloudflare Workers AI (creative-text OCR) and Cloudflare Workflows (monitoring fan-out — live in prod via `MONITORING_FANOUT_MODE=fanout`, see Production Reality)
@@ -179,7 +179,7 @@ The checked-in Cloudflare app is the active production runtime and billing is wi
 - Dodo is the only active billing processor. Stripe was never wired; tests assert no Stripe route exposure.
 - region-aware pricing was REMOVED in `migrations/0016_drop_region_pricing.sql`; pricing is live-loaded from Dodo (`app/lib/dodo-pricing.server.ts`, `/api/pricing-preview`)
 - plan gating is enforced at creation time (`checkPlanLimit`), on manual refresh (free plan blocked), on watchlist resume, and on downgrade/revocation/refund (over-limit watchlists auto-pause, newest kept); authenticated live search is rate-limited per account (60/10min)
-Current GA posture: Email is the verified delivery lane; WhatsApp and Slack are dormant/non-GA customer channels; Workflow-based monitoring fan-out is live in prod (`MONITORING_FANOUT_MODE=fanout`, max 8 in-flight).
+Current GA posture: Email is the verified default delivery lane; Slack and Teams incoming-webhook delivery is a live Starter+ channel (2026-08-12 decision); WhatsApp and the legacy Slack export/API/MCP surface are dormant/non-GA; Workflow-based monitoring fan-out is live in prod (`MONITORING_FANOUT_MODE=fanout`, max 8 in-flight).
 
 Audit-program, incident, and verification history: `docs/PROJECT-HISTORY.md`.
 
