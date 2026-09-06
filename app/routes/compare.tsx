@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link, useMatches } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
@@ -35,13 +35,25 @@ const COMPARE_PAGES = [
 export default function CompareIndexRoute({
   localePrefix,
 }: { localePrefix?: string } = {}) {
-  // Locale-prefixed compare hubs (issue #1563) pass their locale prefix so a
-  // non-EN visitor following the index stays in the locale (hrefs like
-  // `/de/compare/magicbrief` instead of `/compare/magicbrief`). EN `/compare`
-  // passes `undefined` and keeps the bare `/compare/*` children exactly as
-  // before.
+  // Locale-prefixed compare hubs (issue #1563) need locale-prefixed child
+  // links (`/de/compare/magicbrief` instead of `/compare/magicbrief`) so a
+  // non-EN visitor following the index stays in the locale. The locale prefix
+  // is resolved from the React Router match chain (`useMatches`) rather than
+  // relying solely on a prop passed by `$locale.compare.tsx`: React Router v8
+  // renders route components without merging parent-route params into child
+  // component props, so the `localePrefix` prop passed by the wrapper does not
+  // always reach this component when it is also a registered route. Falling
+  // back to the match chain makes the hub self-sufficient whether it is
+  // rendered as the EN `/compare` route, the `/de/compare` route, or imported
+  // by the locale wrapper. EN `/compare` has no `routes/$locale` ancestor in
+  // its match chain, so `resolvedLocalePrefix` is `undefined` and the bare
+  // `/compare/*` children are kept exactly as before.
+  const localeMatch = useMatches().find((m) => m.id === "routes/$locale");
+  const resolvedLocalePrefix =
+    localePrefix ??
+    (localeMatch?.params?.locale ? `/${localeMatch.params.locale}` : undefined);
   const hrefFor = (page: (typeof COMPARE_PAGES)[number]) =>
-    localePrefix ? `${localePrefix}${page.href}` : page.href;
+    resolvedLocalePrefix ? `${resolvedLocalePrefix}${page.href}` : page.href;
 
   return (
     <main className="f9-home">
