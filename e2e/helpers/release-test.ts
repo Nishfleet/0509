@@ -10,11 +10,14 @@ const REACT_HYDRATION_ERROR_PATTERN =
   /(?:hydration failed because (?:the server rendered|the initial ui does not match)|text content did not match|a tree hydrated but some attributes of the server rendered|this will cause a hydration error|minified react error #418\b)/iu;
 const installedPages = new WeakSet<Page>();
 
-// Secret-like substrings are redacted before the message is recorded so a
-// hydration error that happens to surface a token in console text can never
-// leak it into the manifest or the job log. Mirrors the reporter's
-// SECRET_LIKE_VALUE posture.
-const SECRET_LIKE_VALUE = /(?:sk_(?:live|test)_|bearer\s+|api[_-]?key|password\s*=|secret\s*=|token\s*=)/giu;
+// Secret-like substrings (prefix AND the rest of the token value) are
+// redacted before the message is recorded so a hydration error that happens
+// to surface a token in console text can never leak it into the manifest or
+// the job log. The pattern consumes the value after a key= so the payload is
+// not left exposed; over-redaction is safe, under-redaction leaks. Mirrors
+// the reporter's SECRET_LIKE_VALUE posture.
+const SECRET_LIKE_VALUE =
+  /(?:sk_(?:live|test)_[A-Za-z0-9_-]*|rk_(?:live|test)_[A-Za-z0-9_-]*|bearer\s+[A-Za-z0-9.\-_~$]+|(?:api[_-]?key|password|secret|token)\s*[:=]\s*[A-Za-z0-9.\-_~$]*)/giu;
 const MAX_MESSAGE_CHARS = 300;
 const MAX_URL_CHARS = 256;
 const MAX_TITLE_CHARS = 200;
@@ -52,11 +55,15 @@ function recordHydrationError(
   // manifest reporter can name the surface (message text, page URL, test
   // title) in the deploy-readiness JSON and the job log. Only the first
   // occurrence per source is recorded — the dedup above guarantees that.
+  // The message text AND the page URL and test title are redacted before
+  // recording so a credential-bearing URL or title (e.g. a query string with
+  // token=sk_live_…) can never leak into the manifest or the job log. The
+  // reporter re-redacts on parse as defense-in-depth.
   const payload: HydrationErrorDetail = {
     source,
     message: truncate(redactSecrets(detail.message), MAX_MESSAGE_CHARS),
-    url: truncate(detail.url, MAX_URL_CHARS),
-    title: truncate(testInfo.title ?? "", MAX_TITLE_CHARS),
+    url: truncate(redactSecrets(detail.url), MAX_URL_CHARS),
+    title: truncate(redactSecrets(testInfo.title ?? ""), MAX_TITLE_CHARS),
   };
   testInfo.annotations.push({
     type: "reactHydrationErrorDetail",
@@ -74,7 +81,7 @@ export function installReleaseHydrationBridge(
   const onConsole = (message: { type(): string; text(): string }) => {
     if (message.type() !== "error") return;
     if (process.env.HYDRATION_DEBUG === "1") {
-      process.stderr.write(`[hydration-debug] console error: ${message.text().slice(0, 500)}\n`);
+      process.stderr.write(`[hydration-debug] console error: ${redactSecrets(message.text().slice(0, 500))}\n`);
     }
     if (REACT_HYDRATION_ERROR_PATTERN.test(message.text())) {
       recordHydrationError(testInfo, "console", {

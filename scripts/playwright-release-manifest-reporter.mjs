@@ -651,7 +651,8 @@ const HYDRATION_DETAIL_MAX_TITLE = 200;
 // captured hydration message is redacted, not just the first. The module-level
 // SECRET_LIKE_VALUE is intentionally non-global (single-shot validation use);
 // redaction must sweep the whole string.
-const SECRET_LIKE_VALUE_GLOBAL = /(?:sk_(?:live|test)_|bearer\s+|api[_-]?key|password\s*=|secret\s*=|token\s*=)/giu;
+const SECRET_LIKE_VALUE_GLOBAL =
+  /(?:sk_(?:live|test)_[A-Za-z0-9_-]*|rk_(?:live|test)_[A-Za-z0-9_-]*|bearer\s+[A-Za-z0-9.\-_~$]+|(?:api[_-]?key|password|secret|token)\s*[:=]\s*[A-Za-z0-9.\-_~$]*)/giu;
 
 function parseHydrationErrorDetail(description) {
   if (typeof description !== "string" || description.length === 0) return null;
@@ -667,10 +668,13 @@ function parseHydrationErrorDetail(description) {
   const url = typeof parsed.url === "string" ? parsed.url.slice(0, HYDRATION_DETAIL_MAX_URL) : null;
   const title = typeof parsed.title === "string" ? parsed.title.slice(0, HYDRATION_DETAIL_MAX_TITLE) : null;
   if (!source || message === null || url === null || title === null) return null;
-  // Never trust the captured text to have scrubbed secrets — re-redact here
-  // so a malformed bridge cannot leak a token into the manifest.
+  // Never trust the captured text to have scrubbed secrets — re-redact the
+  // message AND the URL (a credential-bearing query string must never reach
+  // the manifest or job log) so a malformed bridge cannot leak a token.
   const safeMessage = String(message).replace(SECRET_LIKE_VALUE_GLOBAL, "[redacted]");
-  return { source, message: safeMessage, url: String(url), title: String(title) };
+  const safeUrl = String(url).replace(SECRET_LIKE_VALUE_GLOBAL, "[redacted]");
+  const safeTitle = String(title).replace(SECRET_LIKE_VALUE_GLOBAL, "[redacted]");
+  return { source, message: safeMessage, url: safeUrl, title: safeTitle };
 }
 
 function projectIdentity(test) {

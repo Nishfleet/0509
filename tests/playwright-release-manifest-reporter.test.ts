@@ -552,13 +552,13 @@ describe("Gate-B Playwright release manifest reporter", () => {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  it("redacts secret-like substrings in the captured hydration error message", () => {
+  it("redacts secret-like substrings in the captured hydration error message and url", () => {
     const directory = makeTestDirectory();
     const outputPath = join(directory, "manifest.json");
     const detail = JSON.stringify({
       source: "console",
       message: "Hydration failed; token=sk_live_leak123 in console text",
-      url: "http://127.0.0.1:4179/app",
+      url: "http://127.0.0.1:4179/app/watchlists?token=sk_live_leak123&api_key=secretkey",
       title: "secret redaction",
     });
     const releaseAnnotations = [
@@ -583,7 +583,42 @@ describe("Gate-B Playwright release manifest reporter", () => {
     const entry = manifest.entries.find((e: { sourceFile?: string }) => e.sourceFile === "hydration-secret-redaction-test.spec.ts");
     expect(entry.hydrationError.message).not.toContain("sk_live_leak123");
     expect(entry.hydrationError.message).toContain("[redacted]");
+    // A credential-bearing query string must never reach the manifest.
+    expect(entry.hydrationError.url).not.toContain("sk_live_leak123");
+    expect(entry.hydrationError.url).not.toContain("secretkey");
+    expect(entry.hydrationError.url).toContain("[redacted]");
     expect(JSON.stringify(manifest)).not.toContain("sk_live_leak123");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("still classifies the strict issue when the hydration detail is malformed", () => {
+    const directory = makeTestDirectory();
+    const outputPath = join(directory, "manifest.json");
+    const releaseAnnotations = [
+      ...annotations(),
+      { type: "reactHydrationError", description: "console" },
+      // An unparseable/truncated detail must not break strict classification
+      // or drop the surface-naming path silently.
+      { type: "reactHydrationErrorDetail", description: "{not-json" },
+    ];
+    const test = fakeTest("hydration-malformed-detail-test", releaseAnnotations);
+    const reporter = new GateBManifestReporter({
+      outputPath,
+      candidateFingerprint: fingerprint,
+      environment: "local",
+      runOrigin,
+      serverIdentity,
+      strict: true,
+    });
+    reporter.onBegin({}, suite([test]));
+    reporter.onTestEnd(test, result("passed", 0, annotations()));
+
+    expect(reporter.onEnd(fullResult("passed"))).toEqual({ status: "failed" });
+    const manifest = readManifest(outputPath);
+    expect(manifest.strictIssues).toContain("browser_hydration_error:console");
+    const entry = manifest.entries.find((e: { sourceFile?: string }) => e.sourceFile === "hydration-malformed-detail-test.spec.ts");
+    // The malformed detail is dropped, but classification is unchanged.
+    expect(entry.hydrationError).toBeUndefined();
     rmSync(directory, { recursive: true, force: true });
   });
 

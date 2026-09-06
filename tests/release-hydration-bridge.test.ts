@@ -106,6 +106,27 @@ describe("release hydration bridge", () => {
     expect(detail?.message).toContain("[redacted]");
   });
 
+  it("redacts secret-like substrings in the recorded page url and title", () => {
+    const page = new FakePage("http://127.0.0.1:4179/app?token=sk_live_secreturl&api_key=secretkey");
+    const testInfo = {
+      annotations: [] as Array<{ type: string; description?: string }>,
+      title: "url scrubbing",
+    };
+    installReleaseHydrationBridge(page as never, testInfo as never);
+
+    page.emit("console", {
+      type: () => "error",
+      text: () => "Hydration failed because the server rendered text did not match the client",
+    });
+
+    const detail = parseDetail(
+      testInfo.annotations.find((a) => a.type === "reactHydrationErrorDetail")?.description,
+    );
+    expect(detail?.url).not.toContain("sk_live_secreturl");
+    expect(detail?.url).not.toContain("secretkey");
+    expect(detail?.url).toContain("[redacted]");
+  });
+
   it("ignores ordinary browser errors and non-error console messages", () => {
     const page = new FakePage();
     const testInfo = {
