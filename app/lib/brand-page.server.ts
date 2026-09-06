@@ -28,6 +28,7 @@ import {
 } from "~/lib/competitor-website";
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import {
+  buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
   readDiscoveryCacheEntryCacheOnly,
 } from "~/lib/discovery-cache.server";
@@ -485,11 +486,18 @@ export function formatBrandPageCheckedAgo(fetchedAt: string, now: Date = new Dat
 function candidateCountries(visitorCountry: string): string[] {
   const candidates = [
     visitorCountry?.trim() || ALL_COUNTRIES_VALUE,
-    ALL_COUNTRIES_VALUE,
-    "United States",
+    ...BRAND_PAGE_FALLBACK_COUNTRIES,
   ];
   return [...new Set(candidates)].slice(0, BRAND_PAGE_MAX_CACHE_LOOKUPS);
 }
+
+/**
+ * The countries a crawler-visible visitor falls back to when their own
+ * country has no cached entry: the global "all" key, then "United States".
+ * Shared with the sitemap helper so sitemap inclusion can never drift from
+ * the countries the loader actually tries.
+ */
+export const BRAND_PAGE_FALLBACK_COUNTRIES = [ALL_COUNTRIES_VALUE, "United States"] as const;
 
 /**
  * Reproduce the exact cache key the /search execution path would have written
@@ -535,6 +543,36 @@ function deriveCacheLookup(
     country: legacyQuery.filters.country || ALL_COUNTRIES_VALUE,
     cacheKeyOverride: null,
   };
+}
+
+/**
+ * The exact discovery cache key `loadBrandPageCacheSnapshot` would derive and
+ * read for this domain + country under the CURRENT environment (rollout mode,
+ * provider): the search-v2 domain key when the v2 rollout applies, else the
+ * legacy fingerprint triple. Shadow mode serves customers from the legacy key,
+ * so it maps to legacy here — identical to `deriveCacheLookup`'s behavior, but
+ * returning the final key string instead of the lookup parts.
+ *
+ * Used by the /sitemap.xml dynamic brand-page entries to prove a candidate
+ * domain's page would actually render indexable: a row under this exact key
+ * must exist and pass the same freshness/demo checks the loader applies.
+ */
+export function brandPageCacheLookupKey(
+  env: AppEnv,
+  provider: string,
+  domain: string,
+  country: string,
+): string {
+  const lookup = deriveCacheLookup(env, provider, domain, country);
+  return (
+    lookup.cacheKeyOverride ??
+    buildDiscoveryCacheKey({
+      provider,
+      fingerprint: lookup.fingerprint,
+      country: lookup.country,
+      cursor: null,
+    })
+  );
 }
 
 type CacheEntry = Awaited<ReturnType<typeof readDiscoveryCacheEntryCacheOnly>>;

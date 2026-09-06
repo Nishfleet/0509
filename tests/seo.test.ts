@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { publicSeoFileForPathname } from "~/lib/seo";
+import { publicSeoFileForPathname, staticSitemapFile } from "~/lib/seo";
 
 describe("public SEO files", () => {
   it("publishes the public funnel surfaces in the sitemap", () => {
@@ -22,9 +22,22 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain("<url><loc>https://0509.io/search</loc></url>");
     expect(sitemap?.body).toContain("<url><loc>https://0509.io/auth/signup</loc></url>");
     expect(sitemap?.body).toContain("<url><loc>https://0509.io/compare/magicbrief</loc></url>");
-    expect(sitemap?.body).toContain(
-      "<url><loc>https://0509.io/compare/meta-ad-library</loc></url>",
-    );
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/compare/meta-ad-library</loc></url>");
+  });
+
+  it("keeps the static sitemap unchanged as the D1 fallback (13 URLs, zero /ads entries)", () => {
+    const staticSitemap = publicSeoFileForPathname("/sitemap.xml");
+    const fallback = staticSitemapFile();
+
+    expect(fallback.body).toBe(staticSitemap?.body);
+    expect(fallback.contentType).toBe("application/xml; charset=utf-8");
+    expect(fallback.cacheControl).toBe("public, max-age=3600");
+    for (const path of ["/", "/search", "/help", "/docs", "/api/docs", "/status", "/terms"]) {
+      expect(fallback.body).toContain(`<url><loc>https://0509.io${path}</loc></url>`);
+    }
+    expect(fallback.body).not.toContain("/ads/");
+    const urlCount = (fallback.body.match(/<url><loc>/g) ?? []).length;
+    expect(urlCount).toBe(13);
   });
 
 	it("disallows auth-only surfaces in robots.txt but keeps /share crawlable", () => {

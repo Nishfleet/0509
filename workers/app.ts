@@ -19,7 +19,11 @@ import {
   PUBLIC_MARKDOWN,
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
-import { publicSeoFileForPathname } from "../app/lib/seo";
+import {
+  publicSeoFileForPathname,
+  staticSitemapFile,
+  type PublicSeoFile,
+} from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import {
   observeScheduledTask,
@@ -65,7 +69,7 @@ function markdownResponse(request: Request, body: string): Response {
   );
 }
 
-function publicFileResponse(request: Request, file: NonNullable<ReturnType<typeof publicSeoFileForPathname>>): Response {
+function publicFileResponse(request: Request, file: PublicSeoFile): Response {
   return withSecurityHeaders(
     new Response(request.method === "HEAD" ? null : file.body, {
       headers: {
@@ -83,6 +87,21 @@ export default {
     const primaryDomainResponse = primaryDomainRedirect(request);
     if (primaryDomainResponse) {
       return withSecurityHeaders(primaryDomainResponse, request);
+    }
+
+    // /sitemap.xml is DYNAMIC: the 13 static paths always render, and
+    // /ads/:domain entries are appended only for domains whose cache-only
+    // brand page would serve indexable right now (bounded D1 read, no live
+    // discovery). Any D1 issue degrades to the unchanged static sitemap.
+    if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/sitemap.xml") {
+      try {
+        const { publicSitemapFile } = await import("../app/lib/brand-page-sitemap.server");
+        return publicFileResponse(request, await publicSitemapFile(env));
+      } catch {
+        // Last-resort: the helper already degrades internally; this guards the
+        // response itself so /sitemap.xml never 500s.
+        return publicFileResponse(request, staticSitemapFile());
+      }
     }
 
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
