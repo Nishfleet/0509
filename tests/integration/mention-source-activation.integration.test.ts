@@ -102,7 +102,9 @@ async function seedMentionSetup(): Promise<SeededTarget> {
     userId,
     trackedEntityId,
   );
-  const byConnector = new Map(rows.map((row) => [row.connectorId, row]));
+  const byConnector = new Map<PresenceConnectorId, SourceTargetRecord>(
+    rows.map((row) => [row.connectorId, row]),
+  );
   const xTarget = byConnector.get("x");
   const redditTarget = byConnector.get("reddit");
   if (!xTarget || !redditTarget) {
@@ -171,6 +173,9 @@ describe("mention source activation — pure buildMentionQuery", () => {
       "reddit",
     );
     expect(query.source).toBe("reddit");
+    if (query.source !== "reddit") {
+      throw new Error("expected reddit mention query");
+    }
     expect(query.query.subredditCandidates.length).toBeGreaterThanOrEqual(1);
     expect(query.provenance.subredditCandidates.length).toBe(query.query.subredditCandidates.length);
     for (const entry of query.provenance.subredditCandidates) {
@@ -185,6 +190,9 @@ describe("mention source activation — pure buildMentionQuery", () => {
       "x",
     );
     expect(query.source).toBe("x");
+    if (query.source !== "x") {
+      throw new Error("expected x mention query");
+    }
     expect(query.query.q).toContain("MamaEarth");
     expect(query.query.q.toLowerCase()).toContain("mamaearth.in");
     expect(query.provenance.query.q).toBe(query.query.q);
