@@ -4,6 +4,14 @@ Narrative records moved out of `CLAUDE.md` so per-session guidance stays operati
 
 ## 2026-09-06
 
+### #1800 main CI red (FleetMainRed) — initial opening, same Secret Scan cross-branch class
+
+- The first FleetMainRed of the day opened 2026-09-06T11:50:56Z with `fleet_main_ci_green[Nishfleet/0509]=0`; the other 8 enrolled repos stayed green. The root cause was the **Secret Scan (Gitleaks)** `push` trigger running a bare `gitleaks git .`, i.e. `git log --all`, which walked every fetched ref — including a redaction-test fixture (`api_key=...` at `tests/release-hydration-bridge.test.ts:95`, commit `b884832f`) that lived only on an unrelated open claim branch (`claim/issue-1752-refresh`, PR #1810). Main's own history scanned clean. The same class re-fired at 14:10Z as #1814; that incident, the exact mechanics, the collateral auto-revert, and the durable fix are all recorded in detail in the **#1814 main CI red** entry below.
+- Resolution (landed in #1826, merged 2026-09-06T15:05:51Z, commit `1a41f0a1`): the `push`/`workflow_dispatch` scans are scoped to `--full-history HEAD` (main ancestry only, never `--all`); `pull_request`/`merge_group` keep `base..head`. `tests/secret-scan-workflow.test.ts` pins every event sets an explicit scope. This kills the cross-branch whack-a-mole class — the `.gitleaksignore` fingerprint PRs (#1805/#1819/#1820) were treating the symptom.
+- Green proven (live): main CI green with every completed check success/skipped and zero failures; Secret Scan green on the post-fix main heads (`1a41f0a1`, `49638a83`); `fleet_main_ci_green{repo="Nishfleet/0509"} = 1` on the live exporter. FleetMainRed no longer fires for 0509.
+- This PR closes #1800. No product code, schema, route, or workflow changed — the fix landed in #1826 and the collateral restore in #1827 (both already merged). This entry records the incident in the canonical log so the close is attributable to a real diff, not a bare `gh issue close`.
+- Rollback: none — no behaviour change in this PR. If main re-reds on Secret Scan, the durable guard is #1826's scope pin.
+
 ### #1814 main CI red — Secret Scan push trigger walked every branch (`git log --all`)
 
 - FleetMainRed opened 2026-09-06T14:10Z with `fleet_main_ci_green[Nishfleet/0509]=0`. The failing required check was **Secret Scan (Gitleaks)** on the `push` event: the scan step ran a bare `gitleaks git .`, which is `git log --all` and walks every fetched ref, not just main's ancestry. A redaction-test fixture (`api_key=...` at `tests/release-hydration-bridge.test.ts:95`, commit `b884832f`) that lived **only on an unrelated open claim branch** (`claim/issue-1752-refresh`, PR #1810) poisoned main's required scan. Main's own 749-commit history scanned clean — 0 findings.
