@@ -20,7 +20,8 @@ const MAJOR_BRANDS = [
 ];
 
 for (const brand of MAJOR_BRANDS) {
-  test(`${brand.label} search links to its indexable brand page`, async ({
+  // Shared-resource lock (issue #1727): live external production search.
+  test(`${brand.label} search links to its indexable brand page`, { lock: "external-api" }, async ({
     page,
   }) => {
     await page.goto(brand.path, { waitUntil: "domcontentloaded" });

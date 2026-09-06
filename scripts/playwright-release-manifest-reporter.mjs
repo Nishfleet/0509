@@ -4,7 +4,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
-import { parseDocument } from "yaml";
 import {
   isLocalReleaseServerIdentity,
   parseExactLoopbackOrigin,
@@ -64,7 +63,7 @@ export const RELEASE_ARTIFACT_STATE_MATRIX = Object.freeze({
   "journey-6-owner-member-invite-concurrency-stale-conflicts": Object.freeze({ prefix: "j6-team", states: Object.freeze(["invite-concurrency-recovery"]) }),
 });
 const ARTIFACT_SCREENSHOT_CONTENT_TYPE = "image/png";
-const ARTIFACT_ARIA_CONTENT_TYPE = "application/yaml";
+const ARTIFACT_ARIA_CONTENT_TYPE = "application/json";
 const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
 const MAX_ARIA_BYTES = 256 * 1024;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -433,7 +432,7 @@ export function expectedReleaseArtifacts(entry) {
     {
       kind: "aria",
       state,
-      attachmentName: `${definition.prefix}-${entry.viewport}-${state}.aria.yml`,
+      attachmentName: `${definition.prefix}-${entry.viewport}-${state}.aria.json`,
       contentType: ARTIFACT_ARIA_CONTENT_TYPE,
     },
   ]);
@@ -455,8 +454,11 @@ function validArtifactBody(expected, attachment) {
   try {
     const text = new TextDecoder("utf-8", { fatal: true }).decode(body);
     if (text.trim().length === 0 || /[\u0000\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text)) return false;
-    const document = parseDocument(text, { strict: true, uniqueKeys: true });
-    return document.errors.length === 0 && document.contents !== null;
+    // Issue #1727: aria evidence is captured via ariaSnapshotJSON() — a JSON
+    // value of ARIA nodes — so validation is a strict JSON parse, not a YAML
+    // document parse.
+    const parsed = JSON.parse(text);
+    return parsed !== null && typeof parsed === "object";
   } catch {
     return false;
   }

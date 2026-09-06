@@ -265,6 +265,11 @@ const run = spawnSync(
     // CLI --retries beats playwright.config, so this remains the knob.
     `--retries=${diagnosticSubset ? 2 : 0}`,
     "--workers=1",
+    // Issue #1727: append the release-manifest reporter on top of the
+    // configured reporters instead of overriding them in playwright.config.
+    // The reporter's strict mode is its constructor default, so the flag's
+    // no-options form is sufficient.
+    "--add-reporter=./scripts/playwright-release-manifest-reporter.mjs",
   ],
   {
     cwd: root,
