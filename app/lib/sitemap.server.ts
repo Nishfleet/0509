@@ -30,12 +30,15 @@
  *        backs indexable thin content, so those stay out — the loader
  *        self-noindexes them; this gate keeps them out of the sitemap so the
  *        two agree.
- *   2. Domain recovery is strictly lossless-only: a row maps to a brand page
+ *   2. Alias domains are never listed: the route 301-redirects them to their
+ *      canonical (product) brand page, so they are no longer distinct
+ *      indexable URLs (issue #1446 criterion 3).
+ *   3. Domain recovery is strictly lossless-only: a row maps to a brand page
  *      ONLY when its cache key or payload carries the registrable domain
  *      (search-v2 domain keys embed it; v2 payloads carry searchIntent +
  *      displayDomain). Legacy fingerprint keys are un-mappable and skipped —
  *      we never guess a domain.
- *   3. Lookup parity: the listed domain must be reachable through the EXACT
+ *   5. Lookup parity: the listed domain must be reachable through the EXACT
  *      cache key the page will read. deriveBrandPageLookupForCountry
  *      reproduces the loader's own key derivation (search-v2 domain keys or
  *      legacy fingerprint triples, per the SEARCH_ROLLOUT_MODE posture), and
@@ -43,40 +46,40 @@
  *      This closes the stale-payload hole: a legacy-keyed row is never
  *      trusted on its payload's displayDomain alone — the key fingerprint
  *      must actually be the one the page derives for that domain.
- *   4. Country scopes are restricted to what every visitor lookup tries
+ *   6. Country scopes are restricted to what every visitor lookup tries
  *      regardless of geo ("all", "United States"): the loader probes
  *      [visitor-country, all, United States] and cannot know a crawler's
  *      geo at sitemap time. A domain backed only by other-country captures
  *      renders the noindex shell for most crawlers, so it stays out of the
  *      sitemap by design — coverage is traded for the noindex guarantee.
- *   5. The emergency brake PUBLIC_BRAND_PAGES_INDEXABLE="0" (noindex on
+ *   7. The emergency brake PUBLIC_BRAND_PAGES_INDEXABLE="0" (noindex on
  *      every /ads/* page) suppresses dynamic entries entirely, and demo
  *      provider environments (no real cache to render) are skipped too, so
  *      the sitemap can never list a page that serves noindex.
- *   6. This is a bounded cache read only — sitemap generation never triggers
+ *   8. This is a bounded cache read only — sitemap generation never triggers
  *      live discovery, Browser Rendering, or any paid operation.
  *
  * The sitemap also appends dynamic /timeline/:domain entries (the Offer
  * Timeline) from `landing_page_snapshot` rows, with its own rules below
  * (SITEMAP_TIMELINE_PATH_LIMIT and indexableTimelineEntriesFromRows):
  *
- *   7. A domain qualifies only when /timeline/:domain WOULD RENDER the
+ *   9. A domain qualifies only when /timeline/:domain WOULD RENDER the
  *      indexable ledger state — at least one stored snapshot that survives
  *      the loader's proof gate (both screenshot and page-text artifacts,
  *      issue #1284). A domain whose rows all fail the gate renders empty
  *      (gone/noindex), so it stays out.
- *   8. Domain recovery is lossless-only: the registrable domain of a row's
+ *   10. Domain recovery is lossless-only: the registrable domain of a row's
  *      canonical_url hostname, gated by the same normalizeBrandPageDomain the
  *      route applies to its :domain param — a domain the route would 404 on
  *      (reserved TLDs, single labels, IPs) is never listed.
- *   9. No freshness window: unlike brand pages (7-day rule), the timeline
+ *   11. No freshness window: unlike brand pages (7-day rule), the timeline
  *      ledger's only indexability rule is the empty-ledger one, so any
  *      proof-complete capture age qualifies.
- *   10. The PUBLIC_BRAND_PAGES_INDEXABLE brake does NOT suppress timeline
+ *   12. The PUBLIC_BRAND_PAGES_INDEXABLE brake does NOT suppress timeline
  *      entries — the timeline route never reads that env, so its pages stay
  *      indexable under the brake; mirroring the loader means timeline locs
  *      stay live (the brand /ads/* entries below are the ones it kills).
- *   11. Same zero-cost rule: one bounded D1 read at sitemap-render time.
+ *   13. Same zero-cost rule: one bounded D1 read at sitemap-render time.
  *      Missing landing_page_snapshot table on a fresh D1 degrades to the
  *      static sitemap, never a 500.
  */
@@ -84,6 +87,7 @@
 import {
   adHasVerifiedDomainLink,
   deriveBrandPageLookupForCountry,
+  isBrandPageAliasDomain,
   normalizeBrandPageDomain,
   BRAND_PAGE_FRESH_FOR_INDEXING_MS,
 } from "~/lib/brand-page.server";
@@ -332,6 +336,11 @@ export function indexableBrandPageEntriesFromRows(
     }
     const domain = brandDomainFromSitemapCacheRow(row);
     if (!domain || seen.has(domain)) {
+      continue;
+    }
+    // Issue #1446 criterion 3: an alias page 301-redirects to its canonical
+    // brand page, so it is no longer a distinct indexable URL — never list it.
+    if (isBrandPageAliasDomain(domain)) {
       continue;
     }
     // Lookup parity: the row's key must be exactly what the page derives for

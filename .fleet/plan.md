@@ -1,71 +1,34 @@
-# Plan — Nishfleet/0509#1563 (manager: pi-issue-0509-1563)
+# Plan — Nishfleet/0509#1446 (manager: pi-issue-0509-1446)
 
-## Diagnosis (verified live + at build level, 2026-09-06)
+## Situation (verified live + at branch level, 2026-09-06)
 
-PR #1620 already merged the locale compare/switch child routes; all 13
-`/<locale>/{compare,switch}/<slug>` URLs serve 200 on production with
-canonical→EN and the full hreflang cluster. Two accept bullets are superseded
-by later owner-authored issues:
+Issue #1446: `/ads/:domain` alias brand pages (ridge.com / oura.com) are not
+redirected/canonicalized to their populated product pages (ridgewallet.com /
+ouraring.com), splitting a brand's verified ads and link equity across two
+competing indexable URLs.
 
-- `<html lang="<locale>">` (accept #1) — owner-authored #1570 requires
-  `lang="en"` on buyer-surface locale pages because they serve byte-identical
-  English copy (WCAG 3.2.6; Google doorway signal). The canary test was
-  updated by #1570 to assert exactly that. Do NOT "fix" lang.
-- 65 locale sitemap URLs (accept #4) — #1570 removed byte-identical locale
-  pages from the sitemap; #1481 dropped the canonicalized dupes
-  (/compare/visualping, /compare/foreplay). Do NOT re-add.
+The implementation already exists in this worktree (`claim/issue-1446`) as two
+commits:
 
-The one genuinely unmet criterion is accept #3: `/de/compare` (and siblings)
-must link to locale-prefixed children. Production renders bare EN links
-(`href="/compare/magicbrief"`).
+- `c2bf5cf1` — canonical alias resolver, route-level 301, sitemap exclusion,
+  and the route-level test `tests/ads-alias-canonical-redirect.test.ts`.
+- `c9ae1487` — restricts alias-landing attribution to the brand's own Meta
+  page id. This is the REQUIRED fix for the real `codex-node-checks` FAIL that
+  closed PR #1714: `tests/integration/brand-attribution.integration.test.ts`
+  line 188 (`expected 2 to be 1`). Verified passing locally with this commit.
 
-**Root cause**: `@react-router/dev` wraps every route module's default export
-in `withComponentProps` at build time. That wrapper renders the component with
-the framework's route props (`{params, loaderData, actionData, matches}` from
-`useRouteComponentProps()`) and discards caller-supplied props. So
-`$locale.compare.tsx` rendering `<CompareRoute localePrefix={...}>` drops
-`localePrefix` in the built app. Verified: the deployed client chunk
-`_locale.compare-1Fn5rb50.js` and server bundle both contain the prop pass,
-and `useParams` demonstrably returns `{locale:"de"}` in the leaf — yet
-production emits unprefixed links because the prop never arrives. Unit tests
-missed it because vitest imports the unwrapped source module and mocks
-`useParams`.
-
-## Fix design (single phase)
-
-1. `app/routes/compare.tsx`: drop the `localePrefix` prop; resolve the prefix
-   inside `CompareIndexRoute` via `useParams()` gated by
-   `isBuyerSurfaceLocaleId` (`params.locale` is `{locale:"de"}` for the leaf
-   match under `/de/compare`, `{}`/undefined under EN `/compare`; safe outside
-   a router because `RouteContext` defaults to `{matches: []}`).
-2. `app/routes/$locale.compare.tsx`: stop passing props — re-export the EN
-   component; keep the `links` override (canonical→EN + hreflang cluster) and
-   `meta` re-export. Comment records why no prop may cross the boundary.
-3. `tests/seo/locale-child-routes.test.ts`: keep the hub-link render
-   assertion (mocked `useParams -> {locale:"de"}` still exercises the
-   behavior) and add a structural guard: `$locale.compare.tsx` must not pass
-   props to the imported route default, and `compare.tsx` must resolve the
-   locale itself via `useParams`.
-4. Lane evidence at `.lane/reports/0509-issue-1563-compare-hub-locale-prefix.md`
-   (lane-unique path per repo AGENTS.md).
-5. Verify: `npm run typecheck`, `npx vitest run --project node` for the touched
-   test files, `npm run build`, and a real local SSR render via
-   `npm run e2e:serve:local` curling `/de/compare` for `href="/de/compare/*"`.
+PR #1714 (which did NOT include `c9ae1487`) was closed without merge; nothing
+was ever pushed to `origin/claim/issue-1446` (still at `f7e19ebb`, pre-work).
+Manager job: verify green, review the diff, push the branch, open a fresh PR,
+arm auto-merge.
 
 ## Phases
 
-- [x] phase 1: fix the compare hub locale-prefix drop + canary guard + evidence record + green gates
-
-## Reviewer round (seat: cursor/cursor-grok-4.6-high)
-
-No critical or warning findings. Two Consider findings recorded, not re-delegated:
-
-- Consider: the structural-guard regex `/<[A-Z][A-Za-z]*\s+[a-zA-Z]+=/` only guards
-  `$locale.compare.tsx`/`compare.tsx` and would miss a spread form
-  (`<CompareRoute {...{localePrefix}}>`) or a future `$locale.switch.tsx` hub with
-  the same bug. Adequate for the current surface (no switch hub; all 5 locale hubs
-  share `$locale.compare.tsx`). Not acted on — no switch hub exists and the guard
-  covers the shipped surface.
-- Consider: the same regex is brittle against the file's own comment — a future
-  edit documenting the bug with a literal JSX example in a comment would falsely
-  fail the guard. Not acted on — the comment currently contains no such literal.
+- [x] phase 1: confirm the canonical-alias implementation + attribution fix
+      are committed and resolve the real CI FAIL
+- [x] phase 2: green verification — route-level test, integration test,
+      full node suite, workers suite, typecheck
+- [x] phase 3: repo checks (sgscan, no agent attribution, exec-review canary)
+- [x] phase 4: push `claim/issue-1446` to origin
+- [x] phase 5: open PR with Verification/run-proof/research/help-first +
+      Closes #1446, reviewer round (product repo: 0509), arm auto-merge
