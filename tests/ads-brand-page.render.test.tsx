@@ -1122,7 +1122,9 @@ describe("ads.cross.link.breadcrumb.canary — combined conditional rule (issue 
   // BOTH the sibling cross-link block AND the BreadcrumbList JSON-LD, and a
   // page with verifiedLinkCount = 0 must render NEITHER. The two sibling
   // tests each cover one block; this guard asserts the two can never drift
-  // out of step for the same page shape.
+  // out of step for the same page shape. Each case drives the two blocks by
+  // their real production conditions (relatedBrands AND verifiedLinkCount), so
+  // a regression on either gate is caught, not masked by fixture choice.
   const otherBrands = [
     { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
     { domain: "asos.com", path: "/ads/asos.com", name: "ASOS" },
@@ -1138,7 +1140,7 @@ describe("ads.cross.link.breadcrumb.canary — combined conditional rule (issue 
 
     // Sibling cross-link block present: ≥2 links to OTHER /ads pages.
     expect(markup).toContain("Browse tracked competitors");
-    const adsHrefCount = (markup.match(/href="\/ads\/(?=.)/g) ?? []).length;
+    const adsHrefCount = (markup.match(/href="\/ads\//g) ?? []).length;
     expect(adsHrefCount).toBeGreaterThanOrEqual(2);
     expect(markup).toContain('href="/ads/adidas.com"');
     expect(markup).toContain('href="/ads/asos.com"');
@@ -1146,19 +1148,36 @@ describe("ads.cross.link.breadcrumb.canary — combined conditional rule (issue 
     expect(markup).not.toContain('href="/ads/nike.com"');
   });
 
-  it("renders NEITHER the sibling cross-link block NOR the BreadcrumbList when verifiedLinkCount = 0", async () => {
+  it("renders NEITHER the sibling cross-link block NOR the BreadcrumbList when verifiedLinkCount = 0, even with sibling brands present", async () => {
+    // This is the case that proves the gate is real: the page has OTHER
+    // indexable sibling brands (relatedBrands non-empty) but its own wall has
+    // zero verified-linked ads, so it self-noindexes. Both blocks must still
+    // be absent — the cross-link block must be gated on verifiedLinkCount and
+    // NOT merely on the presence of sibling brands (the #1417-only behaviour
+    // would render cross-links here, breaking the combined rule).
     const markup = await render(
       populated({
         verifiedLinkedAds: [],
         verifiedLinkCount: 0,
-        relatedBrands: [],
+        relatedBrands: otherBrands,
         noindex: true,
       }),
     );
 
     expect(markup).not.toContain('"@type":"BreadcrumbList"');
     expect(markup).not.toContain("Browse tracked competitors");
-    expect(markup.match(/href="\/ads\/(?=.)/g) ?? []).toHaveLength(0);
+    expect(markup.match(/href="\/ads\//g) ?? []).toHaveLength(0);
+  });
+
+  it("renders breadcrumb without sibling cross-links on a populated page that has no OTHER indexable brands (single-brand sitemap)", async () => {
+    // The two blocks are driven by different real conditions: a page with no
+    // other indexable brands legitimately has cross-links hidden (nothing to
+    // link) while its breadcrumb still renders. Asserting this state keeps the
+    // guard sensitive to a regression that couples the blocks when it must not.
+    const markup = await render(populated({ verifiedLinkCount: 6, relatedBrands: [] }));
+
+    expect(markup).toContain('"@type":"BreadcrumbList"');
+    expect(markup).not.toContain("Browse tracked competitors");
   });
 });
 
