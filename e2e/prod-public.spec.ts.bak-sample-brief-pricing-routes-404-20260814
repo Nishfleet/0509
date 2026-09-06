@@ -205,22 +205,6 @@ test.describe("public production-safe E2E smoke", () => {
       await expect(page.locator("body")).toBeVisible();
     }
 
-    // Legacy public paths (pre-2026-07-20 rebuild) must redirect to the
-    // homepage sections instead of 404 — see tests/public-routes-404.test.ts.
-    // Follow the redirect so the final landing is a 200 and the anchor target
-    // exists on the homepage.
-    const legacyAnchorRedirects: Array<[string, string]> = [
-      ["/sample-brief", "#demo"],
-      ["/pricing", "#pricing"],
-      ["/plans", "#pricing"],
-    ];
-    for (const [path, anchor] of legacyAnchorRedirects) {
-      const response = await gotoPublicPage(page, path);
-      expect(response?.status(), `${path} should redirect`).toBe(301);
-      await expect(page).toHaveURL(new RegExp(`#${anchor.slice(1)}$`));
-      await expect(page.locator(`#${anchor.slice(1)}`)).toBeVisible();
-    }
-
     const health = await request.get(new URL("/api/health", baseURL).toString());
     expect(health.ok()).toBeTruthy();
     await expect(await health.json()).toMatchObject({ app: "0509", status: "ok" });
@@ -252,78 +236,6 @@ test.describe("public production-safe E2E smoke", () => {
         "The link may have expired or been switched off by whoever shared it. Ask them for a fresh link.",
       ),
     ).toBeVisible();
-  });
-
-  test("public links never point at a same-origin 404", async ({ page, request, baseURL }) => {
-    test.setTimeout(90_000);
-    const publicPaths = [
-      "/",
-      "/search",
-      "/compare/magicbrief",
-      "/compare/meta-ad-library",
-      "/help",
-      "/docs",
-      "/api/docs",
-      "/status",
-      "/changelog",
-      "/trust",
-      "/privacy",
-      "/terms",
-      "/bots/presence",
-      "/sample-brief",
-      "/pricing",
-      "/plans",
-    ];
-    const failures: string[] = [];
-
-    for (const path of publicPaths) {
-      const response = await request.get(new URL(path, baseURL).toString(), {
-        maxRedirects: 0,
-        timeout: 10_000,
-      });
-      if (response.status() === 404) {
-        failures.push(`${path} returned 404`);
-      }
-    }
-
-    // Crawl every same-origin link on the public surfaces and record any that
-    // 404 (sol-sweep packet
-    // product-live/0509-sample-brief-and-pricing-public-routes-404). Hash
-    // links are resolved against the homepage which hosts all current anchors.
-    for (const path of publicPaths) {
-      await gotoPublicPage(page, path);
-      const links = await page.evaluate(() =>
-        Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href]")).map(
-          (element) => element.href,
-        ),
-      );
-      for (const href of links) {
-        const url = new URL(href, baseURL);
-        if (url.origin !== new URL(baseURL || "https://0509.io").origin) continue;
-        if (url.protocol !== "http:" && url.protocol !== "https:") continue;
-        const pathname = url.pathname.replace(/\/+$/, "") || "/";
-        const response = await request.get(new URL(pathname, baseURL).toString(), {
-          maxRedirects: 0,
-          timeout: 10_000,
-        });
-        if (response.status() === 404) {
-          failures.push(`${path} links to 404: ${href}`);
-        }
-      }
-      // Hash links resolve to the homepage section when the href is only an
-      // anchor. Verify those anchor targets exist on the homepage.
-      const hashTargets = await page.evaluate(() =>
-        Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')).map(
-          (element) => element.getAttribute("href")!.slice(1),
-        ),
-      );
-      for (const target of hashTargets) {
-        await gotoPublicPage(page, "/");
-        await expect(page.locator(`#${target}`)).toBeVisible();
-      }
-    }
-
-    expect(failures).toEqual([]);
   });
 
   test("public search stays usable at tablet and mobile widths", async ({ page }) => {

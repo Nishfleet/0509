@@ -6,12 +6,6 @@ import {
 
 export default [
   index("routes/marketing.tsx"),
-  // Legacy public paths from before the 2026-07-20 public-home rebuild. The
-  // sample brief and pricing now live in homepage sections (/#demo, /#pricing);
-  // these 301 there so old links, emails, and search hits never see a 404.
-  route("sample-brief", "routes/sample-brief.tsx"),
-  route("pricing", "routes/pricing.tsx"),
-  route("plans", "routes/plans.tsx"),
   route("search", "routes/search.tsx"),
   route("help", "routes/help.tsx"),
   route("docs", "routes/docs.tsx"),
