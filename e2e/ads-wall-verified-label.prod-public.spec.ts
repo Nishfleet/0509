@@ -13,7 +13,8 @@ import { expect, test } from "@playwright/test";
  * is deployed (prod-public's testDir is ./e2e, file suffix
  * .prod-public.spec.ts is required by the project's testMatch).
  */
-test("ads wall labels verified-link cards and separates them from search-only matches", async ({ page }) => {
+// Shared-resource lock (issue #1727): live external production surface.
+test("ads wall labels verified-link cards and separates them from search-only matches", { lock: "external-api" }, async ({ page }) => {
   const response = await page.goto("/ads/notion.so", { waitUntil: "domcontentloaded" });
   expect(response?.status(), "/ads/notion.so must return 200 (cache miss 301s)").toBe(200);
 

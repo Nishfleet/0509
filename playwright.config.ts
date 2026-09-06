@@ -44,8 +44,11 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
+  // The release-manifest reporter is appended by the proof runner via
+  // Playwright 1.63's --add-reporter (issue #1727) instead of overriding the
+  // configured reporters here.
   reporter: strictReleaseProof
-    ? [["list"], ["./scripts/playwright-release-manifest-reporter.mjs", { strict: true }]]
+    ? [["list"]]
     : process.env.CI
       ? [["dot"], ["html", { open: "never" }]]
       : "list",

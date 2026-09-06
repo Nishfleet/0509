@@ -176,7 +176,10 @@ function expectSignedOutPlanIntent(href: string | null, cycle: "monthly" | "year
   expect(redirectTo).toContain("#plans");
 }
 
-test.describe("public production-safe E2E smoke", () => {
+// Shared-resource lock (issue #1727): this smoke hits the live external
+// production surface — serialize it against the other external-API specs so
+// prod rate limits and shared public state cannot race.
+test.describe("public production-safe E2E smoke", { lock: "external-api" }, () => {
   test("public pages and machine-readable surfaces render without auth", async ({ page, baseURL, request }) => {
     await gotoPublicPage(page, "/");
     await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();

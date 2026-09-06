@@ -169,7 +169,11 @@ async function expectPublicTruthSurface(
 }
 
 for (const viewport of viewports) {
-  test(`Gate-B Journey 1: first visit to value to signup (${viewport.name})`, async ({ page }, testInfo) => {
+  // Shared-resource lock (issue #1727): the journey signs up personas and
+  // writes the shared local fixture D1, and the same spec runs under five
+  // engine projects — without the lock two engines can mutate the same
+  // persona state concurrently.
+  test(`Gate-B Journey 1: first visit to value to signup (${viewport.name})`, { lock: "d1" }, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     expect(page.viewportSize()).toEqual({ width: viewport.width, height: viewport.height });
     await page.setExtraHTTPHeaders({
