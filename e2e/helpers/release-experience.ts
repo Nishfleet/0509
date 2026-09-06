@@ -214,7 +214,7 @@ export async function expectPhoneTouchTargets(
   if (!viewport || viewport.width > PHONE_MAX_WIDTH) return;
 
   const failures = await page.locator("button, a, input, select, textarea, [role='button'], [tabindex]").evaluateAll(
-    (elements, minSize) => elements
+    (elements, { minSize, epsilon }) => elements
       .filter((element) => {
         const html = element as HTMLElement;
         const style = getComputedStyle(html);
@@ -227,12 +227,27 @@ export async function expectPhoneTouchTargets(
           html.tagName === "A" &&
           style.display === "inline" &&
           Boolean(html.closest("p, li, dd"));
+        // tabindex="-1" on a non-interactive element (e.g. a heading used as
+        // a programmatic focus target) is not a pointer-operable control, so
+        // the WCAG 2.5.5 touch-target floor does not apply to it. Inherently
+        // interactive tags (button/a/input/select/textarea) and role="button"
+        // are still checked even with tabindex="-1".
+        const isInherentlyInteractive =
+          html instanceof HTMLButtonElement ||
+          html.tagName === "A" ||
+          html instanceof HTMLInputElement ||
+          html instanceof HTMLSelectElement ||
+          html instanceof HTMLTextAreaElement ||
+          html.getAttribute("role") === "button";
+        const isProgrammaticFocusTarget =
+          html.getAttribute("tabindex") === "-1" && !isInherentlyInteractive;
         const isRendered = html.checkVisibility() && rect.width > 0 && rect.height > 0;
         return (
           isRendered &&
           style.display !== "none" &&
           style.visibility !== "hidden" &&
           !isInlineProseLink &&
+          !isProgrammaticFocusTarget &&
           html.getAttribute("aria-hidden") !== "true" &&
           html.getAttribute("aria-disabled") !== "true" &&
           !html.hasAttribute("disabled")
@@ -255,8 +270,10 @@ export async function expectPhoneTouchTargets(
           height: rect.height,
         };
       })
-      .filter((box) => box.width < minSize || box.height < minSize),
-    minimum,
+      // Use the same sub-pixel epsilon as hasMinimumTouchTarget so a control
+      // that renders at 43.99998px due to font/box rounding is not flagged.
+      .filter((box) => box.width < minSize - epsilon || box.height < minSize - epsilon),
+    { minSize: minimum, epsilon: RENDERED_BOX_EPSILON_PX },
   );
 
   expect(failures.slice(0, MAX_REPORTED_FAILURES), `actionable phone controls should be at least ${minimum}x${minimum}px`).toEqual([]);
