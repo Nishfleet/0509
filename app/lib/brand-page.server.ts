@@ -28,6 +28,7 @@ import {
 } from "~/lib/competitor-website";
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import {
+  buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
   readDiscoveryCacheEntryCacheOnly,
 } from "~/lib/discovery-cache.server";
@@ -535,6 +536,32 @@ function deriveCacheLookup(
     country: legacyQuery.filters.country || ALL_COUNTRIES_VALUE,
     cacheKeyOverride: null,
   };
+}
+
+/**
+ * The exact discovery-cache key the brand-page loader derives and reads for
+ * this domain + country under the current rollout mode and provider — i.e.
+ * what `loadBrandPageCacheSnapshot` passes to `readDiscoveryCacheEntryCacheOnly`
+ * (cacheKeyOverride wins, else the provider:fingerprint:country:page-1 triple).
+ * The dynamic sitemap generator uses this to prove a candidate domain renders
+ * the indexable state key-for-key instead of inferring it from cached rows.
+ */
+export function deriveBrandPageLoaderCacheKey(
+  env: AppEnv,
+  provider: string,
+  domain: string,
+  country: string,
+): string {
+  const lookup = deriveCacheLookup(env, provider, domain, country);
+  return (
+    lookup.cacheKeyOverride ??
+    buildDiscoveryCacheKey({
+      provider,
+      fingerprint: lookup.fingerprint,
+      country: lookup.country,
+      cursor: null,
+    })
+  );
 }
 
 type CacheEntry = Awaited<ReturnType<typeof readDiscoveryCacheEntryCacheOnly>>;

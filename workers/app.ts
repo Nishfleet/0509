@@ -85,6 +85,22 @@ export default {
       return withSecurityHeaders(primaryDomainResponse, request);
     }
 
+    // Dynamic /sitemap.xml: /ads/:domain entries come from a bounded D1 cache
+    // read (see app/lib/brand-page-sitemap.server.ts). Any failure — missing
+    // DB, missing cache table, demo-only provider, emergency noindex flag —
+    // degrades to the unchanged static sitemap with HTTP 200. Served before
+    // the static SEO files so publicSeoFileForPathname keeps the static
+    // sitemap as the fallback definition, not the live answer.
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      url.pathname === "/sitemap.xml"
+    ) {
+      const { buildPublicSitemapFile } = await import(
+        "../app/lib/brand-page-sitemap.server"
+      );
+      return publicFileResponse(request, await buildPublicSitemapFile(env));
+    }
+
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
     if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {
       return publicFileResponse(request, publicSeoFile);

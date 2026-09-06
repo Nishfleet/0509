@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { publicSeoFileForPathname } from "~/lib/seo";
+import { buildSitemapXml, publicSeoFileForPathname, SITEMAP_PATHS } from "~/lib/seo";
 
 describe("public SEO files", () => {
   it("publishes the public funnel surfaces in the sitemap", () => {
@@ -75,5 +75,56 @@ describe("public SEO files", () => {
     expect(skill).not.toContain("Slack delivery");
     expect(skill).not.toContain("configured Slack target");
     expect(skill).toContain("Email is the verified automated delivery channel for launch.");
+  });
+});
+
+describe("sitemap XML assembly (buildSitemapXml)", () => {
+  it("keeps every static path and appends deduplicated dynamic entries in deterministic order", () => {
+    const body = buildSitemapXml([
+      "/ads/nykaa.com",
+      "/ads/zomato.com",
+      "/ads/nykaa.com",
+      "/ads/amazon.in",
+    ]);
+
+    // All 13 static URLs survive, in their canonical form.
+    for (const path of SITEMAP_PATHS) {
+      const loc = path === "/" ? "https://0509.io/" : `https://0509.io${path}`;
+      expect(body).toContain(`<url><loc>${loc}</loc></url>`);
+    }
+
+    // Dynamic entries are present, deduplicated, and sorted deterministically.
+    const amazon = body.indexOf("https://0509.io/ads/amazon.in");
+    const nykaa = body.indexOf("https://0509.io/ads/nykaa.com");
+    const zomato = body.indexOf("https://0509.io/ads/zomato.com");
+    expect(amazon).toBeGreaterThan(-1);
+    expect(nykaa).toBeGreaterThan(-1);
+    expect(zomato).toBeGreaterThan(-1);
+    expect(amazon).toBeLessThan(nykaa);
+    expect(nykaa).toBeLessThan(zomato);
+    expect(body.match(/https:\/\/0509\.io\/ads\/nykaa\.com/g)).toHaveLength(1);
+  });
+
+  it("never lets dynamic paths inject markup, query strings, or fragments", () => {
+    const body = buildSitemapXml([
+      "/ads/x.com\"><script>alert(1)</script>",
+      "/ads/a.com?utm_source=evil",
+      "/ads/b.com#fragment",
+      "ads/relative.com",
+      "/ads/<b>tag</b>",
+    ]);
+
+    expect(body).not.toContain("<script");
+    expect(body).not.toContain("?utm_source");
+    expect(body).not.toContain("#fragment");
+    expect(body).not.toContain("ads/relative.com");
+    expect(body).not.toContain("<b>");
+    // The safe static entries still render.
+    expect(body).toContain("<url><loc>https://0509.io/help</loc></url>");
+  });
+
+  it("returns exactly the unchanged static sitemap when no dynamic paths are given", () => {
+    expect(buildSitemapXml()).toBe(publicSeoFileForPathname("/sitemap.xml")?.body);
+    expect(buildSitemapXml([])).toBe(buildSitemapXml());
   });
 });
