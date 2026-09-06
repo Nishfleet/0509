@@ -44,6 +44,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const DATABASE_NAME = "0509";
 const DEFAULT_WINDOW_HOURS = 48;
+/** Issue #1747 metric: the product target is that >=90% of NEW succeeded proof
+ * captures carry a screenshot_artifact_key over a 48h window — this is the
+ * number the regression test enforces and the promise the homepage makes. */
+export const TARGET_RATE_PCT = 90.0;
+/** The live canary alerts BELOW this, not below TARGET_RATE_PCT, so it fires
+ * while there is still headroom before the customer promise fully breaks and
+ * before the >=90% target is missed (issue #1747 acceptance 3). */
 const DEFAULT_ALERT_THRESHOLD_PCT = 80.0;
 const DEFAULT_MIN_SAMPLE = 20;
 
