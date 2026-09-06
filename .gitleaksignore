@@ -25,3 +25,14 @@ b157f14f3a2989221dc52cc87a3ff1ace8f4327f:ops/netcup-browser/tests/server.test.mj
 # this one commit failed the required Gitleaks check on every open PR
 # (0509#1792). Exact commit:file:rule:line, same shape as b157f14f.
 1f285a08bba6194b26325946a14a6beef4d81a02:tests/release-hydration-bridge.test.ts:stripe-access-token:89
+
+# Same hydration redaction fixture, later commit b884832f (2026-09-06). The
+# fixture builds a long dummy body that pairs an api-key-shaped assignment
+# with a sk_live_-prefixed fake value, so the generic-api-key rule fires on
+# the full-history push scan. The test asserts the value is REDACTED
+# (it must not contain the fake secret); it was never a credential. Same
+# file, same purpose, same proof as 1f285a08 above; the fingerprint pins this
+# one exact commit:file:rule:line so it cannot hide a future or different
+# secret. This is the finding that kept main's Secret Scan red
+# (0509#1814).
+b884832f7001cbb8d74226b6cdac14958727fa0a:tests/release-hydration-bridge.test.ts:generic-api-key:95
