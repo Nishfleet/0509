@@ -53,6 +53,18 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // vi.resetModules() clears the module cache but NOT the vi.doMock registry,
+  // so a doMock from one test leaks into the next and non-deterministically
+  // overrides (or fails to override) the next test's own doMock — the same
+  // module then resolves to the wrong factory and the open-ccTLD fallback
+  // tests flake (fleet-ops FleetMainRed 2026-09-06). Unregister every module
+  // this file doMocks so each test starts from a clean mock registry.
+  vi.doUnmock("react-router");
+  vi.doUnmock("~/lib/dodo-pricing.server");
+  vi.doUnmock("~/lib/context.server");
+  vi.doUnmock("~/lib/commercial-launch-gate.server");
+  vi.doUnmock("~/lib/public-proof.server");
+  vi.doUnmock("~/lib/sitemap.server");
   vi.resetModules();
 });
 
@@ -268,17 +280,22 @@ describe("public funnel loaders reuse the sitemap indexability filter", () => {
 });
 
 describe("resolveIndexableBrandPageLinkForDomain", () => {
-  beforeEach(() => {
+  // Each test registers its own vi.doMock for ~/lib/sitemap.server rather than
+  // sharing a describe-level beforeEach mock. In vitest 4, a test-body
+  // vi.doMock does not reliably override a beforeEach vi.doMock registered
+  // earlier in the same tick — the beforeEach factory can win, making the
+  // open-ccTLD fallback tests flake (notion.com → null, glossier.com →
+  // glossier). Registering once per test removes the override race entirely
+  // (fleet-ops FleetMainRed 2026-09-06).
+
+  it("resolves a search-derived domain to its indexable brand-page link", async () => {
+    vi.resetModules();
     vi.doMock("~/lib/sitemap.server", () => ({
       loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
         { path: "/ads/nykaa.com" },
         { path: "/ads/glossier.com" },
       ]),
     }));
-  });
-
-  it("resolves a search-derived domain to its indexable brand-page link", async () => {
-    vi.resetModules();
     const { resolveIndexableBrandPageLinkForDomain } = await import(
       "~/lib/ads-internal-links.server"
     );
@@ -291,6 +308,12 @@ describe("resolveIndexableBrandPageLinkForDomain", () => {
 
   it("returns null when the domain has no indexable brand page", async () => {
     vi.resetModules();
+    vi.doMock("~/lib/sitemap.server", () => ({
+      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
+        { path: "/ads/nykaa.com" },
+        { path: "/ads/glossier.com" },
+      ]),
+    }));
     const { resolveIndexableBrandPageLinkForDomain } = await import(
       "~/lib/ads-internal-links.server"
     );
