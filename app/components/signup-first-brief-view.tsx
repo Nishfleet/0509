@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
-import type { SignupFirstBriefPayload } from "~/lib/first-brief";
+import type { SignupFirstBriefLoaderData } from "~/lib/first-brief";
 
 /**
  * BET 7 (issue #1276): the inline first-brief surface rendered at
@@ -16,10 +16,7 @@ import type { SignupFirstBriefPayload } from "~/lib/first-brief";
 export function SignupFirstBriefView({
   data,
 }: {
-  data:
-    | { step: "first-brief"; status: "waiting"; watchlistName: string | null }
-    | { step: "first-brief"; status: "no_ads"; watchlistName: string | null }
-    | { step: "first-brief"; status: "ready"; brief: SignupFirstBriefPayload };
+  data: SignupFirstBriefLoaderData;
 }) {
   if (data.status === "no_ads") {
     return (
