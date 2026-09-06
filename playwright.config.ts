@@ -57,13 +57,24 @@ export default defineConfig({
     actionTimeout: 10_000,
     navigationTimeout: 20_000,
     screenshot: "only-on-failure",
-    // Playwright 1.63: ARIA + screen snapshots land in the trace alongside the
-    // DOM snapshot, so the trace viewer's Display Aria mode can show the action
-    // screenshot side-by-side with the aria tree. dom stays on (the default
-    // timeline preview); aria+screen are the new captures.
+    // Playwright 1.63: ARIA snapshots land in the trace alongside the DOM
+    // snapshot, so the trace viewer's Display Aria mode can show the aria tree
+    // side-by-side with the DOM. dom stays on (the default timeline preview);
+    // aria is the new capture. screen snapshots are intentionally OFF: the
+    // trace recorder's screen capture calls page.screenshot() during action
+    // before/after phases, which triggers Playwright's caret-hiding
+    // (inPagePrepareForScreenshots sets caret-color:transparent as an inline
+    // style on every input/textarea/[contenteditable]). When that injection
+    // lands before React hydration completes, the client-rendered tree carries
+    // style attributes the server HTML did not, and the strict hydration bridge
+    // (e2e/helpers/release-test.ts) flags it as browser_hydration_error:console
+    // — turning every release proof red (issue #1752 / FleetMainRed #1774).
+    // Failure screenshots (screenshot: "only-on-failure") and video
+    // (retain-on-failure) are unaffected and still capture after hydration
+    // settles.
     trace: {
       mode: "retain-on-failure",
-      snapshots: { dom: true, aria: true, screen: true },
+      snapshots: { dom: true, aria: true },
     },
     video: "retain-on-failure",
   },
