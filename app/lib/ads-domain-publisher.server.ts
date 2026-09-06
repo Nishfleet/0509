@@ -155,6 +155,29 @@ export function resolveSeedList(name: string): SeedList | null {
   return SEED_LISTS[name?.trim()] ?? null;
 }
 
+/**
+ * Whether a registrable domain appears in ANY checked-in seed list
+ * (`data/seed-lists/*.json`). The /ads/:domain loader uses this to scope the
+ * "retire empty marketplace shells" redirect (issue #1306): a seeded brand
+ * that resolves to a thin noindex wall (zero verified-linked ads) 301-redirects
+ * to /search?q=<domain> instead of shipping a noindex marketing shell, while
+ * non-seeded thin pages keep #1442's render-noindex behavior for direct
+ * visitors. Case-insensitive, trailing-dot-normalized — mirrors validateSeedList.
+ */
+export function isSeededBrandDomain(domain: string): boolean {
+  const key = String(domain ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, "");
+  if (!key) return false;
+  for (const list of Object.values(SEED_LISTS)) {
+    if (list.domains.some((d) => d.domain.trim().toLowerCase().replace(/\.$/, "") === key)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export interface AdsDomainPublisherDomainOutcome {
   domain: string;
   verdict: "publish" | "skip" | "failed" | "invalid";
