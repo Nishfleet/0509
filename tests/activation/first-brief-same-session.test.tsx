@@ -122,6 +122,54 @@ function mockDataServer(deliverWeeklyDigest: ReturnType<typeof vi.fn>) {
   return { createDigestRun, listDigests };
 }
 
+function mockNoAdsFirstBrief() {
+  const createDigestRun = vi.fn().mockResolvedValue({
+    digestRunId: "digest-1",
+    created: true,
+  });
+  // No existing digest and an empty event set — the activation scan completed
+  // but found no evidence-linked items.
+  const listDigests = vi.fn().mockResolvedValue([]);
+  vi.doMock("~/lib/data.server", () => ({
+    listWatchlists: vi.fn().mockResolvedValue([watchlist()]),
+    getRecentSuccessfulRuns: vi.fn().mockResolvedValue([{ id: "run-1" }]),
+    getUserDeliveryProfile: vi.fn().mockResolvedValue(verifiedOwner()),
+    listWatchEventsForRun: vi.fn().mockResolvedValue([]),
+    listObservationsForRun: vi.fn().mockResolvedValue([]),
+    createDigestRun,
+    getDigest: vi.fn().mockResolvedValue(null),
+    listDigests,
+    listAdsByIds: vi.fn().mockResolvedValue([]),
+  }));
+  vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
+  vi.doMock("~/lib/cron-failure-alert.server", () => ({
+    reportScheduledTaskFailure: vi.fn(),
+  }));
+  return { createDigestRun, listDigests };
+}
+
+function mockFailingFirstBrief() {
+  const createDigestRun = vi.fn().mockRejectedValue(new Error("digest creation failed"));
+  const listDigests = vi.fn().mockResolvedValue([]);
+  const ads = [{ metaAdId: "ad-1", landingPageUrl: LANDING, adSnapshotUrl: EVIDENCE_URL }];
+  vi.doMock("~/lib/data.server", () => ({
+    listWatchlists: vi.fn().mockResolvedValue([watchlist()]),
+    getRecentSuccessfulRuns: vi.fn().mockResolvedValue([{ id: "run-1" }]),
+    getUserDeliveryProfile: vi.fn().mockResolvedValue(verifiedOwner()),
+    listWatchEventsForRun: vi.fn().mockResolvedValue([event()]),
+    listObservationsForRun: vi.fn().mockResolvedValue([{ ad_id: "ad-1", landing_page_url: LANDING }]),
+    createDigestRun,
+    getDigest: vi.fn().mockResolvedValue(null),
+    listDigests,
+    listAdsByIds: vi.fn().mockResolvedValue(ads),
+  }));
+  vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
+  vi.doMock("~/lib/cron-failure-alert.server", () => ({
+    reportScheduledTaskFailure: vi.fn(),
+  }));
+  return { createDigestRun, listDigests };
+}
+
 function mockAuth() {
   vi.doMock("~/lib/auth.server", () => ({
     requireSession: vi.fn().mockResolvedValue({
@@ -220,5 +268,64 @@ describe("same-session first brief (issue #1487)", () => {
     );
     const call = deliverWeeklyDigest.mock.calls[0]?.[1] as { cadence?: string } | undefined;
     expect(call?.cadence).toBe("weekly");
+  });
+
+  it("renders the honest no-ads terminal state when the scan completes with no verified ads", async () => {
+    const { createDigestRun } = mockNoAdsFirstBrief();
+    mockAuth();
+
+    const { loader } = await import("~/routes/app.onboard");
+    const data = (await loader({
+      context: { cloudflare: { env: { SIGNUP_FIRST_BRIEF_ENABLED: "1" } } },
+      params: {},
+      request: new Request("http://localhost/app/onboard?step=first-brief"),
+    } as never)) as Awaited<ReturnType<typeof loader>>;
+
+    // The loader returns the no_ads terminal state and the scanned watchlist.
+    expect(data).toMatchObject({
+      step: "first-brief",
+      status: "no_ads",
+      watchlistName: "Glowkart",
+    });
+    if (!(typeof data === "object" && data !== null && "status" in data && data.status === "no_ads")) {
+      throw new Error("expected no_ads brief");
+    }
+
+    // Render the component to assert the honest copy and next action are
+    // visible. react-router's <Link> is stubbed to a plain anchor in beforeEach.
+    const { SignupFirstBriefView } = await import("~/components/signup-first-brief-view");
+    const markup = renderToStaticMarkup(<SignupFirstBriefView data={data} />);
+    expect(markup).toContain("No verified ads yet");
+    expect(markup).toContain("Add competitors");
+    expect(markup).toContain('href="/app"');
+
+    // No digest was created because the scan produced no evidence-linked items.
+    expect(createDigestRun).not.toHaveBeenCalled();
+  });
+
+  it("keeps waiting when filing the first brief fails, so polling can retry", async () => {
+    const { createDigestRun } = mockFailingFirstBrief();
+    mockAuth();
+
+    const { loader } = await import("~/routes/app.onboard");
+    const data = (await loader({
+      context: { cloudflare: { env: { SIGNUP_FIRST_BRIEF_ENABLED: "1" } } },
+      params: {},
+      request: new Request("http://localhost/app/onboard?step=first-brief"),
+    } as never)) as Awaited<ReturnType<typeof loader>>;
+
+    // Filing failed; the loader must not freeze the user on a terminal no_ads
+    // screen. The client stays in waiting so the next poll can retry.
+    expect(data).toMatchObject({
+      step: "first-brief",
+      status: "waiting",
+      watchlistName: "Glowkart",
+    });
+    if (!(typeof data === "object" && data !== null && "status" in data && data.status === "waiting")) {
+      throw new Error("expected waiting brief");
+    }
+
+    // The filing path was attempted and failed.
+    expect(createDigestRun).toHaveBeenCalledTimes(1);
   });
 });

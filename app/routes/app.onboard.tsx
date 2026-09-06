@@ -5,6 +5,7 @@ import { useLoaderData } from "react-router";
 import { SignupFirstBriefView } from "~/components/signup-first-brief-view";
 import { useFirstCapturePolling } from "~/components/workspace/use-first-capture-polling";
 import type { SignupFirstBriefLoaderData } from "~/lib/first-brief";
+import type { FirstBriefFileResult } from "~/lib/first-brief.server";
 
 const COMPAT_COOKIE = "f9_onboard_compat";
 
@@ -145,16 +146,19 @@ async function firstBriefLoader(
 
   // File the first brief if the activation scan has completed but no digest
   // exists yet — same gate the dashboard uses.
+  let filingReason: FirstBriefFileResult["reason"] | null = null;
   if (shouldEnsureFirstBrief({ watchlists, digests })) {
     try {
       const { ensureFirstBriefForWorkspace } = await import(
         "~/lib/first-brief.server"
       );
-      await ensureFirstBriefForWorkspace(env, workspaceUserId);
+      const result = await ensureFirstBriefForWorkspace(env, workspaceUserId);
+      filingReason = result.reason;
       digests = await listDigests(env, workspaceUserId);
     } catch {
       // The waiting state below handles a missing brief; a filing failure
       // must never 500 the inline surface.
+      filingReason = "create_failed";
     }
   }
 
@@ -178,17 +182,26 @@ async function firstBriefLoader(
     // same guard `shouldEnsureFirstBrief` uses above — a multi-watchlist
     // workspace must not regress to a perpetual wait just because the first
     // returned active watchlist still has a null `lastScannedAt`.
-    const activeScanned = watchlists.some(
+    const scanned = watchlists.find(
       (w) => w.isActive && Boolean(w.lastScannedAt),
     );
-    if (activeScanned) {
-      const scanned = watchlists.find(
-        (w) => w.isActive && Boolean(w.lastScannedAt),
-      );
+    if (scanned) {
+      // A scan finished, but filing did not produce an evidence-linked digest.
+      // If it was an actual empty scan, the honest terminal state is `no_ads`.
+      // If filing itself failed, keep the waiting/polling state so the next
+      // load can retry instead of freezing the user on an empty screen.
+      if (filingReason === "create_failed") {
+        const activeWatchlist = watchlists.find((w) => w.isActive);
+        return {
+          step: "first-brief",
+          status: "waiting",
+          watchlistName: activeWatchlist?.targetLabel ?? null,
+        };
+      }
       return {
         step: "first-brief",
         status: "no_ads",
-        watchlistName: scanned?.targetLabel ?? null,
+        watchlistName: scanned.targetLabel ?? null,
       };
     }
     // The activation scan is still in flight. Render the waiting state — the
