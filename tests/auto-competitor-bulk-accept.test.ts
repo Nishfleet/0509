@@ -217,8 +217,8 @@ describe("bulkAcceptSuggestedCompetitors — reuse of the existing competitor-im
       ],
       planLimit: 10,
       currentCount: 0,
-      existingFingerprints: [],
-      country: "United States",
+      existingFingerprints: []
+      ,
     });
 
     // The existing createWatchlistWithinLimit path was used — exactly once
@@ -273,13 +273,73 @@ describe("bulkAcceptSuggestedCompetitors — reuse of the existing competitor-im
       planLimit: 10,
       currentCount: 0,
       existingFingerprints: [],
-      country: "United States",
     });
 
     expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(1);
     const target = createWatchlistWithinLimit.mock.calls[0]![2] as { targetLabel: string };
     expect(target.targetLabel).toBe("Vivaia");
     expect(result.admittedCount).toBe(1);
+  });
+
+  it("groups candidates by their own targetCountry (not the batch leader's), preserving per-candidate country + fingerprint", async () => {
+    const createWatchlistWithinLimit = vi.fn().mockResolvedValue({
+      status: "created",
+      watchlist: { id: "wl-grp", targetLabel: "" },
+      current: 1,
+      limit: 10,
+    });
+    const { bulkAcceptSuggestedCompetitors } = await importBulkAcceptModule({
+      createWatchlistWithinLimit,
+    });
+
+    // A sweep can span several countries: two candidates with the same
+    // domain shape but different target countries must each get the country
+    // stamped on the row — the same per-candidate semantics as the one-click
+    // accept and the importer's prepareImportRow (country folds into
+    // targetCountry AND the watchlistFingerprint).
+    const result = await bulkAcceptSuggestedCompetitors({
+      env: {} as AppEnv,
+      workspaceUserId: "user-1",
+      candidates: [
+        {
+          candidateId: candidateIdFor("Brand US", "brandus.com"),
+          advertiser: "Brand US",
+          landingPageUrl: "https://brandus.com",
+          targetCountry: "United States",
+        },
+        {
+          candidateId: candidateIdFor("Brand UK", "branduk.com"),
+          advertiser: "Brand UK",
+          landingPageUrl: "https://branduk.com",
+          targetCountry: "United Kingdom",
+        },
+        {
+          candidateId: candidateIdFor("Brand NoCountry", "brandnope.com"),
+          advertiser: "Brand NoCountry",
+          landingPageUrl: "https://brandnope.com",
+          targetCountry: null,
+        },
+      ],
+      planLimit: 10,
+      currentCount: 0,
+      existingFingerprints: [],
+    });
+
+    // Three distinct countries -> three preview+create passes -> three
+    // created watchlists, each with a country-specific fingerprint.
+    expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(3);
+    const targets = createWatchlistWithinLimit.mock.calls.map((call) => call[2]) as Array<{
+      targetCountry: string;
+      targetFingerprint: string;
+    }>;
+    const countries = targets.map((target) => target.targetCountry).sort();
+    expect(countries).toEqual(["United Kingdom", "United States", "all"].sort());
+    // Distinct countries must yield distinct fingerprints (country is part of
+    // the fingerprint) so cross-path idempotency is preserved.
+    const fingerprints = new Set(targets.map((target) => target.targetFingerprint));
+    expect(fingerprints.size).toBe(3);
+    expect(result.admittedCount).toBe(3);
+    expect(result.createdWatchlistIds).toHaveLength(3);
   });
 });
 
@@ -312,8 +372,8 @@ describe("bulkAcceptSuggestedCompetitors — cap enforcement (eval 3.5, #2)", ()
       candidates,
       planLimit: 3,
       currentCount: 1,
-      existingFingerprints: [],
-      country: "United States",
+      existingFingerprints: []
+      ,
     });
 
     expect(result.admittedCount).toBe(2);
@@ -353,8 +413,8 @@ describe("bulkAcceptSuggestedCompetitors — cap enforcement (eval 3.5, #2)", ()
       candidates,
       planLimit: 10,
       currentCount: 5,
-      existingFingerprints: [],
-      country: "United States",
+      existingFingerprints: []
+      ,
     });
 
     expect(result.admittedCount).toBe(3);
@@ -378,8 +438,8 @@ describe("bulkAcceptSuggestedCompetitors — zero selected is a no-op (#3)", () 
       candidates: [],
       planLimit: 10,
       currentCount: 0,
-      existingFingerprints: [],
-      country: "United States",
+      existingFingerprints: []
+      ,
     });
 
     expect(result.ok).toBe(true);
@@ -418,8 +478,8 @@ describe("bulkAcceptSuggestedCompetitors — idempotency (#4)", () => {
       ],
       planLimit: 10,
       currentCount: 0,
-      existingFingerprints: [],
-      country: "United States",
+      existingFingerprints: []
+      ,
     });
     const capturedTarget = capture.mock.calls[0]![2] as { targetFingerprint: string };
     const fingerprint = capturedTarget.targetFingerprint;
@@ -444,8 +504,8 @@ describe("bulkAcceptSuggestedCompetitors — idempotency (#4)", () => {
       ],
       planLimit: 10,
       currentCount: 1,
-      existingFingerprints: [fingerprint],
-      country: "United States",
+      existingFingerprints: [fingerprint]
+      ,
     });
 
     expect(result.admittedCount).toBe(0);
@@ -485,8 +545,8 @@ describe("bulkAcceptSuggestedCompetitors — idempotency (#4)", () => {
       ],
       planLimit: 10,
       currentCount: 1,
-      existingFingerprints: [],
-      country: "United States",
+      existingFingerprints: []
+      ,
     });
 
     expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(1);

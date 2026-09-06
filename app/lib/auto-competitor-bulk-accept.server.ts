@@ -64,7 +64,6 @@ export interface BulkAcceptOptions {
   planLimit: number;
   currentCount: number;
   existingFingerprints: readonly string[];
-  country: string;
 }
 
 /**
@@ -125,15 +124,8 @@ function buildBulkAcceptMessage(input: {
 export async function bulkAcceptSuggestedCompetitors(
   options: BulkAcceptOptions,
 ): Promise<BulkAcceptResult> {
-  const {
-    env,
-    workspaceUserId,
-    candidates,
-    planLimit,
-    currentCount,
-    existingFingerprints,
-    country,
-  } = options;
+  const { env, workspaceUserId, candidates, planLimit, currentCount, existingFingerprints } =
+    options;
 
   // Zero selected candidates is a no-op, not an error (issue requirement).
   if (candidates.length === 0) {
@@ -153,21 +145,6 @@ export async function bulkAcceptSuggestedCompetitors(
   // the panel; the importer itself rejects > MAX_ROWS anyway.
   const capped = candidates.slice(0, COMPETITOR_IMPORT_MAX_ROWS);
 
-  const rawText = shapeCandidatesAsImportCsv(capped);
-  // The importer assigns `row-${rowNumber}` ids; with a header row, data rows
-  // start at rowNumber 2. Selecting every row id makes the preview's cap
-  // enforcement mark the over-cap tail with `over_cap`.
-  const selectedRowIds = capped.map((_, index) => `row-${index + 2}`);
-
-  const preview = buildCompetitorImportPreview({
-    rawText,
-    country,
-    planLimit,
-    currentCount,
-    existingFingerprints,
-    selectedRowIds,
-  });
-
   const { createWatchlistWithinLimit } = await import("~/lib/data.server");
 
   let admittedCount = 0;
@@ -175,12 +152,51 @@ export async function bulkAcceptSuggestedCompetitors(
   const overCapRows: BulkAcceptOverCapRow[] = [];
   const createdWatchlistIds: string[] = [];
 
-  for (let index = 0; index < capped.length; index += 1) {
-    const candidate = capped[index]!;
-    const row = preview.rows[index];
-    if (!row) {
-      continue;
+  // Group candidates by their own target country (fallback "all") so each
+  // watchlist gets the correct country + fingerprint — the same per-candidate
+  // semantics as the one-click accept and the existing importer's
+  // `prepareImportRow`, which folds country into `targetCountry` and the
+  // `watchlistFingerprint`. A sweep can span several countries (the panel
+  // sorts by overlap across the whole workspace, not per country), so a
+  // single batch-level country would mislabel every row outside the leader's
+  // country and break cross-path idempotency. The existing bulk import path
+  // is still the single accept surface: one preview+create pass per country
+  // group (fleet-ops#517).
+  const groups = new Map<string, BulkAcceptCandidate[]>();
+  for (const candidate of capped) {
+    const key = candidate.targetCountry?.trim() || "all";
+    const group = groups.get(key);
+    if (group) {
+      group.push(candidate);
+    } else {
+      groups.set(key, [candidate]);
     }
+  }
+
+  let runningCurrentCount = currentCount;
+  for (const [country, group] of groups) {
+    const rawText = shapeCandidatesAsImportCsv(group);
+    // The importer assigns `row-${rowNumber}` ids; with a header row, data
+    // rows start at rowNumber 2. Selecting every row id makes the preview's
+    // cap enforcement mark the over-cap tail with `over_cap`.
+    const selectedRowIds = group.map((_, index) => `row-${index + 2}`);
+
+    const preview = buildCompetitorImportPreview({
+      rawText,
+      country,
+      planLimit,
+      currentCount: runningCurrentCount,
+      existingFingerprints,
+      selectedRowIds,
+    });
+
+    let groupAdmitted = 0;
+    for (let index = 0; index < group.length; index += 1) {
+      const candidate = group[index]!;
+      const row = preview.rows[index];
+      if (!row) {
+        continue;
+      }
 
     // Over-cap rows are flagged by the existing importer with the named
     // `over_cap` status and a human reason — never silently dropped, never
@@ -224,6 +240,7 @@ export async function bulkAcceptSuggestedCompetitors(
 
     if (result.status === "created") {
       admittedCount += 1;
+      groupAdmitted += 1;
       createdWatchlistIds.push(result.watchlist.id);
     } else if (result.status === "existing") {
       // INSERT OR IGNORE backstop: a candidate accepted between panel render
@@ -236,6 +253,10 @@ export async function bulkAcceptSuggestedCompetitors(
         reason: "You hit your plan limit before we could create this row.",
       });
     }
+    }
+    // Carry admitted rows into the next country group so cap enforcement
+    // (currentCount) stays cumulative across the whole batch.
+    runningCurrentCount += groupAdmitted;
   }
 
   const overCapCount = overCapRows.length;

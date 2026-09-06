@@ -928,8 +928,6 @@ async function handleBulkAcceptSuggestedCompetitorsAction(
     .filter((watchlist) => watchlist.isActive)
     .map((watchlist) => watchlist.targetFingerprint);
 
-  const country = candidates[0]?.targetCountry ?? "all";
-
   return bulkAcceptSuggestedCompetitors({
     env,
     workspaceUserId,
@@ -937,7 +935,6 @@ async function handleBulkAcceptSuggestedCompetitorsAction(
     planLimit: limit.limit,
     currentCount: limit.current,
     existingFingerprints,
-    country,
   });
 }
 
