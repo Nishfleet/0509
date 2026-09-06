@@ -513,6 +513,80 @@ describe("Gate-B Playwright release manifest reporter", () => {
     rmSync(directory, { recursive: true, force: true });
   });
 
+  it("attaches the captured hydration error surface to the manifest entry", () => {
+    const directory = makeTestDirectory();
+    const outputPath = join(directory, "manifest.json");
+    const detail = JSON.stringify({
+      source: "console",
+      message: "Hydration failed because the server rendered text did not match the client",
+      url: "http://127.0.0.1:4179/app/watchlists?watchlist=e2e-watchlist-1",
+      title: "watchlist board renders the proof age",
+    });
+    const releaseAnnotations = [
+      ...annotations(),
+      { type: "reactHydrationError", description: "console" },
+      { type: "reactHydrationErrorDetail", description: detail },
+    ];
+    const test = fakeTest("browser-hydration-detail-test", releaseAnnotations);
+    const reporter = new GateBManifestReporter({
+      outputPath,
+      candidateFingerprint: fingerprint,
+      environment: "local",
+      runOrigin,
+      serverIdentity,
+      strict: true,
+    });
+    reporter.onBegin({}, suite([test]));
+    reporter.onTestEnd(test, result("passed", 0, annotations()));
+
+    expect(reporter.onEnd(fullResult("passed"))).toEqual({ status: "failed" });
+    const manifest = readManifest(outputPath);
+    expect(manifest.strictIssues).toContain("browser_hydration_error:console");
+    const entry = manifest.entries.find((e: { sourceFile?: string }) => e.sourceFile === "browser-hydration-detail-test.spec.ts");
+    expect(entry.hydrationError).toMatchObject({
+      source: "console",
+      url: "http://127.0.0.1:4179/app/watchlists?watchlist=e2e-watchlist-1",
+      title: "watchlist board renders the proof age",
+    });
+    expect(entry.hydrationError.message).toContain("server rendered text did not match");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("redacts secret-like substrings in the captured hydration error message", () => {
+    const directory = makeTestDirectory();
+    const outputPath = join(directory, "manifest.json");
+    const detail = JSON.stringify({
+      source: "console",
+      message: "Hydration failed; token=sk_live_leak123 in console text",
+      url: "http://127.0.0.1:4179/app",
+      title: "secret redaction",
+    });
+    const releaseAnnotations = [
+      ...annotations(),
+      { type: "reactHydrationError", description: "console" },
+      { type: "reactHydrationErrorDetail", description: detail },
+    ];
+    const test = fakeTest("hydration-secret-redaction-test", releaseAnnotations);
+    const reporter = new GateBManifestReporter({
+      outputPath,
+      candidateFingerprint: fingerprint,
+      environment: "local",
+      runOrigin,
+      serverIdentity,
+      strict: true,
+    });
+    reporter.onBegin({}, suite([test]));
+    reporter.onTestEnd(test, result("passed", 0, annotations()));
+
+    reporter.onEnd(fullResult("passed"));
+    const manifest = readManifest(outputPath);
+    const entry = manifest.entries.find((e: { sourceFile?: string }) => e.sourceFile === "hydration-secret-redaction-test.spec.ts");
+    expect(entry.hydrationError.message).not.toContain("sk_live_leak123");
+    expect(entry.hydrationError.message).toContain("[redacted]");
+    expect(JSON.stringify(manifest)).not.toContain("sk_live_leak123");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
   it("ignores unrelated expected fixture stderr", () => {
     const directory = makeTestDirectory();
     const outputPath = join(directory, "manifest.json");

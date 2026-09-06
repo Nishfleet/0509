@@ -620,6 +620,7 @@ export function readAnnotations(test, result) {
   for (const type of BLOCKING_ANNOTATIONS) {
     if (annotations.some((annotation) => annotation?.type === type)) issues.push(`annotation:${type}`);
   }
+  let hydrationError = null;
   for (const annotation of annotations.filter((value) => value?.type === "reactHydrationError")) {
     const source = annotation?.description;
     issues.push(
@@ -628,7 +629,48 @@ export function readAnnotations(test, result) {
         : "browser_hydration_error",
     );
   }
-  return { values, issues };
+  // The detail annotation (written by the release hydration bridge) carries
+  // the first occurrence's message text, page URL and test title so a red
+  // run names the surface in the manifest and the job log. Only the first
+  // parseable detail is attached; the source annotation already classifies
+  // the issue.
+  for (const annotation of annotations.filter((value) => value?.type === "reactHydrationErrorDetail")) {
+    const parsed = parseHydrationErrorDetail(annotation?.description);
+    if (parsed) {
+      hydrationError = parsed;
+      break;
+    }
+  }
+  return { values, issues, hydrationError };
+}
+
+const HYDRATION_DETAIL_MAX_MESSAGE = 300;
+const HYDRATION_DETAIL_MAX_URL = 256;
+const HYDRATION_DETAIL_MAX_TITLE = 200;
+// Global variant of SECRET_LIKE_VALUE so every secret-like substring in a
+// captured hydration message is redacted, not just the first. The module-level
+// SECRET_LIKE_VALUE is intentionally non-global (single-shot validation use);
+// redaction must sweep the whole string.
+const SECRET_LIKE_VALUE_GLOBAL = /(?:sk_(?:live|test)_|bearer\s+|api[_-]?key|password\s*=|secret\s*=|token\s*=)/giu;
+
+function parseHydrationErrorDetail(description) {
+  if (typeof description !== "string" || description.length === 0) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(description);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const source = parsed.source === "console" || parsed.source === "pageerror" ? parsed.source : null;
+  const message = typeof parsed.message === "string" ? parsed.message.slice(0, HYDRATION_DETAIL_MAX_MESSAGE) : null;
+  const url = typeof parsed.url === "string" ? parsed.url.slice(0, HYDRATION_DETAIL_MAX_URL) : null;
+  const title = typeof parsed.title === "string" ? parsed.title.slice(0, HYDRATION_DETAIL_MAX_TITLE) : null;
+  if (!source || message === null || url === null || title === null) return null;
+  // Never trust the captured text to have scrubbed secrets — re-redact here
+  // so a malformed bridge cannot leak a token into the manifest.
+  const safeMessage = String(message).replace(SECRET_LIKE_VALUE_GLOBAL, "[redacted]");
+  return { source, message: safeMessage, url: String(url), title: String(title) };
 }
 
 function projectIdentity(test) {
@@ -682,6 +724,7 @@ export function createManifestEntry(test, result, firstResult = result) {
         passed: first === "passed",
         retry: Number.isInteger(firstResult?.retry) && firstResult.retry >= 0 ? firstResult.retry : 0,
       },
+      ...(annotations.hydrationError ? { hydrationError: annotations.hydrationError } : {}),
     },
     issues,
   };
@@ -1084,6 +1127,17 @@ export class GateBManifestReporter {
     if (this.artifactsRequired) {
       this.globalIssues.push(...validateReleaseArtifacts(entries));
       this.globalIssues.push(...validateArtifactRootFiles(this.artifactRootPath, entries));
+    }
+    // Surface the first captured hydration error to the job log so a red run
+    // names the failing page, test title and message text without requiring
+    // a reader to open the manifest artifact.
+    for (const entry of entries) {
+      if (entry?.hydrationError) {
+        process.stderr.write(
+          `release hydration error: source=${entry.hydrationError.source} url=${entry.hydrationError.url} title=${entry.hydrationError.title} message=${entry.hydrationError.message}\n`,
+        );
+        break;
+      }
     }
     if (fullResult.status !== "passed") this.globalIssues.push(`run:${fullResult.status}`);
     const manifest = buildManifest({
