@@ -28,6 +28,7 @@ import {
 } from "~/lib/competitor-website";
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import {
+  buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
   readDiscoveryCacheEntryCacheOnly,
 } from "~/lib/discovery-cache.server";
@@ -482,7 +483,37 @@ export function formatBrandPageCheckedAgo(fetchedAt: string, now: Date = new Dat
   return `about ${days} days ago`;
 }
 
-function candidateCountries(visitorCountry: string): string[] {
+/**
+ * The exact discovery cache key the brand-page loader would derive and read
+ * for this provider/domain/country under the CURRENT rollout mode: legacy and
+ * shadow map to the legacy fingerprint triple (`provider:fp:country:page-1`),
+ * v2 maps to the `search-v2:domain:*` key. Built from `deriveCacheLookup`'s
+ * own output so it can never drift from `loadBrandPageCacheSnapshot`.
+ */
+export function deriveBrandPageCacheLookupKey(
+  env: AppEnv,
+  provider: string,
+  domain: string,
+  country: string,
+): string {
+  const lookup = deriveCacheLookup(env, provider, domain, country);
+  return (
+    lookup.cacheKeyOverride ??
+    buildDiscoveryCacheKey({
+      provider,
+      fingerprint: lookup.fingerprint,
+      country: lookup.country,
+      cursor: null,
+    })
+  );
+}
+
+/**
+ * The country fallback order the loader walks per brand-page request.
+ * Exported so the sitemap can prove key parity for the exact countries a
+ * crawler visit would try (no cf-ipcountry → `ALL_COUNTRIES_VALUE` first).
+ */
+export function candidateCountries(visitorCountry: string): string[] {
   const candidates = [
     visitorCountry?.trim() || ALL_COUNTRIES_VALUE,
     ALL_COUNTRIES_VALUE,
@@ -496,8 +527,12 @@ function candidateCountries(visitorCountry: string): string[] {
  * for this domain + country (see `hasWarmSearchCacheEntry`): the search-v2
  * domain key when the v2 rollout applies, else the legacy fingerprint triple.
  * Shadow mode serves customers from the legacy key, so it maps to legacy here.
+ *
+ * Exported so the dynamic sitemap (brand-page-sitemap.server.ts) can prove a
+ * discovery_cache_entry row is the exact row the loader would read for a
+ * candidate domain — recency and a plausible landing URL are never enough.
  */
-function deriveCacheLookup(
+export function deriveCacheLookup(
   env: AppEnv,
   provider: string,
   domain: string,

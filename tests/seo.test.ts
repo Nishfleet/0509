@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { publicSeoFileForPathname } from "~/lib/seo";
+import { publicSeoFileForPathname, renderSitemapXml } from "~/lib/seo";
 
 describe("public SEO files", () => {
   it("publishes the public funnel surfaces in the sitemap", () => {
@@ -25,6 +25,27 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain(
       "<url><loc>https://0509.io/compare/meta-ad-library</loc></url>",
     );
+    // The static fallback (also what the Worker serves on any D1 failure) is
+    // byte-stable: the 13 static URLs, deduplicated, in SITEMAP_PATHS order.
+    const staticUrlCount = (sitemap?.body.match(/<url><loc>/g) ?? []).length;
+    expect(staticUrlCount).toBe(13);
+  });
+
+  it("escapes XML entities in renderSitemapXml so URL output can never inject markup", () => {
+    const xml = renderSitemapXml([
+      "https://0509.io/",
+      "https://0509.io/ads/a&b.com",
+      "https://0509.io/ads/<x>.com",
+      "https://0509.io/ads/a'b\"c.com",
+    ]);
+
+    expect(xml).toContain("<url><loc>https://0509.io/</loc></url>");
+    expect(xml).toContain("<url><loc>https://0509.io/ads/a&amp;b.com</loc></url>");
+    expect(xml).toContain("<url><loc>https://0509.io/ads/&lt;x&gt;.com</loc></url>");
+    expect(xml).toContain("<url><loc>https://0509.io/ads/a&apos;b&quot;c.com</loc></url>");
+    expect(xml).not.toContain("<x>");
+    expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    expect(xml.trimEnd().endsWith("</urlset>")).toBe(true);
   });
 
 	it("disallows auth-only surfaces in robots.txt but keeps /share crawlable", () => {

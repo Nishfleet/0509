@@ -87,6 +87,15 @@ export default {
 
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
     if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {
+      if (url.pathname === "/sitemap.xml") {
+        // Dynamic /ads/:domain entries come from a bounded, cache-only D1 read
+        // (never live discovery); any failure degrades to the unchanged static
+        // sitemap with HTTP 200.
+        const { buildPublicSitemapFile } = await import(
+          "../app/lib/brand-page-sitemap.server"
+        );
+        return publicFileResponse(request, await buildPublicSitemapFile(env));
+      }
       return publicFileResponse(request, publicSeoFile);
     }
 
