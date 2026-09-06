@@ -36,3 +36,4 @@ b884832f7001cbb8d74226b6cdac14958727fa0a:tests/release-hydration-bridge.test.ts:
 # (Bricolage Grotesque / Inter / IBM Plex Mono) for the workspace UI, not a
 # credential. Suppressed so the required Gitleaks check can pass.
 d2adaa81b92a8e52b62fadce5ad21754e87f64ff:docs/FIRSTRUN-DIRECTIONS-2026-07-21.md:generic-api-key:42
+
