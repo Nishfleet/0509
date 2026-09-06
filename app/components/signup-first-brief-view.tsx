@@ -18,8 +18,45 @@ export function SignupFirstBriefView({
 }: {
   data:
     | { step: "first-brief"; status: "waiting"; watchlistName: string | null }
+    | { step: "first-brief"; status: "no_ads"; watchlistName: string | null }
     | { step: "first-brief"; status: "ready"; brief: SignupFirstBriefPayload };
 }) {
+  if (data.status === "no_ads") {
+    return (
+      <article
+        className="f9-wk-brief f9-signup-first-brief"
+        id="signup-first-brief"
+      >
+        <header className="f9-wk-brief-head">
+          <h1>
+            No verified ads yet
+            {data.watchlistName ? ` — ${data.watchlistName}` : ""}
+          </h1>
+        </header>
+        <section className="f9-signup-first-brief-body">
+          <p>
+            The activation scan ran and found no verified ads we could point
+            you to right now. Sometimes a competitor only advertises on some
+            platforms, or their ads aren't publicly linkable yet.
+          </p>
+          <p>
+            When {data.watchlistName ?? "this competitor"} starts running
+            publicly verifiable ads, we'll capture it and email you the first
+            brief. You can also add more competitors in the meantime.
+          </p>
+        </section>
+        <footer className="f9-signup-first-brief-footer">
+          <p>
+            We'll keep watching and alert you when a verified ad appears.
+          </p>
+          <Link to="/app" className="f9-wk-btn">
+            Add competitors
+          </Link>
+        </footer>
+      </article>
+    );
+  }
+
   if (data.status === "waiting") {
     return (
       <article className="f9-wk-brief f9-signup-first-brief" id="signup-first-brief">
