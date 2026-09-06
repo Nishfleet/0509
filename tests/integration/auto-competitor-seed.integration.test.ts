@@ -223,10 +223,16 @@ describe("seedAutoCompetitors — Phase 1 (auto-competitor-watch #1369)", () => 
     const userId = await seedUser();
     // No own-domain cache entry is seeded for "notion.so", so the seed
     // function must honestly return zero candidates rather than invent any.
+    // Phase 5 (#1373) adds a landing-page fallback for the no-ads case, which
+    // would perform a network crawl; this test pins the pure-library honesty
+    // contract with the fallback disabled so it stays cache-only and
+    // deterministic (the crawl path is covered separately in
+    // auto-competitor-landing-page-seed.integration.test.ts).
     const candidates = await seedAutoCompetitors(appEnv, {
       domain: "notion.so",
       country: "all",
       userId,
+      enableLandingPageFallback: false,
     });
     expect(candidates).toEqual([]);
   });
