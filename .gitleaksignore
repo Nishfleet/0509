@@ -25,3 +25,19 @@ b157f14f3a2989221dc52cc87a3ff1ace8f4327f:ops/netcup-browser/tests/server.test.mj
 # this one commit failed the required Gitleaks check on every open PR
 # (0509#1792). Exact commit:file:rule:line, same shape as b157f14f.
 1f285a08bba6194b26325946a14a6beef4d81a02:tests/release-hydration-bridge.test.ts:stripe-access-token:89
+
+# Fake Stripe-shaped dummy (api_key= prefix + 400 x's, line 95) in the same
+# release-hydration-bridge test fixture, commit b884832f on
+# claim/issue-1752-refresh. The test asserts the long console body is
+# truncated AND redacted; it was never a credential. fetch-depth:0 PR scans
+# walk every ref, so this one commit failed the required Gitleaks check on
+# every open PR (2026-09-06, run 34038783154). Exact commit:file:rule:line.
+b884832f7001cbb8d74226b6cdac14958727fa0a:tests/release-hydration-bridge.test.ts:generic-api-key:95
+
+# A comment in THIS .gitleaksignore file (line 22 at commit 41e0ac6c on
+# claim/issue-1747) quotes the fake Stripe key names (the same obviously-fake
+# values documented in the 1f285a08 entry above) while explaining why that
+# entry is a false positive. Gitleaks scans its own ignore file and flags the
+# quoted fakes — a meta-false-positive. The values are obviously fake and
+# were never credentials. Exact commit:file:rule:line.
+41e0ac6c8a5dae12815c51403af3a1d11867dc3b:.gitleaksignore:stripe-access-token:22
