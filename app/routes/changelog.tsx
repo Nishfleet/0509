@@ -36,6 +36,32 @@ export default function ChangelogRoute() {
           }),
         )}
       />
+      <PublicDocBlock title="2026-09-06">
+        <ul className="f9-doc-list">
+          <li>The /trust page no longer lists &quot;landing-page snapshots&quot; as a stored data category — we do not store them, so the trust surface now says only what we actually keep.</li>
+          <li>A finished zero-verified /search now links onward to /capture-rules and /ad-aggression, so a visitor who sees &quot;no verified ads&quot; can read why we refused to count thin captures and how the score is computed, instead of hitting a dead end.</li>
+          <li>Alias brand pages like /ads/ridge.com and /ads/oura.com now redirect to their populated canonical page (/ads/ridgewallet.com, /ads/ouraring.com), so a buyer who types the natural domain lands on the page that actually has the ads, not a competing near-empty URL.</li>
+          <li>Programmatic buyer surfaces — /ads/:domain, /compare/*, /switch/*, /sneaker-resale, /competitor-monitoring — now each render their own Open Graph card, so a link shared to a specific brand or comparison page previews that page instead of one generic site card.</li>
+          <li>Locale compare hub pages (e.g. /de/compare) now link to their locale-prefixed children, so a visitor on a localized hub reaches the localized comparison page instead of a 404.</li>
+        </ul>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="2026-09-05">
+        <ul className="f9-doc-list">
+          <li>A deliberate Gone (HTTP 410) page — an empty offer timeline we have chosen not to store — now renders an honest &quot;not stored yet&quot; shell instead of a generic &quot;something broke on our side&quot; error, so a visitor understands the page is intentionally absent rather than broken.</li>
+          <li>The /search pre-search (idle, no-query) state now reads as a tool — one sentence and one text action — instead of a brochure, so a first-time visitor sees what to type, not a wall of explanatory prose.</li>
+          <li>The /status page copy was realigned to match what the release gate actually verifies, and the &quot;switch from X&quot; links were resized for phone, so the public status page and its switch-from prompts stay honest and tappable on mobile.</li>
+          <li>The three switch pages (/switch/magicbrief, /switch/panoramata, /switch/visualping) are now reachable from the public nav on /search and /competitor-monitoring, so a buyer landing on those surfaces can find the honest comparison instead of having to know the URL.</li>
+          <li>/search results for a known switch-target brand (MagicBrief, Panoramata, Visualping) now show a &quot;Switching from X?&quot; card above the fold with a link to the honest /switch/* destination, and /competitor-monitoring gained a &quot;Switching to 0509?&quot; section.</li>
+          <li>Landing-page monitoring now deduplicates captures by offer state (canonical URL, headline, CTA, price, form-present), so a later capture that is identical to an existing one no longer appends a duplicate versioned row — your timeline shows real changes, not repeats.</li>
+          <li>Every /search result row now renders a visible tier badge — Verified (green), Likely (amber), Unmatched (grey) — and a zero-verified result with candidates names the tiers in its headline, so a visitor can tell at a glance which results were actually verified.</li>
+          <li>Sitemap /ads/:domain pages now serve the correct robots directive in production, so the sitemap and the page headers agree on what is indexable.</li>
+          <li>Bare keyword searches now report a count-honest verdict (e.g. &quot;0 verified · N unmatched keyword matches&quot;) with a next-action link to the verified domain search, and the empty-cache copy is guarded against overpromising.</li>
+          <li>The /docs &quot;Understand the proof labels&quot; section now names the tiers exactly as the /search UI renders them — Verified, Likely, Unmatched — and no longer invents a &quot;Cached&quot; tier, so the trust reference and the product agree.</li>
+          <li>The /compare/pulzifi and /compare/spyland pages now cite verified primary sources for every claim, with inline &quot;Source:&quot; links, so a reader can check any claim on the page.</li>
+        </ul>
+      </PublicDocBlock>
+
       <PublicDocBlock title="2026-08-30">
         <ul className="f9-doc-list">
           <li>Cold searches on /search now show a tier-progress row on first load — &quot;N verified · M checking&quot; — so visitors see what we already know while the verify pass keeps running in the background, instead of staring at a blank warming state.</li>
