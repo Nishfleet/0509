@@ -102,6 +102,11 @@ describe("public /search q= and country= SSR heading and input", () => {
     // The country scope moved to the small annotation line under the H1.
     expect(markup).toContain("Across all countries");
     expect(markup).not.toContain("in all countries");
+    // Issue 1759: the results view (a ?q= search) links the /brands hub as
+    // a crawlable anchor, so the issue's verify command against
+    // /search?q=nike&country=all passes.
+    expect(markup).toContain('href="/brands"');
+    expect(markup).toContain("Browse all tracked brands");
   });
 
   it("pre-fills the competitor website input with the q value", async () => {
@@ -130,6 +135,10 @@ describe("public /search q= and country= SSR heading and input", () => {
     expect(markup).toContain("Find competitor ads");
     const inputMatch = markup.match(/<input[^>]*name="website"[^>]*>/i);
     expect(inputMatch?.[0]).not.toMatch(/value="[^"]+"/);
+    // Issue 1759: the idle pre-search state links the /brands hub as a
+    // crawlable anchor.
+    expect(markup).toContain('href="/brands"');
+    expect(markup).toContain("Browse all tracked brands");
   });
 
   it("keeps the document canonical on /search without query parameters", async () => {
