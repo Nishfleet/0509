@@ -25,3 +25,25 @@ b157f14f3a2989221dc52cc87a3ff1ace8f4327f:ops/netcup-browser/tests/server.test.mj
 # this one commit failed the required Gitleaks check on every open PR
 # (0509#1792). Exact commit:file:rule:line, same shape as b157f14f.
 1f285a08bba6194b26325946a14a6beef4d81a02:tests/release-hydration-bridge.test.ts:stripe-access-token:89
+
+# Fake stripe-shaped api_key in the release-hydration-bridge test LONG-BODY
+# fixture (tests/release-hydration-bridge.test.ts) commit b884832f on
+# claim/issue-1752-refresh. The test drives the hydration-bridge redaction:
+# it builds a long console payload whose value is an obvious fake (a
+# stripe-shaped dummy ending in the literal suffix "secret123") and then
+# asserts the emitted console message has it REDACTED. It was never a
+# credential; the current tree no longer carries the string, which exists
+# only in this historical commit that the all-refs Gitleaks scan still walks.
+# Exact commit:file:rule:line, same shape as the entries above (0509#1800).
+# (Value deliberately not quoted here: quoting the token re-triggers the rule
+# against this very ignore file, as the 41e0ac6c entry demonstrates.)
+b884832f7001cbb8d74226b6cdac14958727fa0a:tests/release-hydration-bridge.test.ts:generic-api-key:95
+
+# Historical comment text (commit 41e0ac6c) quoted two fake stripe-shaped test
+# keys as literals in the prose, and the stripe-access-token rule matched the
+# quoted example inside the comment. Same obvious redaction-test dummies that
+# the b884832f entry covers; never credentials. Current main's comment no
+# longer quotes them, so this suppresses only that one historical commit line.
+# Exact commit:file:rule:line (0509#1800). Value intentionally not quoted, for
+# the same self-flag reason noted above.
+41e0ac6c8a5dae12815c51403af3a1d11867dc3b:.gitleaksignore:stripe-access-token:22
