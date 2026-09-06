@@ -600,6 +600,57 @@ export function supportsReleaseCoverage(releaseJourneys) {
   return Array.isArray(releaseJourneys) && releaseJourneys.length > 0 && releaseJourneys.every((journey) => Boolean(RELEASE_COVERAGE_MATRIX[journey]));
 }
 
+// Issue #1752: decode the reactHydrationErrorDetail annotation (written by the
+// release hydration bridge) back onto the manifest entry. Fields are re-validated
+// here so an entry that carries a secret, control chars or malformed JSON is
+// dropped before it can reach the manifest / job log.
+const HYDRATION_DETAIL_MESSAGE_LIMIT = 300;
+const HYDRATION_DETAIL_TITLE_LIMIT = 160;
+const HYDRATION_DETAIL_ENTRY_LIMIT = 4;
+
+function safeHydrationDetailText(value, max, { allowUrl = false } = {}) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (text.length === 0 || text.length > max) return null;
+  if (
+    /[\u0000-\u001f\u007f<>`\\]/u.test(text) ||
+    (!allowUrl && /:\/\//u.test(text)) ||
+    SECRET_LIKE_VALUE.test(text)
+  ) {
+    return null;
+  }
+  return text;
+}
+
+export function readHydrationErrorDetails(annotations) {
+  const details = [];
+  for (const annotation of annotations) {
+    if (annotation?.type !== "reactHydrationErrorDetail") continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(String(annotation?.description ?? ""));
+    } catch {
+      continue;
+    }
+    const source =
+      parsed?.source === "console" || parsed?.source === "pageerror"
+        ? parsed.source
+        : null;
+    const message = safeHydrationDetailText(parsed?.message, HYDRATION_DETAIL_MESSAGE_LIMIT, { allowUrl: true });
+    const url =
+      parsed?.url === null || parsed?.url === undefined
+        ? null
+        : typeof parsed.url === "string"
+          ? safeRelativeUrl(parsed.url)
+          : null;
+    const title = safeHydrationDetailText(parsed?.title, HYDRATION_DETAIL_TITLE_LIMIT);
+    if (source === null || message === null) continue;
+    details.push({ source, message, url, title });
+    if (details.length >= HYDRATION_DETAIL_ENTRY_LIMIT) break;
+  }
+  return details;
+}
+
 export function readAnnotations(test, result) {
   const annotations = [];
   const seen = new Set();
@@ -628,7 +679,7 @@ export function readAnnotations(test, result) {
         : "browser_hydration_error",
     );
   }
-  return { values, issues };
+  return { values, issues, hydrationErrors: readHydrationErrorDetails(annotations) };
 }
 
 function projectIdentity(test) {
@@ -677,6 +728,9 @@ export function createManifestEntry(test, result, firstResult = result) {
       finalUrl: annotations.values.finalUrl,
       status,
       retry,
+      ...(annotations.hydrationErrors.length > 0
+        ? { hydrationErrors: annotations.hydrationErrors }
+        : {}),
       firstAttempt: {
         status: first,
         passed: first === "passed",

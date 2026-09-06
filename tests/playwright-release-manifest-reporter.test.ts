@@ -10,6 +10,7 @@ const {
   buildManifest,
   expectedReleaseArtifacts,
   markManifestFailed,
+  readAnnotations,
   recordManifestPostflight,
   resolveOutputPath,
   supportsReleaseCoverage,
@@ -510,6 +511,97 @@ describe("Gate-B Playwright release manifest reporter", () => {
     const manifest = readManifest(outputPath);
     expect(manifest.strictIssues).toContain("browser_hydration_error:console");
     expect(JSON.stringify(manifest)).not.toContain("Hydration failed");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("parses the captured hydration detail and drops secrets, bad JSON and bad sources", () => {
+    const annotationsForDetail = [
+      ...annotations(),
+      { type: "reactHydrationError", description: "console" },
+      {
+        type: "reactHydrationErrorDetail",
+        description: JSON.stringify({
+          source: "console",
+          message: "Hydration failed because the server rendered text did not match the client",
+          url: "/app/watchlists?watchlist=e2e-1&token=bad",
+          title: "Gate-B Journey 3: monitoring loop (mobile)",
+        }),
+      },
+      { type: "reactHydrationErrorDetail", description: "{not json" },
+      { type: "reactHydrationErrorDetail", description: "not-json" },
+      {
+        type: "reactHydrationErrorDetail",
+        description: JSON.stringify({ source: "other", message: "ignored source", url: null, title: null }),
+      },
+      {
+        type: "reactHydrationErrorDetail",
+        description: JSON.stringify({
+          source: "console",
+          message: "Hydration failed because the server rendered secret=hunter2",
+          url: "/app",
+          title: "t",
+        }),
+      },
+    ];
+    const { issues, hydrationErrors } = readAnnotations(
+      fakeTest("browser-hydration-detail", annotationsForDetail),
+      result("passed", 0, []),
+    );
+    expect(issues).toContain("browser_hydration_error:console");
+    // Only the clean entry survives. The reporter's decode defence drops the
+    // malformed JSON, the unknown source and any secret-bearing message
+    // (secret=...) before it can reach the manifest.
+    expect(hydrationErrors).toEqual([
+      {
+        source: "console",
+        message: "Hydration failed because the server rendered text did not match the client",
+        url: null,
+        title: "Gate-B Journey 3: monitoring loop (mobile)",
+      },
+    ]);
+    expect(JSON.stringify(hydrationErrors)).not.toContain("hunter2");
+  });
+
+  it("carries sanitized hydration error detail on the manifest entry", () => {
+    const directory = makeTestDirectory();
+    const outputPath = join(directory, "manifest.json");
+    const releaseAnnotations = [
+      ...annotations(),
+      { type: "reactHydrationError", description: "console" },
+      {
+        type: "reactHydrationErrorDetail",
+        description: JSON.stringify({
+          source: "console",
+          message: "Hydration failed because the server rendered text did not match the client",
+          url: "/app/watchlists?watchlist=e2e-1&token=bad",
+          title: "Gate-B Journey 3: monitoring loop (mobile)",
+        }),
+      },
+    ];
+    const test = fakeTest("browser-hydration-detail-entry", releaseAnnotations);
+    const reporter = new GateBManifestReporter({
+      outputPath,
+      candidateFingerprint: fingerprint,
+      environment: "local",
+      runOrigin,
+      serverIdentity,
+      strict: true,
+    });
+    reporter.onBegin({}, suite([test]));
+    reporter.onTestEnd(test, result("passed", 0, annotations()));
+
+    expect(reporter.onEnd(fullResult("passed"))).toEqual({ status: "failed" });
+    const manifest = readManifest(outputPath);
+    expect(manifest.strictIssues).toContain("browser_hydration_error:console");
+    const [entry] = manifest.entries;
+    expect(entry.hydrationErrors).toEqual([
+      {
+        source: "console",
+        message: "Hydration failed because the server rendered text did not match the client",
+        url: null,
+        title: "Gate-B Journey 3: monitoring loop (mobile)",
+      },
+    ]);
     rmSync(directory, { recursive: true, force: true });
   });
 
