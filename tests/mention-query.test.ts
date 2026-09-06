@@ -74,6 +74,16 @@ describe("buildMentionQuery (x)", () => {
     const query = buildMentionQuery({ label: "MamaEarth", canonicalUrl: null }, "x");
     expect(query.query.q).toBe('"MamaEarth"');
   });
+
+  it("precises the provenance probe when siteName enriches the x query", () => {
+    const query = buildMentionQuery(
+      { label: "MamaEarth", canonicalUrl: "https://mamaearth.in" },
+      "x",
+      { siteName: "MamaEarth Official" },
+    );
+    expect(query.query.q).toContain("MamaEarth Official");
+    expect(query.provenance.query.probe).toBe("entity-and-canonical-domain-and-site-name");
+  });
 });
 
 describe("buildMentionQuery determinism", () => {
