@@ -166,13 +166,27 @@ async function firstBriefLoader(
   }
 
   if (!firstBrief || !hasEvidence) {
+    // Distinguish "scan still in flight" from "scan completed but no verified
+    // ads were found". The watchdog's first-scan workflow writes
+    // `lastScannedAt` when the activation scan runs to completion, whether
+    // or not it surfaced any ads. When the scan is finished but no
+    // evidence-linked first-brief exists, the honest surface is a terminal
+    // `no_ads` state with a next action — not a perpetual "still being
+    // captured" wait (BET 7 / issue #1750 accept #2).
+    const activeWatchlist = watchlists.find((w) => w.isActive);
+    if (activeWatchlist?.lastScannedAt) {
+      return {
+        step: "first-brief",
+        status: "no_ads",
+        watchlistName: activeWatchlist.targetLabel ?? null,
+      };
+    }
     // The activation scan is still in flight. Render the waiting state — the
     // client polls the dashboard's first-scan status endpoint.
     return {
       step: "first-brief",
       status: "waiting",
-      watchlistName:
-        watchlists.find((w) => w.isActive)?.targetLabel ?? null,
+      watchlistName: activeWatchlist?.targetLabel ?? null,
     };
   }
 
