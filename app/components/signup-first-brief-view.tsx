@@ -24,7 +24,7 @@ export function SignupFirstBriefView({
   if (data.status === "no_ads") {
     return (
       <article
-        className="f9-wk-brief f9-signup-first-brief f9-signup-first-brief--no-ads"
+        className="f9-wk-brief f9-signup-first-brief"
         id="signup-first-brief"
       >
         <header className="f9-wk-brief-head">

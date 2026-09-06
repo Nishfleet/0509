@@ -173,16 +173,27 @@ async function firstBriefLoader(
     // evidence-linked first-brief exists, the honest surface is a terminal
     // `no_ads` state with a next action — not a perpetual "still being
     // captured" wait (BET 7 / issue #1750 accept #2).
-    const activeWatchlist = watchlists.find((w) => w.isActive);
-    if (activeWatchlist?.lastScannedAt) {
+    //
+    // Completion is detected with `.some` (any active watchlist scanned), the
+    // same guard `shouldEnsureFirstBrief` uses above — a multi-watchlist
+    // workspace must not regress to a perpetual wait just because the first
+    // returned active watchlist still has a null `lastScannedAt`.
+    const activeScanned = watchlists.some(
+      (w) => w.isActive && Boolean(w.lastScannedAt),
+    );
+    if (activeScanned) {
+      const scanned = watchlists.find(
+        (w) => w.isActive && Boolean(w.lastScannedAt),
+      );
       return {
         step: "first-brief",
         status: "no_ads",
-        watchlistName: activeWatchlist.targetLabel ?? null,
+        watchlistName: scanned?.targetLabel ?? null,
       };
     }
     // The activation scan is still in flight. Render the waiting state — the
     // client polls the dashboard's first-scan status endpoint.
+    const activeWatchlist = watchlists.find((w) => w.isActive);
     return {
       step: "first-brief",
       status: "waiting",
