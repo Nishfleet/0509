@@ -220,6 +220,31 @@ describe("/app/onboard?step=first-brief against real D1 (issue #1276)", () => {
     expect(data.status).toBe("waiting");
   });
 
+  it("returns the no_ads terminal state when the scan completed but found no evidence", async () => {
+    const userId = await seedUser(uid("user"));
+    await seedWatchlist(userId, uid("wl"));
+    seededUserId = userId;
+
+    // Mark the watchlist as already scanned (activation scan finished) with
+    // no first-brief digest and no evidence-linked items — the loader must
+    // render the honest terminal state instead of a perpetual wait.
+    await db()
+      .prepare("UPDATE watchlist SET last_scanned_at = ?, updated_at = ? WHERE user_id = ?")
+      .bind(ISO_T0, ISO_T0, userId)
+      .run();
+
+    const result = await callOnboardLoader({
+      SIGNUP_FIRST_BRIEF_ENABLED: "1",
+      FUNNEL_MEASUREMENT_ENABLED: "1",
+    });
+
+    expect(result.kind).toBe("data");
+    if (result.kind !== "data") throw new Error("expected data, not redirect");
+    const data = result.data as SignupFirstBriefLoaderData;
+    expect(data.step).toBe("first-brief");
+    expect(data.status).toBe("no_ads");
+  });
+
   it("redirects to /app when the flag is off (default)", async () => {
     const userId = await seedUser(uid("user"));
     seededUserId = userId;
