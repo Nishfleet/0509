@@ -678,6 +678,18 @@ export function printReleaseReadinessDiagnostics(
     write(
       `launch:readiness:predeploy failed — manifest status=${status}; strictIssues=${JSON.stringify(strictIssues)}\n`,
     );
+    // Issue #1752: the manifest entry now carries sanitized hydration detail
+    // (message, url, title). Name the failing surface in the job log so the
+    // next red run is bisectable without downloading the artifact.
+    const hydrationDetails = [];
+    for (const entry of Array.isArray(manifest?.entries) ? manifest.entries : []) {
+      for (const detail of Array.isArray(entry?.hydrationErrors) ? entry.hydrationErrors : []) {
+        hydrationDetails.push({ sourceFile: entry?.sourceFile ?? null, ...detail });
+      }
+    }
+    if (hydrationDetails.length > 0) {
+      write(`hydration error detail: ${JSON.stringify(hydrationDetails)}\n`);
+    }
   } catch {
     write(`launch:readiness:predeploy failed — readiness manifest unavailable at ${manifestPath}\n`);
   }
