@@ -12,6 +12,7 @@ import {
 } from "~/components/compare-citations";
 import {
   canonicalLinks,
+  compareSocialCardUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -34,6 +35,8 @@ export const meta: MetaFunction = () =>
     title: pageTitle,
     description: pageDescription,
     pathname: "/compare/panoramata",
+    ogImageUrl: compareSocialCardUrl("panoramata"),
+    ogImageAlt: "Five to Nine vs Panoramata comparison card",
   });
 
 const panoramataStrengths: readonly CompareClaimCard[] = [

@@ -12,6 +12,7 @@ import {
 } from "~/components/compare-citations";
 import {
   canonicalLinks,
+  compareSocialCardUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -35,6 +36,8 @@ export const meta: MetaFunction = () =>
     title: "Five to Nine vs checking the Meta Ad Library by hand",
     description: pageDescription,
     pathname: "/compare/meta-ad-library",
+    ogImageUrl: compareSocialCardUrl("meta-ad-library"),
+    ogImageAlt: "Five to Nine vs Meta Ad Library comparison card",
   });
 
 const adLibraryStrengths: readonly CompareClaimCard[] = [

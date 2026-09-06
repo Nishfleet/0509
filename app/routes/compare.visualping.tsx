@@ -14,6 +14,7 @@ import {
 import {
   COMPARE_CANONICAL_TARGETS,
   canonicalLinks,
+  compareSocialCardUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -41,6 +42,8 @@ export const meta: MetaFunction = () =>
     title: "Five to Nine vs Visualping",
     description: pageDescription,
     pathname: "/compare/visualping",
+    ogImageUrl: compareSocialCardUrl("visualping"),
+    ogImageAlt: "Five to Nine vs Visualping comparison card",
   });
 
 const visualpingStrengths: readonly CompareClaimCard[] = [

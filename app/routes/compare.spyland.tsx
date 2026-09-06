@@ -10,7 +10,7 @@ import {
   type CompareCitations,
   type CompareClaimCard,
 } from "~/components/compare-citations";
-import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import spylandCitations from "~/data/compare/spyland-citations.json";
 
@@ -30,6 +30,8 @@ export const meta: MetaFunction = () =>
     title: "Five to Nine vs Spyland",
     description: pageDescription,
     pathname: "/compare/spyland",
+    ogImageUrl: compareSocialCardUrl("spyland"),
+    ogImageAlt: "Five to Nine vs Spyland comparison card",
   });
 
 const spylandStrengths: readonly CompareClaimCard[] = [

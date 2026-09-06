@@ -13,6 +13,7 @@ import {
 import {
   COMPARE_CANONICAL_TARGETS,
   canonicalLinks,
+  compareSocialCardUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -40,6 +41,8 @@ export const meta: MetaFunction = () =>
     title: "Five to Nine vs Foreplay",
     description: pageDescription,
     pathname: "/compare/foreplay",
+    ogImageUrl: compareSocialCardUrl("foreplay"),
+    ogImageAlt: "Five to Nine vs Foreplay comparison card",
   });
 
 const foreplayStrengths: readonly CompareClaimCard[] = [

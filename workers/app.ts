@@ -134,6 +134,22 @@ export default {
       return publicFileResponse(request, publicSeoFile);
     }
 
+    // Per-route Open Graph social cards (issue #1572): dynamic SVG cards for
+    // the programmatic buyer surfaces (/ads/:domain, /compare/*, /switch/*,
+    // /sneaker-resale, /competitor-monitoring) served under /social-card/...
+    // so each surface stamps a branded og:image instead of the generic
+    // og-image.png. Stateless and public — same serving path as the static
+    // social card above, before the rate-limit gate.
+    if (request.method === "GET" || request.method === "HEAD") {
+      const { publicSocialCardForRequest } = await import(
+        "../app/lib/social-cards.server"
+      );
+      const socialCard = publicSocialCardForRequest(request);
+      if (socialCard) {
+        return publicFileResponse(request, socialCard);
+      }
+    }
+
     if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/llms.txt") {
       // Same indexable /ads/:domain set as sitemap.xml — never list a noindex shell.
       return markdownResponse(
