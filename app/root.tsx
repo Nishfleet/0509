@@ -336,6 +336,9 @@ export function ErrorBoundary({ error }: { error: unknown }) {
     "The error is logged and we look at these.",
   ];
   let isNotFound = false;
+  let isGone = false;
+  let goneDomain: string | undefined;
+  let goneBrandName: string | undefined;
   let stack: string | undefined;
 
   if (isRouteErrorResponse(error)) {
@@ -343,6 +346,24 @@ export function ErrorBoundary({ error }: { error: unknown }) {
       isNotFound = true;
       heading = "Page not found";
       paragraphs = ["The page you asked for does not exist."];
+    } else if (error.status === 410) {
+      isGone = true;
+      heading = "This page is gone";
+
+      const goneData = parseGoneErrorData(error.data);
+      if (goneData) {
+        goneDomain = goneData.domain;
+        goneBrandName = goneData.brandName;
+        paragraphs = [
+          `We have no stored offer timeline for ${goneBrandName} yet.`,
+          "Search the brand or see its ads to start watching.",
+        ];
+      } else {
+        paragraphs = [
+          "This page is not stored yet.",
+          "If you were looking for a competitor, search for it.",
+        ];
+      }
     } else if (
       error.status === 503 &&
       error.statusText === "Authentication temporarily unavailable"
@@ -364,6 +385,24 @@ export function ErrorBoundary({ error }: { error: unknown }) {
     stack = error.stack;
   }
 
+  function parseGoneErrorData(data: unknown): { domain: string; brandName: string } | null {
+    if (data && typeof data === "object") {
+      const maybe = data as { domain?: unknown; brandName?: unknown };
+      if (typeof maybe.domain === "string" && typeof maybe.brandName === "string") {
+        return { domain: maybe.domain, brandName: maybe.brandName };
+      }
+      return null;
+    }
+    if (typeof data === "string") {
+      try {
+        return parseGoneErrorData(JSON.parse(data));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
   return (
     <main
       aria-live="assertive"
@@ -379,14 +418,33 @@ export function ErrorBoundary({ error }: { error: unknown }) {
           {paragraphs.map((paragraph) => (
             <p key={paragraph}>{paragraph}</p>
           ))}
-          {isNotFound ? (
+          {isNotFound || isGone ? (
             <div className="f9-action-row">
-              <Link className="f9-wk-btn" to="/">
-                Back to Five to Nine
-              </Link>
-              <Link className="f9-wk-btn-quiet" to="/search">
-                Open search
-              </Link>
+              {goneDomain ? (
+                <>
+                  <Link
+                    className="f9-wk-btn"
+                    to={`/search?q=${encodeURIComponent(goneDomain)}`}
+                  >
+                    Search {goneDomain}
+                  </Link>
+                  <Link
+                    className="f9-wk-btn-quiet"
+                    to={`/ads/${encodeURIComponent(goneDomain)}`}
+                  >
+                    See ads for {goneDomain}
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link className="f9-wk-btn" to="/">
+                    Back to Five to Nine
+                  </Link>
+                  <Link className="f9-wk-btn-quiet" to="/search">
+                    Open search
+                  </Link>
+                </>
+              )}
             </div>
           ) : (
             <>
