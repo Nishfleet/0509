@@ -1,15 +1,13 @@
 # PR #1084 — "Caught in the act" price-diff hero: close-with-evidence
 
-Status: **closed with evidence** (2026-08-27 decision, archived 2026-09-05; PR closed 2026-09-06).
+Status: **closed with evidence** (2026-08-27 decision, archived 2026-09-05).
 
 ## What this records
 
 PR #1084 (`feat/restore-caught-in-the-act-hero`) restored the #188 typographic
 price-diff hero (`They cut the price ~~$159~~ $129 03:47 AM last night`) as the
-homepage first viewport. It was a stale, conflicting pull request against the
-current `origin/main`. The PR itself was closed on 2026-09-06 (tracker #1760)
-once the close-with-evidence decision recorded here in PR #1626 was applied to
-the PR — the step #1626 left undone, which let a second tracker (#1760) spawn.
+homepage first viewport. It is a stale, conflicting pull request against the
+current `origin/main`.
 
 ## (i) The conflict with the shipped Safe hero
 
@@ -58,13 +56,3 @@ view of the shipped Safe hero:
 
 A public-facing pricing/competitor claim in the restored hero stays
 `[NISH]`-gated per issue #1307 accept rule 4.
-
-## (v) Dependent follow-up #1274 — resolved by the Safe ship
-
-#1274 ("Deck still promises screenshot-and-brief after OG hook restore dropped
-that line") was filed on the premise that landing #1084 would drop "We saved the
-proof." from the homepage. The #1084 hero was not landed — the BET 9 Safe hero
-shipped instead, and the live homepage carries `We saved the proof — {website}`
-in its proof strip (`app/routes/marketing.tsx`), matching the deck's "saves the
-screenshots, and files the brief." The deck and homepage do not drift; #1274 is
-resolved by the Safe ship.
