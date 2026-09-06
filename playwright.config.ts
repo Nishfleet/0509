@@ -54,7 +54,14 @@ export default defineConfig({
     actionTimeout: 10_000,
     navigationTimeout: 20_000,
     screenshot: "only-on-failure",
-    trace: "retain-on-failure",
+    // Playwright 1.63: ARIA + screen snapshots land in the trace alongside the
+    // DOM snapshot, so the trace viewer's Display Aria mode can show the action
+    // screenshot side-by-side with the aria tree. dom stays on (the default
+    // timeline preview); aria+screen are the new captures.
+    trace: {
+      mode: "retain-on-failure",
+      snapshots: { dom: true, aria: true, screen: true },
+    },
     video: "retain-on-failure",
   },
   webServer: shouldStartLocalServer
