@@ -167,6 +167,34 @@ export async function expectMinimumTouchTarget(
   ).toBe(true);
 }
 
+export async function expectSecHeadingsNonZeroWidth(page: Page): Promise<void> {
+  // Issue #1842 regression guard: at tablet (768px) the section header is a
+  // flex row (.f9-wk-sec-head, justify-content: space-between) holding the
+  // title container (.f9-wk-sec-headings, min-width: 0) and the actions block
+  // (.f9-wk-sec-acts, flex: 0 0 auto, flex-wrap: nowrap). When the actions
+  // overflow the row, .f9-wk-sec-headings collapses to width: 0 — the title
+  // stays in the DOM but is invisible. toBeVisible() catches the symptom;
+  // this pins the cause by asserting the headings container keeps a non-zero
+  // width whenever the actions are present, on every viewport the journey
+  // runs (mobile wraps, desktop has room, tablet is the dead zone).
+  //
+  // Both elements are asserted present (not silently skipped): the empty
+  // state always renders the pair, so a missing .f9-wk-sec-acts would be a
+  // real markup regression and must fail loudly rather than pass the guard.
+  const secActs = page.locator(".f9-wk-sec-acts").first();
+  await expect(secActs, ".f9-wk-sec-acts should be present and visible").toHaveCount(1);
+  await expect(secActs, ".f9-wk-sec-acts should be visible").toBeVisible();
+  const headings = page.locator(".f9-wk-sec-headings").first();
+  await expect(headings, ".f9-wk-sec-headings should be present").toHaveCount(1);
+  const box = await headings.boundingBox();
+  expect(box, ".f9-wk-sec-headings should render a bounding box").not.toBeNull();
+  if (!box) return;
+  expect(
+    box.width,
+    ".f9-wk-sec-headings must keep non-zero width so .f9-wk-sec-acts cannot collapse it (tablet guard, #1842)",
+  ).toBeGreaterThan(0);
+}
+
 export async function expectVisibleKeyboardFocus(control: Locator): Promise<void> {
   await control.focus();
   await expect(control, "keyboard focus should land on the control").toBeFocused();
