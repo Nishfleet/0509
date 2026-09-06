@@ -1,0 +1,188 @@
+name: Quality ratchet
+
+# Weekly SentenceLength ratchet tightening on main (issue #1728).
+#
+# What it does
+# ------------
+# scripts/quality-ratchet.mjs re-measures the longest sentence in the whole
+# content tree with the real Vale binary and, under --update, lowers
+# `Std.Readability.SentenceLength[max]` in .vale.ini to that measurement.
+# --update is monotone: it writes a ceiling only when the new measurement is
+# LOWER than the prior ceiling, refuses to raise (exit 2), and short-circuits
+# to a no-op when the ceiling already matches reality. When the file changes,
+# this workflow commits the new ceiling to main directly, so .vale.ini's
+# SentenceLength[max] has exactly one writer.
+#
+# Why direct-to-main instead of a PR
+# ----------------------------------
+# A PR opened by GITHUB_TOKEN does not trigger pull_request checks, so a
+# ratchet PR could never land without a PAT. The repo's existing
+# ratchet-auto-tighten.yml already pushes the same class of change directly;
+# this workflow is that pattern applied to the content ceiling. The push is
+# a fast-forward from a just-checked-out main tip inside a serialised
+# concurrency group; a rejection is a loud failure, not a force.
+#
+# The defence against a poisoned run is the script's monotone contract: a bad
+# measurement can lower the ceiling faster than reality but cannot raise it,
+# and the next content-quality run turns red until reality catches up.
+#
+# Concurrency
+# -----------
+# `cancel-in-progress: false` and a single named group: two runs close
+# together MUST serialise, never race a half-written .vale.ini.
+on:
+  schedule:
+    # Weekly, Monday 05:11 UTC — offset from the ratchet-auto-tighten 04:07
+    # slot and the other cron jobs so one GitHub-side blip cannot take two
+    # of them down at once.
+    - cron: "11 5 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: 0509-quality-ratchet
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  tighten:
+    name: Tighten SentenceLength ceiling
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Verify pinned main checkout
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          test "$HEAD_REF" = "refs/heads/main"
+          # actions/checkout leaves a detached HEAD; a symbolic HEAD here would
+          # mean we are not on the exact checked-out commit.
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            echo "expected a detached HEAD from actions/checkout" >&2
+            exit 1
+          fi
+
+      - name: Install Vale 3.20.0 (pinned release + sha256)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/vale.tar.gz" \
+            https://github.com/vale-cli/vale/releases/download/v3.20.0/vale_3.20.0_Linux_64-bit.tar.gz
+          echo "f59e7030c5d4ace6cf915497d0d076a1699d61e876142765963237e6867c9712  $RUNNER_TEMP/vale.tar.gz" \
+            | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/vale.tar.gz" -C "$RUNNER_TEMP" vale
+          "$RUNNER_TEMP/vale" --version
+          "$RUNNER_TEMP/vale" --version | grep -F "vale version 3.20.0"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Run --update and capture the outcome
+        id: tighten
+        run: |
+          set -euo pipefail
+
+          # --update exits 0 on tighten / no-op and 2 on a refused raise.
+          # Exit 1 indicates a hard failure of the measurement itself; treat
+          # it as a loud failure so a broken measure never lands as a green
+          # push.
+          set +e
+          node scripts/quality-ratchet.mjs --update
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
+            echo "quality_ratchet_measurement_failed status=$status" >&2
+            exit 1
+          fi
+          if [ "$status" -eq 2 ]; then
+            echo "quality_ratchet_refused_to_raise" >&2
+            {
+              echo "### :warning: quality ratchet refused to raise"
+              echo ""
+              echo "The measured maximum sentence length on main is above the ceiling in .vale.ini. The file was left untouched. Investigate the most recent merge to main — an over-ceiling sentence reached main past the content-quality gate."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if git diff --quiet -- .vale.ini; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "quality_ratchet_no_change"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "changes<<EOF" >> "$GITHUB_OUTPUT"
+          git diff -- .vale.ini | grep -E '^[+-]Std\.Readability\.SentenceLength' >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Commit tightened ceiling to main
+        if: steps.tighten.outputs.changed == 'true'
+        shell: bash
+        env:
+          CHANGES: ${{ steps.tighten.outputs.changes }}
+          GH_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- .vale.ini
+          if git diff --cached --quiet; then
+            echo "quality_ratchet_nothing_to_commit"
+            exit 0
+          fi
+
+          {
+            echo "chore(ratchet): tighten SentenceLength ceiling"
+            echo ""
+            echo "Mechanical monotone tightening run on main by .github/workflows/quality-ratchet.yml."
+            echo "The ceiling is lowered to the measured maximum sentence length on main -- never raised."
+            echo "No contributor action is required."
+            echo ""
+            echo "Changes:"
+            printf '%s\n' "$CHANGES"
+          } > "$RUNNER_TEMP/commit-msg.txt"
+
+          git commit -F "$RUNNER_TEMP/commit-msg.txt"
+
+          # The checkout ran with persist-credentials: false, so the push
+          # authenticates explicitly with the job's GITHUB_TOKEN through the
+          # remote URL. The token value never reaches the log or the diff.
+          git remote set-url origin \
+            "https://x-access-token:${GH_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          # push refuses if a remote-only commit slipped in between this
+          # checkout and now; the named concurrency group plus a fresh
+          # checkout make a real race a loud failure, which is correct.
+          set +e
+          git push origin HEAD:main
+          push_status=$?
+          set -e
+          if [ "$push_status" -ne 0 ]; then
+            echo "quality_ratchet_push_failed status=$push_status" >&2
+            exit 1
+          fi
+
+          AFTER_SHA="$(git rev-parse HEAD)"
+          {
+            echo "### :wrench: quality ratchet"
+            echo ""
+            echo "SentenceLength ceiling lowered to the measured maximum on main."
+            echo ""
+            echo "Commit: \`${AFTER_SHA}\`"
+            echo ""
+            echo "Changes:"
+            printf '%s\n' "$CHANGES"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm clean final state on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/quality-ratchet.mjs
