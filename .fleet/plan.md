@@ -1,34 +1,26 @@
-# Plan — Nishfleet/0509#1446 (manager: pi-issue-0509-1446)
+# Plan — Nishfleet/0509#1498 (manager: pi-issue-0509-1498)
 
-## Situation (verified live + at branch level, 2026-09-06)
+## Goal
+Remove the false "landing-page snapshots" stored-data claim from the /trust "Data handled" block via Path A (drop the phrase), and lock it with a render test. Timeline route is NOT live (Path B deferred to #1449), so we DROP the phrase, never hedge. No D1 schema change. No gate-owned CI path. No new bin/ files.
 
-Issue #1446: `/ads/:domain` alias brand pages (ridge.com / oura.com) are not
-redirected/canonicalized to their populated product pages (ridgewallet.com /
-ouraring.com), splitting a brand's verified ads and link equity across two
-competing indexable URLs.
-
-The implementation already exists in this worktree (`claim/issue-1446`) as two
-commits:
-
-- `c2bf5cf1` — canonical alias resolver, route-level 301, sitemap exclusion,
-  and the route-level test `tests/ads-alias-canonical-redirect.test.ts`.
-- `c9ae1487` — restricts alias-landing attribution to the brand's own Meta
-  page id. This is the REQUIRED fix for the real `codex-node-checks` FAIL that
-  closed PR #1714: `tests/integration/brand-attribution.integration.test.ts`
-  line 188 (`expected 2 to be 1`). Verified passing locally with this commit.
-
-PR #1714 (which did NOT include `c9ae1487`) was closed without merge; nothing
-was ever pushed to `origin/claim/issue-1446` (still at `f7e19ebb`, pre-work).
-Manager job: verify green, review the diff, push the branch, open a fresh PR,
-arm auto-merge.
+## Facts (verified by manager, 2026-09-06)
+- Copy lives in exactly ONE place: `app/routes/trust.tsx` lines 51-53, "Data handled" `PublicDocBlock` paragraph.
+- `app/routes/$locale.trust.tsx` re-exports EN `TrustRoute` — one edit fixes all locales. No surface-by-surface fix.
+- `TrustRoute` is purely static (no `useLoaderData`): renders via `renderToStaticMarkup(createElement(TrustRoute))`.
+- Test convention: vitest, `.test.tsx` in `tests/`, pattern from `tests/brands-route.render.test.tsx` (`vi.doMock("react-router")` for `Link` + loader stubs; `renderToStaticMarkup`).
+- This `.fleet/plan.md` previously held the stale #1446 plan; superseded by #1498.
 
 ## Phases
+- [x] Phase 1 — Copy fix: in `app/routes/trust.tsx`, delete "landing-page snapshots, " (phrase + trailing comma+space) from the "Data handled" sentence so it reads "...proof-backed changes, source URLs, delivery attempts...". Do not touch /pricing, schema, CI gate, or bin/. — DONE by worker; diff verified by manager.
+- [x] Phase 2 — Single-source check: confirm `$locale.trust.tsx` already re-exports `TrustRoute`; the /trust copy now lives in one place. — DONE (re-exports ./trust; no surface-by-surface edit).
+- [x] Phase 3 — Lock test: add `tests/trust-page-data-handled-claim.test.ts` rendering /trust and asserting the "Data handled" block does NOT contain "landing-page snapshots". — DONE, mirrors brands-route.render.test.tsx.
+- [x] Phase 4 — Run-proof: run the lock test green (vitest) and capture that rendered /trust no longer contains the phrase. — DONE: `npx vitest run --configLoader runner --project node tests/trust-page-data-handled-claim.test.ts` → Test Files 1 passed (1), Tests 1 passed (1).
 
-- [x] phase 1: confirm the canonical-alias implementation + attribution fix
-      are committed and resolve the real CI FAIL
-- [x] phase 2: green verification — route-level test, integration test,
-      full node suite, workers suite, typecheck
-- [x] phase 3: repo checks (sgscan, no agent attribution, exec-review canary)
-- [x] phase 4: push `claim/issue-1446` to origin
-- [x] phase 5: open PR with Verification/run-proof/research/help-first +
-      Closes #1446, reviewer round (product repo: 0509), arm auto-merge
+## Reviewer round (product repo, 0509; step 8)
+Seat resolved via `find_senior_seat` (lib/seat-lib.sh #3121): `openrouter\tdeepseek/deepseek-v4-flash-0731`. `bin/fleet-review-arm-check` exit 0 (round required). One round only.
+Findings → adjudication buckets:
+- Warnings: none.
+- Critical: none.
+- Suggest — lock test positive anchor (`toContain("service logs")`) so the negative claim can't pass vacuously → **Act on** (applied).
+- Suggest — `app/routes/privacy.tsx:54` still lists "landing-page snapshots" (sibling surface) → **Noted**, out of #1498 scope; filed as a new issue.
+- Suggest — regex over string-literal assertion → **Dismissed-with-reason**: the removed copy was exactly that literal string; a lock test on that precise token is intentional.
