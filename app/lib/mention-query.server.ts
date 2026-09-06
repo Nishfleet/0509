@@ -158,12 +158,15 @@ function buildXQuery(
   }
 
   const q = terms.length > 0 ? terms.join(" OR ") : "";
+  const probe = siteName
+    ? "entity-and-canonical-domain-and-site-name"
+    : "entity-and-canonical-domain";
 
   return {
     source: "x",
     query: { q },
     provenance: {
-      query: { q, probe: "entity-and-canonical-domain" },
+      query: { q, probe },
     },
   };
 }
