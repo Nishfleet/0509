@@ -513,10 +513,13 @@ export function buildSitemapXml(
 
 /** Subset of landing_page_snapshot columns the sitemap timeline read needs. */
 export interface TimelineSitemapRow {
+  id: string;
   canonical_url: string;
   captured_at: string;
   artifact_key: string | null;
   metadata_json: string | null;
+  /** True when the row is an ad-destination capture (issue #1729). */
+  is_ad_destination: number | null;
 }
 
 /**
@@ -576,6 +579,13 @@ export function indexableTimelineEntriesFromRows(
     if (!snapshotRowHasCompleteProof(row)) {
       continue;
     }
+    // Brand-page gate (issue #1729): an ad-destination row (the loader
+    // excludes it from the ledger) must not qualify its domain either, so the
+    // sitemap cannot list a /timeline/:domain whose only snapshots are ad
+    // destinations. Mirrors `loadOfferTimeline`'s filter.
+    if (row.is_ad_destination) {
+      continue;
+    }
     seen.add(domain);
     entries.push({
       path: `/timeline/${domain}`,
@@ -612,7 +622,17 @@ export async function loadIndexableTimelineEntries(
     const rows = await queryAll<TimelineSitemapRow>(
       env,
       `
-        SELECT canonical_url, captured_at, artifact_key, metadata_json
+        SELECT
+          id,
+          canonical_url,
+          captured_at,
+          artifact_key,
+          metadata_json,
+          EXISTS(
+            SELECT 1 FROM ad_observation ao
+            WHERE ao.landing_page_snapshot_id = landing_page_snapshot.id
+              AND ao.ad_id IS NOT NULL
+          ) AS is_ad_destination
         FROM landing_page_snapshot
         WHERE artifact_key IS NOT NULL OR metadata_json IS NOT NULL
         ORDER BY captured_at DESC
