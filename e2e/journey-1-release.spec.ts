@@ -6,6 +6,7 @@ import {
   expectPhoneTouchTargets,
   expectPrimaryActionAboveFold,
   expectReducedMotionSafe,
+  expectSecHeadingsNonZeroWidth,
   expectStatusAnnouncement,
   expectVisibleKeyboardFocus,
 } from "./helpers/release-experience";
@@ -251,6 +252,11 @@ for (const viewport of viewports) {
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/website=fresh-empty\.example/);
     await expect(page.getByRole("heading", { name: "No verified ads found for fresh-empty.example" })).toBeVisible();
+    // Issue #1842: at tablet (768px) .f9-wk-sec-acts can overflow and collapse
+    // .f9-wk-sec-headings to width: 0, hiding this exact heading. Pin the
+    // layout invariant directly so a flex-basis/min-width regression cannot
+    // re-hide the title even if toBeVisible()'s internal check changes.
+    await expectSecHeadingsNonZeroWidth(page);
     // Issue 1569: a completed 0-row search (discoveryEmptyReason=no_results) is
     // not evidence the competitor is inactive. The sr-only status region now
     // carries the honest reason (NO_RESULTS_HONEST_COPY), in sync with the
