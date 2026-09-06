@@ -32,11 +32,15 @@ const BASE_IMPORTANCE_BY_EVENT: Record<WatchEventType, number> = {
   landing_page_offer_changed: 80,
   landing_page_cta_changed: 72,
   landing_page_form_changed: 70,
-  // Competitor-site page events cannot be produced until the crawler packet
-  // ships; zero keeps them inert for delivery until real semantics land.
-  website_page_added: 0,
-  website_page_removed: 0,
-  website_page_changed: 0,
+  // Competitor-site page events: the authoritative per-event importance is
+  // the change-analysis scorer's (website-change-analysis.server.ts, carried
+  // in metadata.score and mirrored onto importance_score at creation). These
+  // bases only seed generic rescoring paths; a removed tracked page is the
+  // loudest structural signal, a changed page clears the balanced instant
+  // threshold only when the scorer's material band agrees.
+  website_page_added: 80,
+  website_page_removed: 85,
+  website_page_changed: 75,
 };
 
 type ComparableProofFields = {
