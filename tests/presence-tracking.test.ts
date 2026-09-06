@@ -90,7 +90,9 @@ describe("presence access gates", () => {
     expect(gate.reasonCode).toBe("credentials_missing");
   });
 
-  it("keeps mock-only social connectors out of customer-facing polling", async () => {
+  it("opens the x customer poll path when rollout and creds are enabled", async () => {
+    // Phase 3 (issue 1378) opened the real customer poll path for x and reddit:
+    // with rollout enabled + credentials present, polling is now operational.
     const operational = await connectorOperationalForPolling(
       {
         ...baseEnv,
@@ -99,6 +101,21 @@ describe("presence access gates", () => {
         PRESENCE_X_MOCK: "1",
       },
       "x",
+      "competitor",
+    );
+    expect(operational).toBe(true);
+  });
+
+  it("keeps LinkedIn mock-only social connectors out of customer-facing polling", async () => {
+    const operational = await connectorOperationalForPolling(
+      {
+        ...baseEnv,
+        PRESENCE_LINKEDIN_ROLLOUT: "ga",
+        LINKEDIN_CLIENT_ID: "id",
+        LINKEDIN_CLIENT_SECRET: "secret",
+        PRESENCE_LINKEDIN_MOCK: "1",
+      },
+      "linkedin",
       "competitor",
     );
     expect(operational).toBe(false);
