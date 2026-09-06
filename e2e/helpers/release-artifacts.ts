@@ -101,9 +101,17 @@ export async function attachReleaseStateArtifacts({
       1000,
     );
   });
+  // Issue #1752: caret:"hide" makes Playwright set
+  // style="caret-color:transparent !important" on EVERY input, textarea and
+  // [contenteditable] element before the capture and restore it after. In the
+  // dev release server, hydration can still be in flight when this screenshot
+  // runs (module graph still loading), so React's hydration diff sees an
+  // extra style attribute the SSR/client props never had and the strict proof
+  // fails on browser_hydration_error:console. The evidence image does not
+  // need a hidden caret; "initial" leaves the DOM untouched.
   const screenshot = await page.screenshot({
     animations: "disabled",
-    caret: "hide",
+    caret: "initial",
     fullPage: false,
   });
   // Issue #1727: ariaSnapshotJSON() returns the same tree as ariaSnapshot()

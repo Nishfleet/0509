@@ -56,14 +56,25 @@ export default defineConfig({
   use: {
     actionTimeout: 10_000,
     navigationTimeout: 20_000,
+    // Issue #1752: config-level screenshot options cannot pass caret:"initial"
+    // (unsupported key), so a failure screenshot still uses caret:"hide" —
+    // that can only land on a test that already failed, never a green proof.
     screenshot: "only-on-failure",
-    // Playwright 1.63: ARIA + screen snapshots land in the trace alongside the
-    // DOM snapshot, so the trace viewer's Display Aria mode can show the action
-    // screenshot side-by-side with the aria tree. dom stays on (the default
-    // timeline preview); aria+screen are the new captures.
+    // Playwright 1.63: ARIA snapshots land in the trace alongside the DOM
+    // snapshot, so the trace viewer's Display Aria mode can show the aria
+    // tree per action. dom stays on (the default timeline preview).
+    // Issue #1752: screen snapshots stay OFF. The trace recorder's
+    // _captureScreenshot calls page.screenshot() with default options, and
+    // default caret:"hide" writes caret-color:transparent onto every
+    // input/textarea/[contenteditable] before the capture. When that lands
+    // while React hydration is still in flight (dev release server, module
+    // graph still loading), the hydration diff reports an extra style
+    // attribute and the strict release proof fails on
+    // browser_hydration_error:console. There is no way to pass caret:"initial"
+    // to the trace screenshot, so screen capture cannot run inside the proof.
     trace: {
       mode: "retain-on-failure",
-      snapshots: { dom: true, aria: true, screen: true },
+      snapshots: { dom: true, aria: true, screen: false },
     },
     video: "retain-on-failure",
   },

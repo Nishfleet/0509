@@ -685,6 +685,39 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(output).toContain("annotation:finalUrl");
   });
 
+  it("surfaces hydration error detail from the readiness manifest on predeploy failure", () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-readiness-diag-"));
+    roots.push(root);
+    const manifestPath = join(root, "manifest.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        status: "failed",
+        strictIssues: ["browser_hydration_error:console"],
+        entries: [
+          {
+            sourceFile: "journey-3-release.spec.ts",
+            hydrationErrors: [
+              {
+                source: "console",
+                message: "Hydration failed because the server rendered text did not match the client",
+                url: "/app/watchlists",
+                title: "Gate-B Journey 3: monitoring loop (mobile)",
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const lines: string[] = [];
+    printReleaseReadinessDiagnostics(manifestPath, (text: string) => { lines.push(text); return true; });
+    const output = lines.join("");
+    expect(output).toContain("browser_hydration_error:console");
+    expect(output).toContain("hydration error detail");
+    expect(output).toContain("/app/watchlists");
+    expect(output).toContain("journey-3-release.spec.ts");
+  });
+
   it("reports an unavailable readiness manifest without masking the original failure", () => {
     const lines: string[] = [];
     printReleaseReadinessDiagnostics(

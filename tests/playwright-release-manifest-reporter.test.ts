@@ -513,6 +513,60 @@ describe("Gate-B Playwright release manifest reporter", () => {
     rmSync(directory, { recursive: true, force: true });
   });
 
+  it("carries sanitized hydration error detail on the manifest entry", () => {
+    const directory = makeTestDirectory();
+    const outputPath = join(directory, "manifest.json");
+    const releaseAnnotations = [
+      ...annotations(),
+      { type: "reactHydrationError", description: "console" },
+      {
+        type: "reactHydrationErrorDetail",
+        description: JSON.stringify({
+          source: "console",
+          message: "Hydration failed because the server rendered text did not match the client",
+          url: "/app/watchlists?watchlist=e2e-1&token=bad",
+          title: "Gate-B Journey 3: monitoring loop (mobile)",
+        }),
+      },
+      { type: "reactHydrationErrorDetail", description: "{not json" },
+      {
+        type: "reactHydrationErrorDetail",
+        description: JSON.stringify({
+          source: "console",
+          message: "Hydration failed because secret=hunter2",
+          url: "/app",
+          title: "Gate-B Journey 3: monitoring loop (mobile)",
+        }),
+      },
+    ];
+    const test = fakeTest("browser-hydration-detail", releaseAnnotations);
+    const reporter = new GateBManifestReporter({
+      outputPath,
+      candidateFingerprint: fingerprint,
+      environment: "local",
+      runOrigin,
+      serverIdentity,
+      strict: true,
+    });
+    reporter.onBegin({}, suite([test]));
+    reporter.onTestEnd(test, result("passed", 0, annotations()));
+
+    expect(reporter.onEnd(fullResult("passed"))).toEqual({ status: "failed" });
+    const manifest = readManifest(outputPath);
+    expect(manifest.strictIssues).toContain("browser_hydration_error:console");
+    const [entry] = manifest.entries;
+    expect(entry.hydrationErrors).toEqual([
+      {
+        source: "console",
+        message: "Hydration failed because the server rendered text did not match the client",
+        url: null,
+        title: "Gate-B Journey 3: monitoring loop (mobile)",
+      },
+    ]);
+    expect(JSON.stringify(manifest)).not.toContain("hunter2");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
   it("ignores unrelated expected fixture stderr", () => {
     const directory = makeTestDirectory();
     const outputPath = join(directory, "manifest.json");

@@ -678,6 +678,15 @@ export function printReleaseReadinessDiagnostics(
     write(
       `launch:readiness:predeploy failed — manifest status=${status}; strictIssues=${JSON.stringify(strictIssues)}\n`,
     );
+    const hydrationDetails = [];
+    for (const entry of Array.isArray(manifest?.entries) ? manifest.entries : []) {
+      for (const detail of Array.isArray(entry?.hydrationErrors) ? entry.hydrationErrors : []) {
+        hydrationDetails.push({ sourceFile: entry?.sourceFile ?? null, ...detail });
+      }
+    }
+    if (hydrationDetails.length > 0) {
+      write(`hydration error detail: ${JSON.stringify(hydrationDetails)}\n`);
+    }
   } catch {
     write(`launch:readiness:predeploy failed — readiness manifest unavailable at ${manifestPath}\n`);
   }
