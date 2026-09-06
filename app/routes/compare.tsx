@@ -1,8 +1,9 @@
-import { Link } from "react-router";
+import { Link, useParams } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { isBuyerSurfaceLocaleId } from "~/lib/locale-markets";
 import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 
 const pageDescription =
@@ -32,14 +33,21 @@ const COMPARE_PAGES = [
   { slug: "adspyder", label: "Five to Nine vs AdSpyder", href: "/compare/adspyder" },
 ] as const;
 
-export default function CompareIndexRoute({
-  localePrefix,
-}: { localePrefix?: string } = {}) {
-  // Locale-prefixed compare hubs (issue #1563) pass their locale prefix so a
-  // non-EN visitor following the index stays in the locale (hrefs like
-  // `/de/compare/magicbrief` instead of `/compare/magicbrief`). EN `/compare`
-  // passes `undefined` and keeps the bare `/compare/*` children exactly as
-  // before.
+export default function CompareIndexRoute() {
+  // The locale prefix is read inside the component, never passed in as a
+  // prop: at build time `@react-router/dev` wraps every route module's
+  // default export in `withComponentProps`, which renders the component with
+  // only the route props (`params`, `loaderData`, `actionData`, `matches`)
+  // and silently discards any caller-supplied props (issue #1563). Resolving
+  // the matched `:locale` param here survives the wrapper — `/compare` has
+  // no `params.locale` and keeps bare EN `/compare/*` links, while
+  // `/de/compare` resolves `de` and prefixes every child href so a non-EN
+  // visitor stays in the locale (`/de/compare/magicbrief`, ...).
+  const params = useParams<{ locale?: string }>();
+  const localePrefix =
+    params.locale && isBuyerSurfaceLocaleId(params.locale)
+      ? `/${params.locale}`
+      : undefined;
   const hrefFor = (page: (typeof COMPARE_PAGES)[number]) =>
     localePrefix ? `${localePrefix}${page.href}` : page.href;
 
