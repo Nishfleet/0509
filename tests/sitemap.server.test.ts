@@ -21,6 +21,10 @@ import {
 } from "~/lib/seo";
 import routes from "~/routes";
 import {
+  snapshotRowHasCompleteProof,
+  TIMELINE_SNAPSHOT_LIMIT,
+} from "~/lib/offer-timeline.server";
+import {
   brandDomainFromSitemapCacheRow,
   brandPageEntryPriority,
   brandPageLookupCacheKeysForSitemap,
@@ -36,6 +40,7 @@ import {
   loadIndexableTimelineEntries,
   SITEMAP_BRAND_PATH_LIMIT,
   SITEMAP_TIMELINE_PATH_LIMIT,
+  SITEMAP_TIMELINE_READ_LIMIT,
   timelineDomainFromSnapshotRow,
   type SitemapCacheRow,
   type TimelineSitemapRow,
@@ -876,9 +881,12 @@ describe("indexableTimelineEntriesFromRows", () => {
   });
 
   it("dedupes across captures, keeping the newest capture date as lastmod", () => {
+    // The input is assumed to be ordered `captured_at ASC, id ASC` (matching
+    // loadOfferTimeline's SQL); "newest" within the loader's per-domain window
+    // is therefore the LAST row in the ASC-sorted set.
     const rows = [
-      snapshotRow({ captured_at: "2026-08-10T08:00:00.000Z" }),
       snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }),
+      snapshotRow({ captured_at: "2026-08-10T08:00:00.000Z" }),
     ];
 
     const entries = indexableTimelineEntriesFromRows(rows);
@@ -890,15 +898,161 @@ describe("indexableTimelineEntriesFromRows", () => {
   it("a domain whose NEWEST capture fails the proof gate still qualifies when an older capture is complete", () => {
     // The loader filters proof-less rows out of the ledger, so an empty proof
     // capture must not bump the domain off the list — the older complete
-    // capture still renders an indexable ledger.
+    // capture still renders an indexable ledger. Input is ASC (loader order);
+    // the newest capture (2026-08-20) appears LAST in the ASC input.
     const rows = [
-      snapshotRow({ captured_at: "2026-08-20T08:00:00.000Z", artifact_key: null }),
       snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }),
+      snapshotRow({ captured_at: "2026-08-20T08:00:00.000Z", artifact_key: null }),
     ];
 
     const entries = indexableTimelineEntriesFromRows(rows);
     expect(entries.map((e) => e.path)).toEqual(["/timeline/nykaa.com"]);
     expect(entries[0].lastmod).toBe("2026-08-01");
+  });
+
+  // Loader's per-domain window (issue #1928): the lister mirrors
+  // loadOfferTimeline's own `ORDER BY captured_at ASC, id ASC LIMIT
+  // TIMELINE_SNAPSHOT_LIMIT` window per domain — only the first 200 rows in
+  // the ASC input can ever back a /timeline/:domain render, so proof-less
+  // rows INSIDE that window rule the domain out of the sitemap (the route
+  // would render empty → 410). Rows past the window are unreachable on the
+  // route, so they cannot back a sitemap entry either.
+  it("excludes a domain whose only passing rows fall outside the loader's per-domain TIMELINE_SNAPSHOT_LIMIT window", () => {
+    const baseDayMs = Date.UTC(2026, 0, 1); // 2026-01-01T00:00:00.000Z
+    const dayAt = (dayIndex: number) =>
+      new Date(baseDayMs + dayIndex * DAY_MS).toISOString();
+    const backfillRow = (dayIndex: number): TimelineSitemapRow =>
+      snapshotRow({
+        id: `snap-slack-backfill-${dayIndex}`,
+        canonical_url: "https://slack.com/landing",
+        captured_at: dayAt(dayIndex),
+        artifact_key: null,
+        metadata_json: JSON.stringify({ backfill: true }),
+      });
+    const proofRow = (dayIndex: number): TimelineSitemapRow =>
+      snapshotRow({
+        id: `snap-slack-proof-${dayIndex}`,
+        canonical_url: "https://slack.com/landing",
+        captured_at: dayAt(dayIndex),
+      });
+
+    // Oldest TIMELINE_SNAPSHOT_LIMIT (200) daily captures are seeded backfill
+    // (issue #1284 — no proof artifacts); newest 50 daily captures carry full
+    // proof artifacts. Input is ASC, matching the loader's SQL window.
+    const rows: TimelineSitemapRow[] = [
+      ...Array.from({ length: TIMELINE_SNAPSHOT_LIMIT }, (_, index) =>
+        backfillRow(index),
+      ),
+      ...Array.from({ length: 50 }, (_, offset) =>
+        proofRow(TIMELINE_SNAPSHOT_LIMIT + offset),
+      ),
+    ];
+
+    // Sanity-check the test setup: the 50 newest rows DO pass the proof gate
+    // themselves, so the exclusion below is the loader window's doing — not
+    // the proof gate, not the rows' shape.
+    expect(rows.slice(-50).every((row) => snapshotRowHasCompleteProof(row))).toBe(true);
+
+    // The loader window is the first TIMELINE_SNAPSHOT_LIMIT rows in ASC
+    // order — that whole window is backfill, so the route would render an
+    // empty ledger (gone/noindex shell), and the sitemap must NOT list it
+    // even though the 50 newer rows pass.
+    const entries = indexableTimelineEntriesFromRows(rows);
+    expect(entries.map((e) => e.path)).not.toContain("/timeline/slack.com");
+  });
+
+  it("includes a domain whose loader window has at least one passing row (proof gate passes inside the per-domain window)", () => {
+    // Four proof-less rows scattered through ASC order with one passing row
+    // in the middle; 5 rows total — well under the loader's TIMELINE_SNAPSHOT_LIMIT
+    // window, so the whole bucket enters the window. The proof gate accepts
+    // the middle row, so /timeline/hubspot.com lists with lastmod = the
+    // passing row's date.
+    const passingCapturedAt = "2026-08-10T08:00:00.000Z";
+    const rows = [
+      snapshotRow({
+        id: "snap-hubspot-backfill-1",
+        canonical_url: "https://hubspot.com/landing",
+        captured_at: "2026-08-01T08:00:00.000Z",
+        artifact_key: null,
+        metadata_json: JSON.stringify({ backfill: true }),
+      }),
+      snapshotRow({
+        id: "snap-hubspot-backfill-2",
+        canonical_url: "https://hubspot.com/landing",
+        captured_at: "2026-08-05T08:00:00.000Z",
+        artifact_key: null,
+        metadata_json: JSON.stringify({ backfill: true }),
+      }),
+      // The single passing row — full proof artifacts.
+      snapshotRow({
+        id: "snap-hubspot-proof",
+        canonical_url: "https://hubspot.com/landing",
+        captured_at: passingCapturedAt,
+      }),
+      snapshotRow({
+        id: "snap-hubspot-backfill-3",
+        canonical_url: "https://hubspot.com/landing",
+        captured_at: "2026-08-15T08:00:00.000Z",
+        artifact_key: null,
+        metadata_json: JSON.stringify({ backfill: true }),
+      }),
+      snapshotRow({
+        id: "snap-hubspot-backfill-4",
+        canonical_url: "https://hubspot.com/landing",
+        captured_at: "2026-08-20T08:00:00.000Z",
+        artifact_key: null,
+        metadata_json: JSON.stringify({ backfill: true }),
+      }),
+    ];
+
+    const entries = indexableTimelineEntriesFromRows(rows);
+    expect(entries).toEqual([
+      {
+        path: "/timeline/hubspot.com",
+        lastmod: "2026-08-10",
+        changefreq: "weekly",
+        priority: "0.5",
+      },
+    ]);
+  });
+
+  // Issue #1729 gate coverage — the sitemap lister must mirror
+  // loadOfferTimeline's `!row.is_ad_destination` filter. An ad-destination
+  // row is a landing page correlated against `ad_observation` (the snapshot
+  // is reached through an ad wall — not the brand's own dated offer state),
+  // so it cannot back the public /timeline/:domain ledger. The loader
+  // excludes them; the sitemap must too, even when every row otherwise
+  // carries full proof artifacts.
+  it("excludes a domain whose ONLY passing rows are ad destinations (issue #1729 gate coverage)", () => {
+    const rows = [
+      snapshotRow({
+        id: "snap-adspyder-1",
+        canonical_url: "https://adspyder.io/landing",
+        captured_at: "2026-08-01T08:00:00.000Z",
+        is_ad_destination: 1,
+      }),
+      snapshotRow({
+        id: "snap-adspyder-2",
+        canonical_url: "https://adspyder.io/landing",
+        captured_at: "2026-08-10T08:00:00.000Z",
+        is_ad_destination: 1,
+      }),
+      snapshotRow({
+        id: "snap-adspyder-3",
+        canonical_url: "https://adspyder.io/landing",
+        captured_at: "2026-08-20T08:00:00.000Z",
+        is_ad_destination: 1,
+      }),
+    ];
+
+    // Sanity-check the test setup: every row carries full proof artifacts, so
+    // the proof gate alone would qualify the domain. The exclusion below is
+    // the ad-destination gate's doing — exactly the gap that existed before
+    // this issue (#1729) was first gated in the lister.
+    expect(rows.every((row) => snapshotRowHasCompleteProof(row))).toBe(true);
+
+    const entries = indexableTimelineEntriesFromRows(rows);
+    expect(entries).toEqual([]);
   });
 
   it("bounds the sitemap to SITEMAP_TIMELINE_PATH_LIMIT entries", () => {
@@ -1087,7 +1241,7 @@ describe("loadIndexableTimelineEntries (D1 read)", () => {
     expect(entries.map((e: { path: string }) => e.path)).toEqual(["/timeline/nykaa.com"]);
   });
 
-  it("reads a bounded snapshot subset ordered newest-first and maps to timeline entries", async () => {
+  it("reads a bounded snapshot subset ordered ASC and maps to timeline entries", async () => {
     queryAll.mockResolvedValue([snapshotRow()]);
 
     const entries = await runLoader({ DB: {} });
@@ -1095,9 +1249,12 @@ describe("loadIndexableTimelineEntries (D1 read)", () => {
     expect(queryAll).toHaveBeenCalledTimes(1);
     const [, sql, limit] = queryAll.mock.calls[0] as [unknown, string, number];
     expect(sql).toContain("FROM landing_page_snapshot");
-    expect(sql).toContain("ORDER BY captured_at DESC");
+    // Mirrors loadOfferTimeline's own ORDER BY ... ASC LIMIT window so the
+    // per-domain first-200 slice in indexableTimelineEntriesFromRows matches
+    // what the loader would render (issue #1928).
+    expect(sql).toContain("ORDER BY captured_at ASC, id ASC");
     expect(sql).toContain("LIMIT ?");
-    expect(limit).toBe(SITEMAP_TIMELINE_PATH_LIMIT);
+    expect(limit).toBe(SITEMAP_TIMELINE_READ_LIMIT);
     expect(entries.map((e: { path: string }) => e.path)).toEqual(["/timeline/nykaa.com"]);
     expect(entries[0].lastmod).toBe("2026-08-01");
   });
