@@ -1,5 +1,5 @@
 [Unit]
-Description=0509 proof screenshot-rate regression guard
+Description=0509 proof screenshot-rate regression guard (watcher + paid-tier cohorts)
 Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
 # Independent of any GitHub Actions runner: the guard must keep firing while
 # every runner is busy or offline, and its failure must reach journald + a

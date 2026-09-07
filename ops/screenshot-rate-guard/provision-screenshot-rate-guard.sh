@@ -6,9 +6,12 @@
 # four times without anyone noticing because there was no scheduled detector:
 # earlier fixes changed the capture path but nothing watched the number
 # (issue #1327). This installs a systemd timer (same rail as the 0509-liveness
-# probe) that runs the guard on a 6-hour cadence, queries production D1, fails
-# the unit when the real watcher screenshot rate drops below 80% on a 48h
-# window with a sufficient sample, and auto-files a GitHub issue.
+# probe) that runs the guard on a 6-hour cadence, queries production D1, and
+# auto-files a GitHub issue on a failed verdict. Two cohorts run every tick,
+# each on a rolling 48h window: the watcher cohort (all real watcher captures,
+# alert < 80%, issues #1327/#1747) and the paid-tier cohort (paid-plan watcher
+# captures, alert < 90%, issue #1876 acceptance 4). The unit fails when either
+# cohort's verdict fails with a sufficient sample.
 #
 # Run as root on the VPS:  sudo ops/screenshot-rate-guard/provision-screenshot-rate-guard.sh
 #
