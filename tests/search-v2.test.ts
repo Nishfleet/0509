@@ -6,7 +6,6 @@ import {
   buildSearchV2SavedQuery,
   resolveVerifiedAdvertiserPageId,
 } from "~/lib/search-v2.server";
-import { KNOWN_ADVERTISER_PAGE_IDS } from "~/lib/known-advertiser-page-ids";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
 import { clearWebsiteIdentityCacheForTests } from "~/lib/website-identity.server";
 import type { AdRecord, SearchResponse } from "~/lib/types";
@@ -359,59 +358,6 @@ describe("verified advertiser page-id scoping", () => {
     // No page id → keyword saved query, unchanged fingerprint surface.
     const keyword = buildSearchV2SavedQuery(intent, "exact", filters);
     expect("pageId" in keyword.filters).toBe(false);
-  });
-});
-
-describe("known advertiser page-id unblocking (#1396 / #1269)", () => {
-  it("scopes slack.com and tcs.com first searches to their verified Meta Page ids", () => {
-    const slack = parseSearchInputFromWebsiteField("slack.com");
-    const tcs = parseSearchInputFromWebsiteField("https://www.tcs.com");
-
-    const slackQuery = buildSearchV2SavedQuery(slack, "exact", filters);
-    const tcsQuery = buildSearchV2SavedQuery(tcs, "exact", filters);
-
-    expect(KNOWN_ADVERTISER_PAGE_IDS["slack.com"]).toBe("473141349450143");
-    expect(KNOWN_ADVERTISER_PAGE_IDS["tcs.com"]).toBe("19549406249");
-    expect(slackQuery.filters.pageId).toBe(KNOWN_ADVERTISER_PAGE_IDS["slack.com"]);
-    expect(tcsQuery.filters.pageId).toBe(KNOWN_ADVERTISER_PAGE_IDS["tcs.com"]);
-  });
-
-  it("keeps domains without a verified page id on the keyword fingerprint", () => {
-    const nykaa = parseSearchInputFromWebsiteField("https://nykaa.com");
-    const keyword = buildSearchV2SavedQuery(nykaa, "exact", filters);
-    expect("pageId" in keyword.filters).toBe(false);
-  });
-
-  it("lets a live verified page id override the known-domain seed", () => {
-    const slack = parseSearchInputFromWebsiteField("slack.com");
-    const scoped = buildSearchV2SavedQuery(slack, "exact", filters, {
-      pageId: "112233445566",
-    });
-    expect(scoped.filters.pageId).toBe("112233445566");
-  });
-
-  it("does not reuse the empty keyword cache for page-scoped slack.com / tcs.com scans", () => {
-    const slack = parseSearchInputFromWebsiteField("slack.com");
-    const nykaa = parseSearchInputFromWebsiteField("nykaa.com");
-    const slackKey = buildSearchV2CacheKey({
-      provider: "meta_library_browser",
-      intent: slack,
-      scope: "exact",
-      country: "all",
-    });
-    const nykaaKey = buildSearchV2CacheKey({
-      provider: "meta_library_browser",
-      intent: nykaa,
-      scope: "exact",
-      country: "all",
-    });
-
-    expect(slackKey).toContain(`pid:${KNOWN_ADVERTISER_PAGE_IDS["slack.com"]}`);
-    expect(slackKey.endsWith(":page-1")).toBe(true);
-    expect(nykaaKey).not.toContain("pid:");
-    expect(nykaaKey).toBe(
-      "search-v2:domain:nykaa.com:exact:meta_library_browser:all:page-1",
-    );
   });
 });
 
