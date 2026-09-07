@@ -1113,8 +1113,14 @@ describe("SITEMAP_PATHS", () => {
       expect(rootPaths, `${path} dropped from root sitemap`).toContain(path);
       const entry = ROOT_SITEMAP_STATIC_ENTRIES.find((e) => e.path === path);
       expect(entry, `${path} missing from static entries`).toBeTruthy();
-      expect(entry?.changefreq, `${path} missing changefreq`).toBeTruthy();
-      expect(entry?.priority, `${path} missing priority`).toBeTruthy();
+      // Exact tiers, not mere presence, so a future edit can't silently
+      // flatten the honest freshness/importance signal of a comparison page
+      // (matches the sibling /brands test's exact-value style).
+      expect(entry?.changefreq, `${path} wrong changefreq`).toBe("weekly");
+      // The /compare hub sits one tier above its children (0.8 vs 0.7).
+      expect(entry?.priority, `${path} wrong priority`).toBe(
+        path === "/compare" ? "0.8" : "0.7",
+      );
     }
 
     // The canonicalized losers never appear as distinct sitemap URLs.
