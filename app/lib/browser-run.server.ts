@@ -460,6 +460,17 @@ function isBrowserInternalUrl(value: string) {
   return /^(?:about|blob|data):/i.test(value);
 }
 
+function hostnameWithWwwApexPair(hostname: string): Set<string> {
+  const host = hostname.trim().toLowerCase().replace(/\.$/, "");
+  const pair = new Set<string>([host]);
+  if (host.startsWith("www.")) {
+    pair.add(host.slice(4));
+  } else {
+    pair.add(`www.${host}`);
+  }
+  return pair;
+}
+
 function isBrowserlessProofOriginAllowed(env: AppEnv, url: URL) {
   const configuredOrigins = String(env.BROWSERLESS_PROOF_ALLOWLIST_ORIGINS ?? "")
     .split(/[\s,]+/)
@@ -470,7 +481,32 @@ function isBrowserlessProofOriginAllowed(env: AppEnv, url: URL) {
       ? new Set(configuredOrigins)
       : DEFAULT_BROWSERLESS_PROOF_ALLOWED_ORIGINS;
 
-  return allowedOrigins.has(url.origin);
+  if (allowedOrigins.has(url.origin)) {
+    return true;
+  }
+
+  // www and apex are the same site for allowlist purposes. mamaearth.com
+  // 301s www → apex; an allowlist that only named www.mamaearth.com used to
+  // skip the Browserless fallback after that hop (issue #1919).
+  const urlHosts = hostnameWithWwwApexPair(url.hostname);
+  for (const origin of allowedOrigins) {
+    let allowed: URL;
+    try {
+      allowed = new URL(origin);
+    } catch {
+      continue;
+    }
+    if (allowed.protocol !== url.protocol) {
+      continue;
+    }
+    const allowedHosts = hostnameWithWwwApexPair(allowed.hostname);
+    for (const host of urlHosts) {
+      if (allowedHosts.has(host)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**

@@ -46,6 +46,7 @@ import {
   captureLandingPageSnapshot,
   type LandingPageCaptureFailureDetail,
 } from "~/lib/landing-pages.server";
+import { loadOfferTimeline } from "~/lib/offer-timeline.server";
 import type { LandingPageSnapshotData } from "~/lib/types";
 
 export type DemoBrandBackfillStatus =
@@ -94,10 +95,33 @@ export interface DemoBrandBackfillOptions {
       onFailure: (detail: LandingPageCaptureFailureDetail) => void;
     },
   ) => Promise<LandingPageSnapshotData | null>;
+  /**
+   * Proof-hole probe override for tests. Defaults to the public timeline
+   * loader (same gate as `/timeline/:domain`).
+   */
+  hasPublicProof?: (env: AppEnv, domain: string) => Promise<boolean>;
+  /**
+   * Subset of DEMO_BRAND_PAGE_DOMAINS to capture. The nightly rail omits
+   * this (all five). Catch-up passes only the brands that still 410 so
+   * a hole does not re-spend Browser Run minutes on brands that already
+   * have public proof.
+   */
+  domains?: readonly string[];
+}
+
+export interface DemoBrandProofHoleCatchUpResult {
+  skipped: boolean;
+  missingDomains: string[];
+  backfill: DemoBrandBackfillResult | null;
 }
 
 function demoBrandHomepage(domain: string): string {
   return `https://www.${domain}/`;
+}
+
+async function demoBrandHasPublicProof(env: AppEnv, domain: string): Promise<boolean> {
+  const timeline = await loadOfferTimeline(env, { domain, asOf: null });
+  return timeline.entries.length > 0;
 }
 
 /** `demo-<domain>-<YYYY-MM-DD>` — deterministic per (domain, UTC day). */
@@ -130,7 +154,8 @@ export async function runDemoBrandBackfill(
   }
 
   const results: DemoBrandBackfillDomainResult[] = [];
-  for (const domain of DEMO_BRAND_PAGE_DOMAINS) {
+  const domains = options.domains ?? DEMO_BRAND_PAGE_DOMAINS;
+  for (const domain of domains) {
     const rowId = demoBackfillRowId(domain, day);
     try {
       const existing = await queryOne<{ id: string }>(
@@ -252,6 +277,34 @@ export async function runDemoBrandBackfill(
       (r) => r.status === "capture_failed" || r.status === "error",
     ).length,
   };
+}
+
+/**
+ * Hourly proof-hole catch-up (issue #1919). The nightly 04:00 rail is the
+ * corpus-growth path; this function only fires a capture pass when at least
+ * one demo brand still has zero public-timeline entries (the 410 case).
+ * After every brand has a proof-bearing row, subsequent ticks are a cheap
+ * D1 read and do not spend Browser Run minutes.
+ */
+export async function runDemoBrandProofHoleCatchUp(
+  env: AppEnv,
+  options: DemoBrandBackfillOptions = {},
+): Promise<DemoBrandProofHoleCatchUpResult> {
+  const hasPublicProof = options.hasPublicProof ?? demoBrandHasPublicProof;
+  const missingDomains: string[] = [];
+  for (const domain of DEMO_BRAND_PAGE_DOMAINS) {
+    if (!(await hasPublicProof(env, domain))) {
+      missingDomains.push(domain);
+    }
+  }
+  if (missingDomains.length === 0) {
+    return { skipped: true, missingDomains: [], backfill: null };
+  }
+  const backfill = await runDemoBrandBackfill(env, {
+    ...options,
+    domains: missingDomains,
+  });
+  return { skipped: false, missingDomains, backfill };
 }
 
 /** Short human line used by the scheduled handler for its completion log. */

@@ -1038,6 +1038,62 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     expect(put).toHaveBeenCalledTimes(1);
   });
 
+	it("treats www and apex as the same Browserless allowlist origin (issue #1919)", async () => {
+	  const screenshotBytes = new Uint8Array([8, 5, 0, 9]);
+	  const put = vi.fn().mockResolvedValue(undefined);
+	  const fetch = mockFetchWithDns(
+	    vi.fn(async (input) => {
+	      if (!String(input).includes("browserless.io/stealth/bql")) {
+	        throw new Error("fetch failed");
+	      }
+
+	      return new Response(
+	        JSON.stringify({
+	          data: {
+	            html: {
+	              html: `
+	                <html>
+	                  <head>
+	                    <title>Mamaearth vitamin C</title>
+	                  </head>
+	                  <body>
+	                    <a href="/offer">Shop now</a>
+	                    <p>Up to 30% off this week on the vitamin C range with free shipping.</p>
+	                  </body>
+	                </html>
+	              `,
+	            },
+	            screenshot: {
+	              base64: btoa(String.fromCharCode(...screenshotBytes)),
+	            },
+	            documentRequests: [{ url: "https://mamaearth.com/" }],
+	            url: { url: "https://mamaearth.com/" },
+	          },
+	        }),
+	        {
+	          status: 200,
+	          headers: { "content-type": "application/json" },
+	        },
+	      );
+	    }) as never,
+	  );
+
+	  const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+
+	  await captureLandingPageSnapshot(
+	    {
+	      BROWSERLESS_TOKEN: "browserless-token",
+	      BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://www.mamaearth.com",
+	      LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
+	    },
+	    "https://mamaearth.com/",
+	  );
+
+	  expect(
+	    nonDnsFetchCalls(fetch).some(([input]) => String(input).includes("browserless.io/stealth/bql")),
+	  ).toBe(true);
+	});
+
 	it("does not send arbitrary proof URLs to Browserless without an allowlist", async () => {
 	  const fetch = mockFetchWithDns(
 	    vi.fn(async (input) => {
