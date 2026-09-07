@@ -100,6 +100,13 @@ export interface DemoBrandBackfillOptions {
    * loader (same gate as `/timeline/:domain`).
    */
   hasPublicProof?: (env: AppEnv, domain: string) => Promise<boolean>;
+  /**
+   * Subset of DEMO_BRAND_PAGE_DOMAINS to capture. The nightly rail omits
+   * this (all five). Catch-up passes only the brands that still 410 so
+   * a hole does not re-spend Browser Run minutes on brands that already
+   * have public proof.
+   */
+  domains?: readonly string[];
 }
 
 export interface DemoBrandProofHoleCatchUpResult {
@@ -147,7 +154,8 @@ export async function runDemoBrandBackfill(
   }
 
   const results: DemoBrandBackfillDomainResult[] = [];
-  for (const domain of DEMO_BRAND_PAGE_DOMAINS) {
+  const domains = options.domains ?? DEMO_BRAND_PAGE_DOMAINS;
+  for (const domain of domains) {
     const rowId = demoBackfillRowId(domain, day);
     try {
       const existing = await queryOne<{ id: string }>(
@@ -292,7 +300,10 @@ export async function runDemoBrandProofHoleCatchUp(
   if (missingDomains.length === 0) {
     return { skipped: true, missingDomains: [], backfill: null };
   }
-  const backfill = await runDemoBrandBackfill(env, options);
+  const backfill = await runDemoBrandBackfill(env, {
+    ...options,
+    domains: missingDomains,
+  });
   return { skipped: false, missingDomains, backfill };
 }
 

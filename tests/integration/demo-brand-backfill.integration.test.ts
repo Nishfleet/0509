@@ -245,7 +245,7 @@ describe("demo brand nightly backfill (issue #1449)", () => {
     expect(result.skipped).toBe(false);
     expect(result.missingDomains).toEqual(["nike.com"]);
     expect(result.backfill?.failedCount).toBe(0);
-    expect(captureCalls).toBeGreaterThan(0);
+    expect(captureCalls).toBe(1);
   });
 
   it("leaves every demo brand with at least one proof-bearing snapshot row (issue #1919)", async () => {
