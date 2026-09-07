@@ -81,6 +81,13 @@ export interface AppEnv {
    */
   FUNNEL_MEASUREMENT_ENABLED?: string;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
+  /**
+   * Explicit gate for the R2 -> D1 orphan reconciliation delete path. Absent or
+   * any value other than "1"/"true"/"yes"/"on" leaves the step in dry-run
+   * mode (counts only, no deletes). Set deliberately only after the dry-run
+   * has been exercised against production.
+   */
+  R2_ORPHAN_RECONCILE_ENABLED?: string;
   LAUNCH_CANARY_EMAIL?: string;
   ALLOW_PLATFORM_META_API_FALLBACK?: string;
   META_AD_LIBRARY_TOKEN?: string;
