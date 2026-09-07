@@ -104,10 +104,13 @@ import type { AdRecord } from "~/lib/types";
 /**
  * Hard bound on dynamic brand-page entries per sitemap render. Keeps the
  * D1 read, the payload parsing, and the sitemap itself bounded (Google's
- * limit is 50k URLs per sitemap — 500 fresh brand pages is a deliberate
- * crawl-budget ceiling for this acquisition channel).
+ * limit is 50k URLs per sitemap). Raised 500 → 5000 for the programmatic
+ * /ads/:domain scale-out (issue #966): the seed-list publisher (#1549) grows
+ * the fresh indexable set into the thousands, and 5000 stays a deliberate
+ * crawl-budget ceiling — one tenth of Google's cap, still one bounded D1
+ * read per render, and the sitemap response is cached for an hour.
  */
-export const SITEMAP_BRAND_PATH_LIMIT = 500;
+export const SITEMAP_BRAND_PATH_LIMIT = 5000;
 
 /**
  * Hard bound on dynamic /timeline/:domain entries per sitemap render, next
@@ -264,16 +267,58 @@ export function isIndexableBrandPageRow(row: SitemapCacheRow, now: Date): boolea
  * not-verified and does not single-handedly qualify a row — a false positive
  * would list a thin page that actually serves noindex.
  */
-export function brandPageRowHasVerifiedAds(row: SitemapCacheRow, domain: string): boolean {
+export function brandPageRowVerifiedAdCount(row: SitemapCacheRow, domain: string): number {
   const payload = parseSitemapCachePayload(row.payload_json);
   if (!payload) {
-    return false;
+    return 0;
   }
   const ads = nonDemoAdsFromPayload(payload);
-  const verifiedLinkedAds = ads.filter((ad) =>
-    adHasVerifiedDomainLink(ad as AdRecord, domain),
-  );
-  return verifiedLinkedAds.length > 0;
+  return ads.filter((ad) => adHasVerifiedDomainLink(ad as AdRecord, domain)).length;
+}
+
+export function brandPageRowHasVerifiedAds(row: SitemapCacheRow, domain: string): boolean {
+  return brandPageRowVerifiedAdCount(row, domain) > 0;
+}
+
+/**
+ * Priority bands for /ads/:domain sitemap entries (issue #966). A capture
+ * younger than this with strong evidence earns the top band; a capture this
+ * old (or older) is aging out of the 7-day indexability window and drops to
+ * the bottom band even with thin evidence.
+ */
+export const BRAND_PAGE_PRIORITY_FRESH_MS = 2 * 24 * 60 * 60 * 1000;
+export const BRAND_PAGE_PRIORITY_NEAR_EXPIRY_MS = 5 * 24 * 60 * 60 * 1000;
+/** Verified-linked ads a capture must carry to count as strong evidence. */
+export const BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS = 3;
+
+/**
+ * Honest crawl-importance hint per /ads/:domain entry, derived from the same
+ * two facts the indexability gates already read: capture freshness (age of
+ * `fetched_at`) and evidence count (verified-linked ads backing the page).
+ * - "0.7": fresh capture (≤ 2 days) with strong evidence (≥ 3 verified-linked
+ *   ads) — the pages most worth re-crawling first.
+ * - "0.5": capture nearing the 7-day noindex expiry (≥ 5 days), or an aging
+ *   capture (≥ 2 days) whose evidence is thin (≤ 1 verified-linked ad) —
+ *   low-signal pages about to fall out of the indexable set.
+ * - "0.6": everything else — the historical default band.
+ * Pure and exported so the bands are unit-testable without a database.
+ * Callers must pre-filter to ageMs >= 0 (indexableBrandPageEntriesFromRows
+ * does — isIndexableBrandPageRow rejects future-dated captures).
+ */
+export function brandPageEntryPriority(ageMs: number, verifiedAdCount: number): string {
+  if (
+    ageMs <= BRAND_PAGE_PRIORITY_FRESH_MS &&
+    verifiedAdCount >= BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS
+  ) {
+    return "0.7";
+  }
+  if (
+    ageMs >= BRAND_PAGE_PRIORITY_NEAR_EXPIRY_MS ||
+    (verifiedAdCount <= 1 && ageMs >= BRAND_PAGE_PRIORITY_FRESH_MS)
+  ) {
+    return "0.5";
+  }
+  return "0.6";
 }
 
 /**
@@ -314,8 +359,8 @@ export interface IndexableBrandPageRowOptions {
  * /ads/:domain sitemap entries that the brand page would both find and render
  * indexable. Each entry carries a `lastmod` derived from the cache row's
  * `fetched_at` (the honest freshness signal — when we last saw real ads for
- * this brand) plus `changefreq=weekly` and `priority=0.6` (brand pages are
- * secondary to the funnel but worth periodic re-crawl). Kept separate from
+ * this brand), `changefreq=weekly`, and a `priority` tiered by freshness and
+ * verified-evidence count via brandPageEntryPriority (issue #966). Kept separate from
  * the D1 read so the filtering rules are unit-testable without a database.
  */
 export function indexableBrandPageEntriesFromRows(
@@ -360,18 +405,21 @@ export function indexableBrandPageEntriesFromRows(
     // evidence — never list a wall with ZERO verified-linked ads (that page
     // self-noindexes). Mirrors the loader's
     // `verifiedLinkedAds.length === 0 → noindex` rule (issue #1442).
-    if (!brandPageRowHasVerifiedAds(row, domain)) {
+    const verifiedAdCount = brandPageRowVerifiedAdCount(row, domain);
+    if (verifiedAdCount === 0) {
       continue;
     }
     seen.add(domain);
     const fetchedDate = row.fetched_at.slice(0, 10);
     const payload = parseSitemapCachePayload(row.payload_json);
     const adCount = payload ? nonDemoAdsFromPayload(payload).length : 0;
+    // isIndexableBrandPageRow already proved fetched_at parses and age >= 0.
+    const ageMs = now.getTime() - Date.parse(row.fetched_at);
     entries.push({
       path: `/ads/${domain}`,
       lastmod: fetchedDate,
       changefreq: "weekly",
-      priority: "0.6",
+      priority: brandPageEntryPriority(ageMs, verifiedAdCount),
       adCount,
       fetchedAt: row.fetched_at,
     });
