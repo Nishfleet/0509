@@ -1,0 +1,122 @@
+name: Uptime health check
+
+on:
+  workflow_dispatch:
+  # No GitHub schedule: the 5-minute cron interval is the shortest Actions
+  # offers, but in practice this schedule fired about once an hour (median
+  # 63 minutes between runs over 300 observations, 2026-07-25..2026-08-11)
+  # and then queued behind CI on the three-runner FIFO, so it was never a
+  # real liveness detector. Production liveness detection now runs as the
+  # 0509-liveness systemd timer on the VPS (ops/liveness/, installed by
+  # ops/liveness/provision-production-liveness.sh) at a true five-minute
+  # cadence. This workflow remains available for on-demand probes.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime-health-check
+  cancel-in-progress: false
+
+jobs:
+  health:
+    # Monitoring is trusted operational work. Keep it off repository-level
+    # self-hosted runners because PR-controlled workflow YAML can retarget any
+    # runner registered directly to a user-owned repository.
+    runs-on: ubuntu-latest
+    # Two probe steps, each worst-case ~70s (3 curl attempts x 20s + delays).
+    timeout-minutes: 4
+    steps:
+      - name: Check production health endpoint
+        id: shallow
+        shell: bash
+        env:
+          HEALTH_URL: https://0509.io/api/health
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --show-error --silent --max-time 20 --retry 2 --retry-delay 5 "$HEALTH_URL")"
+          printf '%s\n' "$response"
+          HEALTH_RESPONSE="$response" python3 - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["HEALTH_RESPONSE"])
+          if payload.get("status") != "ok":
+              raise SystemExit(f"health status was {payload.get('status')!r}, expected 'ok'")
+          if payload.get("app") != "0509":
+              raise SystemExit(f"health app was {payload.get('app')!r}, expected '0509'")
+          identity = payload.get("releaseIdentity") or {}
+          worker_version = identity.get("workerVersionId")
+          if not isinstance(worker_version, str) or not worker_version or len(worker_version) > 128:
+              raise SystemExit("health worker version was missing or unsafe")
+          import re
+          if not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", worker_version):
+              raise SystemExit("health worker version contained unsafe characters")
+          if identity.get("searchRolloutMode") != "v2":
+              raise SystemExit("health search rollout mode was not v2")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"worker_version={worker_version}\n")
+          PY
+
+      - name: Persist exact Worker-version evidence
+        shell: bash
+        env:
+          WORKER_VERSION: ${{ steps.shallow.outputs.worker_version }}
+          RUN_ID: ${{ github.run_id }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          with open("uptime-worker-evidence.json", "w", encoding="utf-8") as evidence:
+              json.dump({
+                  "workerVersionId": os.environ["WORKER_VERSION"],
+                  "runId": int(os.environ["RUN_ID"]),
+                  "headSha": os.environ["HEAD_SHA"],
+              }, evidence, sort_keys=True, separators=(",", ":"))
+              evidence.write("\n")
+          PY
+
+      - name: Upload exact Worker-version evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: uptime-worker-${{ steps.shallow.outputs.worker_version }}
+          path: uptime-worker-evidence.json
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+
+      # The shallow check above deliberately never touches D1. The scheduled
+      # deep probe (D1 and scheduled-work) now runs as the 0509-liveness
+      # systemd timer on the VPS; this manual run keeps the same two probes
+      # available on demand.
+      - name: Check production deep health endpoint (D1 and scheduled work)
+        shell: bash
+        env:
+          DEEP_HEALTH_URL: https://0509.io/api/health/deep
+          EXPECTED_WORKER_VERSION: ${{ steps.shallow.outputs.worker_version }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --show-error --silent --max-time 20 --retry 2 --retry-delay 5 "$DEEP_HEALTH_URL")"
+          printf '%s\n' "$response"
+          DEEP_HEALTH_RESPONSE="$response" python3 - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["DEEP_HEALTH_RESPONSE"])
+          if payload.get("status") != "ok":
+              raise SystemExit(f"deep health status was {payload.get('status')!r}, expected 'ok'")
+          checks = payload.get("checks") or {}
+          if checks.get("d1") != "ok":
+              raise SystemExit(f"deep health d1 check was {checks.get('d1')!r}, expected 'ok'")
+          if checks.get("scheduledWork") != "ok":
+              raise SystemExit(
+                  f"deep health scheduled-work check was {checks.get('scheduledWork')!r}, expected 'ok'"
+              )
+          identity = payload.get("releaseIdentity") or {}
+          if identity.get("workerVersionId") != os.environ["EXPECTED_WORKER_VERSION"]:
+              raise SystemExit("deep health worker version did not match shallow health")
+          if identity.get("searchRolloutMode") != "v2":
+              raise SystemExit("deep health search rollout mode was not v2")
+          PY

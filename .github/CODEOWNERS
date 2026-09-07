@@ -1,0 +1,79 @@
+# Gate-owned paths — Nishfleet/0509
+#
+# Everything listed here is machinery that DECIDES whether other changes may
+# land: the workflows that produce the required status contexts, the decision
+# scripts those workflows run, the scanner ignore files, and the design-system
+# ratchet with its ceilings. A pull request that edits one of these is not
+# shipping a feature; it is changing the rules the fleet is judged by, and that
+# is Nish's call.
+#
+# READ THIS BEFORE TRUSTING THE FILE
+# ----------------------------------
+# On GitHub, CODEOWNERS by itself blocks NOTHING. It only auto-requests review.
+# The blocking behaviour comes from branch protection's
+# `require_code_owner_reviews`, and that setting is deliberately NOT enabled on
+# `main` for a reason that is structural rather than a matter of taste:
+#
+#   Nishfleet/0509 has exactly ONE collaborator. `gh api orgs/Nishfleet` reports
+#   `filled_seats: 1`, and every pull request in the recent history is authored
+#   AND merged by nish3451, because the fleet's workers hold that identity's
+#   token. GitHub forbids approving your own pull request. Turning on
+#   `require_code_owner_reviews` with @nish3451 as the owner would therefore not
+#   gate gate-path PRs — it would make them permanently unmergeable, including
+#   the ones Nish writes himself. That is not a stricter gate, it is a deadlock,
+#   and the predictable response to a deadlock is an `--admin` bypass, which
+#   destroys the audit trail the gate exists to create. (Same finding, same
+#   remedy as the sole-admin attestation path in
+#   .github/workflows/required-verifier-integrity.yml, Nish, 2026-08-20.)
+#
+# What actually enforces these paths today, mechanically, regardless of who is
+# pressing the button:
+#
+#   * `enforce_admins: true` on `main` — required checks bind admins too, so
+#     `gh pr merge --admin` can no longer skip a red check.
+#   * `required-verifier-integrity` — a required context that fails any PR
+#     touching the listed verifier definitions without an independent admin
+#     approval or a current sole-admin attestation.
+#   * `gate-integrity` — a required context that fails any PR which deletes or
+#     skips tests, raises a design-ratchet ceiling, widens a scanner ignore
+#     file, softens a CI step, or edits any path in this file, unless it carries
+#     the matching justification.
+#
+# So this file is the DOCUMENTED OWNERSHIP MAP and the source of the gate-path
+# list; the two required checks are the teeth. Turn on
+# `require_code_owner_reviews` the moment a second admin exists on this
+# repository — at that point it becomes the best control of the three, and the
+# attestation paths should be retired in the same change.
+
+# Everything, by default, so a new gate file is never accidentally unowned.
+*                                       @nish3451
+
+# CI definitions: the workflows that produce every required status context.
+/.github/workflows/                     @nish3451
+/.github/CODEOWNERS                     @nish3451
+
+# The gates' own decision logic and its deterministic fixture regressions.
+/.github/scripts/                       @nish3451
+
+# Scanner configuration. Widening an ignore file is the quietest way to land a
+# finding the gate was built to catch.
+/.gitleaksignore                        @nish3451
+/.gitleaks.toml                         @nish3451
+/.semgrepignore                         @nish3451
+/.semgrep.yml                           @nish3451
+/.semgrep.yaml                          @nish3451
+
+# The design-system ratchet: the script that counts retired markers and the
+# frozen ceilings it counts against. Raising a ceiling is invisible to the
+# ratchet's own test, which reads whatever number the same PR just wrote.
+/scripts/design-system-ratchet.mjs      @nish3451
+/docs/design-system-ratchet.json        @nish3451
+
+# CI runner and release-verification scripts invoked by the required contexts.
+/scripts/ci-vitest-run.sh               @nish3451
+/scripts/ci-verify-production-candidate.sh  @nish3451
+/scripts/ci-verify-provider-main-cas.sh @nish3451
+
+# The production deploy-authorization chain.
+/.github/workflows/deploy-production.yml      @nish3451
+/.github/workflows/finalize-production-soak.yml @nish3451
