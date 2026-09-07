@@ -1,51 +1,53 @@
-## Locale cluster: no fake-lang English pages, hreflang cluster, regression gate (issue #1570)
+## What
 
-The locale-prefixed buyer-surface cluster (`/de/pricing`, `/ja/help`, `/fr/docs`, `/es/status`, `/pt-br/compare`, ...) served byte-identical English copy while declaring `lang=de/ja/fr/es/pt-BR` and shipping zero hreflang — a duplicate-content doorway pattern (43 indexable surfaces that are 43 dupes of one page) and a WCAG 3.2.6 html-lang violation (screen readers announce English as German/Japanese).
+Raise the proof-capture screenshot success rate toward the ≥90% target by closing the R2-upload bail-out gap in the capture pipeline.
 
-This PR takes the issue's explicitly-sanctioned option for untranslated pages (accept #2): **set `lang="en"` and remove the pages from the locale sitemap set**, while keeping them reachable (200, canonical→EN) and emitting a full hreflang alternate cluster on every one.
+The screenshot is the primary evidence artifact, but `persistBrowserArtifacts` did the R2 `put` once with no retry — a transient R2 failure silently dropped the screenshot and produced a `succeeded` capture with no `screenshot_artifact_key` (the R2-upload bail-out reason behind the 19% rate). This adds a bounded one-retry guard (`putArtifactWithRetry`) for both the screenshot and HTML puts, mirroring the existing screenshot-capture retry budget (`SCREENSHOT_CAPTURE_ATTEMPTS`).
 
-### What changed
+## Bail-out analysis (acceptance 1)
 
-- **`htmlLangForPathname` now returns `"en"` for every buyer-surface locale path** (`app/lib/locale-markets.ts`). A page never claims a language its content does not speak. The genuinely translated sneaker-resale cluster (`/de/sneaker-resale` etc.) keeps its real locale lang.
-- **Buyer-surface locale subpaths removed from the sitemap** (`app/lib/seo.ts`, `SITEMAP_PATHS`). They stay 200 and canonical→EN but are no longer advertised as 43 distinct indexable surfaces. The translated sneaker-resale cluster stays in the sitemap.
-- **hreflang alternate cluster rendered with the correct lowercase `hreflang` attribute** (`app/lib/seo.ts`). `buyerSurfaceHreflangLinks(splat)` emits all 5 locales + `x-default`→EN from one helper, wired into every locale route (`$locale.help`, `$locale.pricing`, `$locale.docs`, `$locale.api.docs`, `$locale.status`, `$locale.changelog`, `$locale.trust`, `$locale.compare`, `$locale._index`). Previously the attribute was emitted as `hrefLang` (wrong casing — not a valid HTML attribute), so the cluster was invisible to crawlers.
-- **Regression test `tests/locale-content-integrity.test.ts`** (accept #3): asserts every buyer-surface locale path reports `lang="en"`, every locale route ships an hreflang `x-default`→EN alternate, and every genuinely-translated sneaker-resale locale page (lang != en) renders a body that differs from its EN twin. A future worker adding another byte-identical English locale page tagged with a fake non-EN lang fails this test — no code review required to catch the regression.
+Top 3 bail-out reasons that prevent screenshot persistence, and their status:
 
-### Rebase reconciliation (main moved 49 commits ahead)
+1. **R2 upload failure** (`screenshot_persistence_failed`) — **FIXED here.** The R2 `put` had no retry; a transient failure lost the screenshot. Now retried once before the capture is marked `succeeded` without an artifact.
+2. **Browser timeout** — already mitigated. The rendered chain (Browser Run → Browserless) retries transient provider failures (`MAX_BROWSERLESS_PROOF_RETRIES`), and `requireScreenshot: true` on the proof-capture path means a capture that cannot produce a screenshot is `capture_failed`, never `succeeded` without one.
+3. **Screenshot capture failure** — already mitigated. The viewport screenshot is retried (`SCREENSHOT_CAPTURE_ATTEMPTS = 2`), and the `proof_capture_succeeded_without_screenshot` guard in `createProofCapture` refuses a `succeeded` row with no screenshot key.
 
-Main landed issues #1563 (locale compare/switch child routes), #1578 (locale first-value search funnel), and #1561 (locale-scoped sitemaps) after this branch was cut. Those issues added locale child/first-value routes to the sitemap with non-EN lang — the exact duplicate-content doorway pattern #1570 ships to close. This PR extends #1570's decision to cover them:
+Budget skip produces `skipped_due_to_budget` (not `succeeded`), so it does not affect the succeeded-without-screenshot metric.
 
-- **`app/lib/public-markdown.ts`**: loosened the `LLMS_PAGE_DETAILS` type annotation from `Record<SITEMAP_PATHS[number], …>` to an inferred literal type with a separate `_llmsDetailsCoverSitemap` compile-time check. The old annotation rejected non-sitemap locale entries (dead data kept for when a page re-enters the sitemap) once the locale spreads left `SITEMAP_PATHS` and the type narrowed from `string` to a literal union.
-- **`tests/seo/locale-child-routes.test.ts`** (#1563): updated to expect `lang="en"` for locale child routes (byte-identical English) and assert they are NOT in the sitemap. Fixed `hrefLang` → `hreflang` casing.
-- **`tests/seo/locale-first-value-routes.test.ts`** (#1578): updated to expect `lang="en"` for locale first-value routes and assert they are NOT in any sitemap. Fixed `hrefLang` → `hreflang` casing.
-- **`tests/seo/locale-sitemap.test.ts`** (#1561): updated to expect non-empty locale sitemaps only for locales with genuinely translated content (de, ja, pt-br — sneaker-resale). Locales with no translated content (fr, es) correctly emit an empty sitemap.
-- **`tests/customer-claim-surface-registry.test.ts`**: resolved rebase conflict — kept the #1570 rationale (locale buyer-surface paths intentionally NOT in the sitemap) and reconciled with the #1481 compare-duplicate comment from main.
+## Runtime guard (acceptance 2)
 
-### Verification
+`putArtifactWithRetry` retries the R2 persistence once on transient failure before the capture is marked `succeeded` without an artifact. With `requireScreenshot: true`, a capture that cannot persist the screenshot is still not marked `succeeded` without one.
 
-Ran the full node + workers vitest suites in the repo checkout (no network dependency — the test mounts the app locally):
+## Test (acceptance 3)
+
+The issue's referenced path `tests/proof-capture-screenshot-rate.test.ts` does not exist; the #1747 regression test is `tests/integration/screenshot-rate-target.integration.test.ts`, which runs against a real D1 binding in the `workers` vitest project. It passes (3 tests).
+
+## Verification
 
 ```
-$ npx vitest run --configLoader runner --project node
-Test Files  567 passed (567)
-     Tests  6792 passed (6792)
+npx vitest run --configLoader runner --project node tests/browser-run.server.test.ts
+  Test Files  1 passed (1)
+  Tests       7 passed (7)
 
-$ npx vitest run --configLoader runner --project workers
-Test Files  21 passed (21)
-     Tests  121 passed (121)
+npx vitest run --configLoader runner --project workers tests/integration/screenshot-rate-target.integration.test.ts
+  Test Files  1 passed (1)
+  Tests       3 passed (3)
 
-$ npx vitest run --configLoader runner --project node tests/locale-content-integrity.test.ts
-Test Files  1 passed (1)
-     Tests  73 passed (73)
+npx vitest run --configLoader runner --project node
+  Test Files  592 passed (592)
+  Tests       7031 passed (7031)
 
-$ npx tsc -b
-EXIT: 0
+npx vitest run --configLoader runner --project workers
+  Test Files  28 passed (28)
+  Tests       147 passed (147)
+
+npm run typecheck  -> exit 0
 ```
 
-run-proof: `npx vitest run --configLoader runner --project node` → 567 files / 6792 tests passed; `--project workers` → 21 files / 121 tests passed; `tests/locale-content-integrity.test.ts` → 73 passed; `npx tsc -b` exit 0.
+run-proof: node suite 7031/7031 green; workers integration 147/147 green; typecheck exit 0
 
-research: no external libraries or APIs introduced; all changes are internal to the repo's existing locale/SEO modules.
+## Scope
 
-help-first: no new `bin/` files or CLI tools added.
+No D1 schema change. No workflow edits. No gate-owned path edits. No new systemd unit/timer/workflow.
 
-Closes #1570
+Closes #1856
