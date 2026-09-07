@@ -2,9 +2,10 @@
 
 Cloudflare enforces D1 free-tier daily limits on this account: **5,000,000 rows
 read** and **100,000 rows written** per day (enforcement began 2026-09-01;
-0509 runs on Workers Free — see `wrangler.jsonc`, no `usage_model: "paid"`).
-When a daily limit is crossed, Cloudflare emails the account owner and D1
-starts returning errors until the UTC day rolls over.
+0509's `wrangler.jsonc` carries no `usage_model: "paid"`, so the D1 free-tier
+caps are the operative constraint). When a daily limit is crossed, Cloudflare
+emails the account owner and D1 starts returning errors until the UTC day
+rolls over.
 
 ## Trip-wires that fire before the email
 

@@ -158,11 +158,28 @@ describe("ci-d1-budget-check", () => {
       join(root, "scripts", "d1-budget-queries.json"),
       JSON.stringify({ queries: [{ name: "huge", sql: "SELECT id FROM big", callsPerDay: 2 }] }),
     );
-    writeFileSync(join(root, "scripts", "probe-canary.mjs"), "// d1-budget: reads=1 writes=0\n");
+    writeFileSync(join(root, "scripts", "probe-canary.mjs"), "// d1-budget: reads=1 writes=0 runs_per_day=1\n");
 
     const result = runBudgetCheck(root);
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toMatch(/exceeds .* trip threshold/);
+  });
+
+  it("multiplies an inner-loop SEARCH by the outer SCAN rows", () => {
+    const db = scratchDb();
+    // orders SCAN (1,000) then a per-row point lookup into customers: the
+    // inner SEARCH runs once per outer row, so reads = 1000 + 1000 x 1.
+    const result = estimateQueryRows(
+      db,
+      {
+        name: "inner",
+        sql: "SELECT o.id FROM orders o JOIN customers c ON c.id = o.customer_id",
+        callsPerDay: 1,
+        rowsPerIndexedSearch: 10,
+      },
+      estimates(),
+    );
+    expect(result.readsPerCall).toBe(2_000);
   });
 
   it("passes on the real repo config with every canary declaring", () => {
