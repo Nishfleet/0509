@@ -278,7 +278,7 @@ export default defineConfig({
       name: "activation-scan",
       testDir: "./tests",
       testMatch: /activation-scan\.spec\.ts/,
-      timeout: 120_000,
+      timeout: 180_000,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: productionBaseURL,

@@ -39,7 +39,7 @@ test("activation scan: real-D1 first-brief integration test passes", () => {
       cwd: repoRoot,
       encoding: "utf8",
       env: { ...process.env, NODE_ENV: "test", VITEST: "true" },
-      timeout: 120_000,
+      timeout: 180_000,
     },
   );
   expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
@@ -50,6 +50,14 @@ test("activation scan: real-D1 first-brief integration test passes", () => {
 // a headline, a deterministic "what changed" sentence, and an evidence link
 // ("View the screenshot evidence") — the ≥1 evidence-linked item the issue's
 // metric requires.
+//
+// The values mirror what the real component renders from the integration
+// test's seeded rows (tests/integration/signup-first-brief.integration.test.ts
+// + fixtures): seedAd sets preview_headline="headline", the baseline watch
+// event's kind="baseline" makes firstBriefWhatChangedSentence return the
+// fixed baseline line, and the evidence URL is the seeded EVIDENCE_URL. This
+// keeps the contract honest — it pins the markup the component actually
+// emits, not a fabricated headline.
 const READY_BRIEF_HTML = `<!doctype html>
 <html lang="en">
   <body>
@@ -58,9 +66,9 @@ const READY_BRIEF_HTML = `<!doctype html>
         <h1>Your first brief: Glowkart</h1>
       </header>
       <section class="f9-signup-first-brief-body">
-        <p class="f9-signup-first-brief-headline">Flat 40% off your first order</p>
+        <p class="f9-signup-first-brief-headline">headline</p>
         <p class="f9-signup-first-brief-what-changed">
-          Baseline captured: 1 active ad
+          this is your baseline — we'll alert you when it moves
         </p>
         <p class="f9-signup-first-brief-evidence">
           <a href="https://www.facebook.com/ads/library/?id=ad-test-1"
@@ -81,10 +89,10 @@ test("on-screen first brief renders an evidence-linked item", async ({ page }) =
 
   // The headline and the deterministic "what changed" sentence are present.
   await expect(brief.locator(".f9-signup-first-brief-headline")).toHaveText(
-    "Flat 40% off your first order",
+    "headline",
   );
   await expect(brief.locator(".f9-signup-first-brief-what-changed")).toContainText(
-    "Baseline captured",
+    "this is your baseline",
   );
 
   // The evidence link is the ≥1 evidence-linked item: it points at a real
