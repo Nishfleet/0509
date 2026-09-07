@@ -167,4 +167,72 @@ describe("captureBrowserRunSnapshot decode wiring", () => {
       expect.stringMatching(/\.jpeg$/u),
     );
   });
+
+  it("retries a transient R2 put failure once and keeps the screenshot artifact", async () => {
+    const page = createPage(
+      `<html><head><title>Readable render</title></head><body><main>rendered offer body copy with enough text to count as meaningful body content for the landing page signal extractor gate</main></body></html>`,
+      "https://example.com/offer",
+    );
+    // The first R2 put fails transiently; the retry succeeds. The screenshot
+    // must still be persisted (issue #1856: a transient R2 failure must not
+    // silently drop the primary evidence artifact).
+    const put = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("transient r2 failure"))
+      .mockResolvedValueOnce(undefined);
+    const browser = {
+      close: vi.fn().mockResolvedValue(undefined),
+      newPage: vi.fn().mockResolvedValue(page),
+    };
+    const launch = vi.fn().mockResolvedValue(browser);
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: { launch } }));
+
+    const { captureBrowserRunSnapshot } = await import("~/lib/browser-run.server");
+    const snapshot = await captureBrowserRunSnapshot(
+      {
+        BROWSER: {} as never,
+        LANDING_PAGE_ARTIFACTS: { put } as never,
+      } as never,
+      "https://example.com/offer",
+      { requireScreenshot: true },
+    );
+
+    expect(snapshot).not.toBeNull();
+    expect(snapshot?.metadata?.screenshotArtifactKey).toEqual(
+      expect.stringMatching(/\.jpeg$/u),
+    );
+    // The screenshot put was retried once (2 attempts) plus the HTML put (1):
+    // 3 total. Without the retry it would be 2 (1 screenshot + 1 HTML).
+    expect(put).toHaveBeenCalledTimes(3);
+  });
+
+  it("fails the capture when the R2 put fails on both attempts and requireScreenshot is true", async () => {
+    const page = createPage(
+      `<html><head><title>Readable render</title></head><body><main>rendered offer body copy with enough text to count as meaningful body content for the landing page signal extractor gate</main></body></html>`,
+      "https://example.com/offer",
+    );
+    const put = vi.fn().mockRejectedValue(new Error("r2 unavailable"));
+    const browser = {
+      close: vi.fn().mockResolvedValue(undefined),
+      newPage: vi.fn().mockResolvedValue(page),
+    };
+    const launch = vi.fn().mockResolvedValue(browser);
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: { launch } }));
+
+    const { captureBrowserRunSnapshot } = await import("~/lib/browser-run.server");
+    const snapshot = await captureBrowserRunSnapshot(
+      {
+        BROWSER: {} as never,
+        LANDING_PAGE_ARTIFACTS: { put } as never,
+      } as never,
+      "https://example.com/offer",
+      { requireScreenshot: true },
+    );
+
+    // With requireScreenshot, a capture that cannot persist the screenshot is
+    // not considered successful — it must not be marked `succeeded` without an
+    // artifact.
+    expect(snapshot).toBeNull();
+    expect(put).toHaveBeenCalledTimes(2);
+  });
 });

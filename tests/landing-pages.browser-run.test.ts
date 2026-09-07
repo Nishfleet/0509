@@ -751,9 +751,13 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
 
   it("keeps readable rendered evidence when HTML persistence fails", async () => {
     const screenshotBytes = new Uint8Array([8, 5, 0, 9]);
+    // Screenshot put succeeds; the HTML put fails on BOTH attempts (the
+    // persistence retry runs once, issue #1856), so the HTML artifact is
+    // honestly absent while the screenshot is kept.
     const put = vi.fn()
       .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error("screenshot put failed"));
+      .mockRejectedValueOnce(new Error("html put failed"))
+      .mockRejectedValueOnce(new Error("html put failed"));
     const del = vi.fn().mockResolvedValue(undefined);
     mockFetchWithDns(
       vi.fn(async (input) => {
@@ -790,10 +794,11 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         captureWarningCodes: ["html_persistence_failed"],
       },
     });
-    expect(put).toHaveBeenCalledTimes(2);
+    expect(put).toHaveBeenCalledTimes(3);
     const screenshotKey = String(put.mock.calls[0]?.[0]);
     expect(screenshotKey).toMatch(/\.jpeg$/u);
     expect(String(put.mock.calls[1]?.[0])).toMatch(/\.html$/u);
+    expect(String(put.mock.calls[2]?.[0])).toMatch(/\.html$/u);
     expect(del).not.toHaveBeenCalled();
   });
 
