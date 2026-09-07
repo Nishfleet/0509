@@ -63,11 +63,10 @@
  * Timeline) from `landing_page_snapshot` rows, with its own rules below
  * (SITEMAP_TIMELINE_PATH_LIMIT and indexableTimelineEntriesFromRows):
  *
- *   9. A domain qualifies only when /timeline/:domain WOULD RENDER the
- *      indexable ledger state — at least one stored snapshot that survives
- *      the loader's proof gate (both screenshot and page-text artifacts,
- *      issue #1284). A domain whose rows all fail the gate renders empty
- *      (gone/noindex), so it stays out.
+ *   9. A domain qualifies only when at least one of its first
+ *      TIMELINE_SNAPSHOT_LIMIT rows (ordered `captured_at ASC, id ASC`, the
+ *      loader's own window) survives the proof gate AND is not an
+ *      ad-destination.
  *   10. Domain recovery is lossless-only: the registrable domain of a row's
  *      canonical_url hostname, gated by the same normalizeBrandPageDomain the
  *      route applies to its :domain param — a domain the route would 404 on
@@ -79,9 +78,20 @@
  *      entries — the timeline route never reads that env, so its pages stay
  *      indexable under the brake; mirroring the loader means timeline locs
  *      stay live (the brand /ads/* entries below are the ones it kills).
- *   13. Same zero-cost rule: one bounded D1 read at sitemap-render time.
- *      Missing landing_page_snapshot table on a fresh D1 degrades to the
- *      static sitemap, never a 500.
+ *   13. Same zero-cost rule: one bounded D1 read at sitemap-render time, now
+ *      capped at SITEMAP_TIMELINE_READ_LIMIT = SITEMAP_TIMELINE_PATH_LIMIT *
+ *      TIMELINE_SNAPSHOT_LIMIT rows (issue #1928 — widened from a global
+ *      newest-500 to a per-domain ASC first-200 window so the lister mirrors
+ *      loadOfferTimeline's own per-domain LIMIT). The read is still bounded
+ *      (D1's default 100k row-read limit; the read sits at that boundary by
+ *      design), and the per-domain grouping collapses the result to
+ *      SITEMAP_TIMELINE_PATH_LIMIT distinct domains. Missing
+ *      landing_page_snapshot table on a fresh D1 degrades to the static
+ *      sitemap, never a 500.
+ *   14. Per-domain qualification reuses the existing proof + ad-destination
+ *      gates; the only added work is per-domain grouping and a per-domain
+ *      first-200 window selection before the gates run. TIMELINE_SNAPSHOT_LIMIT
+ *      itself is unchanged in the loader.
  */
 
 import {
@@ -94,7 +104,11 @@ import {
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import { queryAll } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
-import { snapshotRowHasCompleteProof, type LandingPageSnapshotRow } from "~/lib/offer-timeline.server";
+import {
+  snapshotRowHasCompleteProof,
+  TIMELINE_SNAPSHOT_LIMIT,
+  type LandingPageSnapshotRow,
+} from "~/lib/offer-timeline.server";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
 import { renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
@@ -118,6 +132,13 @@ export const SITEMAP_BRAND_PATH_LIMIT = 5000;
  * sitemap bounded (500 timelines is the same crawl-budget ceiling).
  */
 export const SITEMAP_TIMELINE_PATH_LIMIT = 500;
+
+// Sitemap read cost: up to N rows per render (issue #1928 — widened from a
+// global newest-500 to a per-domain ASC first-200 window so the lister mirrors
+// loadOfferTimeline's own per-domain LIMIT; see rules 9–14 of the module
+// docblock + `loadIndexableTimelineEntries`).
+export const SITEMAP_TIMELINE_READ_LIMIT =
+  SITEMAP_TIMELINE_PATH_LIMIT * TIMELINE_SNAPSHOT_LIMIT;
 
 /**
  * Country scopes the brand-page loader probes for EVERY visitor regardless of
@@ -597,53 +618,101 @@ export function timelineDomainFromSnapshotRow(row: TimelineSitemapRow): string |
 }
 
 /**
- * Pure core: reduce snapshot rows (ordered newest-first) to deduped, bounded
- * /timeline/:domain sitemap entries that the timeline route would render
- * indexable. A domain qualifies only when `loadOfferTimeline` would return at
- * least one ledger entry for it (entries.length > 0 is the loader's own
- * noindex predicate): at least one row whose canonical_url maps to the domain
- * AND survives the proof gate (screenshot + page-text artifacts stored, issue
- * #1284). No freshness window — unlike brand pages, the timeline ledger
- * renders indexable regardless of capture age. Each entry carries a `lastmod`
- * from the newest capture date for that domain plus changefreq=weekly and
- * priority=0.5 (timelines sit one level below the /ads/:domain brand page in
- * the funnel: 0.6 > 0.5 > the 0.3–0.4 boilerplate band). Kept separate from
- * the D1 read so the filtering rules are unit-testable without a database.
+ * Pure core: reduce snapshot rows to deduped, bounded /timeline/:domain
+ * sitemap entries that the timeline route would render indexable. Mirrors
+ * `loadOfferTimeline`'s own noindex predicate (entries.length > 0 — the
+ * loader's 410-on-empty rule). The input is assumed to be ordered
+ * `captured_at ASC, id ASC` (matching the loader's SQL); for each derived
+ * registrable domain the function keeps only the first TIMELINE_SNAPSHOT_LIMIT
+ * rows (= the loader's own per-domain window), then applies the proof gate
+ * (`snapshotRowHasCompleteProof`) AND the ad-destination gate
+ * (`!row.is_ad_destination`). A domain qualifies when at least one row in
+ * that window survives both gates — the same set `loadOfferTimeline` would
+ * render — so the sitemap can never list a /timeline/:domain that the route
+ * 410s for an empty ledger. No freshness window — unlike brand pages, the
+ * timeline ledger renders indexable regardless of capture age. Each entry's
+ * `lastmod` is the newest passing row's captured_at within the window
+ * ("newest" = last in the ASC-ordered window). Capped at
+ * `SITEMAP_TIMELINE_PATH_LIMIT` distinct domains, with `changefreq=weekly`
+ * and `priority=0.5` (timelines sit one level below /ads/:domain in the
+ * funnel: 0.6 > 0.5 > the 0.3–0.4 boilerplate band). Kept separate from the
+ * D1 read so the filtering rules are unit-testable without a database.
  */
 export function indexableTimelineEntriesFromRows(
   rows: readonly TimelineSitemapRow[],
 ): SitemapEntry[] {
-  const seen = new Set<string>();
-  const entries: SitemapEntry[] = [];
+  // Group input rows by derived registrable domain. Rows whose URL cannot be
+  // losslessly mapped to a /timeline/:domain param (timelineDomainFromSnapshotRow
+  // returns null — reserved TLDs, non-http(s) URLs, etc.) are dropped here and
+  // never enter a bucket, matching rule 10 of the module docblock.
+  const byDomain = new Map<string, TimelineSitemapRow[]>();
   for (const row of rows) {
     const domain = timelineDomainFromSnapshotRow(row);
-    if (!domain || seen.has(domain)) {
+    if (!domain) {
       continue;
     }
-    // The loader's proof gate: a row without both artifacts is filtered out
-    // of the ledger, so its domain would render empty (gone/noindex) and must
-    // not be listed. `seen` is only marked once an entry is created, so a
-    // later older row with complete proof still qualifies its domain.
-    if (!snapshotRowHasCompleteProof(row)) {
+    let bucket = byDomain.get(domain);
+    if (!bucket) {
+      bucket = [];
+      byDomain.set(domain, bucket);
+    }
+    bucket.push(row);
+  }
+
+  const entries: SitemapEntry[] = [];
+  for (const [domain, bucket] of byDomain) {
+    // Loader's per-domain window: only the first TIMELINE_SNAPSHOT_LIMIT
+    // rows (the input is ASC, matching the loader's `ORDER BY ... ASC LIMIT
+    // TIMELINE_SNAPSHOT_LIMIT` window). Rows past the loader's window are
+    // unreachable on /timeline/:domain, so they cannot back a sitemap entry.
+    const window = bucket.length > TIMELINE_SNAPSHOT_LIMIT
+      ? bucket.slice(0, TIMELINE_SNAPSHOT_LIMIT)
+      : bucket;
+
+    // Walk the window in ASC order; the last passing row's captured_at is
+    // the newest captured_at within the loader's window (newest in ASC =
+    // last within the window).
+    let lastmod: string | null = null;
+    let passing = false;
+    for (const row of window) {
+      // The loader's proof gate: a row without both screenshot AND page-text
+      // artifacts is filtered out of the ledger, so its domain would render
+      // empty (gone/noindex) and must not be listed. Mirrors
+      // snapshotRowHasCompleteProof as applied by loadOfferTimeline
+      // (issue #1284).
+      if (!snapshotRowHasCompleteProof(row)) {
+        continue;
+      }
+      // Brand-page gate (issue #1729): an ad-destination row (the loader
+      // excludes it from the ledger) must not qualify its domain either, so
+      // the sitemap cannot list a /timeline/:domain whose only qualifying
+      // snapshots are ad destinations. Mirrors loadOfferTimeline's filter.
+      if (row.is_ad_destination) {
+        continue;
+      }
+      passing = true;
+      lastmod = row.captured_at.slice(0, 10);
+    }
+    if (!passing || lastmod === null) {
       continue;
     }
-    // Brand-page gate (issue #1729): an ad-destination row (the loader
-    // excludes it from the ledger) must not qualify its domain either, so the
-    // sitemap cannot list a /timeline/:domain whose only snapshots are ad
-    // destinations. Mirrors `loadOfferTimeline`'s filter.
-    if (row.is_ad_destination) {
-      continue;
-    }
-    seen.add(domain);
+
     entries.push({
       path: `/timeline/${domain}`,
-      lastmod: row.captured_at.slice(0, 10),
+      lastmod,
       changefreq: "weekly",
       priority: "0.5",
     });
-    if (entries.length >= SITEMAP_TIMELINE_PATH_LIMIT) {
-      break;
-    }
+  }
+
+  // Cap at SITEMAP_TIMELINE_PATH_LIMIT distinct domains. Map iteration is
+  // insertion-ordered (ECMAScript 2015+); insertion order is "first
+  // input-row-seen for each domain", not captured_at ASC across domains,
+  // so the bound is deterministic for a fixed input set but arbitrary
+  // across input sets — the first SITEMAP_TIMELINE_PATH_LIMIT qualifying
+  // domains in the order their first row surfaces in the input.
+  if (entries.length > SITEMAP_TIMELINE_PATH_LIMIT) {
+    entries.length = SITEMAP_TIMELINE_PATH_LIMIT;
   }
   return entries;
 }
@@ -658,6 +727,16 @@ export function indexableTimelineEntriesFromRows(
  * /timeline/:domain indexability is purely the empty-ledger rule above.
  * Mirroring the loader means timeline locs stay live under the brake (the
  * pages they point to still render indexable).
+ *
+ * The read covers `SITEMAP_TIMELINE_READ_LIMIT` rows (= SITEMAP_TIMELINE_PATH_LIMIT
+ * domains * TIMELINE_SNAPSHOT_LIMIT rows each — issue #1928). Each domain's
+ * `indexableTimelineEntriesFromRows` then takes its own first-200 ASC slice
+ * (= the loader's own per-domain LIMIT window), so the read MUST be ordered
+ * `captured_at ASC, id ASC` to mirror the loader's window. The URL-shape
+ * filter (`canonical_url LIKE 'https://%' OR canonical_url LIKE 'http://%'`)
+ * is a superset of any loader's per-domain URL filter; the JS-side
+ * `timelineDomainFromSnapshotRow` + group-by narrows it back to the loader's
+ * effective set, so no domain can sneak in that the loader would 410.
  */
 export async function loadIndexableTimelineEntries(
   env: AppEnv,
@@ -682,11 +761,11 @@ export async function loadIndexableTimelineEntries(
               AND ao.ad_id IS NOT NULL
           ) AS is_ad_destination
         FROM landing_page_snapshot
-        WHERE artifact_key IS NOT NULL OR metadata_json IS NOT NULL
-        ORDER BY captured_at DESC
+        WHERE canonical_url LIKE 'https://%' OR canonical_url LIKE 'http://%'
+        ORDER BY captured_at ASC, id ASC
         LIMIT ?
       `,
-      SITEMAP_TIMELINE_PATH_LIMIT,
+      SITEMAP_TIMELINE_READ_LIMIT,
     );
     return indexableTimelineEntriesFromRows(rows);
   } catch (error) {
