@@ -114,6 +114,9 @@ export default function AdAggressionMethodologyRoute() {
             <a href="#bands">Score bands</a>
           </li>
           <li>
+            <a href="#worked-example">Worked example</a>
+          </li>
+          <li>
             <a href="#evidence-floor">Evidence floor</a>
           </li>
           <li>
@@ -211,6 +214,57 @@ export default function AdAggressionMethodologyRoute() {
             </li>
           ))}
         </ul>
+      </PublicDocBlock>
+
+      <PublicDocBlock id="worked-example" title="Worked example">
+        <p>
+          A competitor observed for 21 days with 14 ads in the capture, 8 active, 3 of those
+          first seen in the last 30 days, 4 ads running 30+ days, and 5 ads carrying more than
+          one creative variant. The computed facts and score:
+        </p>
+        <table className="f9-doc-table" aria-label="Worked example calculation">
+          <thead>
+            <tr>
+              <th scope="col">Component</th>
+              <th scope="col">Fact</th>
+              <th scope="col">Curve input</th>
+              <th scope="col">Points</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Velocity</td>
+              <td>14 ads over 21 days = 4.7 ads/week</td>
+              <td>4.7 ads/week</td>
+              <td>{velocityCurvePoints(14 / (21 / 7))} (rounded)</td>
+            </tr>
+            <tr>
+              <td>Testing</td>
+              <td>5 of 14 ads multi-variant = 35.7%</td>
+              <td>35.7% tested share</td>
+              <td>{testingCurvePoints(5 / 14)} (rounded)</td>
+            </tr>
+            <tr>
+              <td>Freshness</td>
+              <td>3 of 8 active ads fresh = 37.5%</td>
+              <td>37.5% fresh share</td>
+              <td>{linearShareCurvePoints(3 / 8)} (rounded)</td>
+            </tr>
+            <tr>
+              <td>Persistence</td>
+              <td>4 of 14 ads persistent = 28.6%</td>
+              <td>28.6% persistent share</td>
+              <td>{linearShareCurvePoints(4 / 14)} (rounded)</td>
+            </tr>
+            <tr>
+              <td><strong>Total</strong></td>
+              <td colSpan="3"><strong>Sum of four rounded parts</strong></td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Result: score {Math.round(velocityCurvePoints(14 / (21 / 7))) + Math.round(testingCurvePoints(5 / 14)) + Math.round(linearShareCurvePoints(3 / 8)) + Math.round(linearShareCurvePoints(4 / 14))} — falls in the <strong>Steady</strong> band (26–50).
+        </p>
       </PublicDocBlock>
 
       <PublicDocBlock id="evidence-floor" title="Evidence floor">
