@@ -51,8 +51,8 @@ export default function PrivacyRoute() {
 
           <LegalBlock title="Evidence data">
             <p>
-              The product may store ad records, landing-page snapshots, extracted text, screenshots, HTML, timestamps,
-              source URLs, and delivery attempts so teams can verify what changed. Tracking status stays visible when
+              The product may store ad records, extracted text, screenshots, HTML, timestamps, source URLs, and
+              delivery attempts so teams can verify what changed. Tracking status stays visible when
               results are recent, delayed, or freshly verified.
             </p>
           </LegalBlock>
