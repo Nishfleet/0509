@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -252,5 +254,26 @@ describe("digest.headline.ratio — scheduled canary mirror (scripts/canary-dige
       "ad_new",
       "landing_page_offer_changed",
     ]);
+  });
+});
+
+describe("digest.headline.ratio — verify-bet1.sh verification script (issue #1897)", () => {
+  it("passes on the deterministic fixture and prints the termination receipt", () => {
+    // The script ignores the canary's rolling-guard exit code (a fired guard
+    // must not override the deterministic fixture measurement), so this test
+    // is robust even on a machine whose state history has fired the guard.
+    const res = spawnSync("bash", ["scripts/verify-bet1.sh"], {
+      encoding: "utf8",
+    });
+    expect(res.status).toBe(0);
+    // The issue's termination command greps stdout for this exact string.
+    expect(res.stdout).toContain("headline_landing_page_ratio >= 60");
+  });
+
+  it("rejects an unknown argument with exit 2", () => {
+    const res = spawnSync("bash", ["scripts/verify-bet1.sh", "--bogus"], {
+      encoding: "utf8",
+    });
+    expect(res.status).toBe(2);
   });
 });
