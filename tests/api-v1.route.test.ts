@@ -39,7 +39,7 @@ const EXPECTED_CUSTOMER_AGENT_ACTION_NAMES = [
   "delivery_target.update",
   "web_mentions.list",
 ] as const;
-const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
+const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active read-only customer API key.";
 const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled Agency customer API key.";
 
 const apiKey = {

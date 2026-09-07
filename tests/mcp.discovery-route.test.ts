@@ -66,7 +66,7 @@ const READ_EXPORT_TOOL_NAMES = [
   "watchlist_runs.list",
 ] as const;
 const READ_EXPORT_TOOL_NAME_SET = new Set<string>(READ_EXPORT_TOOL_NAMES);
-const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
+const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active read-only customer API key.";
 const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled Agency customer API key.";
 
 async function loadDocs() {
