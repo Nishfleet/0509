@@ -609,6 +609,15 @@ export interface ProofCaptureRecord {
   succeededAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Issue #1876: watchlist owner's plan family at capture time
+   * ('free'|'scout'|'starter'|'agency'), or null when unresolved/legacy.
+   * Optional so legacy test fixtures omitting it stay valid. */
+  planAtCapture?: string | null;
+  /** Issue #1876: structured JSON recording why a screenshot is missing on a
+   * non-succeeded capture (timeout, OOM, selector miss, budget, …). NULL on
+   * succeeded rows (the succeeded path is fail-closed on the screenshot key).
+   * Optional so legacy test fixtures omitting it stay valid. */
+  captureDiagnostics?: Record<string, unknown> | null;
 }
 
 export interface WatchlistProofSummary {
