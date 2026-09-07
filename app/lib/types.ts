@@ -212,9 +212,10 @@ export interface SearchFilters {
    * this query. When present, discovery scopes the Ad Library scrape to that
    * exact page (`view_all_page_id=<pageId>`) instead of guessing with a keyword
    * search — this is what makes mega-brand scans (Nike, Amazon, …) return the
-   * brand's own ads instead of resellers/keyword junk. Only ever set after a
-   * verified advertiser match; never a guess. Optional and omitted for keyword
-   * queries so their cache fingerprints stay unchanged.
+   * brand's own ads instead of resellers/keyword junk. Set from a verified
+   * advertiser match, or from the small known-domain seed (slack.com / tcs.com)
+   * after a live Ad Library check. Never a guess. Optional and omitted for
+   * keyword queries so their cache fingerprints stay unchanged.
    */
   pageId?: string;
 }
