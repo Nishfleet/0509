@@ -6,7 +6,6 @@ import {
   rankDomainMatches,
   type DomainMatchedAd,
 } from "~/lib/search-domain-match.server";
-import { resolveKnownAdvertiserPageId } from "~/lib/known-advertiser-page-ids";
 import { normalizeNumericPageId } from "~/lib/normalize";
 import { parseSearchInputFromWebsiteField, type ParsedSearchQuery } from "~/lib/search-query";
 import { resolveWebsiteIdentity } from "~/lib/website-identity.server";
@@ -101,16 +100,6 @@ export function buildBroaderProviderQuery(intent: ParsedSearchQuery) {
     .trim() || null;
 }
 
-function resolveSearchV2PageId(
-  intent: ParsedSearchQuery,
-  explicitPageId?: string | null,
-): string | null {
-  return (
-    normalizeNumericPageId(explicitPageId) ??
-    (intent.intent === "domain" ? resolveKnownAdvertiserPageId(intent.registrableDomain) : null)
-  );
-}
-
 export function buildSearchV2SavedQuery(
   intent: ParsedSearchQuery,
   scope: SearchScope,
@@ -123,10 +112,9 @@ export function buildSearchV2SavedQuery(
       : intent.normalizedText ?? intent.originalInput;
 
   // A verified page id scopes the scrape to the exact advertiser page — persist
-  // it so watchlist re-scans skip the keyword guess entirely. Known-domain
-  // seeds (slack.com / tcs.com) fill the same slot on the first search so
-  // B2B stems do not dead-end in keyword_unordered. Omitted unless numeric.
-  const pageId = resolveSearchV2PageId(intent, options.pageId);
+  // it so watchlist re-scans skip the keyword guess entirely. Omitted (not
+  // stored) unless it is a real numeric id, keeping keyword fingerprints stable.
+  const pageId = normalizeNumericPageId(options.pageId);
 
   return {
     mode: intent.intent === "domain" ? "advertiser" : "keyword",
@@ -244,7 +232,6 @@ export function buildSearchV2CacheKey(input: {
   cursor?: string | null;
 }) {
   if (input.intent.intent === "domain" && input.intent.registrableDomain) {
-    const pageId = resolveSearchV2PageId(input.intent);
     return [
       "search-v2",
       "domain",
@@ -252,9 +239,6 @@ export function buildSearchV2CacheKey(input: {
       input.scope,
       input.provider.trim().toLowerCase(),
       input.country.trim().toLowerCase().replace(/\s+/g, "-"),
-      // Cursor stays last so telemetry can swap the paging segment. A pid
-      // segment keeps page-scoped scans off the empty keyword cache.
-      ...(pageId ? [`pid:${pageId}`] : []),
       (input.cursor ?? "page-1").trim(),
     ].join(":");
   }

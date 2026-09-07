@@ -912,9 +912,7 @@ export function evaluateSection18Rerun(results) {
  * plus the §1.8 rerun, when run from `main`). A run with no 0-candidate
  * domains (every brand has rows) fails (b) deliberately — the bare empty card
  * is the contract for a nonsense domain, and the canary's 25-domain set
- * used to include slack.com / tcs.com as genuine 0-candidate rows; those two
- * are now page-scoped (#1396) so a later `--assert-tier-model` run needs a
- * true nonsense domain if every cohort brand has cards.
+ * includes slack.com / tcs.com which are genuine 0-candidate today.
  * @param {ProbeResult[]} results
  * @returns {{ pass: boolean, checks: any[] }}
  */
@@ -1094,7 +1092,7 @@ async function main() {
     : { pass: true, checks: [] };
   // The tier-model assertion runs over the full probe set (cohort + rerun)
   // so a previously-bare-dead-end brand that now has raw candidates (e.g.
-  // allbirds) and any remaining genuine 0-candidate domain are both in
+  // allbirds) and a genuine 0-candidate domain (e.g. slack.com) are both in
   // scope. Skipped unless `--assert-tier-model` is passed.
   const tierModelVerdict =
     assertTierModel
