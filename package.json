@@ -66,6 +66,7 @@
     "test": "bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project node --coverage && bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project workers",
     "verify:claims": "node scripts/verify-claims.mjs",
     "test:integration": "bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project workers",
+    "test:capture-gate": "bash ./scripts/test-capture-gate.sh",
     "test:watch": "vitest --configLoader runner",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
   },
