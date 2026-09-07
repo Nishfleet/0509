@@ -24,11 +24,13 @@ jobs:
   d1-budget-check:
     # Required context (issue #1731). Same no-skip contract as
     # codex-node-checks: no job-level `if:`/`needs`, authorizer is step 1.
-    # Runs the D1 query budget trip-wire BEFORE the D1 (workers-project)
-    # vitest suites in codex-node-checks exercise the schema: the check
-    # applies migrations/*.sql to a scratch SQLite and fails when the
-    # estimated daily row footprint (hot queries + declared canary budgets)
-    # exceeds 10% of the D1 free-tier daily limit.
+    # Runs the D1 query budget trip-wire as its own required context; the
+    # codex-node-checks job also runs it as a step ahead of the D1
+    # (workers-project) vitest suites so the check gates the schema before
+    # those suites exercise it. The check applies migrations/*.sql to a
+    # scratch SQLite and fails when the estimated daily row footprint (hot
+    # queries + declared canary budgets) exceeds 10% of the D1 free-tier
+    # daily limit.
     runs-on: ubuntu-latest
     permissions:
       contents: read
