@@ -62,4 +62,13 @@ run-proof: `npm run test:integration -- api-mcp-tier-gating` → 6/6 passed agai
 
 net-positive-because: ungating the read-only MCP/API surface is the BET 6 differentiator (the only read-anything-with-an-agent entry point in the category); the added lines are the tier gate, the free-tier key UI, the docs table, and the real-D1 integration test.
 
+### Reviewer round
+
+Reviewer seat: `commandcode` / `meta/muse-spark-1.2-contributor`.
+
+- **Critical:** none.
+- **Act on:** read-only `credentialRequirement` still claimed "Agency" in discovery output, contradicting the new Free + Scout tier — fixed (`READ_ONLY_API_KEY_REQUIREMENT` now reads "Requires an active read-only customer API key.").
+- **Noted:** write tools are Agency-only (`mcp_account_actions`) while write-enabled key creation is Starter+ (`api_write_access`). This tension is inherent in the issue spec (acceptance #2 "write scopes require Starter+" vs acceptance #1 "account-mutation tools stay on Agency"); a Starter user can create a write-enabled key for future Agency use, but actual account-mutation tool calls require Agency. Left as specified.
+- **Consider:** `ROUTE_FEATURE_REQUIREMENTS` still lists a stale `api.mcp → mcp_access` entry (dead code, not used in gating); `mcp_access` is now orphaned in `AGENCY_FEATURES`. Left as-is to avoid scope creep.
+
 Closes #1275
