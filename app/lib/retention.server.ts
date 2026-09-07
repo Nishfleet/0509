@@ -329,7 +329,15 @@ export async function reconcileOrphanedArtifacts(
 
   if (!env.DB || !env.LANDING_PAGE_ARTIFACTS) return result;
 
-  const cursor = await readOrphanReconcileCursor(env);
+  const state = await readOrphanReconcileState(env);
+  // When the delete path is first enabled after a dry-run walk, reset the
+  // cursor so the live run starts from the beginning of the bucket instead of
+  // resuming where the dry-run (which deleted nothing) left off.
+  let cursor = state.cursor;
+  if (!dryRun && state.mode === "dry-run") {
+    cursor = null;
+  }
+
   const page = await env.LANDING_PAGE_ARTIFACTS.list({
     prefix: "landing-pages/",
     cursor: cursor ?? undefined,
@@ -339,8 +347,12 @@ export async function reconcileOrphanedArtifacts(
   result.truncated = page.truncated;
 
   let deletes = 0;
+  let capHit = false;
   for (const object of page.objects) {
-    if (deletes >= ORPHAN_RECONCILE_MAX_DELETES) break;
+    if (deletes >= ORPHAN_RECONCILE_MAX_DELETES) {
+      capHit = true;
+      break;
+    }
     const parsed = parseProofArtifactKey(object.key);
     if (!parsed) {
       result.nonMatching += 1;
@@ -368,11 +380,11 @@ export async function reconcileOrphanedArtifacts(
     }
   }
 
-  // Persist the cursor only when the delete path is live. In dry-run mode the
-  // cursor is left untouched so the first live run starts from the beginning.
-  if (!dryRun) {
-    await writeOrphanReconcileCursor(env, page.truncated ? (page.cursor ?? null) : null);
-  }
+  // Advance the cursor only when the whole page was processed. If the delete
+  // cap was hit mid-page, leave the cursor unchanged so the next tick re-lists
+  // the same page and continues (already-deleted objects no longer appear).
+  const nextCursor = capHit ? cursor : page.truncated ? (page.cursor ?? null) : null;
+  await writeOrphanReconcileState(env, nextCursor, dryRun ? "dry-run" : "delete", now);
 
   return result;
 }
@@ -380,39 +392,50 @@ export async function reconcileOrphanedArtifacts(
 function isOrphanReconcileEnabled(env: AppEnv): boolean {
   const value = env[ORPHAN_RECONCILE_ENABLED_VAR as keyof AppEnv];
   if (typeof value !== "string") return false;
-  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
-interface OrphanReconcileCursorRow {
+interface OrphanReconcileStateRow {
   cursor_value: string | null;
+  mode: string | null;
 }
 
-async function readOrphanReconcileCursor(env: AppEnv): Promise<string | null> {
-  const [row] = await queryAll<OrphanReconcileCursorRow>(
+async function readOrphanReconcileState(env: AppEnv): Promise<{ cursor: string | null; mode: string }> {
+  const [row] = await queryAll<OrphanReconcileStateRow>(
     env,
     `
-      SELECT cursor_value
+      SELECT cursor_value, mode
       FROM retention_sweep_state
       WHERE state_key = ?
     `,
     ORPHAN_RECONCILE_STATE_KEY,
   );
-  return row?.cursor_value ?? null;
+  return {
+    cursor: row?.cursor_value ?? null,
+    mode: row?.mode === "delete" ? "delete" : "dry-run",
+  };
 }
 
-async function writeOrphanReconcileCursor(env: AppEnv, cursor: string | null) {
+async function writeOrphanReconcileState(
+  env: AppEnv,
+  cursor: string | null,
+  mode: "dry-run" | "delete",
+  now: number,
+) {
   await execute(
     env,
     `
-      INSERT INTO retention_sweep_state (state_key, cursor_value, updated_at)
-      VALUES (?, ?, ?)
+      INSERT INTO retention_sweep_state (state_key, cursor_value, mode, updated_at)
+      VALUES (?, ?, ?, ?)
       ON CONFLICT(state_key) DO UPDATE SET
         cursor_value = excluded.cursor_value,
+        mode = excluded.mode,
         updated_at = excluded.updated_at
     `,
     ORPHAN_RECONCILE_STATE_KEY,
     cursor,
-    new Date().toISOString(),
+    mode,
+    new Date(now).toISOString(),
   );
 }
 

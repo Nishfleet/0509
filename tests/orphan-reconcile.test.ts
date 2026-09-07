@@ -21,11 +21,11 @@ type ListResult = {
 function makeEnv(options: {
   list: ListResult;
   referencedKeys?: Set<string>;
-  cursorRow?: { cursor_value: string | null } | null;
+  stateRow?: { cursor_value: string | null; mode: string | null } | null;
   enabled?: boolean;
 }) {
   const deletes: string[] = [];
-  const cursorWrites: Array<string | null> = [];
+  const cursorWrites: Array<{ cursor: string | null; mode: string }> = [];
   const db = {
     prepare(sql: string) {
       return {
@@ -33,7 +33,7 @@ function makeEnv(options: {
           return {
             async all() {
               if (sql.includes("FROM retention_sweep_state")) {
-                return { results: options.cursorRow ? [options.cursorRow] : [] };
+                return { results: options.stateRow ? [options.stateRow] : [] };
               }
               if (sql.includes("AS external_references")) {
                 const key = bindings[0] as string;
@@ -43,7 +43,7 @@ function makeEnv(options: {
             },
             async run() {
               if (sql.includes("INSERT INTO retention_sweep_state")) {
-                cursorWrites.push(bindings[1] as string | null);
+                cursorWrites.push({ cursor: bindings[1] as string | null, mode: bindings[2] as string });
                 return { meta: { changes: 1 } };
               }
               throw new Error(`unexpected run: ${sql}`);
@@ -85,7 +85,7 @@ describe("reconcileOrphanedArtifacts", () => {
     expect(result.dryRun).toBe(false);
     expect(result.truncated).toBe(true);
     expect(deletes).toEqual([OLD_HTML]);
-    expect(cursorWrites).toEqual(["next-cursor"]);
+    expect(cursorWrites).toEqual([{ cursor: "next-cursor", mode: "delete" }]);
   });
 
   it("keeps a referenced key even when it is old", async () => {
@@ -145,7 +145,7 @@ describe("reconcileOrphanedArtifacts", () => {
   it("resumes from a persisted cursor", async () => {
     const { env, deletes, cursorWrites } = makeEnv({
       list: { objects: [{ key: OLD_HTML }], truncated: false },
-      cursorRow: { cursor_value: "saved-cursor" },
+      stateRow: { cursor_value: "saved-cursor", mode: "delete" },
       enabled: true,
     });
 
@@ -154,14 +154,14 @@ describe("reconcileOrphanedArtifacts", () => {
     expect(result.deleted).toBe(1);
     expect(deletes).toEqual([OLD_HTML]);
     // Not truncated -> cursor reset to null so the next sweep starts fresh.
-    expect(cursorWrites).toEqual([null]);
+    expect(cursorWrites).toEqual([{ cursor: null, mode: "delete" }]);
   });
 
-  it("caps deletes at the per-tick budget", async () => {
+  it("caps deletes at the per-tick budget and does not advance the cursor", async () => {
     const keys = Array.from({ length: 250 }, (_, i) =>
       `landing-pages/2026-01-01/${String(i).padStart(32, "0")}.html`,
     );
-    const { env, deletes } = makeEnv({
+    const { env, deletes, cursorWrites } = makeEnv({
       list: { objects: keys.map((key) => ({ key })), truncated: true, cursor: "c" },
       enabled: true,
     });
@@ -170,9 +170,12 @@ describe("reconcileOrphanedArtifacts", () => {
 
     expect(result.deleted).toBe(200);
     expect(deletes.length).toBe(200);
+    // Cap hit mid-page -> cursor left unchanged so the next tick re-lists the
+    // same page and continues with the remaining 50 objects.
+    expect(cursorWrites).toEqual([{ cursor: null, mode: "delete" }]);
   });
 
-  it("reports counts without deleting in dry-run mode and does not advance the cursor", async () => {
+  it("advances the cursor in dry-run mode so the whole bucket is walked", async () => {
     const { env, deletes, cursorWrites } = makeEnv({
       list: { objects: [{ key: OLD_HTML }], truncated: true, cursor: "next-cursor" },
       // enabled not set -> dry-run
@@ -184,7 +187,23 @@ describe("reconcileOrphanedArtifacts", () => {
     expect(result.dryRunDeletes).toBe(1);
     expect(result.deleted).toBe(0);
     expect(deletes).toEqual([]);
-    expect(cursorWrites).toEqual([]);
+    expect(cursorWrites).toEqual([{ cursor: "next-cursor", mode: "dry-run" }]);
+  });
+
+  it("resets the cursor when the delete path is first enabled after a dry-run", async () => {
+    const { env, deletes, cursorWrites } = makeEnv({
+      list: { objects: [{ key: OLD_HTML }], truncated: true, cursor: "next-cursor" },
+      stateRow: { cursor_value: "end-of-dry-run", mode: "dry-run" },
+      enabled: true,
+    });
+
+    const result = await reconcileOrphanedArtifacts(env, { now: NOW });
+
+    expect(result.deleted).toBe(1);
+    expect(deletes).toEqual([OLD_HTML]);
+    // Transitioned dry-run -> delete: cursor reset to null, then advanced to
+    // the page cursor after processing.
+    expect(cursorWrites).toEqual([{ cursor: "next-cursor", mode: "delete" }]);
   });
 
   it("is wired into the retention sweep and reports its outcome", async () => {
