@@ -114,6 +114,9 @@ export default function AdAggressionMethodologyRoute() {
             <a href="#bands">Score bands</a>
           </li>
           <li>
+            <a href="#worked-example">Worked example</a>
+          </li>
+          <li>
             <a href="#evidence-floor">Evidence floor</a>
           </li>
           <li>
@@ -211,6 +214,23 @@ export default function AdAggressionMethodologyRoute() {
             </li>
           ))}
         </ul>
+      </PublicDocBlock>
+
+      <PublicDocBlock id="worked-example" title="Worked example">
+        <p>
+          A competitor observed for 21 days with 14 ads in the capture, 8 active, 3 of those
+          first seen in the last 30 days, 4 ads running 30+ days, and 5 ads carrying more than
+          one creative variant. The computed facts and score:
+        </p>
+        <ul className="f9-doc-list">
+          <li>Velocity: 14 ads over 21 days = 4.7 ads/week → <strong>{Math.round(velocityCurvePoints(14 / (21 / 7)))}</strong> points</li>
+          <li>Testing: 5 of 14 ads multi-variant = 35.7% → <strong>{Math.round(testingCurvePoints(5 / 14))}</strong> points</li>
+          <li>Freshness: 3 of 8 active ads fresh = 37.5% → <strong>{Math.round(linearShareCurvePoints(3 / 8))}</strong> points</li>
+          <li>Persistence: 4 of 14 ads persistent = 28.6% → <strong>{Math.round(linearShareCurvePoints(4 / 14))}</strong> points</li>
+        </ul>
+        <p>
+          Total: <strong>{Math.round(velocityCurvePoints(14 / (21 / 7))) + Math.round(testingCurvePoints(5 / 14)) + Math.round(linearShareCurvePoints(3 / 8)) + Math.round(linearShareCurvePoints(4 / 14))}</strong> — falls in the <strong>Aggressive</strong> band (51–75).
+        </p>
       </PublicDocBlock>
 
       <PublicDocBlock id="evidence-floor" title="Evidence floor">
