@@ -20,6 +20,18 @@ export const PUBLIC_SEARCH_RATE_LIMIT_MESSAGE =
 export const PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE =
   "You've hit the anonymous ad-check limit. Free search allows 30 ad checks per 10 minutes — wait a few minutes and try again.";
 
+/**
+ * Truthful recovery message for the anonymous public brand-page limiter
+ * (120 page loads / 10 minutes per IP, see enforcePublicBrandPageRateLimit).
+ * Single source of truth: the /ads/:domain and /timeline/:domain loaders put
+ * it in the thrown 429 body and the route ErrorBoundary renders it verbatim,
+ * so a rate-limited visitor is told the honest per-IP free-preview limit and
+ * the recovery path instead of the generic "Something broke on our side"
+ * shell (issue #1930).
+ */
+export const PUBLIC_BRAND_PAGE_RATE_LIMIT_MESSAGE =
+  "You've hit the anonymous preview limit. Free preview allows 120 page loads per 10 minutes — wait a few minutes and try again.";
+
 const INTERNAL_INFRA_PATTERN =
   /\b(d1|sql|sqlite|workflow|binding|wrangler|cloudflare|oauth|token|secret|stack trace)\b/i;
 const INTERNAL_ROLLOUT_PATTERN = /\binternal\b.*\b(workspace|pilot|rollout)\b/i;
