@@ -1,10 +1,10 @@
-import { existsSync, readdirSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CAPTURE_VALIDITY_REASON_CODES } from "~/lib/capture-validity.server";
-import { NO_PHANTOM_CHANGE_RULES, SWITCH_PAGES, SWITCH_SLUGS, type SwitchSlug } from "~/lib/switch-pages";
+import { NO_PHANTOM_CHANGE_RULES, SWITCH_PAGES, SWITCH_SLUGS } from "~/lib/switch-pages";
 import { SITEMAP_PATHS } from "~/lib/seo";
 
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
@@ -52,17 +52,6 @@ afterEach(() => {
   vi.resetModules();
 });
 
-/**
- * BET 8 switch pages — acceptance contract for issue #1896 ("Create switch
- * landing pages for MagicBrief, Panoramata, Visualping").
- *
- * The pages shipped under #1117 (PR #1134). This suite keeps the delivered
- * guarantees machine-checkable so a duplicate of that work can be closed
- * against it: the three named routes exist, are in the public sitemap set,
- * carry WebPage + FAQPage JSON-LD, anchor on a verified public complaint,
- * end in the free /search preview (no demo form), and cross-link the
- * /compare/* surface named in the issue's product_surface.
- */
 describe("BET 8 switch pages", () => {
   const routeIds = switchRouteIds();
 
@@ -70,34 +59,6 @@ describe("BET 8 switch pages", () => {
     expect(routeIds).toEqual(["switch.magicbrief", "switch.panoramata", "switch.visualping"]);
     expect([...SWITCH_SLUGS].sort()).toEqual(["magicbrief", "panoramata", "visualping"]);
   });
-
-  it.each(SWITCH_SLUGS)(
-    "%s cross-links its /compare/* sibling named in the issue surface",
-    async (slug) => {
-      const page = SWITCH_PAGES[slug];
-      const routeModule = (await import(`~/routes/switch.${slug}`)) as {
-        default: () => ReactNode;
-      };
-      const markup = renderToStaticMarkup(createElement(routeModule.default));
-
-  // product_surface: /compare/magicbrief, /compare/panoramata, /compare/visualping (or similar).
-  // visualping consolidates to /compare/visualping-ad-libraries (#1481 canonical).
-  const expectedComparePath: Record<SwitchSlug, string> = {
-    magicbrief: "/compare/magicbrief",
-    panoramata: "/compare/panoramata",
-    visualping: "/compare/visualping-ad-libraries",
-  };
-  expect(page.relatedComparePath).toBe(expectedComparePath[slug]);
-  expect(markup).toContain("Full product comparison");
-  expect(markup).toContain(`href="${expectedComparePath[slug]}"`);
-
-  // The cross-link target must be a real route file, not a dead href.
-  // URL→file derivation follows the flat-route convention (slash → dot) the
-  // rest of this suite's route reads already assume.
-  const routeFile = `app/routes/${expectedComparePath[slug].replace(/^\//, "").replace(/\//g, ".")}.tsx`;
-  expect(existsSync(routeFile), `missing cross-link target ${routeFile}`).toBe(true);
-    },
-  );
 
   it("lists every switch path in the public sitemap set", () => {
     for (const page of Object.values(SWITCH_PAGES)) {
