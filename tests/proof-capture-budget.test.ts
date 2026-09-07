@@ -6,11 +6,14 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 
 import { RecentEvidenceChecksCard } from "~/components/watchlists/recent-evidence-checks-card";
 import {
+  buildBudgetSkipDomainBreakdownQuery,
   buildBudgetSkipSurfaceQuery,
+  mapBudgetSkipDomainRows,
   mapBudgetSkipRows,
   validateBudgetSkipSurface,
 } from "../scripts/canary-proof-budget-skip-surface.mjs";
 import { evaluateProofPolicy } from "~/lib/proof-policy.server";
+import { getIncludedEvidenceAllowance } from "~/lib/plan-entitlements";
 import {
   buildRunHistoryRefusalRows,
   formatRunHistoryRefusalCopy,
@@ -33,14 +36,22 @@ import { buildProofSummary, emptyProofSummary } from "~/lib/watchlist-display";
  *   2. the evidence card    — `RecentEvidenceChecksCard` (count + reason + "why" link)
  *   3. the period triage    — `classifyWatchPeriodTriage` → `evidence_skipped_budget`
  *                             (the digest never reads "all quiet" when a skip happened)
- *   4. the dashboard quota  — `proofUsage` shows "X of Y checks used" + "0 left"
+ *   4. the dashboard quota  — `getIncludedEvidenceAllowance(plan)` feeds the
+ *                             "X of Y checks used" / "0 left" copy
  *
  * The live canary (`scripts/canary-proof-budget-skip-surface.mjs`) is the
  * production detector: it queries `proof_capture` over a 72h window, joins
  * watchlist → user_plan to classify by plan tier, and fails on any silent
  * skip (null `skip_reason`) or paid-tier over-volume. This test exercises
  * the canary's query/validate path against the 70-row scenario the issue
- * names.
+ * names, including the domain-breakdown query that classifies by competitor
+ * domain (`proof_target.landing_page_url`).
+ *
+ * The companion `tests/integration/proof-capture-budget.integration.test.ts`
+ * (workers project, real D1) seeds a paid-tier watchlist, drives
+ * `evaluateProofPolicy` at the monthly cap, persists the skip, and asserts
+ * the run-history read path + period triage against the real schema. This
+ * node test pins the unit-level surfaces and the canary query/validator.
  *
  * No D1 schema change, no workflow edit, no gate-owned path edit — every
  * assertion reuses existing columns, statuses, and surfaces.
@@ -302,45 +313,43 @@ describe("proof-capture budget (#1857): paid-tier exhaustion is never silent", (
     });
   });
 
-  describe("the dashboard quota display shows the exhausted budget", () => {
-    // The dashboard reads `proofUsage` from `getProofUsageSummary`. When the
-    // included allowance is spent, `warningLevel` is "exhausted", `remaining`
-    // is 0, and the rendered copy is "X of Y checks used" + "0 left this
-    // month". This is the per-plan-monthly-quota visibility the issue's
-    // acceptance (b) names — no schema change, just reading the existing
-    // ledger.
-    it("a Starter plan at its 250-capture allowance reports exhausted with 0 remaining", () => {
-      const proofUsage = {
-        plan: "starter" as const,
-        used: 250,
-        limit: 250,
-        remaining: 0,
-        warningLevel: "exhausted" as const,
-        upgradeTarget: "Agency" as const,
-      };
-
-      expect(proofUsage.warningLevel).toBe("exhausted");
-      expect(proofUsage.remaining).toBe(0);
-      expect(proofUsage.used).toBe(proofUsage.limit);
-      // The dashboard copy the loader feeds (app.dashboard.tsx):
-      const quotaLine = `${proofUsage.used} of ${proofUsage.limit} proof captures used in the current billing period.`;
-      const leftLine = `${proofUsage.remaining ?? 0} left this month`;
-      expect(quotaLine).toBe("250 of 250 proof captures used in the current billing period.");
-      expect(leftLine).toBe("0 left this month");
+  describe("the dashboard quota display reads the real per-plan monthly allowance", () => {
+    // The dashboard reads `proofUsage` from `getProofUsageSummary`, whose
+    // `limit` is `getIncludedEvidenceAllowance(plan) + topUpRemaining`. When
+    // `includedUsed >= includedAllowance`, `warningLevel` is "exhausted" and
+    // the dashboard renders "X of Y checks used" + "0 left this month". This
+    // is the per-plan-monthly-quota visibility the issue's acceptance (b)
+    // names. The allowance values below come from the real entitlements
+    // table (`app/lib/plan-entitlements.ts`), not invented literals.
+    it("a Starter plan's included monthly allowance is 250 (the cap the issue names)", () => {
+      expect(getIncludedEvidenceAllowance("starter")).toBe(250);
     });
 
-    it("a Scout plan partway through its allowance is not marked exhausted", () => {
-      const proofUsage = {
-        plan: "scout" as const,
-        used: 80,
-        limit: 100,
-        remaining: 20,
-        warningLevel: "ok" as const,
-        upgradeTarget: "Starter" as const,
-      };
+    it("a Scout plan's included monthly allowance is 50, not 100", () => {
+      // The reviewer caught a stale 100 here — Scout's real allowance is 50.
+      expect(getIncludedEvidenceAllowance("scout")).toBe(50);
+    });
 
-      expect(proofUsage.warningLevel).toBe("ok");
-      expect(proofUsage.remaining).toBe(20);
+    it("an Agency plan has a higher allowance than Starter", () => {
+      const agency = getIncludedEvidenceAllowance("agency");
+      const starter = getIncludedEvidenceAllowance("starter");
+      expect(agency).toBeGreaterThan(starter);
+    });
+
+    it("at includedUsed == includedAllowance the dashboard copy is '250 of 250' and '0 left'", () => {
+      // This mirrors the warningLevel logic in getProofUsageSummary
+      // (plan.server.ts): used >= includedAllowance → "exhausted".
+      const includedAllowance = getIncludedEvidenceAllowance("starter");
+      const includedUsed = includedAllowance; // exhausted
+      const remaining = Math.max(0, includedAllowance - includedUsed);
+      const warningLevel =
+        includedAllowance > 0 && includedUsed >= includedAllowance ? "exhausted" : "ok";
+
+      expect(warningLevel).toBe("exhausted");
+      expect(remaining).toBe(0);
+      // The dashboard copy the loader feeds (app.dashboard.tsx):
+      const quotaLine = `${includedUsed} of ${includedAllowance} proof captures used in the current billing period.`;
+      expect(quotaLine).toBe("250 of 250 proof captures used in the current billing period.");
     });
   });
 
@@ -457,6 +466,101 @@ describe("proof-capture budget (#1857): paid-tier exhaustion is never silent", (
       expect(result.silentRows).toHaveLength(1);
       expect(result.failures[0]).toMatch(/silent budget skips detected/);
       expect(result.failures[0]).toMatch(/user-starter/);
+    });
+  });
+
+  describe("the domain breakdown classifies the 70 rows by plan tier, competitor domain, and timestamp", () => {
+    // Issue acceptance (a): classify by plan tier, competitor domain, and
+    // capture attempt timestamp. The domain-breakdown query selects
+    // `pt.landing_page_url AS competitor_domain` and groups by it, so the
+    // 70-row investigation can be read straight off the result.
+    it("buildBudgetSkipDomainBreakdownQuery selects landing_page_url as competitor_domain", () => {
+      const sql = buildBudgetSkipDomainBreakdownQuery(72);
+
+      // Classifies by plan tier via the watchlist → user_plan join.
+      expect(sql).toMatch(/COALESCE\(up\.plan, 'free'\) AS plan/);
+      // Classifies by competitor domain via proof_target.landing_page_url.
+      expect(sql).toMatch(/pt\.landing_page_url AS competitor_domain/);
+      // Classifies by capture attempt timestamp.
+      expect(sql).toMatch(/MIN\(pc\.created_at\) AS first_budget_skip_at/);
+      expect(sql).toMatch(/MAX\(pc\.created_at\) AS last_budget_skip_at/);
+      // Groups by domain, not just workspace.
+      expect(sql).toMatch(/GROUP BY w\.user_id, COALESCE\(up\.plan, 'free'\), pt\.landing_page_url/);
+      // Only budget-skip rows.
+      expect(sql).toMatch(/pc\.status = 'skipped_due_to_budget'/);
+    });
+
+    it("mapBudgetSkipDomainRows classifies the 70 rows across paid tiers and competitor domains", () => {
+      const rows = mapBudgetSkipDomainRows([
+        {
+          workspace_user_id: "user-starter",
+          plan: "starter",
+          competitor_domain: "https://acme.example/offer",
+          budget_skips_total: 20,
+          budget_skips_silent: 0,
+          first_budget_skip_at: "2026-08-22T00:00:00Z",
+          last_budget_skip_at: "2026-08-25T00:00:00Z",
+        },
+        {
+          workspace_user_id: "user-starter",
+          plan: "starter",
+          competitor_domain: "https://beta.example/offer",
+          budget_skips_total: 21,
+          budget_skips_silent: 0,
+          first_budget_skip_at: "2026-08-23T00:00:00Z",
+          last_budget_skip_at: "2026-08-25T00:00:00Z",
+        },
+        {
+          workspace_user_id: "user-scout",
+          plan: "scout",
+          competitor_domain: "https://gamma.example/offer",
+          budget_skips_total: 18,
+          budget_skips_silent: 0,
+          first_budget_skip_at: "2026-08-23T00:00:00Z",
+          last_budget_skip_at: "2026-08-25T00:00:00Z",
+        },
+        {
+          workspace_user_id: "user-agency",
+          plan: "agency",
+          competitor_domain: "https://delta.example/offer",
+          budget_skips_total: 11,
+          budget_skips_silent: 0,
+          first_budget_skip_at: "2026-08-24T00:00:00Z",
+          last_budget_skip_at: "2026-08-25T00:00:00Z",
+        },
+      ]);
+
+      const totalSkips = rows.reduce((sum, row) => sum + row.budgetSkipsTotal, 0);
+      expect(totalSkips).toBe(70);
+      // Every row carries the competitor domain.
+      for (const row of rows) {
+        expect(row.competitorDomain).not.toBeNull();
+        expect(row.firstBudgetSkipAt).not.toBeNull();
+        expect(row.lastBudgetSkipAt).not.toBeNull();
+        expect(row.budgetSkipsSilent).toBe(0);
+      }
+      // The Starter workspace's 41 skips split across two domains.
+      const starterRows = rows.filter((row) => row.plan === "starter");
+      expect(starterRows).toHaveLength(2);
+      expect(starterRows.reduce((s, r) => s + r.budgetSkipsTotal, 0)).toBe(41);
+    });
+
+    it("mapBudgetSkipDomainRows surfaces a null competitor_domain (legacy rows) rather than hiding it", () => {
+      const rows = mapBudgetSkipDomainRows([
+        {
+          workspace_user_id: "user-starter",
+          plan: "starter",
+          competitor_domain: null,
+          budget_skips_total: 5,
+          budget_skips_silent: 0,
+          first_budget_skip_at: "2026-08-24T00:00:00Z",
+          last_budget_skip_at: "2026-08-25T00:00:00Z",
+        },
+      ]);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.competitorDomain).toBeNull();
+      expect(rows[0]!.budgetSkipsTotal).toBe(5);
     });
   });
 });
