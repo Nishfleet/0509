@@ -13,7 +13,12 @@ import {
 import { fingerprintSavedQuery, normalizeSavedQuery, parseSearchParams } from "~/lib/normalize";
 import { buildSearchV2CacheKey } from "~/lib/search-v2.server";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
-import { NOINDEX_ACTION_SURFACES, SITEMAP_PATHS, SITEMAP_STATIC_ENTRIES } from "~/lib/seo";
+import {
+  NOINDEX_ACTION_SURFACES,
+  ROOT_SITEMAP_STATIC_ENTRIES,
+  SITEMAP_PATHS,
+  SITEMAP_STATIC_ENTRIES,
+} from "~/lib/seo";
 import routes from "~/routes";
 import {
   brandDomainFromSitemapCacheRow,
@@ -1081,5 +1086,79 @@ describe("SITEMAP_PATHS", () => {
     expect(entry?.priority).toBe("0.6");
     const xml = buildSitemapXml([], []);
     expect(xml).toContain("<loc>https://0509.io/brands</loc>");
+  });
+
+  it("keeps every indexable /compare/* winner in the sitemap with changefreq and priority (issue #1878)", () => {
+    // The issue asked to surface all built /compare/* pages (the 4 that were
+    // missing) and all indexable /ads/:domain pages. Duplicate /compare pairs
+    // (visualping, foreplay) are canonicalized to their more specific winners
+    // (issue #1481/#1548); the winners below are the distinct indexable URLs
+    // that must never regress out of the static sitemap. Each must carry an
+    // honest changefreq and priority, matching the /ads/:domain entries that
+    // the dynamic reader appends beside them.
+    const compareWinners = [
+      "/compare",
+      "/compare/magicbrief",
+      "/compare/meta-ad-library",
+      "/compare/visualping-ad-libraries",
+      "/compare/spyland",
+      "/compare/pulzifi",
+      "/compare/foreplay-spyder",
+      "/compare/panoramata",
+      "/compare/adspyder",
+    ] as const;
+
+    const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);
+    for (const path of compareWinners) {
+      expect(rootPaths, `${path} dropped from root sitemap`).toContain(path);
+      const entry = ROOT_SITEMAP_STATIC_ENTRIES.find((e) => e.path === path);
+      expect(entry, `${path} missing from static entries`).toBeTruthy();
+      // Exact tiers, not mere presence, so a future edit can't silently
+      // flatten the honest freshness/importance signal of a comparison page
+      // (matches the sibling /brands test's exact-value style).
+      expect(entry?.changefreq, `${path} wrong changefreq`).toBe("weekly");
+      // The /compare hub sits one tier above its children (0.8 vs 0.7).
+      expect(entry?.priority, `${path} wrong priority`).toBe(
+        path === "/compare" ? "0.8" : "0.7",
+      );
+    }
+
+    // The canonicalized losers never appear as distinct sitemap URLs.
+    expect(rootPaths).not.toContain("/compare/visualping");
+    expect(rootPaths).not.toContain("/compare/foreplay");
+  });
+
+  it("renders at least 10 indexable /ads/:domain + /compare/* locs in the built sitemap (issue #1878 termination)", () => {
+    // Termination gate: the live sitemap must carry >= 10 <loc> under /ads/ or
+    // /compare/ (the `/compare` bare path is excluded by the regex's trailing
+    // slash). 8 indexable /compare/* winners are static above; appending two
+    // representative indexable brand entries clears the floor, proving the
+    // dynamic reader + static winners jointly satisfy the acceptance metric.
+    const xml = buildSitemapXml([
+      {
+        path: "/ads/nykaa.com",
+        lastmod: "2026-08-21",
+        changefreq: "weekly",
+        priority: "0.6",
+        adCount: 3,
+        fetchedAt: "2026-08-21T10:00:00.000Z",
+      },
+      {
+        path: "/ads/meesho.com",
+        lastmod: "2026-08-20",
+        changefreq: "weekly",
+        priority: "0.6",
+        adCount: 2,
+        fetchedAt: "2026-08-20T10:00:00.000Z",
+      },
+    ]);
+    const indexableLocs = [...xml.matchAll(
+      /<loc>https:\/\/0509\.io\/(ads|compare)\/[^<]+<\/loc>/g,
+    )];
+    expect(indexableLocs.length).toBeGreaterThanOrEqual(10);
+    // The dynamic brand entries are present alongside the static comparison set.
+    expect(xml).toContain("<loc>https://0509.io/ads/nykaa.com</loc>");
+    const nykaa = ROOT_SITEMAP_STATIC_ENTRIES.find((e) => e.path === "/ads/nykaa.com");
+    expect(nykaa).toBeUndefined(); // dynamic, never hardcoded static
   });
 });
