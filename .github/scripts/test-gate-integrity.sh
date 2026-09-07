@@ -34,6 +34,13 @@ GATE_GLOBS = json.loads(os.environ["GATE_GLOBS"])
 # Shorthands the fixture expressions below refer to by name.
 ADMIN = {"nish3451": "admin"}
 ATTEST = [{"user": "nish3451", "sha": HEAD}]
+# Worker identity (nishfleet-worker[bot]) and an admin permissions block that
+# also recognises the worker, for the identity-separation fixtures (0509#1140
+# / fleet-ops#413). The same shorthand names are used by
+# test-required-verifier-integrity.sh.
+WORKER_BOT = "nishfleet-worker[bot]"
+WORKER_ADMIN = {"nish3451": "admin", WORKER_BOT: "admin"}
+WORKER_SELF_ATTEST = [{"user": WORKER_BOT, "sha": HEAD}]
 # A multi-line attest comment body in the real-world #1273 shape: the marker
 # line first, then verifier-attest, then review prose. Built with Python
 # string concatenation so HEAD (a Python variable in this eval context) is
@@ -186,6 +193,117 @@ fixture workflow_attested_maintainer '{
   "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
   "attestations": [{"user": "m", "sha": HEAD}], "permissions": {"m": "maintain"}}'
 run_fixture workflow_attested_maintainer FAIL "not admin"
+
+# --- identity separation (0509#1140 / fleet-ops#413) -----------------------
+# Implementer (PR author / pusher) and attestor must be DIFFERENT GitHub
+# logins, and a worker identity (nishfleet-worker[bot]) can never attest. The
+# worker can have admin permission — the rule is not about permission, it is
+# about who pushed the code. Owner self-attest of a human-only PR still
+# passes; that is the sole-admin path, not a worker hole.
+#
+# Mirrors fleet-ops#413 (lib/attest-identity-gate.py) so both repos refuse
+# the same combinations. The fixtures cover the three classes named in the
+# issue plus the human-only owner self-attest regression and the GITHUB_EVENT
+# fallback that lets the rule fire live when the workflow cannot pass author.
+
+# Worker implements and self-attests -> REJECT (worker cannot attest, AND
+# same identity implemented and attested). The same fixture exercises both
+# rules at once.
+fixture worker_implements_self_attests '{
+  "author": WORKER_BOT, "pusher": WORKER_BOT,
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": WORKER_SELF_ATTEST, "permissions": WORKER_ADMIN}'
+run_fixture worker_implements_self_attests FAIL "worker identity cannot attest"
+
+# Worker implements, human admin attests -> PASS (the cross-identity happy
+# path: the implementer is the worker, the attestor is the human admin).
+fixture worker_implements_human_attests '{
+  "author": WORKER_BOT, "pusher": WORKER_BOT,
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": WORKER_ADMIN}'
+run_fixture worker_implements_human_attests PASS "gate-path waived"
+
+# Human implements, worker attests -> REJECT (worker can never attest, even
+# on a human-authored PR). Admin permission is irrelevant.
+fixture human_implements_worker_attests '{
+  "author": "nish3451", "pusher": "nish3451",
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": WORKER_SELF_ATTEST, "permissions": WORKER_ADMIN}'
+run_fixture human_implements_worker_attests FAIL "worker identity cannot attest"
+
+# Owner self-attest of a human-only PR -> PASS (the sole-admin path, still
+# allowed when no worker identity is among the implementers). This is the
+# regression the issue calls out: the human-token path is not retired.
+fixture human_only_owner_self_attests '{
+  "author": "nish3451", "pusher": "nish3451",
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+run_fixture human_only_owner_self_attests PASS "gate-path waived"
+
+# Implementer with extra logins via `implementers` array still REJECTS the
+# same-identity case. The list is additive: a worker mention in the
+# implementers list counts the same as the author being a worker.
+fixture implementers_list_worker_self_attests '{
+  "author": "nish3451", "pusher": "nish3451", "implementers": [WORKER_BOT],
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": WORKER_ADMIN}'
+run_fixture implementers_list_worker_self_attests FAIL "same identity implemented and attested"
+
+# --- GITHUB_EVENT_PATH fallback (0509#1140) ---------------------------------
+# gate-integrity.yml cannot pass `author` today (nishfleet-worker has no
+# Workflows permission). On real CI, the decision script reads
+# pull_request.user.login from GITHUB_EVENT_PATH so the identity split still
+# fires. Bundle author wins when already set. A malformed event file must
+# not crash the gate.
+
+WORKER_EVENT='{"pull_request":{"user":{"login":"nishfleet-worker[bot]"}}}'
+
+# No author in the bundle, the event payload names the worker -> the worker
+# self-attest is REJECTED. This is the live wire-up the issue requires.
+fixture actions_event_worker_self_attest '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": WORKER_SELF_ATTEST, "permissions": WORKER_ADMIN}'
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/actions_event_worker_self_attest.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/actions_event_worker_self_attest.event.json" \
+  run_fixture actions_event_worker_self_attest FAIL "worker identity cannot attest"
+
+# No author in the bundle, the event payload names the worker, human attests
+# -> PASS (cross-identity happy path using the event-derived author).
+fixture actions_event_worker_human_attest '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": WORKER_ADMIN}'
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/actions_event_worker_human_attest.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/actions_event_worker_human_attest.event.json" \
+  run_fixture actions_event_worker_human_attest PASS "gate-path waived"
+
+# Bundle author wins when already set (the event payload names the worker
+# but the bundle author is the human; the human is treated as the
+# implementer and the human self-attest is the sole-admin path, PASS).
+fixture actions_event_does_not_override_bundle '{
+  "author": "nish3451",
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+printf '%s' "$WORKER_EVENT" > "$WORK_DIR/actions_event_does_not_override_bundle.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/actions_event_does_not_override_bundle.event.json" \
+  run_fixture actions_event_does_not_override_bundle PASS "gate-path waived"
+
+# A malformed event file must not crash the gate. Without a parseable
+# author and without a worker mentioned, the human self-attest follows the
+# sole-admin path -> PASS.
+fixture actions_event_malformed '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+printf 'not json' > "$WORK_DIR/actions_event_malformed.event.json"
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/actions_event_malformed.event.json" \
+  run_fixture actions_event_malformed PASS "gate-path waived"
+
+# A missing event file (the workflow env var is set but the file is gone)
+# must also not crash. Same PASS shape.
+fixture actions_event_missing_file '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+GITHUB_ACTIONS=true GITHUB_EVENT_PATH="$WORK_DIR/actions_event_missing_file.event.json" \
+  run_fixture actions_event_missing_file PASS "gate-path waived"
 
 # --- #1273 regression: multi-line attest comment (fleet-ops#828) -------------
 # The real-world attest shape: the marker line is the FIRST line of a
