@@ -4032,6 +4032,8 @@ describe("createProofCapture", () => {
           succeeded_at TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
+          plan_at_capture TEXT,
+          capture_diagnostics TEXT,
           FOREIGN KEY (proof_target_id) REFERENCES proof_target(id) ON DELETE CASCADE
         );
         CREATE UNIQUE INDEX idx_proof_capture_idempotency
