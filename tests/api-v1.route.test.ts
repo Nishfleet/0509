@@ -409,7 +409,7 @@ describe("customer API v1", () => {
       notLiveYet: string[];
     };
 
-    expect(body.planRequirement).toBe("Agency");
+    expect(body.planRequirement).toContain("Free + Scout");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/mcp");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/workspace-readiness");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/actions");
@@ -424,7 +424,7 @@ describe("customer API v1", () => {
       credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
     });
     body.endpoints.forEach((endpoint) => {
-      expect(endpoint.planRequirement).toBe("Agency");
+      expect(endpoint.planRequirement).toMatch(/Free \+ Scout|Agency/);
       expect(endpoint.credentialRequirement).not.toContain("any active customer API key");
     });
     body.endpoints
@@ -486,7 +486,7 @@ describe("customer API v1", () => {
     });
   });
 
-  it("gates workspace readiness to Agency API access", async () => {
+  it("allows workspace readiness on Starter (read-only API is free + Scout and up)", async () => {
     setupMocks(true, true, apiKey.userId, "starter");
     const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
     vi.doMock("~/lib/workspace-readiness.server", () => ({
@@ -502,16 +502,9 @@ describe("customer API v1", () => {
         },
       }),
     } as never);
-    const body = await response.json();
 
-    expect(response.status).toBe(403);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(body).toMatchObject({
-      error: "plan_gated",
-      feature: "api_access",
-      plan: "starter",
-    });
-    expect(getWorkspaceReadiness).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(getWorkspaceReadiness).toHaveBeenCalled();
   });
 
   it("returns workspace-owner readiness for a member API key", async () => {

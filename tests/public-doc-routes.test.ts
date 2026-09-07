@@ -34,9 +34,9 @@ describe("public documentation routes", () => {
     expect(markup).toContain("Free plan scope: one competitor with an instant first scan, then a weekly scheduled check and a weekly email brief backed by one proof capture a month");
     expect(markup).toContain("Use Five to Nine from Claude, ChatGPT, and AI agents");
     expect(markup).toContain("https://0509.io/api/mcp");
-    expect(markup).toContain("API and MCP access are an Agency-plan feature");
+    expect(markup).toContain("read-only API and MCP access are available on Free and Scout");
     expect(markup).toContain("Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports");
-    expect(markup).toContain("Agency plan scope: client reports, share links, PDF delivery, branding, API/MCP access, and team seats");
+    expect(markup).toContain("Agency plan scope: client reports, share links, PDF delivery, branding, full API/MCP agent actions, and team seats");
     expect(markup).toContain("This documentation does not measure live provider availability");
     expect(markup).toContain("Provider availability can vary");
     expect(markup).toContain("documented plan entitlements, not a live availability guarantee");
@@ -105,9 +105,9 @@ describe("public documentation routes", () => {
 
     expect(markup).toContain("Account actions");
     expect(markup).toContain("Developer access");
-    expect(markup).toContain("Developer API and connected-tool access require Agency");
+    expect(markup).toContain("Read-only API and connected-tool access is available on Free and Scout");
     expect(markup).toContain("Connected tools");
-    expect(markup).toContain("same bearer token on Agency");
+    expect(markup).toContain("same bearer token");
     expect(markup).toContain("POST /api/mcp");
     expect(markup).toContain("tools/list");
     expect(markup).toContain("Use a write-enabled key only when the tool should run approved account actions.");

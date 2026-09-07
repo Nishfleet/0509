@@ -34,6 +34,7 @@ type CustomerApiKeyView = {
 
 export type DeveloperAccessLoaderData = {
   canCreateApiKeys?: boolean;
+  canCreateWriteEnabledKeys?: boolean;
   createDisabledReason?: NullableString;
   apiKeys: CustomerApiKeyView[];
 };
@@ -59,6 +60,7 @@ export function DeveloperAccessRoute() {
   );
   const canCreateApiKeys =
     data.canCreateApiKeys !== false && !data.createDisabledReason;
+  const canCreateWriteEnabledKeys = data.canCreateWriteEnabledKeys !== false;
   const createDisabledReason = data.createDisabledReason ?? null;
   const ownerManagedApiKeys = Boolean(
     createDisabledReason?.startsWith("Only "),
@@ -176,8 +178,8 @@ export function DeveloperAccessRoute() {
             <div>
               <h2 id="create-key-title">Create an API key</h2>
               <p>
-                Name the tool, keep it read-only by default, and revoke it here when the
-                connection is retired.
+                Read-only keys are available on Free and Scout. Name the tool, keep it
+                read-only by default, and revoke it here when the connection is retired.
               </p>
             </div>
           </div>
@@ -194,13 +196,18 @@ export function DeveloperAccessRoute() {
             </label>
             <label className="f9-access-check">
               <input
+                disabled={!canCreateWriteEnabledKeys}
                 name="actionsWriteEnabled"
                 type="checkbox"
                 value="1"
               />
               <span>
                 Allow approved account actions
-                <small>Leave off for exports and reporting.</small>
+                <small>
+                  {canCreateWriteEnabledKeys
+                    ? "Leave off for exports and reporting."
+                    : "Write-enabled keys require the Starter plan or above."}
+                </small>
               </span>
             </label>
             <SubmitButton
