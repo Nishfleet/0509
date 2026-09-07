@@ -83,14 +83,22 @@ describe("Ad Aggression Score methodology page — render", () => {
       expect(markup).toContain(band.interpretation);
     }
 
-    // Worked example — table with four component rows and total
+    // Worked example — exact rounded parts and correct band
+    const velocityVal = Math.round(velocityCurvePoints(14 / (21 / 7))); // 24
+    const testingVal = Math.round(testingCurvePoints(5 / 14)); // 18
+    const freshnessVal = Math.round(linearShareCurvePoints(3 / 8)); // 9
+    const persistenceVal = Math.round(linearShareCurvePoints(4 / 14)); // 7
+    const total = velocityVal + testingVal + freshnessVal + persistenceVal; // 58
+
     expect(markup).toContain("Worked example");
-    expect(markup).toContain("Velocity");
-    expect(markup).toContain("Testing");
-    expect(markup).toContain("Freshness");
-    expect(markup).toContain("Persistence");
-    expect(markup).toContain("Sum of four rounded parts");
-    expect(markup).toContain("Steady"); // the example falls in Steady band
+    expect(markup).toContain(`<strong>${velocityVal}</strong>`);
+    expect(markup).toContain(`<strong>${testingVal}</strong>`);
+    expect(markup).toContain(`<strong>${freshnessVal}</strong>`);
+    expect(markup).toContain(`<strong>${persistenceVal}</strong>`);
+    expect(markup).toContain(`<strong>${total}</strong>`);
+    expect(markup).toContain("Aggressive"); // the example falls in Aggressive band (51–75)
+    // The band table also lists Aggressive, but the worked example specifically
+    // should name Aggressive — not Steady which is a different band.
 
     // Evidence floor
     expect(markup).toContain(`${MIN_AGGRESSION_WINDOW_DAYS} days of observed history`);
