@@ -1,7 +1,7 @@
 name: Auto-merge arm
 
 # Thin caller to the fleet-ops reusable auto-merge arm (fleet-ops#1457,
-# #3532). The reusable carries the same arming logic this file used to hold
+# fleet-ops#3532). The reusable carries the same arming logic this file used to hold
 # inline — draft/`no-auto-merge`/`[no-merge]` opt-outs, arming with
 # AUTO_REVERT_PAT so a merge still triggers push workflows on main — and adds
 # the stop-the-line freeze gate and the quality-ceiling check on top. The
@@ -20,6 +20,7 @@ concurrency:
 
 jobs:
   arm:
+    timeout-minutes: 5
     uses: Nishfleet/fleet-ops/.github/workflows/reusable-auto-merge-arm.yml@7a766ad9135f2c8bf6fa75e3c0bc56155bfcb723
     secrets:
       AUTO_REVERT_PAT: ${{ secrets.AUTO_REVERT_PAT }}
