@@ -1,0 +1,761 @@
+{
+  "schemaVersion": 2,
+  "registryId": "G11-V4-2026-07-18",
+  "generatedAt": "2026-07-18T17:23:42Z",
+  "registryStatus": "assessed_open",
+  "canonicalReleaseVerdict": "closeout_candidate_unfrozen",
+  "assessmentBasis": {
+    "historicalExactFingerprint": "1f736de4137eeeca0a117b2e7e9a09df705c8e00682eb7e7e0a0e087a069b173",
+    "historicalExactWorkerVersion": "3592690d-8ca8-4787-be2c-e43324a8dc00",
+    "closeoutBranch": "codex/customer-readiness-inventory-closeout",
+    "rule": "Historical exact-candidate evidence identifies the shortest closeout path. Behavior, browser, review and deployed evidence remains exact-candidate only; byte-identical independently hash-bound lockfile/config evidence may transfer under the G11-V4 risk-based closeout contract. Every non-removed customer claim must be proven on the frozen closeout fingerprint or explicitly classified N/A."
+  },
+  "rules": {
+    "notAssessed": "fail",
+    "nARequiresEvidence": true,
+    "subsetProofPromotesAllSix": false,
+    "driftReopensEvidence": true
+  },
+  "coverage": [
+    {
+      "surface": "public_routes_and_copy",
+      "status": "assessed_pending_reproof"
+    },
+    {
+      "surface": "authenticated_routes_and_navigation",
+      "status": "assessed_pending_reproof"
+    },
+    {
+      "surface": "roles_plans_and_entitlements",
+      "status": "assessed_pending_reproof"
+    },
+    {
+      "surface": "email_templates_and_delivery",
+      "status": "assessed_open_missing_external_email_proof"
+    },
+    {
+      "surface": "cron_workflows_and_operator_recovery",
+      "status": "assessed_gate_c_pending"
+    },
+    {
+      "surface": "providers_and_integrations",
+      "status": "assessed_gate_c_pending"
+    },
+    {
+      "surface": "api_mcp_and_agent_actions",
+      "status": "assessed_pending_reproof"
+    },
+    {
+      "surface": "browser_device_geography_locale",
+      "status": "assessed_open_missing_cross_browser_at"
+    },
+    {
+      "surface": "data_lifecycle_and_rights",
+      "status": "assessed_open_missing_lifecycle_proof"
+    }
+  ],
+  "claims": [
+    {
+      "claimId": "PLAN-CADENCE",
+      "text": "Free Competitor Watch scans weekly on the Monday slot; Scout monitoring every 6 hours; Starter and Agency monitoring every 3 hours.",
+      "surface": "plan catalog, marketing, dashboard and watchlists",
+      "audience": "buyers and signed-in customers",
+      "owner": "product and monitoring",
+      "source": [
+        "app/lib/plan-entitlements.ts",
+        "docs/plan-catalog.md"
+      ],
+      "requiredGate": "G360-P1-WORKFLOW,G11-CAPACITY-SLO",
+      "requiredEvidence": "same-fingerprint schedule, dispatch, completion, retry and deployed scan-health evidence",
+      "status": "assessed_pending_reproof",
+      "assessment": "2026-07-20 integration drift: the free plan gained a weekly Monday scan (Free Weekly Competitor Watch), changing the cadence claim. Historical exact-candidate proof covered paid cadences only; the changed claim needs fresh dispatch/completion/recovery evidence on the merged candidate before any closeout.",
+      "classification": "discovered",
+      "expiry": "any plan, cron, workflow or cadence-copy change"
+    },
+    {
+      "claimId": "PLAN-ALLOWANCE-TOPUPS",
+      "text": "Included evidence checks reset on the entitlement cadence; unused included checks do not roll over; purchased packs do not expire and require an active paid plan to spend.",
+      "surface": "billing, pricing and plan catalog",
+      "audience": "buyers and billing owners",
+      "owner": "billing",
+      "source": [
+        "app/lib/pricing.ts",
+        "app/routes/app.billing.tsx",
+        "docs/plan-catalog.md"
+      ],
+      "requiredGate": "G360-P1-BILLING",
+      "requiredEvidence": "current Dodo lifecycle, usage-ledger, cancellation retention and top-up spend canaries",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical exact candidate has billing lifecycle, ledger and cleanup evidence; the closeout candidate must repeat the exact Gate B/C billing proof after source freeze.",
+      "classification": "known",
+      "expiry": "any entitlement, SKU, billing-policy or provider change"
+    },
+    {
+      "claimId": "PLAN-FEATURE-CATALOG",
+      "text": "Customer-visible plan features come from the authoritative entitlement catalog; undeclared features remain unavailable.",
+      "surface": "pricing, billing and plan-gated customer navigation",
+      "audience": "buyers and signed-in customers",
+      "owner": "product and entitlements",
+      "source": [
+        "app/lib/plan-entitlements.ts",
+        "app/lib/pricing.ts"
+      ],
+      "requiredGate": "G11-INVENTORY,G360-P1-BACKBONE",
+      "requiredEvidence": "executable catalog parity plus same-fingerprint plan-boundary and pre-click denial proof",
+      "status": "assessed_pending_reproof",
+      "assessment": "The closeout registry binds every authoritative plan feature to one executable inventory; 2026-07-20 integration drift added weekly_digest and email_delivery to the free plan (Free Weekly Competitor Watch), so catalog parity plus exact browser and deployed entitlement proof must repeat on the merged candidate.",
+      "classification": "discovered",
+      "expiry": "any plan feature, entitlement, pricing or navigation change"
+    },
+    {
+      "claimId": "MULTILINGUAL-TRANSLATION",
+      "text": "Reads ad text in 30+ languages and scripts and auto-translates it into English.",
+      "surface": "pricing feature copy",
+      "audience": "buyers",
+      "owner": "product and provider runtime",
+      "source": [
+        "app/lib/pricing.ts",
+        "app/lib/translation.server.ts"
+      ],
+      "requiredGate": "G11-LOCALE-TIME,G11-RUNTIME-IDENTITY",
+      "requiredEvidence": "bounded language corpus plus deployed Workers AI model/binding and fallback evidence",
+      "status": "removed_from_product_contract",
+      "assessment": "The unbounded 30+ language promise is removed from plan copy in the closeout candidate; translation runtime remains non-promoted until a bounded corpus and deployed binding proof exist.",
+      "classification": "discovered",
+      "expiry": "translation copy, model, binding or provider change"
+    },
+    {
+      "claimId": "FREE-ACTIVATION-ONLY",
+      "text": "Free includes one weekly Competitor Watch watchlist \u2014 an activation scan, then a weekly Monday scan feeding a weekly brief email \u2014 without instant alerts, evidence checks, collections or exports.",
+      "surface": "dashboard, watchlists, Help and public documentation",
+      "audience": "free users and buyers",
+      "owner": "activation",
+      "source": [
+        "app/routes/app.dashboard.tsx",
+        "app/routes/app.watchlists.tsx",
+        "app/lib/public-markdown.ts"
+      ],
+      "requiredGate": "J2-A-C,J3-A-C",
+      "requiredEvidence": "authoritative first-scan completion/recovery, weekly-scan and weekly-brief delivery, cap and pre-click plan-boundary proof",
+      "status": "assessed_pending_reproof",
+      "assessment": "2026-07-20 integration drift: the overnight stack replaced activation-only free with the recurring Free Weekly Competitor Watch (weekly scan + weekly brief). Historical Journey 2 activation-only proof no longer matches the claim; the changed free contract needs fresh proof at all three widths and deployed identity.",
+      "classification": "known",
+      "expiry": "free-plan, first-scan, weekly-scan, digest, copy or entitlement change"
+    },
+    {
+      "claimId": "FIRST-SCAN-TIMING",
+      "text": "Results usually land within a couple of minutes.",
+      "surface": "watchlist activation",
+      "audience": "new signed-in users",
+      "owner": "monitoring and operations",
+      "source": [
+        "app/routes/app.watchlists.tsx"
+      ],
+      "requiredGate": "G360-P1-WORKFLOW,G11-CAPACITY-SLO",
+      "requiredEvidence": "predeclared p75/p95 configuration-to-proof soak with delayed/failure/recovery truth",
+      "status": "removed_from_product_contract",
+      "assessment": "The unsupported couple-of-minutes promise is removed from customer and recovery copy; completion remains truthful and state-based until a predeclared latency SLO is proven.",
+      "classification": "discovered",
+      "expiry": "workflow, provider, queue, copy or SLO change"
+    },
+    {
+      "claimId": "DELIVERY-TIMEZONE",
+      "text": "Quiet hours use a valid IANA timezone such as Asia/Kolkata or UTC.",
+      "surface": "watchlist delivery UI and API/MCP action",
+      "audience": "customers and API/MCP users",
+      "owner": "delivery",
+      "source": [
+        "app/routes/app.watchlists.tsx",
+        "app/lib/delivery-policy.server.ts",
+        "app/lib/customer-agent-actions.server.ts"
+      ],
+      "requiredGate": "G11-LOCALE-TIME",
+      "requiredEvidence": "invalid-input rejection, legacy UTC fallback, DST-boundary exactly-once delivery and deployed internal receipt",
+      "status": "assessed_pending_reproof",
+      "assessment": "Deterministic policy tests exist for timezone validation, UTC fallback and DST behavior; exact closeout browser and deployed internal receipt proof remains required.",
+      "classification": "discovered",
+      "expiry": "timezone, quiet-hours, API schema, cron or delivery-policy change"
+    },
+    {
+      "claimId": "SOURCE-STATUS-FRESHNESS",
+      "text": "Source status distinguishes live readiness, recent cache, setup-needed and unavailable states without inferring health from configuration.",
+      "surface": "dashboard and source access",
+      "audience": "signed-in customers",
+      "owner": "source providers",
+      "source": [
+        "app/routes/app.dashboard.tsx",
+        "app/routes/app.source-access.ui.tsx"
+      ],
+      "requiredGate": "G360-P1-STATES,G360-P1-PROOF-PARITY",
+      "requiredEvidence": "current provider health/retest, encrypted owner-only token and degraded recovery on exact deployed version",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical all-six browser proof and provider canary cover source-state truth; the closeout candidate must repeat degraded recovery and exact deployed provider identity.",
+      "classification": "known",
+      "expiry": "provider, token, health or copy change"
+    },
+    {
+      "claimId": "CUSTOMER-ROUTE-CATALOG",
+      "text": "Exported customer navigation, public Markdown and sitemap paths remain explicitly inventoried; rendered access-boundary proof stays a separate release gate.",
+      "surface": "dashboard navigation, public markdown and sitemap",
+      "audience": "public visitors and signed-in customers",
+      "owner": "product navigation and public web",
+      "source": [
+        "app/lib/dashboard-navigation.ts",
+        "app/lib/public-markdown.ts",
+        "app/lib/seo.ts"
+      ],
+      "requiredGate": "G11-INVENTORY,G11-SELF-SERVE-PARITY",
+      "requiredEvidence": "executable exported-catalog parity plus same-fingerprint public/authenticated route and access-boundary proof",
+      "status": "assessed_pending_reproof",
+      "assessment": "The closeout registry now binds the exported customer navigation, public markdown and sitemap catalogs; rendered and deployed route proof remains required.",
+      "classification": "discovered",
+      "expiry": "any customer navigation, public path, sitemap or access-boundary change"
+    },
+    {
+      "claimId": "DELIVERY-CHANNEL-GATES",
+      "text": "Email is the default delivery channel. Slack and Teams incoming-webhook delivery of confirmed changes are live Starter+ customer channels (2026-08-12 decision); WhatsApp remains unsupported until separately enabled and proven.",
+      "surface": "notifications, public docs, API/MCP and delivery runtime",
+      "audience": "customers and integrators",
+      "owner": "delivery",
+      "source": [
+        "app/routes/app.notifications.ui.tsx",
+        "app/lib/ga-customer-surface.ts",
+        "app/lib/delivery.server.ts",
+        "app/lib/teams-webhook.server.ts"
+      ],
+      "requiredGate": "G11-EMAIL,G11-SELF-SERVE-PARITY",
+      "requiredEvidence": "no dormant-channel leak plus exact-version controlled inbox delivery/open/link, suppression where provider-supported, retry/dedupe/unsubscribe and recipient privacy proof; Slack/Teams webhook acceptance recorded as delivered only on 2xx",
+      "status": "assessed_open_missing_external_email_proof",
+      "assessment": "Slack/Teams webhook delivery is fail-closed: 2xx acceptance is the only delivery proof, unknown outcomes are recorded as provider_unknown, and provisional changes are labelled unconfirmed. Final configured-sender authentication, controlled inbox, suppression/retry/dedupe/unsubscribe and safe HTML/plain-text email evidence remains open.",
+      "classification": "known",
+      "expiry": "channel flag, provider, UI, API/MCP or delivery change"
+    },
+    {
+      "claimId": "TEAM-AGENCY-SHARING",
+      "text": "Agency includes three seats with the owner included and shared workspace resources.",
+      "surface": "team settings and plan catalog",
+      "audience": "Agency owners and members",
+      "owner": "workspace",
+      "source": [
+        "app/routes/app.team.tsx",
+        "app/lib/plan-entitlements.ts"
+      ],
+      "requiredGate": "J6-A-C,G360-P1-BACKBONE",
+      "requiredEvidence": "seat-cap, invite/revoke/resend, owner/member concurrency and recovery on exact deployment",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical Journey 6 proof covers seat caps, membership and recovery; closeout exact-browser and deployed reconciliation must repeat after freeze.",
+      "classification": "known",
+      "expiry": "role, seat, membership or entitlement change"
+    },
+    {
+      "claimId": "CLIENT-ROOM-AGENCY",
+      "text": "Agency can create and manage client rooms; downgraded workspaces keep existing room context read-only.",
+      "surface": "client delivery",
+      "audience": "Agency users",
+      "owner": "reports and client delivery",
+      "source": [
+        "app/routes/app.clients.tsx"
+      ],
+      "requiredGate": "J4-A-C,G360-P1-PROOF-PARITY",
+      "requiredEvidence": "current evidence, review approval, downgrade read-only, revoke/re-review and cleanup proof",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical Journey 4 proof covers client-room state and delivery; closeout exact-browser, approval/revoke and deployed cleanup must repeat.",
+      "classification": "known",
+      "expiry": "plan, approval, report, room or share change"
+    },
+    {
+      "claimId": "API-LIVE-CATALOG",
+      "text": "The Agency API catalog reports status live and exposes account-owned reads plus narrow audited actions.",
+      "surface": "public API catalog and developer access",
+      "audience": "developers and agents",
+      "owner": "API and agent platform",
+      "source": [
+        "app/routes/api.v1.ts",
+        "app/routes/app.developer-access.ui.tsx"
+      ],
+      "requiredGate": "G11-SELF-SERVE-PARITY,G360-P1-API-LIMITS",
+      "requiredEvidence": "deployed auth, workspace ownership, post-auth limits, revocation, payload bounds, versioning, idempotency and audit parity",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical API limit/auth tests are exact for the prior source; closeout auth, ownership, revocation, bounds and deployed parity must repeat.",
+      "classification": "discovered",
+      "expiry": "API catalog, route, auth, limit or action change"
+    },
+    {
+      "claimId": "API-MCP-ACCOUNT-SCOPE",
+      "text": "API and MCP exports/actions are account-owned, scoped and audited; unsupported channels and broad writes remain blocked.",
+      "surface": "API v1, MCP and public markdown",
+      "audience": "developers and agents",
+      "owner": "API and agent platform",
+      "source": [
+        "app/routes/api.v1.ts",
+        "app/routes/api.mcp.ts",
+        "app/lib/public-markdown.ts"
+      ],
+      "requiredGate": "G11-SELF-SERVE-PARITY,G360-P1-BACKBONE",
+      "requiredEvidence": "owner/member reads, action replay, redaction, rate/output bounds, revoked-key fence and deployed parity",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical API/MCP account-scope tests cover replay, redaction and revoked-key fences; closeout exact deployed parity must repeat.",
+      "classification": "known",
+      "expiry": "tool, action, export, auth or scope change"
+    },
+    {
+      "claimId": "ACCOUNT-DELETION-SUPPORT",
+      "text": "Account deletion is support-only; there is no automatic in-app deletion.",
+      "surface": "account, Help, privacy, trust and terms",
+      "audience": "account owners",
+      "owner": "privacy and support",
+      "source": [
+        "app/routes/app.account.tsx",
+        "app/routes/help.tsx"
+      ],
+      "requiredGate": "G11-DATA-RIGHTS",
+      "requiredEvidence": "approved export/settlement/deletion/retention/backup/provider cleanup runbook and audited execution",
+      "status": "assessed_open_missing_lifecycle_proof",
+      "assessment": "The product truthfully declares support-only deletion, but an approved and audited export, deletion, retention, backup and provider-cleanup execution is still missing.",
+      "classification": "known",
+      "expiry": "deletion, policy, backup, provider or support-process change"
+    },
+    {
+      "claimId": "BILLING-PORTAL-PLAN-CHANGE",
+      "text": "Billing owners can use Dodo-backed checkout, plan change, receipts and the portal/support cancellation path.",
+      "surface": "billing, pricing, Help and terms",
+      "audience": "buyers and billing owners",
+      "owner": "billing",
+      "source": [
+        "app/routes/app.billing.tsx",
+        "docs/launch-owner-actions.md"
+      ],
+      "requiredGate": "J5-A-C,G360-P1-BILLING",
+      "requiredEvidence": "provider retrieval plus checkout, change, failed payment, cancel/reversal, refund, receipt and exact cleanup canaries",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical exact candidate passed Dodo lifecycle and current-run reconciliation; the closeout candidate must repeat provider retrieval, cancellation/refund and cleanup proof.",
+      "classification": "known",
+      "expiry": "Dodo contract, SKU, portal, policy or billing-state change"
+    },
+    {
+      "claimId": "CHECK-PACK-SEMANTICS",
+      "text": "One evidence check is one successful unique proof capture; packs do not change watchlist limits, cadence or features.",
+      "surface": "billing and pricing",
+      "audience": "buyers and billing owners",
+      "owner": "billing and evidence usage",
+      "source": [
+        "app/routes/app.billing.tsx",
+        "app/lib/pricing.ts"
+      ],
+      "requiredGate": "G360-P1-BILLING,G360-P1-BACKBONE",
+      "requiredEvidence": "atomic usage ledger, replay, top-up spend and cancellation-retention proof",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical billing proof covers atomic usage and replay behavior; closeout top-up spend and cancellation-retention proof must repeat on one exact identity.",
+      "classification": "known",
+      "expiry": "usage, pack, plan or billing policy change"
+    },
+    {
+      "claimId": "PRESENCE-SOURCE-COVERAGE",
+      "text": "Website/open-web monitoring is active; unsupported social sources remain gated or manual-only.",
+      "surface": "Presence and public markdown",
+      "audience": "customers and buyers",
+      "owner": "Presence/source providers",
+      "source": [
+        "app/routes/app.presence.tsx",
+        "app/lib/public-markdown.ts"
+      ],
+      "requiredGate": "G11-INVENTORY,G11-SELF-SERVE-PARITY",
+      "requiredEvidence": "deployed connector rollout, plan caps, failure/recovery and explicit unsupported-source truth",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical provider bakeoff covers active open-web monitoring and unsupported-source truth; closeout rollout, caps and degraded recovery must repeat.",
+      "classification": "known",
+      "expiry": "connector, rollout, plan or public-copy change"
+    },
+    {
+      "claimId": "COMPARE-MIGRATION-AFTERNOON",
+      "text": "Collections and watchlists can be set up here in an afternoon with founder-assisted migration.",
+      "surface": "MagicBrief comparison page",
+      "audience": "prospective buyers",
+      "owner": "growth and support",
+      "source": [
+        "app/routes/compare.magicbrief.tsx"
+      ],
+      "requiredGate": "G11-SELF-SERVE-PARITY,G11-SUPPORT-COMMS",
+      "requiredEvidence": "documented bounded migration procedure and internal completion timing; otherwise remove the time promise",
+      "status": "removed_from_product_contract",
+      "assessment": "The unsupported migrate-in-an-afternoon promise is removed from the comparison and marketing surfaces; bounded human migration help remains without a time guarantee.",
+      "classification": "discovered",
+      "expiry": "comparison copy or migration workflow change"
+    },
+    {
+      "claimId": "SEO-CANONICAL-INDEXING",
+      "text": "0509.io is canonical; only intended public routes are indexable and private/token/operator surfaces remain non-indexed.",
+      "surface": "metadata, robots, sitemap and security headers",
+      "audience": "search engines and public visitors",
+      "owner": "public web",
+      "source": [
+        "app/lib/seo.ts",
+        "workers/security-headers.ts"
+      ],
+      "requiredGate": "G11-SEO",
+      "requiredEvidence": "queryful search policy, private/token noindex, structured data, redirects and deployed social/crawl checks",
+      "status": "assessed_pending_reproof",
+      "assessment": "2026-07-20 integration drift: the overnight stack added /search, /auth/signup and /compare/meta-ad-library to the sitemap and introduced public /ads/:domain brand pages (indexable by default with honest-shell/demo/stale self-noindex, deliberately absent from the static sitemap). Prior canonical/robots/sitemap proof predates these surfaces; indexing claims need fresh proof on the merged candidate. 2026-08-09: the proof-backed /competitor-monitoring category page joined the sitemap (route, canonical, WebPage+FAQ JSON-LD, source/freshness limits, and sample labeling are asserted in tests); the claim stays assessed_pending_reproof, no proof fabricated.",
+      "classification": "discovered",
+      "expiry": "route, metadata, host, robots, sitemap or header change"
+    },
+    {
+      "claimId": "EMAIL-DELIVERABILITY",
+      "text": "Auth, invite, alert, digest, support and billing email reaches the intended controlled recipient with durable status and suppression truth.",
+      "surface": "email delivery and lifecycle messaging",
+      "audience": "customers and operators",
+      "owner": "email and support",
+      "source": [
+        "app/lib/delivery-email-core.server.ts",
+        "app/lib/better-auth.server.ts"
+      ],
+      "requiredGate": "G11-EMAIL",
+      "requiredEvidence": "durable magic-link attempt, SPF/DKIM/DMARC, inbox receipt, bounce/complaint suppression, rendering, retry/dedupe/unsubscribe and privacy proof",
+      "status": "assessed_open_missing_external_email_proof",
+      "assessment": "Controlled delivery canaries passed historically, but SPF/DKIM/DMARC, bounce/complaint suppression and dark-mode client rendering are not yet complete on one exact deployment.",
+      "classification": "discovered",
+      "expiry": "template, provider, DNS, recipient, suppression or delivery change"
+    },
+    {
+      "claimId": "OP-HEALTH-UPTIME",
+      "text": "Health is checked every five minutes and operators receive a truthful failure notification and recovery path.",
+      "surface": "health workflow, status and runbooks",
+      "audience": "operators and customers reading status",
+      "owner": "operations",
+      "source": [
+        "docs/ops-backup-uptime.md",
+        "docs/ga-support-runbook.md"
+      ],
+      "requiredGate": "G11-CAPACITY-SLO,G11-SUPPORT-COMMS",
+      "requiredEvidence": "intentional failure notification, deployed identity, recovery and truthful status incident proof",
+      "status": "assessed_open_missing_failure_notification",
+      "assessment": "The historical deployed version passed a 24/24 live health soak; an intentional failure notification and recovery incident proof is still missing for closeout.",
+      "classification": "known",
+      "expiry": "health route, workflow, alert routing or status change"
+    },
+    {
+      "claimId": "OP-BACKUP-RESTORE",
+      "text": "Scheduled D1 exports are retained in R2 and can be restored with migration, integrity, row-count and billing linkage intact.",
+      "surface": "backup workflow and operator runbook",
+      "audience": "operators",
+      "owner": "data operations",
+      "source": [
+        "docs/ops-backup-uptime.md",
+        "scripts/validate-d1-backup.mjs"
+      ],
+      "requiredGate": "G360-P1-OPS,G11-DATA-RIGHTS",
+      "requiredEvidence": "current scheduled export plus remote-scratch restore, actual-path R2 lifecycle/deletion and rollback proof; Time Travel bookmark only before a database-changing release",
+      "status": "assessed_open_missing_r2_lifecycle",
+      "assessment": "A fresh exact-fingerprint remote D1 export/import scratch restore passed integrity, rows and billing linkage. This product has not proved a Time Travel runbook and does not claim it for this source-only closeout; actual-path R2 lifecycle/deletion and closeout-version rollback proof remain open.",
+      "classification": "known",
+      "expiry": "migration, backup, R2, restore or billing-schema change"
+    },
+    {
+      "claimId": "OP-MONITORING-CAPACITY",
+      "text": "Agency plan load is admitted with bounded queue priority, backpressure, delayed-state truth and recovery.",
+      "surface": "monitoring runtime, operator desk and customer state",
+      "audience": "customers and operators",
+      "owner": "monitoring operations",
+      "source": [
+        "docs/monitoring-fanout-rollout.md",
+        "app/routes/ops.tsx"
+      ],
+      "requiredGate": "G11-CAPACITY-SLO,G360-P1-OPS",
+      "requiredEvidence": "plan-limit load, completed scans, quota reconciliation, failure/compensation and deployed soak",
+      "status": "assessed_gate_c_pending",
+      "assessment": "Deterministic queue and compensation proof exists historically; plan-load admission, completed scheduled work, quota reconciliation and deployed soak remain open for closeout.",
+      "classification": "known",
+      "expiry": "plan limit, queue, workflow, provider or operator-path change"
+    },
+    {
+      "claimId": "COMPAT-MOBILE-A11Y",
+      "text": "All six journeys work in primary Chromium, with risk-based representative Firefox, WebKit, iOS Safari and Android Chrome coverage plus keyboard, screen-reader semantics and reduced-motion parity.",
+      "surface": "all customer journeys",
+      "audience": "all supported customers",
+      "owner": "experience",
+      "source": [
+        "playwright.config.ts",
+        "e2e/helpers/release-experience.ts"
+      ],
+      "requiredGate": "G11-COMPATIBILITY,G360-P1-A11Y",
+      "requiredEvidence": "same-fingerprint all-six primary matrix plus representative cross-engine/mobile critical paths, reflow/no-overflow exact artifacts and one manual VoiceOver/Safari complete-process check",
+      "status": "assessed_open_missing_cross_browser_at",
+      "assessment": "Historical exact browser proof covered all six in Chromium at three widths. The closeout harness now passes representative Journey 1 checks in Firefox, WebKit, iOS Safari and Android Chrome; final exact-candidate cross-engine risk samples and one manual VoiceOver/Safari complete-process check remain open. Edge inherits Chromium because no Edge-specific contract is declared.",
+      "classification": "discovered",
+      "expiry": "browser support, CSS/layout, shared interaction or release-matrix change"
+    },
+    {
+      "claimId": "GA-AGENCY-STATUS",
+      "text": "Agency dated release evidence does not constitute current 0/6 Gate A\u2013C readiness.",
+      "surface": "launch/readiness scorecards and runbooks",
+      "audience": "release owners",
+      "owner": "root release owner",
+      "source": [
+        "docs/final-self-serve-ga-scorecard.md",
+        "docs/launch-readiness.md"
+      ],
+      "requiredGate": "G360-P0-IMMUTABLE",
+      "requiredEvidence": "one current all-six production evidence envelope superseding every dated snapshot",
+      "status": "assessed_release_pending",
+      "assessment": "The historical exact deployment has strong A/B and immediate C evidence, but closeout source drift requires one new immutable full ladder and all remaining inventory gaps to close.",
+      "classification": "discovered",
+      "expiry": "any readiness wording, fingerprint, review or deployed-version change"
+    }
+  ],
+  "explicitExclusions": [
+    {
+      "claimId": "E2E-CANARY-ROUTES",
+      "classification": "rejected",
+      "source": [
+        "app/routes.ts",
+        "app/lib/e2e-harness-guard.server.ts",
+        "tests/e2e-harness-guard.test.ts"
+      ],
+      "reason": "Local fixture and token-guarded canary routes are operator/test surfaces, not supported customer capabilities; their exclusion still requires route-guard and no-public-nav proof."
+    },
+    {
+      "claimId": "DAILY-MONITORING-ALIAS",
+      "classification": "duplicate",
+      "source": [
+        "workers/schedule.ts"
+      ],
+      "reason": "Deprecated schedule alias maps to the canonical digest job and is not a separate customer promise."
+    },
+    {
+      "claimId": "NATIVE-APP-EDITING",
+      "classification": "rejected",
+      "source": [
+        "docs/customer-readiness-remediation.md"
+      ],
+      "reason": "No native app is declared; native editing remains out of scope until Gate D buyer evidence changes the product contract."
+    }
+  ],
+  "rows": [
+    {
+      "claimId": "AUDIT-CADENCE-PAID-3-6H",
+      "page": "/",
+      "selector": "homepage product FAQ, pricing section",
+      "sentence": "Paid plans run scheduled checks every 3–6 hours: Scout every 6 hours, Starter every 3 hours, and Agency every 3 hours for its first 25 watchlists with the rest every 6 hours.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'every_6h' app/lib/plan-entitlements.ts && grep -qF 'every_3h' app/lib/plan-entitlements.ts && grep -qF 'priorityScanSlots: 25' app/lib/plan-entitlements.ts",
+      "test": "tests/plan-entitlements.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-CADENCE-FREE-WEEKLY",
+      "page": "/pricing",
+      "selector": "pricing section note, homepage final CTA",
+      "sentence": "Free: watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1 Collection. No card required.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'scheduledScanCadence: \"weekly\"' app/lib/plan-entitlements.ts && grep -qF 'Monday 03:00' app/lib/plan-entitlements.ts",
+      "test": "tests/plan-entitlements.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-DIGEST-CADENCE",
+      "page": "/",
+      "selector": "homepage how-step 03",
+      "sentence": "Your brief groups meaningful changes with source-linked proof and one next review — daily on Starter and Agency, weekly on Scout.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'digestCadence: \"weekly\"' app/lib/plan-entitlements.ts && grep -qF 'digestCadence: \"daily_and_weekly\"' app/lib/plan-entitlements.ts",
+      "test": "tests/plan-entitlements.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-INSTANT-ALERTS",
+      "page": "/",
+      "selector": "homepage product FAQ, competitor-monitoring category FAQ",
+      "sentence": "Starter and Agency can also turn on instant alerts, so a confirmed change emails you as soon as a check finds it instead of waiting for the brief.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'high_priority_alerts' app/lib/plan-entitlements.ts",
+      "test": "tests/plan-entitlements.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-PLAN-LIMITS",
+      "page": "/pricing",
+      "selector": "pricing billing FAQ, pricing plan detail",
+      "sentence": "Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team seats, API/MCP access, client reports, and shared report branding.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'watchlists: 75' app/lib/plan-entitlements.ts && grep -qF 'collections: 250' app/lib/plan-entitlements.ts && grep -qF 'includedEvidenceChecksPerMonth: 2500' app/lib/plan-entitlements.ts && grep -qF 'workspaceSeats: 3' app/lib/plan-entitlements.ts && grep -qF 'api_access' app/lib/plan-entitlements.ts && grep -qF 'mcp_access' app/lib/plan-entitlements.ts",
+      "test": "tests/pricing.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-PRICING-DODO-LOCALIZED",
+      "page": "/pricing",
+      "selector": "pricing billing FAQ, pricing section",
+      "sentence": "Published plan prices are shown on this page. Checkout shows the exact amount in your local currency, loaded from Dodo Payments at preview time.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'PUBLISHED_PLAN_PRICES_USD' app/lib/pricing.ts && grep -qF 'PUBLISHED_BUNDLE_PRICES_USD' app/lib/pricing.ts && test -f app/lib/dodo-pricing.server.ts",
+      "test": "tests/pricing.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-PROOF-CAPTURE-ACCOUNTING",
+      "page": "/pricing#evidence-usage",
+      "selector": "pricing evidence-usage note, billing FAQ",
+      "sentence": "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with page text, the original link, and a screenshot when the capture includes one. Included proof captures reset every month and do not roll over. Purchased proof captures never expire and carry over until you use them.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'never expire' app/lib/pricing.ts && grep -qF 'burst_500_v1' app/lib/pricing.ts && grep -qF 'campaign_2000_v1' app/lib/pricing.ts && grep -qF 'scale_7500_v1' app/lib/pricing.ts",
+      "test": "tests/pricing.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-PUBLIC-SURFACES-ONLY",
+      "page": "/compare/meta-ad-library",
+      "selector": "homepage product FAQ, competitor-monitoring category FAQ, wedge point 03",
+      "sentence": "Public surfaces only: the Meta Ad Library — the same public archive anyone can open in a browser — plus the public landing pages those ads link to. Five to Nine never logs in to anything and never reads anything behind a login.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'never logs in' app/routes/competitor-monitoring.tsx && grep -qF 'public landing pages' app/routes/competitor-monitoring.tsx",
+      "test": "tests/competitor-monitoring-category.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-META-ONLY-SCOPE",
+      "page": "/compare/meta-ad-library",
+      "selector": "homepage product FAQ, competitor-monitoring category FAQ",
+      "sentence": "Five to Nine monitors the Meta Ad Library only — other platforms' ad libraries are out of scope.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'Meta Ad Library only' app/routes/competitor-monitoring.tsx",
+      "test": "tests/competitor-monitoring-category.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-PROOF-BRIEF-REAL",
+      "page": "/",
+      "selector": "homepage proof brief trail note, competitor-monitoring proof brief trail note",
+      "sentence": "Every row above is a real capture. Open the source link and check it yourself — saved watches attach page text and original links, plus a screenshot when the capture includes one.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'loadPublicProofBrief' app/routes/marketing.tsx && grep -qF 'no live proof' app/routes/marketing.tsx",
+      "test": "tests/marketing-proof-brief.test.tsx",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-SEARCH-PREVIEW-FRESHNESS",
+      "page": "/search",
+      "selector": "homepage hero honest note, competitor-monitoring hero honest note",
+      "sentence": "We label source, freshness, coverage, cached results, and proof freshness separately.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'isProvenFreshLiveCapture' app/lib/search-display.ts && grep -qF 'data-f9-result-source' app/routes/search.tsx",
+      "test": "tests/search-live-claim.test.tsx",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-QUIET-PERIOD-HEARTBEAT",
+      "page": "/",
+      "selector": "homepage quiet signals, competitor-monitoring wedge point 02",
+      "sentence": "When a field moves you hear about it once. The same field stays quiet for 48 hours unless it changes again. Quiet periods still send a heartbeat — 'All quiet — 24 ads checked' — so silence always means we looked and nothing moved.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'All quiet' app/routes/marketing.tsx && grep -qF '48 hours' app/routes/marketing.tsx",
+      "test": "tests/monitoring.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-SAVES-SCREENSHOTS",
+      "page": "/",
+      "selector": "homepage meta description + hero deck, competitor-monitoring meta + hero, pricing evidence-usage copy, compare/magicbrief migration FAQ",
+      "sentence": "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then files source-linked proof — page text and the source link — plus a screenshot when the capture includes one.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'screenshot when the capture includes one' app/routes/marketing.tsx && grep -qF 'screenshot when the capture includes one' app/routes/competitor-monitoring.tsx && ! grep -qE 'saves the screenshots|sends screenshot evidence' app/routes/marketing.tsx app/routes/competitor-monitoring.tsx app/lib/pricing.ts",
+      "test": "tests/customer-claim-audit-table.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-LANDING-PAGE-CHANGE-HISTORY",
+      "page": "/pricing",
+      "selector": "pricing Starter/Agency feature list",
+      "sentence": "Landing-page change history as scheduled watches complete.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'Landing-page change history as scheduled watches complete' app/lib/pricing.ts && ! grep -qF 'Landing-page change history with screenshots' app/lib/pricing.ts",
+      "test": "tests/customer-claim-audit-table.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-NO-ACCOUNT-NEEDED",
+      "page": "/search",
+      "selector": "homepage hero honest note, homepage final CTA, competitor-monitoring hero honest note",
+      "sentence": "No account needed. Preview one competitor now. / Public search preview is free — no account.",
+      "claimed": true,
+      "verified": true,
+      "verify": "test -f app/routes/search.tsx && grep -qF 'No account needed' app/routes/marketing.tsx && grep -qF 'No account needed' app/routes/competitor-monitoring.tsx",
+      "test": "tests/marketing-rebuild.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-MIGRATION-SELF-SERVE",
+      "page": "/compare/magicbrief",
+      "selector": "compare/magicbrief migration FAQ",
+      "sentence": "For competitor-list migration and change monitoring, yes: your tracked brands import as watchlists, and paid plans check them every 3–6 hours with source-linked proof. For browsing saved creative collections and boards, no — that saved work does not transfer.",
+      "claimed": true,
+      "verified": true,
+      "verify": "test -f app/routes/compare.magicbrief.tsx && grep -qF 'MIGRATION_SIGNUP_PATH' app/routes/compare.magicbrief.tsx && ! grep -qF 'in an afternoon' app/routes/compare.magicbrief.tsx",
+      "test": "tests/marketing-magicbrief-cta.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-DELIVERY-CHANNEL-EMAIL",
+      "page": "/",
+      "selector": "homepage final CTA",
+      "sentence": "Paid plans run scheduled checks every 3–6 hours and email you the proof.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'email_delivery' app/lib/plan-entitlements.ts && grep -qF 'EmailSendingBinding' app/lib/env.server.ts",
+      "test": "tests/plan-entitlements.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-COMPETITOR-MONITORING-CATEGORY",
+      "page": "/competitor-monitoring",
+      "selector": "competitor-monitoring meta description, competitor-monitoring hero",
+      "sentence": "Competitor monitoring software that watches Meta ads and landing pages, then files source-linked proof when something changes. Free preview, no account.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'source-linked proof' app/routes/competitor-monitoring.tsx && grep -qF 'No account needed' app/routes/competitor-monitoring.tsx",
+      "test": "tests/competitor-monitoring-category.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-OUTSIDE-MARKET-CLAIMS",
+      "page": "/competitor-monitoring",
+      "selector": "category promises, complaints, sources section, category FAQ",
+      "sentence": "Every outside claim carries its source URL and the date we checked it, in the sources section below. Vendor pages change, so each quote is scoped to the date it was checked.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'checked 2026' app/routes/competitor-monitoring.tsx && grep -qF 'categoryPromises' app/routes/competitor-monitoring.tsx",
+      "test": "tests/competitor-monitoring-category.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-FUNNEL-MEASUREMENT",
+      "page": "production config + docs",
+      "selector": "wrangler.jsonc FUNNEL_MEASUREMENT_ENABLED, docs/ga-metrics.md 'Funnel measurement status'",
+      "sentence": "Funnel collection is documented as NOT live (docs/ga-metrics.md §'Funnel measurement status'), and production config agrees: FUNNEL_MEASUREMENT_ENABLED is 0 since issue #1278 — re-enablement pending, see followUp.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF '\"FUNNEL_MEASUREMENT_ENABLED\": \"0\"' wrangler.jsonc && grep -qF 'Enablement deferred; flag currently off in production' docs/ga-metrics.md && grep -qF 'funnelMeasurementEnabled' app/lib/funnel-measurement.server.ts",
+      "test": "tests/funnel-measurement.test.ts",
+      "followUp": "https://github.com/Nishfleet/0509/issues/1590"
+    }
+  ],
+  "rowsMetadata": {
+    "addedBy": "BET 10 reconciliation (issue #1278)",
+    "addedAt": "2026-09-04",
+    "verifyCommand": "npm run verify:claims",
+    "claims": "rows are public sentences; claimed is whether the sentence asserts a state, verified is whether the mapped verification command + live test confirm it holds; a row with claimed != verified must carry an open followUp issue URL (never closed silently)"
+  }
+}

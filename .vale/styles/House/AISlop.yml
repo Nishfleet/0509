@@ -1,0 +1,35 @@
+# Project child of the shared AI-slop deny-list.
+#
+# `extends: Std.AISlop` inherits the base token list; `tokens+` appends
+# project-specific AI tells and `tokens-` removes base tokens that are
+# ordinary vocabulary in this repo's domain. Removing a token also clears
+# every case form of it, which is why whole word-families (harness*,
+# navigate*) are removed here rather than whitelisted one surface form at a
+# time. Deny-listed terms the existing corpus uses legitimately are accepted
+# per-term in .vale/styles/config/vocabularies/House/accept.txt.
+extends: Std.AISlop
+level: error
+tokens-:
+  # Test/QA/build harnesses are literal product infrastructure vocabulary in
+  # this repo (e2e-qa-harness, canary harness, packet harness) — the word
+  # names the thing, it is not slop.
+  - harness
+  - harnesses
+  - harnessing
+  # "navigate" is UI/browser vocabulary throughout the docs (a headless
+  # browser navigates a page; a user navigates to a screen).
+  - navigate
+  - navigates
+  - navigating
+tokens+:
+  # 0509-specific AI tells seen in generated copy.
+  - unlock insights
+  - supercharge
+  - supercharges
+  - supercharging
+  - stay ahead of the curve
+  - in today's fast-paced
+  - in today's competitive landscape
+  - the power of
+  - unlock the power
+  - unleash

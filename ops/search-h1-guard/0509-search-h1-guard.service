@@ -1,0 +1,24 @@
+[Unit]
+Description=0509 /search H1 country-scope regression guard
+Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
+# Independent of any GitHub Actions runner: the guard must keep firing while
+# every runner is busy or offline, and its failure must reach journald + a
+# watchdog even when GitHub's scheduled-cron lottery would skip it.
+
+[Service]
+Type=oneshot
+# The guard auto-files a GitHub issue on a regression, so it runs as the nish
+# user (owner of the ambient `gh` auth / GITHUB_TOKEN). It needs no Cloudflare
+# token — it only curls the live 0509.io /search surface.
+User=nish
+Group=nish
+ExecStart=/opt/0509-search-h1-guard/0509-search-h1-guard-run.sh
+# Ten domains, each fetched with a 30s cap, must fit comfortably inside one
+# slot; the wall-clock timer cadence is daily.
+TimeoutStartSec=300
+# A failed verdict must leave the unit failed for watchers; do not restart
+# into a tight failure loop.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
