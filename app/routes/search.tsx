@@ -1601,11 +1601,10 @@ export default function SearchRoute() {
   // BL-031: the refine panel is a disclosure that stays SHUT until the visitor
   // actually has filters on, so the pre-search screen is one field and one
   // button instead of a six-control form page. The count is written into the
-  // summary so a narrowed search never looks like a broad one.
+  // summary so a narrowed search never looks like a broad one. The country
+  // scope lives at the top of the instrument (issue #1882), so it is counted
+  // here no longer — the badge/auto-open reports only the in-panel controls.
   const activeRefineFilters = [
-    data.filters.country && data.filters.country !== ALL_COUNTRIES_VALUE
-      ? "country"
-      : null,
     data.filters.platform && data.filters.platform !== "all" ? "platform" : null,
     data.filters.creativeType && data.filters.creativeType !== "all"
       ? "creative"
@@ -1655,8 +1654,12 @@ export default function SearchRoute() {
   // state and it becomes the `role="alert"` on a refused one; a field that
   // already holds the domain you searched does not need to be told what to
   // paste into it.
-  const commandHint =
-    liveInputError ?? (instrumentUsed ? null : "Paste one competitor website.");
+  // Issue #1882: the empty state carries exactly ONE explanatory sentence (the
+  // idle ledger line rendered below the instrument). A second "paste a
+  // competitor website" hint under the field would repeat the same idea, so
+  // the resting state prints no field hint — only a refused input gets one,
+  // via liveInputError. The field keeps its visible label for screen readers.
+  const commandHint = liveInputError ?? null;
   // ONE heading per state, and it is the sentence that state actually wants
   // to say. The search answer's title is the strongest when there is one (it
   // is what the old page rendered as the answer panel's h3, directly under a
@@ -1783,7 +1786,14 @@ export default function SearchRoute() {
               <span className="f9-wk-lab">Competitor website</span>
               <input
                 aria-invalid={Boolean(liveInputError)}
-                aria-describedby={commandHint ? "search-command-hint" : undefined}
+                aria-describedby={
+                  [
+                    commandHint ? "search-command-hint" : null,
+                    !instrumentUsed ? "search-idle-copy" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
                 autoComplete="url"
                 className="f9-wk-in"
                 defaultValue={websiteInputValue}
@@ -1803,6 +1813,26 @@ export default function SearchRoute() {
               See ads
             </SubmitButton>
             </div>
+
+            {/* Issue #1882: the country scope belongs at the top of the
+                instrument — the empty state should show input + country + CTA
+                within the first viewport, not tuck the country behind a
+                disclosure. */}
+            <label className="f9-wk-field f9-wk-country">
+              <span className="f9-wk-lab">Country</span>
+              <select
+                className="f9-wk-sel"
+                defaultValue={data.filters.country}
+                name="country"
+              >
+                <option value={ALL_COUNTRIES_VALUE}>All countries</option>
+                {SUPPORTED_COUNTRIES.map((country) => (
+                  <option key={country.code} value={country.name}>
+                    {country.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
             {/* DNA §2: validation speaks in product voice under the field it
                 is about — one telling, not a banner plus a hint saying the
@@ -1835,21 +1865,6 @@ export default function SearchRoute() {
               role="group"
               aria-label="Search filters"
             >
-              <label className="f9-wk-field">
-                <span className="f9-wk-lab">Country</span>
-                <select
-                  className="f9-wk-sel"
-                  defaultValue={data.filters.country}
-                  name="country"
-                >
-                  <option value={ALL_COUNTRIES_VALUE}>All countries</option>
-                  {SUPPORTED_COUNTRIES.map((country) => (
-                    <option key={country.code} value={country.name}>
-                      {country.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label className="f9-wk-field">
                 <span className="f9-wk-lab">Platform</span>
                 <select
@@ -2840,29 +2855,18 @@ export default function SearchRoute() {
           ) : null}
           </>
         ) : (
-          /* Pre-search. The boringness budget: a quiet explanation and the one
-             Rank-1 above it. No specimen, no dimmed sample card, no diagram of
-             a result — the form IS the affordance and the sentence says what
-             comes back.
-             The scope detail is a closed <details>, so the first viewport reads
-             as a tool (BL-031: "a sentence and one text action") while the words
-             stay in the DOM for crawlers — the response to the SEO engine's
-             thin-content warning (dogfood 694ddbd68e95 / AI Answer Readiness
-             69e1b4be47bf). The copy avoids claiming current activity: the
-             discovery cache can serve cached inventory, so the "right now"
-             promise stays gated (PR #567). */
+          /* Pre-search (issue #1882). The form IS the hero: the instrument
+             (input + country + the one filled button) sits above any copy, and
+             under it a single sentence tells the visitor what to paste, then
+             the proof-brief cross-links as the credibility signal. No bullet
+             list, no brochure — the first viewport reads as a tool. The copy
+             avoids claiming current activity: the discovery cache can serve
+             cached inventory, so the "right now" promise stays gated (PR
+             #567). */
           <>
-            <section
-              aria-labelledby="search-idle-title"
-              className="f9-wk-sec"
-            >
-              <p className="f9-wk-kick" id="search-idle-title">
-                Nothing searched yet
-              </p>
-              <p className="f9-wk-lede">
-                Paste a competitor website and press See ads — we check the
-                Meta Ad Library for their ads and keep the capture, so the
-                next time the offer moves, you can prove it.
+            <div className="f9-wk-sec">
+              <p className="f9-wk-lede" id="search-idle-copy">
+                Paste a competitor domain, brand name, or keyword to see their Meta ads.
               </p>
               <div className="f9-wk-acts">
                 <Link className="f9-wk-lnk" to="/#demo">
@@ -2878,42 +2882,7 @@ export default function SearchRoute() {
                   </span>
                 </Link>
               </div>
-            </section>
-            <details className="f9-search-scope-details">
-              <summary>What a search returns</summary>
-              <div className="f9-search-scope-body">
-                <p>
-                  The public preview searches Meta&rsquo;s Ad Library for the
-                  competitor&rsquo;s ads — across Facebook, Instagram, Audience
-                  Network, and Messenger — and keeps what it finds, so a later
-                  change is provable, not anecdotal.
-                </p>
-                <ul className="f9-search-scope-items">
-                  <li>
-                    <strong>Current and recent ads</strong> — creative previews
-                    with first-seen and last-active dates, filterable by
-                    country, platform, creative type, status, and date range.
-                  </li>
-                  <li>
-                    <strong>The offer, read off their landing page</strong> —
-                    the hook and the offer are extracted from the page, and
-                    translated when the creative is in another language.
-                  </li>
-                  <li>
-                    <strong>The proof capture</strong> — each ad and its
-                    landing page are saved with a timestamp, so next
-                    week&rsquo;s comparison has today&rsquo;s evidence.
-                  </li>
-                </ul>
-                <p>
-                  Coverage and freshness vary by advertiser and provider, and
-                  public searches are rate-limited to keep the free preview
-                  fair. Signing in is free: save the useful examples, start a
-                  watchlist that scans on a schedule, and get an email when the
-                  offer or the landing page moves.
-                </p>
-              </div>
-            </details>
+            </div>
           </>
         )}
       </DashboardPage>

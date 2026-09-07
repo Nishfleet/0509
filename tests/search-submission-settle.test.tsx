@@ -328,34 +328,31 @@ describe("public search submission settle", () => {
     expect(markup).toContain("Searching…");
     expect(markup).toContain('aria-busy="true"');
     expect(markup).toContain("disabled");
-    expect(markup).toContain("Nothing searched yet");
+    expect(markup).toContain(
+      "Paste a competitor domain, brand name, or keyword to see their Meta ads.",
+    );
   });
 
-  it("idle pre-search renders honest scope copy clear of the thin-content heuristic", async () => {
+  it("idle pre-search reads as a tool: one sentence, no bullet list", async () => {
     loaderData = idleLoaderData;
     locationObj = { pathname: "/search", search: "", hash: "" };
     navigationState = { state: "idle", location: null };
 
     const markup = await renderMarkup();
 
-    // dogfood 694ddbd68e95: the SEO engine warns at fewer than 250 rendered
-    // words. This fragment is the full body minus the prod shell's nav, so
-    // its count is a strict lower bound for what the engine sees live.
-    expect(markup).toContain("What a search returns");
-    expect(markup).toContain("Current and recent ads");
-    expect(markup).toContain("The offer, read off their landing page");
-    expect(markup).toContain("The proof capture");
-    expect(markup).toContain("Coverage and freshness vary by advertiser");
-    // The scope copy is now a closed disclosure so the idle first viewport
-    // reads as a tool, not a brochure (BL-031): exactly one leading paragraph
-    // under the "Nothing searched yet" kicker, no scope-list class, no note
-    // paragraph in the idle branch.
-    expect(markup).toContain('<details class="f9-search-scope-details">');
+    // Issue #1882: the empty state is a single sentence under the instrument,
+    // with the brochure copy ("Nothing searched yet" + three explaining
+    // bullets) removed. Exactly one leading paragraph, no scope-list class, no
+    // note paragraph in the idle branch.
+    expect(markup).toContain(
+      "Paste a competitor domain, brand name, or keyword to see their Meta ads.",
+    );
+    expect(markup).not.toContain("Nothing searched yet");
+    expect(markup).not.toContain("What a search returns");
+    expect(markup).not.toContain("f9-search-scope-details");
+    expect(markup).not.toContain("f9-search-scope-body");
     expect(markup).not.toContain("f9-search-scope-list");
     expect(markup.match(/class="f9-wk-lede"/g)).toHaveLength(1);
-    const text = markup.replace(/<[^>]+>/g, " ");
-    const words = text.split(/\s+/).filter(Boolean).length;
-    expect(words).toBeGreaterThanOrEqual(250);
   });
 
   it("gives a completed empty search exactly one re-search affordance — all countries when the check ran scoped", async () => {
@@ -803,9 +800,12 @@ describe("refine disclosure state (BL-031 round 3)", () => {
     expect(markup).not.toMatch(/\d+ on<\/span>/);
   });
 
-  it("keeps the active-filter count visible once a narrowed search has actually run", async () => {
-    // A committed country-scoped search is a real narrowing: the disclosure
-    // opens and the summary still says how many filters are on.
+  it("keeps the active country visible at the top band, not the refine badge", async () => {
+    // A committed country-scoped search narrows by the top-band control (issue
+    // #1882): the country select sits above the fold as part of the
+    // instrument, so a country-only narrowing must NOT open the in-panel
+    // refine disclosure or print a badge for a control that no longer lives
+    // in the panel.
     loaderData = {
       ...resultsLoaderData,
       filters: { ...(resultsLoaderData.filters as Record<string, unknown>), country: "Germany" },
@@ -819,9 +819,12 @@ describe("refine disclosure state (BL-031 round 3)", () => {
 
     const markup = await renderMarkup();
 
-    expect(markup).toContain('f9-wk-refine" open=""');
-    expect(markup).toContain("f9-wk-refine-n");
-    expect(markup).toContain("1 on");
+    // The country control remains on the page (top band), carrying the scope.
+    expect(markup).toContain('name="country"');
+    // No in-panel filters are on, so the refine disclosure stays shut.
+    expect(markup).not.toContain('f9-wk-refine" open=""');
+    expect(markup).not.toContain("f9-wk-refine-n");
+    expect(markup).not.toContain("1 on");
   });
 
   it("keeps the refine disclosure shut for a broad search with no active filters", async () => {
