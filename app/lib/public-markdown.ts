@@ -807,7 +807,7 @@ export function llmsPageForTimelinePath(
     url: canonicalUrl(path),
     title: `${domain} offer timeline`,
     description:
-      `Offer timeline for ${domain} with dated offer states from public captures${datePhrase}. Listed only when a complete proof capture backs at least one dated offer state.`,
+      `Offer timeline for ${domain} with at least one dated offer state from public captures${datePhrase}. Listed only when a complete proof capture backs at least one dated offer state.`,
   };
 }
 
@@ -834,7 +834,9 @@ function renderLlmsPagesSection(
  * and one blank line before `Current product truth:`. Only callers that
  * have at least one surviving timeline page should emit it —
  * buildLlmsText gates on timelinePages.length so the static fallback stays
- * byte-identical to the no-D1 / no-table / demo path (issue #1929).
+ * byte-identical to the no-D1 / no-table / demo path (issue #1929;
+ * reviewer-adjudicated in pstack reviewer-senior round: "at least one
+ * dated offer state" rather than an uncounted plural).
  */
 function renderLlmsTimelineSection(
   timelinePages: readonly { title: string; url: string; description: string }[],

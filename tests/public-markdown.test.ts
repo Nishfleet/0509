@@ -296,16 +296,16 @@ describe("public markdown", () => {
 
   it("renders /timeline/:domain entries with newest-capture date, skips non-qualifying paths, and keeps the static fallback byte-identical (issue #1929)", () => {
     // Acceptance 5a: a single valid timeline entry renders with the
-    // offer-timeline title, "dated offer states" wording, and the
-    // lastmod-derived capture date.
+    // offer-timeline title, "at least one dated offer state" wording, and the
+    // lastmod-derived capture date (reviewer-flagged honest singular form).
     const singleValid = buildLlmsText([], [
       { path: "/timeline/example.com", lastmod: "2026-08-26" },
     ]);
     const singleValidTimelineLine =
       "- [example.com offer timeline](https://0509.io/timeline/example.com): " +
-      "Offer timeline for example.com with dated offer states from public captures, last captured on 2026-08-26.";
+      "Offer timeline for example.com with at least one dated offer state from public captures, last captured on 2026-08-26.";
     expect(singleValid).toContain(`Timelines:\n${singleValidTimelineLine}`);
-    expect(singleValid).toContain("dated offer states");
+    expect(singleValid).toContain("at least one dated offer state");
     expect(singleValid).toContain("last captured on 2026-08-26");
 
     // Acceptance 5b: paths that fail the regex must produce zero /timeline/
@@ -335,7 +335,7 @@ describe("public markdown", () => {
       "3 live Meta Ad Library ads for nike.com from public search, captured on 2026-08-26.";
     const mixedTimelineLine =
       "- [calendly.com offer timeline](https://0509.io/timeline/calendly.com): " +
-      "Offer timeline for calendly.com with dated offer states from public captures, last captured on 2026-08-25.";
+      "Offer timeline for calendly.com with at least one dated offer state from public captures, last captured on 2026-08-25.";
     const mixed = buildLlmsText(
       [{ path: "/ads/nike.com", adCount: 3, fetchedAt: "2026-08-26T14:40:00.000Z" }],
       [{ path: "/timeline/calendly.com", lastmod: "2026-08-25" }],
@@ -358,7 +358,7 @@ describe("public markdown", () => {
 
     const timelineLine =
       "- [example.com offer timeline](https://0509.io/timeline/example.com): " +
-      "Offer timeline for example.com with dated offer states from public captures, last captured on 2026-08-26. " +
+      "Offer timeline for example.com with at least one dated offer state from public captures, last captured on 2026-08-26. " +
       "Listed only when a complete proof capture backs at least one dated offer state.";
     const lastTimelineIndex = lines.lastIndexOf(timelineLine);
     expect(lastTimelineIndex).toBeGreaterThan(-1);
@@ -400,25 +400,29 @@ describe("public markdown", () => {
     expect(renderedTimelineLinks).not.toBeNull();
     expect(renderedTimelineLinks!.length).toBe(SITEMAP_TIMELINE_PATH_LIMIT);
 
-    // Filter-first slice order: invalid paths are dropped before slicing, so an
-    // input that mixes 200 valid + 400 invalid (600 total) must render exactly
-    // 200 /timeline/ links — every surviving path is a valid one, none are
-    // dropped by the cap because only 200 reached the slice stage.
+    // Filter-first slice order: invalid paths are dropped before slicing. Mix
+    // N valid + M invalid entries (with M big enough that filtering drops
+    // enough valid entries to slip under the cap) and assert the output has
+    // exactly N /timeline/ links. The valid count is capped at
+    // SITEMAP_TIMELINE_PATH_LIMIT so the test stays stable if the shared cap
+    // moves (acceptance 6).
+    const validCount = Math.min(200, SITEMAP_TIMELINE_PATH_LIMIT);
+    const invalidCount = 400;
     const mixedInput = [
-      ...Array.from({ length: 200 }, (_, index) => ({
+      ...Array.from({ length: validCount }, (_, index) => ({
         path: `/timeline/valid-${index}.com`,
         lastmod: "2026-08-26",
       })),
-      ...Array.from({ length: 400 }, (_, index) => ({
+      ...Array.from({ length: invalidCount }, (_, index) => ({
         path: index % 2 === 0 ? "/timeline/" : `/timeline/extra-${index}/nested`,
         lastmod: "2026-08-26",
       })),
     ];
-    expect(mixedInput.length).toBe(600);
+    expect(mixedInput.length).toBe(validCount + invalidCount);
     const mixedRendered = buildLlmsText([], mixedInput);
     const mixedTimelineLinks = mixedRendered.match(/\]\(https:\/\/0509\.io\/timeline\//g);
     expect(mixedTimelineLinks).not.toBeNull();
-    expect(mixedTimelineLinks!.length).toBe(200);
+    expect(mixedTimelineLinks!.length).toBe(validCount);
   });
 
   it("keeps the brand-page contract unchanged when timelines are also passed (issue #1929)", () => {

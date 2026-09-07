@@ -31,4 +31,16 @@ $ npx tsc -b
 
 The production parity check is captured by the existing test scaffolding — `buildLlmsText()` keeps `=== LLMS_TEXT` byte-identical so any future regression in the no-D1 / demo / missing-table fallback breaks here before reaching production. The live confirm of parity between sitemap and llms.txt requires a deploy + warm D1 read; that is left to the auto-merge arm.
 
+## Reviewer round (pstack `reviewer-senior`, seat cursor/cursor-grok-4.6-high)
+
+Adjudicated against `~/.pi/agent/skills/review-adjudication/SKILL.md`:
+
+- **Act on** (warning #1, acceptance 2 wording): the offer-timeline line copy now reads "at least one dated offer state" instead of the uncounted plural "dated offer states" — the loader returns no count, and the issue's own constraint was "no unsupported claim — if the ledger has one state, say one state." Test strings updated to match.
+- **Act on** (warning #2, cap stability): the `validCount` for the filter-first cap test is now `Math.min(200, SITEMAP_TIMELINE_PATH_LIMIT)` so the assertion stays stable if the shared cap moves below 200.
+- **Consider** (suggestion: `SITEMAP_TIMELINE_PATH_LIMIT` import pulls `sitemap.server` into this module's graph). Noted — `public-markdown` is server-only today, and `workers/app.ts` already imports the sitemap module. No client route imports `public-markdown`. Noted, not acted.
+- **Consider** (suggestion: no worker test that `/llms.txt` actually calls both loaders). Noted — a workers-side assertion would land in `tests/integration/` and expand scope; this PR stays in the unit-test lane.
+- **Noted** (suggestion: ~1000-line file size). Pre-existing layout; not this diff's problem.
+- **Dismissed with reason** (scope check warning): `.fleet/plan.md` and `.fleet/pr-body.md` are fleet paper (heavy-mode artifacts), not product files. Reviewer noted "Fleet paper should not block merge" — confirmed out of scope for the product review gate.
+- **Acceptance check** — all six bullets PASS post-fix.
+
 `Closes #1929`
