@@ -1,0 +1,70 @@
+name: Demo-brand timeline canary
+
+# Public-surface regression guard for the Offer Timeline (issue #1899).
+#
+# The D1 row-count canary (scripts/canary-demo-brand-timeline.mjs without
+# --http) catches a total-loss regression (table wiped, row purge) but
+# CANNOT catch the proof-gate dark state: a brand can have stored seed rows
+# and still 410 on /timeline/:domain because the proof gate (issue #1284)
+# filters out any snapshot missing both a screenshot and a page-text
+# artifact. That gap left /timeline/nike.com, /timeline/nykaa.com, and
+# /timeline/mamaearth.com returning 410 for days without anyone noticing
+# (issue #1899). This workflow probes the real public surface so the gap
+# surfaces as a red check + an auto-filed issue instead of hiding behind a
+# non-zero D1 count.
+#
+# No Cloudflare token, no `production` environment, no D1 access — it is a
+# plain public curl against https://0509.io/timeline/<domain>, so it runs
+# on the default `GITHUB_TOKEN` and never mutates production state. The
+# auto-file path uses the same `GITHUB_TOKEN` and the same dedupe marker
+# (`demo-brand-timeline-guard-incident`) as the D1 canary.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every 6 hours. The nightly backfill cron runs once per UTC day at
+    # 04:00; a 6-hour cadence catches a regression within the same business
+    # day without burning a runner every hour.
+    - cron: "13 */6 * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: demo-brand-timeline-canary
+  cancel-in-progress: false
+
+jobs:
+  http-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336488a3a8a8b6a00ed0df1f1b1c1 # v4
+        with:
+          fetch-depth: 1
+
+      - name: Probe /timeline/:domain for the five demo brands
+        id: probe
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # --http probes the public surface; --file-issue auto-files a
+          # deduped incident when any brand's timeline is dark. The script
+          # exits 1 on a regression (any brand 410/5xx/empty-shell) and 0
+          # when every brand returns 200 with the "As of" affordance.
+          node scripts/canary-demo-brand-timeline.mjs --http --file-issue
+
+      - name: Upload canary evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: demo-brand-timeline-canary
+          path: |
+            demo-brand-timeline-canary-*.txt
+          if-no-files-found: ignore
+          retention-days: 7
+          compression-level: 0
