@@ -1,5 +1,5 @@
 export const READINESS_ACTION_NAME = "get_workspace_readiness" as const;
-export const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
+export const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active read-only customer API key.";
 export const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled Agency customer API key.";
 export const BROAD_WRITE_API_NON_GOAL = "broad public write APIs beyond approved account actions";
 

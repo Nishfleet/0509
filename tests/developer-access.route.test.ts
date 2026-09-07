@@ -48,7 +48,7 @@ describe("developer access route action", () => {
     expect(source).toContain("ownerManagedApiKeys");
   });
 
-  it("loads a clear Agency-plan lock reason before API-key submit", async () => {
+  it("allows a Starter user to create read-only API keys (BET 6)", async () => {
     const { getUserPlan } = await import("~/lib/plan.server");
     vi.mocked(getUserPlan).mockResolvedValue("starter");
 
@@ -74,8 +74,9 @@ describe("developer access route action", () => {
     } as never);
 
     expect(result).toMatchObject({
-      canCreateApiKeys: false,
-      createDisabledReason: "Developer access is included in the Agency plan. Upgrade to Agency to create API keys.",
+      canCreateApiKeys: true,
+      canCreateWriteEnabledKeys: true,
+      createDisabledReason: null,
       apiKeys: [],
     });
   });

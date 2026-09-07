@@ -10,6 +10,7 @@ import {
   WRITE_ENABLED_API_KEY_REQUIREMENT,
 } from "~/lib/agent-action-catalog";
 import { mcpActionGroups } from "~/lib/mcp-agent-action-groups";
+import { mcpToolTierLabel } from "~/lib/plan-feature-gate.server";
 import {
   isSlackDeliveryCustomerFacing,
   slackDeliveryUnavailableMessage,
@@ -21,7 +22,6 @@ import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 import { decodeListCursor } from "~/lib/list-pagination";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
-const API_PLAN_REQUIREMENT = "Agency";
 const MAX_AUTHENTICATED_API_BODY_BYTES = 64 * 1024;
 type ApiLimitContext = {
   identity: {
@@ -808,7 +808,7 @@ export function loader({ request }: LoaderFunctionArgs) {
   return jsonResponse({
     name: "Five to Nine MCP",
     status: "live",
-    planRequirement: API_PLAN_REQUIREMENT,
+    planRequirement: "Read-only tools on Free + Scout; write and account-mutation tools on Starter/Agency",
     endpoint: `${origin}/api/mcp`,
     transport: "streamable-http-json-rpc",
     protocolVersion: MCP_PROTOCOL_VERSION,
@@ -849,7 +849,6 @@ export function loader({ request }: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { authenticateApiKeyRequest } = await import("~/lib/api-keys.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
   const {
     createAuthenticatedApiLimitContext,
@@ -867,10 +866,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     actorUserId: auth.apiKey.userId,
     apiKeyId: auth.apiKey.id,
   });
-  const mcpGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_access");
-  if (!mcpGate.ok) {
-    return mcpGate.response;
-  }
 
   const rpcRequest = await readJsonRpcRequest(request);
   if (!rpcRequest.ok) {
@@ -925,7 +920,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        `Use these Agency tools to retrieve Five to Nine account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active Agency customer API key; account action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. The dated offer-history tools — get_change_history, get_offer_state_at, diff_offer, list_suppressed — read stored competitor captures for any domain and never trigger a live capture. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
+        `Use these Five to Nine tools to retrieve account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Read-only tools work on Free and Scout with any active customer API key; write and account-mutation tools require a write-enabled key on Starter or Agency. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. The dated offer-history tools — get_change_history, get_offer_state_at, diff_offer, list_suppressed — read stored competitor captures for any domain and never trigger a live capture. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
     });
   }
 
@@ -946,7 +941,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       apiLimit,
     );
     if (!result.ok) {
-      return jsonRpcError(message.id, -32602, result.message);
+      return jsonRpcError(message.id, -32602, result.message, result.status);
     }
     return jsonRpcResult(message.id, result.value);
   }
@@ -961,7 +956,10 @@ async function callTool(
   origin: string,
   executionContext: ExecutionContext | null,
   apiLimit: ApiLimitContext,
-): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; message: string }> {
+): Promise<
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; message: string; status?: number }
+> {
   if (!params || typeof params !== "object") {
     return { ok: false, message: "tools/call params must be an object." };
   }
@@ -971,6 +969,26 @@ async function callTool(
   if (!name) {
     return { ok: false, message: "tools/call requires name." };
   }
+
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+  const {
+    mcpToolFeature,
+    mcpTierDeniedMessage,
+    requireReadOrExportFeature,
+    requireWorkspacePlanFeature,
+  } = await import("~/lib/plan-feature-gate.server");
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, apiKey.userId);
+
+  // BET 6 tier gate: read-only tools need mcp_read_access (free + Scout);
+  // write/account-mutation tools need mcp_account_actions (Agency).
+  const requiredFeature = mcpToolFeature(name);
+  if (requiredFeature) {
+    const tierGate = await requireWorkspacePlanFeature(env, workspaceUserId, requiredFeature);
+    if (!tierGate.ok) {
+      return { ok: false, message: mcpTierDeniedMessage(name, tierGate.plan), status: 403 };
+    }
+  }
+
   if (isWriteToolName(name) && !apiKey.actionsWriteEnabled) {
     return { ok: false, message: "This API key is read-only. Create a write-enabled key for audited action tools." };
   }
@@ -983,26 +1001,15 @@ async function callTool(
     return { ok: false, message: slackDeliveryUnavailableMessage() };
   }
 
-  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
-  const { requireExportFeature, requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
-  const workspaceUserId = await resolveWorkspaceDataUserId(env, apiKey.userId);
-
   const exportToolNames = new Set([
     "get_collection_export",
     "get_watchlist_export",
     "get_digest_export",
   ]);
   if (exportToolNames.has(name)) {
-    const exportGate = await requireExportFeature(env, workspaceUserId, format);
+    const exportGate = await requireReadOrExportFeature(env, workspaceUserId, format, "mcp_read_access");
     if (!exportGate.ok) {
       return { ok: false, message: "This export format is not included in your current plan." };
-    }
-  }
-
-  if (isWriteToolName(name)) {
-    const actionsGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_account_actions");
-    if (!actionsGate.ok) {
-      return { ok: false, message: "Account actions require the Agency plan." };
     }
   }
 
@@ -1535,7 +1542,7 @@ function mcpToolDiscoveryEntry(tool: (typeof MCP_TOOLS)[number]) {
   const requiresWriteEnabled = isWriteToolName(tool.name);
   return {
     ...tool,
-    planRequirement: API_PLAN_REQUIREMENT,
+    planRequirement: mcpToolTierLabel(tool.name),
     requiresWriteEnabled,
     credentialRequirement: requiresWriteEnabled
       ? WRITE_ENABLED_API_KEY_REQUIREMENT
@@ -1872,15 +1879,18 @@ function jsonRpcResult(id: JsonRpcId, result: Record<string, unknown>) {
   });
 }
 
-function jsonRpcError(id: JsonRpcId, code: number, message: string) {
-  return jsonResponse({
-    jsonrpc: "2.0",
-    id,
-    error: {
-      code,
-      message,
+function jsonRpcError(id: JsonRpcId, code: number, message: string, status = 200) {
+  return jsonResponse(
+    {
+      jsonrpc: "2.0",
+      id,
+      error: {
+        code,
+        message,
+      },
     },
-  });
+    status,
+  );
 }
 
 function jsonRpcLimitResponse(id: JsonRpcId, response: Response) {
@@ -1917,8 +1927,9 @@ function retryAfterSecondsFromResponse(response: Response) {
   return Number.isFinite(value) && value >= 1 ? Math.ceil(value) : 1;
 }
 
-function jsonResponse(payload: Record<string, unknown>) {
+function jsonResponse(payload: Record<string, unknown>, status = 200) {
   return Response.json(payload, {
+    status,
     headers: noStoreHeaders(),
   });
 }

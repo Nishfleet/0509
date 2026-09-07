@@ -19,7 +19,7 @@ type ApiResourceType = "collection" | "watchlist" | "digest";
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const { authenticateApiKeyRequest } = await import("~/lib/api-keys.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { requireExportFeature, requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+  const { requireReadOrExportFeature, requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
   const {
     createAuthenticatedApiLimitContext,
@@ -77,7 +77,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
       },
     );
   }
-  const exportGate = await requireExportFeature(env, workspaceUserId, format);
+  const exportGate = await requireReadOrExportFeature(env, workspaceUserId, format, "api_access");
   if (!exportGate.ok) {
     return exportGate.response;
   }

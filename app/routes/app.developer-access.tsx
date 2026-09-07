@@ -24,9 +24,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const { workspaceUserId, isMember, ownerName } = await requireWorkspaceSession(env, request);
-  const [apiKeys, apiGate] = await Promise.all([
+  const [apiKeys, apiGate, writeGate] = await Promise.all([
     isMember ? Promise.resolve([]) : listCustomerApiKeys(env, workspaceUserId),
     requireWorkspacePlanFeature(env, workspaceUserId, "api_access"),
+    requireWorkspacePlanFeature(env, workspaceUserId, "api_write_access"),
   ]);
   const createDisabledReason = developerAccessDisabledReason({
     hasApiAccess: apiGate.ok,
@@ -36,6 +37,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     canCreateApiKeys: !createDisabledReason,
+    canCreateWriteEnabledKeys: writeGate.ok,
     createDisabledReason,
     apiKeys: apiKeys.map((apiKey) => ({
       id: apiKey.id,
@@ -79,10 +81,21 @@ export async function action({ context, request }: ActionFunctionArgs) {
         })!,
       };
     }
+    const wantsWrite = formData.get("actionsWriteEnabled") === "1";
+    if (wantsWrite) {
+      const writeGate = await requireWorkspacePlanFeature(env, workspaceUserId, "api_write_access");
+      if (!writeGate.ok) {
+        return {
+          ok: false,
+					intent,
+          message: "Write-enabled API keys require the Starter plan or above. Read-only keys are available on Free and Scout.",
+        };
+      }
+    }
     const { createCustomerApiKey } = await import("~/lib/api-keys.server");
     const name = String(formData.get("apiKeyName") ?? "");
     const result = await createCustomerApiKey(env, workspaceUserId, name, {
-      actionsWriteEnabled: formData.get("actionsWriteEnabled") === "1",
+      actionsWriteEnabled: wantsWrite,
     });
 
     return {
