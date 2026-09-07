@@ -2,14 +2,16 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   buildProductionDeployPlan,
   executeProductionDeployPlan,
 } from "./deploy-production-plan.mjs";
+import { writeDeploySummary } from "./deploy-summary.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 const localEnvFilePattern = /^(?:\.dev\.vars(?:\..+)?|\.env(?:\..+)?)$/;
 const cloudflareCredentialEnvNames = [
   "CF_ACCOUNT_ID",
@@ -58,47 +60,50 @@ function run(command, args, options = {}) {
   }
 }
 
-try {
-  const holdDirectory = join(root, "tmp");
-  mkdirSync(holdDirectory, { recursive: true });
-  for (const name of readdirSync(root)) {
-    if (!localEnvFilePattern.test(name)) {
-      continue;
+if (isMainModule) {
+  try {
+    const holdDirectory = join(root, "tmp");
+    mkdirSync(holdDirectory, { recursive: true });
+    for (const name of readdirSync(root)) {
+      if (!localEnvFilePattern.test(name)) {
+        continue;
+      }
+
+      const source = join(root, name);
+      if (!statSync(source).isFile()) {
+        continue;
+      }
+
+      const held = join(holdDirectory, `.deploy-hold-${process.pid}-${movedLocalEnvFiles.length}-${name.slice(1)}`);
+      renameSync(source, held);
+      movedLocalEnvFiles.push({ source, held });
     }
 
-    const source = join(root, name);
-    if (!statSync(source).isFile()) {
-      continue;
+    const nonce = `${process.pid}-${randomBytes(8).toString("hex")}`;
+    const manifestPath = `test-results/deploy-readiness-${nonce}.json`;
+    const remoteRestoreEvidencePath = process.env.D1_REMOTE_RESTORE_EVIDENCE_PATH;
+    const backupProofStatus = process.env.BACKUP_PROOF_STATUS;
+    const wranglerOutputPath = `test-results/wrangler-deploy-output-${nonce}.jsonl`;
+    const rollbackTargetPath = `test-results/worker-rollback-target-${nonce}.json`;
+    const plan = buildProductionDeployPlan({
+      manifestPath,
+      remoteRestoreEvidencePath,
+      backupProofStatus,
+      wranglerOutputPath,
+      rollbackTargetPath,
+    });
+    executeProductionDeployPlan(plan, (step) => run(step.command, step.args, step));
+    writeDeploySummary();
+  } catch (error) {
+    exitCode = error && typeof error.exitCode === "number" ? error.exitCode : 1;
+    console.error(error instanceof Error ? error.message : error);
+  } finally {
+    for (const { source, held } of movedLocalEnvFiles.reverse()) {
+      if (existsSync(held)) {
+        renameSync(held, source);
+      }
     }
-
-    const held = join(holdDirectory, `.deploy-hold-${process.pid}-${movedLocalEnvFiles.length}-${name.slice(1)}`);
-    renameSync(source, held);
-    movedLocalEnvFiles.push({ source, held });
   }
 
-  const nonce = `${process.pid}-${randomBytes(8).toString("hex")}`;
-  const manifestPath = `test-results/deploy-readiness-${nonce}.json`;
-  const remoteRestoreEvidencePath = process.env.D1_REMOTE_RESTORE_EVIDENCE_PATH;
-  const backupProofStatus = process.env.BACKUP_PROOF_STATUS;
-  const wranglerOutputPath = `test-results/wrangler-deploy-output-${nonce}.jsonl`;
-  const rollbackTargetPath = `test-results/worker-rollback-target-${nonce}.json`;
-  const plan = buildProductionDeployPlan({
-    manifestPath,
-    remoteRestoreEvidencePath,
-    backupProofStatus,
-    wranglerOutputPath,
-    rollbackTargetPath,
-  });
-  executeProductionDeployPlan(plan, (step) => run(step.command, step.args, step));
-} catch (error) {
-  exitCode = error && typeof error.exitCode === "number" ? error.exitCode : 1;
-  console.error(error instanceof Error ? error.message : error);
-} finally {
-  for (const { source, held } of movedLocalEnvFiles.reverse()) {
-    if (existsSync(held)) {
-      renameSync(held, source);
-    }
-  }
+  process.exit(exitCode);
 }
-
-process.exit(exitCode);
