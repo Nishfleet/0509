@@ -16,7 +16,7 @@ import {
 import type { RootLoaderData } from "~/root";
 
 const description =
-  "Five to Nine API docs for account-owned exports and approved account actions.";
+  "Five to Nine API docs for read-only evidence access and approved account actions.";
 
 export const links: LinksFunction = () => canonicalLinks("/api/docs");
 
@@ -27,6 +27,46 @@ export const meta: MetaFunction = () =>
     pathname: "/api/docs",
   });
 
+// BET 6: read-only tools are free + Scout; write/account-mutation tools are
+// Agency. This table is documentation copy; the authoritative gate lives in
+// app/lib/plan-feature-gate.server.ts.
+const READ_ONLY_TOOLS: Array<[string, string]> = [
+  ["get_workspace_readiness", "Account setup and readiness state"],
+  ["get_change_history", "Evidence-backed change history for a domain"],
+  ["get_offer_state_at", "Stored offer state for a domain on a date"],
+  ["diff_offer", "Diff two stored offer states for a domain"],
+  ["list_suppressed", "Proof-suppressed snapshot rows for a domain"],
+  ["get_collection_export", "Read an account-owned collection"],
+  ["get_watchlist_export", "Read an account-owned watchlist"],
+  ["get_digest_export", "Read an account-owned digest"],
+  ["watchlist_runs.list", "List watchlist run history"],
+];
+
+const WRITE_TOOLS: Array<[string, string]> = [
+  ["retest_meta_source", "Retest saved source access"],
+  ["create_watchlist", "Create a competitor watchlist"],
+  ["update_watchlist", "Tune a watchlist"],
+  ["refresh_watchlist", "Refresh a watchlist"],
+  ["pause_watchlist", "Pause a watchlist"],
+  ["resume_watchlist", "Resume a watchlist"],
+  ["create_collection", "Create a collection"],
+  ["add_external_proof", "Save visible external evidence"],
+  ["create_share_link", "Create a share link"],
+  ["create_report", "Create a report"],
+  ["share_report", "Share a report"],
+  ["create_counter_move_brief", "Create a counter-move brief"],
+  ["upsert_memory", "Save account context"],
+  ["list_memory", "Read scoped account memory"],
+  ["upsert_client_room", "Save a client room"],
+  ["list_client_rooms", "Read client rooms"],
+  ["create_support_case", "Open a support case"],
+  ["list_support_cases", "Read support case summaries"],
+  ["list_delivery_targets", "Read redacted delivery targets"],
+  ["update_delivery_settings", "Update delivery policy"],
+  ["update_delivery_target", "Update a delivery target"],
+  ["list_web_mentions", "Read existing web mention observations"],
+];
+
 export default function ApiDocsRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
 
@@ -34,7 +74,7 @@ export default function ApiDocsRoute() {
     <PublicDocShell
       kicker="Developer access"
       title="Use account-owned evidence from your tools."
-      intro="The API exports saved Five to Nine data that already belongs to the authenticated account and supports selected approved actions."
+      intro="Read-only access on Free + Scout. Writes and exports on Starter+. Full agent actions on Agency."
     >
       <script
         {...jsonLdScriptProps(
@@ -47,20 +87,25 @@ export default function ApiDocsRoute() {
       />
       <PublicDocBlock title="Authentication">
         <p>
-          Developer API and connected-tool access require Agency. Create a customer API key inside{" "}
+          Read-only API and connected-tool access is available on Free and Scout. Create a customer
+          API key inside{" "}
           <Link to={appLinkTarget("/app/developer-access", rootData?.session)}>Developer access</Link>.
           Send it as a bearer token:
         </p>
         <pre className="f9-code-block">
           <code>{`Authorization: Bearer f9_live_...`}</code>
         </pre>
+        <p>
+          Read-only keys work on Free and Scout. Write-enabled keys (approved account actions)
+          require the Starter plan or above.
+        </p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Connected tools">
         <p>
-          Compatible tools can connect with the same bearer token on Agency. Use an active customer
-          API key for readiness and exports. Use a write-enabled key only when the tool should run
-          approved account actions.
+          Compatible tools can connect with the same bearer token. Use an active customer API key
+          for readiness and read-only evidence. Use a write-enabled key only when the tool should
+          run approved account actions.
         </p>
         <p>
           Follow the{" "}
@@ -78,6 +123,39 @@ Authorization: Bearer f9_live_...
   "params": {}
 }`}</code>
         </pre>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Tool tiers">
+        <p>
+          Read-only tools are available on Free and Scout. Write and account-mutation tools require
+          the Agency plan.
+        </p>
+        <p>
+          <strong>Read-only — Free + Scout</strong>
+        </p>
+        <dl className="proof-trail-list">
+          {READ_ONLY_TOOLS.map(([tool, detail]) => (
+            <div key={tool}>
+              <dt>
+                <code>{tool}</code>
+              </dt>
+              <dd>{detail}</dd>
+            </div>
+          ))}
+        </dl>
+        <p>
+          <strong>Write and account-mutation — Agency</strong>
+        </p>
+        <dl className="proof-trail-list">
+          {WRITE_TOOLS.map(([tool, detail]) => (
+            <div key={tool}>
+              <dt>
+                <code>{tool}</code>
+              </dt>
+              <dd>{detail}</dd>
+            </div>
+          ))}
+        </dl>
       </PublicDocBlock>
 
       <PublicDocBlock title="REST endpoints">
@@ -103,10 +181,14 @@ Authorization: Bearer f9_live_...
 						<dd>{"GET /api/v1/digests/{digestId}?format=json"}</dd>
           </div>
         </dl>
-        <p>Supported formats are JSON and CSV where the resource supports them.</p>
+        <p>
+          JSON reads are available on Free and Scout. CSV and Slack exports require the Starter plan
+          or above.
+        </p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Account actions">
+        <p>Approved account actions require the Agency plan and a write-enabled key.</p>
         <dl className="proof-trail-list">
           {auditedAgentActionGroups().map((group) => (
             <div key={group.id}>
@@ -119,7 +201,7 @@ Authorization: Bearer f9_live_...
 
       <PublicDocBlock title="Recipes">
         <ul className="f9-doc-list">
-          <li>Export a watchlist as CSV before a weekly sales meeting.</li>
+          <li>Ask an agent what changed on a competitor domain this month with receipts.</li>
           <li>Pull a collection as JSON into a team research note.</li>
           <li>Create a counter-move brief and save account context for future reports.</li>
         </ul>

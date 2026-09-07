@@ -13,6 +13,7 @@ import {
 import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
 
 const API_PLAN_REQUIREMENT = "Agency";
+const READ_API_PLAN_REQUIREMENT = "Free + Scout";
 
 function customerExportFormats() {
   return isSlackDeliveryCustomerFacing() ? ["json", "csv", "slack"] : ["json", "csv"];
@@ -32,7 +33,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     {
       name: "Five to Nine Customer API",
       status: "live",
-      planRequirement: API_PLAN_REQUIREMENT,
+      planRequirement: "Read-only endpoints on Free + Scout; write and account-mutation on Starter/Agency",
       auth: {
         type: "bearer",
         header: "Authorization: Bearer <Five to Nine API key>",
@@ -43,16 +44,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
           method: "POST",
           path: "/api/mcp",
           formats: ["mcp-json-rpc"],
-          planRequirement: API_PLAN_REQUIREMENT,
+          planRequirement: "Read-only tools on Free + Scout; write tools on Agency",
           requiresWriteEnabled: false,
           credentialRequirement:
-            `Tool discovery and export access: ${READ_ONLY_API_KEY_REQUIREMENT} Account action tools: ${WRITE_ENABLED_API_KEY_REQUIREMENT}`,
+            `Read-only tools: ${READ_ONLY_API_KEY_REQUIREMENT} Account action tools: ${WRITE_ENABLED_API_KEY_REQUIREMENT}`,
         },
         {
           method: "GET",
           path: "/api/v1/workspace-readiness",
           formats: ["json"],
-          planRequirement: API_PLAN_REQUIREMENT,
+          planRequirement: READ_API_PLAN_REQUIREMENT,
           requiresWriteEnabled: false,
           credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
         },
@@ -69,7 +70,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           method: "GET",
           path: "/api/v1/collections/{collectionId}",
           formats: customerExportFormats(),
-          planRequirement: API_PLAN_REQUIREMENT,
+          planRequirement: READ_API_PLAN_REQUIREMENT,
           requiresWriteEnabled: false,
           credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
         },
@@ -77,7 +78,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           method: "GET",
           path: "/api/v1/watchlists/{watchlistId}",
           formats: customerExportFormats(),
-          planRequirement: API_PLAN_REQUIREMENT,
+          planRequirement: READ_API_PLAN_REQUIREMENT,
           requiresWriteEnabled: false,
           credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
         },
@@ -85,7 +86,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           method: "GET",
           path: "/api/v1/watchlists/{watchlistId}/runs/latest",
           formats: ["json"],
-          planRequirement: API_PLAN_REQUIREMENT,
+          planRequirement: READ_API_PLAN_REQUIREMENT,
           requiresWriteEnabled: false,
           credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
         },
@@ -93,7 +94,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           method: "GET",
           path: "/api/v1/digests/{digestId}",
           formats: customerExportFormats(),
-          planRequirement: API_PLAN_REQUIREMENT,
+          planRequirement: READ_API_PLAN_REQUIREMENT,
           requiresWriteEnabled: false,
           credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
         },

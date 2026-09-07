@@ -66,7 +66,7 @@ const READ_EXPORT_TOOL_NAMES = [
   "watchlist_runs.list",
 ] as const;
 const READ_EXPORT_TOOL_NAME_SET = new Set<string>(READ_EXPORT_TOOL_NAMES);
-const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
+const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active read-only customer API key.";
 const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled Agency customer API key.";
 
 async function loadDocs() {
@@ -125,7 +125,7 @@ describe("MCP route discovery", () => {
     );
 
     expect(body.status).toBe("live");
-    expect(body.planRequirement).toBe("Agency");
+    expect(body.planRequirement).toContain("Free + Scout");
     expect(body.endpoint).toBe("https://0509.io/api/mcp");
     expect(body.auth.setup).toBe("https://0509.io/mcp/setup");
     expect(body.agentActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
@@ -204,7 +204,7 @@ describe("MCP route discovery", () => {
     body.tools.forEach((tool) => {
       const requiresWriteEnabled = expectedWriteToolNameSet.has(tool.name);
       expect(tool).toMatchObject({
-        planRequirement: "Agency",
+        planRequirement: requiresWriteEnabled ? "Agency" : "Free + Scout",
         requiresWriteEnabled,
         credentialRequirement: requiresWriteEnabled
           ? WRITE_ENABLED_API_KEY_REQUIREMENT

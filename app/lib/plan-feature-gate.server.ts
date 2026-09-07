@@ -8,6 +8,95 @@ import { getUserPlan } from "~/lib/plan.server";
 
 export type ExportFormat = "csv" | "json" | "slack";
 
+/**
+ * MCP tool tiering — the single source of truth for which plan feature gates
+ * each MCP tool (BET 6). Read-only tools are free + Scout; write/account-
+ * mutation tools are Agency. Export formats (csv/slack) ride the export
+ * features (Starter+); JSON reads ride the read-only tier.
+ */
+export const MCP_READ_ONLY_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "get_workspace_readiness",
+  "get_collection_export",
+  "get_watchlist_export",
+  "get_digest_export",
+  "watchlist_runs.list",
+  "get_change_history",
+  "get_offer_state_at",
+  "diff_offer",
+  "list_suppressed",
+]);
+
+export const MCP_WRITE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "retest_meta_source",
+  "create_watchlist",
+  "update_watchlist",
+  "refresh_watchlist",
+  "pause_watchlist",
+  "resume_watchlist",
+  "create_collection",
+  "add_external_proof",
+  "create_share_link",
+  "create_report",
+  "share_report",
+  "create_counter_move_brief",
+  "upsert_memory",
+  "list_memory",
+  "upsert_client_room",
+  "list_client_rooms",
+  "create_support_case",
+  "list_support_cases",
+  "list_delivery_targets",
+  "update_delivery_settings",
+  "update_delivery_target",
+  "list_web_mentions",
+]);
+
+export function isMcpReadOnlyTool(toolName: string): boolean {
+  return MCP_READ_ONLY_TOOL_NAMES.has(toolName);
+}
+
+export function isMcpWriteTool(toolName: string): boolean {
+  return MCP_WRITE_TOOL_NAMES.has(toolName);
+}
+
+/** The plan feature that gates a given MCP tool, or null if unclassified. */
+export function mcpToolFeature(toolName: string): PlanFeature | null {
+  if (MCP_READ_ONLY_TOOL_NAMES.has(toolName)) return "mcp_read_access";
+  if (MCP_WRITE_TOOL_NAMES.has(toolName)) return "mcp_account_actions";
+  return null;
+}
+
+/** Human tier label for a tool, used in discovery and docs. */
+export function mcpToolTierLabel(toolName: string): string {
+  if (MCP_READ_ONLY_TOOL_NAMES.has(toolName)) return "Free + Scout";
+  if (MCP_WRITE_TOOL_NAMES.has(toolName)) return "Agency";
+  return "Agency";
+}
+
+/** Documented denial message for a tier-gated MCP tool. */
+export function mcpTierDeniedMessage(toolName: string, plan: PlanFamily): string {
+  if (MCP_WRITE_TOOL_NAMES.has(toolName)) {
+    return "Account-mutation tools require the Agency plan. Read-only tools are available on Free and Scout.";
+  }
+  return `This tool is not included in your current plan (${plan}).`;
+}
+
+/**
+ * Read-or-export gate: JSON reads ride the read-only tier (free + Scout);
+ * csv/slack exports ride the export features (Starter+).
+ */
+export async function requireReadOrExportFeature(
+  env: AppEnv,
+  workspaceUserId: string,
+  format: ExportFormat,
+  readFeature: PlanFeature,
+) {
+  if (format === "json") {
+    return requireWorkspacePlanFeature(env, workspaceUserId, readFeature);
+  }
+  return requireExportFeature(env, workspaceUserId, format);
+}
+
 export const CUSTOMER_AGENT_ACTION_FEATURES = {
   "share.create": "share_links",
   "report.create": "client_reports",

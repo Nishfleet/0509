@@ -45,7 +45,9 @@ export const PLAN_FEATURES = [
   "pdf_reports",
   "agency_branding",
   "api_access",
+  "api_write_access",
   "mcp_access",
+  "mcp_read_access",
   "mcp_account_actions",
   "team_workspace",
   "presence_competitor_tracking",
@@ -80,8 +82,16 @@ export interface PlanEntitlements {
 // MagicBrief free) with an instant first scan, a weekly brief that is
 // genuinely proof-backed once a month, and one real Collection — no card.
 // Free gets the weekly brief + the email lane it rides on; instant alerts,
-// Slack, exports, API, and paid cadences stay paid.
-const FREE_FEATURES: PlanFeature[] = ["weekly_digest", "email_delivery"];
+// Slack, exports, and paid cadences stay paid. Read-only API/MCP access is the
+// BET 6 wedge: a free account can create a read-only key and query its own
+// saved evidence (offer history, readiness, collections, watchlists, digests)
+// from an agent. Write scopes and account-mutation tools stay paid.
+const FREE_FEATURES: PlanFeature[] = [
+  "weekly_digest",
+  "email_delivery",
+  "api_access",
+  "mcp_read_access",
+];
 
 const SCOUT_FEATURES: PlanFeature[] = [
   "competitor_research",
@@ -90,6 +100,8 @@ const SCOUT_FEATURES: PlanFeature[] = [
   "presence_competitor_tracking",
   "presence_website_sources",
   "presence_digest_alerts",
+  "api_access",
+  "mcp_read_access",
 ];
 
 const STARTER_FEATURES: PlanFeature[] = [
@@ -109,6 +121,9 @@ const STARTER_FEATURES: PlanFeature[] = [
   "share_links",
   "presence_self_tracking",
   "presence_social_connect",
+  "api_access",
+  "mcp_read_access",
+  "api_write_access",
 ];
 
 const AGENCY_FEATURES: PlanFeature[] = [
@@ -117,7 +132,9 @@ const AGENCY_FEATURES: PlanFeature[] = [
   "pdf_reports",
   "agency_branding",
   "api_access",
+  "api_write_access",
   "mcp_access",
+  "mcp_read_access",
   "mcp_account_actions",
   "team_workspace",
 ];
@@ -130,7 +147,8 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     // isWeeklyAlignedScan) feeding the weekly email brief. One Collection and
     // one included evidence check per month keep the brief genuinely
     // proof-backed at least once a month — the free-alternatives wedge.
-    // Instant alerts, exports, API, and paid cadences stay paid.
+    // Instant alerts, exports, write scopes, and paid cadences stay paid.
+    // Read-only API/MCP access is free (BET 6).
     watchlists: 1,
     collections: 1,
     includedEvidenceChecksPerMonth: 1,

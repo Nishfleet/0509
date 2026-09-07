@@ -55,10 +55,19 @@ describe("plan feature enforcement matrix", () => {
 		expect(share).toContain("resolveWorkspaceBrandIdentity");
   });
 
-  it("keeps agency-only surfaces off scout and starter", () => {
-    expect(canUsePlanFeature("scout", "api_access")).toBe(false);
+  it("keeps read-only API/MCP on free + scout but write scopes and account actions paid", () => {
+    // BET 6: read-only API/MCP access is free + Scout.
+    expect(canUsePlanFeature("free", "api_access")).toBe(true);
+    expect(canUsePlanFeature("scout", "api_access")).toBe(true);
+    expect(canUsePlanFeature("free", "mcp_read_access")).toBe(true);
+    expect(canUsePlanFeature("scout", "mcp_read_access")).toBe(true);
+    // Write scopes and account-mutation tools stay paid.
+    expect(canUsePlanFeature("scout", "api_write_access")).toBe(false);
+    expect(canUsePlanFeature("starter", "api_write_access")).toBe(true);
+    expect(canUsePlanFeature("scout", "mcp_account_actions")).toBe(false);
     expect(canUsePlanFeature("starter", "mcp_access")).toBe(false);
     expect(canUsePlanFeature("agency", "api_access")).toBe(true);
+    expect(canUsePlanFeature("agency", "mcp_account_actions")).toBe(true);
     expect(canUsePlanFeature("agency", "share_links")).toBe(true);
   });
 
