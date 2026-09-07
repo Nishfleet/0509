@@ -8,6 +8,10 @@ import {
 // SITEMAP_PATHS + canonicalUrl keep the llms.txt link list on the same
 // canonical origin and route set as sitemap.xml.
 import { AI_TRAINING_CRAWLERS, SITEMAP_PATHS, canonicalUrl } from "~/lib/seo";
+// SITEMAP_TIMELINE_PATH_LIMIT caps the /timeline/:domain slice in buildLlmsText
+// at the same crawl-budget ceiling the sitemap uses (issue #1929). Imported
+// from sitemap.server so we never invent a parallel cap.
+import { SITEMAP_TIMELINE_PATH_LIMIT } from "~/lib/sitemap.server";
 
 const AUDITED_AGENT_ACTION_GROUPS = auditedAgentActionGroups();
 const AUDITED_AGENT_ACTION_GROUP_SUMMARY = AUDITED_AGENT_ACTION_GROUPS.map((group) => group.label).join(", ");
@@ -772,6 +776,41 @@ export function llmsPageForBrandPath(
   };
 }
 
+const TIMELINE_BRAND_PATH = /^\/timeline\/([^/]+)$/;
+
+/**
+ * One llms.txt index line for an indexable /timeline/:domain page. Callers
+ * must only pass paths the sitemap would emit (proof-gated, single-segment,
+ * not locale-prefixed). Returns null for anything that is not a single-
+ * segment /timeline/:domain path — locale prefixes (`/de/timeline/x`) and
+ * multi-segment paths (`/timeline/x/y`) fall out naturally via the regex.
+ * Mirrors llmsPageForBrandPath's shape so buildLlmsText can render it the
+ * same way it renders brand pages (issue #1929).
+ */
+export function llmsPageForTimelinePath(
+  path: string,
+  lastmod?: string,
+): {
+  path: string;
+  url: string;
+  title: string;
+  description: string;
+} | null {
+  const match = TIMELINE_BRAND_PATH.exec(path);
+  if (!match) {
+    return null;
+  }
+  const domain = match[1];
+  const datePhrase = lastmod ? `, last captured on ${lastmod.slice(0, 10)}` : "";
+  return {
+    path,
+    url: canonicalUrl(path),
+    title: `${domain} offer timeline`,
+    description:
+      `Offer timeline for ${domain} with at least one dated offer state from public captures${datePhrase}. Listed only when a complete proof capture backs at least one dated offer state.`,
+  };
+}
+
 function renderLlmsPagesSection(
   brandPages: readonly { title: string; url: string; description: string }[],
 ): string {
@@ -781,6 +820,30 @@ function renderLlmsPagesSection(
       (page) => `- [${page.title}](${page.url}): ${page.description}`,
     ),
     ...brandPages.map(
+      (page) => `- [${page.title}](${page.url}): ${page.description}`,
+    ),
+  ].join("\n");
+}
+
+/**
+ * Renders the indexable /timeline/:domain block as a sibling of the Pages:
+ * section. Returns the bare block (`Timelines:\n-line\n-line`) with no
+ * leading separator — the call site prefixes a `\n` so the splice sits
+ * between pagesSection (no trailing newline) and the template's
+ * `\n\nCurrent` and lands with exactly one line break before `Timelines:`
+ * and one blank line before `Current product truth:`. Only callers that
+ * have at least one surviving timeline page should emit it —
+ * buildLlmsText gates on timelinePages.length so the static fallback stays
+ * byte-identical to the no-D1 / no-table / demo path (issue #1929;
+ * reviewer-adjudicated in pstack reviewer-senior round: "at least one
+ * dated offer state" rather than an uncounted plural).
+ */
+function renderLlmsTimelineSection(
+  timelinePages: readonly { title: string; url: string; description: string }[],
+): string {
+  return [
+    "Timelines:",
+    ...timelinePages.map(
       (page) => `- [${page.title}](${page.url}): ${page.description}`,
     ),
   ].join("\n");
@@ -853,23 +916,43 @@ Use the visible product and founder contact paths on the site.
 
 /**
  * Render llms.txt. Pass the same brand-page sitemap entries the live sitemap
- * emits so AI answer engines see every indexable /ads/:domain URL. An empty
- * list is the no-D1 / demo / emergency-brake fallback (static funnel pages
- * only) — the same degradation sitemap.xml uses.
+ * emits so AI answer engines see every indexable /ads/:domain URL. Pass the
+ * timeline entries loadIndexableTimelineEntries returns so AI answer engines
+ * see the same indexable /timeline/:domain URLs the sitemap emits. Empty
+ * lists (the no-D1 / demo / missing-table fallback) keep the output
+ * byte-identical to the static funnel — `LLMS_TEXT = buildLlmsText()` is the
+ * canary, gated by the `Timelines:` header being suppressed when no
+ * timeline page survives the regex filter (issue #1929).
  */
 export function buildLlmsText(
   brandEntries: readonly { path: string; adCount?: number; fetchedAt?: string }[] = [],
+  timelineEntries: readonly { path: string; lastmod?: string }[] = [],
 ): string {
   const brandPages = brandEntries.flatMap((entry) => {
     const page = llmsPageForBrandPath(entry.path, entry.adCount, entry.fetchedAt);
     return page ? [page] : [];
   });
+  const timelinePages = timelineEntries
+    .flatMap((entry) => {
+      const page = llmsPageForTimelinePath(entry.path, entry.lastmod);
+      return page ? [page] : [];
+    })
+    .slice(0, SITEMAP_TIMELINE_PATH_LIMIT);
   const pagesSection = renderLlmsPagesSection(brandPages);
+  // Prefix the non-empty timeline block with a single `\n` so it splices
+  // cleanly between pagesSection (no trailing newline) and the template's
+  // `\n\nCurrent` — one line break before `Timelines:`, one blank line before
+  // `Current product truth:`. Empty case returns `""` so the static funnel
+  // stays byte-identical (canary: `expect(buildLlmsText()).toBe(LLMS_TEXT)`).
+  const timelineSection =
+    timelinePages.length > 0
+      ? `\n${renderLlmsTimelineSection(timelinePages)}`
+      : "";
   return `# Five to Nine
 
 Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence. Presence Desk tracks your brand and competitors across declared sources with proof-backed briefs.
 
-${pagesSection}
+${pagesSection}${timelineSection}
 
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
