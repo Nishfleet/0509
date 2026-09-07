@@ -48,6 +48,7 @@
     "scripts/check-deferred-release-zero-migrations.mjs",
     "scripts/check-worker-bundle-size.mjs",
     "scripts/deploy-production-plan.mjs",
+    "scripts/deploy-summary.mjs",
     "scripts/verify-deploy-readiness.mjs",
     "scripts/verify-remote-restore-evidence.mjs",
     "scripts/verify-cross-browser-risk-proof.mjs",
