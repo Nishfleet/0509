@@ -1,0 +1,34 @@
+{
+  "competitor": "panoramata",
+  "productName": "Panoramata",
+  "sources": [
+    {
+      "id": "panoramata-home",
+      "href": "https://www.panoramata.co/",
+      "label": "Panoramata home",
+      "checked": "2026-08-28",
+      "claim": "Panoramata also tracks marketing emails, SMS, and flows on higher tiers, beyond ads and landing pages."
+    },
+    {
+      "id": "panoramata-website-changes",
+      "href": "https://www.panoramata.co/track/website-changes",
+      "label": "Panoramata website-change tracking",
+      "checked": "2026-08-28",
+      "claim": "Panoramata combines competitor ads, landing pages (desktop and mobile), website changes, and a versioned screenshot archive."
+    },
+    {
+      "id": "panoramata-meta-ads",
+      "href": "https://www.panoramata.co/track/meta-ads",
+      "label": "Panoramata Meta ads tracking",
+      "checked": "2026-08-28",
+      "claim": "Panoramata tracks competitor Meta ads as part of its ads-plus-pages product."
+    },
+    {
+      "id": "panoramata-pricing",
+      "href": "https://www.panoramata.co/pricing",
+      "label": "Panoramata pricing page",
+      "checked": "2026-08-28",
+      "claim": "Public list prices run from €99 a month (Startup, 20 competitors) to €379 (Advanced); Professional is listed at €149; a 6-month archive is listed on Startup and unlimited history on Professional."
+    }
+  ]
+}

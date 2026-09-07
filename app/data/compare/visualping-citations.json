@@ -1,0 +1,27 @@
+{
+  "competitor": "visualping",
+  "productName": "Visualping",
+  "sources": [
+    {
+      "id": "visualping-home",
+      "href": "https://visualping.io/",
+      "label": "Visualping home",
+      "checked": "2026-08-28",
+      "claim": "Works on any public URL; visual, text, element, and all-in change modes."
+    },
+    {
+      "id": "visualping-pricing",
+      "href": "https://visualping.io/pricing",
+      "label": "Visualping pricing page",
+      "checked": "2026-08-28",
+      "claim": "Free plan with limited checks and pages, plus paid plans that add frequency, volume, and team features."
+    },
+    {
+      "id": "visualping-integrations",
+      "href": "https://visualping.io/integrations",
+      "label": "Visualping integrations",
+      "checked": "2026-08-28",
+      "claim": "Email, Slack, Microsoft Teams, webhooks, SMS, and API alerts are available on paid plans."
+    }
+  ]
+}
