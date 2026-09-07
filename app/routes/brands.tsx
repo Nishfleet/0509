@@ -32,8 +32,14 @@ import {
 import { groupBrandRecordsByCategory } from "~/lib/brand-categories";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 
+/** A brand-page link plus whether its `/timeline/:domain` is indexable. */
+interface BrandHubItem extends IndexableAdsLink {
+  /** True when the sitemap lists this domain's `/timeline/:domain` (issue #1931). */
+  timelineIndexable: boolean;
+}
+
 interface BrandsLoaderData {
-  groups: Array<{ category: string; items: IndexableAdsLink[] }>;
+  groups: Array<{ category: string; items: BrandHubItem[] }>;
   allCount: number;
 }
 
@@ -52,8 +58,27 @@ export async function loader({ context }: LoaderFunctionArgs): Promise<BrandsLoa
     links = [];
   }
 
-  const groups = groupBrandRecordsByCategory(links);
-  return { groups, allCount: links.length };
+  // Issue #1931 — the hub also links each brand's Offer Timeline when the
+  // sitemap lists it, so the moat surface gets in-product distribution from
+  // the browse page too. Same indexability signal as the sitemap; a D1
+  // hiccup degrades to no timeline links (never a 500).
+  let timelineDomains = new Set<string>();
+  try {
+    const { loadIndexableTimelineDomains } = await import("~/lib/ads-internal-links.server");
+    timelineDomains = await loadIndexableTimelineDomains(env);
+  } catch (error) {
+    console.warn("Brands hub timeline link load failed; omitting timeline links.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+  }
+
+  const items: BrandHubItem[] = links.map((link) => ({
+    ...link,
+    timelineIndexable: timelineDomains.has(link.domain),
+  }));
+
+  const groups = groupBrandRecordsByCategory(items);
+  return { groups, allCount: items.length };
 }
 
 const brandsDescription =
@@ -114,6 +139,14 @@ export default function BrandsHubRoute() {
                     <li key={link.domain}>
                       <Link to={link.path}>{link.name}</Link>
                       <span>&nbsp;·&nbsp;{link.domain}</span>
+                      {link.timelineIndexable && (
+                        <>
+                          <span>&nbsp;·&nbsp;</span>
+                          <Link to={`/timeline/${encodeURIComponent(link.domain)}`}>
+                            Offer timeline
+                          </Link>
+                        </>
+                      )}
                     </li>
                   ))}
                 </ul>
