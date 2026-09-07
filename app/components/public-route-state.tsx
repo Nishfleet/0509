@@ -1,6 +1,8 @@
 import { Link, useLocation, useRevalidator } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 
+import { MarketingFooter } from "~/components/marketing-footer";
+import { MarketingNav } from "~/components/marketing-nav";
 import { RouteSkeleton } from "~/components/route-skeleton";
 import { mapCustomerRouteError } from "~/lib/customer-route-error";
 import { DashboardShell } from "~/components/dashboard-shell";
@@ -260,5 +262,66 @@ export function PublicSearchRateLimitError({ error }: { error: unknown }) {
         </div>
       </div>
     </DashboardShell>
+  );
+}
+
+interface BrandPageRateLimitErrorData {
+  error: string;
+  message?: string;
+}
+
+/**
+ * Rate-limit error state for the public /ads/:domain and /timeline/:domain
+ * brand pages (issue #1930).
+ *
+ * Anonymous throttling is a normal, recoverable product state, not an internal
+ * failure: this renders the limiter's own honest message (naming the per-IP
+ * free-preview limit) with a recovery path, instead of the generic
+ * "Something broke on our side" root boundary. It uses the same marketing
+ * chrome as the loaded brand pages so a rate-limited visitor keeps the page's
+ * look and can retry or head back to the start.
+ */
+export function BrandPageRateLimitError({ error }: { error: unknown }) {
+  const revalidator = useRevalidator();
+
+  const data = useMemo<BrandPageRateLimitErrorData | null>(() => {
+    if (!error || typeof error !== "object") return null;
+    if (!("data" in error)) return null;
+    const maybe = (error as { data?: unknown }).data;
+    if (!maybe || typeof maybe !== "object") return null;
+    return maybe as BrandPageRateLimitErrorData;
+  }, [error]);
+
+  const message =
+    data?.message ??
+    "You've hit the anonymous preview limit. Wait a few minutes and try again.";
+
+  return (
+    <main className="f9-home f9-ads-page">
+      <MarketingNav />
+      <div
+        aria-live="assertive"
+        className="f9-dash-state f9-dash-state-error"
+        role="alert"
+        tabIndex={-1}
+      >
+        <h2>Too many requests</h2>
+        <p data-testid="rate-limit-message">{message}</p>
+        <div className="f9-inline-actions">
+          <button
+            className="f9-wk-btn"
+            disabled={revalidator.state === "loading"}
+            onClick={() => revalidator.revalidate()}
+            type="button"
+          >
+            {revalidator.state === "loading" ? "Retrying…" : "Try again"}
+          </button>
+          <Link className="f9-wk-btn-quiet" to="/">
+            Back to Five to Nine
+          </Link>
+        </div>
+      </div>
+      <MarketingFooter />
+    </main>
   );
 }
