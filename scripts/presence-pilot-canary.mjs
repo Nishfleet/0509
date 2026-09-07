@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=200 writes=0 runs_per_day=8
 /**
  * Controlled pilot canary for Presence website tracking.
  * Runs security + sync integrity tests and validates pilot access gates.

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=200 writes=0 runs_per_day=8
 /**
  * Bounded internal canary for Presence website connector hardening.
  * Runs focused Vitest suites — no customer delivery, no live outbound fetches.

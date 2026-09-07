@@ -16,6 +16,7 @@ import { parse } from "yaml";
 const REQUIRED_JOBS = [
   [".github/workflows/secret-scan.yml", "gitleaks"],
   [".github/workflows/ci.yml", "codex-node-checks"],
+  [".github/workflows/ci.yml", "d1-budget-check"],
   [".github/workflows/ci.yml", "dependabot-critical-check"],
   // preview-assert (0509#1576) becomes a required context on main once the
   // orchestrator adds it to branch protection; it must satisfy the same

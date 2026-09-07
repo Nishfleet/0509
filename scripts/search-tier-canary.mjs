@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=100 writes=0 runs_per_day=4
 // Daily regression guard for the §1.8 six-domain set (issue #1452).
 //
 // Fetches /search?q=<keyword>&country=all for each of the six domains and
