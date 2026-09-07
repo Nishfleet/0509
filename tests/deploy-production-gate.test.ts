@@ -269,20 +269,6 @@ describe("production deployment readiness gate", () => {
     const canaryIndex = plan.findIndex(
       (step: any) => step.id === "post_deploy_release_canary",
     );
-    // The in-plan canary token sync absorbs Cloudflare's "currently
-    // deployed" lag (run 34079008963) before the workflow's "Synchronize
-    // private canary token" step runs its single classic `wrangler secret
-    // put`. It sits after propagation stabilization so the first attempt
-    // usually lands, and stays non-blocking so a lagging sync can never
-    // trigger rollback_failed_release on an otherwise-good deploy.
-    expect(canaryIndex).toBe(deployIndex + 5);
-    expect(plan[canaryIndex - 1]).toMatchObject({
-      id: "canary_bypass_token_sync",
-      command: "node",
-      args: ["scripts/sync-canary-bypass-token.mjs"],
-      includeCloudflareCredentials: true,
-      nonBlockingDiagnostic: true,
-    });
     expect(plan[canaryIndex]).toMatchObject({
       id: "post_deploy_release_canary",
       includeCloudflareCredentials: true,
@@ -320,6 +306,29 @@ describe("production deployment readiness gate", () => {
       args: ["run", "e2e:prod:public"],
     });
     expect(plan[canaryIndex + 6]).toMatchObject({ id: "oauth_branding" });
+    // The in-plan canary token sync absorbs Cloudflare's "currently
+    // deployed" lag (run 34079008963) before the workflow's "Synchronize
+    // private canary token" step runs its single classic `wrangler secret
+    // put`. It MUST be the last plan step: a successful `secret put`
+    // creates and deploys a new Worker version, so every version-anchored
+    // check (propagation stabilization, Gate C, the soak — all pinned to
+    // the deploy's version id) has to run first. It stays non-blocking so
+    // a lagging sync can never trigger rollback_failed_release on an
+    // otherwise-good deploy.
+    const canarySyncIndex = plan.findIndex(
+      (step: any) => step.id === "canary_bypass_token_sync",
+    );
+    expect(canarySyncIndex).toBe(plan.length - 1);
+    expect(canarySyncIndex).toBeGreaterThan(
+      plan.findIndex((step: any) => step.id === "start_production_soak"),
+    );
+    expect(plan[canarySyncIndex]).toMatchObject({
+      id: "canary_bypass_token_sync",
+      command: "node",
+      args: ["scripts/sync-canary-bypass-token.mjs"],
+      includeCloudflareCredentials: true,
+      nonBlockingDiagnostic: true,
+    });
   });
 
   it("resolves the deferred-release schema baseline at run time, never from a pinned sha", () => {
