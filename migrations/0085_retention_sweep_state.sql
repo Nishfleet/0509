@@ -1,0 +1,10 @@
+-- R2 -> D1 orphan reconciliation walks the landing-pages/ bucket one bounded
+-- page per six-hourly sweep tick. The R2 list cursor must survive between
+-- ticks so a single sweep never walks the whole bucket; it is persisted here
+-- as a single aggregate row. The cursor is an opaque R2 token and contains no
+-- customer or provider data.
+CREATE TABLE IF NOT EXISTS retention_sweep_state (
+  state_key TEXT PRIMARY KEY NOT NULL CHECK (state_key = 'r2_orphan_reconcile_cursor'),
+  cursor_value TEXT,
+  updated_at TEXT NOT NULL
+);

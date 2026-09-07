@@ -31,6 +31,17 @@ const RELEASE_SCHEDULED_OBSERVATION_RETENTION_DAYS = 90;
 const PRESENCE_ITEM_RETENTION_DAYS = 180;
 const SNAPSHOT_RETENTION_LIMIT = 20;
 
+// R2 -> D1 orphan reconciliation. The landing-pages/ bucket holds objects that
+// lose their D1 row and become invisible to the D1-driven sweep; this step
+// lists the bucket directly and deletes objects with no D1 reference. The
+// grace window lets a row written after its object (capture then commit)
+// survive, and the per-tick cap keeps the invocation budget bounded.
+const ORPHAN_RECONCILE_GRACE_DAYS = 7;
+const ORPHAN_RECONCILE_MAX_DELETES = 200;
+const ORPHAN_RECONCILE_LIST_LIMIT = 1000;
+const ORPHAN_RECONCILE_STATE_KEY = "r2_orphan_reconcile_cursor";
+const ORPHAN_RECONCILE_ENABLED_VAR = "R2_ORPHAN_RECONCILE_ENABLED";
+
 interface SnapshotRetentionCandidate {
   id: string;
   artifact_key: string | null;
@@ -52,6 +63,27 @@ export type RetentionSweepResult = {
   deleted: Record<string, number>;
   /** Stable step names only; database/provider error details are never returned. */
   failedSteps: string[];
+  /** R2 -> D1 orphan reconciliation outcome. */
+  orphanReconcile?: OrphanReconcileResult;
+};
+
+export type OrphanReconcileResult = {
+  /** Objects listed from the bucket this tick. */
+  listed: number;
+  /** Objects deleted this tick (0 in dry-run mode). */
+  deleted: number;
+  /** Objects that would be deleted in dry-run mode. */
+  dryRunDeletes: number;
+  /** Objects skipped because they are referenced in D1. */
+  referenced: number;
+  /** Objects skipped because they are inside the grace window. */
+  tooYoung: number;
+  /** Objects skipped because they do not match the producer key shape. */
+  nonMatching: number;
+  /** True when the delete path is disabled and only counts are reported. */
+  dryRun: boolean;
+  /** True when the bucket page was truncated and a cursor was persisted. */
+  truncated: boolean;
 };
 
 export async function runRetentionSweep(
@@ -256,7 +288,179 @@ export async function runRetentionSweep(
     failedSteps.push("proof_capture_artifact");
   }
 
-  return { deleted, failedSteps };
+  let orphanReconcile: OrphanReconcileResult | undefined;
+  try {
+    orphanReconcile = await reconcileOrphanedArtifacts(env, { now });
+    if (orphanReconcile.deleted > 0) {
+      deleted.r2_orphan_reconcile = orphanReconcile.deleted;
+    }
+  } catch {
+    console.error("[retention] delete failed for r2_orphan_reconcile");
+    failedSteps.push("r2_orphan_reconcile");
+  }
+
+  return { deleted, failedSteps, orphanReconcile };
+}
+
+/**
+ * R2 -> D1 orphan reconciliation. Lists the landing-pages/ bucket one bounded
+ * page per tick (cursor persisted in D1 so a single sweep never walks the whole
+ * bucket) and deletes objects that have no D1 reference and are past the grace
+ * window. Non-matching keys (e.g. backups/d1/) are never touched. The delete
+ * path is gated behind R2_ORPHAN_RECONCILE_ENABLED; until it is set the step
+ * runs in dry-run mode and only reports counts.
+ */
+export async function reconcileOrphanedArtifacts(
+  env: AppEnv,
+  options: { now?: number } = {},
+): Promise<OrphanReconcileResult> {
+  const now = options.now ?? Date.now();
+  const dryRun = !isOrphanReconcileEnabled(env);
+  const result: OrphanReconcileResult = {
+    listed: 0,
+    deleted: 0,
+    dryRunDeletes: 0,
+    referenced: 0,
+    tooYoung: 0,
+    nonMatching: 0,
+    dryRun,
+    truncated: false,
+  };
+
+  if (!env.DB || !env.LANDING_PAGE_ARTIFACTS) return result;
+
+  const cursor = await readOrphanReconcileCursor(env);
+  const page = await env.LANDING_PAGE_ARTIFACTS.list({
+    prefix: "landing-pages/",
+    cursor: cursor ?? undefined,
+    limit: ORPHAN_RECONCILE_LIST_LIMIT,
+  });
+  result.listed = page.objects.length;
+  result.truncated = page.truncated;
+
+  let deletes = 0;
+  for (const object of page.objects) {
+    if (deletes >= ORPHAN_RECONCILE_MAX_DELETES) break;
+    const parsed = parseProofArtifactKey(object.key);
+    if (!parsed) {
+      result.nonMatching += 1;
+      continue;
+    }
+    if (await artifactKeyReferencedInD1(env, parsed.key)) {
+      result.referenced += 1;
+      continue;
+    }
+    if (!artifactKeyPastGrace(parsed.key, now)) {
+      result.tooYoung += 1;
+      continue;
+    }
+    if (dryRun) {
+      result.dryRunDeletes += 1;
+      continue;
+    }
+    try {
+      await env.LANDING_PAGE_ARTIFACTS.delete(parsed.key);
+      deletes += 1;
+      result.deleted += 1;
+    } catch {
+      // One failed delete must not stop the rest of the page.
+      console.error("[retention] orphan delete failed", parsed.key);
+    }
+  }
+
+  // Persist the cursor only when the delete path is live. In dry-run mode the
+  // cursor is left untouched so the first live run starts from the beginning.
+  if (!dryRun) {
+    await writeOrphanReconcileCursor(env, page.truncated ? (page.cursor ?? null) : null);
+  }
+
+  return result;
+}
+
+function isOrphanReconcileEnabled(env: AppEnv): boolean {
+  const value = env[ORPHAN_RECONCILE_ENABLED_VAR as keyof AppEnv];
+  if (typeof value !== "string") return false;
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+}
+
+interface OrphanReconcileCursorRow {
+  cursor_value: string | null;
+}
+
+async function readOrphanReconcileCursor(env: AppEnv): Promise<string | null> {
+  const [row] = await queryAll<OrphanReconcileCursorRow>(
+    env,
+    `
+      SELECT cursor_value
+      FROM retention_sweep_state
+      WHERE state_key = ?
+    `,
+    ORPHAN_RECONCILE_STATE_KEY,
+  );
+  return row?.cursor_value ?? null;
+}
+
+async function writeOrphanReconcileCursor(env: AppEnv, cursor: string | null) {
+  await execute(
+    env,
+    `
+      INSERT INTO retention_sweep_state (state_key, cursor_value, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(state_key) DO UPDATE SET
+        cursor_value = excluded.cursor_value,
+        updated_at = excluded.updated_at
+    `,
+    ORPHAN_RECONCILE_STATE_KEY,
+    cursor,
+    new Date().toISOString(),
+  );
+}
+
+/**
+ * True when the key is referenced anywhere in D1. Mirrors the shared/referenced
+ * guards used by the D1-driven sweep so an object that still has a row (or a
+ * row that references it via metadata or ad JSON) is never deleted.
+ */
+async function artifactKeyReferencedInD1(env: AppEnv, key: string) {
+  const [row] = await queryAll<ArtifactReferenceCount>(
+    env,
+    `
+      SELECT (
+        SELECT COUNT(*) FROM proof_capture
+        WHERE html_artifact_key = ? OR screenshot_artifact_key = ?
+      ) + (
+        SELECT COUNT(*) FROM landing_page_snapshot
+        WHERE artifact_key = ?
+          OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.htmlArtifactKey') = ?)
+          OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.screenshotArtifactKey') = ?)
+      ) + (
+        SELECT COUNT(*) FROM ad
+        WHERE json_valid(raw_json) AND (
+          json_extract(raw_json, '$.landingPage.artifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.htmlArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.screenshotArtifactKey') = ?
+        )
+      ) AS external_references
+    `,
+    key,
+    key,
+    key,
+    key,
+    key,
+    key,
+    key,
+    key,
+  );
+  return Number(row?.external_references ?? 0) > 0;
+}
+
+/** True when the date embedded in the key is at least the grace window old. */
+function artifactKeyPastGrace(key: string, now: number): boolean {
+  const match = /^landing-pages\/(\d{4}-\d{2}-\d{2})\//u.exec(key);
+  if (!match) return false;
+  const embedded = Date.parse(`${match[1]}T00:00:00.000Z`);
+  if (Number.isNaN(embedded)) return false;
+  return now - embedded >= ORPHAN_RECONCILE_GRACE_DAYS * DAY_MS;
 }
 
 export async function deleteExpiredProofCaptureArtifacts(
