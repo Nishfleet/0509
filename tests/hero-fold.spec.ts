@@ -3,14 +3,13 @@ import { expect, test } from "@playwright/test";
 import {
   expectNoHorizontalOverflow,
   expectPrimaryActionAboveFold,
-} from "../../e2e/helpers/release-experience";
+} from "../e2e/helpers/release-experience";
 
 /**
- * BET 9 hero first-viewport gate (issue #1875).
+ * BET 9 hero first-viewport gate (issue #1898).
  *
  * The termination command:
- *   npx playwright test tests/design/hero-viewport.spec.ts \
- *     --project=chromium --project=mobile-chromium
+ *   npx playwright test tests/hero-fold.spec.ts
  * exits 0 with screenshots showing the headline, value proposition, and
  * clickable CTA all inside the first viewport at desktop (1440×900) and
  * mobile (390×844), with zero console errors and no horizontal overflow.
@@ -100,6 +99,6 @@ test(`BET 9 hero: headline + value prop + CTA in first viewport, zero console er
   // CTA. Saved next to Playwright's outputDir so the termination command
   // leaves a visible artefact.
   await page.screenshot({
-    path: `test-results/design/hero-viewport-${label}.png`,
+    path: `test-results/hero-fold-${label}.png`,
   });
 });
