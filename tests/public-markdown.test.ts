@@ -7,10 +7,16 @@ import {
   PUBLIC_MARKDOWN,
   buildLlmsText,
   llmsPageForBrandPath,
+  llmsPageForTimelinePath,
   wantsPublicMarkdown,
 } from "~/lib/public-markdown";
 import { auditedAgentActionGroups } from "~/lib/agent-action-catalog";
 import { AI_TRAINING_CRAWLERS, SITEMAP_PATHS, canonicalUrl } from "~/lib/seo";
+// SITEMAP_TIMELINE_PATH_LIMIT caps the /timeline/:domain slice in buildLlmsText
+// at the same crawl-budget ceiling the sitemap uses (issue #1929). The
+// acceptance-6 test imports the constant directly so a future change that
+// invents a parallel cap fails loudly.
+import { SITEMAP_TIMELINE_PATH_LIMIT } from "~/lib/sitemap.server";
 
 describe("public markdown", () => {
   it("supports same-url markdown negotiation for public pages", () => {
@@ -286,5 +292,157 @@ describe("public markdown", () => {
     expect(markdown).not.toMatch(
       /\bemail delivery\b[^.\n]{0,50}\b(?:is|are)\s+(?:live|available)\b/i,
     );
+  });
+
+  it("renders /timeline/:domain entries with newest-capture date, skips non-qualifying paths, and keeps the static fallback byte-identical (issue #1929)", () => {
+    // Acceptance 5a: a single valid timeline entry renders with the
+    // offer-timeline title, "at least one dated offer state" wording, and the
+    // lastmod-derived capture date (reviewer-flagged honest singular form).
+    const singleValid = buildLlmsText([], [
+      { path: "/timeline/example.com", lastmod: "2026-08-26" },
+    ]);
+    const singleValidTimelineLine =
+      "- [example.com offer timeline](https://0509.io/timeline/example.com): " +
+      "Offer timeline for example.com with at least one dated offer state from public captures, last captured on 2026-08-26.";
+    expect(singleValid).toContain(`Timelines:\n${singleValidTimelineLine}`);
+    expect(singleValid).toContain("at least one dated offer state");
+    expect(singleValid).toContain("last captured on 2026-08-26");
+
+    // Acceptance 5b: paths that fail the regex must produce zero /timeline/
+    // links, and llmsPageForTimelinePath must reject them directly so callers
+    // cannot sneak them past the splice.
+    const invalidOnly = buildLlmsText([], [
+      { path: "/timeline/" },
+      { path: "/de/timeline/example.com" },
+      { path: "/timeline/a/b" },
+    ]);
+    expect(invalidOnly).not.toContain("Timelines:");
+    expect(invalidOnly).not.toContain("https://0509.io/timeline/");
+    expect(llmsPageForTimelinePath("/timeline/")).toBeNull();
+    expect(llmsPageForTimelinePath("/de/timeline/example.com")).toBeNull();
+    expect(llmsPageForTimelinePath("/timeline/a/b")).toBeNull();
+
+    // Acceptance 5c: the empty-arg call must still be byte-identical to the
+    // static funnel. Already pinned at line ~245 in the noindex-shells test;
+    // re-asserted here so the new two-arg path is guarded explicitly.
+    expect(buildLlmsText()).toBe(LLMS_TEXT);
+
+    // Mixed input: brand and timeline entries coexist. The brand line keeps
+    // its ad-count phrasing; the timeline line gets the new dated-offers
+    // format; and the timeline line must render AFTER the brand line in the
+    // absolute output (timeline section is spliced below the Pages section).
+    const mixedBrandLine =
+      "3 live Meta Ad Library ads for nike.com from public search, captured on 2026-08-26.";
+    const mixedTimelineLine =
+      "- [calendly.com offer timeline](https://0509.io/timeline/calendly.com): " +
+      "Offer timeline for calendly.com with at least one dated offer state from public captures, last captured on 2026-08-25.";
+    const mixed = buildLlmsText(
+      [{ path: "/ads/nike.com", adCount: 3, fetchedAt: "2026-08-26T14:40:00.000Z" }],
+      [{ path: "/timeline/calendly.com", lastmod: "2026-08-25" }],
+    );
+    expect(mixed).toContain(mixedBrandLine);
+    expect(mixed).toContain(mixedTimelineLine);
+    expect(mixed.indexOf(mixedBrandLine)).toBeLessThan(mixed.indexOf(mixedTimelineLine));
+  });
+
+  it("renders exactly one blank line between the Timelines section and 'Current product truth:' (issue #1929)", () => {
+    // The reviewer-flagged splice risks double blank lines if a future change
+    // touches the spacing. Pin the byte spacing: between the last -line of
+    // the Timelines block and "Current product truth:" there must be exactly
+    // ONE blank line — one \n worth of visible gap, so two \n characters in
+    // the rendered string between those two lines.
+    const rendered = buildLlmsText([], [
+      { path: "/timeline/example.com", lastmod: "2026-08-26" },
+    ]);
+    const lines = rendered.split("\n");
+
+    const timelineLine =
+      "- [example.com offer timeline](https://0509.io/timeline/example.com): " +
+      "Offer timeline for example.com with at least one dated offer state from public captures, last captured on 2026-08-26. " +
+      "Listed only when a complete proof capture backs at least one dated offer state.";
+    const lastTimelineIndex = lines.lastIndexOf(timelineLine);
+    expect(lastTimelineIndex).toBeGreaterThan(-1);
+    expect(lines[lastTimelineIndex + 1]).toBe("");
+    expect(lines[lastTimelineIndex + 2]).toBe("Current product truth:");
+
+    // And the gap between the last -line of Pages and the Timelines header
+    // must be exactly one newline (no blank line between Pages: and
+    // Timelines:); the splice uses a single `\n` prefix so pagesSection
+    // ends right against `Timelines:`.
+    const timelinesHeaderIndex = lines.indexOf("Timelines:");
+    expect(timelinesHeaderIndex).toBeGreaterThan(-1);
+    expect(lines[timelinesHeaderIndex - 1]).not.toBe("");
+
+    // Belt-and-braces regex check that names both anchor lines so a future
+    // rename of either header surfaces as a clear test failure rather than
+    // a confusing index-out-of-bounds from the split-based assertions above.
+    const sectionGap = rendered.match(/Timelines:[\s\S]*?Current product truth:/);
+    expect(sectionGap).not.toBeNull();
+    expect(sectionGap![0]).toMatch(
+      /2026-08-26\.[^\n]*\n\nCurrent product truth:/,
+    );
+  });
+
+  it("caps the rendered Timelines section at SITEMAP_TIMELINE_PATH_LIMIT entries (issue #1929, acceptance 6)", () => {
+    // Acceptance 6: timeline output is bounded by the same crawl-budget
+    // ceiling the sitemap uses. (limit + 10) fake entries with valid regex-
+    // matching paths must render exactly `limit` /timeline/ links — the
+    // filter-first slice order drops invalid paths before the cap is applied,
+    // so we test the cap with all-valid input here.
+    const overLimit = SITEMAP_TIMELINE_PATH_LIMIT + 10;
+    const tooMany = Array.from({ length: overLimit }, (_, index) => ({
+      path: `/timeline/domain-${index}.com`,
+      lastmod: "2026-08-26",
+    }));
+    const rendered = buildLlmsText([], tooMany);
+
+    const renderedTimelineLinks = rendered.match(/\]\(https:\/\/0509\.io\/timeline\//g);
+    expect(renderedTimelineLinks).not.toBeNull();
+    expect(renderedTimelineLinks!.length).toBe(SITEMAP_TIMELINE_PATH_LIMIT);
+
+    // Filter-first slice order: invalid paths are dropped before slicing. Mix
+    // N valid + M invalid entries (with M big enough that filtering drops
+    // enough valid entries to slip under the cap) and assert the output has
+    // exactly N /timeline/ links. The valid count is capped at
+    // SITEMAP_TIMELINE_PATH_LIMIT so the test stays stable if the shared cap
+    // moves (acceptance 6).
+    const validCount = Math.min(200, SITEMAP_TIMELINE_PATH_LIMIT);
+    const invalidCount = 400;
+    const mixedInput = [
+      ...Array.from({ length: validCount }, (_, index) => ({
+        path: `/timeline/valid-${index}.com`,
+        lastmod: "2026-08-26",
+      })),
+      ...Array.from({ length: invalidCount }, (_, index) => ({
+        path: index % 2 === 0 ? "/timeline/" : `/timeline/extra-${index}/nested`,
+        lastmod: "2026-08-26",
+      })),
+    ];
+    expect(mixedInput.length).toBe(validCount + invalidCount);
+    const mixedRendered = buildLlmsText([], mixedInput);
+    const mixedTimelineLinks = mixedRendered.match(/\]\(https:\/\/0509\.io\/timeline\//g);
+    expect(mixedTimelineLinks).not.toBeNull();
+    expect(mixedTimelineLinks!.length).toBe(validCount);
+  });
+
+  it("keeps the brand-page contract unchanged when timelines are also passed (issue #1929)", () => {
+    // Brand-page contract: passing brand entries (with or without timeline
+    // entries) must emit the brand line; only the timeline entry moves the
+    // timeline line. The two cases share the brand surface exactly so a
+    // future change that accidentally re-orders the splice breaks here.
+    const brandPage = llmsPageForBrandPath("/ads/nike.com");
+    expect(brandPage).not.toBeNull();
+    const brandLine = `- [${brandPage!.title}](${brandPage!.url}): ${brandPage!.description}`;
+
+    const brandOnly = buildLlmsText([{ path: "/ads/nike.com" }]);
+    const brandAndTimeline = buildLlmsText(
+      [{ path: "/ads/nike.com" }],
+      [{ path: "/timeline/calendly.com", lastmod: "2026-08-26" }],
+    );
+
+    expect(brandOnly).toContain(brandLine);
+    expect(brandAndTimeline).toContain(brandLine);
+    expect(brandOnly).not.toContain("https://0509.io/timeline/calendly.com");
+    expect(brandAndTimeline).toContain("https://0509.io/timeline/calendly.com");
   });
 });

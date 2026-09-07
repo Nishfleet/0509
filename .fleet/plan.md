@@ -1,34 +1,35 @@
-# Phase plan — fix(seo): sitemap lists /timeline/:domain pages that serve a 410
+# Plan — `/llms.txt` indexable timeline entries (issue #1929)
 
-Issue: Nishfleet/0509#1928. Manager mode (`difficulty: heavy`).
+Manager mode (heavy). Reuse the same indexable timeline set that `publicSitemapFile` emits in `/sitemap.xml`. Existing static fallback (no D1, demo, missing `landing_page_snapshot`) must keep working byte-for-byte. Stay in scope — only the three files the issue body names: `workers/app.ts`, `app/lib/public-markdown.ts`, `tests/public-markdown.test.ts`.
 
 ## Goal
-Make the sitemap timeline lister mirror `loadOfferTimeline`'s actual
-renderable set: a domain is listed iff the route would render the dated
-ledger (200), not when it would 410. Currently
-`loadIndexableTimelineEntries` reads the global newest-N rows and dedupes by
-domain, which lets domains through whose only passing rows are outside the
-screenshot's read window (and so the route's 200-entry per-domain LIMIT
-returns 0 entries).
+Make `/llms.txt` list the same indexable `/timeline/:domain` URLs the sitemap does, without adding locale-prefixed variants, inventing a new cap, or breaking today's static fallback.
 
 ## Acceptance-driven phases
 
-- [x] phase 1: rewrite `loadIndexableTimelineEntries` + `indexableTimelineEntriesFromRows` so a domain is listed iff it has at least one row that survives the loader's own filter inside the loader's per-domain `TIMELINE_SNAPSHOT_LIMIT` window. Implementation: read all snapshot rows in one bounded query (`canonical_url LIKE 'https://%' OR canonical_url LIKE 'http://%'`, ordered `captured_at ASC, id ASC` to mirror the loader's `ASC LIMIT 200`), bound at `SITEMAP_TIMELINE_PATH_LIMIT * TIMELINE_SNAPSHOT_LIMIT = 100_000`. In JS: group by derived registrable domain (same `timelineDomainFromSnapshotRow` extraction), for each domain take the first `TIMELINE_SNAPSHOT_LIMIT` rows (the loader's window), apply the existing proof gate + ad-destination gate + `canonicalUrlBelongsToDomain`. List domains with >=1 passing row. Document the D1 read cost change in the PR body per accept #6. Keep `TIMELINE_SNAPSHOT_LIMIT = 200`, the proof gate (#1284), and the ad-destination gate (#1729) untouched.
-- [x] phase 2: unit assertions in `tests/sitemap.server.test.ts` — `indexableTimelineEntriesFromRows` (a) excludes a domain whose only passing row falls outside the loader's per-domain `TIMELINE_SNAPSHOT_LIMIT` window, (b) still includes a domain whose oldest-200 window has at least one passing row. Plus update the existing "bounds to SITEMAP_TIMELINE_PATH_LIMIT entries" assertion to cover the new bound shape (per-domain cap inside a larger global read). (77 tests pass on the rebase.)
-- [x] phase 3: integration test under `tests/integration/timeline-sitemap-parity.integration.test.ts` that applies real migrations, seeds more than `TIMELINE_SNAPSHOT_LIMIT` rows per domain and asserts every domain emitted by `loadIndexableTimelineEntries` also returns non-empty `entries` from `loadOfferTimeline` for that same domain. A mocked-binding unit test does not count (accept #4). Also asserts a domain whose oldest-200 window is all proof-less is excluded from the sitemap entries even when newer passing rows exist beyond the window. (3 tests pass against real D1.)
-- [x] phase 4: verification — `tests/sitemap.server.test.ts` (77), `tests/integration/timeline-sitemap-parity.integration.test.ts` (3), and the existing `timeline-renders.integration.test.ts` (410 retirement guard, accept #2) green; rebased onto current origin/main; `bin/fleet-*` PR-body checks pass; PR opened with Verification + run-proof + research + help-first receipts; auto-merge armed.
+- [x] phase 1: markdown layer — in `app/lib/public-markdown.ts` add a pure `llmsPageForTimelinePath(path, lastmod?)` mirroring `llmsPageForBrandPath` (regex `^\/timeline\/([^/]+)$`, returns `null` for `/timeline/`, `/de/timeline/x`, `/timeline/x/y`); extend `buildLlmsText(brandEntries = [], timelineEntries = [])` to a second optional arg, default `[]`; render a new `Timelines:` block under `Pages:` with one `- [${domain} offer timeline](${canonicalUrl(path)}): Offer timeline for ${domain} with dated offer states from public captures, last captured on ${lastmod}.` line per sitemap-emitted entry; skip entries whose path does not match the regex (defence in depth, bullet 5b); bound the section by the imported `SITEMAP_TIMELINE_PATH_LIMIT` from `app/lib/sitemap.server` (no new cap, bullet 6); only emit the `Timelines:` header when at least one entry survived filtering so `LLMS_TEXT = buildLlmsText()` stays byte-identical (bullet 5c).
+- [x] phase 2: worker wiring — in `workers/app.ts` import `loadIndexableTimelineEntries` next to `loadIndexableBrandPageEntries`; in the `/llms.txt` branch replace the single `await loadIndexableBrandPageEntries(env)` with `await Promise.all([loadIndexableBrandPageEntries(env), loadIndexableTimelineEntries(env)])` and pass the tuple into `buildLlmsText` (bullet 1); the existing no-`DB` / no-table degradation inside `loadIndexableTimelineEntries` keeps the branch from 500ing (bullet 3).
+- [x] phase 3: unit test — in `tests/public-markdown.test.ts` add four tests: (a) `/timeline/:domain` entry renders with newest-capture date + skips non-qualifying paths + keeps `LLMS_TEXT` byte-identical on the empty-arg call (acceptance 5a/5b/5c); (b) exactly one blank line between the `Timelines:` block and `Current product truth:`; (c) section is capped at `SITEMAP_TIMELINE_PATH_LIMIT` entries (acceptance 6) with filter-first slice order verified; (d) brand-page contract is unchanged when timelines are also passed.
+- [x] phase 4: verification — full `vitest --project node` (602 files / 7173 tests, green); typecheck on the changed files is clean (the pre-existing e2e/playwright errors are not introduced by this diff); no D1 / no `landing_page_snapshot` / demo fallback stays byte-identical to today's static funnel (`buildLlmsText() === LLMS_TEXT`).
 
 ## Files to Modify
-- `app/lib/sitemap.server.ts` — rewrite `indexableTimelineEntriesFromRows` (per-domain grouping + first-N-per-domain window) and `loadIndexableTimelineEntries` (single bounded read of all candidate rows, ordered ASC to match loader).
-- `tests/sitemap.server.test.ts` — add unit assertions for the per-domain window qualification; update the existing bound assertion.
+- `app/lib/public-markdown.ts` — new `llmsPageForTimelinePath`, second `timelineEntries` arg on `buildLlmsText`, new `Timelines:` block in the rendered output, `SITEMAP_TIMELINE_PATH_LIMIT` import.
+- `workers/app.ts` — `/llms.txt` branch calls both readers via `Promise.all` and forwards both to `buildLlmsText`.
+- `tests/public-markdown.test.ts` — four new tests covering acceptance 5a/5b/5c, acceptance 6 (cap), spacing between sections, and brand-page surface preservation.
 
 ## New Files
-- `tests/integration/timeline-sitemap-parity.integration.test.ts` — real-D1 parity invariant test.
+None.
 
 ## Risks
-- The new read is `SITEMAP_TIMELINE_PATH_LIMIT * TIMELINE_SNAPSHOT_LIMIT = 100_000` rows max — large but bounded; document in PR body (accept #6). D1's default row read limit is 100k so this fits exactly; will note any cost delta vs. the previous top-500 read.
-- `indexableTimelineEntriesFromRows` is exported and unit-tested; keep its signature stable.
-- The URL-shape filter in `loadOfferTimeline` is per-domain and more restrictive than `(canonical_url LIKE 'https://%' OR canonical_url LIKE 'http://%')`. The broad filter is a SUPERSET of any loader filter; the JS-side `canonicalUrlBelongsToDomain` narrows it back to the loader's effective set.
-- Do NOT change `TIMELINE_SNAPSHOT_LIMIT`, the proof gate, or the ad-destination gate — those are the existing organs whose bug was a loader/lister mismatch, not a defect in those organs (accept #3).
-- Gate-owned paths (`.github/**`, `migrations/**`, `plan.server.ts`, `competitor-site-monitor`, `auto-competitor-seed`) MUST NOT be touched.
-- The integration test applies real migrations and seeds many rows — keep its seed count bounded (e.g., 3 domains × 250 rows) so the suite stays under D1's row read cap.
+- `app/lib/public-markdown.ts` is imported by the worker and tests but not by client routes; importing `SITEMAP_TIMELINE_PATH_LIMIT` from `app/lib/sitemap.server` stays server-side (no client-bundle contamination).
+- `LLMS_TEXT` byte-identity depends on the `Timelines:` header being suppressed when `timelineEntries.length === 0` AND no entry matches the regex — guard with a single conditional, do not emit the header at all in the empty path.
+- Locale prefixes (`/de/timeline/x`, `/ja/timeline/x`) are naturally excluded by the single-segment regex `^\/timeline\/([^/]+)$` — no separate denylist needed (bullet 4).
+- The `linkedPaths.length === SITEMAP_PATHS.length` assertion in the existing "real link list" test stays the byte-identity canary for bullet 5c; the new test re-asserts `buildLlmsText() === LLMS_TEXT` directly so a regression surfaces as a clean failure.
+- `loadIndexableTimelineEntries` already returns `SitemapEntry[]` with `lastmod`; no change to `sitemap.server.ts` is required — keeps the diff to one producer + one consumer.
+- The new section uses the existing `canonicalUrl` so URL shape cannot drift from sitemap.xml.
+
+## Out of scope (deliberately not touched)
+- `app/lib/sitemap.server.ts` — the issue's verify command asserts that whatever the sitemap emits, llms.txt emits the same set. The sitemap's loadIndexableTimelineEntries already returns the right set; modifying its SQL (`ORDER BY`/`WHERE`/`LIMIT`) or its per-domain grouping would change its output and is **not** what issue #1929 asks for. Those are bugfixes for a different issue.
+- `app/lib/offer-timeline.server.ts` (`TIMELINE_SNAPSHOT_LIMIT` export) — only consumed by sitemap internals; no consumer of llms.txt needs it.
+- `app/lib/ads-internal-links.server.ts` — unrelated comment.
+- `tests/sitemap.server.test.ts` — the timeline-related tests are tied to sitemap-internal logic; the diff must not delete or rewrite them.
