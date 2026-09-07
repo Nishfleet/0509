@@ -13,6 +13,8 @@ const FUNNEL_OPERATIONS = [
   "funnel_signup_start",
   "funnel_signup_start_magicbrief",
   "funnel_pricing_free_card_clicked",
+  "funnel_signup_completed",
+  "funnel_first_brief_generated",
   "funnel_first_brief_viewed",
   "funnel_activation_scan_started",
   "funnel_first_brief_email_sent",
