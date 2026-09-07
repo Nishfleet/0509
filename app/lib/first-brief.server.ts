@@ -164,8 +164,9 @@ async function fileAndDeliverFirstBrief(
   // activation scan's baseline capture. Emit the coarse workspace-scoped
   // `first_brief_generated` funnel event so scouts can measure the
   // scan -> brief-generated step. Only fires on a fresh filing
-  // (`claim.created`); the `already_filed` path below skips it. Measurement
-  // is gated by FUNNEL_MEASUREMENT_ENABLED and never fails the brief path.
+  // (`claim.created`); the `already_filed` early return above skips it.
+  // Measurement is gated by FUNNEL_MEASUREMENT_ENABLED and never fails the
+  // brief path.
   if (claim.created) {
     try {
       const { emitFunnelFirstBriefGenerated } = await import(
