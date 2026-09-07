@@ -67,6 +67,15 @@ const BROWSERLESS_RETRY_DELAY_MS = 300;
 const QUICK_ACTION_MAX_ATTEMPTS = 2;
 /** Retry budget for a viewport screenshot after HTML is already in hand. */
 const SCREENSHOT_CAPTURE_ATTEMPTS = 2;
+/**
+ * Retry budget for persisting a captured artifact to R2 (2 attempts total).
+ * A transient R2 put failure must not silently drop the screenshot that was
+ * already captured — the screenshot is the primary evidence artifact, so the
+ * persistence step retries once before the capture is marked `succeeded`
+ * without an artifact (issue #1856).
+ */
+const R2_PUT_ATTEMPTS = 2;
+const R2_PUT_RETRY_DELAY_MS = 300;
 const QUICK_ACTION_RETRY_MAX_DELAY_MS = 1_000;
 const QUICK_ACTION_RETRY_DELAY_MS = 250;
 const BROWSER_RUN_QUICK_ACTION_TIMEOUT_MS = 30_000;
@@ -1066,7 +1075,7 @@ async function persistBrowserArtifacts(
   const captureWarningCodes: string[] = [];
   if (screenshot) {
     try {
-      await env.LANDING_PAGE_ARTIFACTS.put(screenshotArtifactKey, screenshot, {
+      await putArtifactWithRetry(env.LANDING_PAGE_ARTIFACTS, screenshotArtifactKey, screenshot, {
         httpMetadata: {
           contentType: "image/jpeg",
         },
@@ -1084,7 +1093,7 @@ async function persistBrowserArtifacts(
   }
   if (!requireScreenshot || persistedScreenshotArtifactKey) {
     try {
-      await env.LANDING_PAGE_ARTIFACTS.put(htmlArtifactKey, html, {
+      await putArtifactWithRetry(env.LANDING_PAGE_ARTIFACTS, htmlArtifactKey, html, {
         httpMetadata: {
           contentType: "text/html; charset=utf-8",
         },
@@ -1105,6 +1114,35 @@ async function persistBrowserArtifacts(
     screenshotArtifactKey: persistedScreenshotArtifactKey,
     captureWarningCodes,
   };
+}
+
+/**
+ * Persists an artifact to R2 with a single bounded retry on transient failure.
+ * The screenshot is the primary evidence artifact, so a transient R2 put error
+ * must not silently drop it — the retry runs before the capture is ever marked
+ * `succeeded` without an artifact (issue #1856). Mirrors the bounded retry
+ * pattern used for the viewport screenshot capture itself.
+ */
+async function putArtifactWithRetry(
+  bucket: R2Bucket,
+  key: string,
+  value: ArrayBuffer | Uint8Array | string,
+  options: R2PutOptions,
+): Promise<void> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= R2_PUT_ATTEMPTS; attempt += 1) {
+    try {
+      await bucket.put(key, value, options);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= R2_PUT_ATTEMPTS) {
+        throw error;
+      }
+      await sleep(R2_PUT_RETRY_DELAY_MS);
+    }
+  }
+  throw lastError;
 }
 
 function logRenderedCaptureWarning(reasonCode: string, error: unknown) {
