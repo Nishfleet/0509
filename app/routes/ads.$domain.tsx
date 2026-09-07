@@ -168,6 +168,15 @@ export interface BrandPageLoaderData {
    */
   offerTimelineEntries: OfferLedgerEntry[];
   /**
+   * True when this domain's `/timeline/:domain` page is in the sitemap's
+   * indexable set (issue #1931). Gates the Offer Timeline cross-link so a
+   * demo/empty/410 timeline is never linked — the same signal the sitemap
+   * uses. Independent of `offerTimelineEntries` (which is the ledger the
+   * section renders); a timeline can be indexable with a non-empty ledger,
+   * and the cross-link only renders when BOTH hold.
+   */
+  timelineIndexable: boolean;
+  /**
    * Country of the Ad Library the cached creatives came from ("India",
    * "United States", …) — or "all countries" for the all-countries view.
    * The Meta Ad Library is country-scoped, so this always names the library
@@ -329,6 +338,25 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     });
   }
 
+  // Issue #1931 — the Offer Timeline cross-link must be gated by the SAME
+  // indexability signal the sitemap uses (`loadIndexableTimelineEntries`), so
+  // a demo/empty/410 timeline is never linked. This is independent of the
+  // ledger above: the section renders the ledger, but the cross-link only
+  // appears when the sitemap would list the /timeline/:domain URL. A D1
+  // hiccup degrades to `false` (no cross-link) rather than 500 the page.
+  let timelineIndexable = false;
+  try {
+    const { resolveIndexableTimelineLinkForDomain } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    timelineIndexable =
+      (await resolveIndexableTimelineLinkForDomain(env, brand.domain)) !== null;
+  } catch (error) {
+    console.warn("Brand page timeline indexability read failed; omitting the cross-link.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+  }
+
   // Issues #1289 / #1345: surface failed/suppressed landing-page captures
   // for this domain so the public page names what we checked and why it did
   // not become an alert. The full array is NOT leaked into the loader data —
@@ -467,6 +495,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
       : null,
     changeEvents: snapshot ? buildBrandChangeFeed(verifiedLinkedAds, now) : [],
     offerTimelineEntries,
+    timelineIndexable,
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
     relatedBrands,
@@ -751,11 +780,11 @@ export default function BrandAdsRoute() {
                 // Issue 964: link this brand page to its citable Offer
                 // Timeline Dataset so answer engines can follow the
                 // relationship from the brand page to the change-ledger.
-                // Only when a stored timeline exists — the page links the
-                // timeline section in exactly that case, and a missing
+                // Only when a stored timeline exists AND the timeline is in
+                // the sitemap's indexable set (issue #1931) — a missing
                 // timeline would point hasPart at a 410 Gone URL.
                 hasPart:
-                  data.offerTimelineEntries.length > 0
+                  data.timelineIndexable && data.offerTimelineEntries.length > 0
                     ? brandPageTimelineHasPart({
                         domain: data.domain,
                         brandName: data.brandName,
@@ -810,9 +839,17 @@ export default function BrandAdsRoute() {
 function BrandOfferTimeline({
   domain,
   entries,
+  timelineIndexable,
 }: {
   domain: string;
   entries: OfferLedgerEntry[];
+  /**
+   * True when this domain's `/timeline/:domain` is in the sitemap's indexable
+   * set (issue #1931). The ledger section renders whenever entries exist, but
+   * the cross-link to the full timeline only appears when the sitemap would
+   * list that URL — so a demo/empty/410 timeline is never linked.
+   */
+  timelineIndexable: boolean;
 }) {
   if (entries.length === 0) {
     return null;
@@ -832,9 +869,11 @@ function BrandOfferTimeline({
           </span>
         </div>
         <OfferTimelineLedger entries={entries} />
-        <p className="f9-timeline-also">
-          <Link to={`/timeline/${encodeURIComponent(domain)}`}>{`Full offer timeline for ${domain}`}</Link>
-        </p>
+        {timelineIndexable && (
+          <p className="f9-timeline-also">
+            <Link to={`/timeline/${encodeURIComponent(domain)}`}>{`Full offer timeline for ${domain}`}</Link>
+          </p>
+        )}
       </div>
     </section>
   );
@@ -1171,7 +1210,7 @@ function BrandAdsResults({
         </section>
       ) : null}
 
-      <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} />
+      <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} timelineIndexable={data.timelineIndexable} />
       <BrandCaptureFailures summary={data.captureFailuresSummary} domain={data.domain} signupPath={signupPath} />
 
       {/* 5. THE ADS — the wall of real creatives */}
@@ -1565,7 +1604,7 @@ function BrandAdsShell({
           </Link>
         </div>
 
-        <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} />
+        <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} timelineIndexable={data.timelineIndexable} />
         <BrandCaptureFailures summary={data.captureFailuresSummary} domain={data.domain} signupPath={signupPath} />
 
         <div className="f9-ads-example" aria-hidden="true">

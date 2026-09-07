@@ -124,6 +124,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     observationDays: null,
     changeEvents,
     offerTimelineEntries: [],
+    timelineIndexable: true,
     adLibraryCountry: "India",
     noindex: false,
     relatedBrands: [],
@@ -431,6 +432,78 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain('href="/timeline/');
     expect(markup).not.toContain("Full offer timeline");
     expect(markup).not.toContain("brand-offer-timeline-title");
+  });
+
+  it("renders the ledger but no /timeline cross-link when the timeline is not in the sitemap's indexable set (issue #1931)", async () => {
+    // Regression for #1931: the cross-link must be gated by the SAME
+    // indexability signal the sitemap uses. A domain with a stored ledger but
+    // whose /timeline/:domain the sitemap would NOT list (proof-gated,
+    // ad-destination, or a domain the route 404s on) must not emit a link to
+    // a page that could 410 — the ledger section still renders, but the
+    // cross-link is omitted.
+    const markup = await render(
+      populated({
+        domain: "gymshark.com",
+        brandName: "Gymshark",
+        canonicalPath: "/ads/gymshark.com",
+        timelineIndexable: false,
+        offerTimelineEntries: [
+          {
+            id: "snap-gymshark-20260827",
+            capturedAt: "2026-08-27T00:00:00.000Z",
+            dateLabel: "27 Aug 2026",
+            canonicalUrl: "https://www.gymshark.com/",
+            headline: "Train hard. Rest harder.",
+            ctaText: "Shop Now",
+            priceText: null,
+            formPresent: false,
+            screenshotHref: null,
+            pageTextHref: null,
+            evidenceNote: null,
+            transition: null,
+          },
+        ],
+      }),
+    );
+
+    // The ledger section still renders (there are stored states).
+    expect(markup).toContain("brand-offer-timeline-title");
+    expect(markup).toContain("Offer timeline");
+    // But the cross-link to the full timeline is omitted.
+    expect(markup).not.toContain('href="/timeline/');
+    expect(markup).not.toContain("Full offer timeline");
+  });
+
+  it("renders the /timeline cross-link only when the timeline is in the sitemap's indexable set (issue #1931)", async () => {
+    // The cross-link appears when the ledger is non-empty AND the sitemap
+    // lists the /timeline/:domain URL.
+    const markup = await render(
+      populated({
+        domain: "gymshark.com",
+        brandName: "Gymshark",
+        canonicalPath: "/ads/gymshark.com",
+        timelineIndexable: true,
+        offerTimelineEntries: [
+          {
+            id: "snap-gymshark-20260827",
+            capturedAt: "2026-08-27T00:00:00.000Z",
+            dateLabel: "27 Aug 2026",
+            canonicalUrl: "https://www.gymshark.com/",
+            headline: "Train hard. Rest harder.",
+            ctaText: "Shop Now",
+            priceText: null,
+            formPresent: false,
+            screenshotHref: null,
+            pageTextHref: null,
+            evidenceNote: null,
+            transition: null,
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain('href="/timeline/gymshark.com"');
+    expect(markup).toContain("Full offer timeline for gymshark.com");
   });
 
   it("renders the teaching shell (not a dotted apology) on a cache miss", async () => {
