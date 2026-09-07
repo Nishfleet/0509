@@ -3681,6 +3681,13 @@ async function evaluateSelectiveProofCandidates(
               : undefined,
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
           idempotencyKey: `${proofRequestKey}:skip:${proofDecision.skipReason}`,
+          planAtCapture: userPlan,
+          captureDiagnostics: {
+            screenshotMissingReason:
+              proofDecision.skipReason === "skipped_due_to_budget"
+                ? "budget"
+                : "policy_skip",
+          },
         });
       }
       continue;
@@ -3713,6 +3720,11 @@ async function evaluateSelectiveProofCandidates(
             : "Proof capture allowance exhausted.",
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         idempotencyKey: `${proofRequestKey}:skip:budget`,
+        planAtCapture: userPlan,
+        captureDiagnostics: {
+          screenshotMissingReason: "budget",
+          budgetReason: evidenceReservation.result.reason,
+        },
       });
       continue;
     }
@@ -3826,6 +3838,13 @@ async function evaluateSelectiveProofCandidates(
           },
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
           idempotencyKey: proofRequestKey,
+          planAtCapture: userPlan,
+          captureDiagnostics: {
+            screenshotMissingReason:
+              failureDetail?.reasonCode ?? "proof_capture_failed",
+            captureValidityStatus: failedClassification.status,
+            ...(failureDetail?.metadata ?? {}),
+          },
         });
         await assertOrchestratedWatchlistRunLease(env, input.runId, {
           orchestrationToken: input.lease?.processingToken,
@@ -3974,6 +3993,7 @@ async function evaluateSelectiveProofCandidates(
         idempotencyKey: proofRequestKey,
         attemptedAt: snapshot.capturedAt,
         succeededAt: snapshot.capturedAt,
+        planAtCapture: userPlan,
       });
       proofCaptureCommitted = true;
       if (!(await finalizeEvidence("succeeded"))) {
@@ -4238,6 +4258,8 @@ async function evaluateDirectWebsiteProofCandidate(
       failureReason: "Direct website evidence was already requested recently.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:dedupe`,
+      planAtCapture: userPlan,
+      captureDiagnostics: { screenshotMissingReason: "dedupe" },
     });
     return emptyProofEvaluation(websiteUrl);
   }
@@ -4259,6 +4281,8 @@ async function evaluateDirectWebsiteProofCandidate(
       },
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:rate-limit`,
+      planAtCapture: userPlan,
+      captureDiagnostics: { screenshotMissingReason: "rate_limit" },
     });
     return emptyProofEvaluation(websiteUrl);
   }
@@ -4285,6 +4309,8 @@ async function evaluateDirectWebsiteProofCandidate(
       failureReason: "Proof capture allowance exhausted.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:budget`,
+      planAtCapture: userPlan,
+      captureDiagnostics: { screenshotMissingReason: "budget" },
     });
     return emptyProofEvaluation(websiteUrl);
   }
@@ -4311,6 +4337,11 @@ async function evaluateDirectWebsiteProofCandidate(
           : "Proof capture allowance exhausted.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:budget`,
+      planAtCapture: userPlan,
+      captureDiagnostics: {
+        screenshotMissingReason: "budget",
+        budgetReason: evidenceReservation.result.reason,
+      },
     });
     return emptyProofEvaluation(websiteUrl);
   }
@@ -4415,6 +4446,14 @@ async function evaluateDirectWebsiteProofCandidate(
         },
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         idempotencyKey: proofRequestKey,
+        planAtCapture: userPlan,
+        captureDiagnostics: {
+          screenshotMissingReason:
+            failureDetail?.reasonCode ??
+            "direct_website_proof_capture_failed",
+          captureValidityStatus: failedClassification.status,
+          ...(failureDetail?.metadata ?? {}),
+        },
       });
       // Issue #949: the fetch bailed out — the diff stage never ran.
       recordDiffStage(pipelineCounters, {
@@ -4561,6 +4600,7 @@ async function evaluateDirectWebsiteProofCandidate(
       idempotencyKey: finalProofRequestKey,
       attemptedAt: snapshot.capturedAt,
       succeededAt: snapshot.capturedAt,
+      planAtCapture: userPlan,
     });
     proofCaptureCommitted = true;
     if (!(await finalizeEvidence("succeeded"))) {

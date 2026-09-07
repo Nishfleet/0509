@@ -183,7 +183,9 @@ const PROOF_CAPTURE_LIST_COLUMNS = `
   proof_capture.attempted_at,
   proof_capture.succeeded_at,
   proof_capture.created_at,
-  proof_capture.updated_at
+  proof_capture.updated_at,
+  proof_capture.plan_at_capture,
+  proof_capture.capture_diagnostics
 `;
 export async function listProofCapturesForTargets(
   env: AppEnv,
@@ -370,6 +372,11 @@ type CreateProofCaptureInput = {
   idempotencyKey?: string | null;
   attemptedAt?: string;
   succeededAt?: string | null;
+  /** Issue #1876: watchlist owner's plan family at capture time. */
+  planAtCapture?: string | null;
+  /** Issue #1876: structured screenshot-missing diagnostic for non-succeeded
+   * captures (timeout, OOM, selector miss, budget, …). NULL for succeeded. */
+  captureDiagnostics?: JsonRecord | null;
 };
 function getReusableProofCaptureId(existing: ProofCaptureRecord, input: CreateProofCaptureInput) {
   if (existing.proofTargetId !== input.proofTargetId) {
@@ -398,7 +405,8 @@ function matchesSuccessfulProofCapturePayload(
     jsonEquivalent(existing.extractedFields, input.extractedFields ?? {}) &&
     jsonEquivalent(existing.fieldConfidence, input.fieldConfidence ?? {}) &&
     jsonEquivalent(existing.extractionWarnings, input.extractionWarnings ?? []) &&
-    jsonEquivalent(existing.captureMetadata, input.captureMetadata ?? {})
+    jsonEquivalent(existing.captureMetadata, input.captureMetadata ?? {}) &&
+    (existing.planAtCapture ?? null) === (input.planAtCapture ?? null)
   );
 }
 function jsonEquivalent(left: unknown, right: unknown) {
@@ -669,9 +677,11 @@ export async function createProofCapture(
           attempted_at,
           succeeded_at,
           created_at,
-          updated_at
+          updated_at,
+          plan_at_capture,
+          capture_diagnostics
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       id,
       input.proofTargetId,
@@ -693,6 +703,8 @@ export async function createProofCapture(
       input.succeededAt ?? null,
       timestamp,
       timestamp,
+      input.planAtCapture ?? null,
+      input.captureDiagnostics ? jsonValue(input.captureDiagnostics) : null,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
