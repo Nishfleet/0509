@@ -715,3 +715,9 @@ bash "$here/0509-surface-probe-deleted.test.sh"
 # cannot push .github/workflows/**). Hermetic (repo-only checks, no
 # gh/prometheus/systemd).
 bash "$here/fleet-litellm-organ.test.sh"
+
+# fleet-ops#4148 (child of #4140 row 9): shape-only per-role unit templates
+# systemd/codex-sol@.service + codex-luna@.service (identity pinned in
+# ExecStart). Live wrapper wipe is gated. Hosted here so P14 runs the shape
+# pin without a workflow-file edit. Hermetic (repo-only checks).
+bash "$here/codex-launcher-retired.test.sh"
