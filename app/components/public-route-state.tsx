@@ -268,7 +268,6 @@ export function PublicSearchRateLimitError({ error }: { error: unknown }) {
 interface BrandPageRateLimitErrorData {
   error: string;
   message?: string;
-  retryAfter?: number;
 }
 
 /**

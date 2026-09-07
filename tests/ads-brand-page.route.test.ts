@@ -636,7 +636,7 @@ describe("/ads/:domain loader", () => {
     const response = thrown as Response;
     expect(response.status).toBe(429);
     expect(response.headers.get("retry-after")).toBe("600");
-    const body = await response.json();
+    const body = (await response.json()) as { error?: string; message?: string };
     expect(body.error).toBe("rate_limited");
     expect(body.message).toContain("anonymous preview limit");
     expect(mocks.getDiscoveryCacheEntry).not.toHaveBeenCalled();
