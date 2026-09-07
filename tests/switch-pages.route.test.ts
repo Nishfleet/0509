@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,6 +52,17 @@ afterEach(() => {
   vi.resetModules();
 });
 
+/**
+ * BET 8 switch pages — acceptance contract for issue #1896 ("Create switch
+ * landing pages for MagicBrief, Panoramata, Visualping").
+ *
+ * The pages shipped under #1117 (PR #1134). This suite keeps the delivered
+ * guarantees machine-checkable so a duplicate of that work can be closed
+ * against it: the three named routes exist, are in the public sitemap set,
+ * carry WebPage + FAQPage JSON-LD, anchor on a verified public complaint,
+ * end in the free /search preview (no demo form), and cross-link the
+ * /compare/* surface named in the issue's product_surface.
+ */
 describe("BET 8 switch pages", () => {
   const routeIds = switchRouteIds();
 
@@ -59,6 +70,28 @@ describe("BET 8 switch pages", () => {
     expect(routeIds).toEqual(["switch.magicbrief", "switch.panoramata", "switch.visualping"]);
     expect([...SWITCH_SLUGS].sort()).toEqual(["magicbrief", "panoramata", "visualping"]);
   });
+
+  it.each(SWITCH_SLUGS)(
+    "%s cross-links its /compare/* sibling named in the issue surface",
+    async (slug) => {
+      const page = SWITCH_PAGES[slug];
+      const routeModule = (await import(`~/routes/switch.${slug}`)) as {
+        default: () => ReactNode;
+      };
+      const markup = renderToStaticMarkup(createElement(routeModule.default));
+
+      // product_surface: /compare/magicbrief, /compare/panoramata, /compare/visualping (or similar).
+      expect(page.relatedComparePath).toMatch(/^\/compare\//);
+      expect(markup).toContain("Full product comparison");
+      expect(markup).toContain(`href="${page.relatedComparePath}"`);
+
+      // The cross-link target must be a real route file, not a dead href.
+      const routeFile = `app/routes/${(page.relatedComparePath ?? "")
+        .replace(/^\//, "")
+        .replace(/\//g, ".")}.tsx`;
+      expect(existsSync(routeFile), `missing cross-link target ${routeFile}`).toBe(true);
+    },
+  );
 
   it("lists every switch path in the public sitemap set", () => {
     for (const page of Object.values(SWITCH_PAGES)) {
