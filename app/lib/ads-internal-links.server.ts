@@ -15,7 +15,10 @@ import {
 } from "~/lib/ads-internal-links";
 import { hostnamesMatchOpenCctldToGenericCommercial } from "~/lib/search-query";
 import { PUBLIC_PROOF_FEATURED_WEBSITE } from "~/lib/public-proof.server";
-import { loadIndexableBrandPageEntries } from "~/lib/sitemap.server";
+import {
+  loadIndexableBrandPageEntries,
+  loadIndexableTimelineEntries,
+} from "~/lib/sitemap.server";
 import type { AppEnv } from "~/lib/env.server";
 
 export async function loadIndexableAdsInternalLinks(env: AppEnv): Promise<IndexableAdsLink[]> {
@@ -84,6 +87,74 @@ export async function resolveIndexableBrandPageLinkForDomain(
     }
   }
   return null;
+}
+
+/**
+ * Load the set of registrable domains whose `/timeline/:domain` page is in
+ * the sitemap's indexable set (issue #1931).
+ *
+ * Reuses `loadIndexableTimelineEntries` — the exact signal the sitemap uses —
+ * so a public funnel page can never point at a `/timeline/:domain` that the
+ * route would 410 (empty ledger) or that the sitemap would refuse to list
+ * (proof-gated, ad-destination, or a domain the route 404s on). Cache-only:
+ * never triggers live discovery or scraping.
+ *
+ * Returns a `Set` of registrable domains (lowercased, no `www.` prefix) whose
+ * timeline is indexable. Degrades to an empty set on any sitemap hiccup so a
+ * timeline-link failure can never 500 a page — it just omits the cross-link.
+ */
+export async function loadIndexableTimelineDomains(env: AppEnv): Promise<Set<string>> {
+  try {
+    const entries = await loadIndexableTimelineEntries(env);
+    const domains = new Set<string>();
+    for (const entry of entries) {
+      const domain = timelineDomainFromSitemapPath(entry.path);
+      if (domain) {
+        domains.add(domain);
+      }
+    }
+    return domains;
+  } catch (error) {
+    console.warn("Indexable timeline internal-link load failed; omitting /timeline links.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    return new Set<string>();
+  }
+}
+
+/**
+ * Resolve a single brand domain to its indexable `/timeline/:domain` path, or
+ * null when that timeline is not in the sitemap's indexable set (issue #1931).
+ *
+ * The returned path is safe to link: it is present only when the sitemap's own
+ * indexability decision (`loadIndexableTimelineEntries`) lists it, so a
+ * demo/empty/410 timeline is never linked. Cache-only.
+ */
+export async function resolveIndexableTimelineLinkForDomain(
+  env: AppEnv,
+  domain: string | null | undefined,
+): Promise<string | null> {
+  if (!domain) {
+    return null;
+  }
+  const normalized = domain.trim().toLowerCase().replace(/^www\./, "");
+  if (!normalized) {
+    return null;
+  }
+  const domains = await loadIndexableTimelineDomains(env);
+  return domains.has(normalized) ? `/timeline/${normalized}` : null;
+}
+
+/** Extract the registrable domain from a `/timeline/:domain` sitemap path. */
+function timelineDomainFromSitemapPath(path: string): string | null {
+  if (!path.startsWith("/timeline/")) {
+    return null;
+  }
+  const domain = path.slice("/timeline/".length);
+  if (!domain || domain.includes("/") || domain.includes("?") || domain.includes("#")) {
+    return null;
+  }
+  return domain;
 }
 
 /** Shared loader for /compare/* pages that have no other loader work. */

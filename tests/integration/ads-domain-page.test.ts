@@ -133,6 +133,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     changeEvents,
     observationDays: null,
     offerTimelineEntries: [],
+    timelineIndexable: true,
     adLibraryCountry: "India",
     noindex: false,
     relatedBrands: [],
