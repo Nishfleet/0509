@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=300 writes=0 runs_per_day=4
 /**
  * Live canary for issue #1287: every `skipped_due_to_budget` proof_capture
  * row over a 72 h window must surface a user-visible reason (a non-null

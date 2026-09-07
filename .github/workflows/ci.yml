@@ -21,6 +21,75 @@ env:
   VITEST_TOTAL_SHARDS: "4"
 
 jobs:
+  d1-budget-check:
+    # Required context (issue #1731). Same no-skip contract as
+    # codex-node-checks: no job-level `if:`/`needs`, authorizer is step 1.
+    # Runs the D1 query budget trip-wire BEFORE the D1 (workers-project)
+    # vitest suites in codex-node-checks exercise the schema: the check
+    # applies migrations/*.sql to a scratch SQLite and fails when the
+    # estimated daily row footprint (hot queries + declared canary budgets)
+    # exceeds 10% of the D1 free-tier daily limit.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Authorize exact verification candidate
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              test -z "$EXPECTED_SHA"
+              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+              [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
+              ;;
+            workflow_dispatch)
+              test "$GITHUB_REF" = "refs/heads/main"
+              test "$GITHUB_RUN_ATTEMPT" = "1"
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              ;;
+            merge_group)
+              test -z "$EXPECTED_SHA"
+              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.authorize.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Verify authorized checkout
+        shell: bash
+        env:
+          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+      - name: D1 query budget check
+        run: bash ./scripts/ci-d1-budget-check.sh
+
   codex-node-checks:
     # Required context (branch protection). It must be structurally incapable
     # of concluding SKIPPED: GitHub counts a skipped required context as
@@ -105,6 +174,10 @@ jobs:
           fi
       - name: Build
         run: npm run build
+      - name: D1 query budget check (before D1 test runs)
+        # Issue #1731: the trip-wire must pass before the workers-project
+        # (real-D1) vitest suite below runs on every D1 CI run.
+        run: bash ./scripts/ci-d1-budget-check.sh
       - name: Test (shard 1 of ${{ env.VITEST_TOTAL_SHARDS }})
         run: |
           set -euo pipefail

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=200 writes=0 runs_per_day=4
 /**
  * Live regression guard for issue #1449: the demo-brand Offer Timeline corpus.
  *
