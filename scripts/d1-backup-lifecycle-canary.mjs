@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=0 writes=0 runs_per_day=1
 
 import { createHash } from "node:crypto";
 import {

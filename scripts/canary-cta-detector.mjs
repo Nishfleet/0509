@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=200 writes=0 runs_per_day=4
 /**
  * Live canary for issue #1500: the landing-page CTA-change detector must
  * emit ≥1 `landing_page_cta_changed` event per 25 watchlists over any

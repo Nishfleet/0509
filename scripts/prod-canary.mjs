@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=100 writes=0 runs_per_day=10
 
 import {
   DEFAULT_CANARY_BASE_URL,

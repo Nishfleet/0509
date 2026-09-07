@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=50 writes=0 runs_per_day=4
 /**
  * Live regression guard for issue #1502: the /search?q=<domain> first-viewport
  * H1 must never ship the technical country-scope jargon ("across all
