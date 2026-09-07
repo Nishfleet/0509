@@ -92,6 +92,12 @@ export interface DigestEmailHeartbeatTriage {
   suppressionReasons: string[];
   nextAction: string;
   noActionLine: string | null;
+  /**
+   * Watched competitors whose checks were dropped because the monthly
+   * proof-capture allowance was reached. Emits the digest footer line
+   * "Note: N competitors hit the monthly proof-capture limit." (#1879).
+   */
+  budgetSkippedCompetitorCount?: number;
 }
 
 /*
@@ -588,6 +594,10 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
     triage.suppressionReasons.length > 0
       ? `<p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">Held back: ${escapeHtml(triage.suppressionReasons.join("; "))}.</p>`
       : "";
+  const budgetSkipFooter = budgetSkipFooterNote(triage);
+  const budgetSkipHtml = budgetSkipFooter
+    ? `<p style="margin: 0 0 16px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(budgetSkipFooter)}</p>`
+    : "";
   const recordText = renderTriageRecordText(triage, input.timeZone);
   // Brief-as-retention-loop (lane 1, 2026-08-20): a failed or incomplete
   // period is a brief too — it carries the same four retention fields so the
@@ -628,6 +638,7 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(checksLine)}</p>
       ${suppressionHtml}
       <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(recordText)}</p>
+      ${budgetSkipHtml}
       ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
       <p style="margin: 0 0 20px;">
@@ -649,6 +660,7 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ? [`Held back: ${triage.suppressionReasons.join("; ")}.`]
       : []),
     recordText,
+    budgetSkipFooter,
     ...retentionTextLines,
     ...renderEmailAccountabilityText(accountability),
     "",
@@ -665,6 +677,25 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
     html,
     text,
   };
+}
+
+/**
+ * One-line digest footer when any watched competitor hit the monthly
+ * proof-capture limit. Only for `evidence_skipped_budget` periods and only
+ * when the count is known (#1879 accept: "Note: N competitors hit the
+ * monthly proof-capture limit.").
+ */
+function budgetSkipFooterNote(triage: DigestEmailHeartbeatTriage): string | null {
+  if (
+    triage.status !== "evidence_skipped_budget" ||
+    typeof triage.budgetSkippedCompetitorCount !== "number" ||
+    triage.budgetSkippedCompetitorCount <= 0
+  ) {
+    return null;
+  }
+  const count = triage.budgetSkippedCompetitorCount;
+  const noun = count === 1 ? "competitor" : "competitors";
+  return `Note: ${count} ${noun} hit the monthly proof-capture limit. Checks resume when the allowance resets.`;
 }
 
 function renderTriageRecordText(
