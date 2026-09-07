@@ -7,6 +7,7 @@ import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import {
   runDemoBrandBackfill,
+  runDemoBrandProofHoleCatchUp,
   summarizeDemoBrandBackfill,
 } from "../app/lib/demo-brand-backfill.server";
 import { resumePendingDigestScheduleJobsDetailed } from "../app/lib/digest-orchestration.server";
@@ -245,6 +246,30 @@ export default {
           },
           (error) =>
             reportScheduledTaskFailure(env, "scheduled_observation_gap_check", error),
+        ),
+      );
+      // Issue #1919: the nightly 04:00 backfill cannot close a live 410 until
+      // the next UTC day. Ride the existing hourly gap-check rail (no new
+      // cron — soak still covers only the four workload schedules) and only
+      // spend a capture pass while a demo brand still has zero proof rows.
+      ctx.waitUntil(
+        runDemoBrandProofHoleCatchUp(env).then(
+          (result) => {
+            if (result.skipped) {
+              return;
+            }
+            console.log("demo brand proof-hole catch-up completed", {
+              missing: result.missingDomains,
+              day: result.backfill?.day,
+              captured: result.backfill?.capturedCount,
+              failed: result.backfill?.failedCount,
+              summary: result.backfill
+                ? summarizeDemoBrandBackfill(result.backfill)
+                : null,
+            });
+          },
+          (error) =>
+            reportScheduledTaskFailure(env, "demo_brand_proof_hole_catch_up", error),
         ),
       );
       return;
