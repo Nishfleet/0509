@@ -4,6 +4,7 @@ import { DEMO_BRAND_PAGE_DOMAINS } from "~/lib/demo-brand-pages";
 import {
   demoBackfillRowId,
   runDemoBrandBackfill,
+  runDemoBrandProofHoleCatchUp,
   summarizeDemoBrandBackfill,
 } from "~/lib/demo-brand-backfill.server";
 import {
@@ -208,6 +209,43 @@ describe("demo brand nightly backfill (issue #1449)", () => {
     expect(Number(nikeFailedDay?.n ?? 0)).toBe(0);
     expect(result.failedCount).toBe(1);
     expect(result.capturedCount).toBe(DEMO_BRAND_PAGE_DOMAINS.length - 1);
+  });
+
+  it("proof-hole catch-up skips capture when every demo brand already has a public timeline (issue #1919)", async () => {
+    const day = "2026-10-04";
+    let captureCalls = 0;
+    const result = await runDemoBrandProofHoleCatchUp(appEnv, {
+      now: new Date(`${day}T02:00:00.000Z`),
+      hasPublicProof: async () => true,
+      capture: (async () => {
+        captureCalls += 1;
+        return null;
+      }) as never,
+    });
+    expect(result.skipped).toBe(true);
+    expect(result.missingDomains).toEqual([]);
+    expect(result.backfill).toBeNull();
+    expect(captureCalls).toBe(0);
+  });
+
+  it("proof-hole catch-up runs the backfill when a demo brand still 410s (issue #1919)", async () => {
+    const day = "2026-10-05";
+    const stub = makeStubCapture(day, 9);
+    let captureCalls = 0;
+    const result = await runDemoBrandProofHoleCatchUp(appEnv, {
+      now: new Date(`${day}T01:00:00.000Z`),
+      hasPublicProof: async (_env, domain) => domain !== "nike.com",
+      capture: (async (_env: unknown, url: string) => {
+        captureCalls += 1;
+        const domain = DEMO_BRAND_PAGE_DOMAINS.find((d) => url.includes(d));
+        if (!domain) return null;
+        return stub(domain).snapshot;
+      }) as never,
+    });
+    expect(result.skipped).toBe(false);
+    expect(result.missingDomains).toEqual(["nike.com"]);
+    expect(result.backfill?.failedCount).toBe(0);
+    expect(captureCalls).toBeGreaterThan(0);
   });
 
   it("leaves every demo brand with at least one proof-bearing snapshot row (issue #1919)", async () => {
