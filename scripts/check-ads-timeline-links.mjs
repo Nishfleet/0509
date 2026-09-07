@@ -111,10 +111,18 @@ async function main() {
     console.log(`sitemap: ${adsDomains.size} /ads pages, ${timelineDomains.size} /timeline pages`);
   }
 
-  // 2. For each indexable /ads page, assert it links its own /timeline.
+  // 2. For each indexable /ads page whose /timeline is ALSO indexable, assert
+  //    it links its own /timeline. The /ads set (discovery_cache_entry) and
+  //    the /timeline set (landing_page_snapshot) are different data sources,
+  //    so an indexable /ads page whose timeline is NOT indexable correctly
+  //    omits the link (issue #1931) — the sweep must not flag that as a
+  //    regression. Only the intersection is asserted.
   const failures = [];
   let fetchedAdsPages = 0;
   for (const domain of adsDomains) {
+    if (!timelineDomains.has(domain)) {
+      continue;
+    }
     const adsUrl = `${baseUrl}/ads/${encodeURIComponent(domain)}`;
     let html;
     try {
@@ -136,22 +144,26 @@ async function main() {
     const timelineHref = `/timeline/${encodeURIComponent(domain)}`;
     if (!html.includes(`href="${timelineHref}"`)) {
       failures.push(
-        `${adsUrl} is indexable but has no "Offer timeline" link to ${timelineHref}`,
+        `${adsUrl} is indexable and its /timeline is indexable, but has no "Offer timeline" link to ${timelineHref}`,
       );
     }
   }
 
-  // If every /ads page was skipped (rate-limited or otherwise unfetchable),
-  // the sweep verified nothing — that is a hard failure, not a green.
+  // If every qualifying /ads page was skipped (rate-limited or otherwise
+  // unfetchable), the sweep verified nothing — that is a hard failure, not a
+  // green.
   if (fetchedAdsPages === 0) {
     console.error(
-      `FAIL: could not fetch any of the ${adsDomains.size} indexable /ads pages ` +
+      `FAIL: could not fetch any of the qualifying indexable /ads pages ` +
         `(all returned non-200) — nothing verified.`,
     );
     process.exit(2);
   }
 
-  // 3. Check /brands links a timeline for each qualifying domain.
+  // 3. Check /brands links a timeline for each qualifying domain. /brands
+  //    only renders a timeline link for a domain that ALSO has an indexable
+  //    brand page (loadIndexableAdsInternalLinks), so only the intersection of
+  //    timeline domains and brand-hub domains is asserted.
   let brandsHtml;
   try {
     const res = await fetchWithTimeout(`${baseUrl}/brands`);
@@ -163,6 +175,9 @@ async function main() {
   }
   if (brandsHtml) {
     for (const domain of timelineDomains) {
+      if (!adsDomains.has(domain)) {
+        continue;
+      }
       const timelineHref = `/timeline/${encodeURIComponent(domain)}`;
       if (!brandsHtml.includes(`href="${timelineHref}"`)) {
         failures.push(
