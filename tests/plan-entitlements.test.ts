@@ -28,9 +28,14 @@ describe("plan entitlements catalog", () => {
     expect(entitlements.digestCadence).toBe("weekly");
     expect(planAllowsDigestCadence("free", "weekly")).toBe(true);
     expect(planAllowsDigestCadence("free", "daily")).toBe(false);
-    // Free carries only the weekly digest + its email lane; no exports,
-    // instant alerts, Slack, API, or MCP.
-    expect([...entitlements.features].sort()).toEqual(["email_delivery", "weekly_digest"]);
+    // Free carries the weekly digest + its email lane plus read-only API/MCP
+    // access (BET 6); no exports, instant alerts, Slack, or write scopes.
+    expect([...entitlements.features].sort()).toEqual([
+      "api_access",
+      "email_delivery",
+      "mcp_read_access",
+      "weekly_digest",
+    ]);
     // A Friday 00:00 UTC tick is a 6h-aligned slot for paid plans but must
     // never include free — free scans only on the weekly Monday slot.
     expect(shouldSchedulePlanInRegularScan("free", new Date("2026-07-03T00:00:00.000Z"))).toBe(false);
