@@ -73,7 +73,7 @@ export async function resolveIndexableBrandPageLinkForDomain(
   // commercial matcher the verified-link classifier trusts, so a search that
   // resolves notion.com hands off to the indexable /ads/notion.so page
   // instead of silently dropping the brand destination. Bounded: iterates the
-  // same ≤500 indexable set, cache-only.
+  // same bounded indexable set (SITEMAP_BRAND_PATH_LIMIT), cache-only.
   for (const link of links) {
     if (
       hostnamesMatchOpenCctldToGenericCommercial(normalized, {

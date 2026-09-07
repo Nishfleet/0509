@@ -22,8 +22,13 @@ import {
 import routes from "~/routes";
 import {
   brandDomainFromSitemapCacheRow,
+  brandPageEntryPriority,
   brandPageLookupCacheKeysForSitemap,
   brandPageRowHasVerifiedAds,
+  brandPageRowVerifiedAdCount,
+  BRAND_PAGE_PRIORITY_FRESH_MS,
+  BRAND_PAGE_PRIORITY_NEAR_EXPIRY_MS,
+  BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS,
   buildSitemapXml,
   indexableBrandPageEntriesFromRows,
   indexableTimelineEntriesFromRows,
@@ -285,6 +290,72 @@ describe("indexableBrandPageEntriesFromRows", () => {
   });
 });
 
+describe("brandPageEntryPriority — freshness + evidence bands (issue #966)", () => {
+  it("gives 0.7 to a fresh capture with strong verified evidence", () => {
+    expect(brandPageEntryPriority(60 * 60 * 1000, BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS)).toBe("0.7");
+    expect(brandPageEntryPriority(BRAND_PAGE_PRIORITY_FRESH_MS, 10)).toBe("0.7");
+  });
+
+  it("gives 0.6 to a fresh capture with thin evidence (the default band)", () => {
+    expect(brandPageEntryPriority(2 * 60 * 60 * 1000, 1)).toBe("0.6");
+    expect(brandPageEntryPriority(3 * DAY_MS, 2)).toBe("0.6");
+  });
+
+  it("gives 0.5 to a capture nearing the 7-day noindex expiry, whatever its evidence", () => {
+    expect(brandPageEntryPriority(BRAND_PAGE_PRIORITY_NEAR_EXPIRY_MS, 1)).toBe("0.5");
+    expect(brandPageEntryPriority(6 * DAY_MS, 50)).toBe("0.5");
+  });
+
+  it("gives 0.5 to an aging capture whose evidence is thin", () => {
+    expect(brandPageEntryPriority(3 * DAY_MS, 1)).toBe("0.5");
+  });
+
+  it("never gives 0.7 to strong evidence on an aging capture", () => {
+    expect(brandPageEntryPriority(BRAND_PAGE_PRIORITY_FRESH_MS + 1, 100)).toBe("0.6");
+  });
+});
+
+describe("priority tiers flow through indexableBrandPageEntriesFromRows (issue #966)", () => {
+  const now = new Date();
+  const strongPayload = {
+    ...basePayload,
+    ads: [
+      verifiedAd,
+      { ...verifiedAd, metaAdId: "meta-nykaa-2" },
+      { ...verifiedAd, metaAdId: "meta-nykaa-3" },
+    ],
+  };
+
+  it("lists a strong fresh capture with priority 0.7", () => {
+    const entries = indexableBrandPageEntriesFromRows(
+      [cacheRow({ payload: strongPayload, fetched_at: isoAgo(60 * 60 * 1000) })],
+      now,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0].priority).toBe("0.7");
+  });
+
+  it("lists a near-expiry capture with priority 0.5 and its honest lastmod", () => {
+    const fetchedAt = isoAgo(6 * DAY_MS);
+    const entries = indexableBrandPageEntriesFromRows(
+      [cacheRow({ payload: strongPayload, fetched_at: fetchedAt })],
+      now,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0].priority).toBe("0.5");
+    expect(entries[0].lastmod).toBe(fetchedAt.slice(0, 10));
+  });
+
+  it("lists an aging thin-evidence capture with priority 0.5", () => {
+    const entries = indexableBrandPageEntriesFromRows(
+      [cacheRow({ fetched_at: isoAgo(3 * DAY_MS) })],
+      now,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0].priority).toBe("0.5");
+  });
+});
+
 describe("lookup parity — never list a page that would serve noindex", () => {
   const now = new Date();
 
@@ -465,6 +536,45 @@ describe("populated-vs-thin gate — never list an indexable thin page (issue #1
     expect(
       brandPageRowHasVerifiedAds(cacheRow({ payload: unverifiedOnlyPayload }), "nykaa.com"),
     ).toBe(false);
+  });
+
+  it("brandPageRowVerifiedAdCount counts only verified-linked ads, mirroring the gate", () => {
+    const strongPayload = {
+      ...basePayload,
+      ads: [
+        verifiedAd,
+        { ...verifiedAd, metaAdId: "meta-nykaa-2" },
+        { ...verifiedAd, metaAdId: "meta-nykaa-3" },
+        // Unverified text-mention — renders on the wall, never counts.
+        {
+          metaAdId: "meta-text-1",
+          source: "meta_library_browser",
+          landingPageUrl: null,
+          domainMatch: undefined,
+          firstSeenAt: isoAgo(30 * DAY_MS),
+          active: true,
+          variantCount: 1,
+        },
+      ],
+    };
+    expect(brandPageRowVerifiedAdCount(cacheRow({ payload: strongPayload }), "nykaa.com")).toBe(3);
+    expect(brandPageRowVerifiedAdCount(cacheRow(), "nykaa.com")).toBe(1);
+    // Unverified-only rows count 0 — the same fact the hasVerifiedAds gate reads.
+    const unverifiedOnly = {
+      ...basePayload,
+      ads: [
+        {
+          metaAdId: "meta-text-1",
+          source: "meta_library_browser",
+          landingPageUrl: null,
+          domainMatch: undefined,
+          firstSeenAt: isoAgo(30 * DAY_MS),
+          active: true,
+          variantCount: 1,
+        },
+      ],
+    };
+    expect(brandPageRowVerifiedAdCount(cacheRow({ payload: unverifiedOnly }), "nykaa.com")).toBe(0);
   });
 
   it("lists allbirds.com when the capture lands on allbirds.co.uk with enough history", () => {
