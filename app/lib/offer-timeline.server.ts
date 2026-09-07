@@ -21,7 +21,7 @@ import {
 import { isValidProofPageTextKey } from "~/lib/proof-page-text";
 import { isValidProofScreenshotKey } from "~/lib/proof-screenshot";
 
-const TIMELINE_SNAPSHOT_LIMIT = 200;
+export const TIMELINE_SNAPSHOT_LIMIT = 200;
 
 export interface LandingPageSnapshotRow {
   id: string;
