@@ -6,7 +6,10 @@ import {
   runDemoBrandBackfill,
   summarizeDemoBrandBackfill,
 } from "~/lib/demo-brand-backfill.server";
-import { loadOfferTimeline } from "~/lib/offer-timeline.server";
+import {
+  loadOfferTimeline,
+  snapshotRowHasCompleteProof,
+} from "~/lib/offer-timeline.server";
 
 import { appEnv, db } from "./fixtures";
 
@@ -205,6 +208,45 @@ describe("demo brand nightly backfill (issue #1449)", () => {
     expect(Number(nikeFailedDay?.n ?? 0)).toBe(0);
     expect(result.failedCount).toBe(1);
     expect(result.capturedCount).toBe(DEMO_BRAND_PAGE_DOMAINS.length - 1);
+  });
+
+  it("leaves every demo brand with at least one proof-bearing snapshot row (issue #1919)", async () => {
+    // Issue #1919 regression guard: the public surface went 410 for three demo
+    // brands while the D1 row-count canary stayed green, because the only rows
+    // were artifact-less seeds. This test counts rows that actually pass the
+    // proof gate (screenshot + page-text artifact keys) so a brand whose
+    // capture writes only unproven rows — or no rows at all — fails before
+    // deploy instead of being caught by the public canary.
+    const day = "2026-10-03";
+    const stub = makeStubCapture(day, 7);
+    const captureStub = async (_env: unknown, url: string) => {
+      const domain = DEMO_BRAND_PAGE_DOMAINS.find((d) => url.includes(d));
+      if (!domain) return null;
+      return stub(domain).snapshot;
+    };
+
+    const result = await runDemoBrandBackfill(appEnv, {
+      now: new Date(`${day}T01:00:00.000Z`),
+      capture: captureStub as never,
+    });
+    expect(result.failedCount).toBe(0);
+
+    for (const domain of DEMO_BRAND_PAGE_DOMAINS) {
+      const rows = await db()
+        .prepare(
+          `SELECT artifact_key, metadata_json FROM landing_page_snapshot
+           WHERE canonical_url LIKE ?`,
+        )
+        .bind(`%${domain}%`)
+        .all<{ artifact_key: string | null; metadata_json: string | null }>();
+      const proofBearing = (rows.results ?? []).filter((row) =>
+        snapshotRowHasCompleteProof(row),
+      );
+      expect(
+        proofBearing.length,
+        `${domain} must have at least one proof-bearing snapshot row`,
+      ).toBeGreaterThanOrEqual(1);
+    }
   });
 
   it("summarizes a run into the scheduled-handler log line", () => {
