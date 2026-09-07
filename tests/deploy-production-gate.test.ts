@@ -269,6 +269,20 @@ describe("production deployment readiness gate", () => {
     const canaryIndex = plan.findIndex(
       (step: any) => step.id === "post_deploy_release_canary",
     );
+    // The in-plan canary token sync absorbs Cloudflare's "currently
+    // deployed" lag (run 34079008963) before the workflow's "Synchronize
+    // private canary token" step runs its single classic `wrangler secret
+    // put`. It sits after propagation stabilization so the first attempt
+    // usually lands, and stays non-blocking so a lagging sync can never
+    // trigger rollback_failed_release on an otherwise-good deploy.
+    expect(canaryIndex).toBe(deployIndex + 5);
+    expect(plan[canaryIndex - 1]).toMatchObject({
+      id: "canary_bypass_token_sync",
+      command: "node",
+      args: ["scripts/sync-canary-bypass-token.mjs"],
+      includeCloudflareCredentials: true,
+      nonBlockingDiagnostic: true,
+    });
     expect(plan[canaryIndex]).toMatchObject({
       id: "post_deploy_release_canary",
       includeCloudflareCredentials: true,
@@ -570,6 +584,106 @@ process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
     ]);
   });
 
+  it("retries the classic canary token secret put until the version is marked deployed", () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-canary-sync-"));
+    roots.push(root);
+    const logPath = join(root, "wrangler-invocations.json");
+    const fakeWranglerPath = join(root, "fake-wrangler.mjs");
+    writeFileSync(
+      fakeWranglerPath,
+      `#!/usr/bin/env node
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+let stdin = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { stdin += chunk; });
+process.stdin.on("end", () => {
+  const logPath = process.env.FAKE_WRANGLER_LOG;
+  const calls = existsSync(logPath) ? JSON.parse(readFileSync(logPath, "utf8")) : [];
+  calls.push({ argv: process.argv.slice(2), stdin });
+  writeFileSync(logPath, JSON.stringify(calls));
+  const failTimes = Number(process.env.FAKE_WRANGLER_FAIL_TIMES || "0");
+  if (calls.length <= failTimes) {
+    process.stderr.write("Secret edit failed. You attempted to modify a secret, but the latest version of your Worker isn't currently deployed.\\n");
+    process.exitCode = 1;
+    return;
+  }
+  process.stdout.write("Success! Upserted secret CANARY_BYPASS_TOKEN.\\n");
+});
+`,
+    );
+    chmodSync(fakeWranglerPath, 0o755);
+
+    const runSync = (extraEnv: Record<string, string>) =>
+      spawnSync(
+        process.execPath,
+        [resolve("scripts/sync-canary-bypass-token.mjs")],
+        {
+          cwd: process.cwd(),
+          env: {
+            ...process.env,
+            WRANGLER_BIN: fakeWranglerPath,
+            FAKE_WRANGLER_LOG: logPath,
+            CANARY_SYNC_RETRY_DELAY_MS: "1",
+            ...extraEnv,
+          },
+          encoding: "utf8",
+        },
+      );
+
+    // Two lagging failures then the mark lands: the bounded retry syncs on
+    // the third attempt, the token travels on stdin, and it never appears
+    // in argv (no process-list or log leak).
+    const synced = runSync({
+      CANARY_BYPASS_TOKEN: "test-canary-token",
+      CANARY_SYNC_MAX_ATTEMPTS: "5",
+      FAKE_WRANGLER_FAIL_TIMES: "2",
+    });
+    expect(synced.status).toBe(0);
+    expect(synced.stdout).toContain("canary token synced on attempt 3");
+    const calls = JSON.parse(readFileSync(logPath, "utf8")) as Array<{
+      argv: string[];
+      stdin: string;
+    }>;
+    expect(calls).toHaveLength(3);
+    for (const call of calls) {
+      expect(call.argv).toEqual([
+        "secret",
+        "put",
+        "CANARY_BYPASS_TOKEN",
+        "--name",
+        "0509",
+      ]);
+      expect(call.stdin).toBe("test-canary-token");
+      expect(call.argv).not.toContain("test-canary-token");
+    }
+
+    // A permanent failure still exits nonzero after exactly the bound. In
+    // the plan this surfaces as a recorded non-blocking diagnostic — the
+    // workflow step gets the final word — never a rollback.
+    rmSync(logPath, { force: true });
+    const exhausted = runSync({
+      CANARY_BYPASS_TOKEN: "test-canary-token",
+      CANARY_SYNC_MAX_ATTEMPTS: "4",
+      FAKE_WRANGLER_FAIL_TIMES: "99",
+    });
+    expect(exhausted.status).toBe(1);
+    expect(exhausted.stderr).toContain(
+      "canary token sync failed after 4 attempts",
+    );
+    expect(JSON.parse(readFileSync(logPath, "utf8"))).toHaveLength(4);
+
+    // No token in env (break-glass local deploy): skip without spawning.
+    rmSync(logPath, { force: true });
+    const skipped = runSync({
+      CANARY_BYPASS_TOKEN: "",
+      CANARY_SYNC_MAX_ATTEMPTS: "5",
+      FAKE_WRANGLER_FAIL_TIMES: "0",
+    });
+    expect(skipped.status).toBe(0);
+    expect(skipped.stdout).toContain("CANARY_BYPASS_TOKEN is not set");
+    expect(existsSync(logPath)).toBe(false);
+  });
+
   it("refuses malformed rollback evidence and a known same-version target before spawning", () => {
     const root = mkdtempSync(join(tmpdir(), "0509-worker-rollback-refusal-"));
     roots.push(root);
@@ -813,6 +927,29 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       if (blockedStep) expect(executed).not.toContain(blockedStep);
     },
   );
+
+  it("never rolls back a good deploy when the canary token sync exhausts its retries", () => {
+    // run 34079008963's fault is Cloudflare lag, not a failed deploy — an
+    // exhausted bounded retry is recorded as a diagnostic, never a reason
+    // for rollback_failed_release, and the plan keeps going so the
+    // workflow's own secret step still gets the final word.
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const executed: string[] = [];
+    executeProductionDeployPlan(plan, (step: any) => {
+      executed.push(step.id);
+      if (step.id === "canary_bypass_token_sync") {
+        throw new Error("canary_bypass_token_sync_still_lagging");
+      }
+    });
+    expect(executed).toContain("canary_bypass_token_sync");
+    expect(executed).toContain("post_deploy_release_canary");
+    expect(executed).toContain("oauth_branding");
+    expect(executed).not.toContain("rollback_failed_release");
+  });
 
   it("runs the post-canary refund invariant before rethrowing a canary failure", () => {
     const plan = buildProductionDeployPlan({
