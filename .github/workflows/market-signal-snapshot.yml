@@ -49,10 +49,21 @@ on:
     - cron: "7 0 * * *"
   workflow_dispatch:
 
+# The snapshot is a READ-ONLY telemetry job (a `wrangler d1 execute --remote`
+# SELECT plus a cross-repo push of the result). It is NOT a production provider
+# mutation, so it must NOT share the `0509-production-provider-mutations`
+# concurrency group with deploy-production.yml. While it did, a deploy running
+# at 04:28Z on 2026-09-06 kept the group busy, the 04:29Z scheduled snapshot
+# queued, and the next deploy entry cancelled the pending snapshot (deploy-
+# production uses the default `queue: single`, which cancels older pending
+# runs in the group). The daily snapshot went stale >26h that morning (issue
+# #1894). Its own group lets it run regardless of deploy churn, and
+# `cancel-in-progress: false` means a rerun never interrupts a running
+# snapshot. A no-op unchanged snapshot still exits 0, so a queued rerun is
+# harmless.
 concurrency:
-  group: 0509-production-provider-mutations
+  group: market-signal-snapshot
   cancel-in-progress: false
-  queue: max
 
 # The snapshot script reads the repository's issue list for the github section
 # of the signal, so the token needs issues: read. Without issues: read the
