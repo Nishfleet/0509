@@ -6,17 +6,23 @@ import { DatabaseSync } from "node:sqlite";
 import {
   readFirstBriefState,
   seedFreshFirstBriefEvidence,
-} from "../../scripts/bet7-activation-verification.mjs";
-import { resolveE2ePersistPath } from "../../scripts/e2e-local-fixture.mjs";
-import { resolveLocalD1DatabasePath } from "../../scripts/e2e-local-state-query.mjs";
-import { reserveLocalReleaseOrigin } from "../../scripts/local-release-server.mjs";
+} from "../scripts/bet7-activation-verification.mjs";
+import { resolveE2ePersistPath } from "../scripts/e2e-local-fixture.mjs";
+import { resolveLocalD1DatabasePath } from "../scripts/e2e-local-state-query.mjs";
+import { reserveLocalReleaseOrigin } from "../scripts/local-release-server.mjs";
 
 /**
- * Issue #1487 — BET 7 termination spec.
+ * Issue #1895 — BET 7 activation-scan termination spec.
  *
  * The issue's termination command is:
- *   npx playwright test --config=playwright.config.ts --project=workspace \
- *     tests/e2e/activation-first-brief.spec.ts
+ *   npx playwright test tests/activation-scan.spec.ts
+ *
+ * This spec was moved from `tests/e2e/activation-first-brief.spec.ts` (the
+ * issue #1487 termination spec) so the BET 7 activation-scan flow lives under
+ * the exact path the issue's termination command names. The assertions are
+ * unchanged: a fresh signup's activation scan produces an on-screen brief
+ * with >=1 evidence-linked item in the same session and dispatches the
+ * first-brief email.
  *
  * This spec is self-contained: it does NOT rely on the shared webServer block
  * (which never sets SIGNUP_FIRST_BRIEF_ENABLED — the surface under test would
