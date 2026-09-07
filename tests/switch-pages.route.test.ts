@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CAPTURE_VALIDITY_REASON_CODES } from "~/lib/capture-validity.server";
-import { NO_PHANTOM_CHANGE_RULES, SWITCH_PAGES, SWITCH_SLUGS } from "~/lib/switch-pages";
+import { NO_PHANTOM_CHANGE_RULES, SWITCH_PAGES, SWITCH_SLUGS, type SwitchSlug } from "~/lib/switch-pages";
 import { SITEMAP_PATHS } from "~/lib/seo";
 
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
@@ -80,16 +80,22 @@ describe("BET 8 switch pages", () => {
       };
       const markup = renderToStaticMarkup(createElement(routeModule.default));
 
-      // product_surface: /compare/magicbrief, /compare/panoramata, /compare/visualping (or similar).
-      expect(page.relatedComparePath).toMatch(/^\/compare\//);
-      expect(markup).toContain("Full product comparison");
-      expect(markup).toContain(`href="${page.relatedComparePath}"`);
+  // product_surface: /compare/magicbrief, /compare/panoramata, /compare/visualping (or similar).
+  // visualping consolidates to /compare/visualping-ad-libraries (#1481 canonical).
+  const expectedComparePath: Record<SwitchSlug, string> = {
+    magicbrief: "/compare/magicbrief",
+    panoramata: "/compare/panoramata",
+    visualping: "/compare/visualping-ad-libraries",
+  };
+  expect(page.relatedComparePath).toBe(expectedComparePath[slug]);
+  expect(markup).toContain("Full product comparison");
+  expect(markup).toContain(`href="${expectedComparePath[slug]}"`);
 
-      // The cross-link target must be a real route file, not a dead href.
-      const routeFile = `app/routes/${(page.relatedComparePath ?? "")
-        .replace(/^\//, "")
-        .replace(/\//g, ".")}.tsx`;
-      expect(existsSync(routeFile), `missing cross-link target ${routeFile}`).toBe(true);
+  // The cross-link target must be a real route file, not a dead href.
+  // URL→file derivation follows the flat-route convention (slash → dot) the
+  // rest of this suite's route reads already assume.
+  const routeFile = `app/routes/${expectedComparePath[slug].replace(/^\//, "").replace(/\//g, ".")}.tsx`;
+  expect(existsSync(routeFile), `missing cross-link target ${routeFile}`).toBe(true);
     },
   );
 
