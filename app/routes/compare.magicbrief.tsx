@@ -201,7 +201,7 @@ export default function CompareMagicBriefRoute() {
         </div>
       </section>
 
-      <section className="ld-quiet">
+      <section className="ld-quiet" data-source-url={citations.sources[0].href}>
         <div className="ld-section-head">
           <span className="ld-kicker">Not imported</span>
           <h2>What does not transfer.</h2>
