@@ -99,6 +99,6 @@ test(`BET 9 hero: headline + value prop + CTA in first viewport, zero console er
   // CTA. Saved next to Playwright's outputDir so the termination command
   // leaves a visible artefact.
   await page.screenshot({
-    path: `test-results/design/hero-fold-${label}.png`,
+    path: `test-results/hero-fold-${label}.png`,
   });
 });
