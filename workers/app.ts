@@ -392,8 +392,11 @@ export default {
           async (result) => {
             const total = Object.values(result.deleted).reduce((sum, count) => sum + count, 0);
             const failedSteps = result.failedSteps ?? [];
-            if (total > 0) {
-              console.log("retention sweep completed", result.deleted);
+            if (total > 0 || result.orphanReconcile) {
+              console.log("retention sweep completed", {
+                deleted: result.deleted,
+                orphanReconcile: result.orphanReconcile,
+              });
             }
             if (failedSteps.length > 0) {
               await reportScheduledTaskFailure(
