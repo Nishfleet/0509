@@ -66,6 +66,13 @@ export interface WatchPeriodTriage {
   suppressedChanges: number;
   /** Customer-safe suppression reasons (already-reported repeats, etc.). */
   suppressionReasons: string[];
+  /**
+   * Number of watched competitors (distinct watchlists) that had at least one
+   * `skipped_due_to_budget` capture in the period. Only populated for
+   * `evidence_skipped_budget` periods and only when the proof captures carried
+   * a watchlist identity; absent means the count is unknown, not zero (#1879).
+   */
+  budgetSkippedCompetitorCount?: number;
   nextAction: string;
   /** Explicit no-action line; null only when there is genuinely nothing to do and no claim to make. */
   noActionLine: string | null;
@@ -74,7 +81,9 @@ export interface WatchPeriodTriage {
 export interface WatchPeriodTriageInput {
   events: readonly Pick<WatchEventRecord, "status">[];
   candidates: readonly Pick<EventCandidateRecord, "status" | "dedupeReason">[];
-  proofCaptures: readonly Pick<ProofCaptureRecord, "status">[];
+  proofCaptures: ReadonlyArray<
+    Pick<ProofCaptureRecord, "status"> & { watchlistId?: string }
+  >;
   successfulRuns: number;
   lastSuccessfulCheckAt: string | null;
 }
@@ -183,6 +192,10 @@ export function classifyWatchPeriodTriage(
         changesCaptured: 0,
         suppressedChanges: 0,
         suppressionReasons: [],
+        budgetSkippedCompetitorCount: budgetSkippedCompetitorCount(
+          input.proofCaptures,
+          budgetSkipped,
+        ),
         nextAction:
           "Checks resume when the allowance resets. Add a credit pack or upgrade the plan to capture more now.",
         noActionLine:
@@ -223,6 +236,31 @@ function countBudgetSkippedCaptures(
 ) {
   return proofCaptures.filter((capture) => capture.status === "skipped_due_to_budget")
     .length;
+}
+
+/**
+ * Distinct watched competitors (watchlist ids) that hit the budget, when the
+ * captures carried a watchlist identity. Falls back to the skip count when no
+ * watchlist id is present so the digest still states a defensible lower bound
+ * rather than dropping the note entirely (#1879).
+ */
+function budgetSkippedCompetitorCount(
+  proofCaptures: readonly (Pick<ProofCaptureRecord, "status"> & {
+    watchlistId?: string;
+  })[],
+  budgetSkipped: number,
+): number | undefined {
+  const withWatchlist = proofCaptures.filter(
+    (capture) =>
+      capture.status === "skipped_due_to_budget" &&
+      typeof capture.watchlistId === "string" &&
+      capture.watchlistId.length > 0,
+  );
+  if (withWatchlist.length > 0) {
+    return new Set(withWatchlist.map((capture) => capture.watchlistId)).size;
+  }
+  // No watchlist identity on any budget skip: report the skip-count lower bound.
+  return budgetSkipped;
 }
 
 function collectSuppressionReasons(
@@ -298,6 +336,7 @@ export function readTriageFromDigestSummary(
             typeof reason === "string" && reason.trim().length > 0,
         )
       : [],
+    budgetSkippedCompetitorCount: readTriageBudgetSkipCount(candidate.budgetSkippedCompetitorCount),
     nextAction:
       readTriageString(candidate.nextAction) ??
       "Review the changes in your brief.",
@@ -313,4 +352,10 @@ function readTriageNumber(value: unknown) {
   return typeof value === "number" && Number.isInteger(value) && value >= 0
     ? value
     : 0;
+}
+
+function readTriageBudgetSkipCount(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
 }
