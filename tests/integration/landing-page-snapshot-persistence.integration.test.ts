@@ -90,7 +90,8 @@ describe("landing-page snapshot persistence against real D1", () => {
     const rows = await db()
       .prepare(
         `SELECT id, canonical_url, raw_headline, normalized_headline_hash,
-                cta_text, price_text, form_present, artifact_key, captured_at
+                cta_text, price_text, form_present, artifact_key, captured_at,
+                json_extract(metadata_json, '$.screenshotArtifactKey') AS screenshot_key
          FROM landing_page_snapshot WHERE id = ?`,
       )
       .bind(captureId)
@@ -104,6 +105,7 @@ describe("landing-page snapshot persistence against real D1", () => {
         form_present: number;
         artifact_key: string;
         captured_at: string;
+        screenshot_key: string | null;
       }>();
     expect(rows.results).toHaveLength(1);
     const row = rows.results![0]!;
@@ -114,6 +116,7 @@ describe("landing-page snapshot persistence against real D1", () => {
     expect(row.price_text).toBe("₹499");
     expect(row.form_present).toBe(1);
     expect(row.artifact_key).toMatch(/\.html$/);
+    expect(row.screenshot_key).toMatch(/\.jpeg$/);
     expect(row.captured_at).toBe("2026-09-01T10:00:00.000Z");
     void watchlistId;
   });
