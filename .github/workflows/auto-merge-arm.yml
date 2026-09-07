@@ -20,7 +20,6 @@ concurrency:
 
 jobs:
   arm:
-    timeout-minutes: 5
     uses: Nishfleet/fleet-ops/.github/workflows/reusable-auto-merge-arm.yml@7a766ad9135f2c8bf6fa75e3c0bc56155bfcb723
     secrets:
       AUTO_REVERT_PAT: ${{ secrets.AUTO_REVERT_PAT }}
