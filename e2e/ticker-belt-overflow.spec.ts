@@ -23,13 +23,20 @@ const MOBILE_VIEWPORT = { width: 390, height: 844 } as const;
 
 // The key public routes from the issue's product_surface. `/ads/:domain`
 // uses a fixture domain; a cache-miss 301-redirects to `/search?q=<domain>`
-// (issue #1282), which the overflow assertion still covers.
+// (issue #1282), which the overflow assertion still covers. The final URL is
+// asserted so the test is honest about which page actually rendered.
 const KEY_ROUTES = [
-  { path: "/", name: "homepage" },
-  { path: "/search", name: "search" },
-  { path: "/ads/nykaa.com", name: "ads brand page" },
-  { path: "/pricing", name: "pricing" },
-  { path: "/auth/signup", name: "signup" },
+  { path: "/", name: "homepage", finalUrl: "/" },
+  { path: "/search", name: "search", finalUrl: "/search" },
+  {
+    path: "/ads/nykaa.com",
+    name: "ads brand page",
+    // Either the brand page renders (fresh snapshot) or it 301s to the
+    // search redirect target (cache miss, issue #1282).
+    finalUrl: /^\/ads\/nykaa\.com(\?|$)|^\/search\?q=nykaa\.com/,
+  },
+  { path: "/pricing", name: "pricing", finalUrl: "/pricing" },
+  { path: "/auth/signup", name: "signup", finalUrl: "/auth/signup" },
 ] as const;
 
 for (const route of KEY_ROUTES) {
@@ -45,14 +52,22 @@ for (const route of KEY_ROUTES) {
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(300);
 
+    // Be honest about which page actually rendered (the ads route may 301 to
+    // /search on a cache miss). Compare the path + query, not the full origin.
+    const finalPath = new URL(page.url()).pathname + new URL(page.url()).search;
+    expect(finalPath, `final URL on ${route.path}`).toMatch(route.finalUrl);
+
     // The issue metric: the document must not scroll horizontally at 390px.
-    const noOverflow = await page.evaluate(
-      () => document.documentElement.scrollWidth === document.documentElement.clientWidth,
-    );
+    // Assert the numbers (not a collapsed boolean) so a failure reports the
+    // actual scrollWidth vs clientWidth.
+    const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
     expect(
-      noOverflow,
+      scrollWidth,
       `documentElement must not overflow horizontally on ${route.path} at 390px`,
-    ).toBe(true);
+    ).toBe(clientWidth);
 
     // Nested elements must not leak past the viewport either.
     await expectNoHorizontalOverflow(page);
@@ -71,6 +86,12 @@ test("homepage ticker belt is clipped and does not inflate the document at 390px
   await expect(ticker, "homepage ticker container is present").toHaveCount(1);
   const belt = page.locator(".ld-ticker-belt");
   await expect(belt, "homepage ticker belt is present").toHaveCount(1);
+  // The marquee loop duplicates its run for a seamless animation (acceptance
+  // criterion 2: content duplicates for the seamless loop).
+  await expect(
+    page.locator(".ld-ticker-run"),
+    "homepage ticker run is duplicated for the seamless loop",
+  ).toHaveCount(2);
 
   const { beltWidth, containerWidth, docWidth, clientWidth } = await page.evaluate(() => {
     const beltEl = document.querySelector<HTMLElement>(".ld-ticker-belt");
