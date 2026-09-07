@@ -67,7 +67,11 @@ describe("homepage mobile first viewport (#971)", () => {
 
   it("caps the desktop wall so a proof strip can still leave the command in 1440x900", () => {
     const wall = ruleBody(".ld-hero-grid .ld-wall");
-    expect(wall).toMatch(/font-size:\s*clamp\(2\.2rem, 3\.6vw, 3\.2rem\)/);
+    // #1875: the cap was 3.2rem; with the live Nykaa-length proof strip
+    // present the search command landed at ~993px on desktop. 2.7rem keeps
+    // the H1 the dominant element while reclaiming ~25px so the CTA clears
+    // the 900px fold with room to spare.
+    expect(wall).toMatch(/font-size:\s*clamp\(2\.1rem, 3\.4vw, 2\.7rem\)/);
     expect(wall).not.toMatch(/font-size:\s*clamp\([^)]*4\.5rem\)/);
   });
 });

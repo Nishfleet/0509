@@ -231,5 +231,42 @@ export default defineConfig({
         video: "off",
       },
     },
+    {
+      // BET 9 hero first-viewport gate (issue #1875). The termination command:
+      //   npx playwright test tests/design/hero-viewport.spec.ts \
+      //     --project=chromium --project=mobile-chromium
+      // exits 0 with screenshots showing the headline, value proposition, and
+      // clickable CTA inside the first viewport at desktop (1440×900) and
+      // mobile (390×844), zero console errors, no horizontal overflow. Targets
+      // the live homepage by default (E2E_PROD_BASE_URL, same source as
+      // prod-public); point E2E_PROD_BASE_URL at a local fixture server to run
+      // against a local build.
+      name: "chromium",
+      testDir: "./tests/design",
+      testMatch: /hero-viewport\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        baseURL: productionBaseURL,
+        actionTimeout: 30_000,
+        trace: "retain-on-failure",
+        video: "off",
+      },
+    },
+    {
+      name: "mobile-chromium",
+      testDir: "./tests/design",
+      testMatch: /hero-viewport\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        baseURL: productionBaseURL,
+        actionTimeout: 30_000,
+        trace: "retain-on-failure",
+        video: "off",
+      },
+    },
   ],
 });

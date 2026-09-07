@@ -4915,16 +4915,20 @@ one signal-green accent.
 
 .ld-hero-grid .ld-wall {
   /* Safe BET 9 wall (#1173): buyer-job H1 plus a proof strip must still
-     leave the search command in the 1440x900 first viewport. */
-  font-size: clamp(2.2rem, 3.6vw, 3.2rem);
+     leave the search command in the 1440x900 first viewport. The cap was
+     3.2rem; with the live Nykaa-length proof strip present that pushed the
+     command to ~993px on desktop (#1875). 2.7rem keeps the H1 the dominant
+     element while reclaiming ~25px so the CTA clears the 900px fold with
+     room to spare. */
+  font-size: clamp(2.1rem, 3.4vw, 2.7rem);
 }
 
 .ld-deck-copy {
   font-size: clamp(1rem, 1.4vw, 1.2rem);
-  line-height: 1.5;
+  line-height: 1.32;
   font-weight: 500;
   max-width: 540px;
-  margin: clamp(10px, 1.4vw, 14px) 0 0;
+  margin: clamp(8px, 1.2vw, 10px) 0 0;
 }
 
 .ld-deck-copy b {
@@ -4936,7 +4940,7 @@ one signal-green accent.
 
 .ld-hero-copy .ld-command {
   width: min(100%, 680px);
-  margin-top: clamp(12px, 1.8vw, 18px);
+  margin-top: clamp(10px, 1.5vw, 14px);
 }
 
 .ld-hero-copy .ld-honest {
@@ -5187,7 +5191,7 @@ one signal-green accent.
 
 /* BET 9 Safe — live proof demoted from the H1 to a strip under it (#1173). */
 .ld-proof-strip {
-  margin: 12px 0 0;
+  margin: 8px 0 0;
   border: 1.5px solid var(--ld-ink);
   background: var(--ld-card);
   box-shadow: 6px 6px 0 rgba(14, 13, 10, 0.12);
@@ -5198,7 +5202,7 @@ one signal-green accent.
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 12px;
+  padding: 4px 12px;
   border-bottom: 1.5px solid var(--ld-ink);
   background: var(--ld-ink);
   color: var(--ld-bone);
@@ -5240,12 +5244,12 @@ one signal-green accent.
 }
 
 .ld-proof-hook {
-  padding: 10px 14px;
+  padding: 4px 12px;
   border-right: 1.5px solid var(--ld-ink);
   font-family: var(--ld-display);
   font-weight: 700;
-  font-size: clamp(0.95rem, 1.3vw, 1.15rem);
-  line-height: 1.25;
+  font-size: clamp(0.9rem, 1.15vw, 1.02rem);
+  line-height: 1.16;
   color: var(--ld-ink);
 }
 
@@ -5257,7 +5261,7 @@ one signal-green accent.
 
 .ld-proof-hook .ld-proof-attrib {
   display: block;
-  margin-top: 10px;
+  margin-top: 5px;
   font-family: var(--ld-mono);
   font-size: 0.7rem;
   font-weight: 500;
@@ -5267,7 +5271,7 @@ one signal-green accent.
 }
 
 .ld-proof-trail {
-  padding: 10px 12px;
+  padding: 4px 10px;
   font-family: var(--ld-mono);
   font-size: 0.72rem;
   letter-spacing: 0.04em;
@@ -5277,7 +5281,7 @@ one signal-green accent.
 .ld-proof-trail ul { list-style: none; margin: 0; padding: 0; }
 
 .ld-proof-trail li {
-  padding: 4px 0;
+  padding: 1px 0;
   border-bottom: 1px dotted var(--ld-line);
   display: flex;
   gap: 10px;
@@ -5293,7 +5297,7 @@ one signal-green accent.
 }
 
 .ld-proof-strip-foot {
-  padding: 10px 18px;
+  padding: 5px 14px;
   border-top: 1px solid var(--ld-line);
   font-family: var(--ld-mono);
   font-size: 0.66rem;
