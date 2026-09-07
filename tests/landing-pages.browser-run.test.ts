@@ -635,6 +635,106 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     expect(put).toHaveBeenCalledTimes(1);
   });
 
+  it("captures a rendered proof bundle from a heavyweight (>1 MiB) real page", async () => {
+    // Issue #1919: flagship retail homepages legitimately render 1.1–1.9 MiB
+    // of DOM (nike.com, nykaa.com, mamaearth.com measured). A 1 MiB rendered
+    // cap rejected every one of them as `html_oversized`, so the nightly demo
+    // backfill never wrote a row and /timeline 410'd. The rendered cap now
+    // admits real heavyweight pages while still failing closed above 3 MiB.
+    const put = vi.fn().mockResolvedValue(undefined);
+    mockFetchWithDns(vi.fn(async () => {
+      throw new Error("fetch failed");
+    }) as never);
+
+    const heavyweightDom = `
+      <html>
+        <head><title>Heavyweight retail offer</title></head>
+        <body>
+          <button>Shop now</button>
+          <p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p>
+          <!-- ${"x".repeat(1_400_000)} -->
+        </body>
+      </html>
+    `;
+    const page = {
+      goto: vi.fn(),
+      on: vi.fn(),
+      setUserAgent: vi.fn(),
+      setRequestInterception: vi.fn(),
+      setViewport: vi.fn(),
+      content: vi.fn().mockResolvedValue(heavyweightDom),
+      screenshot: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4])),
+      url: vi.fn().mockReturnValue("https://example.com/glow"),
+    };
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch: vi.fn().mockResolvedValue(browser) },
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSER: {} as Fetcher,
+        LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
+      },
+      "https://example.com/glow",
+      { preferRendered: true, requireScreenshot: true },
+    );
+
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Heavyweight retail offer",
+      captureMethod: "browser_render",
+      artifactKey: expect.stringContaining(".html"),
+      metadata: expect.objectContaining({
+        htmlArtifactKey: expect.stringContaining(".html"),
+        screenshotArtifactKey: expect.stringContaining(".jpeg"),
+      }),
+    });
+    expect(put).toHaveBeenCalledTimes(2);
+  });
+
+  it("still fails closed when rendered HTML exceeds the raised bound", async () => {
+    const put = vi.fn().mockResolvedValue(undefined);
+    mockFetchWithDns(vi.fn(async () => {
+      throw new Error("fetch failed");
+    }) as never);
+
+    const oversizedDom = `<html><body><!-- ${"x".repeat(3_200_000)} --></body></html>`;
+    const page = {
+      goto: vi.fn(),
+      on: vi.fn(),
+      setUserAgent: vi.fn(),
+      setRequestInterception: vi.fn(),
+      setViewport: vi.fn(),
+      content: vi.fn().mockResolvedValue(oversizedDom),
+      screenshot: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4])),
+      url: vi.fn().mockReturnValue("https://example.com/glow"),
+    };
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch: vi.fn().mockResolvedValue(browser) },
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSER: {} as Fetcher,
+        LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
+      },
+      "https://example.com/glow",
+      { preferRendered: true, requireScreenshot: true },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(put).not.toHaveBeenCalled();
+  });
+
   it("returns null when Browser Run launch does not settle", async () => {
     vi.useFakeTimers();
     mockFetchWithDns(vi.fn(async () => {

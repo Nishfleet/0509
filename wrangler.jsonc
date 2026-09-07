@@ -78,6 +78,12 @@
     "MONITORING_CONCURRENCY_SLOT_LEASE_MS": "3600000",
     "MONITORING_SCHEDULED_BROWSER_MODE": "billing",
     "BROWSER_RUN_SESSION_REUSE": "0",
+    // Issue #1919: allow the existing Browserless proof fallback leg for the
+    // five demo /timeline brands so a second provider can capture a
+    // proof-bearing snapshot when the Browser Run session is blocked or the
+    // page is too heavy for it. The two 0509.io defaults are restated because
+    // a configured list replaces them.
+    "BROWSERLESS_PROOF_ALLOWLIST_ORIGINS": "https://0509.io https://www.0509.io https://www.nike.com https://www.nykaa.com https://www.allbirds.com https://www.lenskart.com https://www.mamaearth.com",
     "SEARCH_ROLLOUT_MODE": "v2",
     "ADS_DOMAIN_PUBLISHER_CAP": "60",
     "PRESENCE_WEBSITE_ROLLOUT": "generally_available",
