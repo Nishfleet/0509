@@ -34,6 +34,11 @@ async function loadWorker() {
     failedCount: 0,
     domains: [],
   });
+  const runDemoBrandProofHoleCatchUp = vi.fn().mockResolvedValue({
+    skipped: true,
+    missingDomains: [],
+    backfill: null,
+  });
   const summarizeDemoBrandBackfill = vi.fn((result) =>
     `demo-brand-backfill day=${result.day} captured=${result.capturedCount} failed=${result.failedCount} []`,
   );
@@ -75,6 +80,7 @@ async function loadWorker() {
   }));
   vi.doMock("../app/lib/demo-brand-backfill.server", () => ({
     runDemoBrandBackfill,
+    runDemoBrandProofHoleCatchUp,
     summarizeDemoBrandBackfill,
   }));
   vi.doMock("../app/lib/cron-failure-alert.server", () => ({ reportScheduledTaskFailure }));
@@ -136,6 +142,7 @@ async function loadWorker() {
     runScheduledMonitoring,
     runScheduledDiscoveryWarmup,
     runDemoBrandBackfill,
+    runDemoBrandProofHoleCatchUp,
     summarizeDemoBrandBackfill,
     flushDeferredInstantAlerts,
     scheduleBillingLifecycleEmailRecovery,
@@ -175,6 +182,8 @@ describe("Worker scheduled handler", () => {
 
     expect(loaded.sendScheduledObservationGapAlert).toHaveBeenCalledTimes(1);
     expect(loaded.runScheduledMonitoring).not.toHaveBeenCalled();
+    expect(loaded.runDemoBrandBackfill).not.toHaveBeenCalled();
+    expect(loaded.runDemoBrandProofHoleCatchUp).toHaveBeenCalledTimes(1);
     expect(loaded.scheduleBillingLifecycleEmailRecovery).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
@@ -459,6 +468,7 @@ describe("Worker scheduled handler", () => {
     await Promise.all(pending);
 
     expect(loaded.runDemoBrandBackfill).toHaveBeenCalledTimes(1);
+    expect(loaded.runDemoBrandProofHoleCatchUp).not.toHaveBeenCalled();
     // The daily digest cron itself still runs its normal monitoring/digest
     // work — the backfill rides the rail, it does not replace it. The hook
     // only fires for digestCadence "daily", never the 3-hour or weekly crons.
@@ -488,7 +498,31 @@ describe("Worker scheduled handler", () => {
       );
       await Promise.all(pending);
       expect(loaded.runDemoBrandBackfill).not.toHaveBeenCalled();
+      expect(loaded.runDemoBrandProofHoleCatchUp).not.toHaveBeenCalled();
     }
+  });
+
+  it("pages the operator when the hourly demo-brand proof-hole catch-up throws", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    const failure = new Error("proof hole capture pipeline down");
+    loaded.runDemoBrandProofHoleCatchUp.mockRejectedValueOnce(failure);
+
+    await loaded.worker.scheduled(
+      {
+        cron: GAP_CHECK_CRON,
+        scheduledTime: Date.parse("2026-09-07T15:13:00.000Z"),
+      } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      "demo_brand_proof_hole_catch_up",
+      failure,
+    );
   });
 
   it("pages the operator when the nightly demo-brand backfill throws", async () => {
