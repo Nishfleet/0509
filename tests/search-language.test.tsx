@@ -162,9 +162,11 @@ describe("BL-031 — the page budgets", () => {
     const blockKickers = new Set(
       [...route.matchAll(/<DetailBlock kicker="([^"]+)"/g)].map((match) => match[1]),
     );
-    // One kicker on the pre-search state, and it never co-exists with the
-    // pane — the pane only renders once a search has produced a selected ad.
-    expect(kickers).toBe(1);
+    // Issue #1882: the pre-search state carries no caps-mono kicker at all —
+    // the form is the hero, so there is nothing left to kick — and it never
+    // co-exists with the pane (the pane only renders once a search has
+    // produced a selected ad).
+    expect(kickers).toBe(0);
     // "Save this ad" and "Keep this evidence" are the same slot: four
     // mutually exclusive branches of the pane's last block.
     expect([...blockKickers].sort()).toEqual([
@@ -203,32 +205,38 @@ describe("BL-031 — the page budgets", () => {
   it("refuses the rejected specimen empty state and states the real one instead", () => {
     expect(route).not.toContain("SpecimenEmptyState");
     expect(route).not.toContain("f9-search-specimen");
-    expect(route).toContain("Nothing searched yet");
+    expect(route).toContain("Paste a competitor domain, brand name, or keyword");
   });
 
-  it("answers the thin-content finding with honest scope copy, not filler", () => {
-    // dogfood 694ddbd68e95: 207 rendered words on /search. The idle state now
-    // carries a scope disclosure under the quiet lede — what a search returns,
-    // the proof, and the next step — with the coverage caveat still stated, but
-    // closed so the first viewport reads as a tool (BL-031), not a brochure.
-    // The budgets hold: still one kicker on the pre-search state, still three
-    // filled buttons on the whole page, still only one idle lede, and still no
-    // specimen or sample card.
-    expect(route).toContain("What a search returns");
-    expect(route).toContain("Current and recent ads");
-    expect(route).toContain("The offer, read off their landing page");
-    expect(route).toContain("The proof capture");
-    expect(route).toContain("f9-search-scope-details");
-    expect(route).toContain("f9-search-scope-items");
-    expect(route).toContain("Coverage and freshness vary by advertiser");
-    // The scope copy now lives in a closed <details> — the dropped section
-    // wrapper and its scope-list class are gone, and the scope detail uses no
-    // f9-wk-lede / f9-wk-note (those stay reserved for the results view).
+  it("reads as a tool: the single sentence replaces the three-bullet list", () => {
+    // Issue #1882 (Transformation campaign §3.6): the /search empty state was
+    // text-heavy ("Nothing searched yet" + three explanatory bullets). It is
+    // now one sentence under the instrument and nothing else — a tool, not a
+    // brochure. The budgets hold: still zero kickers on the pre-search state,
+    // still three filled buttons on the whole page, still one idle lede, and
+    // still no specimen or sample card.
+    expect(route).toContain(
+      "Paste a competitor domain, brand name, or keyword to see their Meta ads.",
+    );
+    // The brochure copy is gone: no subhead, no scope disclosure, no bullets.
+    expect(route).not.toContain("Nothing searched yet");
+    expect(route).not.toContain("What a search returns");
+    expect(route).not.toContain("Current and recent ads");
+    expect(route).not.toContain("The offer, read off their landing page");
+    expect(route).not.toContain("The proof capture");
+    expect(route).not.toContain("f9-search-scope-details");
+    expect(route).not.toContain("f9-search-scope-items");
+    expect(route).not.toContain("Coverage and freshness vary by advertiser");
+    expect(route).not.toContain("f9-search-scope-body");
     expect(route).not.toContain("f9-search-scope-list");
-    // The scope detail keeps a f9-wk-lede out of the scope disclosure — the
-    // idle lede count is asserted on the rendered idle markup in
-    // search-submission-settle.test.tsx, where the idle branch is isolated.
-    expect(route.match(/className="f9-wk-kick"/g)).toHaveLength(1);
+    // The instrument moves to the top of the page above the idle copy.
+    const commandStart = route.search(
+      /<section\s+aria-labelledby="search-command-title"\s+className="f9-wk-command"/,
+    );
+    const idleCopy = route.indexOf("Paste a competitor domain, brand name");
+    expect(commandStart).toBeGreaterThan(-1);
+    expect(idleCopy).toBeGreaterThan(commandStart);
+    expect(route.match(/className="f9-wk-kick"/g) ?? []).toHaveLength(0);
     expect(route.match(/className="f9-wk-btn"/g)).toHaveLength(3);
     expect(route).not.toContain("f9-search-specimen");
   });

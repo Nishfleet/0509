@@ -298,7 +298,9 @@ describe("formatSearchFreshnessLabel", () => {
 describe("public /search promise gating (route render)", () => {
   it("renders the idle state with no unconditional right-now promise", async () => {
     const markup = await renderMarkup();
-    expect(markup).toContain("Nothing searched yet");
+    expect(markup).toContain(
+      "Paste a competitor domain, brand name, or keyword to see their Meta ads.",
+    );
     expect(markup).not.toContain("right now");
     expect(markup).not.toMatch(/running on Meta right now/i);
   });
