@@ -67,11 +67,28 @@ const CANARY_CLEANUP_REF =
 const ISSUE_BODY_MARKER = "screenshot-rate-guard-incident";
 
 /**
+ * @typedef {"watcher"|"paid-tier"} CanaryCohort
+ */
+
+/**
+ * Issue #1876: the paid-tier cohort filters to captures whose watchlist owner
+ * was on a paid plan at capture time (Scout/Starter/Agency) — the population
+ * the homepage "saves the screenshots" promise is paid to honour. `watcher`
+ * (the default) keeps the #1747 behaviour: all real watcher captures
+ * (`kind IS NULL`), regardless of plan.
+ * @type {readonly CanaryCohort[]}
+ */
+export const CANARY_COHORTS = ["watcher", "paid-tier"];
+
+/** The paid plan families the paid-tier cohort filters on. */
+export const PAID_PLAN_FAMILIES = ["scout", "starter", "agency"];
+
+/**
  * @param {string[]} argv
- * @returns {{local: boolean, json: boolean, windowHours: number, threshold: number, minSample: number, fileIssue: boolean, dryRun: boolean}}
+ * @returns {{local: boolean, json: boolean, windowHours: number, threshold: number, minSample: number, fileIssue: boolean, dryRun: boolean, cohort: CanaryCohort}}
  */
 export function parseArgs(argv) {
-  /** @type {{local: boolean, json: boolean, windowHours: number, threshold: number, minSample: number, fileIssue: boolean, dryRun: boolean}} */
+  /** @type {{local: boolean, json: boolean, windowHours: number, threshold: number, minSample: number, fileIssue: boolean, dryRun: boolean, cohort: CanaryCohort}} */
   const parsed = {
     local: false,
     json: false,
@@ -80,6 +97,7 @@ export function parseArgs(argv) {
     minSample: DEFAULT_MIN_SAMPLE,
     fileIssue: false,
     dryRun: false,
+    cohort: "watcher",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -123,8 +141,16 @@ export function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (arg === "--cohort" && argv[index + 1]) {
+      const value = argv[index + 1];
+      if (CANARY_COHORTS.includes(/** @type {CanaryCohort} */ (value))) {
+        parsed.cohort = /** @type {CanaryCohort} */ (value);
+      }
+      index += 1;
+      continue;
+    }
     throw new Error(
-      `Unknown argument: ${arg}. Supported: --local, --json, --file-issue, --dry-run, --window-hours <int>, --threshold <0..100>, --min-sample <int>.`,
+      `Unknown argument: ${arg}. Supported: --local, --json, --file-issue, --dry-run, --window-hours <int>, --threshold <0..100>, --min-sample <int>, --cohort <watcher|paid-tier>.`,
     );
   }
   return parsed;
@@ -133,8 +159,19 @@ export function parseArgs(argv) {
 /** One row per project kind so the canary can tell real watcher captures from
  * cleanup-stripped launch-gate captures. Integer-concatenated window (no SQL
  * interpolation), mirroring canary-proof-budget-skip-surface.
- * @param {number} windowHours */
-export function buildScreenshotRateQuery(windowHours) {
+ *
+ * Issue #1876: `cohort='paid-tier'` adds a `plan_at_capture IN (...)` filter so
+ * the verdict population is the paid-tier watchlist cohort (Scout/Starter/
+ * Agency) the homepage promise is paid to honour. `cohort='watcher'` (default)
+ * keeps the #1747 behaviour — all real watcher captures regardless of plan.
+ * @param {number} windowHours
+ * @param {{cohort?: CanaryCohort}} [options] */
+export function buildScreenshotRateQuery(windowHours, options) {
+  const cohort = options?.cohort ?? "watcher";
+  const paidTierFilter =
+    cohort === "paid-tier"
+      ? `      AND plan_at_capture IN ('${PAID_PLAN_FAMILIES.join("','")}')\n`
+      : "";
   return `
     SELECT
       json_extract(capture_metadata_json, '$.kind') AS kind,
@@ -143,7 +180,7 @@ export function buildScreenshotRateQuery(windowHours) {
     FROM proof_capture
     WHERE status = 'succeeded'
       AND created_at > datetime('now', '-' || ${Math.floor(windowHours)} || ' hours')
-    GROUP BY json_extract(capture_metadata_json, '$.kind');
+${paidTierFilter}    GROUP BY json_extract(capture_metadata_json, '$.kind');
   `.trim();
 }
 
@@ -242,15 +279,16 @@ export function validateScreenshotRate(input) {
 
 /** Acceptance 3c: the auto-filed ticket must carry rate, sample size, and a
  * link to the capture-path code.
- * @param {{real: {kind: string | null, total: number, withShot: number, pct: number}, canary: {kind: string | null, total: number, withShot: number, pct: number}, all: {total: number, withShot: number, pct: number}, windowHours: number, threshold: number, minSample: number, checkedAt: string}} input
+ * @param {{real: {kind: string | null, total: number, withShot: number, pct: number}, canary: {kind: string | null, total: number, withShot: number, pct: number}, all: {total: number, withShot: number, pct: number}, windowHours: number, threshold: number, minSample: number, checkedAt: string, cohort?: CanaryCohort}} input
  * @returns {string} */
 export function buildIssueBody(input) {
-  const { real, canary, all, windowHours, threshold, minSample, checkedAt } = input;
+  const { real, canary, all, windowHours, threshold, minSample, checkedAt, cohort } = input;
   const lines = [];
   lines.push(`## Proof screenshot success rate regression (issue #1327 guard)`);
   lines.push("");
   lines.push(`The watcher proof-capture screenshot rate dropped below ${threshold}%.`);
   lines.push("");
+  lines.push(`- **cohort:** ${cohort ?? "watcher"}${cohort === "paid-tier" ? " (plan_at_capture IN scout/starter/agency)" : ""}`);
   lines.push(`- **rate (real watcher captures):** ${real.pct}%`);
   lines.push(`- **sample size:** ${real.withShot}/${real.total} succeeded captures carried a screenshot key in the last ${windowHours}h`);
   lines.push(`- **window:** last ${windowHours}h (checked ${checkedAt})`);
@@ -259,7 +297,7 @@ export function buildIssueBody(input) {
   lines.push(`### Population breakdown`);
   lines.push(`- watcher captures (\`kind IS NULL\`): ${real.withShot}/${real.total} with a screenshot key (${real.pct}%)`);
   lines.push(`- launch-gate captures (\`kind='${CANARY_KIND}'\`): ${canary.withShot}/${canary.total} with a screenshot key (${canary.pct}%) — keys are deleted by launch-canary cleanup by design, so they are diagnostic only, never a regression signal`);
-  lines.push(`- aggregate (all succeeded): ${all.withShot}/${all.total} with a screenshot key (${all.pct}%)`);
+  lines.push(`- aggregate (all succeeded in cohort): ${all.withShot}/${all.total} with a screenshot key (${all.pct}%)`);
   lines.push("");
   lines.push(`### Capture-path code`);
   lines.push(`The guard protects the persisted-screenshot contract in \`${CAPTURE_PATH_REF}\`.`);
@@ -267,7 +305,7 @@ export function buildIssueBody(input) {
   lines.push("");
   lines.push(`> run by \`scripts/canary-proof-screenshot-rate.mjs\` (fleet worker, scheduled by \`ops/screenshot-rate-guard/\`).`);
   lines.push("");
-  lines.push(`${ISSUE_BODY_MARKER}: true, window_hours: ${windowHours}, rate: ${real.pct}, n: ${real.total}`);
+  lines.push(`${ISSUE_BODY_MARKER}: true, cohort: ${cohort ?? "watcher"}, window_hours: ${windowHours}, rate: ${real.pct}, n: ${real.total}`);
   return lines.join("\n");
 }
 
@@ -285,6 +323,7 @@ export function buildGhIssueCommand({ body, title, repo }) {
  *   threshold: number,
  *   minSample: number,
  *   checkedAt: string,
+ *   cohort: CanaryCohort,
  *   real: {kind: string | null, total: number, withShot: number, pct: number},
  *   canary: {kind: string | null, total: number, withShot: number, pct: number},
  *   all: {total: number, withShot: number, pct: number},
@@ -300,6 +339,7 @@ export function buildGhIssueCommand({ body, title, repo }) {
  *   windowHours: number,
  *   threshold: number,
  *   minSample: number,
+ *   cohort: CanaryCohort,
  *   database: string,
  *   checkedAt: string,
  *   real: {kind: string | null, total: number, withShot: number, pct: number},
@@ -317,13 +357,14 @@ export function buildGhIssueCommand({ body, title, repo }) {
  * @returns {ScreenshotRateReport}
  */
 function summarize(input) {
-  const { real, canary, all, windowHours, threshold, minSample, local } = input;
+  const { real, canary, all, windowHours, threshold, minSample, local, cohort } = input;
   return {
     verdict: input.validation.verdict,
     local,
     windowHours,
     threshold,
     minSample,
+    cohort,
     database: DATABASE_NAME,
     checkedAt: input.checkedAt,
     real: {
@@ -356,15 +397,19 @@ function renderHumanReport(input) {
   const s = summarize(input);
   const lines = [];
   lines.push(
-    `proof-screenshot-rate canary (mode=${s.local ? "local" : "remote"}, window=${s.windowHours}h, threshold=${s.threshold}%, minSample=${s.minSample} at ${s.checkedAt})`,
+    `proof-screenshot-rate canary (mode=${s.local ? "local" : "remote"}, cohort=${s.cohort}, window=${s.windowHours}h, threshold=${s.threshold}%, minSample=${s.minSample} at ${s.checkedAt})`,
   );
+  const verdictLabel =
+    s.cohort === "paid-tier"
+      ? `paid-tier watcher captures (kind IS NULL, plan_at_capture IN scout/starter/agency)`
+      : `watcher captures (kind IS NULL)`;
   lines.push(
-    `- watcher captures (kind IS NULL): ${s.real.withShot}/${s.real.total} with a screenshot key (${s.real.pct}%) — VERDICT POPULATION`,
+    `- ${verdictLabel}: ${s.real.withShot}/${s.real.total} with a screenshot key (${s.real.pct}%) — VERDICT POPULATION`,
   );
   lines.push(
     `- launch-gate captures (${CANARY_KIND}): ${s.canary.withShot}/${s.canary.total} with a screenshot key (${s.canary.pct}%) — keys stripped by cleanup, diagnostic only`,
   );
-  lines.push(`- aggregate (all succeeded): ${s.all.withShot}/${s.all.total} with a screenshot key (${s.all.pct}%)`);
+  lines.push(`- aggregate (all succeeded in cohort): ${s.all.withShot}/${s.all.total} with a screenshot key (${s.all.pct}%)`);
   if (s.verdict === "pass") {
     lines.push(`verdict: ok — ${s.real.pct}% >= ${s.threshold}% (n=${s.real.total}).`);
   } else if (s.verdict === "skip") {
@@ -404,7 +449,7 @@ export function findExistingOpenIncident({ repo }) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const checkedAt = new Date().toISOString();
-  const query = buildScreenshotRateQuery(args.windowHours);
+  const query = buildScreenshotRateQuery(args.windowHours, { cohort: args.cohort });
   const wranglerArgs = [
     "wrangler",
     "d1",
@@ -461,6 +506,7 @@ function main() {
     checkedAt,
     validation,
     local: args.local,
+    cohort: args.cohort,
   };
 
   const report = summarize(input);

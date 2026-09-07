@@ -12,7 +12,7 @@ import {
 
 describe("canary-proof-screenshot-rate (#1327)", () => {
   describe("parseArgs", () => {
-    it("returns defaults for an empty argv", () => {
+    it("returns defaults for an empty argv (cohort=watcher preserves #1747 behaviour)", () => {
       expect(parseArgs([])).toEqual({
         local: false,
         json: false,
@@ -21,10 +21,11 @@ describe("canary-proof-screenshot-rate (#1327)", () => {
         minSample: 20,
         fileIssue: false,
         dryRun: false,
+        cohort: "watcher",
       });
     });
 
-    it("accepts --local, --json, --window-hours, --threshold, --min-sample, --file-issue, --dry-run", () => {
+    it("accepts --local, --json, --window-hours, --threshold, --min-sample, --file-issue, --dry-run, --cohort", () => {
       expect(
         parseArgs([
           "--local",
@@ -37,6 +38,8 @@ describe("canary-proof-screenshot-rate (#1327)", () => {
           "90",
           "--min-sample",
           "25",
+          "--cohort",
+          "paid-tier",
         ]),
       ).toEqual({
         local: true,
@@ -46,14 +49,16 @@ describe("canary-proof-screenshot-rate (#1327)", () => {
         minSample: 25,
         fileIssue: true,
         dryRun: true,
+        cohort: "paid-tier",
       });
     });
 
-    it("ignores non-positive / out-of-range numeric values", () => {
-      expect(parseArgs(["--window-hours", "0", "--threshold", "250", "--min-sample", "-1"])).toMatchObject({
+    it("ignores non-positive / out-of-range numeric values and an unknown cohort", () => {
+      expect(parseArgs(["--window-hours", "0", "--threshold", "250", "--min-sample", "-1", "--cohort", "bogus"])).toMatchObject({
         windowHours: 48,
         threshold: 80,
         minSample: 20,
+        cohort: "watcher",
       });
     });
 
@@ -73,6 +78,18 @@ describe("canary-proof-screenshot-rate (#1327)", () => {
 
     it("rounds fractional hours to an integer", () => {
       expect(buildScreenshotRateQuery(48.9)).toMatch(/'-' \|\| 48 \|\| ' hours'/);
+    });
+
+    it("watcher cohort (default) does NOT filter by plan_at_capture", () => {
+      const sql = buildScreenshotRateQuery(48);
+      expect(sql).not.toMatch(/plan_at_capture/);
+    });
+
+    it("paid-tier cohort (#1876) filters by plan_at_capture IN scout/starter/agency", () => {
+      const sql = buildScreenshotRateQuery(48, { cohort: "paid-tier" });
+      expect(sql).toMatch(/plan_at_capture IN \('scout','starter','agency'\)/);
+      expect(sql).toMatch(/status = 'succeeded'/);
+      expect(sql).toMatch(/GROUP BY json_extract\(capture_metadata_json, '\$\.kind'\)/);
     });
   });
 
@@ -178,7 +195,22 @@ describe("canary-proof-screenshot-rate (#1327)", () => {
       expect(body).toMatch(/\*\*sample size:\*\* 0\/34 succeeded captures/);
       expect(body).toMatch(/app\/lib\/browser-run\.server\.ts/);
       expect(body).toMatch(/app\/lib\/proof-artifact-retention\.server\.ts/);
-      expect(body).toMatch(/screenshot-rate-guard-incident: true, window_hours: 48, rate: 0, n: 34/);
+      expect(body).toMatch(/screenshot-rate-guard-incident: true, cohort: watcher, window_hours: 48, rate: 0, n: 34/);
+    });
+
+    it("paid-tier cohort body names the plan_at_capture filter (#1876)", () => {
+      const body = buildIssueBody({
+        real: { kind: null, total: 34, withShot: 0, pct: 0 },
+        canary: { kind: "launch_readiness_real_capture", total: 9, withShot: 0, pct: 0 },
+        all: { total: 43, withShot: 0, pct: 0 },
+        windowHours: 48,
+        threshold: 90,
+        minSample: 20,
+        checkedAt: "2026-09-07T00:00:00Z",
+        cohort: "paid-tier",
+      });
+      expect(body).toMatch(/\*\*cohort:\*\* paid-tier \(plan_at_capture IN scout\/starter\/agency\)/);
+      expect(body).toMatch(/cohort: paid-tier, window_hours: 48/);
     });
   });
 

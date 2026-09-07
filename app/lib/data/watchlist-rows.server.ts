@@ -126,6 +126,8 @@ export interface ProofCaptureRow {
   succeeded_at: string | null;
   created_at: string;
   updated_at: string;
+  plan_at_capture: string | null;
+  capture_diagnostics: string | null;
 }
 export interface CountRow {
   total: number;
@@ -304,6 +306,10 @@ export function toProofCaptureRecord(row: ProofCaptureRow): ProofCaptureRecord {
     succeededAt: row.succeeded_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    planAtCapture: row.plan_at_capture ?? null,
+    captureDiagnostics: row.capture_diagnostics
+      ? parseJson<Record<string, unknown> | null>(row.capture_diagnostics, null)
+      : null,
   };
 }
 export function toWatchlistDeliveryConfigRecord(
