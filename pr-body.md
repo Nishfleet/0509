@@ -1,51 +1,71 @@
-## Locale cluster: no fake-lang English pages, hreflang cluster, regression gate (issue #1570)
+## Problem
 
-The locale-prefixed buyer-surface cluster (`/de/pricing`, `/ja/help`, `/fr/docs`, `/es/status`, `/pt-br/compare`, ...) served byte-identical English copy while declaring `lang=de/ja/fr/es/pt-BR` and shipping zero hreflang — a duplicate-content doorway pattern (43 indexable surfaces that are 43 dupes of one page) and a WCAG 3.2.6 html-lang violation (screen readers announce English as German/Japanese).
+`0509-landing-page-artifacts` holds ~4,566 objects / 15.8 GB, but D1 references at most ~603 artifact keys. ~87% of the bucket is orphaned — R2 objects with no D1 row pointing at them. `runRetentionSweep` only deletes artifacts it can reach *through D1*, so an object that loses its row is invisible to the sweep forever. There is no R2 -> D1 reconciliation anywhere in the codebase.
 
-This PR takes the issue's explicitly-sanctioned option for untranslated pages (accept #2): **set `lang="en"` and remove the pages from the locale sitemap set**, while keeping them reachable (200, canonical→EN) and emitting a full hreflang alternate cluster on every one.
+## Fix
 
-### What changed
+Add a bounded R2 -> D1 reconciliation step to the existing six-hourly retention sweep.
 
-- **`htmlLangForPathname` now returns `"en"` for every buyer-surface locale path** (`app/lib/locale-markets.ts`). A page never claims a language its content does not speak. The genuinely translated sneaker-resale cluster (`/de/sneaker-resale` etc.) keeps its real locale lang.
-- **Buyer-surface locale subpaths removed from the sitemap** (`app/lib/seo.ts`, `SITEMAP_PATHS`). They stay 200 and canonical→EN but are no longer advertised as 43 distinct indexable surfaces. The translated sneaker-resale cluster stays in the sitemap.
-- **hreflang alternate cluster rendered with the correct lowercase `hreflang` attribute** (`app/lib/seo.ts`). `buyerSurfaceHreflangLinks(splat)` emits all 5 locales + `x-default`→EN from one helper, wired into every locale route (`$locale.help`, `$locale.pricing`, `$locale.docs`, `$locale.api.docs`, `$locale.status`, `$locale.changelog`, `$locale.trust`, `$locale.compare`, `$locale._index`). Previously the attribute was emitted as `hrefLang` (wrong casing — not a valid HTML attribute), so the cluster was invisible to crawlers.
-- **Regression test `tests/locale-content-integrity.test.ts`** (accept #3): asserts every buyer-surface locale path reports `lang="en"`, every locale route ships an hreflang `x-default`→EN alternate, and every genuinely-translated sneaker-resale locale page (lang != en) renders a body that differs from its EN twin. A future worker adding another byte-identical English locale page tagged with a fake non-EN lang fails this test — no code review required to catch the regression.
+- List `landing-pages/` with a cursor, persisting the cursor between ticks in a new `retention_sweep_state` D1 table so one sweep never walks the whole bucket. The cursor advances only when the whole page is processed; if the per-tick delete cap is hit mid-page, the cursor is left unchanged so the next tick re-lists the same page and continues (no object is skipped).
+- For each key, require `parseProofArtifactKey` to accept it. Skip anything else untouched — in particular `backups/d1/`, which has its own 90-day lifecycle rule.
+- Delete only when the key is absent from D1 (checked across `proof_capture.html_artifact_key`, `proof_capture.screenshot_artifact_key`, `landing_page_snapshot.artifact_key`, plus the metadata/ad JSON reference paths the existing guards already cover) **and** the date embedded in the key is at least 7 days old (grace period for a row written after its object).
+- Cap deletes per tick at 200 so the invocation budget holds.
+- The delete path is gated behind `R2_ORPHAN_RECONCILE_ENABLED`. Until that env var is set, the step runs in **dry-run mode** and only reports counts — so the first production run is automatically a dry-run, exercised before the delete path is enabled. Dry-run advances the cursor so it walks the whole bucket and reports the full backlog; when the delete path is first enabled after a dry-run, the cursor is reset so the live run starts from the beginning. The dry-run counts are logged in the `retention_sweep` cron handler.
 
-### Rebase reconciliation (main moved 49 commits ahead)
+### Note on `deleteProofArtifacts`
 
-Main landed issues #1563 (locale compare/switch child routes), #1578 (locale first-value search funnel), and #1561 (locale-scoped sitemaps) after this branch was cut. Those issues added locale child/first-value routes to the sitemap with non-EN lang — the exact duplicate-content doorway pattern #1570 ships to close. This PR extends #1570's decision to cover them:
+The issue asks to "reuse `deleteProofArtifacts` so the existing shared/referenced guards apply." `deleteProofArtifacts` requires an owner id and refuses keys with no owner reference (`unreferenced` / `denied` outcomes) — it cannot delete a truly orphaned object, which by definition has no D1 row and therefore no owner. The reconciliation instead applies the same shared/referenced guard directly: `artifactKeyReferencedInD1` checks every place a key can be referenced (the three columns plus the metadata/ad JSON paths the existing `artifactReferencedOutsideSnapshot`/`artifactReferencedOutsideProofCapture` guards already cover) and skips any referenced key. Only a key with zero D1 references past the grace window is deleted.
 
-- **`app/lib/public-markdown.ts`**: loosened the `LLMS_PAGE_DETAILS` type annotation from `Record<SITEMAP_PATHS[number], …>` to an inferred literal type with a separate `_llmsDetailsCoverSitemap` compile-time check. The old annotation rejected non-sitemap locale entries (dead data kept for when a page re-enters the sitemap) once the locale spreads left `SITEMAP_PATHS` and the type narrowed from `string` to a literal union.
-- **`tests/seo/locale-child-routes.test.ts`** (#1563): updated to expect `lang="en"` for locale child routes (byte-identical English) and assert they are NOT in the sitemap. Fixed `hrefLang` → `hreflang` casing.
-- **`tests/seo/locale-first-value-routes.test.ts`** (#1578): updated to expect `lang="en"` for locale first-value routes and assert they are NOT in any sitemap. Fixed `hrefLang` → `hreflang` casing.
-- **`tests/seo/locale-sitemap.test.ts`** (#1561): updated to expect non-empty locale sitemaps only for locales with genuinely translated content (de, ja, pt-br — sneaker-resale). Locales with no translated content (fr, es) correctly emit an empty sitemap.
-- **`tests/customer-claim-surface-registry.test.ts`**: resolved rebase conflict — kept the #1570 rationale (locale buyer-surface paths intentionally NOT in the sitemap) and reconciled with the #1481 compare-duplicate comment from main.
+## Acceptance
 
-### Verification
+- Unit tests (`tests/orphan-reconcile.test.ts`): referenced key survives; shared key survives; orphan inside the grace window survives; orphan outside it is deleted; a non-matching key (`backups/d1/...`) is never touched; the cursor advances and resumes; deletes are capped at 200 and the cursor does not advance when the cap is hit mid-page; dry-run reports counts without deleting and advances the cursor; the cursor resets when the delete path is first enabled after a dry-run.
+- Dry-run mode reports counts without deleting, gated behind `R2_ORPHAN_RECONCILE_ENABLED` (absent = dry-run). Exercised once against production before the delete path is enabled.
+- After the backlog drains, object count approaches the D1 reference count plus recent writes.
 
-Ran the full node + workers vitest suites in the repo checkout (no network dependency — the test mounts the app locally):
+## Verification
 
-```
-$ npx vitest run --configLoader runner --project node
-Test Files  567 passed (567)
-     Tests  6792 passed (6792)
+- `npx vitest run --configLoader runner --project node` — 602 files / 7157 tests passed.
+- `npx vitest run --configLoader runner --project workers` — 33 files / 169 tests passed (includes the `retention-sweep-state.integration.test.ts` which applies the real migrations and asserts the new READ and WRITE path, plus the `artifactKeyReferencedInD1` reference query against real D1 schema).
+- `tests/orphan-reconcile.test.ts` — 10 tests passed.
+- `tests/retention.test.ts` — 12 tests passed (existing suite, no regressions).
 
-$ npx vitest run --configLoader runner --project workers
-Test Files  21 passed (21)
-     Tests  121 passed (121)
+## run-proof
 
-$ npx vitest run --configLoader runner --project node tests/locale-content-integrity.test.ts
-Test Files  1 passed (1)
-     Tests  73 passed (73)
+- Unit + integration test runs above are the run proof for this change.
+- The reconciliation is wired into the existing `retention_sweep` cron task (six-hourly warmup) via `runRetentionSweep`; no new timer or workflow is added.
 
-$ npx tsc -b
-EXIT: 0
-```
+## research
 
-run-proof: `npx vitest run --configLoader runner --project node` → 567 files / 6792 tests passed; `--project workers` → 21 files / 121 tests passed; `tests/locale-content-integrity.test.ts` → 73 passed; `npx tsc -b` exit 0.
+- The R2 `list` cursor API and the existing `parseProofArtifactKey` / `deleteProofArtifacts` guards were read from the codebase before implementing. The orphan path does a direct R2 delete because `deleteProofArtifacts` cannot delete unreferenced keys (see note above).
 
-research: no external libraries or APIs introduced; all changes are internal to the repo's existing locale/SEO modules.
+## help-first
 
-help-first: no new `bin/` files or CLI tools added.
+- `reconcileOrphanedArtifacts` is a new exported function; its behavior is documented in the JSDoc and covered by unit tests. No new CLI or bin file is added.
 
-Closes #1570
+## organ-heartbeat
+
+- `migrations/0085_retention_sweep_state.sql` is a new additive table (no DROP/ALTER), not an organ change. `app/lib/retention.server.ts` is an existing organ extended in place; no new organ is introduced.
+
+## Reviewer round
+
+Reviewer seat: `minimax/MiniMax-M3` (senior seat from `find_senior_seat`).
+
+Findings adjudication (one round):
+- **Act on** — cursor-skip bug when the delete cap is hit mid-page: fixed by leaving the cursor unchanged on cap hit so the next tick re-lists the same page and no object is skipped.
+- **Act on** — dry-run counts not surfaced in production: fixed by logging `orphanReconcile` in the `retention_sweep` cron handler.
+- **Act on** — dry-run only reported the first page: fixed by advancing the cursor in dry-run and resetting it when the delete path is first enabled after a dry-run (mode stored in `retention_sweep_state`).
+- **Act on** — integration test under-covered the real reconcile SQL: extended to exercise `artifactKeyReferencedInD1` against real D1 schema via `landing_page_snapshot` metadata and `ad.raw_json` rows.
+- **Consider** — `artifactKeyReferencedInD1` re-runs per object on a cap-hit re-list: correct and bounded (re-checking references is required for correctness); noted, no change.
+- **Consider** — wiring test could assert `failedSteps` is empty: the mock DB intentionally throws on the other sweep steps, so this is expected; noted, no change.
+
+Second review confirms all four prior findings resolved; no critical or warning findings remain.
+
+## Test plan
+
+- Unit tests cover every acceptance bullet.
+- Integration test applies the real migrations and asserts the `retention_sweep_state` READ and WRITE path.
+- Dry-run is the default until `R2_ORPHAN_RECONCILE_ENABLED` is set, so the first production run is safe.
+
+net-positive-because: this PR adds the R2 -> D1 reconciliation mechanism (the issue's whole point) plus its unit and integration tests; the net-positive diff is the mechanism itself, not scaffolding, and it reclaims ~13 GB of orphaned R2 storage while stopping a ~0.43 GB/day leak no existing code path could see.
+
+Closes #1926
