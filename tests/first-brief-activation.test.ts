@@ -10,23 +10,26 @@ import type { WatchEventRecord, WatchlistRecord } from "~/lib/types";
  *   signup completion → activation scan baseline → first brief filed →
  *   on-screen brief ready → "Your first brief" email dispatched.
  *
- * Asserts the four funnel events fire in the issue's order
- * (`signup_completed` → `first_brief_generated` → `first_brief_viewed` →
- * `first_brief_email_sent`) and that the timing guarantees the issue names
- * hold: the on-screen deadline is 5 minutes and the email window is 60
- * minutes (constants live in `scripts/bet7-activation-verification.mjs`).
+ * Asserts the activation funnel events fire in the issue's order
+ * (`signup_completed` → `first_brief_generated` → `first_brief_email_sent`)
+ * and that the timing guarantees the issue names hold: the on-screen deadline
+ * is 5 minutes and the email window is 60 minutes (constants live in
+ * `scripts/bet7-activation-verification.mjs`). The `first_brief_viewed` event
+ * is fired by the dashboard/onboard loader, covered separately by
+ * `tests/integration/signup-first-brief.integration.test.ts`; this test does
+ * not claim it.
  *
  * The per-piece behaviour (loader ready state, filing idempotency, unverified
  * email gating) is covered by `tests/integration/signup-first-brief.integration.test.ts`
  * and `tests/first-brief.server.test.ts`; this test ties the activation
  * funnel together and proves the new `signup_completed` and
- * `first_brief_generated` events fire at the right steps.
+ * `first_brief_generated` events fire at the right steps, with the same
+ * privacy/GPC contract the other activation events carry.
  */
 
 const FUNNEL_OPERATIONS = [
   "funnel_signup_completed",
   "funnel_first_brief_generated",
-  "funnel_first_brief_viewed",
   "funnel_first_brief_email_sent",
 ];
 
@@ -95,12 +98,15 @@ function loginConfirmation() {
  * Mocks the Better Auth surface so `completeBetterAuthMagicLinkSignIn` reaches
  * the post-verification funnel emit without hitting D1 or the auth provider.
  * `succeeds` toggles whether verification yields session cookies.
+ * `redirectWithoutSession` models a 302 that did not set a session cookie —
+ * the emit must stay silent in that case (the reviewer's session-cookie gate).
  */
-function mockBetterAuth(succeeds: boolean) {
+function mockBetterAuth(succeeds: boolean, redirectWithoutSession = false) {
   const sessionHeaders = new Headers({
     Location: SIGNUP_REDIRECT,
     "Set-Cookie": "f9_session=ok; Path=/; HttpOnly",
   });
+  const redirectHeaders = new Headers({ Location: SIGNUP_REDIRECT });
   vi.doMock("~/lib/better-auth.server", () => ({
     clearBetterAuthMagicLinkConfirmationCookies: () => [] as string[],
     clearBetterAuthMagicLinkStateCookies: () => [] as string[],
@@ -108,11 +114,15 @@ function mockBetterAuth(succeeds: boolean) {
     requestHasBetterAuthSessionCookie: () => false,
     verifyBetterAuthMagicLink: vi.fn().mockResolvedValue(
       new Response(null, {
-        status: succeeds ? 302 : 400,
-        headers: succeeds ? sessionHeaders : new Headers(),
+        status: redirectWithoutSession ? 302 : succeeds ? 302 : 400,
+        headers: redirectWithoutSession
+          ? redirectHeaders
+          : succeeds
+            ? sessionHeaders
+            : new Headers(),
       }),
     ),
-    betterAuthResponseHasSessionCookies: () => succeeds,
+    betterAuthResponseHasSessionCookies: () => succeeds && !redirectWithoutSession,
     isBetterAuthMagicLinkFailureRedirect: () => false,
     consumeBetterAuthMagicLinkConfirmationTicket: vi.fn().mockResolvedValue(true),
     appendBetterAuthSetCookieHeaders: () => {},
@@ -280,6 +290,22 @@ describe("first-brief activation flow (issue #1862)", () => {
       const env = { FUNNEL_MEASUREMENT_ENABLED: "1" } as never;
 
       // Verification failure redirects to the error page, never reaching the emit.
+      await expect(
+        completeBetterAuthMagicLinkSignIn(env, new Request("http://localhost/"), signupConfirmation()),
+      ).rejects.toThrow();
+
+      expect(funnelOperations(logSpy)).not.toContain("funnel_signup_completed");
+    });
+
+    it("does NOT emit signup_completed on a 302 that set no session cookie", async () => {
+      // A non-failure redirect that did not establish a session must not
+      // count as a completion (the reviewer's session-cookie gate).
+      mockBetterAuth(false, true);
+      const { completeBetterAuthMagicLinkSignIn } = await import(
+        "~/lib/better-auth-magic-link-sign-in.server"
+      );
+      const env = { FUNNEL_MEASUREMENT_ENABLED: "1" } as never;
+
       await expect(
         completeBetterAuthMagicLinkSignIn(env, new Request("http://localhost/"), signupConfirmation()),
       ).rejects.toThrow();
