@@ -1,0 +1,15 @@
+[Unit]
+Description=Run the 0509 demo-brand Offer Timeline regression guard daily
+Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
+
+[Timer]
+# Daily at 09:37 UTC — well after the 04:00 UTC daily digest cron that runs
+# the demo-brand backfill, so a successful capture night is always counted
+# before the guard verdict. The :37 offset follows the screenshot-rate guard
+# convention of avoiding whole-minute collisions.
+OnCalendar=*-*-* 09:37:00
+Persistent=true
+Unit=0509-demo-brand-timeline-guard.service
+
+[Install]
+WantedBy=timers.target

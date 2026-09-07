@@ -1,0 +1,23 @@
+-- Issue #1876: make the proof-capture screenshot-success metric measurable
+-- on the paid-tier watchlist cohort (Scout/Starter/Agency) and observable by
+-- failure mode.
+--
+-- Two additive nullable columns (D1 expand/contract phase 1 — no backfill, no
+-- NOT NULL, no DROP, no rename):
+--
+--   plan_at_capture   the watchlist owner's plan family at capture time
+--                     ('free'|'scout'|'starter'|'agency'), so the screenshot
+--                     rate can be aggregated over the paid-tier cohort the
+--                     homepage promise is paid to honour. NULL on historical
+--                     rows and on captures whose plan could not be resolved —
+--                     both are excluded from the paid-tier cohort filter.
+--
+--   capture_diagnostics  structured JSON recording WHY a screenshot is
+--                        missing on a non-succeeded capture (timeout, OOM,
+--                        selector miss, budget, rate_limit, dedupe, …). The
+--                        succeeded path is fail-closed
+--                        (proof_capture_succeeded_without_screenshot), so a
+--                        succeeded row always carries a screenshot key and
+--                        this column stays NULL for it.
+ALTER TABLE proof_capture ADD COLUMN plan_at_capture TEXT;
+ALTER TABLE proof_capture ADD COLUMN capture_diagnostics TEXT;

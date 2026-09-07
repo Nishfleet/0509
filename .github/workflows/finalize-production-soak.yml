@@ -1,0 +1,171 @@
+name: Finalize production soak
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_run_id:
+        description: GitHub run ID that deployed the exact candidate
+        required: true
+        type: string
+      deploy_run_attempt:
+        description: Attempt number of the exact deploy run
+        required: true
+        type: string
+      deploy_sha:
+        description: Exact 40-character commit deployed to production
+        required: true
+        type: string
+
+concurrency:
+  group: 0509-production-provider-mutations
+  cancel-in-progress: false
+  queue: max
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  finalize:
+    name: Finalize exact Worker soak
+    if: github.repository == 'Nishfleet/0509' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: https://0509.io
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Validate immutable deploy identity
+        shell: bash
+        env:
+          DEPLOY_RUN_ID: ${{ inputs.deploy_run_id }}
+          DEPLOY_RUN_ATTEMPT: ${{ inputs.deploy_run_attempt }}
+          DEPLOY_SHA: ${{ inputs.deploy_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$DEPLOY_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]]
+
+      - name: Verify successful protected production deploy
+        id: verify_deploy_run
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DEPLOY_RUN_ID: ${{ inputs.deploy_run_id }}
+          DEPLOY_RUN_ATTEMPT: ${{ inputs.deploy_run_attempt }}
+          DEPLOY_SHA: ${{ inputs.deploy_sha }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const expectedRunId = Number(process.env.DEPLOY_RUN_ID);
+            const expectedAttempt = Number(process.env.DEPLOY_RUN_ATTEMPT);
+            const expectedSha = process.env.DEPLOY_SHA;
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: expectedRunId,
+            });
+            const { data: workflow } = await github.rest.actions.getWorkflow({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "deploy-production.yml",
+            });
+            const canonicalWorkflowPath = ".github/workflows/deploy-production.yml";
+            const valid =
+              context.repo.owner === "Nishfleet" &&
+              context.repo.repo === "0509" &&
+              workflow.path === canonicalWorkflowPath &&
+              run.workflow_id === workflow.id &&
+              run.id === expectedRunId &&
+              run.run_attempt === expectedAttempt &&
+              run.head_sha === expectedSha &&
+              run.head_branch === "main" &&
+              [canonicalWorkflowPath, `${canonicalWorkflowPath}@main`].includes(run.path) &&
+              run.status === "completed" &&
+              run.conclusion === "success" &&
+              ["push", "workflow_dispatch"].includes(run.event) &&
+              run.repository?.full_name === "Nishfleet/0509" &&
+              run.head_repository?.full_name === "Nishfleet/0509";
+            if (!valid) {
+              core.setFailed("production_deploy_run_provenance_invalid");
+              return;
+            }
+            core.setOutput("sha", run.head_sha);
+            core.setOutput("run-id", String(run.id));
+            core.setOutput("run-attempt", String(run.run_attempt));
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.verify_deploy_run.outputs.sha }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Download immutable running-soak evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: production-release-evidence-${{ steps.verify_deploy_run.outputs.sha }}-${{ steps.verify_deploy_run.outputs.run-id }}-${{ steps.verify_deploy_run.outputs.run-attempt }}
+          path: test-results
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: Nishfleet/0509
+          run-id: ${{ steps.verify_deploy_run.outputs.run-id }}
+
+      - name: Restore permission-safe release evidence
+        shell: bash
+        env:
+          ARCHIVE: test-results/production-release-evidence-${{ steps.verify_deploy_run.outputs.sha }}-${{ steps.verify_deploy_run.outputs.run-id }}-${{ steps.verify_deploy_run.outputs.run-attempt }}.tar.gz
+        run: |
+          set -euo pipefail
+          node scripts/release-evidence-archive.mjs restore --archive "$ARCHIVE"
+
+      - name: Finalize exact Worker scheduled-work soak
+        shell: bash
+        env:
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          journals=(test-results/production-soak-*.json)
+          [ "${#journals[@]}" -eq 1 ]
+          node scripts/gate-c-soak.mjs finalize --journal "${journals[0]}"
+
+      - name: Archive immutable passed release evidence
+        shell: bash
+        env:
+          FINAL_ARCHIVE: test-results/production-release-evidence-${{ steps.verify_deploy_run.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
+        run: |
+          set -euo pipefail
+          umask 077
+          node scripts/release-evidence-archive.mjs create --output "$FINAL_ARCHIVE"
+
+      - name: Preserve immutable passed release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: production-release-final-evidence-${{ steps.verify_deploy_run.outputs.sha }}-${{ steps.verify_deploy_run.outputs.run-id }}-${{ steps.verify_deploy_run.outputs.run-attempt }}
+          path: test-results/production-release-evidence-${{ steps.verify_deploy_run.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Preserve failed finalization diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: production-soak-finalization-diagnostics-${{ inputs.deploy_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/gate-c-*.json
+            test-results/production-soak-*.json
+          if-no-files-found: warn
+          retention-days: 90

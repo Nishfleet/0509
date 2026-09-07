@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the 0509 production liveness probe every five minutes
+Documentation=https://github.com/nish3451/0509/blob/main/docs/ops-backup-uptime.md
+
+[Timer]
+# Offset minutes 2,7,12,... matching the old GitHub Actions cron offset, so
+# history stays comparable. systemd timers fire on this schedule reliably;
+# GitHub Actions' 5-minute cron in practice fired about once an hour.
+OnCalendar=*:2/5
+Persistent=true
+Unit=0509-liveness.service
+
+[Install]
+WantedBy=timers.target

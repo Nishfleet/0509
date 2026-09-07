@@ -1,0 +1,46 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "0509-e2e-local",
+  "compatibility_date": "2026-03-29",
+  "main": "./workers/app.ts",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": false
+  },
+  "secrets": {
+    "required": []
+  },
+  "vars": {
+    "APP_NAME": "0509",
+    "AUTH_PROVIDER": "better-auth",
+    "E2E_PROVIDER_NETWORK_DENY": "1",
+    "E2E_TEST_MODE": "1",
+    "SEARCH_ROLLOUT_MODE": "v2",
+    "MONITORING_FANOUT_MODE": "inline",
+    "PRESENCE_WEBSITE_ROLLOUT": "disabled",
+    "PRESENCE_DIGEST_ROLLOUT": "disabled",
+    "PRESENCE_X_ROLLOUT": "disabled",
+    "PRESENCE_REDDIT_ROLLOUT": "disabled",
+    "PRESENCE_LINKEDIN_ROLLOUT": "disabled"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "0509",
+      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "0509-monitoring-e2e-local",
+      "binding": "MONITORING_WORKFLOW",
+      "class_name": "MonitoringWorkflow"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "LANDING_PAGE_ARTIFACTS",
+      "bucket_name": "0509-landing-page-artifacts"
+    }
+  ]
+}
