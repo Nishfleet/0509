@@ -144,6 +144,32 @@ export FLEET_ESCALATION_CANARY_SKIP_STANDARDS_DRIFT=1
 export LOADED_UNITS="$loaded"
 export ON_FAILURE_DIR="$onf_dir"
 
+# Block 13 (fleet-ops#4266): detached-work lint reads the audit trail.
+# Hermetic default: a stub ausearch with an EMPTY fixture, so every
+# scenario is deterministic even when ausearch is installed on the runner
+# (the block-14 scenarios 2e/2f/2g override AUSEARCH_FIXTURE per run).
+printf '' >"$scratch/.ausearch-default.txt"
+cat >"$scratch/ausearch-stub" <<'SH'
+#!/usr/bin/env bash
+cat "$AUSEARCH_FIXTURE" 2>/dev/null || true
+SH
+chmod +x "$scratch/ausearch-stub"
+export AUSEARCH="$scratch/ausearch-stub"
+export AUSEARCH_FIXTURE="$scratch/.ausearch-default.txt"
+
+# Block 13 rule-loaded guard (fleet-ops#4266): the canary only trusts an
+# empty ausearch result when the fleet-unit-run rule is confirmed loaded in
+# the running auditd (auditctl -l). Hermetic default: a stub auditctl that
+# reports the rule loaded, so the block-14 scenarios exercise the ausearch
+# verdict path deterministically (the rule-loaded PENDING path is covered by
+# scenario 2h).
+cat >"$scratch/auditctl-stub" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "-w /usr/bin/systemd-run -p x -F auid=1000 -k fleet-unit-run"
+SH
+chmod +x "$scratch/auditctl-stub"
+export AUDITCTL="$scratch/auditctl-stub"
+
 # Block 10 (fleet-ops#388): backup-staleness state for the fake systemctl.
 # Block 11 (fleet-ops#529): vault-conflict-resolver state uses the same dir.
 backup_state="$scratch/backup_state"
@@ -516,19 +542,116 @@ grep -q 'unit=naked.timer' "$triage" || fail "scenario2c: triage must name naked
 ok "scenario2c: missing-escalation timer unit named and canary exits 1 (fleet-ops#618)"
 
 # ============================================================================
-# Scenario 2d (fleet-ops#618): source lock. A future edit that lists only
-# --type=service (or greps only .service$) reopens the hole. The canary
-# must request service,path,timer in one list-units call.
+# Scenario 2d (fleet-ops#618 + fleet-ops#4266): source lock. A future edit
+# that lists only --type=service (or greps only .service$) reopens the hole.
+# The canary must request service,path,timer,scope in one list-units call
+# (#4266 closed the `systemd-run --user --scope` escalation bypass).
 # ============================================================================
 canary_src="$repo_root/bin/fleet-escalation-canary"
-grep -F -- '--type=service,path,timer' "$canary_src" >/dev/null \
-  || fail "scenario2d: canary must list-units --type=service,path,timer (fleet-ops#618)"
-if grep -n -- '--type=service' "$canary_src" | grep -v -- 'service,path,timer' >/dev/null; then
+grep -F -- '--type=service,path,timer,scope' "$canary_src" >/dev/null \
+  || fail "scenario2d: canary must list-units --type=service,path,timer,scope (fleet-ops#618/#4266)"
+if grep -n -- '--type=service' "$canary_src" | grep -v -- 'service,path,timer,scope' >/dev/null; then
   fail "scenario2d: canary still has a service-only --type= list-units (fleet-ops#618)"
 fi
 grep -E "grep '\\\\.service\\\$'" "$canary_src" >/dev/null \
   && fail "scenario2d: canary still filters loaded units to .service only (fleet-ops#618)" || true
-ok "scenario2d: canary source enumerates service, path, and timer (fleet-ops#618 class lock)"
+ok "scenario2d: canary source enumerates service, path, timer, and scope (fleet-ops#618/#4266 class lock)"
+# ============================================================================
+# Scenario 2e (fleet-ops#4266): block 14 detached-work lint — empty audit
+# trail is clean (exit 0, no DETACHED-RAW-UNIT).
+# ============================================================================
+reset_state
+cover "good-worker.service"
+exclude "unit-escalation@foo.service"
+sanctioned_wrapper "pi-issue-run"
+write_intake "0509"
+write_claim_repos "Nishfleet/0509"
+
+aufile="$scratch/ausearch-empty.txt"
+: >"$aufile"
+cat >"$scratch/ausearch-stub" <<'SH'
+#!/usr/bin/env bash
+cat "$AUSEARCH_FIXTURE" 2>/dev/null || true
+SH
+chmod +x "$scratch/ausearch-stub"
+AUSEARCH="$scratch/ausearch-stub" AUSEARCH_FIXTURE="$aufile" run_canary
+
+[[ "$env_rc" == 0 ]] || fail "scenario2e: empty audit trail must exit 0, got $env_rc ($env_out)"
+! grep -q 'DETACHED-RAW-UNIT' "$triage" || fail "scenario2e: empty trail must not trip the raw-unit lint"
+ok "scenario2e: empty systemd-run audit trail is clean (fleet-ops#4266)"
+
+# ============================================================================
+# Scenario 2f (fleet-ops#4266): a RAW systemd-run transient in the last 24h
+# (no --property=OnFailure in the execve args) is a VIOLATION naming the
+# unit. This is the exact silent-death class #4266 exists to catch.
+# ============================================================================
+reset_state
+cover "good-worker.service"
+exclude "unit-escalation@foo.service"
+sanctioned_wrapper "pi-issue-run"
+write_intake "0509"
+write_claim_repos "Nishfleet/0509"
+
+aufile="$scratch/ausearch-raw.txt"
+cat >"$aufile" <<'SH'
+type=EXECVE msg=audit(1776000000.123:456): argc=6 a0="systemd-run" a1="--user" a2="--collect" a3="--unit=raw-scoop" a4="-- /bin/sleep 1"
+SH
+AUSEARCH="$scratch/ausearch-stub" AUSEARCH_FIXTURE="$aufile" run_canary
+
+[[ "$env_rc" == 1 ]] || fail "scenario2f: raw systemd-run must exit 1, got $env_rc ($env_out)"
+grep -q 'DETACHED-RAW-UNIT' "$triage" || fail "scenario2f: triage missing DETACHED-RAW-UNIT"
+grep -q 'unit=raw-scoop' "$triage" || fail "scenario2f: triage must name raw-scoop"
+ok "scenario2f: raw systemd-run transient named and canary exits 1 (fleet-ops#4266)"
+
+# ============================================================================
+# Scenario 2g (fleet-ops#4266): a pi-systemd-run execve (carries the
+# OnFailure property) is clean — the lint must not flag sanctioned launches.
+# ============================================================================
+reset_state
+cover "good-worker.service"
+exclude "unit-escalation@foo.service"
+sanctioned_wrapper "pi-issue-run"
+write_intake "0509"
+write_claim_repos "Nishfleet/0509"
+
+aufile="$scratch/ausearch-covered.txt"
+cat >"$aufile" <<'SH'
+type=EXECVE msg=audit(1776000000.124:457): argc=8 a0="systemd-run" a1="--user" a2="--unit=good-scoop" a3="--property=OnFailure=unit-escalation@good-scoop.service.service" a4="-- /bin/sleep 1"
+SH
+AUSEARCH="$scratch/ausearch-stub" AUSEARCH_FIXTURE="$aufile" run_canary
+
+[[ "$env_rc" == 0 ]] || fail "scenario2g: pi-systemd-run execve must exit 0, got $env_rc ($env_out)"
+! grep -q 'DETACHED-RAW-UNIT' "$triage" || fail "scenario2g: covered execve must not trip the lint"
+ok "scenario2g: pi-systemd-run execve (with OnFailure) is clean (fleet-ops#4266)"
+
+# ============================================================================
+# Scenario 2h (fleet-ops#4266): auditd present but the fleet-unit-run rule
+# NOT loaded in the running daemon -> PENDING (loud, not fail). An empty
+# ausearch result must not be trusted as "clean" when the rule that would
+# produce it is absent — that is the false-clean gap.
+# ============================================================================
+reset_state
+cover "good-worker.service"
+exclude "unit-escalation@foo.service"
+sanctioned_wrapper "pi-issue-run"
+write_intake "0509"
+write_claim_repos "Nishfleet/0509"
+
+cat >"$scratch/auditctl-empty" <<'SH'
+#!/usr/bin/env bash
+# no fleet-unit-run rule loaded
+printf '%s\n' "-w /usr/bin/systemctl -p x -F auid=1000 -k fleet-unit-stop"
+SH
+chmod +x "$scratch/auditctl-empty"
+
+AUDITCTL="$scratch/auditctl-empty" run_canary
+
+[[ "$env_rc" == 0 ]] || fail "scenario2h: rule-not-loaded must exit 0 (PENDING, not fail), got $env_rc ($env_out)"
+grep -q 'ESCALATION-CANARY-PENDING' "$triage" || fail "scenario2h: triage missing PENDING for rule-not-loaded"
+! grep -q 'DETACHED-RAW-UNIT' "$triage" || fail "scenario2h: rule-not-loaded must not trip the raw-unit lint"
+ok "scenario2h: fleet-unit-run rule not loaded -> PENDING, not false-clean (fleet-ops#4266)"
+
+
 
 # ============================================================================
 # Scenario 3: VPS plane — a bin script runs pi --print --provider unwrapped
