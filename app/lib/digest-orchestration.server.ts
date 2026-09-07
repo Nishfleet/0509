@@ -1131,9 +1131,8 @@ async function collectPeriodProofCaptures(
   watchlists: WatchlistRecord[],
   period: { periodStart: string; periodEnd: string },
 ) {
-  const captures: Array<
-    Pick<ProofCaptureRecord, "status">
-  > = [];
+  const captures: Array<Pick<ProofCaptureRecord, "status"> & { watchlistId?: string }> =
+    [];
   for (const watchlist of watchlists) {
     const recent = await listRecentProofCapturesForWatchlist(
       env,
@@ -1142,7 +1141,9 @@ async function collectPeriodProofCaptures(
     );
     for (const capture of recent) {
       if (capture.attemptedAt >= period.periodStart && capture.attemptedAt <= period.periodEnd) {
-        captures.push(capture);
+        // Tag the source watchlist so the period triage can count how many
+        // competitors hit the budget (issue #1879 digest footer).
+        captures.push({ ...capture, watchlistId: watchlist.id });
       }
     }
   }
