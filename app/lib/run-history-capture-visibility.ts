@@ -85,8 +85,23 @@ export function resolveProofCaptureRefusal(
     });
   }
 
+  // Issue #1879: a budget skip is never a generic "Skipped" row — it is a
+  // budget-exhaustion event with its own label and the reset/upgrade escape
+  // hatch, so a paid-tier capture that was dropped is unmistakable.
+  if (capture.status === "skipped_due_to_budget") {
+    return {
+      id: capture.id,
+      kind: capture.status,
+      reasonCode: capture.skipReason ?? capture.status,
+      label: "Budget exhausted",
+      explanation:
+        "plan allowance reached — your monthly proof-capture budget was already used, so this check was dropped; it resets on your next plan cycle",
+      attemptedAt: capture.attemptedAt,
+      generatesAlert: false,
+    };
+  }
+
   if (
-    capture.status === "skipped_due_to_budget" ||
     capture.status === "skipped_due_to_rate_limit" ||
     capture.status === "skipped_due_to_dedupe"
   ) {
