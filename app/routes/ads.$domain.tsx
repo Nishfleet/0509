@@ -52,7 +52,7 @@
  */
 
 import { Link, redirect, useLoaderData } from "react-router";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useState } from "react";
 
 import { AdCreative } from "~/components/ads/ad-creative";
@@ -65,7 +65,10 @@ import { BrowseTrackedCompetitors } from "~/components/ads-internal-links";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
+import { BrandPageRateLimitError } from "~/components/public-route-state";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+import { PUBLIC_BRAND_PAGE_RATE_LIMIT_MESSAGE } from "~/lib/customer-route-error";
+import { ErrorBoundary as RootErrorBoundary } from "~/root";
 import { CAPTURE_RULES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
 import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
@@ -223,7 +226,29 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     cloudflare?.ctx,
   );
   if (rateLimitResponse) {
-    throw rateLimitResponse;
+    // Anonymous throttling is a normal, recoverable product state, not an
+    // internal failure: throw an explicit in-product 429 document whose body
+    // names the per-IP free-preview limit and the recovery path, and keep the
+    // limiter's Retry-After signal so the client and the document response
+    // both know when the window clears. The route-level headers() export
+    // below forwards that header onto the final document response (issue
+    // #1930).
+    const retryAfterSeconds = rateLimitResponse.headers.get("retry-after");
+    throw new Response(
+      JSON.stringify({
+        error: "rate_limited",
+        message: PUBLIC_BRAND_PAGE_RATE_LIMIT_MESSAGE,
+        ...(retryAfterSeconds ? { retryAfter: Number(retryAfterSeconds) } : {}),
+      }),
+      {
+        status: 429,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+          ...(retryAfterSeconds ? { "retry-after": retryAfterSeconds } : {}),
+        },
+      },
+    );
   }
 
   const {
@@ -673,6 +698,19 @@ export function brandPageBreadcrumbItems(
     { name: data.brandName, pathname: data.canonicalPath },
   ];
 }
+
+// When the loader throws a 429 (anonymous brand-page limiter), React Router
+// only merges cookies from the thrown response's headers onto the final
+// document response unless the boundary route forwards them. Copy Retry-After
+// through here so the rate-limited document keeps the limiter's recovery
+// signal. For every other request errorHeaders is undefined and nothing is
+// added (issue #1930).
+export const headers: HeadersFunction = ({ errorHeaders }) => {
+  const documentHeaders: Record<string, string> = {};
+  const retryAfter = errorHeaders?.get("retry-after");
+  if (retryAfter) documentHeaders["Retry-After"] = retryAfter;
+  return documentHeaders;
+};
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   if (!loaderData) {
@@ -1606,4 +1644,22 @@ function BrandAdsShell({
       </div>
     </section>
   );
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  // Use the rate-limit-specific error UI when the loader threw a 429 with a
+  // retryAfter value in the body (issue #1930). Anonymous throttling is a
+  // normal, recoverable product state, not an internal failure. Every other
+  // error (404, 410, 503, generic) falls through to the root boundary so the
+  // existing honest handling is preserved unchanged.
+  const isRateLimitError =
+    error &&
+    typeof error === "object" &&
+    "data" in error &&
+    (error as { data?: { error?: string; retryAfter?: number } }).data?.error ===
+      "rate_limited";
+  if (isRateLimitError) {
+    return <BrandPageRateLimitError error={error} />;
+  }
+  return <RootErrorBoundary error={error} />;
 }
