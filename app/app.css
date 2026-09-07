@@ -17146,6 +17146,15 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   margin-top: 13px;
 }
 
+/* "Learn more" link on a failed/skipped capture row in run history (issue
+   #1880). The row's `say` cell is plain ink with no underline by default, so
+   the public capture-rules link needs an explicit underline to read as a
+   link rather than continuation copy. */
+.f9-rh-learn {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* Visible breadcrumb navigation (issue #1463). Rendered by the shared
    <Breadcrumbs> component alongside its BreadcrumbList JSON-LD so the visible
    Home → Category → Page trail and Google's rich-result crumb stay in lockstep.

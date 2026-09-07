@@ -11,6 +11,10 @@ import {
   type CaptureAttemptStatus,
 } from "~/lib/capture-attempt-reason-code";
 import type { CaptureAttempt } from "~/lib/data/watchlist-run-capture-attempts.server";
+import {
+  CAPTURE_BUDGET_SKIP_HREF,
+  CAPTURE_RULES_PUBLIC_PATH,
+} from "~/lib/capture-validity-public-rules";
 import type { WatchlistRunRecord } from "~/lib/types";
 
 /**
@@ -181,7 +185,12 @@ export default function WatchlistRunHistoryRoute() {
                       ? "bad"
                       : "quiet"
                 }
-                say={formatAttemptSay(attempt.reasonLabel, attempt.status)}
+                say={
+                  <AttemptSay
+                    reasonLabel={attempt.reasonLabel}
+                    status={attempt.status}
+                  />
+                }
                 time={<LocalTime iso={attempt.checkedAt} />}
                 off={attempt.status !== "succeeded"}
               />
@@ -203,15 +212,37 @@ export default function WatchlistRunHistoryRoute() {
   );
 }
 
-function formatAttemptSay(
-  reasonLabel: string | null,
-  status: CaptureAttemptStatus,
-): string {
+function attemptLearnMoreHref(status: CaptureAttemptStatus): string | null {
+  if (status === "succeeded") return null;
+  // A budget skip links to its own anchored block on the public rules page;
+  // every other non-success capture links to the page itself, where each
+  // refusal rule the capture-validity gate enforces is published.
+  if (status === "skipped_due_to_budget") return CAPTURE_BUDGET_SKIP_HREF;
+  return CAPTURE_RULES_PUBLIC_PATH;
+}
+
+function AttemptSay({
+  reasonLabel,
+  status,
+}: {
+  reasonLabel: string | null;
+  status: CaptureAttemptStatus;
+}) {
   if (status === "succeeded") {
-    return "Captured without issue.";
+    return <>Captured without issue.</>;
   }
   const reason = reasonLabel ?? "Check did not produce an alert";
-  return `${reason}. No alert sent.`;
+  const href = attemptLearnMoreHref(status);
+  return (
+    <>
+      {reason}. No alert sent.{" "}
+      {href ? (
+        <Link className="f9-rh-learn" to={href}>
+          Learn more
+        </Link>
+      ) : null}
+    </>
+  );
 }
 
 export function shortenUrl(url: string): string {
