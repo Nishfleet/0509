@@ -44,7 +44,7 @@ export const ESTIMATES_PATH = "scripts/d1-budget-estimates.json";
 export const QUERIES_PATH = "scripts/d1-budget-queries.json";
 
 const CANARY_BUDGET_PATTERN =
-  /d1-budget:\s*reads=(\d+)\s+writes=(\d+)(?:\s+runs_per_day=(\d+))?/;
+  /d1-budget:\s*reads=(\d+)\s+writes=(\d+)\s+runs_per_day=(\d+)/;
 const PLAN_ACCESS_PATTERN = /^(SCAN|SEARCH)\s+(\S+)/;
 const PLAN_PSEUDO_TARGETS = new Set(["CONSTANT", "SUBQUERY", "MATERIALIZE"]);
 const WRITE_VERBS = new Set(["INSERT", "UPDATE", "DELETE", "REPLACE"]);
@@ -298,9 +298,11 @@ export function estimateQueryRows(db, query, estimates) {
       for (const kid of kids) unionRows += walkNode(kid, execCount);
       return Math.max(unionRows, 1);
     }
-    let childExec = execCount;
+    // Nested-loop body: each child runs once per row this node produces, so
+    // the child's execCount is this node's execCount times its own rows.
+    const childExec = execCount * Math.max(ownRows, 1);
     for (const kid of kids) {
-      childExec *= Math.max(walkNode(kid, childExec), 1);
+      walkNode(kid, childExec);
     }
     return ownRows;
   }
@@ -349,7 +351,7 @@ export function scanCanaryBudgets(root) {
       file,
       reads: Number(match[1]),
       writes: Number(match[2]),
-      runsPerDay: match[3] === undefined ? 1 : Number(match[3]),
+      runsPerDay: Number(match[3]),
     });
   }
   return { files, declarations, errors };
@@ -371,11 +373,15 @@ export function runBudgetCheck(root) {
   );
 
   const db = new DatabaseSync(":memory:");
+  let applied = 0;
   try {
-    const applied = applyMigrationsToDatabase(db, join(root, "migrations"));
+    applied = applyMigrationsToDatabase(db, join(root, "migrations"));
     lines.push(`d1-budget-check: applied ${applied} migrations to scratch SQLite schema`);
   } catch (error) {
+    // A partial schema would make EXPLAIN QUERY PLAN lie, so abort rather
+    // than estimate against a half-applied migration set.
     errors.push(`migration apply failed: ${error instanceof Error ? error.message : String(error)}`);
+    return { ok: false, errors, lines, totals: { readsPerDay: 0, writesPerDay: 0, readTrip: 0, writeTrip: 0 } };
   }
 
   let readsPerDay = 0;
