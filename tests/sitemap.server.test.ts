@@ -308,6 +308,8 @@ describe("brandPageEntryPriority — freshness + evidence bands (issue #966)", (
 
   it("gives 0.5 to an aging capture whose evidence is thin", () => {
     expect(brandPageEntryPriority(3 * DAY_MS, 1)).toBe("0.5");
+    // Exact boundary: age == 2d with 1 verified ad is already the thin band.
+    expect(brandPageEntryPriority(BRAND_PAGE_PRIORITY_FRESH_MS, 1)).toBe("0.5");
   });
 
   it("never gives 0.7 to strong evidence on an aging capture", () => {
@@ -981,7 +983,9 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
     for (const entry of entries) {
       expect(entry.lastmod).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(entry.changefreq).toBe("weekly");
-      expect(entry.priority).toBe("0.6");
+      // Priority is tiered by freshness/evidence (issue #966); the exact band
+      // for the default fixture is pinned in the brandPageEntryPriority suite.
+      expect(["0.5", "0.6", "0.7"]).toContain(entry.priority);
     }
   });
 

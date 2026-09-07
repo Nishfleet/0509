@@ -298,10 +298,12 @@ export const BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS = 3;
  * - "0.7": fresh capture (≤ 2 days) with strong evidence (≥ 3 verified-linked
  *   ads) — the pages most worth re-crawling first.
  * - "0.5": capture nearing the 7-day noindex expiry (≥ 5 days), or an aging
- *   capture (≥ 2 days) whose evidence is thin (a single verified-linked ad) —
+ *   capture (≥ 2 days) whose evidence is thin (≤ 1 verified-linked ad) —
  *   low-signal pages about to fall out of the indexable set.
  * - "0.6": everything else — the historical default band.
  * Pure and exported so the bands are unit-testable without a database.
+ * Callers must pre-filter to ageMs >= 0 (indexableBrandPageEntriesFromRows
+ * does — isIndexableBrandPageRow rejects future-dated captures).
  */
 export function brandPageEntryPriority(ageMs: number, verifiedAdCount: number): string {
   if (
