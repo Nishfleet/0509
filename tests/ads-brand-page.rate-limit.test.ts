@@ -19,6 +19,7 @@
  */
 
 import { createElement } from "react";
+import type { ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { UNSAFE_ErrorResponseImpl, createRoutesStub } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -87,7 +88,7 @@ async function routeError(route: "ads" | "timeline"): Promise<unknown> {
   throw new Error(`${route} loader unexpectedly resolved instead of throwing a 429`);
 }
 
-function renderBoundary(ErrorBoundary: (props: { error: unknown }) => unknown, error: unknown) {
+function renderBoundary(ErrorBoundary: ComponentType<{ error: unknown }>, error: unknown) {
   const Stub = createRoutesStub([
     {
       path: "/",
@@ -149,7 +150,7 @@ describe("/ads/:domain and /timeline/:domain rate-limit error boundary (issue #1
           ? await import("~/routes/ads.$domain")
           : await import("~/routes/timeline.$domain");
       const errorHeaders = new Headers({ "retry-after": "600" });
-      const documentHeaders = headers({ errorHeaders } as never);
+      const documentHeaders = headers({ errorHeaders } as never) as Record<string, string>;
       expect(documentHeaders["Retry-After"]).toBe("600");
     },
   );
@@ -162,7 +163,7 @@ describe("/ads/:domain and /timeline/:domain rate-limit error boundary (issue #1
         route === "ads"
           ? await import("~/routes/ads.$domain")
           : await import("~/routes/timeline.$domain");
-      const documentHeaders = headers({ errorHeaders: undefined } as never);
+      const documentHeaders = headers({ errorHeaders: undefined } as never) as Record<string, string>;
       expect(documentHeaders).toEqual({});
     },
   );
