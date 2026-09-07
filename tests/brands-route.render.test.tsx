@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The default export reads `useLoaderData`; a mutable fixture lets each test
 // render the route with a specific loader payload.
-let currentData: { groups: Array<{ category: string; items: Array<{ domain: string; path: string; name: string }> }>; allCount: number };
+let currentData: { groups: Array<{ category: string; items: Array<{ domain: string; path: string; name: string; timelineIndexable?: boolean }> }>; allCount: number };
 
 beforeEach(() => {
   vi.resetModules();
@@ -84,5 +84,28 @@ describe("/brands hub — links every indexable /ads/:domain page (issue #1417)"
     const markup = await render({ allCount: 0, groups: [] });
     expect(markup).toContain("No brand pages are indexed right now");
     expect(markup).not.toContain("ld-brands-groups");
+  });
+
+  it("links the Offer Timeline for a brand whose /timeline/:domain is indexable (issue #1931)", async () => {
+    // A brand whose timeline is in the sitemap's indexable set gets an
+    // "Offer timeline" link next to its /ads page on the hub.
+    const markup = await render({
+      allCount: 2,
+      groups: [
+        {
+          category: "Sport & footwear",
+          items: [
+            { domain: "nike.com", path: "/ads/nike.com", name: "Nike", timelineIndexable: true },
+            { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas", timelineIndexable: false },
+          ],
+        },
+      ],
+    });
+
+    expect(markup).toContain('href="/timeline/nike.com"');
+    expect(markup).toContain("Offer timeline");
+    // A non-qualifying domain must NOT get a timeline link (would point at a
+    // 410/empty timeline).
+    expect(markup).not.toContain('href="/timeline/adidas.com"');
   });
 });

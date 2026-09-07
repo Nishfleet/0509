@@ -272,6 +272,7 @@ describe("/ads/:domain meta stamps a branded og:image", () => {
     observationDays: null,
     changeEvents: [],
     offerTimelineEntries: [],
+    timelineIndexable: true,
     adLibraryCountry: "India",
     noindex: false,
     relatedBrands: [],
