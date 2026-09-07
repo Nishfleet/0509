@@ -259,6 +259,9 @@ describe("digest.headline.ratio — scheduled canary mirror (scripts/canary-dige
 
 describe("digest.headline.ratio — verify-bet1.sh verification script (issue #1897)", () => {
   it("passes on the deterministic fixture and prints the termination receipt", () => {
+    // The script ignores the canary's rolling-guard exit code (a fired guard
+    // must not override the deterministic fixture measurement), so this test
+    // is robust even on a machine whose state history has fired the guard.
     const res = spawnSync("bash", ["scripts/verify-bet1.sh"], {
       encoding: "utf8",
     });

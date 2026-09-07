@@ -32,10 +32,20 @@ elif [[ -n "${1:-}" ]]; then
   exit 2
 fi
 
+CANARY_RC=0
 if [[ "$MODE" == "live" ]]; then
-  OUTPUT="$(node "$ROOT/scripts/canary-digest-headline-ratio.mjs" --json --no-commit 2>/dev/null)"
+  OUTPUT="$(node "$ROOT/scripts/canary-digest-headline-ratio.mjs" --json --no-commit 2>/dev/null)" || CANARY_RC=$?
 else
-  OUTPUT="$(node "$ROOT/scripts/canary-digest-headline-ratio.mjs" --input "$FIXTURE" --json --no-commit 2>/dev/null)"
+  OUTPUT="$(node "$ROOT/scripts/canary-digest-headline-ratio.mjs" --input "$FIXTURE" --json --no-commit 2>/dev/null)" || CANARY_RC=$?
+fi
+
+# The canary's exit code is its rolling-guard verdict (0.5 floor over the
+# state history), NOT the fixture ratio — a fired rolling guard must not
+# override the deterministic fixture measurement. Only a hard canary error
+# (exit 2: unreadable input / D1 failure) is a verification failure here.
+if [[ "$CANARY_RC" -eq 2 ]]; then
+  echo "verify-bet1: canary could not produce a measurement (exit 2)" >&2
+  exit 2
 fi
 
 # Parse the canary's JSON report and assert ratio >= target. The pass receipt
