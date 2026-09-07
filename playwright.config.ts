@@ -267,5 +267,25 @@ export default defineConfig({
         video: "off",
       },
     },
+    {
+      // BET 7 activation-scan termination gate (issue #1895). The termination
+      // command:
+      //   npx playwright test tests/activation-scan.spec.ts
+      // exits 0 when the real-D1 first-brief integration test passes and the
+      // on-screen brief renders an evidence-linked item. The spec is
+      // self-contained (runs the workers-project vitest as a subprocess), so
+      // it needs no shared webServer and no SIGNUP_FIRST_BRIEF_ENABLED env.
+      name: "activation-scan",
+      testDir: "./tests",
+      testMatch: /activation-scan\.spec\.ts/,
+      timeout: 120_000,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: productionBaseURL,
+        actionTimeout: 30_000,
+        trace: "retain-on-failure",
+        video: "off",
+      },
+    },
   ],
 });
