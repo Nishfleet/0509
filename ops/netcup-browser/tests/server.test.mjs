@@ -416,10 +416,10 @@ test("queue bounds: 1 running + 1 queued, then 429", async () => {
 });
 
 test("size caps: oversized rendered HTML fails the job", async () => {
-  // Point a second service at a fake chrome that emits > 1 MiB HTML.
+  // Point a second service at a fake chrome that emits > 3 MiB HTML.
   const bigDir = path.join(tmpRoot, "big");
   await mkdir(bigDir, { recursive: true });
-  const bigChrome = await writeFakeChrome(bigDir, { html: "x".repeat(1_200_000) });
+  const bigChrome = await writeFakeChrome(bigDir, { html: "x".repeat(3_200_000) });
   const bigConfig = resolveConfig({
     RENDERER_PORT: "0",
     RENDERER_BIND: "127.0.0.1",

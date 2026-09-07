@@ -9,7 +9,7 @@
 //                       JPEG screenshot evidence -> close tab.
 //   landing_snapshot -> Node-side per-hop redirect validation, then
 //                       chrome-headless-shell --dump-dom (rendered HTML,
-//                       1 MiB cap) and --screenshot (PNG -> ffmpeg JPEG,
+//                       3 MiB cap) and --screenshot (PNG -> ffmpeg JPEG,
 //                       3 MiB cap).
 //   report_pdf       -> chrome-headless-shell --print-to-pdf of the
 //                       worker-signed same-origin 0509 share URL (10 MiB cap).
@@ -40,7 +40,7 @@ export class BoundedError extends Error {
 }
 
 export const DEFAULT_BOUNDS = {
-  landingHtmlMaxBytes: 1_000_000, // 0509: MAX_RENDERED_HTML_BYTES
+  landingHtmlMaxBytes: 3_000_000, // 0509: MAX_RENDERED_HTML_BYTES
   landingJpegMaxBytes: 3_000_000, // 0509: MAX_RENDERED_SCREENSHOT_BYTES
   metaSnapshotMaxBytes: 512_000,
   metaScreenshotRawMaxBytes: 8_000_000, // PNG before conversion
@@ -292,7 +292,7 @@ export async function runLandingSnapshot({ url, bounds = {}, chrome = {}, signal
 
   const profileDir = path.join(tmpRoot, `landing-${sha256Hex(finalUrl).slice(0, 16)}`);
   try {
-    // Rendered HTML via --dump-dom (bounded at 1 MiB).
+    // Rendered HTML via --dump-dom (bounded at 3 MiB).
     const htmlRun = await runProcess(chromeBin, [
       "--no-sandbox",
       "--disable-gpu",

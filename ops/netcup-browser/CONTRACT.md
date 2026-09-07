@@ -10,7 +10,7 @@ the service binds loopback only.
 | Kind              | Engine                          | Output                                    |
 | ----------------- | ------------------------------- | ----------------------------------------- |
 | `meta_discovery`  | Camofox HTTP API (port 9377)    | ariaSnapshot JSON + JPEG screenshot        |
-| `landing_snapshot`| chrome-headless-shell            | rendered HTML (1 MiB) + JPEG (3 MiB)       |
+| `landing_snapshot`| chrome-headless-shell            | rendered HTML (3 MiB) + JPEG (3 MiB)       |
 | `report_pdf`      | chrome-headless-shell            | PDF of the worker-signed 0509 share URL (10 MiB) |
 
 Any other kind is rejected at the API with `invalid_job_kind`. There is no
@@ -43,7 +43,7 @@ cookie/token exposure.
 
 | Artifact      | Cap     | Content type            |
 | ------------- | ------- | ----------------------- |
-| landing HTML  | 1 MiB   | `text/html`             |
+| landing HTML  | 3 MiB   | `text/html`             |
 | JPEGs         | 3 MiB   | `image/jpeg`            |
 | PDF           | 10 MiB  | `application/pdf`       |
 

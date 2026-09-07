@@ -88,5 +88,5 @@ ops/netcup-browser/deploy/rollback.sh    # restores newest source .bak-*, restar
 ## Notes
 
 - Initial concurrency is 1 with a bounded queue (4) — deliberate.
-- Artifacts are capped (HTML 1 MiB, JPEG 3 MiB, PDF 10 MiB) with SHA-256.
+- Artifacts are capped (HTML 3 MiB, JPEG 3 MiB, PDF 10 MiB) with SHA-256.
 - No D1 access and no customer Meta token ever reach the VPS from 0509.
