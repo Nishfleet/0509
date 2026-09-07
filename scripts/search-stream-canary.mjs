@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=2000 writes=0 runs_per_day=1
 // Streaming /search canary (issue #1858, accept #4).
 //
 // The /search loader streams results via the warming + revalidation path
