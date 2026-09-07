@@ -46,7 +46,11 @@ const MOBILE_VIEWPORT = {
 const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 const BROWSERLESS_PROOF_RENDER_WAIT_MS = 5_000;
-const MAX_RENDERED_HTML_BYTES = 1_000_000;
+// Flagship retail homepages legitimately render well past 1 MiB of DOM (the
+// demo brands measured 1.1–1.9 MiB), so the rendered leg is bounded at 3 MiB —
+// the same order as the 3 MiB screenshot cap. Anything larger still fails as
+// `html_oversized` instead of silently truncating the evidence artifact.
+const MAX_RENDERED_HTML_BYTES = 3_000_000;
 const MAX_RENDERED_SCREENSHOT_BYTES = 3_000_000;
 const MAX_BROWSERLESS_RESPONSE_BYTES = 6_000_000;
 const BROWSERLESS_PROOF_TIMEOUT_MS = 30_000;
