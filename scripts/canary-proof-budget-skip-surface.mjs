@@ -118,6 +118,73 @@ export function buildBudgetSkipSurfaceQuery(windowHours) {
 }
 
 /**
+ * Issue #1857 acceptance (a): classify the `skipped_due_to_budget` rows by
+ * watchlist plan tier, competitor domain (proof_target.landing_page_url),
+ * and capture attempt timestamp. One row per (workspace, plan, domain) with
+ * the first/last skip timestamp, so the 70-row investigation can be read
+ * straight off the result. Read-only — no DDL, no DML.
+ *
+ * @param {number} windowHours
+ */
+export function buildBudgetSkipDomainBreakdownQuery(windowHours) {
+  return `
+    SELECT
+      w.user_id AS workspace_user_id,
+      COALESCE(up.plan, 'free') AS plan,
+      pt.landing_page_url AS competitor_domain,
+      COUNT(*) AS budget_skips_total,
+      SUM(CASE WHEN pc.skip_reason IS NULL THEN 1 ELSE 0 END) AS budget_skips_silent,
+      MIN(pc.created_at) AS first_budget_skip_at,
+      MAX(pc.created_at) AS last_budget_skip_at
+    FROM proof_capture pc
+    INNER JOIN proof_target pt ON pt.id = pc.proof_target_id
+    INNER JOIN watchlist w ON w.id = pt.watchlist_id
+    LEFT JOIN user_plan up ON up.user_id = w.user_id
+    WHERE pc.status = 'skipped_due_to_budget'
+      AND pc.created_at > datetime('now', '-' || ${Math.floor(windowHours)} || ' hours')
+    GROUP BY w.user_id, COALESCE(up.plan, 'free'), pt.landing_page_url
+    ORDER BY budget_skips_total DESC, workspace_user_id ASC, competitor_domain ASC;
+  `.trim();
+}
+
+/**
+ * Normalizes the domain-breakdown rows (snake_case → camelCase, drops
+ * non-budget rows). The `competitorDomain` is `null` when a proof_target
+ * carries no landing_page_url (legacy rows); the row is still returned so
+ * the investigation sees the gap rather than hiding it.
+ *
+ * @param {Array<Record<string, unknown>>} rows
+ * @typedef {{
+ *   workspaceUserId: string,
+ *   plan: string,
+ *   competitorDomain: string | null,
+ *   budgetSkipsTotal: number,
+ *   budgetSkipsSilent: number,
+ *   firstBudgetSkipAt: string | null,
+ *   lastBudgetSkipAt: string | null,
+ * }} BudgetSkipDomainRow
+ * @returns {BudgetSkipDomainRow[]}
+ */
+export function mapBudgetSkipDomainRows(rows) {
+  return rows
+    .map((row) => ({
+      workspaceUserId: String(row.workspace_user_id ?? ""),
+      plan: String(row.plan ?? "free"),
+      competitorDomain:
+        typeof row.competitor_domain === "string" && row.competitor_domain.length > 0
+          ? row.competitor_domain
+          : null,
+      budgetSkipsTotal: Number(row.budget_skips_total ?? 0),
+      budgetSkipsSilent: Number(row.budget_skips_silent ?? 0),
+      firstBudgetSkipAt:
+        typeof row.first_budget_skip_at === "string" ? row.first_budget_skip_at : null,
+      lastBudgetSkipAt:
+        typeof row.last_budget_skip_at === "string" ? row.last_budget_skip_at : null,
+    }))
+    .filter((row) => row.workspaceUserId.length > 0 && row.budgetSkipsTotal > 0);
+}
+
+/**
  * @typedef {{
  *   workspaceUserId: string,
  *   plan: string,
