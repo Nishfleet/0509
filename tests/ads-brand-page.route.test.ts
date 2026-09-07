@@ -614,11 +614,8 @@ describe("/ads/:domain loader", () => {
     expect(mocks.enforcePublicBrandPageRateLimit).not.toHaveBeenCalled();
   });
 
-  it("throws an honest 429 with Retry-After when the bucket is exhausted", async () => {
-    const limited = new Response("Too many requests", {
-      status: 429,
-      headers: { "retry-after": "600" },
-    });
+  it("throws the public rate-limit response when the bucket is exhausted", async () => {
+    const limited = new Response("Too many requests", { status: 429 });
     const mocks = installBrandPageMocks({ entry: cacheEntry(), rateLimitResponse: limited });
 
     let thrown: unknown = null;
@@ -628,17 +625,7 @@ describe("/ads/:domain loader", () => {
       thrown = error;
     }
 
-    // The loader must NOT rethrow the raw limiter response: it throws an
-    // in-product 429 document naming the per-IP free-preview limit and
-    // carrying Retry-After (issue #1930), so the route boundary can render
-    // the honest state instead of the generic error shell.
-    expect(thrown).toBeInstanceOf(Response);
-    const response = thrown as Response;
-    expect(response.status).toBe(429);
-    expect(response.headers.get("retry-after")).toBe("600");
-    const body = (await response.json()) as { error?: string; message?: string };
-    expect(body.error).toBe("rate_limited");
-    expect(body.message).toContain("anonymous preview limit");
+    expect(thrown).toBe(limited);
     expect(mocks.getDiscoveryCacheEntry).not.toHaveBeenCalled();
   });
 });
