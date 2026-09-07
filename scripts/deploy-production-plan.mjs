@@ -337,25 +337,6 @@ export function buildProductionDeployPlan({
       ],
     },
     {
-      // The workflow's "Synchronize private canary token" step runs classic
-      // `wrangler secret put` after `npm run deploy` returns, and it dies
-      // when Cloudflare's "currently deployed" mark lags behind `wrangler
-      // deploy` (run 34079008963: "Secret edit failed ... latest version of
-      // your Worker isn't currently deployed."). Sync the token here first
-      // with a bounded retry — the retry is the poll for the mark, and once
-      // a put lands the workflow step's identical put is a no-op rewrite.
-      // Classic `secret put` only; `wrangler versions secret put` stays
-      // rejected ("Failed to parse body as FormData", run 31514742997).
-      // Non-blocking by design: an exhausted retry is lag, not a failed
-      // deploy — it must never trigger rollback_failed_release, and the
-      // workflow step still gets the final word after the plan.
-      id: "canary_bypass_token_sync",
-      command: "node",
-      args: ["scripts/sync-canary-bypass-token.mjs"],
-      includeCloudflareCredentials: true,
-      nonBlockingDiagnostic: true,
-    },
-    {
       id: "post_deploy_release_canary",
       command: "node",
       args: [
@@ -420,6 +401,31 @@ export function buildProductionDeployPlan({
       id: "oauth_branding",
       command: "node",
       args: ["scripts/check-google-oauth-branding.mjs"],
+    },
+    {
+      // The workflow's "Synchronize private canary token" step runs classic
+      // `wrangler secret put` after `npm run deploy` returns, and it dies
+      // when Cloudflare's "currently deployed" mark lags behind `wrangler
+      // deploy` (run 34079008963: "Secret edit failed ... latest version of
+      // your Worker isn't currently deployed."). Sync the token here first
+      // with a bounded retry — the retry is the poll for the mark, and once
+      // a put lands, the workflow step's identical put is a no-op rewrite.
+      // Classic `secret put` only; `wrangler versions secret put` stays
+      // rejected ("Failed to parse body as FormData", run 31514742997).
+      //
+      // MUST stay the last step. A successful `secret put` creates and
+      // deploys a NEW Worker version, so every version-anchored check —
+      // worker_propagation_stabilization, post_deploy_release_canary and
+      // start_production_soak, all pinned to the deploy's version id — must
+      // run before it or they would see the post-secret version and fail.
+      // Non-blocking by design: an exhausted retry is lag, not a failed
+      // deploy — it must never trigger rollback_failed_release, and the
+      // workflow step still gets the final word after the plan.
+      id: "canary_bypass_token_sync",
+      command: "node",
+      args: ["scripts/sync-canary-bypass-token.mjs"],
+      includeCloudflareCredentials: true,
+      nonBlockingDiagnostic: true,
     },
   ];
 }
