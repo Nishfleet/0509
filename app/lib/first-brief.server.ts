@@ -160,6 +160,24 @@ async function fileAndDeliverFirstBrief(
     };
   }
 
+  // BET 7 (issue #1862): the first-brief digest was just filed from the
+  // activation scan's baseline capture. Emit the coarse workspace-scoped
+  // `first_brief_generated` funnel event so scouts can measure the
+  // scan -> brief-generated step. Only fires on a fresh filing
+  // (`claim.created`); the `already_filed` early return above skips it.
+  // Measurement is gated by FUNNEL_MEASUREMENT_ENABLED and never fails the
+  // brief path.
+  if (claim.created) {
+    try {
+      const { emitFunnelFirstBriefGenerated } = await import(
+        "~/lib/funnel-measurement.server"
+      );
+      emitFunnelFirstBriefGenerated(env);
+    } catch {
+      // Measurement must never fail the first-brief path.
+    }
+  }
+
   const delivered = await deliverFirstBrief(env, {
     digestRunId: digest.id,
     watchlist: input.watchlist,

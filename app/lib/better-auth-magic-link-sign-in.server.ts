@@ -60,6 +60,22 @@ export async function completeBetterAuthMagicLinkSignIn(
     throw redirect(`/auth/${confirmation.mode}?error=callback_failed`, { headers: failureHeaders });
   }
 
+  // BET 7 (issue #1862): a brand-new workspace just completed signup — the
+  // magic-link verification established its session. Emit the coarse
+  // workspace-scoped `signup_completed` funnel event so scouts can measure
+  // the signup -> activation drop-off. Login mode never trips this, and the
+  // emit is gated on `hasSessionCookies` so a non-failure response that did
+  // not actually set a session never counts as a completion. Measurement is
+  // gated by FUNNEL_MEASUREMENT_ENABLED and never fails the sign-in path.
+  if (confirmation.mode === "signup" && hasSessionCookies) {
+    try {
+      const { emitFunnelSignupCompleted } = await import("~/lib/funnel-measurement.server");
+      emitFunnelSignupCompleted(env, request);
+    } catch {
+      // Measurement must never block the sign-in redirect.
+    }
+  }
+
   try {
     await betterAuth.consumeBetterAuthMagicLinkConfirmationTicket(env, request);
   } catch (error) {

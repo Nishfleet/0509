@@ -13,6 +13,8 @@ const FUNNEL_OPERATIONS = [
   "funnel_signup_start",
   "funnel_signup_start_magicbrief",
   "funnel_pricing_free_card_clicked",
+  "funnel_signup_completed",
+  "funnel_first_brief_generated",
   "funnel_first_brief_viewed",
   "funnel_activation_scan_started",
   "funnel_first_brief_email_sent",
@@ -210,6 +212,80 @@ describe("funnel activation events (BET 7, issue #1487)", () => {
       "~/lib/funnel-measurement.server"
     );
     emitFunnelFirstBriefEmailSent({});
+    expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
+  });
+});
+
+describe("funnel activation events (BET 7, issue #1862)", () => {
+  let logSpy: MockInstance;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("emits signup_completed with the workspace activation shape", async () => {
+    const { emitFunnelSignupCompleted } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelSignupCompleted(
+      { FUNNEL_MEASUREMENT_ENABLED: "1" },
+      makeFunnelRequest(),
+    );
+    const [record] = emittedFunnelRecords(logSpy) as [
+      { operation: string; message: string; details: Record<string, string> },
+    ];
+    expect(record.operation).toBe("funnel_signup_completed");
+    expect(record.details.route).toBe("activation");
+    expect(record.details.account_scope).toBe("workspace");
+    expect(Object.keys(record.details).sort()).toEqual(
+      ["account_scope", "event_id", "route"].sort(),
+    );
+    // No email, name, user id, or workspace identity ever reaches a record.
+    expect(JSON.stringify(record.details)).not.toMatch(
+      /watchlist|competitor|workspace_id|@/i,
+    );
+    expect(JSON.stringify(record)).not.toMatch(/@/);
+  });
+
+  it("suppresses signup_completed when the gate is off or GPC is set", async () => {
+    const { emitFunnelSignupCompleted } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelSignupCompleted({}, makeFunnelRequest());
+    const gpc = new Request("http://localhost/", { headers: { "sec-gpc": "1" } });
+    emitFunnelSignupCompleted({ FUNNEL_MEASUREMENT_ENABLED: "1" }, gpc);
+    expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
+  });
+
+  it("emits first_brief_generated without a request (async filing path)", async () => {
+    const { emitFunnelFirstBriefGenerated } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelFirstBriefGenerated({ FUNNEL_MEASUREMENT_ENABLED: "1" });
+    const [record] = emittedFunnelRecords(logSpy) as [
+      { operation: string; message: string; details: Record<string, string> },
+    ];
+    expect(record.operation).toBe("funnel_first_brief_generated");
+    expect(record.details.route).toBe("activation");
+    expect(record.details.account_scope).toBe("workspace");
+    expect(Object.keys(record.details).sort()).toEqual(
+      ["account_scope", "event_id", "route"].sort(),
+    );
+    expect(JSON.stringify(record.details)).not.toMatch(
+      /watchlist|competitor|workspace_id|@/i,
+    );
+    expect(JSON.stringify(record)).not.toMatch(/@/);
+  });
+
+  it("suppresses first_brief_generated when the gate is off", async () => {
+    const { emitFunnelFirstBriefGenerated } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelFirstBriefGenerated({});
     expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
   });
 });

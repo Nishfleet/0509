@@ -40,6 +40,8 @@ export type FunnelEventKind =
   | "locale_segment_view_de"
   | "locale_segment_view_ja"
   | "locale_segment_view_pt_br"
+  | "signup_completed"
+  | "first_brief_generated"
   | "first_brief_viewed"
   | "activation_scan_started"
   | "first_brief_email_sent";
@@ -95,6 +97,8 @@ const FUNNEL_ROUTES: Record<FunnelEventKind, FunnelRoute> = {
   locale_segment_view_de: "sneaker_resale",
   locale_segment_view_ja: "sneaker_resale",
   locale_segment_view_pt_br: "sneaker_resale",
+  signup_completed: "activation",
+  first_brief_generated: "activation",
   first_brief_viewed: "activation",
   activation_scan_started: "activation",
   first_brief_email_sent: "activation",
@@ -117,6 +121,8 @@ const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
   locale_segment_view_de: "funnel_locale_segment_view_de",
   locale_segment_view_ja: "funnel_locale_segment_view_ja",
   locale_segment_view_pt_br: "funnel_locale_segment_view_pt_br",
+  signup_completed: "funnel_signup_completed",
+  first_brief_generated: "funnel_first_brief_generated",
   first_brief_viewed: "funnel_first_brief_viewed",
   activation_scan_started: "funnel_activation_scan_started",
   first_brief_email_sent: "funnel_first_brief_email_sent",
@@ -139,6 +145,8 @@ const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
   locale_segment_view_de: "Anonymous German sneaker-resale page view",
   locale_segment_view_ja: "Anonymous Japanese sneaker-resale page view",
   locale_segment_view_pt_br: "Anonymous Brazilian Portuguese sneaker-resale page view",
+  signup_completed: "Signup completed via magic-link verification",
+  first_brief_generated: "First brief generated for a signup workspace",
   first_brief_viewed: "First brief viewed in session",
   activation_scan_started: "Activation scan started for a signup workspace",
   first_brief_email_sent: "First brief email dispatched",
@@ -234,6 +242,8 @@ interface FunnelEventExtra {
  * resolved from the kind, never from the presence of a request.
  */
 const WORKSPACE_SCOPED_KINDS = new Set<FunnelEventKind>([
+  "signup_completed",
+  "first_brief_generated",
   "first_brief_viewed",
   "activation_scan_started",
   "first_brief_email_sent",
@@ -355,6 +365,29 @@ export function emitFunnelSignupStartFromAllowlistedSource(
 
 export function emitFunnelFirstBriefViewed(env: AppEnv, request: Request) {
   emitFunnelEvent(env, "first_brief_viewed", {}, request);
+}
+
+/**
+ * BET 7 (issue #1862): a signup completed — the magic-link verification
+ * established a session for a brand-new workspace. Fires inside the same
+ * request that set the session cookies, so the standard GPC opt-out applies.
+ * Coarse workspace-scoped count only — no email, name, or user id ever
+ * reaches a record. Only emitted when `mode === "signup"`; returning users
+ * sign in via the login path and never trip this.
+ */
+export function emitFunnelSignupCompleted(env: AppEnv, request: Request) {
+  emitFunnelEvent(env, "signup_completed", {}, request);
+}
+
+/**
+ * BET 7 (issue #1862): the first-brief digest was filed for a signup
+ * workspace — the activation scan's baseline capture became an on-screen
+ * brief. May fire without a request from the async scan-completion path
+ * (same as `first_brief_email_sent`), so GPC does not apply there; the field
+ * allowlist and workspace scope are unchanged.
+ */
+export function emitFunnelFirstBriefGenerated(env: AppEnv) {
+  emitFunnelEvent(env, "first_brief_generated");
 }
 
 /**
