@@ -192,7 +192,7 @@ export default function CompareVisualpingRoute() {
         </Form>
       </section>
 
-      <section className="ld-quiet">
+      <section className="ld-quiet" data-source-url={citations.sources[0].href}>
         <div className="ld-section-head">
           <span className="ld-kicker">Credit where due</span>
           <h2>What Visualping does well.</h2>
