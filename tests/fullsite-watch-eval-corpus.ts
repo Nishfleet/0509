@@ -46,6 +46,8 @@
  *                                          token on >=80% of alertable facts
  */
 
+import type { CompetitorSiteChangeField } from "~/lib/competitor-site-content";
+
 export interface BasePage {
 	canonicalUrl: string;
 	html: string;
@@ -363,7 +365,7 @@ export type PageHtmls = Record<string, string>;
 export interface MaterialScenario {
 	name: string;
 	/** Alertable fields that genuinely changed (true positives to expect). */
-	expectedFields: string[];
+	expectedFields: CompetitorSiteChangeField[];
 	/** Prior-run inventory: canonicalUrl -> raw HTML. */
 	prior: PageHtmls;
 	/** Current-run inventory: canonicalUrl -> raw HTML. */
