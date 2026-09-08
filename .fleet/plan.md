@@ -105,3 +105,13 @@ transition.
 - `OfferLedgerEntry` consumers beyond the four named files (search for
   `transition:`/`OfferLedgerEntry` usages) must not break from the new optional
   `suppressedReason` field; it is optional to keep back-compat.
+- [ ] phase 6: Base the transition gate AND the before/after diff on the last
+  NON-suppressed emitted entry, never a suppressed one, so a later same-region
+  capture can never diff against a suppressed (cookie-banner / "—") state and
+  reintroduce a phantom "price restored from —"-style transition. Add a test
+  case that runs sg("$149","Shop Now") -> fr("—", consent CTA) [suppressed] ->
+  fr("$149","Shop Now") and asserts the third state is suppressed with a geo
+  reason (never a "price restored from —" transition).
+  reason: senior reviewer Follow-on (inverse-face of the phantom-change gap,
+  issue #1996) — closes the back-door leak of suppressed-field data into a later
+  real transition.
