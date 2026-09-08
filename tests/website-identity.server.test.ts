@@ -164,7 +164,7 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     mockFetch.mockResolvedValue(
       htmlResponse(`<html><head>
         <title>On | Swiss Performance Running Shoes</title>
-        <meta property="og:site_name" content="On"/>
+        <meta property="og:site_name" content="On Shop"/>
       </head><body></body></html>`),
     );
 
@@ -174,6 +174,41 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     expect(identity?.siteName).toBe("On");
     expect(identity?.domainAliases).toContain("on-running.com");
     expect(identity?.aliases).toContain("On");
+    // The live shop label is demoted from query-driver to alias, not deleted.
+    expect(identity?.aliases).toContain("On Shop");
+  });
+
+  it("supplies On's brand site name even when the homepage is bot-blocked (issue #1993)", async () => {
+    // on.com's og:site_name is "On Shop" — a shop label Meta Ad Library returns
+    // 0 ads for. The curated site name "On" must win whether the live homepage
+    // is fetchable (and would otherwise contribute "On Shop") or bot-blocked
+    // (and would otherwise contribute nothing, leaving the bare stem "on").
+    mockFetch.mockResolvedValue(
+      new Response(null, { status: 403, headers: { "content-type": "text/html" } }),
+    );
+
+    const identity = await resolveWebsiteIdentity("https://on.com");
+
+    expect(identity).not.toBeNull();
+    expect(identity?.siteName).toBe("On");
+    expect(identity?.aliases).toContain("On");
+    expect(identity?.domainAliases).toContain("on-running.com");
+  });
+
+  it("supplies Reebok's site name when the homepage is bot-blocked (issue #1993)", async () => {
+    // reebok.com's Shopify homepage is bot-blocked for the scripted crawler, so
+    // the provider query would degenerate to the bare stem "reebok" — which
+    // returns 0 rows from Meta Ad Library. The curated site name keeps the
+    // provider question askable (issue #1993).
+    mockFetch.mockResolvedValue(
+      new Response(null, { status: 403, headers: { "content-type": "text/html" } }),
+    );
+
+    const identity = await resolveWebsiteIdentity("https://reebok.com");
+
+    expect(identity).not.toBeNull();
+    expect(identity?.siteName).toBe("Reebok");
+    expect(identity?.aliases).toContain("Reebok");
   });
 
   it("does not fabricate verified coverage for a brand that runs no Meta ads", async () => {
