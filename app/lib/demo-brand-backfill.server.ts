@@ -46,6 +46,7 @@ import {
   captureLandingPageSnapshot,
   type LandingPageCaptureFailureDetail,
 } from "~/lib/landing-pages.server";
+import { extractPriceTier } from "~/lib/landing-page-price-tier.server";
 import { loadOfferTimeline } from "~/lib/offer-timeline.server";
 import type { LandingPageSnapshotData } from "~/lib/types";
 
@@ -220,9 +221,10 @@ export async function runDemoBrandBackfill(
             ocr_text,
             translated_text,
             captured_at,
-            created_at
+            created_at,
+            price_tier
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
         `,
         rowId,
         snapshot.rawUrl,
@@ -238,6 +240,7 @@ export async function runDemoBrandBackfill(
         typeof snapshot.formPresent === "boolean" ? (snapshot.formPresent ? 1 : 0) : null,
         snapshot.capturedAt,
         nowIso(),
+        extractPriceTier(snapshot.priceText),
       );
       await replaceAnalysisFields(
         env,
