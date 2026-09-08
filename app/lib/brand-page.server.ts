@@ -144,6 +144,8 @@ export function isReservedBrandPageDomain(host: string): boolean {
 export const BRAND_PAGE_CANONICAL_ALIASES: Readonly<Record<string, string>> = {
   "ridge.com": "ridgewallet.com",
   "oura.com": "ouraring.com",
+  // Notion.so is the real domain; notion.com is the natural buyer-typed alias.
+  "notion.com": "notion.so",
 };
 
 /**
