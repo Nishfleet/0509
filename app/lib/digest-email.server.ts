@@ -1253,7 +1253,7 @@ function renderValueTierSwingSectionHtml(swing: PriceTierSwing | null) {
     (band) => `
           <tr>
             <td style="font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT}; padding: 8px 0; border-bottom: 1px dotted ${EMAIL_CASE_LINE};">${escapeHtml(band.label)}</td>
-            <td style="font-family: ${EMAIL_MONO_FONT}; font-size: 12px; text-align: right; color: ${EMAIL_CASE_INK}; padding: 8px 0; border-bottom: 1px dotted ${EMAIL_CASE_LINE};">${swing.distribution[band.id]}</td>
+            <td style="font-family: ${EMAIL_MONO_FONT}; font-size: 12px; text-align: right; color: ${EMAIL_CASE_INK}; padding: 8px 0; border-bottom: 1px dotted ${EMAIL_CASE_LINE};">${Number(swing.distribution[band.id]) || 0}</td>
           </tr>`,
   ).join("");
   const swingLine =

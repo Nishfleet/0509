@@ -306,7 +306,9 @@ export interface PriceTierSwing {
  * plain lexicographic string compare against an ISO timestamp — no date
  * functions, no timezone drift. The swing query is bounded the same way as
  * the distributions: SQLite 3.25+ window functions are available in D1,
- * and the result is a single scalar row regardless of corpus size.
+ * and the result is a single scalar row regardless of corpus size. The
+ * LAG ordering carries `id` as a tiebreaker so two snapshots of the same
+ * page sharing a `captured_at` still yield a deterministic "previous band".
  *
  * A page whose FIRST snapshot ever lands in the window has no previous
  * band to compare, so it is never counted as a swing — a new page is not
@@ -329,7 +331,7 @@ export async function loadPriceTierSwing(
                 price_tier,
                 captured_at,
                 LAG(price_tier) OVER (
-                  PARTITION BY canonical_url ORDER BY captured_at
+                  PARTITION BY canonical_url ORDER BY captured_at, id
                 ) AS prev_tier
          FROM landing_page_snapshot
        )
