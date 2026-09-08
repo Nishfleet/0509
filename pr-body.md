@@ -1,51 +1,105 @@
-## Locale cluster: no fake-lang English pages, hreflang cluster, regression gate (issue #1570)
+## Offer timeline (BET 3 differentiator) for the populated sneaker-resale cluster (issue #1946)
 
-The locale-prefixed buyer-surface cluster (`/de/pricing`, `/ja/help`, `/fr/docs`, `/es/status`, `/pt-br/compare`, ...) served byte-identical English copy while declaring `lang=de/ja/fr/es/pt-BR` and shipping zero hreflang — a duplicate-content doorway pattern (43 indexable surfaces that are 43 dupes of one page) and a WCAG 3.2.6 html-lang violation (screen readers announce English as German/Japanese).
-
-This PR takes the issue's explicitly-sanctioned option for untranslated pages (accept #2): **set `lang="en"` and remove the pages from the locale sitemap set**, while keeping them reachable (200, canonical→EN) and emitting a full hreflang alternate cluster on every one.
+The nightly Offer Timeline backfill (issue #1449) was scoped to the 5 hard-coded demo brands. Issue #1946 extends the same nightly backfill to the populated sneaker-resale cluster — the seven-day-running market-signal buyer's cluster (StockX, Foot Locker, Stadium Goods, Flight Club, Hypebeast, Saucony, …) — so the `/ads/<brand>` pages and `/timeline/<brand>` endpoints that already exist for the cluster finally surface dated offer states instead of 410. A brand with no verified/likely ad row keeps the honest 410 shell — no phantom timeline.
 
 ### What changed
 
-- **`htmlLangForPathname` now returns `"en"` for every buyer-surface locale path** (`app/lib/locale-markets.ts`). A page never claims a language its content does not speak. The genuinely translated sneaker-resale cluster (`/de/sneaker-resale` etc.) keeps its real locale lang.
-- **Buyer-surface locale subpaths removed from the sitemap** (`app/lib/seo.ts`, `SITEMAP_PATHS`). They stay 200 and canonical→EN but are no longer advertised as 43 distinct indexable surfaces. The translated sneaker-resale cluster stays in the sitemap.
-- **hreflang alternate cluster rendered with the correct lowercase `hreflang` attribute** (`app/lib/seo.ts`). `buyerSurfaceHreflangLinks(splat)` emits all 5 locales + `x-default`→EN from one helper, wired into every locale route (`$locale.help`, `$locale.pricing`, `$locale.docs`, `$locale.api.docs`, `$locale.status`, `$locale.changelog`, `$locale.trust`, `$locale.compare`, `$locale._index`). Previously the attribute was emitted as `hrefLang` (wrong casing — not a valid HTML attribute), so the cluster was invisible to crawlers.
-- **Regression test `tests/locale-content-integrity.test.ts`** (accept #3): asserts every buyer-surface locale path reports `lang="en"`, every locale route ships an hreflang `x-default`→EN alternate, and every genuinely-translated sneaker-resale locale page (lang != en) renders a body that differs from its EN twin. A future worker adding another byte-identical English locale page tagged with a fake non-EN lang fails this test — no code review required to catch the regression.
+Phase 1 — cohort derivation (`app/lib/sneaker-resale-cohort.ts` + `app/lib/sneaker-resale-cohort.server.ts`):
 
-### Rebase reconciliation (main moved 49 commits ahead)
+- **`deriveSneakerResaleCohort(seedList, tierByDomain)`** — pure helper. Takes the bundled `data/seed-lists/sneaker-resale.json` and a `{ domain → { verified, likely, hasCoverage } }` map; returns the cohort whose `hasCoverage` is `true`. Excludes duplicate seed domains, missing tier entries, and any domain whose tier entry has `unmatchedCount` only.
+- **`getSneakerResaleTierByDomain(env, domains)`** — read-only D1 adapter. Reads only the existing `public_search` discovery cache rows (the BET 5 publisher's write path) with `route_context = 'public_search' AND country = 'all' AND expires_at > now`. Skips `payload.source === 'demo'` rows, expired rows, and tables that aren't migrated yet (returns an empty `Map`, never throws). Provider-rollover-safe: surfaces the freshest row per domain.
+- **`canonicalizeSneakerResaleDomain`** mirrors the publisher's `validateSeedList` so `WWW.StockX.com` and the cache key for `stockx.com` compare equal.
+- 21-test unit suite (`tests/sneaker-resale-cohort.test.ts`): every branch — covered brand, missing cache row, only-unmatched, empty seed list, www./case normalization, deduplication, the bundled 25-domain seed list end-to-end, plus the D1 adapter happy / missing-DB / empty-domains / missing-table / demo-source / SQL-shape paths.
 
-Main landed issues #1563 (locale compare/switch child routes), #1578 (locale first-value search funnel), and #1561 (locale-scoped sitemaps) after this branch was cut. Those issues added locale child/first-value routes to the sitemap with non-EN lang — the exact duplicate-content doorway pattern #1570 ships to close. This PR extends #1570's decision to cover them:
+Phase 2 — nightly backfill (`app/lib/sneaker-resale-backfill.server.ts`):
 
-- **`app/lib/public-markdown.ts`**: loosened the `LLMS_PAGE_DETAILS` type annotation from `Record<SITEMAP_PATHS[number], …>` to an inferred literal type with a separate `_llmsDetailsCoverSitemap` compile-time check. The old annotation rejected non-sitemap locale entries (dead data kept for when a page re-enters the sitemap) once the locale spreads left `SITEMAP_PATHS` and the type narrowed from `string` to a literal union.
-- **`tests/seo/locale-child-routes.test.ts`** (#1563): updated to expect `lang="en"` for locale child routes (byte-identical English) and assert they are NOT in the sitemap. Fixed `hrefLang` → `hreflang` casing.
-- **`tests/seo/locale-first-value-routes.test.ts`** (#1578): updated to expect `lang="en"` for locale first-value routes and assert they are NOT in any sitemap. Fixed `hrefLang` → `hreflang` casing.
-- **`tests/seo/locale-sitemap.test.ts`** (#1561): updated to expect non-empty locale sitemaps only for locales with genuinely translated content (de, ja, pt-br — sneaker-resale). Locales with no translated content (fr, es) correctly emit an empty sitemap.
-- **`tests/customer-claim-surface-registry.test.ts`**: resolved rebase conflict — kept the #1570 rationale (locale buyer-surface paths intentionally NOT in the sitemap) and reconciled with the #1481 compare-duplicate comment from main.
+- **`runSneakerResaleBackfill(env, options?)`** mirrors `runDemoBrandBackfill` exactly — same `captureLandingPageSnapshot` write path with `preferRendered: true`, `requireScreenshot: true`, `routeContext: "proof_capture"`, and the `onFailure` callback that captures `reasonCode`. Same `INSERT OR IGNORE` into `landing_page_snapshot` with the byte-identical column list (matches `createLandingPageSnapshot` in `app/lib/data/ads.server.ts`). Same `replaceAnalysisFields(env, "landing_page", rowId, buildLandingPageAnalysisFields(snapshot))` step.
+- Deterministic row id `sneaker-<domain>-<YYYY-MM-DD>` — `INSERT OR IGNORE` swallows a cron retry without double-appending a day.
+- Per-brand failure isolation: a brand whose capture returns null ends `capture_failed` with a captured `reasonCode`; a brand whose capture throws ends `error`. Neither aborts the cohort siblings.
+- Cohort path: `resolveSeedList("sneaker-resale") → getSneakerResaleTierByDomain → deriveSneakerResaleCohort`. A brand whose `deriveSneakerResaleCohort` returns `hasCoverage: false` is excluded before `capture()` is ever called — no phantom offer.
+- Test seams: `options.cohort` (skip the seed-list → tier-lookup → derive path), `options.tierLookup` (skip the D1 tier call), `options.domains` (caller-supplied subset). All seams are honored only when supplied; production code paths never read them.
+- **`runSneakerResaleProofHoleCatchUp`** — issue-#1919 mirror; returns a degraded `SneakerResaleProofHoleCatchUpResult` when every cohort brand already has a public timeline.
+- **`summarizeSneakerResaleBackfill`** — log-line shape mirrors `summarizeDemoBrandBackfill` (`sneaker-resale-backfill day=YYYY-MM-DD captured=N failed=M [<domain>:captured|<domain>:failed:<reason>|<domain>:error]`) so an operator can grep for it on the daily rail.
+- 15-test node suite (`tests/sneaker-resale-backfill.server.test.ts`) + 9-test real-D1 integration suite (`tests/integration/sneaker-resale-backfill.integration.test.ts`).
+
+Phase 3 — worker wiring (`workers/app.ts`):
+
+- New sibling `ctx.waitUntil(runSneakerResaleBackfill(env))` block on the daily rail (`scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily"`), positioned between the BET 5a publisher block and the `scheduled_monitoring` block.
+- Same gate as `runDemoBrandBackfill` and `runAdsDomainPublisher` — a new wrangler cron would escape the four-cron release-soak CHECK, so the cohort expansion rides the existing rail.
+- Failure escalation: `reportScheduledTaskFailure(env, "sneaker_resale_backfill", error)` — operator pages on whole-run throw. Per-brand failures stay inside the backfill (logged + counted), never escape as a page.
+- 3 new tests in `tests/worker-scheduled-handler.test.ts`: (a) daily cron invokes BOTH backfills as siblings, (b) 3-hour / weekly crons do NOT invoke the new backfill, (c) operator pages on `sneaker_resale_backfill` failure while `demo_brand_backfill` still runs (per-brand-failure-isolation check).
+- **Supplemental fix (phase-4 reviewer, Act on):** the nightly cohort verdict reads the publisher's `public_search` cache rows, which carry a 15-minute TTL; as a sibling waitUntil the backfill would read before the publisher's awaited per-domain writes land and derive an empty cohort every night. `runSneakerResaleBackfill` is now chained after `runAdsDomainPublisher`'s promise on the same daily block (a publisher whole-run failure still runs the backfill best-effort and pages via its own block). Two regression tests in the scheduled handler (deferred-publisher ordering, publisher-throws best-effort) + one cohort fall-through test; `summarizeSneakerResaleBackfill` now emits `cohort=N`.
+
+Phase 4 — verification (this PR):
+
+- `npx vitest run --project node` and `npx vitest run --project workers` both green across all 4 affected suites (cohort unit, backfill unit, integration, scheduled-handler). 56 node-project tests + 9 worker-project tests added/changed; full repo suites also green (node 606 files / 7227 tests, workers 35 files / 181 tests).
+- `npx tsc -b` exit 0.
+- No new migrations, no new wrangler cron, no `.github/workflows/**` changes. `landing_page_snapshot` schema untouched.
+
+### Plan
+
+`.fleet/plan.md` (manager mode, 4 phases):
+
+```
+- [x] phase 1: cohort derivation (pure helper + read-only D1 tier lookup)
+- [x] phase 2: nightly sneaker-resale backfill
+- [x] phase 3: worker wiring
+- [x] phase 4: verification + PR
+```
+
+### Phase reviewer outputs (manager mode run-proof)
+
+Phase 1: pre-existing in the worktree (green on entry, 21/21 cohort unit tests passed).
+Phase 2 reviewer (`reviewer` subagent): "No findings in Act on bucket. Two Consider items: (a) integration test uses `hypebeast.com` for the no-phantom-row case but that domain is not in the bundled seed list, so the missing-tier branch — not the hasCoverage branch — drops the brand; (b) `options.domains` Set was trim()/lowercase() only, not canonicalized." Both fixed in commit `26fcfa32 fix(sneaker-resale-cohort): address phase 2 reviewer findings`.
+Phase 3 reviewer (`reviewer` subagent): "No Act on findings. One Consider about three identical `if (scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily")` guards (out of scope — mirrors existing publisher and demo-brand block shape). One Noted about a stale `.fleet/plan.md` description line; fixed in the phase-3 tick commit."
+Phase 4 reviewer (`reviewer` subagent, seat cursor/cursor-grok-4.6-high): "The sneaker cohort will be empty on essentially every nightly run — bullet 4 (timeline HTTP 200) is not achievable as wired." Act on (fixed, commit `e36f2e18`): chain the backfill after the publisher's promise on the same daily block + 3 regression tests. Warning (fixed): demo-payload fall-through to next-newest legitimate row. Suggestion (fixed): `cohort=N` in the summary line. Suggestion (Noted, no change): `cacheStatus` field is informational only. No Dismissed findings.
+
+Also included: `c0ddb959` fixes a pre-existing month-locked assertion in `tests/integration/mention-digest-resweep.integration.test.ts` (`2026-08-` hard-coded; key embeds now−168h, so it broke on the September rollover and red-flagged every PR's codex-node-checks/preview-assert since 2026-09-01 — including sibling claims 1945/1947). Derives the expected date from the same clock expression the code uses. Test-only, no production behavior.
 
 ### Verification
 
-Ran the full node + workers vitest suites in the repo checkout (no network dependency — the test mounts the app locally):
-
 ```
+$ npx vitest run --configLoader runner --project node tests/sneaker-resale-cohort.test.ts tests/sneaker-resale-backfill.server.test.ts tests/worker-scheduled-handler.test.ts
+ Test Files  3 passed (3)
+      Tests  56 passed (56)
+
+$ npx vitest run --configLoader runner --project workers tests/integration/sneaker-resale-backfill.integration.test.ts tests/integration/mention-digest-resweep.integration.test.ts
+ Test Files  2 passed (2)
+      Tests  15 passed (15)
+
 $ npx vitest run --configLoader runner --project node
-Test Files  567 passed (567)
-     Tests  6792 passed (6792)
+ Test Files  606 passed (606)
+      Tests  7227 passed (7227)
 
 $ npx vitest run --configLoader runner --project workers
-Test Files  21 passed (21)
-     Tests  121 passed (121)
+ Test Files  35 passed (35)
+      Tests  181 passed (181)
 
-$ npx vitest run --configLoader runner --project node tests/locale-content-integrity.test.ts
-Test Files  1 passed (1)
-     Tests  73 passed (73)
+$ npx tsc -b --noEmit
+EXIT: 0
 
-$ npx tsc -b
+$ git diff --stat origin/main..HEAD
+ .fleet/plan.md                                     |  67 ++-
+ app/lib/sneaker-resale-backfill.server.ts          | 437 ++++++++++++++++
+ app/lib/sneaker-resale-cohort.server.ts            | 235 +++++++++
+ app/lib/sneaker-resale-cohort.ts                   | 155 ++++++
+ pr-body.md                                         | 102 ++--
+ .../mention-digest-resweep.integration.test.ts     |   8 +-
+ .../sneaker-resale-backfill.integration.test.ts    | 478 ++++++++++++++++++
+ tests/sneaker-resale-backfill.server.test.ts       | 554 +++++++++++++++++++++
+ tests/sneaker-resale-cohort.test.ts                | 493 ++++++++++++++++++
+ tests/worker-scheduled-handler.test.ts             | 159 ++++++
+ workers/app.ts                                     |  32 +-
+ 11 files changed, 2652 insertions(+), 68 deletions(-)
+
+$ PATH="/home/nish/workspaces/tooling/fleet-ops/bin:$PATH" prove-one-run-check --body pr-body.md --name-status -
 EXIT: 0
 ```
 
-run-proof: `npx vitest run --configLoader runner --project node` → 567 files / 6792 tests passed; `--project workers` → 21 files / 121 tests passed; `tests/locale-content-integrity.test.ts` → 73 passed; `npx tsc -b` exit 0.
+run-proof: `npx vitest run --project node tests/sneaker-resale-cohort.test.ts tests/sneaker-resale-backfill.server.test.ts tests/worker-scheduled-handler.test.ts` → 3 files / 56 tests passed; `npx vitest run --project workers tests/integration/sneaker-resale-backfill.integration.test.ts tests/integration/mention-digest-resweep.integration.test.ts` → 2 files / 15 tests passed; full `npx vitest run --project node` → 606 files / 7227 tests passed; full `npx vitest run --project workers` → 35 files / 181 tests passed; `npx tsc -b --noEmit` exit 0.
 
-research: no external libraries or APIs introduced; all changes are internal to the repo's existing locale/SEO modules.
+research: no external libraries or APIs introduced; the cohort expansion reuses the existing `captureLandingPageSnapshot` write path, the existing `landing_page_snapshot` table, the existing `public_search` discovery cache, and the existing daily cron. Compared vs the existing `app/lib/demo-brand-backfill.server.ts` (issue #1449) and adopted the same shape; the only structural difference is the cohort source (`data/seed-lists/sneaker-resale.json` filtered by tier verdict instead of `DEMO_BRAND_PAGE_DOMAINS`).
 
-help-first: no new `bin/` files or CLI tools added.
+help-first: no new `bin/` files, no new CLI tools. Read `workers/app.ts` to find the existing daily-rail pattern (`runDemoBrandBackfill`, `runAdsDomainPublisher`), read `app/lib/demo-brand-backfill.server.ts` to find the capture + INSERT OR IGNORE shape, read `app/lib/ads-domain-publisher.server.ts` (`SEED_LISTS["sneaker-resale"]`) to confirm the seed list is registered, and reused all of them. The acceptance bullet explicitly forbids a new service / new cron / new schema.
 
-Closes #1570
+Closes #1946
