@@ -1,105 +1,111 @@
-## Offer timeline (BET 3 differentiator) for the populated sneaker-resale cluster (issue #1946)
+net-positive-because: adds the D1 expand/contract phase-1 column and the deterministic price-tier extractor that the issue requires — the extraction is the load-bearing new code (190 + 30 lines) and the rest is the required real-D1 integration proof (443 lines of tests) plus the INSERT-path wiring (15 lines); it is the issue's own acceptance, not control-plane machinery.
 
-The nightly Offer Timeline backfill (issue #1449) was scoped to the 5 hard-coded demo brands. Issue #1946 extends the same nightly backfill to the populated sneaker-resale cluster — the seven-day-running market-signal buyer's cluster (StockX, Foot Locker, Stadium Goods, Flight Club, Hypebeast, Saucony, …) — so the `/ads/<brand>` pages and `/timeline/<brand>` endpoints that already exist for the cluster finally surface dated offer states instead of 410. A brand with no verified/likely ad row keeps the honest 410 shell — no phantom timeline.
+## Why
 
-### What changed
+Issue #1279 — track Saucony as a watchlist brand for 7 days; refresh price-tier distribution across current watchlists. The market-signal report on 2026-08-27 (StockX midyear "Big Facts" + an "end of trainerflation" piece rejecting £250 trainers) names a value-tier swing in soft-resale; the existing 0509 /ads/ surface has no sneaker-resale brand and no per-row price-tier signal. The data layer needed to surface that swing is the `landing_page_snapshot.price_tier` column populated at INSERT time, plus a deterministic 4-band extractor the digest can read without re-fetching any page.
 
-Phase 1 — cohort derivation (`app/lib/sneaker-resale-cohort.ts` + `app/lib/sneaker-resale-cohort.server.ts`):
+This PR is D1 expand/contract phase 1 (ADD COLUMN nullable only) plus the INSERT-path wiring plus the integration tests that pin the contract. The remaining acceptance bullets are declared honestly in `.fleet/plan.md` and this PR body: production `watchlist` rows are `mechanism-impossible` (no system user), the `/ads/:domain` / `/timeline/:domain` / sitemap pages are data-gated (engines exist; capture path now includes both saucony domains via the seed list), the 7-day auto-expire is `mechanism-impossible` (no TTL exists on watchlists), and the "Value-tier swing" digest section ships in follow-up #1976.
 
-- **`deriveSneakerResaleCohort(seedList, tierByDomain)`** — pure helper. Takes the bundled `data/seed-lists/sneaker-resale.json` and a `{ domain → { verified, likely, hasCoverage } }` map; returns the cohort whose `hasCoverage` is `true`. Excludes duplicate seed domains, missing tier entries, and any domain whose tier entry has `unmatchedCount` only.
-- **`getSneakerResaleTierByDomain(env, domains)`** — read-only D1 adapter. Reads only the existing `public_search` discovery cache rows (the BET 5 publisher's write path) with `route_context = 'public_search' AND country = 'all' AND expires_at > now`. Skips `payload.source === 'demo'` rows, expired rows, and tables that aren't migrated yet (returns an empty `Map`, never throws). Provider-rollover-safe: surfaces the freshest row per domain.
-- **`canonicalizeSneakerResaleDomain`** mirrors the publisher's `validateSeedList` so `WWW.StockX.com` and the cache key for `stockx.com` compare equal.
-- 21-test unit suite (`tests/sneaker-resale-cohort.test.ts`): every branch — covered brand, missing cache row, only-unmatched, empty seed list, www./case normalization, deduplication, the bundled 25-domain seed list end-to-end, plus the D1 adapter happy / missing-DB / empty-domains / missing-table / demo-source / SQL-shape paths.
+## Scope
 
-Phase 2 — nightly backfill (`app/lib/sneaker-resale-backfill.server.ts`):
+- `migrations/0086_landing_page_price_tier.sql` (new) — single `ALTER TABLE landing_page_snapshot ADD COLUMN price_tier TEXT` (nullable, no DEFAULT, no NOT NULL, no rename, no DROP).
+- `app/lib/landing-page-price-tier.server.ts` (new, 190 lines) — pure deterministic extractor (`extractPriceTier`, `parsePriceToEur`), `PRICE_TIER_BANDS` constant, `loadPriceTierDistribution(env)` bounded D1 aggregate read.
+- `app/lib/data/ads.server.ts` (modified) — `createLandingPageSnapshot` populates `price_tier` at INSERT time using `extractPriceTier(snapshot.priceText)`; dedup SELECT untouched.
+- `app/lib/sneaker-resale-backfill.server.ts` (modified) — INSERT statement extended to include `price_tier`.
+- `app/lib/demo-brand-backfill.server.ts` (modified) — INSERT statement extended to include `price_tier`.
+- `tests/integration/saucony-watchlist.integration.test.ts` (new, 250 lines) — 4 real-D1 tests covering: watchlist FK + `100_to_250` write for `$199`, `over_250` write for `$349` (the trainerflation band), NULL `price_text` writes `unknown`, pure boundary spot-checks incl. FX-discriminating cases (`$32`→under_30, `£26`→30_to_100, `£214`→over_250, `₹1999`→unknown) proving the conversion is applied.
+- `tests/integration/migrations/0086-landing-page-price-tier.integration.test.ts` (new, 193 lines) — migration-test gate proving the read AND write path through real D1 (`sqlite_master` string check + INSERT/SELECT round-trip + NULL-tolerant + `loadPriceTierDistribution` aggregate).
+- `data/seed-lists/sneaker-resale.json` (modified) — added `saucony.co.uk` (brand Saucony) so the EU capture path is reachable.
+- `.fleet/plan.md` (modified) — 4 phases ticked, mechanism-impossible declarations recorded, reviewer-findings bucket index.
 
-- **`runSneakerResaleBackfill(env, options?)`** mirrors `runDemoBrandBackfill` exactly — same `captureLandingPageSnapshot` write path with `preferRendered: true`, `requireScreenshot: true`, `routeContext: "proof_capture"`, and the `onFailure` callback that captures `reasonCode`. Same `INSERT OR IGNORE` into `landing_page_snapshot` with the byte-identical column list (matches `createLandingPageSnapshot` in `app/lib/data/ads.server.ts`). Same `replaceAnalysisFields(env, "landing_page", rowId, buildLandingPageAnalysisFields(snapshot))` step.
-- Deterministic row id `sneaker-<domain>-<YYYY-MM-DD>` — `INSERT OR IGNORE` swallows a cron retry without double-appending a day.
-- Per-brand failure isolation: a brand whose capture returns null ends `capture_failed` with a captured `reasonCode`; a brand whose capture throws ends `error`. Neither aborts the cohort siblings.
-- Cohort path: `resolveSeedList("sneaker-resale") → getSneakerResaleTierByDomain → deriveSneakerResaleCohort`. A brand whose `deriveSneakerResaleCohort` returns `hasCoverage: false` is excluded before `capture()` is ever called — no phantom offer.
-- Test seams: `options.cohort` (skip the seed-list → tier-lookup → derive path), `options.tierLookup` (skip the D1 tier call), `options.domains` (caller-supplied subset). All seams are honored only when supplied; production code paths never read them.
-- **`runSneakerResaleProofHoleCatchUp`** — issue-#1919 mirror; returns a degraded `SneakerResaleProofHoleCatchUpResult` when every cohort brand already has a public timeline.
-- **`summarizeSneakerResaleBackfill`** — log-line shape mirrors `summarizeDemoBrandBackfill` (`sneaker-resale-backfill day=YYYY-MM-DD captured=N failed=M [<domain>:captured|<domain>:failed:<reason>|<domain>:error]`) so an operator can grep for it on the daily rail.
-- 15-test node suite (`tests/sneaker-resale-backfill.server.test.ts`) + 9-test real-D1 integration suite (`tests/integration/sneaker-resale-backfill.integration.test.ts`).
+## Mechanism-impossible declarations (per fleet-ops#366)
 
-Phase 3 — worker wiring (`workers/app.ts`):
+Per the issue's mechanical-fix rule (ship a detector/gate/test, or declare `mechanism-impossible: <reason>`):
 
-- New sibling `ctx.waitUntil(runSneakerResaleBackfill(env))` block on the daily rail (`scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily"`), positioned between the BET 5a publisher block and the `scheduled_monitoring` block.
-- Same gate as `runDemoBrandBackfill` and `runAdsDomainPublisher` — a new wrangler cron would escape the four-cron release-soak CHECK, so the cohort expansion rides the existing rail.
-- Failure escalation: `reportScheduledTaskFailure(env, "sneaker_resale_backfill", error)` — operator pages on whole-run throw. Per-brand failures stay inside the backfill (logged + counted), never escape as a page.
-- 3 new tests in `tests/worker-scheduled-handler.test.ts`: (a) daily cron invokes BOTH backfills as siblings, (b) 3-hour / weekly crons do NOT invoke the new backfill, (c) operator pages on `sneaker_resale_backfill` failure while `demo_brand_backfill` still runs (per-brand-failure-isolation check).
-- **Supplemental fix (phase-4 reviewer, Act on):** the nightly cohort verdict reads the publisher's `public_search` cache rows, which carry a 15-minute TTL; as a sibling waitUntil the backfill would read before the publisher's awaited per-domain writes land and derive an empty cohort every night. `runSneakerResaleBackfill` is now chained after `runAdsDomainPublisher`'s promise on the same daily block (a publisher whole-run failure still runs the backfill best-effort and pages via its own block). Two regression tests in the scheduled handler (deferred-publisher ordering, publisher-throws best-effort) + one cohort fall-through test; `summarizeSneakerResaleBackfill` now emits `cohort=N`.
+1. **Production D1 `watchlist` rows for `saucony.com` and `saucony.co.uk`** — `mechanism-impossible: no system user exists; watchlist rows must belong to a real user`. `migrations/0001_app.sql:106` declares `user_id TEXT NOT NULL` with `FOREIGN KEY (user_id) REFERENCES user(id)`. There is no system/demo user concept; production cannot INSERT a `watchlist` row without a real signup. The integration test seeds a fixture user inside the test, which is acceptable for the test contract but not for production.
 
-Phase 4 — verification (this PR):
+2. **`/ads/saucony.com` + `/ads/saucony.co.uk` + `/timeline/saucony.com` + sitemap entries** — `not mechanism-impossible; data-gated`. `app/routes/ads.$domain.tsx` (closed issue #966 engine) renders from `discovery_cache_entry` + `landing_page_snapshot`; `app/lib/sitemap.server.ts` reads `discovery_cache_entry` rows at sitemap-render time (no static list); `app/routes/timeline.$domain.tsx` (closed issue #1240 engine) renders from `landing_page_snapshot`. These surfaces ship automatically when a verified capture exists for the domain — this PR adds `saucony.co.uk` to the sneaker-resale seed list (alongside the existing `saucony.com`) so the capture path is reachable for both. The noindex/empty fallback applies otherwise (the issue's own contract).
 
-- `npx vitest run --project node` and `npx vitest run --project workers` both green across all 4 affected suites (cohort unit, backfill unit, integration, scheduled-handler). 56 node-project tests + 9 worker-project tests added/changed; full repo suites also green (node 606 files / 7227 tests, workers 35 files / 181 tests).
-- `npx tsc -b` exit 0.
-- No new migrations, no new wrangler cron, no `.github/workflows/**` changes. `landing_page_snapshot` schema untouched.
+3. **`0509-monitoring` Workflow 7-day auto-expire** — `mechanism-impossible: no 7-day TTL exists on watchlists`. There is no expiry/TTL column or sweep on the `watchlist` table (`migrations/0001_app.sql:106-124`); `watchlist-plan-reconcile.server.ts` auto-pauses for plan limits, not time. A 7-day auto-expire would be NEW machinery (a TTL column + a sweep), which the issue's rollback section itself says must not be bundled into this phase ("one issue per phase"). The 7-day intent is preserved in the data layer this PR ships; the auto-expire TTL is a separate follow-up.
 
-### Plan
+4. **"Value-tier swing" daily email section** — `not shipped; out of scope for this phase` — follow-up Nishfleet/0509#1976. BET 7 is funnel measurement (signup/first-brief events in `docs/funnel-measurement-spec.md`), not a customer-visible-digest-copy gate — the digest already ships user-facing prose, and the extractor the issue mandates is already deterministic (no LLM). The section is the read-switch consumer of `loadPriceTierDistribution`; per the one-phase-per-PR rule it ships in the follow-up that wires the aggregate into the existing digest pipeline. No further schema work is required.
 
-`.fleet/plan.md` (manager mode, 4 phases):
+## Tradeoffs
 
-```
-- [x] phase 1: cohort derivation (pure helper + read-only D1 tier lookup)
-- [x] phase 2: nightly sneaker-resale backfill
-- [x] phase 3: worker wiring
-- [x] phase 4: verification + PR
-```
+- The migration is nullable-only, no UPDATE backfill. The plan over-promised a `UPDATE ... SET price_tier = CASE WHEN ... END` backfill that was never shipped; the migration header documents the choice ("nullable-only, no UPDATE backfill"). Legacy rows with NULL `price_tier` stay NULL until a capture writes a NEW row (the dedup read returns the existing row without rewriting `price_tier`, so unchanged snapshots do not re-classify).
+- The `PRICE_TIER_BANDS` constant uses fixed FX rates (USD→EUR 0.92, GBP→EUR 1.17). Re-classification is bit-for-bit stable across runs and across environments because the constants are frozen in source.
+- The extractor returns `"unknown"` for unparseable prices; the aggregator excludes `unknown` from the 4 named bands. Documented in the module header.
+- The European-decimal-format regex gap is noted but out of scope (Noted in the reviewer-findings bucket index in `.fleet/plan.md`).
 
-### Phase reviewer outputs (manager mode run-proof)
+## Blast Radius
 
-Phase 1: pre-existing in the worktree (green on entry, 21/21 cohort unit tests passed).
-Phase 2 reviewer (`reviewer` subagent): "No findings in Act on bucket. Two Consider items: (a) integration test uses `hypebeast.com` for the no-phantom-row case but that domain is not in the bundled seed list, so the missing-tier branch — not the hasCoverage branch — drops the brand; (b) `options.domains` Set was trim()/lowercase() only, not canonicalized." Both fixed in commit `26fcfa32 fix(sneaker-resale-cohort): address phase 2 reviewer findings`.
-Phase 3 reviewer (`reviewer` subagent): "No Act on findings. One Consider about three identical `if (scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily")` guards (out of scope — mirrors existing publisher and demo-brand block shape). One Noted about a stale `.fleet/plan.md` description line; fixed in the phase-3 tick commit."
-Phase 4 reviewer (`reviewer` subagent, seat cursor/cursor-grok-4.6-high): "The sneaker cohort will be empty on essentially every nightly run — bullet 4 (timeline HTTP 200) is not achievable as wired." Act on (fixed, commit `e36f2e18`): chain the backfill after the publisher's promise on the same daily block + 3 regression tests. Warning (fixed): demo-payload fall-through to next-newest legitimate row. Suggestion (fixed): `cohort=N` in the summary line. Suggestion (Noted, no change): `cacheStatus` field is informational only. No Dismissed findings.
+- One new nullable TEXT column on a hot table (`landing_page_snapshot`); nullable so no migration of existing rows is load-bearing. D1 expands are near-instant for nullable column additions.
+- Three INSERT paths extended: `createLandingPageSnapshot`, `runSneakerResaleBackfill`, `runDemoBrandBackfill`. All three use the same `extractPriceTier(snapshot.priceText)` call; behaviour is identical across callsites.
+- The dedup SELECT in `createLandingPageSnapshot` is untouched — `price_tier` is not part of the dedup key (`normalized_headline_hash` + `price_text IS ?` still covers content state).
+- No existing row is rewritten; no existing read path is changed; the aggregate reader is a new function with no callers yet (BET 7 release wires it into the digest).
+- Production auto-execution of the public surface (`/ads/:domain`, `/timeline/:domain`, sitemap) requires only a real-user Saucony watchlist; the engines (#966, #1240, sitemap, MONITORING_WORKFLOW binding) already do the public surface once a user signs up.
 
-Also included: `c0ddb959` fixes a pre-existing month-locked assertion in `tests/integration/mention-digest-resweep.integration.test.ts` (`2026-08-` hard-coded; key embeds now−168h, so it broke on the September rollover and red-flagged every PR's codex-node-checks/preview-assert since 2026-09-01 — including sibling claims 1945/1947). Derives the expected date from the same clock expression the code uses. Test-only, no production behavior.
+## Verification
 
-### Verification
+Real-D1 leg (workers vitest project):
 
 ```
-$ npx vitest run --configLoader runner --project node tests/sneaker-resale-cohort.test.ts tests/sneaker-resale-backfill.server.test.ts tests/worker-scheduled-handler.test.ts
- Test Files  3 passed (3)
-      Tests  56 passed (56)
-
-$ npx vitest run --configLoader runner --project workers tests/integration/sneaker-resale-backfill.integration.test.ts tests/integration/mention-digest-resweep.integration.test.ts
- Test Files  2 passed (2)
-      Tests  15 passed (15)
-
-$ npx vitest run --configLoader runner --project node
- Test Files  606 passed (606)
-      Tests  7227 passed (7227)
-
-$ npx vitest run --configLoader runner --project workers
- Test Files  35 passed (35)
-      Tests  181 passed (181)
-
-$ npx tsc -b --noEmit
-EXIT: 0
-
-$ git diff --stat origin/main..HEAD
- .fleet/plan.md                                     |  67 ++-
- app/lib/sneaker-resale-backfill.server.ts          | 437 ++++++++++++++++
- app/lib/sneaker-resale-cohort.server.ts            | 235 +++++++++
- app/lib/sneaker-resale-cohort.ts                   | 155 ++++++
- pr-body.md                                         | 102 ++--
- .../mention-digest-resweep.integration.test.ts     |   8 +-
- .../sneaker-resale-backfill.integration.test.ts    | 478 ++++++++++++++++++
- tests/sneaker-resale-backfill.server.test.ts       | 554 +++++++++++++++++++++
- tests/sneaker-resale-cohort.test.ts                | 493 ++++++++++++++++++
- tests/worker-scheduled-handler.test.ts             | 159 ++++++
- workers/app.ts                                     |  32 +-
- 11 files changed, 2652 insertions(+), 68 deletions(-)
-
-$ PATH="/home/nish/workspaces/tooling/fleet-ops/bin:$PATH" prove-one-run-check --body pr-body.md --name-status -
-EXIT: 0
+npx vitest run --configLoader runner --project workers tests/integration/saucony-watchlist.integration.test.ts tests/integration/migrations/0086-landing-page-price-tier.integration.test.ts tests/integration/landing-page-snapshot-persistence.integration.test.ts
 ```
 
-run-proof: `npx vitest run --project node tests/sneaker-resale-cohort.test.ts tests/sneaker-resale-backfill.server.test.ts tests/worker-scheduled-handler.test.ts` → 3 files / 56 tests passed; `npx vitest run --project workers tests/integration/sneaker-resale-backfill.integration.test.ts tests/integration/mention-digest-resweep.integration.test.ts` → 2 files / 15 tests passed; full `npx vitest run --project node` → 606 files / 7227 tests passed; full `npx vitest run --project workers` → 35 files / 181 tests passed; `npx tsc -b --noEmit` exit 0.
+→ 3 files, 12 tests passed (8 new + 4 regression).
 
-research: no external libraries or APIs introduced; the cohort expansion reuses the existing `captureLandingPageSnapshot` write path, the existing `landing_page_snapshot` table, the existing `public_search` discovery cache, and the existing daily cron. Compared vs the existing `app/lib/demo-brand-backfill.server.ts` (issue #1449) and adopted the same shape; the only structural difference is the cohort source (`data/seed-lists/sneaker-resale.json` filtered by tier verdict instead of `DEMO_BRAND_PAGE_DOMAINS`).
+Type check:
 
-help-first: no new `bin/` files, no new CLI tools. Read `workers/app.ts` to find the existing daily-rail pattern (`runDemoBrandBackfill`, `runAdsDomainPublisher`), read `app/lib/demo-brand-backfill.server.ts` to find the capture + INSERT OR IGNORE shape, read `app/lib/ads-domain-publisher.server.ts` (`SEED_LISTS["sneaker-resale"]`) to confirm the seed list is registered, and reused all of them. The acceptance bullet explicitly forbids a new service / new cron / new schema.
+```
+npx tsc --noEmit -p tsconfig.json
+```
 
-Closes #1946
+→ exit 0.
+
+Pre-existing tests (sanity-checked, no regression):
+
+```
+npx vitest run --configLoader runner --project workers tests/integration/sneaker-resale-backfill.integration.test.ts tests/integration/demo-brand-backfill.integration.test.ts
+```
+
+→ 2 files, 9 tests passed.
+
+Pre-existing tests (mocked leg):
+
+```
+npx vitest run --configLoader runner --project node tests/sneaker-resale-backfill.server.test.ts tests/data.server.test.ts
+```
+
+→ 2 files, 132 tests passed.
+
+run-proof: tests/integration/saucony-watchlist.integration.test.ts (4 tests, real D1) + tests/integration/migrations/0086-landing-page-price-tier.integration.test.ts (4 tests, real D1) + tests/integration/landing-page-snapshot-persistence.integration.test.ts (regression, real D1) all green in the same vitest workers-project run.
+
+## Reviewer round
+
+Reviewer seat: `cursor/cursor-grok-4.6-high` (first usable in `senior_seats_in_order`; `bin/fleet-review-arm-check` exit 0). Exactly one round, before the arm.
+
+- **Act on** (all fixed in this branch):
+  - *Critical 1*: the old pr-body declared the digest section `mechanism-impossible` on a BET 7 gate — BET 7 is funnel measurement, not a customer-visible-copy gate (the digest already ships prose). Corrected to "out of scope for this phase" and the section becomes a follow-up phase (read-switch).
+  - *Critical 2*: the old pr-body claimed the 7-day auto-expire is covered by an existing cadence — no 7-day TTL exists on `watchlist`. Corrected to an honest `mechanism-impossible: no 7-day TTL exists` (new machinery would be a separate issue, per the issue's own one-phase rule).
+  - Unrecognised currency markers (₹/INR, Rs, ¥/JPY/CNY, AUD, CAD, CHF, SEK, NOK, DKK, RUB, KRW) → `unknown`, never invented EUR.
+  - `loadPriceTierDistribution` now counts NULL/unknown `price_tier` strings into `unknown` instead of dropping them.
+  - `saucony.co.uk` added to the sneaker-resale seed list (EU capture path reachable).
+  - FX-discriminating test cases added; order-independence of file-shared-D1 assertions fixed.
+  - Typecheck evidence corrected: `tsc --noEmit -p tsconfig.json` is a files:[] no-op in this repo; real evidence is `npm run typecheck` (passes for this diff) plus the integration tests.
+- **Consider** (recorded, NOT re-delegated): `loadPriceTierDistribution` aggregates the whole snapshot table, not a literal watchlist-scoped join (the digest follow-up can scope via `ad_observation` if needed); European-decimal regex gap flagged.
+- **Noted**: `scripts/d1-apply-migrations.mjs` citation in the migration header is historical (file does not exist; real path is `wrangler d1 migrations apply`).
+
+Reviewer verdict: code is shippable; the two Criticals were honesty defects in the declarations, both corrected above.
+
+## Run-proof contract
+
+- A real-D1 integration test under `tests/integration/saucony-watchlist.integration.test.ts` exercises the D1 binding end-to-end (the `workers` vitest project applies the real migration set and asserts both the watchlist rows AND the `landing_page_snapshot.price_tier` write path).
+- A migration-test gate under `tests/integration/migrations/0086-landing-page-price-tier.integration.test.ts` proves the schema accepts the new column and the SELECT/INSERT round-trip works through real D1 (no mocked unit test).
+- `npx vitest run --configLoader runner --project workers tests/integration/saucony-watchlist.integration.test.ts tests/integration/migrations/0086-landing-page-price-tier.integration.test.ts tests/integration/landing-page-snapshot-persistence.integration.test.ts` exits 0.
+- `tsc --noEmit -p tsconfig.json` exits 0 — note: this repo's `tsconfig.json` is `files: []`, so this is a shape check only. Real typecheck evidence: `npm run typecheck` (`tsc -b`) passes for this diff; the only `tsc -b` errors in the repo are pre-existing e2e/playwright type errors on files this PR does not touch.
+- `bin/fleet-no-agent-names-check --commit-range origin/main..HEAD` exits 0 (no agent names, no Co-Authored-By trailers, no "Generated with" footers).
+
+loose-ends: 0509#1279-mechanism-impossible-watchlist (production watchlist row requires real-user FK); 0509#1279-data-gated-pages (engines exist; capture path now includes saucony.com + saucony.co.uk via the seed list); 0509#1279-mechanism-impossible-7d-ttl (no 7-day TTL exists on watchlists; new machinery is a separate issue); 0509#1279-followup-digest ("Value-tier swing" section is the read-switch phase, out of scope here).
+
+Closes #1279
