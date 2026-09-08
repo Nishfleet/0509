@@ -42,6 +42,26 @@ async function loadWorker() {
   const summarizeDemoBrandBackfill = vi.fn((result) =>
     `demo-brand-backfill day=${result.day} captured=${result.capturedCount} failed=${result.failedCount} []`,
   );
+  const runSneakerResaleBackfill = vi.fn().mockResolvedValue({
+    day: "2026-09-05",
+    startedAt: "2026-09-05T01:00:00.000Z",
+    capturedCount: 6,
+    failedCount: 0,
+    domains: [],
+  });
+  const summarizeSneakerResaleBackfill = vi.fn((result) =>
+    `sneaker-resale-backfill day=${result.day} cohort=${result.domains.length} captured=${result.capturedCount} failed=${result.failedCount} []`,
+  );
+  const runAdsDomainPublisher = vi.fn().mockResolvedValue({
+    list: "sneaker-resale",
+    gate: "bet2_active",
+    attempted: 0,
+    published: 0,
+    skipped: 0,
+    failed: 0,
+    invalid: 0,
+    outcomes: [],
+  });
   const flushDeferredInstantAlerts = vi.fn().mockResolvedValue({ groups: 0 });
   const sendWeeklyBusinessNumbers = vi.fn().mockResolvedValue({ sent: false });
   const sendCustomerAtRiskAlert = vi.fn().mockResolvedValue({ sent: false });
@@ -82,6 +102,14 @@ async function loadWorker() {
     runDemoBrandBackfill,
     runDemoBrandProofHoleCatchUp,
     summarizeDemoBrandBackfill,
+  }));
+  vi.doMock("../app/lib/sneaker-resale-backfill.server", () => ({
+    runSneakerResaleBackfill,
+    summarizeSneakerResaleBackfill,
+  }));
+  vi.doMock("../app/lib/ads-domain-publisher.server", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("../app/lib/ads-domain-publisher.server")>()),
+    runAdsDomainPublisher,
   }));
   vi.doMock("../app/lib/cron-failure-alert.server", () => ({ reportScheduledTaskFailure }));
   vi.doMock("../app/lib/monthly-recap.server", () => ({ sendMonthlyCustomerRecaps }));
@@ -144,6 +172,9 @@ async function loadWorker() {
     runDemoBrandBackfill,
     runDemoBrandProofHoleCatchUp,
     summarizeDemoBrandBackfill,
+    runSneakerResaleBackfill,
+    summarizeSneakerResaleBackfill,
+    runAdsDomainPublisher,
     flushDeferredInstantAlerts,
     scheduleBillingLifecycleEmailRecovery,
     scheduleDigestScheduleExhaustionRecovery,
@@ -545,6 +576,134 @@ describe("Worker scheduled handler", () => {
       expect.anything(),
       "demo_brand_backfill",
       failure,
+    );
+  });
+
+  it("runs the nightly sneaker-resale backfill on the daily 04:00 cron alongside the demo-brand backfill (issue #1946)", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    const scheduledTime = Date.parse("2026-09-05T04:00:00.000Z");
+
+    await loaded.worker.scheduled(
+      { cron: DAILY_DIGEST_CRON, scheduledTime } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    // Both backfills ride the same daily rail — the cohort expansion in
+    // #1946 must NOT displace the existing demo-brand backfill, so the
+    // scheduled handler dispatches both as siblings on the daily cron.
+    expect(loaded.runSneakerResaleBackfill).toHaveBeenCalledTimes(1);
+    expect(loaded.runDemoBrandBackfill).toHaveBeenCalledTimes(1);
+    // The summary log line ran for the new backfill so a nightly canary
+    // can grep for "sneaker-resale-backfill day=" in the operator log.
+    expect(loaded.summarizeSneakerResaleBackfill).toHaveBeenCalledTimes(1);
+    // The daily digest cron still runs its normal monitoring/digest work.
+    expect(loaded.runScheduledMonitoring).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not run the sneaker-resale backfill on the 3-hour or weekly crons (issue #1946)", async () => {
+    for (const cron of [WARMUP_CRON, NORMAL_CRON]) {
+      const loaded = await loadWorker();
+      const { ctx, pending } = createContext();
+      await loaded.worker.scheduled(
+        { cron, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
+        {} as never,
+        ctx as never,
+      );
+      await Promise.all(pending);
+      expect(loaded.runSneakerResaleBackfill).not.toHaveBeenCalled();
+    }
+  });
+
+  it("pages the operator when the nightly sneaker-resale backfill throws (issue #1946)", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    const failure = new Error("sneaker-resale capture pipeline down");
+    loaded.runSneakerResaleBackfill.mockRejectedValueOnce(failure);
+
+    await loaded.worker.scheduled(
+      {
+        cron: DAILY_DIGEST_CRON,
+        scheduledTime: Date.parse("2026-09-05T04:00:00.000Z"),
+      } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      "sneaker_resale_backfill",
+      failure,
+    );
+    // The demo-brand backfill still ran on the same rail — one sibling
+    // failing must not poison the other's waitUntil.
+    expect(loaded.runDemoBrandBackfill).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for the nightly publisher to land public_search rows before deriving the sneaker-resale cohort (issue #1946)", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    const scheduledTime = Date.parse("2026-09-05T04:00:00.000Z");
+
+    // The cohort verdict reads the publisher's public_search cache rows,
+    // which carry a 15-minute TTL. If the backfill ran as a sibling it
+    // would read before the publisher's awaited per-domain writes land and
+    // derive an empty cohort every night; regression: the backfill must
+    // not even be invoked until the publisher's promise resolves.
+    let resolvePublisher: (value: unknown) => void = () => {};
+    loaded.runAdsDomainPublisher.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePublisher = resolve;
+      }),
+    );
+
+    await loaded.worker.scheduled(
+      { cron: DAILY_DIGEST_CRON, scheduledTime } as never,
+      {} as never,
+      ctx as never,
+    );
+
+    expect(loaded.runSneakerResaleBackfill).not.toHaveBeenCalled();
+    resolvePublisher({
+      list: "sneaker-resale",
+      attempted: 2,
+      published: 2,
+      skipped: 0,
+      failed: 0,
+      invalid: 0,
+    });
+    await Promise.all(pending);
+
+    expect(loaded.runSneakerResaleBackfill).toHaveBeenCalledTimes(1);
+    // The publisher's own block still ran and logged on the same rail.
+    expect(loaded.runAdsDomainPublisher).toHaveBeenCalledTimes(1);
+  });
+
+  it("still runs the sneaker-resale backfill when the nightly publisher throws (issue #1946)", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    loaded.runAdsDomainPublisher.mockRejectedValueOnce(new Error("publisher pipeline down"));
+
+    await loaded.worker.scheduled(
+      {
+        cron: DAILY_DIGEST_CRON,
+        scheduledTime: Date.parse("2026-09-05T04:00:00.000Z"),
+      } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    // Best-effort capture against whatever rows exist; the empty-cohort
+    // guard keeps the honest 410, and the publisher pages via its own block.
+    expect(loaded.runSneakerResaleBackfill).toHaveBeenCalledTimes(1);
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      "ads_domain_publisher",
+      expect.any(Error),
     );
   });
 });
