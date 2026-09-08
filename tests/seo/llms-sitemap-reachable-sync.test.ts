@@ -1,0 +1,134 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  ADVERTISED_SITEMAP_URLS,
+  LOCALE_SITEMAP_LOCALES,
+  publicSeoFileForPathname,
+} from "~/lib/seo";
+import {
+  buildLocaleSitemapXml,
+  buildSitemapXml,
+} from "~/lib/sitemap.server";
+import { buildLlmsText } from "~/lib/public-markdown";
+import { BUYER_SURFACE_LOCALE_IDS } from "~/lib/locale-markets";
+
+/**
+ * llms.txt ↔ reachable-sitemap sync canary (issue #2017, Option A per the
+ * orchestrator decision; supersedes the issue's root-sitemap grep gate, which
+ * would have reversed shipped issue #1561).
+ *
+ * The invariant under test: every public marketing URL llms.txt lists must be
+ * reachable from a crawler sitemap entry point. "Reachable" means the root
+ * sitemap OR a `/<locale>/sitemap.xml` that robots.txt advertises — NOT every
+ * sitemap that happens to be served (#1561 keeps locale-prefixed URLs out of
+ * the root, and #1570 keeps byte-identical English locale pages out of the
+ * sitemaps entirely, so fr/es emit empty sitemaps that are deliberately NOT
+ * advertised). Before #2017, robots.txt advertised only the root sitemap, so
+ * `/de/sneaker-resale`, `/ja/sneaker-resale`, and `/pt-br/sneaker-resale`
+ * were listed in llms.txt and in their locale sitemaps but had no path from
+ * robots.txt — Google could never discover them.
+ *
+ * Locale `/ads/` variants are excluded from the llms-side set where the
+ * dynamic-sitemap freshness gate already excludes them (stale/demo/noindex
+ * brand shells are never emitted by either side; llmsPageForBrandPath returns
+ * null for any locale-prefixed /ads path).
+ */
+
+const SITE = "https://0509.io";
+
+function locsFromXml(xml: string): string[] {
+  return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1] ?? "");
+}
+
+function urlsFromLlmsText(text: string): string[] {
+  return [...text.matchAll(/\]\((https:\/\/[^)]+)\)/g)].map((m) => m[1] ?? "");
+}
+
+const isLocaleAdsVariant = (url: string) =>
+  BUYER_SURFACE_LOCALE_IDS.some((locale) =>
+    url.startsWith(`${SITE}/${locale}/ads/`),
+  );
+
+/** Root sitemap including the dynamic brand/timeline entries the live route appends. */
+function reachableSitemapLocs() {
+  const brandEntries = [
+    { path: "/ads/nike.com", adCount: 12, fetchedAt: new Date().toISOString() },
+  ];
+  const timelineEntries = [{ path: "/timeline/nike.com" }];
+  return new Set([
+    ...locsFromXml(buildSitemapXml(brandEntries, timelineEntries)),
+    ...LOCALE_SITEMAP_LOCALES.flatMap((locale) =>
+      locsFromXml(buildLocaleSitemapXml(locale)),
+    ),
+  ]);
+}
+
+describe("robots.txt advertises the non-empty locale sitemaps (issue #2017)", () => {
+  it("lists a Sitemap line for the root plus every translated-locale sitemap", () => {
+    const robots =
+      publicSeoFileForPathname("/robots.txt")?.body ??
+      fail("robots.txt must be served");
+    for (const url of ADVERTISED_SITEMAP_URLS) {
+      expect(robots, `robots.txt must advertise ${url}`).toContain(
+        `Sitemap: ${url}`,
+      );
+    }
+    expect(ADVERTISED_SITEMAP_URLS).toContain(`${SITE}/sitemap.xml`);
+    for (const locale of ["de", "ja", "pt-br"]) {
+      expect(ADVERTISED_SITEMAP_URLS).toContain(`${SITE}/${locale}/sitemap.xml`);
+    }
+  });
+
+  it("never advertises an empty locale sitemap", () => {
+    for (const locale of LOCALE_SITEMAP_LOCALES) {
+      expect(
+        locsFromXml(buildLocaleSitemapXml(locale)).length,
+        `/${locale}/sitemap.xml is advertised but empty`,
+      ).toBeGreaterThan(0);
+    }
+    // fr/es emit empty sitemaps (#1570) and must stay unadvertised.
+    for (const locale of ["fr", "es"]) {
+      expect(LOCALE_SITEMAP_LOCALES).not.toContain(locale);
+    }
+  });
+});
+
+describe("llms.txt ↔ reachable sitemap sync (issue #2017 canary)", () => {
+  it("every llms.txt URL is reachable from an advertised sitemap", () => {
+    const reachable = reachableSitemapLocs();
+    const llmsUrls = urlsFromLlmsText(
+      buildLlmsText([{ path: "/ads/nike.com", adCount: 12 }]),
+    ).filter((url) => !isLocaleAdsVariant(url));
+    expect(llmsUrls.length).toBeGreaterThan(0);
+    for (const url of llmsUrls) {
+      expect(
+        reachable.has(url),
+        `llms.txt lists ${url} but no advertised sitemap does`,
+      ).toBe(true);
+    }
+  });
+
+  it("all four sneaker-resale URLs are sitemap-reachable; the root keeps exactly one (#1561)", () => {
+    const reachable = reachableSitemapLocs();
+    for (const path of [
+      "/sneaker-resale",
+      "/de/sneaker-resale",
+      "/ja/sneaker-resale",
+      "/pt-br/sneaker-resale",
+    ]) {
+      expect(
+        reachable.has(`${SITE}${path}`),
+        `${path} has no sitemap path to it`,
+      ).toBe(true);
+    }
+    const rootLocs = locsFromXml(buildSitemapXml([], []));
+    expect(rootLocs.filter((loc) => loc.includes("sneaker-resale"))).toHaveLength(
+      1,
+    );
+    // Each locale sneaker-resale URL lives in its own locale sitemap only.
+    for (const locale of ["de", "ja", "pt-br"]) {
+      const locs = locsFromXml(buildLocaleSitemapXml(locale));
+      expect(locs).toContain(`${SITE}/${locale}/sneaker-resale`);
+    }
+  });
+});
