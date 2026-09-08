@@ -184,4 +184,71 @@ describe("capture-validity gate (issue #1996)", () => {
       `/artifacts/page-text/${encodeURIComponent(SG_B_HTML)}`,
     );
   });
+
+  it("phase 6: never diffs against a suppressed state (no phantom price-restored transition)", () => {
+    // The inverse face of the phantom-change gap (issue #1996, phase 6). The
+    // second state is suppressed (geo locale change: /sg/ -> /fr/) and carries
+    // a "—" price and a consent CTA — placeholder fields that are a
+    // capture-validity artefact, NOT a real offer state. A later same-region
+    // real capture (t3, back on /fr/ with a real "Shop Now" CTA and "$149"
+    // price) must diff against the last NON-suppressed state (t1, /sg/), never
+    // the suppressed one, so it can never emit a fake "price restored from —"
+    // transition.
+    const ledger = buildOfferLedger([
+      snapshot({
+        id: "sg-07",
+        capturedAt: "2026-09-07T00:00:00.000Z",
+        canonicalUrl: "https://www.nike.com/sg/",
+        headline: "Nike. Just Do It. Nike.com",
+        ctaText: "Shop Now",
+        priceText: "$149",
+        formPresent: true,
+        screenshotKey: SG_A,
+        pageTextKey: SG_A_HTML,
+      }),
+      snapshot({
+        id: "fr-08",
+        capturedAt: "2026-09-08T00:00:00.000Z",
+        canonicalUrl: "https://www.nike.com/fr/",
+        headline: "Nike. Just Do It",
+        ctaText: "En savoir plus sur les publicités personnalisées",
+        priceText: "—",
+        formPresent: true,
+        screenshotKey: FR_B,
+        pageTextKey: FR_B_HTML,
+      }),
+      // t3: back on France with a real CTA + price ($149), 9 Sept.
+      snapshot({
+        id: "fr-09",
+        capturedAt: "2026-09-09T00:00:00.000Z",
+        canonicalUrl: "https://www.nike.com/fr/",
+        headline: "Nike. Just Do It",
+        ctaText: "Shop Now",
+        priceText: "$149",
+        formPresent: true,
+      }),
+    ]);
+
+    // Three distinct dated states.
+    expect(ledger).toHaveLength(3);
+
+    // t1: first state — no transition, no suppression.
+    expect(ledger[0]?.id).toBe("sg-07");
+    expect(ledger[0]?.transition).toBeNull();
+    expect(ledger[0]?.suppressedReason).toBeNull();
+
+    // t2: /fr/ differs from /sg/ only by geo — suppressed with the geo reason,
+    // transition null.
+    expect(ledger[1]?.id).toBe("fr-08");
+    expect(ledger[1]?.suppressedReason).toBe("geo locale change");
+    expect(ledger[1]?.transition).toBeNull();
+
+    // t3: the baseline is the last NON-SUPPRESSED entry (t1, /sg/), NOT the
+    // suppressed t2. /fr/ vs /sg/ again differ only by geo, so t3 is suppressed
+    // with the geo reason and transition null — there is NO "price restored
+    // from —" transition, because t3 never diffs against the suppressed "—".
+    expect(ledger[2]?.id).toBe("fr-09");
+    expect(ledger[2]?.suppressedReason).toBe("geo locale change");
+    expect(ledger[2]?.transition).toBeNull();
+  });
 });

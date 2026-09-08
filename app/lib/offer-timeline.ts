@@ -279,6 +279,29 @@ function offerFieldsEqual(left: OfferSnapshotInput, right: OfferSnapshotInput): 
 }
 
 /**
+ * The last emitted dated state that was NOT itself suppressed (issue #1996,
+ * phase 6). A suppressed state carries `transition: null` and a non-null
+ * `suppressedReason` — it is a capture-validity artefact (geo locale change
+ * or cookie-banner/consent string), not a real offer state. Later snapshots
+ * must diff against a real state, never a suppressed one, else a later
+ * same-region capture could "restore" a price/CTA that only ever existed as
+ * a suppressed placeholder (e.g. the French "—" price) and emit a phantom
+ * transition. Suppressed states are still emitted as their own labeled dated
+ * states — only the BASELINE for later transitions skips them.
+ */
+function lastNonSuppressedEntry(
+  entries: readonly OfferLedgerEntry[],
+): OfferLedgerEntry | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.suppressedReason == null) {
+      return entry;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Build the dated offer-state ledger (issue #1957).
  *
  * Consecutive captures that are identical in all four commercial fields
@@ -311,7 +334,15 @@ export function buildOfferLedger(snapshots: readonly OfferSnapshotInput[]): Offe
     // [runStart..index]. Emit ONE collapsed state for the whole run.
     const firstInRun = ordered[runStart]!;
     const runLength = index - runStart + 1;
-    const previousState = entries.length > 0 ? entries[entries.length - 1] : undefined;
+    // Phase 6: the diff/gate baseline is the last NON-suppressed emitted entry,
+    // never the raw last one. The raw last entry may itself be a suppressed
+    // state (transition null, suppressedReason set) whose placeholder fields
+    // (e.g. a "—" price or a consent CTA) are not a real offer state — diffing
+    // a later real capture against it would fabricate a phantom "price restored
+    // from —" transition. Scanning from the end for the first non-suppressed
+    // entry closes that back-door, while suppressed states remain emitted as
+    // their own labeled dated states.
+    const previousState = lastNonSuppressedEntry(entries);
     // Capture-validity gate (issue #1996): hold back snapshot pairs that differ
     // only by geo locale or whose CTA/headline matches a cookie-banner/consent
     // string. When a reason is found, emit the state as suppressed — transition
