@@ -1,0 +1,24 @@
+[Unit]
+Description=0509 sneaker-resale seed-list recall canary — every-3h guard (issue #1945)
+# Fails (exit non-zero) when any expected-coverage sneaker-resale seed-list
+# brand dead-ends (0 rows) or returns blanket-unmatched on production
+# /search?q=<brand>&country=all, so a silent recall/alias regression on the
+# strongest market-signal cluster self-files rather than going unmeasured.
+# Deliberately a user unit on the fleet VPS (like search-tier-canary and the
+# agent-cron-* units): the worker GitHub App token cannot create or update
+# .github/workflows files, and this check needs no secrets — only outbound
+# HTTPS to 0509.io.
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/nish/workspaces/products/0509
+Environment=HOME=/home/nish
+Environment=PATH=/home/nish/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/nish/.local/bin/node scripts/canary-sneaker-resale-recall.mjs
+# A 25-brand run is paced to the anonymous /search budget (20 req / 10 min / IP)
+# plus 429 backoff worst case; give it room without letting it hang forever.
+TimeoutStartSec=50min
+StandardOutput=append:/home/nish/workspaces/agent-state/cron-output/0509-sneaker-resale-recall-canary.log
+StandardError=inherit
+# A failed canary must stay failed for operators; do not restart into a loop.
+Restart=no

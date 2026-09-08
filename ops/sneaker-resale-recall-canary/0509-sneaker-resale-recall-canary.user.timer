@@ -1,0 +1,14 @@
+[Unit]
+Description=Every 3h — 0509 sneaker-resale seed-list recall canary (issue #1945)
+
+[Timer]
+# Every 3 hours at minute 05, IST. The sneaker-resale cluster is the
+# strongest buyer signal; a 3h cadence bounds how long a silent recall on it
+# can go unmeasured.
+OnCalendar=*-*-* 05/3:00:00 Asia/Kolkata
+Persistent=true
+AccuracySec=2min
+Unit=0509-sneaker-resale-recall-canary.service
+
+[Install]
+WantedBy=timers.target
