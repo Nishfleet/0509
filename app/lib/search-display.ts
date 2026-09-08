@@ -68,11 +68,24 @@ export function formatSearchCommandTitle(query: string): string {
 }
 
 /**
+ * User-visible served-scope disclosure for the permissive `country=all`
+ * default on the public /search context line. Replaces the "Across all
+ * countries" overclaim (issue #2020): the Meta Ad Library API surfaces
+ * commercial ads only where they were delivered in the EU/UK, so a visitor
+ * who searches without a country is told the real served scope up front
+ * instead of learning it from a thin or empty result. Lowercase-first so the
+ * annotation's first-letter capitalizer builds the sentence-cased line.
+ */
+export const ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE =
+  "commercial ads are shown only where Meta delivered them in the EU/UK";
+
+/**
  * H1 scope phrase for a shared `/search` URL. Named markets stay "in India"
- * / "in United States". `country=all` renders as "across all countries" —
- * plain buyer language for the top-of-funnel default, which still never
- * implies a single market. (/ads/:domain names the same scope as "Meta's
- * global ad library" on its ad-wall surface, issue #1464.)
+ * / "in United States". `country=all` renders the honest served-scope
+ * disclosure (`ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE`) — the API's commercial
+ * coverage is EU/UK-gated, so the default never claims universal coverage.
+ * (/ads/:domain names the same scope as "Meta's global ad library" on its
+ * ad-wall surface, issue #1464.)
  */
 export function formatSearchPageScope(
   country: string | null | undefined,
@@ -82,7 +95,7 @@ export function formatSearchPageScope(
     return null;
   }
   if (trimmed.toLowerCase() === ALL_COUNTRIES_VALUE) {
-    return "across all countries";
+    return ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE;
   }
   return formatSearchMarketScope(country);
 }
@@ -90,10 +103,11 @@ export function formatSearchPageScope(
 /**
  * Sentence-cased country-scope annotation for the small context line under
  * the /search H1. The H1 itself never carries the country scope (issue
- * #1502); this is where it lives instead — "Across all countries" for the
- * unscoped default, "In India" for a named market, null when no country was
- * supplied. Wraps `formatSearchPageScope` and capitalizes the first letter
- * so the annotation reads as a standalone line, not a trailing clause.
+ * #1502); this is where it lives instead — the served-scope disclosure
+ * (`ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE`) for the unscoped default, "In
+ * India" for a named market, null when no country was supplied. Wraps
+ * `formatSearchPageScope` and capitalizes the first letter so the annotation
+ * reads as a standalone line, not a trailing clause.
  */
 export function formatSearchScopeAnnotation(
   country: string | null | undefined,
