@@ -1,6 +1,6 @@
 # Plan — Sitemap-timeline cohort backfill for calendly.com / adspyder.io (issue #1958)
 
-Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) covers only the five demo brands plus the sneaker-resale cohort (PR #1956 / issue #1946); calendly.com and adspyder.io sit in no cohort, so their indexed /timeline/:domain pages freeze at the seed capture and the "newest dated offer state < 7 days" metric falls to zero. Extend the SAME scheduledTask daily block (no new cron, no new service, no migration) with a bounded cohort derived from the sitemap-listed timeline domains that carry complete proof AND verified ad coverage, reusing the captureLandingPageSnapshot honest-capture path and the sneaker-resale machinery as the shape precedent.
+Manager mode (heavy). The nightly offer-timeline backfill rail covers only the demo brands plus the sneaker-resale cohort (PR #1956); calendly.com and adspyder.io sit in no cohort, so their indexed /timeline/:domain pages freeze at the seed capture. Extend the SAME scheduledTask daily block (no new cron, no new service, no migration) with a bounded cohort of sitemap-listed timeline domains carrying complete proof AND verified ad coverage, reusing captureLandingPageSnapshot honest-capture semantics; the sneaker-resale rail is the shape precedent.
 
 ## Phases
 
