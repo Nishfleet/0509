@@ -52,9 +52,7 @@ function coveredTierLookup(): SitemapTimelineTierLookup {
       map.set(domain, tier({ verifiedCount: 2, likelyCount: 1, hasCoverage: true, cacheStatus: "fresh" }));
     }
     for (const domain of EXCLUDED_TARGETS) {
-      // Excluded-lane domains keep a fresh verdict too: in the production
-      // path the exclusion set (not the tier) is what drops them, and this
-      // fixture must prove that.
+      // Fresh verdicts on purpose: only the exclusion set drops these.
       map.set(domain, tier({ verifiedCount: 2, likelyCount: 1, hasCoverage: true, cacheStatus: "fresh" }));
     }
     return map;
@@ -161,8 +159,6 @@ async function runCoveredNight(day: string, index: number, tierLookup: SitemapTi
 
 describe("sitemap-timeline cohort nightly backfill (issue #1958, phase 4)", () => {
   beforeAll(async () => {
-    // Old frozen state (2026-08), years-style dates matching the real freeze
-    // report; each distinct so the sitemap first-seen order is deterministic.
     await seedSitemapCandidate("calendly.com", "2026-08-20T03:00:00.000Z");
     await seedSitemapCandidate("adspyder.io", "2026-08-21T03:00:00.000Z");
     await seedSitemapCandidate("stockx.com", "2026-08-22T03:00:00.000Z");
