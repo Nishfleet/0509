@@ -14,6 +14,10 @@ import {
   runSneakerResaleBackfill,
   summarizeSneakerResaleBackfill,
 } from "../app/lib/sneaker-resale-backfill.server";
+import {
+  runSitemapTimelineBackfill,
+  summarizeSitemapTimelineBackfill,
+} from "../app/lib/sitemap-timeline-backfill.server";
 import { resumePendingDigestScheduleJobsDetailed } from "../app/lib/digest-orchestration.server";
 import { runAdsDomainPublisher } from "../app/lib/ads-domain-publisher.server";
 import {
@@ -452,6 +456,32 @@ export default {
           },
           (error) =>
             reportScheduledTaskFailure(env, "demo_brand_backfill", error),
+        ),
+      );
+      // Nightly sitemap-timeline cohort Offer Timeline backfill (issue
+      // #1958): calendly.com and adspyder.io sit in no cohort, so their
+      // indexed /timeline/:domain pages froze at the seed capture and the
+      // "newest dated offer state < 7 days" metric decayed to zero. This
+      // sibling rides the same daily rail and re-captures the homepage of
+      // every bounded, coverage-verified sitemap-listed timeline domain each
+      // UTC day, so no indexed Offer Timeline ever shows a "last state"
+      // older than 7 days. Sibling, NOT chained after the publisher like
+      // sneaker: this cohort's tier read accepts any-age rows, so there is
+      // no ordering hazard, and a publisher whole-run failure cannot couple
+      // the timeline capture to it.
+      ctx.waitUntil(
+        runSitemapTimelineBackfill(env).then(
+          (result) => {
+            console.log("sitemap timeline backfill completed", {
+              day: result.day,
+              cohort: result.domains.length,
+              captured: result.capturedCount,
+              failed: result.failedCount,
+              summary: summarizeSitemapTimelineBackfill(result),
+            });
+          },
+          (error) =>
+            reportScheduledTaskFailure(env, "sitemap_timeline_backfill", error),
         ),
       );
     }
