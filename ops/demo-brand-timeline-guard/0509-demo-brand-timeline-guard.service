@@ -1,0 +1,24 @@
+[Unit]
+Description=0509 demo-brand Offer Timeline regression guard
+Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
+# Independent of any GitHub Actions runner: the guard must keep firing while
+# every runner is busy or offline, and its failure must reach journald + a
+# watchdog even when GitHub's scheduled-cron lottery would skip it.
+
+[Service]
+Type=oneshot
+# The guard reads production D1 via wrangler, so it runs as the owner of the
+# repo checkout and the sanctioned Cloudflare token (not a DynamicUser like
+# the secrets-less liveness probe).
+User=nish
+Group=nish
+ExecStart=/opt/0509-demo-brand-timeline-guard/0509-demo-brand-timeline-guard-run.sh
+# One corpus read (all landing_page_snapshot rows) plus a wrangler query must
+# fit comfortably inside a single slot; the wall-clock timer cadence is daily.
+TimeoutStartSec=120
+# A failed verdict must leave the unit failed for watchers; do not restart
+# into a tight failure loop.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

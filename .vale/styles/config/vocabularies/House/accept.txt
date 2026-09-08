@@ -1,0 +1,13 @@
+# Accepted vocabulary for the House style — terms on the AI-slop deny-list
+# that the existing corpus uses legitimately, plus the project words named
+# in the acceptance spec. Entries are exact, case-sensitive tokens; add each
+# surface form that should be accepted.
+robust
+leverage
+leverages
+leveraging
+actionable
+comprehensive
+granular
+the fact that
+The fact that
