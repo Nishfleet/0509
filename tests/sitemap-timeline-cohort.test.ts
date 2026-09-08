@@ -682,9 +682,29 @@ describe("sitemapTimelineExcludedDomains (static, no D1)", () => {
     expect(excluded).toContain("stockx.com");
     expect(excluded).toContain("sneakerping.com");
 
-    // 5 demo brands + 25 sneaker seeds − 1 overlap (nike.com) = 29, and no
-    // duplicates.
-    expect(excluded).toHaveLength(29);
+    // Length is derived from the live seed list (it grows with market-signal
+    // refreshes — never hardcode it): 5 demo brands ∪ seed domains, deduped.
+    const { resolveSeedList } = await import("~/lib/ads-domain-publisher.server");
+    const { SNEAKER_RESALE_SEED_LIST } = await import(
+      "~/lib/sneaker-resale-backfill.server"
+    );
+    const { canonicalizeSitemapTimelineDomain } = await import(
+      "~/lib/sitemap-timeline-cohort"
+    );
+    const seedDomains = new Set(
+      (resolveSeedList(SNEAKER_RESALE_SEED_LIST).domains ?? [])
+        .map((entry) => canonicalizeSitemapTimelineDomain(entry?.domain))
+        .filter((d): d is string => d !== null),
+    );
+    const expected = new Set([
+      "nike.com",
+      "nykaa.com",
+      "allbirds.com",
+      "lenskart.com",
+      "mamaearth.com",
+      ...seedDomains,
+    ]);
+    expect(excluded).toHaveLength(expected.size);
     expect(new Set(excluded).size).toBe(excluded.length);
     // Deterministic order: demo brands first, then seed-list order.
     expect(excluded.slice(0, 5)).toEqual([

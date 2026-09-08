@@ -10,10 +10,10 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 - [x] phase 4: real-D1 integration test applying the capture path against a calendly-like fixture — fresh row with a real screenshot written; no-coverage fixture writes nothing; per-day idempotency; three-night dated-ledger accumulation.
 - [x] phase 5: full verification (all suites green, tsc clean, sgscan/crgate/repo tests), PR with Verification/run-proof receipts + reviewer round + arm.
 
-## Manager decisions (recorded for review)
+## Manager decisions (full rationale in the PR body)
 
-1. **No `expires_at > now` gate on the tier read.** The sneaker adapter gates on expiry because its publisher re-writes those rows same-tick; calendly/adspyder have NO scheduled writer, so an expiry gate would find zero fresh rows at 04:00 UTC, derive an empty cohort, and the freeze would persist. The coverage verdict is a durable per-domain evidence fact; row age is surfaced via `cacheStatus: fresh|stale` and reported as `stale=N` nightly.
-2. **Sibling, not chained after the publisher** (unlike sneaker). No ordering hazard remains once the tier read accepts any-age rows, and only seed-list domains are publisher-written same-tick — the entire seed list is in the static exclusion set, so no same-tick-dependent row can be a cohort candidate. A publisher whole-run failure cannot couple to the timeline capture.
+1. No `expires_at > now` gate on the tier read — calendly/adspyder have no scheduled writer, so a freshness gate would empty the cohort nightly; age surfaces via `cacheStatus` and `stale=N`.
+2. Sibling, not chained after the publisher — all publisher-written seed domains are in the static exclusion set, so no same-tick coupling exists.
 
 ## Files
 
@@ -28,10 +28,7 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 - `migrations/**`, wrangler cron config, `.github/workflows/**`, verifier/deploy/GitHub paths — untouched (landing_page_snapshot already exists).
 - `app/routes/timeline.$domain.tsx`, `app/lib/sitemap.server.ts`, the sneaker/demo backfill modules and `data/seed-lists/` — read/reused, NOT modified.
 
-## Reviewer rounds (seat cursor/cursor-grok-4.6-high each round)
+## Reviewer rounds (seat cursor/cursor-grok-4.6-high; full buckets in the PR body)
 
-- **Phase 1**: Act on: none. Consider (carried): retention-decay premise (public_search 15-min TTL + 7-day retention grace; calendly/adspyder unrefreshed rows go empty — phase-5 live verification is the net, follow-up issue if the rail must be durable regardless of search traffic); sitemap candidacy oldest-first cap (phase-5 live check that both domains appear); degenerate-path extractor and sneaker-seed import coupling — Noted/Dismissed for this PR. Dismissed: lexical expires_at compare, demo-row fall-through, provider-segment validation (SQL constrains).
-- **Phase 2**: Act on: none. Consider (carried): CAP slice before domains-subset filter (no caller passes domains today); stale "fan-out shrinks under CAP" note (tier read stays full-size; CAP bounds browser spend); missing-snapshot-table degrade logs like a quiet night (degraded= marker is a follow-up candidate); stale=N counts all processed domains (document-intended). Dismissed: missing-table degrade divergence from sneaker (default path must never throw), preferRendered persist default, UTC day slicing.
-- **Phase 3**: Act on: none. Consider: surrogate cron strings in the do-not-run case (pinned to literal constants in phase 5); mocked resolver's weekly fallback label honesty. Dismissed: sibling-concurrency race (disjoint row-id namespaces + INSERT OR IGNORE), publisher-failure coupling (sibling is the deliberate decision), exact-failure-object assertion.
-- **Phase 4**: Act on: none. Consider (carried): real tier adapter never exercised against real D1 (live verification is the net; discovery_cache_entry-seeded fixture is a follow-up candidate); "newest within 7 days" partly fixture-derivative (frames as written-timestamp regression guard). Dismissed: stub screenshot keys (Browser Rendering out of CI scope, sneaker precedent), `as never` casts, fixed fixture dates, excluded-domain hasCoverage:true forcing the real exclusion to drop.
-- **Phase 5**: Act on: none. Warning: none. Suggestion (fixed): do-not-run case now fires the literal REGULAR_MONITORING_CRON / WEEKLY_DIGEST_CRON constants instead of surrogate hourly/6-hourly strings (phase-5 worker retry, suite 22/22 green). Consider (follow-up candidates): real-D1 adapter gap, missing-table degrade marker, CAP-vs-subset hygiene. Noted: both manager decisions upheld with stronger-than-stated justification. Dismissed: stale-verdict captures as phantom-timeline vector (verdict gates inclusion only; written row is real current state); sibling miss of same-tick publisher coverage (publisher seeds all excluded).
+- Phases 1-4: Act on: none each round. Carried Consider items: retention-decay premise, real-D1 tier-adapter fixture gap, missing-table degrade marker, CAP-vs-subset hygiene.
+- Phase 5: Act on: none. Suggestion fixed (literal cron constants in the do-not-run case). Both manager decisions upheld.

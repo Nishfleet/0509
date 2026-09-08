@@ -9,7 +9,6 @@ import { proofScreenshotSrc } from "~/lib/proof-screenshot";
 import {
   runSitemapTimelineBackfill,
   sitemapTimelineBackfillRowId,
-  summarizeSitemapTimelineBackfill,
   type SitemapTimelineTierLookup,
 } from "~/lib/sitemap-timeline-backfill.server";
 import type { SitemapTimelineTier } from "~/lib/sitemap-timeline-cohort";
@@ -18,50 +17,19 @@ import { loadSitemapTimelineCandidateDomains, sitemapTimelineExcludedDomains } f
 import { appEnv, db } from "./fixtures";
 
 /**
- * Nightly sitemap-timeline cohort Offer Timeline backfill (issue #1958,
- * phase 4) against the real migration set. Mirrors
- * `sneaker-resale-backfill.integration.test.ts` (issue #1946 / PR #1956):
- * capture is stubbed (the real pipeline needs Browser Rendering), every D1
- * read/write is real, and the proof gate (issue #1284) is asserted by
- * loading the public timeline directly.
- *
- * Two production paths run for real here (unlike the sneaker suite, which
- * injects `cohort`):
- *   - `loadSitemapTimelineCandidateDomains` — the sitemap read over the real
- *     applied D1. Candidacy requires a complete-proof snapshot row for a
- *     REAL registrable hostname (`timelineDomainFromSnapshotRow` derives
- *     the /timeline/:domain param from the URL hostname), so this file seeds
- *     one complete-proof row per fixture domain in `beforeAll`. calendly.com
- *     and adspyder.io are the exact target domains this issue reports as
- *     frozen; stockx.com (sneaker seed) and nike.com (demo brand) are the
- *     excluded-lane proof.
- *   - `deriveSitemapTimelineCohort` inside `buildSitemapTimelineCohort` —
- *     every run below goes through the production default path (no `cohort`
- *     option), so the `hasCoverage` filter and the exclusion set are the
- *     real ones. Only the tier verdict (`tierLookup`, would otherwise read
- *     `discovery_cache_entry`) and the capture call are injected.
- *
- * Storage is isolated per test FILE, so the seeded rows and every backfilled
- * row accumulate across `it()`s in this file. Each test scopes its
- * assertions to its own UTC day (row ids are `timeline-<domain>-<day>`) and
- * its own domain set — never to the whole table.
+ * Nightly sitemap-timeline cohort backfill (issue #1958, phase 4) against the
+ * real migration set; mirrors `sneaker-resale-backfill.integration.test.ts`.
+ * Capture is stubbed (needs Browser Rendering); every D1 read/write is real.
+ * The production default path runs for real (no `cohort` option): the sitemap
+ * read over applied D1, the hasCoverage filter, and the real exclusion set.
+ * Storage is per-test-file: assertions scope to their own UTC day + domain.
  */
 
-/**
- * The issue's two frozen target domains: calendly.com and adspyder.io. Both
- * are real registrable hostnames (the sitemap derivation requires one), so
- * the seeded complete-proof rows make them genuine sitemap candidates.
- */
+/** The issue's two frozen target domains. */
 const COVERED_DOMAINS = ["calendly.com", "adspyder.io"] as const;
 
-/**
- * Excluded-lane domains, also seeded as complete-proof sitemap candidates so
- * the exclusion is exercised, not vacuous: stockx.com is in the sneaker-resale
- * seed list (its nightly rail owns the timeline), nike.com is a demo brand
- * (demo rail owns it) AND a sneaker-seed overlap. Even with
- * `hasCoverage: true` tier verdicts, the real static exclusion set must keep
- * both off the sitemap-timeline cohort.
- */
+/** Excluded-lane domains (sneaker seed / demo brand), also seeded as
+ * complete-proof candidates so the real exclusion set is what drops them. */
 const EXCLUDED_TARGETS = ["stockx.com", "nike.com"] as const;
 
 const ALL_SEEDED_DOMAINS = [...COVERED_DOMAINS, ...EXCLUDED_TARGETS] as const;
@@ -439,17 +407,13 @@ describe("sitemap-timeline cohort nightly backfill (issue #1958, phase 4)", () =
       return stub(domain).snapshot;
     };
 
-    // The real static exclusion set must contain the demo brand (nike.com,
-    // also a sneaker-seed overlap) and the sneaker-seed brand (stockx.com) —
-    // and must NOT contain the issue's target domains.
     const excluded = sitemapTimelineExcludedDomains();
     expect(excluded).toEqual(expect.arrayContaining(["nike.com", "stockx.com"]));
     expect(excluded).not.toContain("calendly.com");
     expect(excluded).not.toContain("adspyder.io");
 
-    // Both excluded-lane domains carry `hasCoverage: true` verdicts on
-    // purpose: only the real exclusion set (or the coverage filter if the
-    // exclusion ever regressed) can keep them off the cohort.
+    // Excluded-lane domains carry hasCoverage:true on purpose — only the real
+    // exclusion set can keep them off the cohort.
     const result = await runSitemapTimelineBackfill(appEnv, {
       now: new Date(`${day}T01:00:00.000Z`),
       tierLookup: coveredTierLookup(),
@@ -475,49 +439,6 @@ describe("sitemap-timeline cohort nightly backfill (issue #1958, phase 4)", () =
     }
   });
 
-  it("summarizes a run into the scheduled-handler log line", () => {
-    const summary = summarizeSitemapTimelineBackfill({
-      day: "2026-09-05",
-      startedAt: "2026-09-05T01:00:00.000Z",
-      capturedCount: 1,
-      failedCount: 1,
-      domains: [
-        {
-          domain: "calendly.com",
-          status: "captured",
-          snapshotId: "timeline-calendly.com-2026-09-05",
-          reasonCode: null,
-          canonicalUrl: null,
-          capturedAt: null,
-          error: null,
-          tier: tier({ verifiedCount: 2, likelyCount: 1, hasCoverage: true, cacheStatus: "fresh" }),
-        },
-        {
-          domain: "adspyder.io",
-          status: "skipped_already_captured",
-          snapshotId: "timeline-adspyder.io-2026-09-05",
-          reasonCode: null,
-          canonicalUrl: null,
-          capturedAt: null,
-          error: null,
-          tier: tier({ verifiedCount: 2, likelyCount: 1, hasCoverage: true, cacheStatus: "stale" }),
-        },
-        {
-          domain: "stockx.com",
-          status: "capture_failed",
-          snapshotId: null,
-          reasonCode: "screenshot_required",
-          canonicalUrl: null,
-          capturedAt: null,
-          error: null,
-          tier: tier({ verifiedCount: 2, likelyCount: 1, hasCoverage: true, cacheStatus: "stale" }),
-        },
-      ],
-    });
-    expect(summary).toContain("sitemap-timeline-backfill day=2026-09-05");
-    expect(summary).toContain("captured=1 failed=1");
-    expect(summary).toContain("calendly.com:captured");
-    expect(summary).toContain("adspyder.io:already");
-    expect(summary).toContain("stockx.com:failed:screenshot_required");
-  });
+  // The summarize log-line shape is pinned by the node unit suite
+  // (tests/sitemap-timeline-backfill.server.test.ts) — not duplicated here.
 });

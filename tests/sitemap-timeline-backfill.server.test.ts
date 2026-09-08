@@ -99,6 +99,25 @@ function emptyTierLookup(): SitemapTimelineTierLookup {
   return async () => new Map();
 }
 
+/** Compact domain-result fixture for summarize/log-line assertions. */
+function dom(
+  domain: string,
+  status: SitemapTimelineBackfillDomainResult["status"],
+  extra: Partial<SitemapTimelineBackfillDomainResult> = {},
+): SitemapTimelineBackfillDomainResult {
+  return {
+    domain,
+    status,
+    snapshotId: null,
+    reasonCode: null,
+    canonicalUrl: null,
+    capturedAt: null,
+    error: null,
+    tier: null,
+    ...extra,
+  };
+}
+
 function tierLookupFor(
   cohortEntries: SitemapTimelineCohortEntry[],
 ): SitemapTimelineTierLookup {
@@ -116,22 +135,7 @@ function tierLookupFor(
  * every write-path capture stub so the INSERT-column assertions see the real
  * snapshot fields (CAPTURE_HOMEPAGE shape `https://www.<domain>/`).
  */
-function snapshotForUrl(
-  url: string,
-): {
-  rawUrl: string;
-  canonicalUrl: string;
-  rawHeadline: string;
-  normalizedHeadline: string;
-  normalizedHeadlineHash: string;
-  ctaText: string;
-  priceText: string | null;
-  formPresent: boolean;
-  captureMethod: string;
-  capturedAt: string;
-  artifactKey: string;
-  metadata: Record<string, unknown>;
-} {
+function snapshotForUrl(url: string) {
   const domain = url.replace(/^https:\/\/www\./, "").replace(/\/$/, "");
   return {
     rawUrl: url,
@@ -168,36 +172,13 @@ describe("summarizeSitemapTimelineBackfill", () => {
       capturedCount: 2,
       failedCount: 1,
       domains: [
-        {
-          domain: "calendly.com",
-          status: "captured",
+        dom("calendly.com", "captured", {
           snapshotId: "timeline-calendly.com-2026-09-05",
-          reasonCode: null,
-          canonicalUrl: null,
-          capturedAt: null,
-          error: null,
-          tier: null,
-        },
-        {
-          domain: "adspyder.io",
-          status: "skipped_already_captured",
+        }),
+        dom("adspyder.io", "skipped_already_captured", {
           snapshotId: "timeline-adspyder.io-2026-09-05",
-          reasonCode: null,
-          canonicalUrl: null,
-          capturedAt: null,
-          error: null,
-          tier: null,
-        },
-        {
-          domain: "notion.com",
-          status: "capture_failed",
-          snapshotId: null,
-          reasonCode: "screenshot_required",
-          canonicalUrl: null,
-          capturedAt: null,
-          error: null,
-          tier: null,
-        },
+        }),
+        dom("notion.com", "capture_failed", { reasonCode: "screenshot_required" }),
       ],
     });
 
@@ -214,54 +195,29 @@ describe("summarizeSitemapTimelineBackfill", () => {
       startedAt: "2026-09-06T01:00:00.000Z",
       capturedCount: 0,
       failedCount: 1,
-      domains: [
-        {
-          domain: "calendly.com",
-          status: "error",
-          snapshotId: null,
-          reasonCode: null,
-          canonicalUrl: null,
-          capturedAt: null,
-          error: "BoomError",
-          tier: null,
-        },
-      ],
+      domains: [dom("calendly.com", "error", { error: "BoomError" })],
     });
 
     expect(summary).toContain("calendly.com:error:BoomError");
   });
 
   it("surfaces evidence age as stale=N (phase-1 reviewer carry-forward)", () => {
-    // calendly's tier verdict came from an expired cache row (stale);
-    // adspyder's from a fresh one — the log must say how many processed
-    // domains ran on stale evidence so ops can see the retention-decay
-    // premise (no scheduled writer for these domains).
+    // calendly's verdict came from an expired cache row (stale), adspyder's
+    // from a fresh one — ops must see how many domains ran on stale evidence.
     const summary = summarizeSitemapTimelineBackfill({
       day: "2026-09-05",
       startedAt: "2026-09-05T01:00:00.000Z",
       capturedCount: 1,
       failedCount: 0,
       domains: [
-        {
-          domain: "calendly.com",
-          status: "captured",
+        dom("calendly.com", "captured", {
           snapshotId: "timeline-calendly.com-2026-09-05",
-          reasonCode: null,
-          canonicalUrl: null,
-          capturedAt: null,
-          error: null,
           tier: tier({ verifiedCount: 1, hasCoverage: true, cacheStatus: "stale" }),
-        },
-        {
-          domain: "adspyder.io",
-          status: "captured",
+        }),
+        dom("adspyder.io", "captured", {
           snapshotId: "timeline-adspyder.io-2026-09-05",
-          reasonCode: null,
-          canonicalUrl: null,
-          capturedAt: null,
-          error: null,
           tier: tier({ verifiedCount: 1, hasCoverage: true, cacheStatus: "fresh" }),
-        },
+        }),
       ],
     });
 
