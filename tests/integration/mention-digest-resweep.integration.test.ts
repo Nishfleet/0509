@@ -278,6 +278,9 @@ describe("mention resweep + digest", () => {
     expect(result.delivered).toBe(true);
 
     const call = mocks.sendPresenceDigestEmail.mock.calls[0] as [AppEnv, { idempotencyKey: string }];
-    expect(call[1].idempotencyKey).toMatch(/^presence-digest:user_\d{4}:2026-08-\d{2}$/);
+    // The key embeds the current ISO date (since.slice(0, 10)), which rolls
+    // every day. Assert the shape, not a specific hard-coded month, so the
+    // suite does not go red when the wall-clock month advances.
+    expect(call[1].idempotencyKey).toMatch(/^presence-digest:user_\d{4}:\d{4}-\d{2}-\d{2}$/);
   });
 });
