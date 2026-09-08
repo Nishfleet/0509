@@ -1564,6 +1564,11 @@ bash "$here/fleet-usd-spend.test.sh" || fail "fleet-usd-spend tests failed"
 # `question` issue for an out-of-store "Nish, should we…?" line. Hosted here
 # for the same P14 reason as fleet-usd-spend above (no workflow-scope edit).
 bash "$here/fleet-questions-line.test.sh" || fail "fleet-questions-line tests failed"
+# fleet-ops#4566: measure.sh usd_24h cursor_today traceable to Cursor's own
+# GetCurrentPeriodUsage api-bucket figure (via prepaid-spend/cursor.json), never
+# a fabricated 0.000000. Hosted here for the same P14 reason as fleet-usd-spend
+# above (no workflow-scope edit; the worker App cannot push .github/workflows/**).
+bash "$here/measure-cursor-today.test.sh" || fail "measure-cursor-today tests failed"
 
 # fleet-ops#4562: the stale-question detector (question+priority with no
 # decision-resolved after 24h fails loud and auto-files once, deduped).
