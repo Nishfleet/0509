@@ -44,9 +44,7 @@ vi.mock("~/lib/landing-pages.server", () => ({
   captureLandingPageSnapshot: vi.fn(),
 }));
 
-// The candidate-domain adapter wraps the EXISTING
-// `loadIndexableTimelineEntries` from the sitemap module; mock at the
-// adapter boundary so the default production candidate path is testable.
+// Mock at the adapter boundary (wraps `loadIndexableTimelineEntries`).
 vi.mock("~/lib/sitemap.server", () => ({
   loadIndexableTimelineEntries,
 }));
@@ -189,8 +187,6 @@ describe("summarizeSitemapTimelineBackfill", () => {
   });
 
   it("surfaces evidence age as stale=N (phase-1 reviewer carry-forward)", () => {
-    // calendly's verdict came from an expired cache row (stale), adspyder's
-    // from a fresh one — ops must see how many domains ran on stale evidence.
     const summary = summarizeSitemapTimelineBackfill({
       day: "2026-09-05",
       startedAt: "2026-09-05T01:00:00.000Z",
@@ -279,8 +275,6 @@ describe("runSitemapTimelineBackfill (no-cohort path)", () => {
   });
 
   it("returns an empty degraded result when the sitemap candidacy read comes back empty", async () => {
-    // Default production path with an empty sitemap read: no tier lookup,
-    // no capture, no throw.
     const tierLookup = vi.fn(emptyTierLookup());
     const env = { DB: {} } as unknown as AppEnv;
 
@@ -455,9 +449,6 @@ describe("runSitemapTimelineBackfill (idempotency + subset paths)", () => {
       return snapshotForUrl(url);
     });
 
-    // "WWW.Calendly.com." canonicalizes to calendly.com (parity with
-    // `canonicalizeSneakerResaleDomain`); the sloppy input still resolves to
-    // the right cohort entry and adspyder.io is filtered out by the subset.
     const result = await runSitemapTimelineBackfill(env, {
       now: new Date("2026-09-05T01:00:00.000Z"),
       cohort: cohort({ domain: "calendly.com" }, { domain: "adspyder.io" }),
@@ -489,8 +480,7 @@ describe("runSitemapTimelineBackfill (write path shape)", () => {
     );
     expect(execute).toHaveBeenCalledTimes(1);
     const call = execute.mock.calls[0];
-    // execute(env, sql, rowId, ...) — the SQL is the first arg after the env.
-    expect(call?.[1]).toMatch(/INSERT OR IGNORE INTO landing_page_snapshot/);
+        expect(call?.[1]).toMatch(/INSERT OR IGNORE INTO landing_page_snapshot/);
     expect(call?.[2]).toBe("timeline-calendly.com-2026-09-05");
     expect(replaceAnalysisFields).toHaveBeenCalledWith(
       env,
@@ -499,21 +489,13 @@ describe("runSitemapTimelineBackfill (write path shape)", () => {
       expect.any(Array),
     );
 
-    // Honest capture semantics: the row is written from the real snapshot's
-    // fields, including the raw URL of the CAPTURE_HOMEPAGE shape
-    // (`https://www.<domain>/`).
     expect(call?.[3]).toBe("https://www.calendly.com/");
-    // capture_method is the 8th binding (id, raw_url, canonical_url, both
-    // headlines, hash, then capture_method).
     expect(call?.[8]).toBe("browser_render");
   });
 });
 
 describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
   it("captures only sitemap candidates with hasCoverage — no-phantom-row on coverage false", async () => {
-    // Default production path, no `cohort` override: candidate domains come
-    // from the sitemap read, exclusions from the real static set, the
-    // coverage filter from the injected tier map.
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
     execute.mockResolvedValue({});
@@ -538,10 +520,6 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
       capture: captureStub as never,
     });
 
-    // adspyder.io has NO tier entry in the fixture map → `hasCoverage`
-    // missing → stays off the cohort → nothing captured for it, no phantom
-    // row, and it does not even appear in the result (it was never a cohort
-    // member).
     expect(result.capturedCount).toBe(1);
     expect(capturedDomains).toEqual(["calendly.com"]);
     expect(result.domains.map((r) => r.domain)).toEqual(["calendly.com"]);
@@ -554,9 +532,6 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
   });
 
   it("keeps demo and sneaker-seed domains out via the real exclusion set", async () => {
-    // nike.com is a demo brand domain and a sneaker seed, stockx.com is a
-    // sneaker seed — both are in `sitemapTimelineExcludedDomains()` and must
-    // never be captured by this rail even when their tier looks covered.
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
     execute.mockResolvedValue({});
@@ -621,9 +596,6 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
     const result = await runSitemapTimelineBackfill(env, {
       now: new Date("2026-09-05T01:00:00.000Z"),
       tierLookup,
-      // A fixture exclusion that removes calendly.com but not adspyder.io —
-      // pins the exclusion flowing through the derivation without depending
-      // on the real demo/sneaker seed lists.
       excludedDomains: new Set(["calendly.com"]),
       capture: captureStub as never,
     });
@@ -668,7 +640,6 @@ describe("runSitemapTimelineBackfill (CAP bound)", () => {
     expect(result.domains).toHaveLength(SITEMAP_TIMELINE_COHORT_CAP);
     expect(result.capturedCount).toBe(SITEMAP_TIMELINE_COHORT_CAP);
     expect(captureStub).toHaveBeenCalledTimes(SITEMAP_TIMELINE_COHORT_CAP);
-    // First 200 in cohort order are processed; the 201st+ never is.
     expect(capturedDomains[0]).toBe("domain-0.example");
     expect(capturedDomains[SITEMAP_TIMELINE_COHORT_CAP - 1]).toBe(
       `domain-${SITEMAP_TIMELINE_COHORT_CAP - 1}.example`,

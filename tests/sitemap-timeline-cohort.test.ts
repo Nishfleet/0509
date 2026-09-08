@@ -33,8 +33,7 @@ vi.mock("~/lib/data/d1.server", () => ({
   ensureDb,
 }));
 
-// The candidate-domain adapter wraps the EXISTING `loadIndexableTimelineEntries`
-// from the sitemap module; mock at the adapter boundary.
+// Mock at the adapter boundary.
 vi.mock("~/lib/sitemap.server", () => ({
   loadIndexableTimelineEntries,
 }));
@@ -302,15 +301,9 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
     expect(sql).toContain("route_context = 'public_search'");
     expect(sql).toContain("country = 'all'");
     expect(sql).toContain("cache_key IN (?,?,?,?,?,?)");
-    // Manager decision (issue #1958 phase 1): no `expires_at > ?` WHERE gate
-    // — a freshness filter would empty the cohort at night for domains with
-    // no scheduled writer. Age surfaces as cacheStatus instead (the column is
-    // still selected so the adapter can compute it).
+    // Manager decision: no `expires_at > ?` gate — age surfaces as cacheStatus.
     expect(sql).not.toContain("expires_at >");
-    // No prefix binding either (the sneaker adapter's nowIso prefix is gone
-    // with the expiry gate).
     expect(call.prefix).toBeUndefined();
-    // 2 domains × 3 providers = 6 keys, in domain-major then provider order.
     expect(call.values).toEqual([
       "search-v2:domain:calendly.com:exact:meta_api:all:page-1",
       "search-v2:domain:calendly.com:exact:meta_library_browser:all:page-1",
@@ -424,8 +417,6 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
       "calendly.com",
     ]);
 
-    // The newer meta_library_browser row (1 verified) wins over the older
-    // meta_api row (2 verified).
     expect(tierByDomain.get("calendly.com")).toEqual({
       verifiedCount: 1,
       likelyCount: 0,
@@ -474,8 +465,6 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
       "calendly.com",
     ]);
 
-    // The newest row is a demo payload; the commercial row must win, never be
-    // silently discarded.
     expect(tierByDomain.get("calendly.com")).toEqual({
       verifiedCount: 1,
       likelyCount: 0,
@@ -516,9 +505,6 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
       "calendly.com",
     ]);
 
-    // hasCoverage is computed from the payload regardless of expiry; the old
-    // age is surfaced via cacheStatus so the backfill can still work while
-    // seeing how stale the evidence is.
     expect(tierByDomain.get("calendly.com")).toEqual({
       verifiedCount: 2,
       likelyCount: 0,
