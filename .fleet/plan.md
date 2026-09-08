@@ -24,7 +24,7 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 
 ## Phase 3 — worker wiring + scheduled-handler tests (acceptance 1 + 5a)
 
-- [ ] phase 3: extend the EXISTING daily backfill rail in workers/app.ts (same scheduledTask block — NO new cron, NO new service, NO migration) with a bounded sitemap-timeline cohort: calendly.com and adspyder.io.
+- [x] phase 3: extend the EXISTING daily backfill rail in workers/app.ts (same scheduledTask block — NO new cron, NO new service, NO migration) with a bounded sitemap-timeline cohort: calendly.com and adspyder.io.
 
 - `workers/app.ts`: import `runSitemapTimelineBackfill` + `summarizeSitemapTimelineBackfill`; inside the EXISTING `scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily"` block add a SIBLING `ctx.waitUntil(runSitemapTimelineBackfill(env).then(log with day/cohort/captured/failed/summary, (error) => reportScheduledTaskFailure(env, "sitemap_timeline_backfill", error)))` — alongside runDemoBrandBackfill. MANAGER DECISION (recorded for review): NOT chained after publisherRun like sneaker. Sneaker's chain exists because its tier read gates on 15-min-TTL rows the publisher writes that tick; this cohort's tier read accepts any-age rows (Phase 1 decision), so there is no ordering hazard, a sibling keeps a publisher whole-run failure from coupling to the timeline capture, and runDemoBrandBackfill is the closer sibling shape. No new cron, no other worker changes.
 - `tests/worker-scheduled-handler.test.ts` (edit): add the `vi.doMock` for `sitemap-timeline-backfill.server` (runSitemapTimelineBackfill + summarizeSitemapTimelineBackfill) mirroring the sneaker mocks, plus three cases: (a) daily 04:00 cron invokes `runSitemapTimelineBackfill` once AND still invokes demo + sneaker backfills (the cohort expansion must not displace the existing rails); (b) the 3h (WARMUP_CRON) and weekly (NORMAL_CRON) crons do NOT invoke it; (c) a throw pages `reportScheduledTaskFailure(env, "sitemap_timeline_backfill", error)` while the demo backfill still ran.
@@ -94,6 +94,17 @@ Diff: `git diff 644c3d38..HEAD` (backfill module + unit suite). 56 tests green (
   - `stale=N` counts every processed domain incl. skipped/error rows — document-intended; ops should read it as "evidence age of verdicts that drove today's processing".
 - **Noted**: INSERT succeeds before replaceAnalysisFields (error after insert leaves a real row; next run = skipped_already_captured) — inherited sneaker shape; no-phantom default-path test exercises tier absence not explicit false (phase-1 suite + phase-4 fixture cover explicit false); the `as never` casts mirror the sneaker suite.
 - **Dismissed-with-reason**: missing-table degrade divergence from sneaker (planned carry-forward, default path can't throw — sitemap.server.ts:748-752 identical degrade); preferRendered without explicit persistArtifacts (pipeline defaults persist); UTC day slicing (matches sneaker + 04:00 UTC cron).
+
+### Phase 3 reviewer round (2026-09-08, seat cursor/cursor-grok-4.6-high)
+
+Diff: `git diff 52d48efa..HEAD` (worker wiring + scheduled-handler tests). 93 tests green (phase-3 suite 22/22) before review. Verifier confirmed DAILY_DIGEST_CRON fidelity and sneaker-chain untouched.
+
+- **Act on (fixed)**: none.
+- **Consider (recorded)**:
+  - Case (b) fires surrogate cron strings (WARMUP_CRON `17 */6 * * *`, NORMAL_CRON `0 * * * *`) not the literal production 3h/weekly constants (`REGULAR_MONITORING_CRON` `0 */3 * * *`, `WEEKLY_DIGEST_CRON` `0 5 * * MON`). The pin holds only because the mocked resolver maps everything non-daily to non-daily cadence; tightening to loop the literal constants would be a stronger regression pin. Behaviorally airtight today.
+  - The mocked resolver's fallback returns weekly cadence for any unknown cron while the real resolver omits digestCadence for hourly/3h — case (b)'s NORMAL_CRON leg exercises the weekly branch, not the real no-cadence branch. Harmless (the gate only discriminates === "daily"), but the label is less honest than it looks.
+- **Noted**: test descriptions say "3-hour or weekly" while firing 6-h/hourly strings (inherited from the plan's loose labels; pre-existing suite convention); completion log duplicates day/cohort/captured/failed in fields and summary string (house shape, same in sneaker log).
+- **Dismissed-with-reason**: sibling-concurrency race (disjoint row-id namespaces, INSERT OR IGNORE, monitoring captures don't touch the timeline namespace); publisher-failure coupling (sibling is the deliberate manager decision; any-age tier read removes the sneaker chain's ordering hazard); case (c) asserting the exact failure object (same reference flows through the rejection handler).
 
 ### Phase 5 reviewer round (single reviewer pass, seat per find_senior_seat)
 - **Act on (fixed)**: (manager appends during the run)
