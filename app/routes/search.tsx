@@ -1,6 +1,7 @@
 import {
   Form,
   Link,
+  data,
   redirect,
   useActionData,
   useLoaderData,
@@ -215,12 +216,11 @@ export const meta: MetaFunction = () =>
     pathname: "/search",
   });
 
-// React Router already merges Set-Cookie from a successful loader Response
-// onto the HTML document. Other loader headers are NOT merged unless this
-// export copies them — and a success path that returns Response.json() also
-// carries Content-Type: application/json, which must never land on the HTML
-// document. Only forward Set-Cookie (belt-and-suspenders for the thrown 429
-// and the success mint) plus Retry-After from the 429.
+// React Router already merges Set-Cookie from a successful loader `data()`
+// result onto the HTML document. Other loader headers are NOT merged unless
+// this export copies them. A thrown 429 is still a JSON Response; do not copy
+// its Content-Type onto the HTML document. Only forward Set-Cookie plus
+// Retry-After from the 429.
 export const headers: HeadersFunction = ({ errorHeaders, loaderHeaders }) => {
   const documentHeaders: Record<string, string> = {};
   const retryAfter = errorHeaders?.get("retry-after");
@@ -811,13 +811,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // succeeded and there was NO incoming anonymous cookie, persist the fresh
   // browser identity via Set-Cookie so that browser keeps its own per-browser
   // /search budget on later searches instead of sharing the shared-IP counter
-  // with other anonymous visitors on the same NAT IP. Only this successful
-  // fresh-search branch is wrapped — the idle/validation/HEAD/invalid early
-  // returns above never set the cookie, and signed-in requests (session set)
-  // never do either. The route-level headers() export forwards this
-  // Set-Cookie onto the final document response.
+  // with other anonymous visitors on the same NAT IP. `data()` carries the
+  // cookie on the HTML document without turning the loader into a JSON
+  // Response (which broke funnel tests and would serialize the payload).
+  // Idle/validation/HEAD/invalid early returns never set the cookie, and
+  // signed-in requests (session set) never do either.
   if (!session && isFreshAnonymousId) {
-    return Response.json(searchPayload, {
+    return data(searchPayload, {
       headers: { "Set-Cookie": buildAnonSearchSetCookie(anonymousSearchId) },
     });
   }
