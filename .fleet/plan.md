@@ -15,7 +15,7 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 
 ## Phase 2 — nightly timeline-cohort backfill module (acceptance 2)
 
-- [ ] phase 2: nightly timeline-cohort backfill module reusing captureLandingPageSnapshot with honest-capture semantics (requireScreenshot: true, per-brand failure isolation, deterministic row id, INSERT OR IGNORE); rows written only with real screenshot + page text.
+- [x] phase 2: nightly timeline-cohort backfill module reusing captureLandingPageSnapshot with honest-capture semantics (requireScreenshot: true, per-brand failure isolation, deterministic row id, INSERT OR IGNORE); rows written only with real screenshot + page text.
 
 - `app/lib/sitemap-timeline-backfill.server.ts` (new) mirrors `app/lib/sneaker-resale-backfill.server.ts` exactly: `runSitemapTimelineBackfill(env, options?)` — build cohort = `loadSitemapTimelineCandidateDomains(env)` minus `sitemapTimelineExcludedDomains()` filtered by `deriveSitemapTimelineCohort(tierByDomain = getSitemapTimelineTierByDomain)`; per-brand try/catch isolation; `captureLandingPageSnapshot(env, https://www.<domain>/, { preferRendered: true, requireScreenshot: true, routeContext: "proof_capture", onFailure })` — a row is written ONLY with a real screenshot + page text; a failed capture is a per-brand `capture_failed` (recorded + reported, never fabricated as an offer state); deterministic row id `timeline-<domain>-<YYYY-MM-DD>` via `sitemapTimelineBackfillRowId(domain, day)`; `INSERT OR IGNORE` (a cron retry cannot double-append a day); `replaceAnalysisFields(env, "landing_page", rowId, buildLandingPageAnalysisFields(snapshot))`; `summarizeSitemapTimelineBackfill(result)` log line shaped `sitemap-timeline-backfill day=... cohort=N captured=... failed=... [domain:captured ...]`; missing DB / empty cohort / missing snapshot table → empty degraded result, never a throw. Bounded: an explicit `SITEMAP_TIMELINE_COHORT_CAP` constant (default 200) slices the derived cohort so a future sitemap coverage explosion cannot blow the nightly Browser Run budget.
 - `CAPTURE_HOMEPAGE` = `https://www.<domain>/` — the same shape the sneaker rail captures and the same shape the sitemap domain derivation accepts (registrable domain from hostname), so a written row immediately qualifies as a complete-proof sitemap candidate on the next read.
@@ -81,6 +81,19 @@ Diff: `git diff origin/main..HEAD` (plan + cohort helper + adapter + unit suite)
   - Import coupling: the adapter value-imports SNEAKER_RESALE_SEED_LIST from sneaker-resale-backfill.server, dragging its module graph into consumers; the string is a registry key. No worker-bundle cost (sneaker backfill already bundled); Noted, not changed this PR.
 - **Noted**: seed-contents contract pin in tests; countSitemapTimelineTier unknown[] drift (harmless); cacheStatus has no consumer yet (phase 2 summarize surfaces it); D1 fan-out 500×3 keys ≈ 17 chunked SELECTs, shrinks to ~7 under phase 2's 200 CAP.
 - **Dismissed-with-reason**: lexical expires_at comparison (writers store ISO text; existing SQL gates use the same comparison); demo-row fall-through matches the fixed sneaker precedent; extractor not validating provider segment (SQL constrains candidates); no write path yet to review.
+
+### Phase 2 reviewer round (2026-09-08, seat cursor/cursor-grok-4.6-high)
+
+Diff: `git diff 644c3d38..HEAD` (backfill module + unit suite). 56 tests green (21 new) before review.
+
+- **Act on (fixed)**: none.
+- **Consider (recorded, phase-5 review carries)**:
+  - CAP slice runs before the `requested`-domains filter (sitemap-timeline-backfill.server.ts:292-293) — a caller requesting a domain beyond cohort position 200 gets a silent no-op. No caller passes `domains` today (phase 3 wires none); future-proofing hygiene, not a bug.
+  - Plan note "D1 fan-out shrinks to ~7 under the 200 CAP" is stale: the tier lookup runs over ALL candidate domains (up to 500 → ~1500 keys ≈ 15-17 chunked SELECTs) before the cap. The CAP bounds capture/browser spend (its purpose); the D1 read stays full-size.
+  - Missing-snapshot-table degrade returns a result indistinguishable from "no coverage today" in the log (cohort=0 captured=0 failed=0). Consider a `degraded=missing_snapshot_table` marker in the summarize line for ops.
+  - `stale=N` counts every processed domain incl. skipped/error rows — document-intended; ops should read it as "evidence age of verdicts that drove today's processing".
+- **Noted**: INSERT succeeds before replaceAnalysisFields (error after insert leaves a real row; next run = skipped_already_captured) — inherited sneaker shape; no-phantom default-path test exercises tier absence not explicit false (phase-1 suite + phase-4 fixture cover explicit false); the `as never` casts mirror the sneaker suite.
+- **Dismissed-with-reason**: missing-table degrade divergence from sneaker (planned carry-forward, default path can't throw — sitemap.server.ts:748-752 identical degrade); preferRendered without explicit persistArtifacts (pipeline defaults persist); UTC day slicing (matches sneaker + 04:00 UTC cron).
 
 ### Phase 5 reviewer round (single reviewer pass, seat per find_senior_seat)
 - **Act on (fixed)**: (manager appends during the run)
