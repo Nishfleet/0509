@@ -962,18 +962,21 @@ export async function runWebsiteSiteScan(
     ((url: string) => safeFetchDocument(url, { maxBytes: CRAWL_PAGE_MAX_BYTES }));
   await observeBudgetedPages(env, input.lease, budgeted, fetcher);
 
+  // Emit before finalize so a failed write leaves the scan incomplete and
+  // retryable. Finalize-then-emit would make a complete scan the baseline
+  // even when no website_page_* rows landed.
+  await emitWebsitePageChangeEvents(env, {
+    watchlistId: input.lease.watchlistId,
+    runId: input.lease.runId,
+    inventoryComplete,
+    captureAt: new Date().toISOString(),
+  });
+
   const manifest = await finalizeWebsiteSiteScan(env, {
     ...input.lease,
     status: inventoryComplete ? "complete" : failureCode !== null ? "failed" : "partial",
     sitemapDocumentCount: sitemap.sitemapDocumentCount,
     failureCode,
-  });
-
-  await emitWebsitePageChangeEvents(env, {
-    watchlistId: input.lease.watchlistId,
-    runId: input.lease.runId,
-    inventoryComplete: manifest.inventoryComplete,
-    captureAt: manifest.finalizedAt,
   });
 
   return {

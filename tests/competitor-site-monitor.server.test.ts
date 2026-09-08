@@ -712,6 +712,61 @@ describe("runWebsiteSiteScan", () => {
       .prepare("SELECT COUNT(*) AS total FROM website_site_scan_page")
       .get() as { total: number };
     expect(Number(count.total)).toBe(firstPages.length * 2);
+    expect(await listWatchEventsForRun(env, "watch-1", "run-2")).toEqual([]);
+  });
+
+  it("emits added and removed events when a later complete scan sees a different inventory", async () => {
+    const priorSitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://competitor.example/</loc></url>
+  <url><loc>https://competitor.example/about</loc></url>
+</urlset>`;
+    const currentSitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://competitor.example/</loc></url>
+  <url><loc>https://competitor.example/pricing</loc></url>
+</urlset>`;
+    const robots = { "https://competitor.example/robots.txt": { body: "User-agent: *\nDisallow: /admin\n" } };
+
+    await runWebsiteSiteScan(env, {
+      lease: LEASE_A,
+      rootUrl: "https://competitor.example/",
+      pageBudget: DEFAULT_PAGE_BUDGET,
+      fetchDocument: fixtureFetcher({
+        ...robots,
+        "https://competitor.example/sitemap.xml": { body: priorSitemap },
+      }),
+    });
+    expect(await listWatchEventsForRun(env, "watch-1", "run-1")).toEqual([]);
+
+    harness.sqlite
+      .prepare(
+        `INSERT INTO watchlist_run (id, watchlist_id, trigger_type, status, page_budget, pages_scanned, summary_json, started_at, processing_token, created_at, updated_at)
+         VALUES (?, ?, 'scheduled', 'running', 50, 0, '{}', ?, ?, ?, ?)`,
+      )
+      .run("run-2", "watch-1", "2026-08-02T01:00:00.000Z", "tok-b", "2026-08-02T01:00:00.000Z", "2026-08-02T01:00:00.000Z");
+
+    await runWebsiteSiteScan(env, {
+      lease: { ...LEASE_A, runId: "run-2", processingToken: "tok-b" },
+      rootUrl: "https://competitor.example/",
+      pageBudget: DEFAULT_PAGE_BUDGET,
+      fetchDocument: fixtureFetcher({
+        ...robots,
+        "https://competitor.example/sitemap.xml": { body: currentSitemap },
+      }),
+    });
+
+    const events = await listWatchEventsForRun(env, "watch-1", "run-2");
+    expect(events.map((event) => event.eventType).sort()).toEqual([
+      "website_page_added",
+      "website_page_removed",
+    ]);
+    expect(events.find((event) => event.eventType === "website_page_added")?.metadata.to).toBe(
+      "https://competitor.example/pricing",
+    );
+    expect(events.find((event) => event.eventType === "website_page_removed")?.metadata.from).toBe(
+      "https://competitor.example/about",
+    );
   });
 
   it("is honestly incomplete when the sitemap cannot be fetched", async () => {
