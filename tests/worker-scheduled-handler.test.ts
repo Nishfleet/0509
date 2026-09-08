@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DAILY_DIGEST_CRON,
   DISCOVERY_WARMUP_CRON,
+  REGULAR_MONITORING_CRON,
   WEEKLY_DIGEST_CRON,
 } from "../workers/schedule";
 
@@ -51,6 +52,16 @@ async function loadWorker() {
   });
   const summarizeSneakerResaleBackfill = vi.fn((result) =>
     `sneaker-resale-backfill day=${result.day} cohort=${result.domains.length} captured=${result.capturedCount} failed=${result.failedCount} []`,
+  );
+  const runSitemapTimelineBackfill = vi.fn().mockResolvedValue({
+    day: "2026-09-05",
+    startedAt: "2026-09-05T01:00:00.000Z",
+    capturedCount: 7,
+    failedCount: 0,
+    domains: [],
+  });
+  const summarizeSitemapTimelineBackfill = vi.fn((result) =>
+    `sitemap-timeline-backfill day=${result.day} cohort=${result.domains.length} captured=${result.capturedCount} failed=${result.failedCount} stale=0 []`,
   );
   const runAdsDomainPublisher = vi.fn().mockResolvedValue({
     list: "sneaker-resale",
@@ -106,6 +117,10 @@ async function loadWorker() {
   vi.doMock("../app/lib/sneaker-resale-backfill.server", () => ({
     runSneakerResaleBackfill,
     summarizeSneakerResaleBackfill,
+  }));
+  vi.doMock("../app/lib/sitemap-timeline-backfill.server", () => ({
+    runSitemapTimelineBackfill,
+    summarizeSitemapTimelineBackfill,
   }));
   vi.doMock("../app/lib/ads-domain-publisher.server", async (importOriginal) => ({
     ...(await importOriginal<typeof import("../app/lib/ads-domain-publisher.server")>()),
@@ -174,6 +189,8 @@ async function loadWorker() {
     summarizeDemoBrandBackfill,
     runSneakerResaleBackfill,
     summarizeSneakerResaleBackfill,
+    runSitemapTimelineBackfill,
+    summarizeSitemapTimelineBackfill,
     runAdsDomainPublisher,
     flushDeferredInstantAlerts,
     scheduleBillingLifecycleEmailRecovery,
@@ -705,5 +722,73 @@ describe("Worker scheduled handler", () => {
       "ads_domain_publisher",
       expect.any(Error),
     );
+  });
+
+  it("runs the nightly sitemap-timeline backfill on the daily 04:00 cron alongside the demo-brand and sneaker-resale backfills (issue #1958)", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    const scheduledTime = Date.parse("2026-09-05T04:00:00.000Z");
+
+    await loaded.worker.scheduled(
+      { cron: DAILY_DIGEST_CRON, scheduledTime } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    // The cohort expansion in #1958 must NOT displace the existing rails —
+    // the scheduled handler dispatches all three backfills as siblings on
+    // the daily cron.
+    expect(loaded.runSitemapTimelineBackfill).toHaveBeenCalledTimes(1);
+    expect(loaded.runDemoBrandBackfill).toHaveBeenCalledTimes(1);
+    expect(loaded.runSneakerResaleBackfill).toHaveBeenCalledTimes(1);
+    // The summary log line ran so a nightly canary can grep for
+    // "sitemap-timeline-backfill day=" in the operator log.
+    expect(loaded.summarizeSitemapTimelineBackfill).toHaveBeenCalledTimes(1);
+    // The daily digest cron still runs its normal monitoring/digest work.
+    expect(loaded.runScheduledMonitoring).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not run the sitemap-timeline backfill on the 3-hour or weekly crons (issue #1958)", async () => {
+    // The literal 3-hourly and weekly crons rather than the warmup/hourly
+    // surrogates: the daily rail must be the ONLY rail that runs the
+    // nightly sitemap-timeline backfill (issue #1958, phase 5).
+    for (const cron of [REGULAR_MONITORING_CRON, WEEKLY_DIGEST_CRON]) {
+      const loaded = await loadWorker();
+      const { ctx, pending } = createContext();
+      await loaded.worker.scheduled(
+        { cron, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
+        {} as never,
+        ctx as never,
+      );
+      await Promise.all(pending);
+      expect(loaded.runSitemapTimelineBackfill).not.toHaveBeenCalled();
+    }
+  });
+
+  it("pages the operator when the nightly sitemap-timeline backfill throws (issue #1958)", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    const failure = new Error("sitemap-timeline capture pipeline down");
+    loaded.runSitemapTimelineBackfill.mockRejectedValueOnce(failure);
+
+    await loaded.worker.scheduled(
+      {
+        cron: DAILY_DIGEST_CRON,
+        scheduledTime: Date.parse("2026-09-05T04:00:00.000Z"),
+      } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      "sitemap_timeline_backfill",
+      failure,
+    );
+    // The demo-brand backfill still ran on the same rail — one sibling
+    // failing must not poison the other's waitUntil.
+    expect(loaded.runDemoBrandBackfill).toHaveBeenCalledTimes(1);
   });
 });

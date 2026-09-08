@@ -14,6 +14,10 @@ import {
   runSneakerResaleBackfill,
   summarizeSneakerResaleBackfill,
 } from "../app/lib/sneaker-resale-backfill.server";
+import {
+  runSitemapTimelineBackfill,
+  summarizeSitemapTimelineBackfill,
+} from "../app/lib/sitemap-timeline-backfill.server";
 import { resumePendingDigestScheduleJobsDetailed } from "../app/lib/digest-orchestration.server";
 import { runAdsDomainPublisher } from "../app/lib/ads-domain-publisher.server";
 import {
@@ -452,6 +456,28 @@ export default {
           },
           (error) =>
             reportScheduledTaskFailure(env, "demo_brand_backfill", error),
+        ),
+      );
+      // Nightly sitemap-timeline cohort backfill (issue #1958): calendly.com
+      // and adspyder.io sit in no cohort, so their indexed /timeline/:domain
+      // pages froze at the seed capture. This sibling rides the same daily
+      // rail and re-captures every bounded, coverage-verified sitemap-listed
+      // timeline domain each UTC day. Sibling, NOT chained after the
+      // publisher: the tier read accepts any-age rows (no ordering hazard)
+      // and a publisher whole-run failure cannot couple to the capture.
+      ctx.waitUntil(
+        runSitemapTimelineBackfill(env).then(
+          (result) => {
+            console.log("sitemap timeline backfill completed", {
+              day: result.day,
+              cohort: result.domains.length,
+              captured: result.capturedCount,
+              failed: result.failedCount,
+              summary: summarizeSitemapTimelineBackfill(result),
+            });
+          },
+          (error) =>
+            reportScheduledTaskFailure(env, "sitemap_timeline_backfill", error),
         ),
       );
     }
