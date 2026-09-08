@@ -66,6 +66,7 @@ import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+import { rerankDigestBrief } from "~/lib/digest-rerank";
 import { CAPTURE_RULES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
 import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
@@ -74,7 +75,7 @@ import type {
   BrandIntelTeaser,
   BrandPageAggression,
 } from "~/lib/brand-page.server";
-import { brandOwnedAdIdSet, rerankBrandChangeFeed } from "~/lib/brand-page.server";
+import { brandOwnedAdIdSet } from "~/lib/brand-page.server";
 import { isSeededBrandDomain } from "~/lib/ads-domain-publisher.server";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 import type { CaptureFailuresSummary } from "~/lib/offer-timeline.server";
@@ -1197,7 +1198,12 @@ function BrandAdsResults({
           #1951). Landing-page commercial-field changes are the headline
           cards; ad_new / ad_inactive collapse into a single counted line. */}
       {(() => {
-        const { headlineItems, adChurnSummary } = rerankBrandChangeFeed(data.changeEvents);
+        // The shared BET 1 helper from #1897, imported from the client-safe
+        // module it lives in — `rerankBrandChangeFeed` in brand-page.server
+        // delegates to exactly this function, so the digest and the /ads page
+        // still cannot drift, but the client bundle does not pull in the
+        // server-only module (issue #1951 CI build failure).
+        const { headlineItems, adChurnSummary } = rerankDigestBrief(data.changeEvents);
         const hasHeadline = headlineItems.length > 0;
         const hasChurn = adChurnSummary.total > 0;
         if (!hasHeadline && !hasChurn) return null;
