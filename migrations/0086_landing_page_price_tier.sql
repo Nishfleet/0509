@@ -9,22 +9,23 @@
 --               by `extractPriceTier` in
 --               `app/lib/landing-page-price-tier.server.ts`. One of
 --               `under_30`, `30_to_100`, `100_to_250`, `over_250`, or
---               `unknown`. NULL on rows where the extractor was never run
---               (legacy snapshots written before the extractor existed)
---               and on rows where `price_text` is itself NULL.
+--               `unknown`. New inserts (phase 2) write `unknown` for NULL
+--               or unparseable `price_text`; NULL remains only on legacy
+--               rows written before the extractor existed.
 --
 -- The column is nullable with no default: every existing row stays
 -- untouched and falls through as NULL. The plan explicitly classifies the
 -- backfill as best-effort and not load-bearing ("no existing row is forced
--- to a non-null value — `unknown` is acceptable"). Historical rows will be
--- re-classified naturally as the monitoring workflow re-captures them and
--- `createLandingPageSnapshot` (phase 2) writes `price_tier` at INSERT time
--- using the new extractor. The four named-band totals therefore reflect
+-- to a non-null value — `unknown` is acceptable"). Legacy NULL rows stay
+-- NULL until a NEW row is written by `createLandingPageSnapshot` (phase 2,
+-- dedup returns the existing row without rewriting the column); both NULL
+-- and `unknown` count into the same `unknown` bucket in
+-- `loadPriceTierDistribution`. The four named-band totals therefore reflect
 -- only the rows that were successfully parsed, which is the
 -- honest-accounting policy documented at the top of the extractor module.
 --
 -- Future phases may rename the column, DROP it, or fold the distribution
 -- into a derived summary table — those moves are out of scope for phase 1.
 -- The migration applies at the standard migration cadence
--- (`scripts/d1-apply-migrations.mjs` / `wrangler d1 migrations apply`).
+-- (`wrangler d1 migrations apply`).
 ALTER TABLE landing_page_snapshot ADD COLUMN price_tier TEXT;

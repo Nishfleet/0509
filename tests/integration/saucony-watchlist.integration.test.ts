@@ -162,9 +162,9 @@ describe("saucony-watchlist (issue #1279)", () => {
       ["100_to_250", "30_to_100", "over_250", "under_30", "unknown"].sort(),
     );
     expect(distribution["100_to_250"]).toBeGreaterThanOrEqual(2);
-    expect(distribution["30_to_100"]).toBe(0);
-    expect(distribution.over_250).toBe(0);
-    expect(distribution.under_30).toBe(0);
+    // The `30_to_100` / `over_250` / `under_30` counts are not asserted
+    // here because the D1 storage is file-shared across tests in this
+    // file and other tests write those bands.
     expect(typeof distribution.unknown).toBe("number");
     expect(distribution.unknown).toBeGreaterThanOrEqual(0);
   });
@@ -246,5 +246,13 @@ describe("saucony-watchlist (issue #1279)", () => {
     expect(extractPriceTier(null)).toBe("unknown");
     expect(extractPriceTier("")).toBe("unknown");
     expect(extractPriceTier("free")).toBe("unknown");
+
+    // FX-discriminating cases: the band differs with vs without the FX
+    // conversion, proving the conversion is actually applied.
+    expect(extractPriceTier("$32")).toBe("under_30");
+    expect(extractPriceTier("£26")).toBe("30_to_100");
+    expect(extractPriceTier("£214")).toBe("over_250");
+    // Unrecognised currency marker → null → "unknown", never assumed EUR.
+    expect(extractPriceTier("₹1999")).toBe("unknown");
   });
 });

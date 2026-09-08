@@ -19,8 +19,10 @@ import { appEnv, db, ISO_T0, seedUser, uid } from "../fixtures";
  * adds a nullable TEXT column on `landing_page_snapshot`. The migration
  * is safe to apply on a hot table (no row rewrite, no default), and the
  * new column must (a) exist on the schema, (b) accept the bucket id
- * `100_to_250` written by `createLandingPageSnapshot` at INSERT time, (c)
- * accept NULL for legacy rows and for `null` `price_text`, and (d)
+ * `100_to_250` in a raw INSERT that mirrors the column list
+ * `createLandingPageSnapshot` writes (the production INSERT path itself
+ * is exercised in tests/integration/saucony-watchlist.integration.test.ts),
+ * (c) accept NULL for legacy rows and for `null` `price_text`, and (d)
  * `loadPriceTierDistribution` must return the five-bucket shape over the
  * real table.
  *
