@@ -7,6 +7,7 @@
  * hrefs, and "as of <date>" retrieval.
  */
 
+import { SUPPORTED_COUNTRIES } from "~/lib/countries";
 import { proofScreenshotSrc } from "~/lib/proof-screenshot";
 import { proofPageTextSrc } from "~/lib/proof-page-text";
 
@@ -79,6 +80,15 @@ export interface OfferLedgerEntry {
   /** Null on the first dated state — there is no prior offer to diff. */
   transition: OfferTransition | null;
   /**
+   * Why this capture was suppressed instead of emitted as a real offer
+   * transition (issue #1996). Non-null means the snapshot pair was held back
+   * because it differs only by geo locale or matches a cookie-banner/consent
+   * string — `transition` is forced null and no phantom offer change is
+   * reported. Null is the normal state (a genuine change or the first dated
+   * state).
+   */
+  suppressedReason?: string | null;
+  /**
    * The run's extent when consecutive captures were identical (issue #1957).
    * Non-null on a collapsed dated state: the snapshot stayed unchanged
    * through a later capture, so the state is shown once with an honest
@@ -134,6 +144,120 @@ export function formatOfferDate(iso: string): string {
   return OFFER_DATE_FORMATTER.format(date);
 }
 
+const COUNTRY_ISO_CODES = new Set(
+  SUPPORTED_COUNTRIES.map((country) => country.code.toLowerCase()),
+);
+
+/**
+ * Detect a geo locale encoded as the first path segment of a canonical URL
+ * (issue #1996). Returns the lowercase ISO-2 code when the segment matches a
+ * `SUPPORTED_COUNTRIES` code (e.g. `/sg/` -> `"sg"`, `/fr/` -> `"fr"`), else
+ * null. Non-locale path segments (product slugs, brand seed handles) are not
+ * treated as locales, so a genuine `/fr/`-vs-`/sg/` product-page swap is not
+ * wrongly suppressed.
+ */
+export function geoLocaleSegment(url: string): string | null {
+  let path: string;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    return null;
+  }
+  const cleaned = path.trim().replace(/^\/+/, "").replace(/\/+$/, "");
+  const firstSegment = (cleaned.split("/")[0] ?? "").toLowerCase();
+  return COUNTRY_ISO_CODES.has(firstSegment) ? firstSegment : null;
+}
+
+const COOKIE_BANNER_OR_CONSENT_PATTERNS = [
+  // French/English ads-personalization and consent-banner phrases. Kept at
+  // phrase level (not bare "cookie"/"consent"/"personalised") so ordinary
+  // offer copy like a "Personalised winter sale" headline is never suppressed.
+  // Generic offer CTA verbs ("Shop Now") are intentionally absent.
+  "publicités personnalisées",
+  "personalised ads",
+  "personalised advertising",
+  "personalised content",
+  "personalized ads",
+  "personalized advertising",
+  "personalized content",
+  "ad personalisation",
+  "ad personalization",
+  "personal preferences",
+  "cookie settings",
+  "cookie preferences",
+  "cookie banner",
+  "cookie consent",
+  "manage cookies",
+  "accept cookies",
+  "reject cookies",
+  "accept all cookies",
+  "reject all cookies",
+  "gérer mes cookies",
+  "gestion des cookies",
+  "consent settings",
+  "consent preferences",
+  "privacy consent",
+  "privacy settings",
+  "privacy preferences",
+  "ad preferences",
+  "accept all",
+  "reject all",
+];
+
+/**
+ * True when the text matches a known cookie-banner or ads-personalization
+ * consent string (issue #1996). Case-insensitive substring match. Kept to
+ * consent/ads-personalization strings only — generic offer CTA verbs (e.g.
+ * "Shop Now") are intentionally NOT here so remaining generic CTAs still diff
+ * normally.
+ */
+export function isCookieBannerOrConsent(text: string | null): boolean {
+  if (!text) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  return COOKIE_BANNER_OR_CONSENT_PATTERNS.some((needle) => lower.includes(needle));
+}
+
+interface CaptureValiditySnapshot {
+  canonicalUrl: string;
+  headline: string;
+  ctaText: string | null;
+}
+
+/**
+ * Decide whether a snapshot pair should be suppressed instead of emitted as a
+ * real offer transition (issue #1996).
+ *
+ * Returns the reason to suppress, or null to diff normally:
+ * - `"geo locale change"` when both canonical URLs carry a geo locale path
+ *   segment and those locales differ (e.g. `/sg/` vs `/fr/`).
+ * - `"cookie banner / consent string"` when the current CTA or headline
+ *   matches a known consent/ads-personalization string.
+ * - null otherwise (a genuine same-geo change diffs normally).
+ */
+export function captureValidityReason(
+  previous: CaptureValiditySnapshot,
+  current: CaptureValiditySnapshot,
+): string | null {
+  const previousLocale = geoLocaleSegment(previous.canonicalUrl);
+  const currentLocale = geoLocaleSegment(current.canonicalUrl);
+  if (
+    previousLocale !== null &&
+    currentLocale !== null &&
+    previousLocale !== currentLocale
+  ) {
+    return "geo locale change";
+  }
+  if (
+    isCookieBannerOrConsent(current.ctaText) ||
+    isCookieBannerOrConsent(current.headline)
+  ) {
+    return "cookie banner / consent string";
+  }
+  return null;
+}
+
 export function canonicalUrlBelongsToDomain(canonicalUrl: string, domain: string): boolean {
   let hostname: string;
   try {
@@ -152,6 +276,29 @@ function offerFieldsEqual(left: OfferSnapshotInput, right: OfferSnapshotInput): 
     left.priceText === right.priceText &&
     left.formPresent === right.formPresent
   );
+}
+
+/**
+ * The last emitted dated state that was NOT itself suppressed (issue #1996,
+ * phase 6). A suppressed state carries `transition: null` and a non-null
+ * `suppressedReason` — it is a capture-validity artefact (geo locale change
+ * or cookie-banner/consent string), not a real offer state. Later snapshots
+ * must diff against a real state, never a suppressed one, else a later
+ * same-region capture could "restore" a price/CTA that only ever existed as
+ * a suppressed placeholder (e.g. the French "—" price) and emit a phantom
+ * transition. Suppressed states are still emitted as their own labeled dated
+ * states — only the BASELINE for later transitions skips them.
+ */
+function lastNonSuppressedEntry(
+  entries: readonly OfferLedgerEntry[],
+): OfferLedgerEntry | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.suppressedReason == null) {
+      return entry;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -187,7 +334,24 @@ export function buildOfferLedger(snapshots: readonly OfferSnapshotInput[]): Offe
     // [runStart..index]. Emit ONE collapsed state for the whole run.
     const firstInRun = ordered[runStart]!;
     const runLength = index - runStart + 1;
-    const previousState = entries.length > 0 ? entries[entries.length - 1] : undefined;
+    // Phase 6: the diff/gate baseline is the last NON-suppressed emitted entry,
+    // never the raw last one. The raw last entry may itself be a suppressed
+    // state (transition null, suppressedReason set) whose placeholder fields
+    // (e.g. a "—" price or a consent CTA) are not a real offer state — diffing
+    // a later real capture against it would fabricate a phantom "price restored
+    // from —" transition. Scanning from the end for the first non-suppressed
+    // entry closes that back-door, while suppressed states remain emitted as
+    // their own labeled dated states.
+    const previousState = lastNonSuppressedEntry(entries);
+    // Capture-validity gate (issue #1996): hold back snapshot pairs that differ
+    // only by geo locale or whose CTA/headline matches a cookie-banner/consent
+    // string. When a reason is found, emit the state as suppressed — transition
+    // forced null, reason recorded — instead of a phantom offer transition. The
+    // first dated state (no previous) always keeps transition null +
+    // suppressedReason null.
+    const suppressedReason = previousState
+      ? captureValidityReason(previousState, firstInRun)
+      : null;
 
     entries.push({
       id: firstInRun.id,
@@ -202,9 +366,10 @@ export function buildOfferLedger(snapshots: readonly OfferSnapshotInput[]): Offe
       pageTextHref: proofPageTextSrc(firstInRun.pageTextKey),
       captureMethod: firstInRun.captureMethod ?? null,
       evidenceNote: firstInRun.evidenceNote ?? null,
-      transition: previousState
+      transition: previousState && suppressedReason === null
         ? diffOfferBetweenStates(previousState, firstInRun)
         : null,
+      suppressedReason,
       runExtentLabel:
         runLength > 1 ? `unchanged since ${formatOfferDate(current.capturedAt)}` : null,
     });
