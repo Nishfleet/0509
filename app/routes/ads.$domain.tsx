@@ -72,7 +72,7 @@ import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { rerankDigestBrief } from "~/lib/digest-rerank";
-import { CAPTURE_RULES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
+import { CAPTURE_RULES_PUBLIC_PATH, NO_PHANTOM_CHANGES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
 import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 import type {
@@ -1165,6 +1165,8 @@ function BrandAdsResults({
               (#1432); /proof is its legacy 301 alias. */}
           <p className="f9-wk-dim f9-ads-proof-note">
             {"No phantom changes: every alert from this page is backed by a saved capture. "}
+            <Link to={NO_PHANTOM_CHANGES_PUBLIC_PATH}>If we send it, the page really changed</Link>
+            {" · "}
             <Link to={CAPTURE_RULES_PUBLIC_PATH}>What we refuse to alert on</Link>
           </p>
 
