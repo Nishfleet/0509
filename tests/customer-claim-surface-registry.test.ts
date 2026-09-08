@@ -367,7 +367,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",
     "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale",
     "/pt-br/sneaker-resale",
-    "/capture-rules", "/ad-aggression", "/pricing", "/help", "/docs", "/api/docs",
+    "/capture-rules", "/no-phantom-changes", "/ad-aggression", "/pricing", "/help", "/docs", "/api/docs",
     "/status", "/changelog", "/trust", "/privacy", "/terms",
   ],
   e2eRoutePaths: [

@@ -680,6 +680,11 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Public capture-validity rules: the landing-page captures that never become alerts.",
   },
+  "/no-phantom-changes": {
+    title: "No phantom changes — if we send it, the page really changed",
+    description:
+      "Buyer guarantee: the capture-validity rule set behind no-phantom-change alerts, including geo-variance and takedown/restore suppression.",
+  },
   "/ad-aggression": {
     title: "Ad Aggression Score methodology",
     description:
