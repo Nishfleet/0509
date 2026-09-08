@@ -1089,32 +1089,41 @@ describe("emitWebsitePageChangeEvents", () => {
 
     const added = events.find((event) => event.eventType === "website_page_added");
     expect(added?.summary).toBe("https://competitor.example/changelog");
+    expect(added?.importanceScore).toBeGreaterThanOrEqual(75);
     expect(added?.metadata).toMatchObject({
       from: "",
       to: "https://competitor.example/changelog",
       canonicalUrl: "https://competitor.example/changelog",
+      criticalityBand: "critical",
     });
+    expect(added?.metadata.criticalityReasons).toEqual(
+      expect.arrayContaining(["new-landing-page"]),
+    );
 
     const removed = events.find((event) => event.eventType === "website_page_removed");
     expect(removed?.summary).toBe("https://competitor.example/about");
+    expect(removed?.importanceScore).toBeGreaterThanOrEqual(50);
+    expect(removed?.importanceScore).toBeLessThan(75);
     expect(removed?.metadata).toMatchObject({
       from: "https://competitor.example/about",
       to: "",
+      criticalityBand: "material",
     });
 
     const changed = events.find((event) => event.eventType === "website_page_changed");
     expect(changed?.summary).toContain("Call to action changed on https://competitor.example/");
+    expect(changed?.importanceScore).toBeGreaterThanOrEqual(50);
+    expect(changed?.importanceScore).toBeLessThan(75);
     expect(changed?.metadata).toMatchObject({
       from: "Buy now",
       to: "Get started",
       field: "cta",
+      criticalityBand: "material",
     });
+    expect(changed?.metadata.criticalityReasons).toEqual(
+      expect.arrayContaining(["cta-string-change"]),
+    );
     expect(changed?.baselineFromRunId).toBe("run-1");
-    // website_page_* events carry a customer importance that clears the
-    // balanced instant-alert gate (issue #1384).
-    expect(added?.importanceScore).toBe(80);
-    expect(removed?.importanceScore).toBe(80);
-    expect(changed?.importanceScore).toBe(82);
 
     expect(events.some((event) => String(event.metadata.field) === "title")).toBe(false);
     expect(events.some((event) => String(event.metadata.field) === "meta")).toBe(false);

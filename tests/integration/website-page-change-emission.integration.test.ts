@@ -210,21 +210,21 @@ describe("website_page_* emission against real D1", () => {
     const added = events.find((event) => event.eventType === "website_page_added");
     expect(added?.metadata.from).toBe("");
     expect(added?.metadata.to).toBe("https://example.test/pricing");
+    expect(added?.importanceScore).toBeGreaterThanOrEqual(75);
+    expect(added?.metadata.criticalityBand).toBe("critical");
 
     const removed = events.find((event) => event.eventType === "website_page_removed");
     expect(removed?.metadata.from).toBe("https://example.test/about");
     expect(removed?.metadata.to).toBe("");
+    expect(removed?.importanceScore).toBeGreaterThanOrEqual(50);
 
     const changed = events.find((event) => event.eventType === "website_page_changed");
     expect(changed?.metadata.from).toBe("Buy now");
     expect(changed?.metadata.to).toBe("Get started");
     expect(changed?.metadata.field).toBe("cta");
+    expect(changed?.metadata.criticalityBand).toBe("material");
+    expect(changed?.importanceScore).toBeGreaterThanOrEqual(50);
     expect(changed?.baselineFromRunId).toBe(priorRun);
-    // website_page_* events carry a customer importance that clears the
-    // balanced instant-alert gate (issue #1384).
-    expect(added?.importanceScore).toBe(80);
-    expect(removed?.importanceScore).toBe(80);
-    expect(changed?.importanceScore).toBe(82);
 
     expect(events.some((event) => event.metadata.field === "title")).toBe(false);
     expect(events.some((event) => event.metadata.field === "meta")).toBe(false);
