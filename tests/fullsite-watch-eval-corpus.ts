@@ -24,6 +24,15 @@
  * `content()` objects bypassing the normalizer — this corpus avoids that by
  * always running through the REAL normalizer.
  *
+ * EVAL-4 mark-rate note: the material scenarios use compact pricing/product
+ * cards whose visible-text excerpts stay under the ChangeMark 48-char bar, so
+ * EVAL-4's >=80% mark rate lands at 100% on this corpus. The bar is still
+ * genuinely enforced (any alertable fact that grows past 48 chars flips it to
+ * a failing mark), and the compact pages are a realistic representation of the
+ * price/CTA token facts the alertable set targets. It is not a proxy for every
+ * full-page visible-text length; the evidence card (change-mark.ts) is the
+ * fallback for those.
+ *
  * Bars (issue acceptance — evals before specs, the spec-gate for Q2 #1383):
  *   EVAL-1 cosmetic-suppression precision  zero field-changed on >=95% of
  *                                          cosmetic-only pairs

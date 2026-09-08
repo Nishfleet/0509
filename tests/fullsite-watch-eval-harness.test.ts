@@ -175,13 +175,13 @@ async function evaluateCosmeticAll(): Promise<{
 // ---------------------------------------------------------------------------
 
 describe("EVAL-2 materiality precision", () => {
-	it("emits an alertable fact with the correct field on >=90% of material changes", async () => {
+	it("emits an alertable fact with EVERY correct field on >=90% of material changes", async () => {
 		const scenarios = materialScenarios();
 		let correct = 0;
 		for (const scenario of scenarios) {
 			const facts = await evaluateScenario(scenario, completeContext());
 			const fields = new Set(facts.filter(isAlertable).map((f) => f.field));
-			if (scenario.expectedFields.some((f) => fields.has(f))) correct += 1;
+			if (scenario.expectedFields.every((f) => fields.has(f))) correct += 1;
 		}
 		const rate = correct / scenarios.length;
 		expect(rate).toBeGreaterThanOrEqual(0.9);
