@@ -4,7 +4,6 @@ import { createLandingPageSnapshot } from "~/lib/data/ads.server";
 import {
   extractPriceTier,
   loadPriceTierDistribution,
-  PRICE_TIER_BANDS,
   type PriceTierBucket,
 } from "~/lib/landing-page-price-tier.server";
 
@@ -38,8 +37,6 @@ import { appEnv, db, ISO_T0, seedUser, uid } from "./fixtures";
  * named-band counts plus the `unknown` bucket — the same shape the daily
  * digest's "Value-tier swing" section reads.
  */
-
-const PRICE_TIER_KEYS = PRICE_TIER_BANDS.map((band) => band.id);
 
 async function seedAdvertiserWatchlist(
   userId: string,

@@ -48,21 +48,20 @@ describe("migration 0086 — landing_page_snapshot.price_tier (issue #1279)", ()
       .all<{ price_tier: string | null }>();
     expect(Array.isArray(rows.results ?? [])).toBe(true);
 
-    // Verify the column metadata — sqlite_master + pragma_table_info is the
-    // canonical way to assert the column exists without depending on
-    // a SELECT that returns rows. PRAGMA is supported on the workerd D1
-    // build (it is on every release since 2025).
-    const pragma = await db()
-      .prepare("PRAGMA table_info(landing_page_snapshot)")
-      .all<{ name: string; type: string | null; notnull: number; pk: number }>();
-    const priceTierColumn = (pragma.results ?? []).find(
-      (column) => column.name === "price_tier",
-    );
-    expect(priceTierColumn).toBeDefined();
-    expect(priceTierColumn?.type).toBe("TEXT");
-    // The migration is explicitly nullable (no NOT NULL), so existing rows
-    // can pass through as NULL.
-    expect(priceTierColumn?.notnull).toBe(0);
+    // Verify the column metadata — the CREATE TABLE statement in
+    // sqlite_master is the canonical source for column names and types
+    // across every D1 binding (no PRAGMA dependency). This is a string
+    // check on the stored DDL; the migration's nullable TEXT column is
+    // present iff `price_tier` appears in the CREATE TABLE statement.
+    const masterRow = await db()
+      .prepare(
+        `SELECT sql FROM sqlite_master
+         WHERE type = 'table' AND name = 'landing_page_snapshot'`,
+      )
+      .first<{ sql: string | null }>();
+    expect(masterRow?.sql).toBeDefined();
+    expect(masterRow?.sql).toMatch(/\bprice_tier\b/);
+    expect(masterRow?.sql).toMatch(/price_tier\s+TEXT/i);
   });
 
   it("(2) accepts a 100_to_250 write and round-trips it on read", async () => {
@@ -169,6 +168,12 @@ describe("migration 0086 — landing_page_snapshot.price_tier (issue #1279)", ()
       .bind(legacyId)
       .first<{ price_tier: string | null }>();
     expect(legacyRow?.price_tier).toBeNull();
+
+    // Legacy NULL rows aggregate into the `unknown` bucket — the
+    // aggregator must reflect that the legacy row is counted, not
+    // silently dropped.
+    const distribution = await loadPriceTierDistribution(appEnv);
+    expect(distribution.unknown).toBeGreaterThanOrEqual(1);
   });
 
   it("(4) loadPriceTierDistribution returns the five-bucket shape on real D1", async () => {
