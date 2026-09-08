@@ -22,20 +22,11 @@
 import {
   canonicalizeCompetitorSiteUrl,
   classifyCompetitorSitePage,
-  COMPETITOR_PAGE_NORMALIZER_VERSION,
-  evaluateWebsitePageChanges,
-  normalizeCompetitorPageContent,
-  type CompetitorPageInventory,
-  type NormalizedCompetitorPageContent,
-  type WebsitePageChange,
+  type CompetitorSitePageKind,
 } from "~/lib/competitor-site-content";
-import { createWatchEvent } from "~/lib/data/watch-events.server";
 import {
   beginWebsiteSiteScan,
   finalizeWebsiteSiteScan,
-  getLatestCompleteWebsiteScanBaseline,
-  listWebsitePageObservationsForRun,
-  listWebsiteSiteScanPagesForRun,
   upsertWebsitePageObservation,
   upsertWebsiteSiteScanPage,
   type WebsiteScanLease,
@@ -52,14 +43,9 @@ import {
 } from "~/lib/public-url.server";
 import { stripAllTags, stripScriptAndStyle } from "~/lib/sanitize-text.server";
 import type {
-  WatchEventType,
   WebsitePageDiscoverySource,
   WebsitePageKind,
-  WebsitePageObservationRecord,
-  WebsitePageObservationSignals,
-  WebsiteSiteScanPageRecord,
 } from "~/lib/types";
-import { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
 
 // ==== Constants ====
 
@@ -93,10 +79,6 @@ export const DISCOVERY_FETCH_TIMEOUT_MS = 15_000;
 
 /** Normalizer version label recorded on every fetched observation. */
 export const FULLSITE_OBSERVATION_NORMALIZER_VERSION = "fullsite-watch-v1";
-
-/** `website_page_observation.excerpt` is bounded to 1000 chars in migration 0077. */
-const OBSERVATION_EXCERPT_LIMIT = 1_000;
-const OBSERVATION_FETCH_ERROR_CODE_LIMIT = 64;
 
 /** Stable failure codes stored on the run manifest. */
 export const SITE_SCAN_FAILURE_CODES = {
@@ -957,21 +939,6 @@ export async function runWebsiteSiteScan(
   const failureCode =
     sitemap.failureCode ?? (overBudget ? "over_budget" : null);
 
-  const fetcher =
-    input.fetchDocument ??
-    ((url: string) => safeFetchDocument(url, { maxBytes: CRAWL_PAGE_MAX_BYTES }));
-  await observeBudgetedPages(env, input.lease, budgeted, fetcher);
-
-  // Emit before finalize so a failed write leaves the scan incomplete and
-  // retryable. Finalize-then-emit would make a complete scan the baseline
-  // even when no website_page_* rows landed.
-  await emitWebsitePageChangeEvents(env, {
-    watchlistId: input.lease.watchlistId,
-    runId: input.lease.runId,
-    inventoryComplete,
-    captureAt: new Date().toISOString(),
-  });
-
   const manifest = await finalizeWebsiteSiteScan(env, {
     ...input.lease,
     status: inventoryComplete ? "complete" : failureCode !== null ? "failed" : "partial",
@@ -987,218 +954,6 @@ export async function runWebsiteSiteScan(
     inventoryComplete: manifest.inventoryComplete,
     failureCode: manifest.failureCode,
   };
-}
-
-function boundObservationText(value: string | null | undefined, limit: number): string | null {
-  if (value == null || value.length === 0) return null;
-  return value.length > limit ? value.slice(0, limit) : value;
-}
-
-function signalsFromNormalized(
-  content: NormalizedCompetitorPageContent,
-): WebsitePageObservationSignals {
-  return {
-    title: content.title,
-    metaDescription: content.metaDescription,
-    visibleTextHash: content.visibleTextHash,
-    visibleTextExcerpt: content.visibleTextExcerpt,
-    offer: content.offerOrPriceText,
-    price: null,
-    cta: content.ctaText,
-    formPresent: content.formPresent,
-  };
-}
-
-function observationHttpStatus(status: number | null): number | null {
-  if (status == null) return null;
-  if (!Number.isInteger(status) || status < 100 || status > 599) return null;
-  return status;
-}
-
-async function observeBudgetedPages(
-  env: AppEnv,
-  lease: WebsiteScanLease,
-  pages: readonly DiscoveredPage[],
-  fetchDocument: (url: string) => Promise<SafeFetchResult>,
-): Promise<void> {
-  for (const page of pages) {
-    const fetched = await fetchDocument(page.canonicalUrl);
-    if (!fetched.ok || fetched.body == null || fetched.body.length === 0) {
-      await upsertWebsitePageObservation(env, {
-        ...lease,
-        canonicalUrl: page.canonicalUrl,
-        discoverySource: page.discoverySource,
-        pageKind: page.pageKind,
-        fetchStatus: "fetch_failed",
-        httpStatus: observationHttpStatus(fetched.status),
-        fetchErrorCode: boundObservationText(
-          fetched.refusedReason ?? "fetch_failed",
-          OBSERVATION_FETCH_ERROR_CODE_LIMIT,
-        ),
-      });
-      continue;
-    }
-
-    const content = await normalizeCompetitorPageContent({
-      canonicalUrl: page.canonicalUrl,
-      rawHtml: fetched.body,
-    });
-    await upsertWebsitePageObservation(env, {
-      ...lease,
-      canonicalUrl: page.canonicalUrl,
-      discoverySource: page.discoverySource,
-      pageKind: page.pageKind,
-      contentHash: content.contentHash,
-      excerpt: boundObservationText(content.visibleTextExcerpt, OBSERVATION_EXCERPT_LIMIT),
-      fetchStatus: "fetched",
-      httpStatus: observationHttpStatus(fetched.status),
-      normalizerVersion: content.normalizerVersion,
-      signals: signalsFromNormalized(content),
-    });
-  }
-}
-
-function placeholderPageContent(canonicalUrl: string): NormalizedCompetitorPageContent {
-  return {
-    normalizerVersion: COMPETITOR_PAGE_NORMALIZER_VERSION,
-    canonicalUrl,
-    title: null,
-    metaDescription: null,
-    visibleTextExcerpt: null,
-    visibleTextHash: null,
-    offerOrPriceText: null,
-    ctaText: null,
-    formPresent: false,
-    contentHash: "inventory-placeholder",
-  };
-}
-
-function pageUrlInventory(
-  pages: readonly Pick<WebsiteSiteScanPageRecord, "canonicalUrl">[],
-): CompetitorPageInventory {
-  return new Map(pages.map((page) => [page.canonicalUrl, placeholderPageContent(page.canonicalUrl)]));
-}
-
-function observationToNormalizedContent(
-  observation: WebsitePageObservationRecord,
-): NormalizedCompetitorPageContent | null {
-  if (observation.fetchStatus !== "fetched") return null;
-  if (observation.contentHash == null || observation.signals == null) return null;
-  const signals = observation.signals;
-  return {
-    normalizerVersion:
-      observation.normalizerVersion ?? COMPETITOR_PAGE_NORMALIZER_VERSION,
-    canonicalUrl: observation.canonicalUrl,
-    title: signals.title,
-    metaDescription: signals.metaDescription,
-    visibleTextExcerpt: signals.visibleTextExcerpt,
-    visibleTextHash: signals.visibleTextHash,
-    offerOrPriceText: signals.offer ?? signals.price,
-    ctaText: signals.cta,
-    formPresent: signals.formPresent ?? false,
-    contentHash: observation.contentHash,
-  };
-}
-
-function observationInventory(
-  observations: readonly WebsitePageObservationRecord[],
-): CompetitorPageInventory {
-  const inventory = new Map<string, NormalizedCompetitorPageContent>();
-  for (const observation of observations) {
-    const content = observationToNormalizedContent(observation);
-    if (content == null) continue;
-    inventory.set(content.canonicalUrl, content);
-  }
-  return inventory;
-}
-
-function watchEventTypeForFact(fact: WebsitePageChange): WatchEventType | null {
-  if (fact.kind === "page-added") return "website_page_added";
-  if (fact.kind === "page-removed") return "website_page_removed";
-  if (fact.kind === "field-changed" && fact.material) return "website_page_changed";
-  return null;
-}
-
-function summaryForFact(fact: WebsitePageChange): string {
-  if (fact.kind === "field-changed") {
-    return `${fact.field} changed on ${fact.canonicalUrl}`;
-  }
-  return fact.canonicalUrl;
-}
-
-export interface EmitWebsitePageChangeEventsInput {
-  watchlistId: string;
-  runId: string;
-  inventoryComplete: boolean;
-  captureAt?: string | null;
-}
-
-/**
- * Load the prior complete scan's observations, run the existing evaluator, and
- * write alertable website_page_* watch_event rows. The first complete scan is
- * the baseline and emits nothing. Title / meta / form facts are dropped.
- */
-export async function emitWebsitePageChangeEvents(
-  env: AppEnv,
-  input: EmitWebsitePageChangeEventsInput,
-): Promise<{ eventIds: string[] }> {
-  const prior = await getLatestCompleteWebsiteScanBaseline(
-    env,
-    input.watchlistId,
-    input.runId,
-  );
-  if (prior == null) {
-    return { eventIds: [] };
-  }
-
-  const [currentPages, currentObservations] = await Promise.all([
-    listWebsiteSiteScanPagesForRun(env, input.watchlistId, input.runId),
-    listWebsitePageObservationsForRun(env, input.watchlistId, input.runId),
-  ]);
-
-  const context = {
-    priorInventoryComplete: prior.scan.inventoryComplete,
-    currentInventoryComplete: input.inventoryComplete,
-    priorCaptureAt: prior.scan.finalizedAt ?? prior.scan.startedAt,
-    currentCaptureAt: input.captureAt ?? null,
-  };
-
-  const structuralFacts = evaluateWebsitePageChanges(
-    pageUrlInventory(prior.pages),
-    pageUrlInventory(currentPages),
-    context,
-  ).filter((fact) => fact.kind === "page-added" || fact.kind === "page-removed");
-
-  const fieldFacts = evaluateWebsitePageChanges(
-    observationInventory(prior.observations),
-    observationInventory(currentObservations),
-    { ...context, currentInventoryComplete: false },
-  ).filter((fact) => fact.kind === "field-changed");
-
-  const eventIds: string[] = [];
-  for (const fact of [...structuralFacts, ...fieldFacts]) {
-    const eventType = watchEventTypeForFact(fact);
-    if (eventType == null) continue;
-    const eventId = await createWatchEvent(env, {
-      watchlistId: input.watchlistId,
-      runId: input.runId,
-      eventType,
-      adId: null,
-      baselineFromRunId: prior.scan.watchlistRunId,
-      title: formatWatchEventTypeLabel(eventType),
-      summary: summaryForFact(fact),
-      metadata: {
-        from: fact.before ?? "",
-        to: fact.after ?? "",
-        canonicalUrl: fact.canonicalUrl,
-        field: fact.field,
-        kind: fact.kind,
-        dedupeKey: fact.dedupeKey,
-      },
-    });
-    eventIds.push(eventId);
-  }
-  return { eventIds };
 }
 
 async function loadRobotsRules(
