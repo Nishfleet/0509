@@ -39,8 +39,15 @@ const COHORT_BRANDS = [
   { domain: "goat.com", brand: "GOAT" },
 ] as const;
 
+// `saucony.com` is the excluded brand. It MUST be in the bundled
+// `data/seed-lists/sneaker-resale.json` so the production default
+// `resolveSeedList("sneaker-resale")` surfaces it; the only thing keeping
+// it out of the cohort is `deriveSneakerResaleCohort`'s `hasCoverage`
+// filter. Using a brand that's not in the seed list would make the
+// missing-tier branch (not the hasCoverage branch) do the dropping, which
+// is not what the regression guard is supposed to prove.
 const EXCLUDED_BRANDS = [
-  { domain: "hypebeast.com", brand: "Hypebeast" },
+  { domain: "saucony.com", brand: "Saucony" },
 ] as const;
 
 function tier(overrides: Partial<SneakerResaleTier>): SneakerResaleTier {

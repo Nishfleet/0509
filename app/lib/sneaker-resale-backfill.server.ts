@@ -44,6 +44,7 @@ import {
 } from "~/lib/landing-pages.server";
 import { loadOfferTimeline } from "~/lib/offer-timeline.server";
 import {
+  canonicalizeSneakerResaleDomain,
   deriveSneakerResaleCohort,
   type SneakerResaleCohortEntry,
   type SneakerResaleTier,
@@ -239,7 +240,11 @@ export async function runSneakerResaleBackfill(
 
   const tierByDomain = new Map(cohort.map((entry) => [entry.domain, entry.tier]));
   const requested = options.domains
-    ? new Set(options.domains.map((d) => d.trim().toLowerCase()).filter(Boolean))
+    ? new Set(
+        options.domains
+          .map((d) => canonicalizeSneakerResaleDomain(d))
+          .filter((d): d is string => Boolean(d)),
+      )
     : null;
 
   const results: SneakerResaleBackfillDomainResult[] = [];
