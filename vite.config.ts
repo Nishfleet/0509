@@ -78,6 +78,16 @@ export default defineConfig(({ mode }) => ({
     // NODE_ENV from a caller's shell or CI cannot break the suite.
     env: { NODE_ENV: "test" },
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    // The D1 integration suite under tests/integration-d1/ runs on real
+    // workerd via @cloudflare/vitest-plugin (vitest.workers.config.ts) and
+    // imports `cloudflare:workers`/`cloudflare:test`, which only exist in
+    // the Workers pool. Exclude it from this node-env suite so the two
+    // configs own disjoint file sets.
+    exclude: [
+      "tests/integration-d1/**",
+      "**/node_modules/**",
+      "**/dist/**",
+    ],
     testTimeout: 10_000,
   },
 }));
