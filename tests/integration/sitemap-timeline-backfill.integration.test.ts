@@ -195,8 +195,7 @@ describe("sitemap-timeline cohort nightly backfill (issue #1958, phase 4)", () =
       expect(entry?.snapshotId).toBe(sitemapTimelineBackfillRowId(domain, day));
 
       // The row landed in the real schema with BOTH artifact receipts in the
-      // metadata — the proof gate (issue #1284) accepts it, so the row is a
-      // complete-proof sitemap candidate on the next read.
+      // metadata — a complete-proof sitemap candidate on the next read.
       const row = await db()
         .prepare(
           `SELECT id, artifact_key, metadata_json, canonical_url, captured_at
