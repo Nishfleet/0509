@@ -1,46 +1,47 @@
 ## What
 
-Closes #1929. The moat page — `/timeline/:domain` — was absent from `https://0509.io/llms.txt`, so AI answer engines indexing the site via that map never pointed at the dated offer-state ledger. This PR extends the existing dynamic-brand-page pipeline to also list the same indexable `/timeline/:domain` URLs the sitemap emits.
+Narrow the `gate-integrity` gate-weakening scan so dependency lockfiles are excluded from it. A Dependabot bump rewrites only the lockfile, whose machine-generated version/integrity text can coincidentally resemble a skip marker or an assertion (e.g. `@babel/helper-skip-transparent-expression-wrappers`, `"integrity": "sha512-..."`). Excluding lockfile paths up front keeps the scan from ever reading lockfile bytes, so a lockfile-only PR is structurally immune to a false positive regardless of how the content patterns evolve.
 
-**Files**
+This is a narrowing, never a relaxation: every other path is still scanned exactly as before. The negative control fixture proves a real `it.skip(` in a test file with no `test-removal-justified:` trailer still fails.
 
-- `app/lib/public-markdown.ts` — new `llmsPageForTimelinePath(path, lastmod?)` mirroring `llmsPageForBrandPath` (single-segment `/timeline/:domain` regex, locale prefixes and multi-segment paths fall out naturally); `buildLlmsText` now accepts an optional second arg with timeline entries; the rendered output gains a `Timelines:` block right under `Pages:`; bound by the imported `SITEMAP_TIMELINE_PATH_LIMIT` from `sitemap.server` so no parallel cap is invented.
-- `workers/app.ts` — `/llms.txt` branch now resolves both readers in parallel via `Promise.all([loadIndexableBrandPageEntries(env), loadIndexableTimelineEntries(env)])` so the two surfaces cannot diverge by construction. The no-D1 / no-table degradation inside `loadIndexableTimelineEntries` keeps the no-D1 / demo fallback byte-identical to today's static funnel.
-- `tests/public-markdown.test.ts` — four new tests: (a) `buildLlmsText` renders the offer-timeline line with newest-capture date and skips non-qualifying paths while staying `=== LLMS_TEXT` on the empty-arg call (acceptance 5a/5b/5c); (b) exactly one blank line between the `Timelines:` block and `Current product truth:`; (c) timeline section is capped at `SITEMAP_TIMELINE_PATH_LIMIT` entries with filter-first slice order; (d) brand-page contract is unchanged when timeline entries are also passed.
+## Honest finding on the issue premise
+
+The issue reports that lockfile-only Dependabot PRs (#1579, #1543, #1589) fail `gate-integrity`. I verified this against live data: **they do not**. All three pass `gate-integrity` on main today (latest runs SUCCESS). The current decision script is already structurally immune to lockfile false positives, because lockfiles are neither test paths nor gate paths, so none of the content patterns fire on them.
+
+The real blocker for those PRs is the `arm` check: `AUTO_REVERT_PAT is not configured` on Dependabot-triggered runs (GitHub does not expose repo secrets to Dependabot-triggered workflows). That is a separate defect, filed as **#1948**.
+
+So this change is defensive hardening that makes the lockfile immunity explicit and durable against future pattern changes, plus fixtures that pin the behavior. It does not fix an active gate-integrity failure, because none exists.
 
 ## Verification
 
-Real runs, on this branch, against the public-markdown unit suite + full node project:
+- `bash .github/scripts/test-gate-integrity.sh` → **73 passed, 0 failed** (was 70; +3 new fixtures).
+- New fixtures:
+  - `lockfile_only_bump` — #1579's exact 3-line diff → PASS.
+  - `lockfile_skip_like_text` — #1589's skip-like/integrity text → PASS.
+  - `lockfile_negative_control` — real `it.skip(` in a test file, no trailer → FAIL (gate still blocks).
+- Real PR diffs #1579 and #1589 run through the decision script → PASS.
 
-```
-$ npx vitest run --configLoader runner --project node tests/public-markdown.test.ts
- Test Files  1 passed (1)
-      Tests  13 passed (13)
+run-proof: fixture regression `test-gate-integrity.sh` (73/73 green).
 
-$ npx vitest run --configLoader runner --project node
- Test Files  602 passed (602)
-      Tests  7173 passed (7173)
+## Gate-path change
 
-$ npx tsc -b
-(no errors in app/lib/public-markdown.ts, workers/app.ts, tests/public-markdown.test.ts;
- pre-existing e2e/playwright errors in journey-* and playwright.config.ts are not
- introduced by this diff.)
-```
+This PR edits `.github/scripts/gate-integrity.sh` and `.github/scripts/test-gate-integrity.sh`, which are gate-owned paths. Per the gate-integrity rule, I do not post the attestation comment myself; a repository admin must post `gate-integrity-attest: <head sha>` for this PR to pass the gate.
 
-`run-proof:` the targeted `tests/public-markdown.test.ts` suite ran on this branch and went 13/13 green; the full node project (602 files, 7173 tests) re-ran green to confirm nothing else moved.
+Closes #1947
 
-The production parity check is captured by the existing test scaffolding — `buildLlmsText()` keeps `=== LLMS_TEXT` byte-identical so any future regression in the no-D1 / demo / missing-table fallback breaks here before reaching production. The live confirm of parity between sitemap and llms.txt requires a deploy + warm D1 read; that is left to the auto-merge arm.
+## Reviewer round (1 of 1)
 
-## Reviewer round (pstack `reviewer-senior`, seat cursor/cursor-grok-4.6-high)
+Reviewer seat: minimax/MiniMax-M3 (senior ladder exhausted; fell through to capable seat).
 
-Adjudicated against `~/.pi/agent/skills/review-adjudication/SKILL.md`:
+### Act on
+None.
 
-- **Act on** (warning #1, acceptance 2 wording): the offer-timeline line copy now reads "at least one dated offer state" instead of the uncounted plural "dated offer states" — the loader returns no count, and the issue's own constraint was "no unsupported claim — if the ledger has one state, say one state." Test strings updated to match.
-- **Act on** (warning #2, cap stability): the `validCount` for the filter-first cap test is now `Math.min(200, SITEMAP_TIMELINE_PATH_LIMIT)` so the assertion stays stable if the shared cap moves below 200.
-- **Consider** (suggestion: `SITEMAP_TIMELINE_PATH_LIMIT` import pulls `sitemap.server` into this module's graph). Noted — `public-markdown` is server-only today, and `workers/app.ts` already imports the sitemap module. No client route imports `public-markdown`. Noted, not acted.
-- **Consider** (suggestion: no worker test that `/llms.txt` actually calls both loaders). Noted — a workers-side assertion would land in `tests/integration/` and expand scope; this PR stays in the unit-test lane.
-- **Noted** (suggestion: ~1000-line file size). Pre-existing layout; not this diff's problem.
-- **Dismissed with reason** (scope check warning): `.fleet/plan.md` and `.fleet/pr-body.md` are fleet paper (heavy-mode artifacts), not product files. Reviewer noted "Fleet paper should not block merge" — confirmed out of scope for the product review gate.
-- **Acceptance check** — all six bullets PASS post-fix.
+### Consider
+None.
 
-`Closes #1929`
+### Noted
+- The change does not fix an active gate-integrity failure — the three PRs already pass on main. This is defensive hardening; the real blocker is the `arm`/AUTO_REVERT_PAT issue (#1948). Already documented in the "Honest finding" section above.
+- The `lockfile_skip_like_text` fixture's content does not trip the current `SKIP_MARKERS`/`ASSERTION` regexes, so it pins the exclusion rather than reproducing a live false-positive trigger. Consistent with the honest finding; kept as a regression pin.
+
+### Dismissed
+- `prev` exclusion asymmetry (renaming a test file to a lockfile path would skip it): not a realistic bypass — a test renamed to `package-lock.json` would no longer match `TEST_PATH` and would break the build. The `prev` check correctly handles lockfile renames.
