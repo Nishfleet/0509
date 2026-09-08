@@ -839,10 +839,13 @@ export interface SitemapEntry {
 export const LATEST_CHANGELOG_ENTRY_DATE = "2026-09-06";
 
 /**
- * Static funnel paths with honest changefreq/priority tiers. lastmod is
- * deliberately omitted on static paths — the build has no per-page content
- * timestamp, and inventing one would be a false freshness claim. Dynamic
- * /ads/:domain brand pages carry a real lastmod from their cache fetched_at.
+ * Static funnel paths with honest changefreq/priority tiers. lastmod on
+ * static paths is attached at SITEMAP-RENDER time, never at build time:
+ * the production sitemap (see `withStaticLastmod` in app/lib/sitemap.server.ts)
+ * stamps the changelog's latest entry date — the app's real content record —
+ * with /brands overridden by the newest /ads capture's fetched_at. This
+ * table carries only the static changefreq/priority tiers; the no-DB fallback
+ * (SITEMAP_XML below) does the same with the changelog date alone.
  */
 const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
   "/": { changefreq: "daily", priority: "1.0" },
@@ -918,6 +921,11 @@ export function normalizeSitemapLastmod(value: string | undefined): string | und
   // Real-calendar-date check: rejects 2026-02-31 and friends.
   const parsed = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    return undefined;
+  }
+  // A future date is a false freshness claim too (reviewer round, issue
+  // #2031): never emit one.
+  if (parsed.getTime() > Date.now()) {
     return undefined;
   }
   return value;
