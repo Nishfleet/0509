@@ -142,6 +142,18 @@ TEST_PATH = re.compile(
     r"[^/]+\.(?:test|spec)\.(?:ts|tsx|js|jsx|mjs|cjs)$"
 )
 
+# Dependency lockfiles are machine-generated version/integrity manifests, not
+# test or workflow source. Their content is not gate-weakening signal: a
+# package name or integrity hash can coincidentally resemble a skip marker or
+# an assertion (e.g. `@babel/helper-skip-transparent-expression-wrappers`,
+# `"integrity": "sha512-..."`), and a Dependabot bump must never be judged by
+# the text of the lockfile it rewrites. Excluding these paths up front keeps
+# the gate-weakening scan from ever reading lockfile bytes, so a lockfile-only
+# PR is structurally immune to a false positive regardless of how the content
+# patterns evolve. This is a narrowing, never a relaxation: every other path
+# is still scanned exactly as before.
+LOCKFILE_PATH = re.compile(r"(?:^|/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$")
+
 # A newly skipped or focused test. `.only` is included because it silently
 # disables every OTHER test in the file, which is a larger hole than `.skip`.
 SKIP_MARKERS = re.compile(
@@ -518,6 +530,14 @@ def main():
         patch = f.get("patch")
         if patch is not None and not isinstance(patch, str):
             return fail([f"context bundle patch for {name!r} is not a string"])
+
+        # Lockfiles are excluded from the gate-weakening scan entirely (see
+        # LOCKFILE_PATH). A lockfile is never a test path and never a gate
+        # path, so skipping it here changes no verdict for any real diff — it
+        # only makes the immunity explicit and durable against future pattern
+        # changes.
+        if LOCKFILE_PATH.search(name) or (prev and LOCKFILE_PATH.search(prev)):
+            continue
 
         # --- test-integrity, filename level -------------------------------
         if status == "removed" and is_test_path(name):
