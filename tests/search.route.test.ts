@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DataWithResponseInit, LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
 
 import {
   mapCustomerRouteError,
@@ -11,18 +11,20 @@ import type { AdRecord, SearchResponse } from "~/lib/types";
 // The /search loader returns a plain payload object for most branches, but the
 // anonymous fresh-search success branch (issue #1972 phase 1) returns react-router
 // `data(...)` so it can Set-Cookie without a JSON Response. Unwrap whichever
-// shape came back so assertions on the payload stay shape-stable. Distribute
-// over DataWithResponseInit the same way react-router's ClientData helper does,
-// otherwise tsc sees `.result` as missing on the wrapper member of the union.
-type UnwrapLoaderData<T> = T extends Response
-  ? never
-  : T extends DataWithResponseInit<infer D>
-    ? D
-    : T;
+// shape came back so assertions on the payload stay shape-stable. Do not
+// import DataWithResponseInit — react-router only re-exports it as
+// UNSAFE_DataWithResponseInit, which fails tsc.
+type SearchLoaderPayload = {
+  result?: unknown;
+  selectedAd?: unknown;
+  relevanceApplied?: unknown;
+  session?: unknown;
+  inputError?: unknown;
+};
 
-function isDataWithResponseInit<T>(
+function isDataWithResponseInit(
   value: unknown,
-): value is DataWithResponseInit<T> {
+): value is { type: string; data: SearchLoaderPayload } {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -31,16 +33,16 @@ function isDataWithResponseInit<T>(
   );
 }
 
-async function unwrapLoaderResult<T>(
-  loaderFn: (args: LoaderFunctionArgs) => Promise<T>,
+async function unwrapLoaderResult(
+  loaderFn: (args: LoaderFunctionArgs) => Promise<unknown>,
   args: LoaderFunctionArgs,
-): Promise<UnwrapLoaderData<T>> {
+): Promise<SearchLoaderPayload> {
   const out = await loaderFn(args);
   if (out instanceof Response) {
-    return (await out.json()) as UnwrapLoaderData<T>;
+    return (await out.json()) as SearchLoaderPayload;
   }
-  if (isDataWithResponseInit(out)) return out.data as UnwrapLoaderData<T>;
-  return out as UnwrapLoaderData<T>;
+  if (isDataWithResponseInit(out)) return out.data;
+  return out as SearchLoaderPayload;
 }
 
 const baseAd: AdRecord = {
