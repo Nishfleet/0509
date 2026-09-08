@@ -85,12 +85,14 @@ interface RateLimitErrorData {
   error: string;
   message?: string;
   retryAfter?: number;
+  continuePath?: string;
 }
 
 /**
  * Rate-limit error state for anonymous /search.
  *
- * Shows the policy (20 requests / 10 min / IP), an absolute retry time, and a
+ * Shows the policy (20 searches / 10 min per browser, with a shared-IP
+ * abuse backstop), an absolute retry time, and a minute:second countdown.
  * minute:second countdown. The "Try again" button is disabled until the window
  * clears, then submits a form that carries the original q/country parameters so
  * the user is not forced to re-type. The original search state is also written
@@ -199,6 +201,12 @@ export function PublicSearchRateLimitError({ error }: { error: unknown }) {
     () => `/auth/login?redirectTo=${encodeURIComponent(retryPath)}`,
     [retryPath],
   );
+  const continuePath = useMemo(() => {
+    if (typeof data?.continuePath === "string" && data.continuePath.startsWith("/auth/signup")) {
+      return data.continuePath;
+    }
+    return `/auth/signup?redirectTo=${encodeURIComponent(retryPath)}`;
+  }, [data?.continuePath, retryPath]);
 
   const retryAtIso = retryAt?.toISOString() ?? null;
 
@@ -253,6 +261,13 @@ export function PublicSearchRateLimitError({ error }: { error: unknown }) {
           </button>
           <Link className="f9-wk-btn-quiet" to="/">
             Back to Five to Nine
+          </Link>
+          <Link
+            className="f9-wk-btn"
+            data-testid="rate-limit-continue"
+            to={continuePath}
+          >
+            Continue in a signed-in account (free)
           </Link>
           <Link className="f9-wk-btn-quiet" to={signInRedirect}>
             Sign in for more searches
