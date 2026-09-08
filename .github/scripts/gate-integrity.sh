@@ -531,14 +531,6 @@ def main():
         if patch is not None and not isinstance(patch, str):
             return fail([f"context bundle patch for {name!r} is not a string"])
 
-        # Lockfiles are excluded from the gate-weakening scan entirely (see
-        # LOCKFILE_PATH). A lockfile is never a test path and never a gate
-        # path, so skipping it here changes no verdict for any real diff — it
-        # only makes the immunity explicit and durable against future pattern
-        # changes.
-        if LOCKFILE_PATH.search(name) or (prev and LOCKFILE_PATH.search(prev)):
-            continue
-
         # --- test-integrity, filename level -------------------------------
         if status == "removed" and is_test_path(name):
             test_violations.append(f"test file deleted: {name}")
@@ -557,6 +549,18 @@ def main():
                     f"no patch available for {name} (binary or oversized diff); "
                     "content rules could not be applied to it"
                 )
+            continue
+
+        # Dependency lockfiles are exempt from the CONTENT scan only (see
+        # LOCKFILE_PATH). The filename-level test/gate integrity checks above
+        # still run, so a test can never vanish by being renamed to a lockfile
+        # name or a gate path edited through one — this narrows the scan, never
+        # the gate. A lockfile's machine-generated version/integrity text is
+        # not gate-weakening signal even when it happens to resemble one (e.g.
+        # `|| true` in pnpm-lock.yaml, an `integrity:` hash). Only the current
+        # filename is excluded; renames FROM a lockfile are not, keeping the
+        # exclusion to the narrowest surface.
+        if LOCKFILE_PATH.search(name):
             continue
 
         adds = added_lines(patch)

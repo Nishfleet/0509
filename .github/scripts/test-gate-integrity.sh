@@ -127,6 +127,27 @@ fixture lockfile_skip_like_text '{"files": [
    "patch": "+        \"@babel/helper-skip-transparent-expression-wrappers\": \"^7.29.7\",\n+    \"node_modules/@babel/helper-skip-transparent-expression-wrappers\": {\n+      \"resolved\": \"https://registry.npmjs.org/@babel/helper-skip-transparent-expression-wrappers/-/helper-skip-transparent-expression-wrappers-7.29.7.tgz\",\n+        \"@cloudflare/vitest-plugin\": \"^1.1.2\",\n+      \"resolved\": \"https://registry.npmjs.org/@cloudflare/vitest-plugin/-/vitest-plugin-1.1.2.tgz\",\n+      \"integrity\": \"sha512-abcdefghijklmnopqrstuvwxyz==\",\n-        \"@cloudflare/vitest-plugin\": \"^1.0.0\",\n-      \"resolved\": \"https://registry.npmjs.org/@cloudflare/vitest-plugin/-/vitest-plugin-1.0.0.tgz\""}]}'
 run_fixture lockfile_skip_like_text PASS
 
+# A pnpm-lock.yaml is the ONLY lockfile a content rule can actually fire on:
+# the CI_SOFTENER scan (see gate-integrity.sh) applies to every `.yaml`, so
+# lockfile bytes that happen to contain `|| true` used to trip the gate on
+# main. This is the one fixture that genuinely FAILS without the LOCKFILE_PATH
+# exclusion and PASSES with it — it is the regression pin the change needs
+# (a plain `package-lock.json` never matched a content rule even on main).
+# Must NOT name a softened-CI violation for the lockfile.
+fixture lockfile_pnpm_ci_softener '{"files": [
+  {"filename": "pnpm-lock.yaml", "status": "modified",
+   "patch": "+      || true\n+      version: 1.2.3"}]}'
+run_fixture lockfile_pnpm_ci_softener PASS "no test-integrity or gate-path violation"
+
+# The exclusion is scoped to lockfile CONTENT, never to filename-level suite
+# integrity: a test renamed to a lockfile name is still a test renamed out of
+# the suite and must FAIL. Pins the narrowing so a future edit cannot widen
+# the skip to mask test removal.
+fixture lockfile_rename_bypass '{"files": [
+  {"filename": "package-lock.json", "previous_filename": "tests/auth.test.ts", "status": "renamed",
+   "patch": "+lockfile bytes"}]}'
+run_fixture lockfile_rename_bypass FAIL "test file renamed out of the suite: tests/auth.test.ts -> package-lock.json"
+
 # The exclusion must NOT weaken the gate for real test files. A genuine
 # `it.skip(` in a test path with no `test-removal-justified:` trailer still
 # FAILS — the negative control that proves the narrowing is scoped to
