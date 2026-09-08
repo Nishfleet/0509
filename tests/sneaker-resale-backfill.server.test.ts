@@ -415,6 +415,51 @@ describe("runSneakerResaleBackfill (idempotency + subset paths)", () => {
     expect(result.capturedCount).toBe(1);
     expect(capturedDomains).toEqual(["stockx.com"]);
   });
+
+  it("canonicalizes the caller-supplied domains subset (WWW.StockX.com === stockx.com)", async () => {
+    const env = { DB: {} } as unknown as AppEnv;
+    queryOne.mockResolvedValue(null);
+    execute.mockResolvedValue({});
+    replaceAnalysisFields.mockResolvedValue(undefined);
+
+    const capturedDomains: string[] = [];
+    const captureStub = vi.fn(async (_env: AppEnv, url: string) => {
+      const domain = url.replace(/^https:\/\/www\./, "").replace(/\/$/, "");
+      capturedDomains.push(domain);
+      return {
+        rawUrl: url,
+        canonicalUrl: url,
+        rawHeadline: `headline for ${domain}`,
+        normalizedHeadline: `headline for ${domain}`,
+        normalizedHeadlineHash: `hash-${domain}`,
+        ctaText: null,
+        priceText: null,
+        formPresent: null,
+        captureMethod: "browser_render",
+        capturedAt: "2026-09-05T01:30:00.000Z",
+        artifactKey: null,
+        metadata: null,
+      };
+    });
+
+    const result = await runSneakerResaleBackfill(env, {
+      now: new Date("2026-09-05T01:00:00.000Z"),
+      cohort: cohort(
+        { domain: "stockx.com" },
+        { domain: "nike.com" },
+      ),
+      // WWW. prefix and trailing dot are stripped before the cohort lookup
+      // so a caller with sloppy domain input still gets the right cohort
+      // entry — parity with `canonicalizeSneakerResaleDomain`.
+      domains: ["WWW.StockX.com."],
+      capture: captureStub as never,
+    });
+
+    expect(result.capturedCount).toBe(1);
+    expect(capturedDomains).toEqual(["stockx.com"]);
+    // The other cohort entry (nike.com) was filtered out by the subset.
+    expect(capturedDomains).not.toContain("nike.com");
+  });
 });
 
 describe("runSneakerResaleBackfill (write path shape)", () => {
