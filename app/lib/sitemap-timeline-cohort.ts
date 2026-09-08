@@ -2,22 +2,19 @@
  * Pure cohort derivation for sitemap-listed /timeline/:domain pages
  * (issue #1958, phase 1).
  *
- * The nightly sitemap-timeline backfill (phase 2) captures the homepages of
- * domains that (a) appear in the indexable timeline sitemap
- * (`loadIndexableTimelineEntries` — the complete-proof + non-ad-destination
- * gate, applied for free by reusing that set) and (b) carry >=1 verified-or-
- * likely ad row in the existing `public_search` discovery cache — the same
- * evidence rule the sneaker-resale cohort uses (issue #1946). A domain with
- * no cache row, or only `unmatched` ads, is `hasCoverage: false` and stays
- * off the cohort: its existing /timeline/:domain ledger is honest and must
- * not be overwritten by a phantom capture.
+ * The nightly backfill (phase 2) captures domains that (a) appear in the
+ * indexable timeline sitemap (`loadIndexableTimelineEntries` — complete-proof
+ * + non-ad-destination gate applied for free by reusing that set) and (b)
+ * carry >=1 verified-or-likely ad row in the existing `public_search`
+ * discovery cache (same evidence rule as the sneaker cohort, issue #1946).
+ * A domain with no cache row, or only `unmatched` ads, is `hasCoverage: false`
+ * and stays off the cohort — its honest ledger is never overwritten by a
+ * phantom capture.
  *
- * Pure helper by design: no D1 imports, no server-only dependencies, no
- * provider calls. The D1 lookups that produce `tierByDomain` and the
- * candidate-domain list live in `app/lib/sitemap-timeline-cohort.server.ts`.
- * Sibling shape to `app/lib/sneaker-resale-cohort.ts`; types are defined
- * locally (never imported from the sneaker module) so the two cohorts can
- * evolve independently.
+ * Pure by design: no D1 imports, no server-only dependencies, no provider
+ * calls; the D1 lookups live in `sitemap-timeline-cohort.server.ts`. Sibling
+ * shape to `sneaker-resale-cohort.ts`; types are defined locally so the two
+ * cohorts evolve independently.
  */
 
 import {

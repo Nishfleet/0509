@@ -1,30 +1,22 @@
 /**
- * Nightly sitemap-timeline cohort Offer Timeline backfill (issue #1958, phase 2).
+ * Nightly sitemap-timeline cohort backfill (issue #1958, phase 2).
  *
- * Sibling module to `app/lib/sneaker-resale-backfill.server.ts` (issue #1946)
- * and `app/lib/demo-brand-backfill.server.ts` (issue #1449): same
- * `captureLandingPageSnapshot` write path, same `INSERT OR IGNORE` semantics,
- * same `requireScreenshot: true` honesty contract. The cohort is the
- * sitemap-listed timeline domain set from phase 1 (`app/lib/sitemap-timeline-cohort.server.ts`):
- * every domain in the indexable timeline sitemap minus the static
- * demo/sneaker-seed exclusions, filtered by the `public_search` tier verdict.
- * A sitemap-listed domain without verified/likely coverage stays off the
- * cohort — its honest /timeline/:domain ledger is never overwritten by a
- * phantom row.
+ * Sibling of `sneaker-resale-backfill.server.ts` (issue #1946) and
+ * `demo-brand-backfill.server.ts` (issue #1449): same `captureLandingPageSnapshot`
+ * write path, same `INSERT OR IGNORE` semantics, same `requireScreenshot: true`
+ * honesty contract. The cohort is the sitemap-listed timeline domain set from
+ * phase 1 minus the static demo/sneaker-seed exclusions, filtered by the
+ * `public_search` tier verdict — a listed domain without coverage stays off
+ * the cohort, so its honest /timeline/:domain ledger is never overwritten by
+ * a phantom row.
  *
- * Honesty contract (same shape as `runSneakerResaleBackfill`): a row is only
- * written when the capture pipeline returned a real snapshot (headline, CTA,
- * price, artifacts); a failed capture is a per-domain `capture_failed` and
- * never a written row; row ids are deterministic per (domain, UTC day) with
- * `INSERT OR IGNORE` so a cron retry cannot double-append a day;
- * `capture_method` is whatever the real pipeline reported; per-domain
- * failures never abort the other domains; no-coverage candidates are filtered
- * by `deriveSitemapTimelineCohort` before capture is ever called.
- *
- * Manager decisions carried from reviews: evidence age is surfaced via
- * `stale=N` in the summarize line (no expiry gate, phase 1); the cohort is
- * bounded by `SITEMAP_TIMELINE_COHORT_CAP` (default 200) so a future sitemap
- * coverage explosion cannot blow the nightly Browser Run budget.
+ * Honesty contract: a row is only written from a real snapshot (headline, CTA,
+ * price, artifacts); a failed capture is a per-domain `capture_failed`, never
+ * a written row; row ids are deterministic per (domain, UTC day) with
+ * `INSERT OR IGNORE`; per-domain failures never abort the other domains.
+ * Evidence age surfaces via `stale=N` (no expiry gate, phase 1); the cohort
+ * is bounded by `SITEMAP_TIMELINE_COHORT_CAP` (default 200) to bound nightly
+ * Browser Run spend.
  */
 
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
