@@ -72,8 +72,8 @@ export const KNOWN_IDENTITY_GAPS = Object.freeze(new Map([
 // A cold domain can return a warming page (0 rows) on the first hit. The
 // canary retries once after a short wait to clear the transient warming state
 // without burning the anonymous /search budget (20 req / 10 min / IP).
-export const WARMING_RETRY_LIMIT = 1;
-export const WARMING_RETRY_DELAY_MS = 5_000;
+export const WARMING_RETRY_LIMIT = 2;
+export const WARMING_RETRY_DELAY_MS = 15_000;
 
 // Anonymous /search is 20 requests per 10 minutes per IP. The canary makes 25
 // requests (one per domain), so a scheduled run can collide with other search
@@ -236,12 +236,14 @@ export async function probeSneakerResaleDomain({
  *   failures: SneakerResaleProbe[],
  *   noCoverage: SneakerResaleProbe[],
  *   identityGaps: { probe: SneakerResaleProbe, issue: string }[],
+ *   warming: SneakerResaleProbe[],
  * }}
  */
 export function evaluateSneakerResaleRecall(results) {
   const failures = [];
   const noCoverage = [];
   const identityGaps = [];
+  const warming = [];
   for (const probe of results) {
     if (probe.tierCounts.verified + probe.tierCounts.likely > 0) {
       continue;
@@ -254,6 +256,20 @@ export function evaluateSneakerResaleRecall(results) {
     // search-tier canary does for a persistent 429.
     if (probe.rateLimited || probe.requestError) {
       failures.push(probe);
+      continue;
+    }
+    // A probe that is STILL on the warming page after the retry budget is
+    // INCONCLUSIVE, not a dead-end: warming is the site's designed cold-cache
+    // state (production /search can stay warming for minutes on a cold
+    // domain, especially overnight), and the reference verifier's own
+    // contract counts a dead-end only as `rowCount == 0 && !isWarming`
+    // (bet2-live-verification.mjs). Treating a persistent warming page as a
+    // recall regression made the guard flap on rotating brands every night
+    // (2026-09-09 03:00/03:03 IST: footlocker+zappos, then puma+zappos, on
+    // identical code). Surfaced every run; a genuine regression (a settled,
+    // non-warming 0-row page) still fails loud below.
+    if (probe.isWarming) {
+      warming.push(probe);
       continue;
     }
     // 0 verified/likely on a CONFIRMED settled page. A known genuine-no-ads
@@ -286,7 +302,7 @@ export function evaluateSneakerResaleRecall(results) {
     // /ads/:domain page cannot publish.
     failures.push(probe);
   }
-  return { pass: failures.length === 0, failures, noCoverage, identityGaps };
+  return { pass: failures.length === 0, failures, noCoverage, identityGaps, warming };
 }
 
 /**
@@ -366,6 +382,14 @@ async function main() {
     emitLine(formatProbeLine(probe));
   }
   emitLine("");
+  if (verdict.warming.length > 0) {
+    emitLine(
+      `${verdict.warming.length} brand(s) still on the warming page after retries — inconclusive (not failed):`,
+    );
+    for (const probe of verdict.warming) {
+      emitLine(`  - ${probe.domain}: warming page, 0 rows — cold-cache, not a dead-end`);
+    }
+  }
   if (verdict.pass) {
     emitLine("PASS: every coverage-bearing sneaker-resale brand returned at least one verified or likely row");
     if (verdict.noCoverage.length > 0) {

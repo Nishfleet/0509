@@ -195,6 +195,103 @@ describe("canary.sneaker-resale-recall", () => {
     expect(verdict.pass).toBe(true);
   });
 
+  it("evaluateSneakerResaleRecall surfaces (does not fail) a probe still on the warming page after retries", () => {
+    // A persistent warming page is the site's designed cold-cache state, not
+    // evidence of a recall regression (the reference verifier counts a
+    // dead-end only as rowCount == 0 && !isWarming). It is inconclusive and
+    // surfaced, not failed — otherwise the guard flaps on rotating brands
+    // overnight (2026-09-09 03:00/03:03 IST). A settled non-warming 0-row
+    // page still fails loud.
+    const results = loadSneakerResaleDomains().map((entry) =>
+      entry.domain === "zappos.com"
+        ? {
+            domain: entry.domain,
+            brand: entry.brand,
+            status: 200,
+            rowCount: 0,
+            tierCounts: { verified: 0, likely: 0, unmatched: 0 },
+            headline: "Warming up the search index",
+            isWarming: true,
+          }
+        : {
+            domain: entry.domain,
+            brand: entry.brand,
+            status: 200,
+            rowCount: 2,
+            tierCounts: { verified: 2, likely: 0, unmatched: 0 },
+            headline: "2 verified ads linked to the brand",
+            isWarming: false,
+          },
+    );
+    const verdict = evaluateSneakerResaleRecall(results);
+    expect(verdict.pass).toBe(true);
+    expect(verdict.failures).toEqual([]);
+    expect(verdict.warming.map((p) => p.domain)).toEqual(["zappos.com"]);
+  });
+
+  it("evaluateSneakerResaleRecall still fails a settled non-warming 0-row dead-end alongside a warming domain", () => {
+    const results = loadSneakerResaleDomains().map((entry) =>
+      entry.domain === "footlocker.com"
+        ? {
+            domain: entry.domain,
+            brand: entry.brand,
+            status: 200,
+            rowCount: 0,
+            tierCounts: { verified: 0, likely: 0, unmatched: 0 },
+            headline: "No verified ads for the brand",
+            isWarming: false,
+          }
+        : entry.domain === "puma.com"
+          ? {
+              domain: entry.domain,
+              brand: entry.brand,
+              status: 200,
+              rowCount: 0,
+              tierCounts: { verified: 0, likely: 0, unmatched: 0 },
+              headline: "Warming up the search index",
+              isWarming: true,
+            }
+          : {
+              domain: entry.domain,
+              brand: entry.brand,
+              status: 200,
+              rowCount: 2,
+              tierCounts: { verified: 2, likely: 0, unmatched: 0 },
+              headline: "2 verified ads linked to the brand",
+              isWarming: false,
+            },
+    );
+    const verdict = evaluateSneakerResaleRecall(results);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.failures.map((p) => p.domain)).toEqual(["footlocker.com"]);
+    expect(verdict.warming.map((p) => p.domain)).toEqual(["puma.com"]);
+  });
+
+  it("probeSneakerResaleDomain retries a warming page up to WARMING_RETRY_LIMIT before returning it", async () => {
+    const { WARMING_RETRY_LIMIT, WARMING_RETRY_DELAY_MS } = await import(
+      "../scripts/canary-sneaker-resale-recall.mjs"
+    );
+    const warmingHtml =
+      '<html><body><section class="f9-results-panel"><h2 class="f9-wk-sec-title">Checking this competitor — results on the way</h2></section></body></html>';
+    let calls = 0;
+    const sleeps: number[] = [];
+    const probe = await probeSneakerResaleDomain({
+      domain: "zappos.com",
+      baseUrl: "https://0509.io",
+      fetchImpl: (() => {
+        calls += 1;
+        return Promise.resolve(mockFetchResponse(warmingHtml));
+      }) as typeof fetch,
+      sleepImpl: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    expect(calls).toBe(WARMING_RETRY_LIMIT + 1);
+    expect(sleeps).toEqual(Array(WARMING_RETRY_LIMIT).fill(WARMING_RETRY_DELAY_MS));
+    expect(probe.isWarming).toBe(true);
+    expect(probe.rowCount).toBe(0);
+  });
+
   it("evaluateSneakerResaleRecall fails a persistent 429 even on a carve-out domain", () => {
     // A run that cannot confirm a domain (persistent 429 / request error) is
     // never a pass, regardless of which carve-out the domain is in. sneakerping
