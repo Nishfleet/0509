@@ -99,8 +99,12 @@ describe("public /search q= and country= SSR heading and input", () => {
     );
     expect(h1Match?.[1] ?? "").not.toContain("across all countries");
     expect(h1Match?.[1] ?? "").not.toContain("all-countries query");
-    // The country scope moved to the small annotation line under the H1.
-    expect(markup).toContain("Across all countries");
+    // The country scope moved to the small annotation line under the H1 and,
+    // for the unscoped default, renders an honest served-scope disclosure
+    // (issue #2020) instead of the old "Across all countries" overclaim.
+    expect(markup).toContain("Commercial ads are shown only where Meta delivered them in the EU/UK");
+    expect(markup).not.toContain("Across all countries");
+    expect(markup).not.toContain("across all countries");
     expect(markup).not.toContain("in all countries");
     // Issue 1759: the results view (a ?q= search) links the /brands hub as
     // a crawlable anchor, so the issue's verify command against

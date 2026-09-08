@@ -8,6 +8,7 @@ import {
   formatProofCaptureLabel,
   formatResultCardSummary,
   formatSearchCaptureAgeLabel,
+  ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE,
   formatSearchCommandTitle,
   formatSearchMarketScope,
   formatSearchPageScope,
@@ -424,13 +425,25 @@ describe("formatSearchMarketScope", () => {
 });
 
 describe("formatSearchPageScope", () => {
-  it("spells the all-countries view in plain buyer language, never a single market", () => {
-    expect(formatSearchPageScope("all")).toBe("across all countries");
-    expect(formatSearchPageScope("ALL")).toBe("across all countries");
+  it("served-scope disclosure for the all-countries default, never a universal-coverage claim", () => {
+    expect(formatSearchPageScope("all")).toBe(
+      ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE,
+    );
+    expect(formatSearchPageScope("ALL")).toBe(
+      ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE,
+    );
+    // Issue #2020: the default no longer claims universal coverage, and it
+    // still never collapses to a single named market.
+    expect(formatSearchPageScope("all")).not.toContain("across all countries");
+    expect(formatSearchPageScope("all")).not.toContain("all countries");
     expect(formatSearchPageScope("all")).not.toContain("in all countries");
     expect(formatSearchPageScope("all")).not.toContain("in United States");
-    expect(formatSearchPageScope("ALL")).not.toContain("in all countries");
-    expect(formatSearchPageScope("ALL")).not.toContain("in United States");
+    expect(formatSearchPageScope("ALL")).not.toContain("across all countries");
+    expect(formatSearchPageScope("ALL")).not.toContain("all countries");
+    // The honest disclosure names the served scope (EU/UK delivery).
+    expect(formatSearchPageScope("all")).toContain("EU");
+    expect(formatSearchPageScope("all")).toContain("UK");
+    expect(formatSearchPageScope("all")).toContain("Meta delivered");
   });
 
   it("names the market for a specific country", () => {
@@ -499,9 +512,20 @@ describe("formatSearchCommandTitle", () => {
 });
 
 describe("formatSearchScopeAnnotation", () => {
-  it("sentence-cases the all-countries scope for the annotation under the H1", () => {
-    expect(formatSearchScopeAnnotation("all")).toBe("Across all countries");
-    expect(formatSearchScopeAnnotation("ALL")).toBe("Across all countries");
+  it("sentence-cases the served-scope disclosure for the annotation under the H1", () => {
+    expect(formatSearchScopeAnnotation("all")).toBe(
+      ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE.charAt(0).toUpperCase() +
+        ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE.slice(1),
+    );
+    expect(formatSearchScopeAnnotation("ALL")).toBe(
+      ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE.charAt(0).toUpperCase() +
+        ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE.slice(1),
+    );
+    // Issue #2020: the annotation under the H1 stops the old overclaim.
+    expect(formatSearchScopeAnnotation("all")).not.toContain(
+      "Across all countries",
+    );
+    expect(formatSearchScopeAnnotation("all")).not.toContain("all countries");
   });
 
   it("sentence-cases a named market", () => {
