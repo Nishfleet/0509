@@ -232,7 +232,9 @@ describe("search page title", () => {
     // The title lives in one shared constant so the visible meta title and the
     // WebPage JSON-LD name can never drift apart.
     expect(searchSource).toContain(`searchTitle = "${title}"`);
-    expect(searchSource).toContain("title: searchTitle");
+    // The shared constant is still the fallback for the meta title on the
+    // unresolved/idle case (issue #2039 adds a resolved-brand override on top).
+    expect(searchSource).toContain("?? searchTitle");
     expect(searchSource).not.toContain('title: "Search | Five to Nine"');
   });
 });
