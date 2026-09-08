@@ -31,6 +31,12 @@ This PR edits `.github/scripts/gate-integrity.sh` and `.github/scripts/test-gate
 
 Closes #1947
 
+## Adjacent CI fix (salvage-resume, 2nd commit)
+
+The required `codex-node-checks` and `preview-assert` checks were failing on a **pre-existing time-bomb test** unrelated to this gate change: `tests/integration/mention-digest-resweep.integration.test.ts` hard-coded `2026-08-` in the presence-digest idempotency-key regex, but the key embeds the real wall-clock `since.slice(0,10)`, so it breaks every new month (observed 2026-09-08 → received `2026-09-01`). Verified unrelated via the PR diff (this PR touches only `.github/scripts/*.sh`), and by other open PRs (#1952, #1924) failing the same check on the same test.
+
+Fixed by asserting the full ISO date shape `\d{4}-\d{2}-\d{2}` instead of a specific month. Proven: the old regex fails against the live `2026-09-01` key; the test now passes (workers project, 6/6). This is a test repair (regex widening for date-agnosticism), not a test removal or skip — no `test-removal-justified` trailer applies.
+
 ## Reviewer round (1 of 1)
 
 Reviewer seat: cursor/cursor-grok-4.6-high (senior, resolved via find_senior_seat).
