@@ -26,7 +26,7 @@ import { DEMO_BRAND_PAGE_DOMAINS } from "~/lib/demo-brand-pages";
 import type { AppEnv } from "~/lib/env.server";
 import { resolveSeedList } from "~/lib/ads-domain-publisher.server";
 import { SNEAKER_RESALE_SEED_LIST } from "~/lib/sneaker-resale-backfill.server";
-import { loadIndexableTimelineEntries } from "~/lib/sitemap.server";
+import { loadIndexableBrandPageEntries, loadIndexableTimelineEntries } from "~/lib/sitemap.server";
 import {
   canonicalizeSitemapTimelineDomain,
   countSitemapTimelineTier,
@@ -63,12 +63,15 @@ interface AdvertiserPayloadShape {
 }
 
 /**
- * Read the bounded candidate set of indexable timeline domains from the
- * sitemap read. Wraps the EXISTING `loadIndexableTimelineEntries(env)` and
- * maps each `SitemapEntry.path` (`/timeline/:domain`) to its registrable
- * domain — the complete-proof + non-ad-destination gates and the
- * `SITEMAP_TIMELINE_PATH_LIMIT` bound apply upstream for free. Missing DB →
- * `[]` (degrade, never throw).
+ * Read the bounded candidate set of timeline domains. Issue #2021 widened the
+ * source from the capture-backed timeline sitemap (a bootstrap trap: only
+ * domains that already have captures were captured again) to the full tracked
+ * /ads cohort (`loadIndexableBrandPageEntries`) — every tracked brand whose
+ * landing page is watchable accumulates dated offer states. Coverage still
+ * applies downstream: the tier lookup (verified/likely `public_search`
+ * coverage) and `deriveSitemapTimelineCohort` gate which candidates actually
+ * get captured, and `SITEMAP_TIMELINE_COHORT_CAP` bounds nightly spend.
+ * Missing DB → `[]` (degrade, never throw).
  */
 export async function loadSitemapTimelineCandidateDomains(
   env: AppEnv,
@@ -76,8 +79,33 @@ export async function loadSitemapTimelineCandidateDomains(
   if (!env?.DB) {
     return [];
   }
-  const entries = await loadIndexableTimelineEntries(env);
-  return timelineDomainsFromSitemapEntries(entries);
+  const [brandEntries, timelineEntries] = await Promise.all([
+    loadIndexableBrandPageEntries(env),
+    loadIndexableTimelineEntries(env),
+  ]);
+  // Capture-backed timeline domains first (they carry an honest lastmod),
+  // then the tracked /ads cohort: rewrite each `/ads/:domain` entry to the
+  // equivalent `/timeline/:domain` shape so the shared path extractor
+  // (dedupe + canonicalize, never guessing) applies unchanged.
+  const adsAsTimeline = brandEntries.map((entry) => ({
+    path: entry.path.startsWith("/ads/")
+      ? `/timeline/${entry.path.slice("/ads/".length)}`
+      : entry.path,
+  }));
+  // Dedupe across both sources, capture-backed first-seen order preserved.
+  const seen = new Set<string>();
+  const domains: string[] = [];
+  for (const domain of [
+    ...timelineDomainsFromSitemapEntries(timelineEntries),
+    ...timelineDomainsFromSitemapEntries(adsAsTimeline),
+  ]) {
+    if (seen.has(domain)) {
+      continue;
+    }
+    seen.add(domain);
+    domains.push(domain);
+  }
+  return domains;
 }
 
 /**
