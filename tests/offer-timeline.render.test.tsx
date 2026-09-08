@@ -145,6 +145,32 @@ describe("/timeline/:domain render", () => {
     expect(markup).toContain("Festive glow kit");
   });
 
+  it("renders a geo-variance suppressed state as 'Capture suppressed' not a transition or 'First offer' (issue #1996)", async () => {
+    const suppressed = entry({
+      id: "fr-08",
+      capturedAt: "2026-09-08T00:00:00.000Z",
+      dateLabel: "8 Sep 2026",
+      canonicalUrl: "https://www.nike.com/fr/",
+      headline: "Nike. Just Do It",
+      ctaText: "En savoir plus sur les publicités personnalisées",
+      priceText: "—",
+      transition: null,
+      suppressedReason: "geo locale change",
+      screenshotHref: `/artifacts/proof/${encodeURIComponent(SCREENSHOT_B)}`,
+      pageTextHref: `/artifacts/page-text/${encodeURIComponent(HTML_B)}`,
+    });
+    const markup = await render(data({ entries: [suppressed] }));
+
+    // The suppressed state is named, not shown as a phantom change nor as the
+    // misleading "First offer on record." text.
+    expect(markup).toContain("Capture suppressed: geo locale change");
+    expect(markup).not.toContain("First offer on record.");
+    expect(markup).not.toContain("Headline");
+    // Proof is still preserved.
+    expect(markup).toContain(`href="/artifacts/proof/${encodeURIComponent(SCREENSHOT_B)}"`);
+    expect(markup).toContain(`href="/artifacts/page-text/${encodeURIComponent(HTML_B)}"`);
+  });
+
   it("links each dated state to its source URL with nofollow (accept #2)", async () => {
     const markup = await render(data());
 

@@ -48,6 +48,10 @@ export interface OfferHistoryEntryPayload {
   ctaText: string | null;
   priceText: string | null;
   formPresent: boolean | null;
+  /** What forced this capture to be suppressed (geo-locale change, cookie
+   * banner) with `changes` null; null when the state was either the first on
+   * record or a genuine change. */
+  suppressedReason: string | null;
   changes: OfferFieldChangePayload[] | null;
   evidence: OfferHistoryEvidence;
 }
@@ -244,6 +248,7 @@ function entryToPayload(
     ctaText: entry.ctaText,
     priceText: entry.priceText,
     formPresent: entry.formPresent,
+    suppressedReason: entry.suppressedReason ?? null,
     changes: transitionToChanges(entry.transition),
     evidence: {
       timelineUrl: `${origin}/timeline/${encodeURIComponent(domain)}?asOf=${entry.capturedAt.slice(0, 10)}`,

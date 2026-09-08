@@ -103,6 +103,10 @@ export function OfferTimelineLedger({ entries }: { entries: OfferLedgerEntry[] }
                     />
                   ) : null}
                 </dl>
+              ) : entry.suppressedReason ? (
+                <p className="f9-timeline-suppressed">
+                  {`Capture suppressed: ${entry.suppressedReason}`}
+                </p>
               ) : (
                 <p className="f9-timeline-initial">First offer on record.</p>
               )}
