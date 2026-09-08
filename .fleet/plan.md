@@ -31,7 +31,7 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 
 ## Phase 4 — real-D1 integration test (acceptance 5c + 4)
 
-- [ ] phase 4: real-D1 integration test applying the capture path against a calendly-like fixture — fresh row with a real screenshot written; no-coverage fixture writes nothing; per-day idempotency; three-night dated-ledger accumulation.
+- [x] phase 4: real-D1 integration test applying the capture path against a calendly-like fixture — fresh row with a real screenshot written; no-coverage fixture writes nothing; per-day idempotency; three-night dated-ledger accumulation.
 
 - `tests/integration/sitemap-timeline-backfill.integration.test.ts` (new, workers project, real D1 via `tests/integration/fixtures.ts` + `apply-migrations.ts`, capture stubbed — the real pipeline needs Browser Rendering):
   - Covered fixture: seed one complete-proof snapshot row for a calendly-like REAL registrable domain (e.g. calendly.com — the sitemap domain derivation requires a real registrable hostname) so `loadSitemapTimelineCandidateDomains` candidacy is real; inject `tierLookup` with `hasCoverage: true`; run backfill; assert a fresh `timeline-calendly.com-<day>` row with a real screenshot + page-text artifact key (`screenshotArtifactKey`/`htmlArtifactKey` in metadata) is written and `loadOfferTimeline` renders the new dated state (screenshotHref/pageTextHref `/artifacts/...`).
@@ -105,6 +105,17 @@ Diff: `git diff 52d48efa..HEAD` (worker wiring + scheduled-handler tests). 93 te
   - The mocked resolver's fallback returns weekly cadence for any unknown cron while the real resolver omits digestCadence for hourly/3h — case (b)'s NORMAL_CRON leg exercises the weekly branch, not the real no-cadence branch. Harmless (the gate only discriminates === "daily"), but the label is less honest than it looks.
 - **Noted**: test descriptions say "3-hour or weekly" while firing 6-h/hourly strings (inherited from the plan's loose labels; pre-existing suite convention); completion log duplicates day/cohort/captured/failed in fields and summary string (house shape, same in sneaker log).
 - **Dismissed-with-reason**: sibling-concurrency race (disjoint row-id namespaces, INSERT OR IGNORE, monitoring captures don't touch the timeline namespace); publisher-failure coupling (sibling is the deliberate manager decision; any-age tier read removes the sneaker chain's ordering hazard); case (c) asserting the exact failure object (same reference flows through the rejection handler).
+
+### Phase 4 reviewer round (2026-09-08, seat cursor/cursor-grok-4.6-high)
+
+Diff: `git diff e02011a9..HEAD` (integration suite). 17 integration tests green (8 new + 9 sneaker coexistence) before review.
+
+- **Act on (fixed)**: none.
+- **Consider (recorded, phase-5 carry)**:
+  - The real tier adapter getSitemapTimelineTierByDomain is never exercised against real D1 — every run injects tierLookup; the phase-1 retention-decay risk lives exactly in that adapter. The no-coverage fixture proves the backfill honors hasCoverage: false, not that production's adapter emits the correct verdict. Plan-scoped (sneaker sibling shares the gap); phase 5's live tier read verification is the net. If live verification shows the adapter drift, a follow-up issue adds a discovery_cache_entry-seeded fixture test.
+  - "Newest within 7 days" assertion is partly fixture-derivative (stub writes its own capturedAt); genuinely pins written captured_at landing ascending + final entry = last night, bounded against run clocks. Frame as a written-timestamp regression guard; phase 5's live run owns the metric.
+- **Noted**: `capturedAt = ${day}T0${index+1}:30:00.000Z` produces invalid ISO for index >= 9 (footgun; all indexes used are 0-7; sneaker sibling has the same trap); arrayContaining vs exact toEqual complementarity; per-file cross-test accumulation handled honestly (distinct UTC days + exact id-scoped counts); capture-stub null without onFailure → reasonCode null is the honest contract; exclusion fixture is real (stockx.com/nike.com in the actual seed JSON).
+- **Dismissed-with-reason**: "real screenshot" is a stub key not browser-rendered (Browser Rendering explicitly out of CI scope, sneaker precedent; hex32 keys pass the real proof validators, so the href assertions stay honest); `as never` casts (sneaker shape); fixed fixture dates (all now injected, zero wall-clock dependence); hasCoverage: true for excluded domains in the covered fixture (forces the real static exclusion to do the dropping — the exact regression the exclusion test must prove).
 
 ### Phase 5 reviewer round (single reviewer pass, seat per find_senior_seat)
 - **Act on (fixed)**: (manager appends during the run)
