@@ -54,14 +54,20 @@ $ NODE_OPTIONS="--max-old-space-size=8192" npx tsc -b
 
 `run-proof:` the target regression suite `tests/offer-timeline-geo-variance-phantom.test.ts` ran on this branch post-rebase and went 4/4 green; four related offer-timeline suites (42 tests) green; full node project (618 files, 7368 tests) and workers project (39 files, 198 tests) re-ran green; `tsc -b` exits 0 with the larger heap. The regression test FAILS on current main (the pre-gate pair diffs to a phantom Headline/CTA/Price change) and PASSES with the gate — it is the `bin/prove-one-run-check` receipt run.
 
-## Reviewer round
+## Reviewer round (product repo, one round — seat cursor/cursor-grok-4.6-high)
 
-This is a product repo (0509), so the reviewer round ran via step 8 before arming.
+Ran via step 8 before arming (`bin/fleet-review-arm-check` exit 0 → senior seat usable). Reviewer ran `npx vitest run --project node` on the five offer-timeline suites (46/46 green) and assessed the diff vs the issue acceptance.
 
 Adjudicated against `~/.pi/agent/skills/review-adjudication/SKILL.md`:
 
-- **Act on** (phase 6 follow-on): base the gate AND diff on the last non-suppressed entry so a later same-region capture can never diff against a suppressed placeholder. Landed as `lastNonSuppressedEntry` + `tests/offer-timeline-geo-variance-phantom.test.ts` phase-6 case.
-- **Consider / Noted**: none outstanding — the optional `suppressedReason` field keeps back-compat; survivors in `tests/offer-timeline.test.ts` are populated via `buildOfferLedger`. Recorded, not re-delegated.
+- **Act on**: none — reviewer reported zero critical and zero warning findings.
+- **Consider** (`"accept all"`/`"reject all"` are bare 2-word substrings with no cookie/consent context, a small genuine-CTA false-positive risk): NOTED, recorded, not re-delegated. The rest of the consent list is phrase-level and generic offer verbs ("Shop Now") are deliberately absent; the two bare phrases carry a minor risk that is within the issue's conservative prefer-never-fabricate scope. Documented in `.fleet/plan.md` as an accepted over-breadth tradeoff.
+- **Consider** (geo-switch suppression permanently deafens the timeline to real new-region changes until the baseline is deliberately re-anchored): NOTED, recorded, not re-delegated. This is the phase-6 codified intended behavior (see `.fleet/plan.md` phase 6); re-anchoring the baseline on region adoption is the deeper fix the issue explicitly calls out of scope. `.fleet/plan.md` risk table records the decision.
+- **Noted** (`geoLocaleSegment` treats any ISO-2 first path segment as a locale, e.g. `/in/`): harmless given the segment must match a real `SUPPORTED_COUNTRIES` code; not covered by tests.
+- **Dismissed-with-reason** (conditional-`suppressedReason`/plain-paragraph render): back-compat call sites must keep compiling; proof hrefs are preserved and the suppressed state is explicit with a reason — exactly acceptance bullet 1.
+- **Acceptance check** — all four bullets PASS.
+
+The two Consider items are deliberate over-breadth tradeoffs of a conservative never-fabricate design, recorded here and in `.fleet/plan.md` as required, and are not re-delegated (manager mode: Consider/Noted are recorded, not acted-on).
 
 ## Acceptance
 

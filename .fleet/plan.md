@@ -114,4 +114,21 @@ transition.
   reason (never a "price restored from —" transition).
   reason: senior reviewer Follow-on (inverse-face of the phantom-change gap,
   issue #1996) — closes the back-door leak of suppressed-field data into a later
-  real transition.
+  real transition. IMPLEMENTED + verified (tests/offer-timeline-geo-variance-phantom.test.ts
+  phase-6 case, green).
+
+## Reviewer round (seat cursor/cursor-grok-4.6-high, one round, product repo)
+
+- No Act-on findings; zero critical / zero warning from the reviewer.
+- Consider (recorded, not re-delegated): bare `"accept all"`/`"reject all"`
+  substrings on the consent list are a small genuine-CTA false-positive risk;
+  rest of the list is phrase-level and "Shop Now" is deliberately absent —
+  accepted over-breadth within the never-fabricate scope.
+- Consider (recorded, not re-delegated): geo-switch suppression deafens the
+  timeline to genuine new-region changes until the baseline is deliberately
+  re-anchored. This is phase-6 codified intended behavior; region re-anchoring is
+  the deeper fix the issue calls out of scope.
+- Noted: geoLocaleSegment treats any ISO-2 first segment as a locale; harmless
+  given it must match a real SUPPORTED_COUNTRIES code.
+- Dismissed-with-reason: conditional suppressedReason + plain-paragraph render;
+  back-compat call sites keep compiling and proof hrefs are preserved.
