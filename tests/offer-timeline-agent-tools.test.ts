@@ -110,6 +110,36 @@ describe("get_change_history payload", () => {
     ]);
   });
 
+  it("surfaces a geo-variance suppressed state with its reason and no changes (issue #1996)", () => {
+    const ledger = buildOfferLedger([
+      snapshot({
+        id: "sg-07",
+        capturedAt: "2026-09-07T00:00:00.000Z",
+        canonicalUrl: "https://www.nike.com/sg/",
+        headline: "Nike. Just Do It. Nike.com",
+        ctaText: "Shop Now",
+        priceText: "$149",
+        screenshotKey: SCREENSHOT_A,
+        pageTextKey: HTML_A,
+      }),
+      snapshot({
+        id: "fr-08",
+        capturedAt: "2026-09-08T00:00:00.000Z",
+        canonicalUrl: "https://www.nike.com/fr/",
+        headline: "Nike. Just Do It",
+        ctaText: "En savoir plus sur les publicités personnalisées",
+        priceText: "—",
+        screenshotKey: SCREENSHOT_B,
+        pageTextKey: HTML_B,
+      }),
+    ]);
+    const payload = buildChangeHistoryPayload(DOMAIN, ledger, null, ORIGIN);
+    expect(payload.status).toBe("ok");
+    expect(payload.entries[1]?.suppressedReason).toBe("geo locale change");
+    expect(payload.entries[1]?.changes).toBeNull();
+    expect(payload.entries[0]?.suppressedReason).toBeNull();
+  });
+
   it("reports the documented no-history payload for an unknown domain, never an error", () => {
     const payload = buildChangeHistoryPayload("unknown.example", [], null, ORIGIN);
     expect(payload.status).toBe("no_history");
