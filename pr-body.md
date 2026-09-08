@@ -28,10 +28,11 @@ Phase 3 — worker wiring (`workers/app.ts`):
 - Same gate as `runDemoBrandBackfill` and `runAdsDomainPublisher` — a new wrangler cron would escape the four-cron release-soak CHECK, so the cohort expansion rides the existing rail.
 - Failure escalation: `reportScheduledTaskFailure(env, "sneaker_resale_backfill", error)` — operator pages on whole-run throw. Per-brand failures stay inside the backfill (logged + counted), never escape as a page.
 - 3 new tests in `tests/worker-scheduled-handler.test.ts`: (a) daily cron invokes BOTH backfills as siblings, (b) 3-hour / weekly crons do NOT invoke the new backfill, (c) operator pages on `sneaker_resale_backfill` failure while `demo_brand_backfill` still runs (per-brand-failure-isolation check).
+- **Supplemental fix (phase-4 reviewer, Act on):** the nightly cohort verdict reads the publisher's `public_search` cache rows, which carry a 15-minute TTL; as a sibling waitUntil the backfill would read before the publisher's awaited per-domain writes land and derive an empty cohort every night. `runSneakerResaleBackfill` is now chained after `runAdsDomainPublisher`'s promise on the same daily block (a publisher whole-run failure still runs the backfill best-effort and pages via its own block). Two regression tests in the scheduled handler (deferred-publisher ordering, publisher-throws best-effort) + one cohort fall-through test; `summarizeSneakerResaleBackfill` now emits `cohort=N`.
 
 Phase 4 — verification (this PR):
 
-- `npx vitest run --project node` and `npx vitest run --project workers` both green across all 4 affected suites (cohort unit, backfill unit, integration, scheduled-handler). 53 node-project tests + 9 worker-project tests added/changed.
+- `npx vitest run --project node` and `npx vitest run --project workers` both green across all 4 affected suites (cohort unit, backfill unit, integration, scheduled-handler). 56 node-project tests + 9 worker-project tests added/changed; full repo suites also green (node 606 files / 7227 tests, workers 35 files / 181 tests).
 - `npx tsc -b` exit 0.
 - No new migrations, no new wrangler cron, no `.github/workflows/**` changes. `landing_page_snapshot` schema untouched.
 
@@ -51,38 +52,51 @@ Phase 4 — verification (this PR):
 Phase 1: pre-existing in the worktree (green on entry, 21/21 cohort unit tests passed).
 Phase 2 reviewer (`reviewer` subagent): "No findings in Act on bucket. Two Consider items: (a) integration test uses `hypebeast.com` for the no-phantom-row case but that domain is not in the bundled seed list, so the missing-tier branch — not the hasCoverage branch — drops the brand; (b) `options.domains` Set was trim()/lowercase() only, not canonicalized." Both fixed in commit `26fcfa32 fix(sneaker-resale-cohort): address phase 2 reviewer findings`.
 Phase 3 reviewer (`reviewer` subagent): "No Act on findings. One Consider about three identical `if (scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily")` guards (out of scope — mirrors existing publisher and demo-brand block shape). One Noted about a stale `.fleet/plan.md` description line; fixed in the phase-3 tick commit."
+Phase 4 reviewer (`reviewer` subagent, seat cursor/cursor-grok-4.6-high): "The sneaker cohort will be empty on essentially every nightly run — bullet 4 (timeline HTTP 200) is not achievable as wired." Act on (fixed, commit `e36f2e18`): chain the backfill after the publisher's promise on the same daily block + 3 regression tests. Warning (fixed): demo-payload fall-through to next-newest legitimate row. Suggestion (fixed): `cohort=N` in the summary line. Suggestion (Noted, no change): `cacheStatus` field is informational only. No Dismissed findings.
+
+Also included: `c0ddb959` fixes a pre-existing month-locked assertion in `tests/integration/mention-digest-resweep.integration.test.ts` (`2026-08-` hard-coded; key embeds now−168h, so it broke on the September rollover and red-flagged every PR's codex-node-checks/preview-assert since 2026-09-01 — including sibling claims 1945/1947). Derives the expected date from the same clock expression the code uses. Test-only, no production behavior.
 
 ### Verification
 
 ```
 $ npx vitest run --configLoader runner --project node tests/sneaker-resale-cohort.test.ts tests/sneaker-resale-backfill.server.test.ts tests/worker-scheduled-handler.test.ts
  Test Files  3 passed (3)
-      Tests  53 passed (53)
+      Tests  56 passed (56)
 
-$ npx vitest run --configLoader runner --project workers tests/integration/sneaker-resale-backfill.integration.test.ts
- Test Files  1 passed (1)
-      Tests  9 passed (9)
+$ npx vitest run --configLoader runner --project workers tests/integration/sneaker-resale-backfill.integration.test.ts tests/integration/mention-digest-resweep.integration.test.ts
+ Test Files  2 passed (2)
+      Tests  15 passed (15)
+
+$ npx vitest run --configLoader runner --project node
+ Test Files  606 passed (606)
+      Tests  7227 passed (7227)
+
+$ npx vitest run --configLoader runner --project workers
+ Test Files  35 passed (35)
+      Tests  181 passed (181)
 
 $ npx tsc -b --noEmit
 EXIT: 0
 
 $ git diff --stat origin/main..HEAD
- .fleet/plan.md                                          |   8 +-
- app/lib/sneaker-resale-backfill.server.ts               | 432 +++++++++++++++++
- app/lib/sneaker-resale-cohort.server.ts                 | 226 ++++++++++
- app/lib/sneaker-resale-cohort.ts                        | 155 +++++++
- tests/integration/sneaker-resale-backfill.integration.test.ts | 471 +++++++++++++++++
- tests/sneaker-resale-backfill.server.test.ts            | 509 ++++++++++++++++++
- tests/sneaker-resale-cohort.test.ts                     | 447 ++++++++++++++++++
- tests/worker-scheduled-handler.test.ts                  |  80 +++++
- workers/app.ts                                          |  34 +++
- 9 files changed, 2362 insertions(+), 7 deletions(-)
+ .fleet/plan.md                                     |  67 ++-
+ app/lib/sneaker-resale-backfill.server.ts          | 437 ++++++++++++++++
+ app/lib/sneaker-resale-cohort.server.ts            | 235 +++++++++
+ app/lib/sneaker-resale-cohort.ts                   | 155 ++++++
+ pr-body.md                                         | 102 ++--
+ .../mention-digest-resweep.integration.test.ts     |   8 +-
+ .../sneaker-resale-backfill.integration.test.ts    | 478 ++++++++++++++++++
+ tests/sneaker-resale-backfill.server.test.ts       | 554 +++++++++++++++++++++
+ tests/sneaker-resale-cohort.test.ts                | 493 ++++++++++++++++++
+ tests/worker-scheduled-handler.test.ts             | 159 ++++++
+ workers/app.ts                                     |  32 +-
+ 11 files changed, 2652 insertions(+), 68 deletions(-)
 
 $ PATH="/home/nish/workspaces/tooling/fleet-ops/bin:$PATH" prove-one-run-check --body pr-body.md --name-status -
 EXIT: 0
 ```
 
-run-proof: `npx vitest run --project node tests/sneaker-resale-cohort.test.ts tests/sneaker-resale-backfill.server.test.ts tests/worker-scheduled-handler.test.ts` → 3 files / 53 tests passed; `npx vitest run --project workers tests/integration/sneaker-resale-backfill.integration.test.ts` → 1 file / 9 tests passed; `npx tsc -b --noEmit` exit 0.
+run-proof: `npx vitest run --project node tests/sneaker-resale-cohort.test.ts tests/sneaker-resale-backfill.server.test.ts tests/worker-scheduled-handler.test.ts` → 3 files / 56 tests passed; `npx vitest run --project workers tests/integration/sneaker-resale-backfill.integration.test.ts tests/integration/mention-digest-resweep.integration.test.ts` → 2 files / 15 tests passed; full `npx vitest run --project node` → 606 files / 7227 tests passed; full `npx vitest run --project workers` → 35 files / 181 tests passed; `npx tsc -b --noEmit` exit 0.
 
 research: no external libraries or APIs introduced; the cohort expansion reuses the existing `captureLandingPageSnapshot` write path, the existing `landing_page_snapshot` table, the existing `public_search` discovery cache, and the existing daily cron. Compared vs the existing `app/lib/demo-brand-backfill.server.ts` (issue #1449) and adopted the same shape; the only structural difference is the cohort source (`data/seed-lists/sneaker-resale.json` filtered by tier verdict instead of `DEMO_BRAND_PAGE_DOMAINS`).
 
