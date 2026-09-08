@@ -1,0 +1,50 @@
+name: Sneaker-resale recall canary
+
+# Recall guard for the sneaker-resale seed-list cluster (issue #1945).
+#
+# The sneaker-resale cluster is the strongest, most-consistent buyer signal
+# across the daily market reports. Its 25 seed-list brands must each render
+# >=1 verified/likely row on a bare /search probe, or the /ads/:domain page
+# cannot publish and the brand dead-ends in the free preview. The existing
+# search-tier-canary guards only the §1.8 six-domain set and is not scheduled;
+# the seed-list cluster that drives the market signal had no recall guard at
+# all, so a silent recall/alias regression on the strongest cluster went
+# unmeasured.
+#
+# This scheduled run executes scripts/canary-sneaker-resale-recall.mjs, which
+# iterates the 25 seed-list domains, reports per-domain verified/likely/unmatched
+# rows, and exits non-zero when a coverage-bearing brand dead-ends (0 rows) or
+# returns blanket-unmatched. A non-zero exit fails the job, so a silent recall
+# regression on the strongest cluster self-files rather than going unmeasured.
+#
+# Every 3 hours, offset from the meta-discovery-canary slot (23 */3) so the two
+# scheduled canaries do not collide on the same runner IP's anonymous /search
+# budget (20 req / 10 min / IP).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "47 */3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sneaker-resale-recall-canary
+  cancel-in-progress: false
+
+jobs:
+  recall:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+      - name: Run sneaker-resale recall canary
+        run: node scripts/canary-sneaker-resale-recall.mjs
