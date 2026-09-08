@@ -8,6 +8,7 @@ import {
   getPlanEntitlements,
   getPlanLimit,
   getScheduledMonitoringPolicy,
+  getSitePageBudget,
   getWorkspaceSeatLimit,
   PLAN_FAMILIES,
   planAllowsDigestCadence,
@@ -84,6 +85,15 @@ describe("plan entitlements catalog", () => {
     expect(shouldSchedulePlanInRegularScan("scout", new Date("2026-07-03T03:00:00.000Z"))).toBe(false);
     expect(shouldSchedulePlanInRegularScan("starter", new Date("2026-07-03T03:00:00.000Z"))).toBe(true);
     expect(shouldSchedulePlanInRegularScan("agency", new Date("2026-07-03T03:00:00.000Z"))).toBe(true);
+  });
+
+  it("caps Full-Site Watch page budgets low on Free/Scout and higher on paid plans", () => {
+    expect(getSitePageBudget("free")).toBe(5);
+    expect(getSitePageBudget("scout")).toBe(10);
+    expect(getSitePageBudget("starter")).toBe(25);
+    expect(getSitePageBudget("agency")).toBe(50);
+    expect(getPlanEntitlements("free").sitePageBudget).toBe(5);
+    expect(getPlanEntitlements("agency").sitePageBudget).toBe(50);
   });
 
   it("gives Agency 25 priority scan slots; overflow only on 6h-aligned runs (WP-37)", () => {

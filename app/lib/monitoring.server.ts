@@ -2,7 +2,7 @@ import { buildAnalysisFields } from "~/lib/analysis.server";
 import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { type DigestCadence } from "~/lib/change-intelligence";
 import { shouldAttemptCreativeTextCapture } from "~/lib/creative-capture-policy";
-import { isFullSiteWatchEnabled } from "~/lib/env.server";
+import { isFullSiteWatchAllowedForHost, isFullSiteWatchEnabled } from "~/lib/env.server";
 import {
   captureCreativeText,
   createMissingCreativeCaptureResult,
@@ -86,6 +86,7 @@ import { resolveScheduledScanCacheMaxAgeMs } from "~/lib/discovery-cache.server"
 import {
   getPlanEntitlements,
   getScheduledMonitoringPolicy,
+  getSitePageBudget,
   isPaidPlanFamily,
   parsePlanFamily,
   shouldSchedulePlanInRegularScan,
@@ -2293,7 +2294,6 @@ export async function runWatchlist(
         await runWebsiteSiteScanForWatchlist(env, watchlist, {
           runId,
           processingToken: options.orchestrationToken ?? null,
-          pageBudget: DEFAULT_PAGE_BUDGET,
         });
       } catch (error) {
         console.error(
@@ -4808,12 +4808,22 @@ function directWebsiteUrlForWatchlist(watchlist: WatchlistRecord) {
   return normalizePublicHttpUrl(watchlist.targetId)?.toString() ?? null;
 }
 
+async function resolveWebsiteSitePageBudget(env: AppEnv, workspaceUserId: string) {
+  try {
+    const plan = await getUserPlan(env, workspaceUserId);
+    return getSitePageBudget(plan);
+  } catch {
+    return getSitePageBudget("free");
+  }
+}
+
 /**
  * Full-Site Watch: run sitemap discovery + bounded crawl + inventory writes
  * for one competitor watchlist under the current run's processing-token
  * lease. Only advertiser watchlists with a public website URL participate.
- * The discovery/crawl module owns all durability; failures surface as honest
- * failed manifests (inventory_complete = false) instead of exceptions.
+ * Page budget comes from the workspace plan. A canary host list, when set,
+ * skips every other site. Failures surface as honest failed manifests
+ * (inventory_complete = false) instead of exceptions.
  */
 async function runWebsiteSiteScanForWatchlist(
   env: AppEnv,
@@ -4821,11 +4831,13 @@ async function runWebsiteSiteScanForWatchlist(
   options: {
     runId: string;
     processingToken: string | null;
-    pageBudget: number;
   },
 ) {
   const websiteUrl = directWebsiteUrlForWatchlist(watchlist);
   if (!websiteUrl) {
+    return null;
+  }
+  if (!isFullSiteWatchAllowedForHost(env, websiteUrl)) {
     return null;
   }
   if (!options.processingToken) {
@@ -4834,6 +4846,7 @@ async function runWebsiteSiteScanForWatchlist(
     return null;
   }
 
+  const pageBudget = await resolveWebsiteSitePageBudget(env, watchlist.userId);
   const { runWebsiteSiteScan } = await import("~/lib/competitor-site-monitor.server");
   return runWebsiteSiteScan(env, {
     lease: {
@@ -4842,7 +4855,7 @@ async function runWebsiteSiteScanForWatchlist(
       processingToken: options.processingToken,
     },
     rootUrl: websiteUrl,
-    pageBudget: options.pageBudget,
+    pageBudget,
   });
 }
 

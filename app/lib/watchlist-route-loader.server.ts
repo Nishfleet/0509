@@ -73,6 +73,35 @@ async function loadLatestRunCaptureAttempts(
   }
 }
 
+async function loadWebsiteCoverageLabel(
+  env: import("~/lib/env.server").AppEnv,
+  watchlistId: string,
+): Promise<string | null> {
+  try {
+    const { getLatestWebsiteSiteScanForWatchlist } = await import(
+      "~/lib/data/watchlist-site-pages.server"
+    );
+    const { buildWebsiteCoverageLabel } = await import(
+      "~/lib/competitor-site-monitor.server"
+    );
+    const latest = await getLatestWebsiteSiteScanForWatchlist(env, watchlistId);
+    if (!latest) {
+      return null;
+    }
+    return buildWebsiteCoverageLabel({
+      scan: {
+        inventoryComplete: latest.scan.inventoryComplete,
+        pageBudget: latest.scan.pageBudget,
+        fetchedPageCount: latest.scan.fetchedPageCount,
+      },
+      pages: latest.pages,
+    });
+  } catch {
+    // A missing table or D1 blip must not take the competitor detail down.
+    return null;
+  }
+}
+
 export async function loadWatchlistsRoute({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
@@ -231,6 +260,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
       canManageDelivery: !isMember,
       verifiedAccountEmail,
       deliveryTestRequestTokens: {} as Record<string, string>,
+      websiteCoverageLabel: null as string | null,
     };
   }
 
@@ -320,6 +350,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
   const latestRunCaptureAttempts = latestRunForCaptureAttempts
     ? await loadLatestRunCaptureAttempts(env, latestRunForCaptureAttempts)
     : [];
+  const websiteCoverageLabel = await loadWebsiteCoverageLabel(env, selectedWatchlist.id);
   const suggestedCompetitorsPanel = await suggestedCompetitorsPanelPromise;
 
   return {
@@ -352,6 +383,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     recentProofCaptures,
     proofSummary: buildProofSummary(recentProofCaptures),
     latestRunCaptureAttempts,
+    websiteCoverageLabel,
     suggestedCompetitorsPanel,
     discoveryStatus,
     plan,
