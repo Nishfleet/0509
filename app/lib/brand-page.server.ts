@@ -27,6 +27,8 @@ import {
   normalizeCompetitorWebsiteInput,
 } from "~/lib/competitor-website";
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
+import type { DigestBriefRerank } from "~/lib/digest-rerank";
+import { rerankDigestBrief } from "~/lib/digest-rerank";
 import {
   buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
@@ -49,7 +51,7 @@ import {
 } from "~/lib/search-domain-match.server";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { buildSearchV2CacheKey, buildSearchV2SavedQuery } from "~/lib/search-v2.server";
-import type { AdRecord } from "~/lib/types";
+import type { AdRecord, WatchEventType } from "~/lib/types";
 
 /** Path params beyond this length are rejected before any parsing. */
 const BRAND_PAGE_DOMAIN_MAX_LENGTH = 80;
@@ -746,6 +748,16 @@ export interface BrandChangeEvent {
   move: string;
   /** Muted "why it matters" line — a factual template, never a model inference. */
   why: string;
+  /**
+   * Watch-event type. Every emitted row carries one — currently always
+   * "ad_new" because the public cache snapshot only knows new ads entering
+   * rotation. Landing-page change types will flow through the same shape once
+   * the offer-timeline watchlist stream is wired to the public surface (see
+   * the issue's out-of-scope notes). Always-set by design: every consumer
+   * goes through `rerankBrandChangeFeed`, which never has to handle a
+   * missing-type branch.
+   */
+  eventType: WatchEventType;
   /** Multi-variant count when > 1, for an honest "testing" read. */
   variantCount: number | null;
 }
@@ -781,6 +793,12 @@ export function buildBrandChangeFeed(ads: AdRecord[], now: Date = new Date()): B
       source: brandChangeSourceLabel(ad.source),
       move,
       why: brandChangeWhy(ad),
+      // The public /ads surface only knows about new ads entering rotation
+      // (the cache snapshot has no landing-page diff history yet). Tagging
+      // every row here keeps the type honest and lets `rerankBrandChangeFeed`
+      // share the digest re-rank helper from #1897 without a missing-type
+      // branch on its side.
+      eventType: "ad_new",
       variantCount: ad.variantCount && ad.variantCount > 1 ? ad.variantCount : null,
       firstSeenMs,
     });
@@ -790,6 +808,24 @@ export function buildBrandChangeFeed(ads: AdRecord[], now: Date = new Date()): B
     .sort((a, b) => b.firstSeenMs - a.firstSeenMs)
     .slice(0, BRAND_CHANGE_FEED_MAX_ROWS)
     .map(({ firstSeenMs: _firstSeenMs, ...event }) => event);
+}
+
+/**
+ * Apply the BET 1 re-rank (issue #1897) to the /ads/:domain "What changed
+ * this week" feed so the public surface never dresses a bare ad_new as a
+ * headline "move" (issue #1951). Delegates to the same `rerankDigestBrief`
+ * helper the email digest uses, so the digest and the public /ads page
+ * cannot drift by construction.
+ *
+ * Today every feed row carries `eventType: "ad_new"`, so the headline set
+ * is always empty and `adChurnSummary.newCount` equals the feed length. The
+ * landing_page_* headline path lights up the moment a landing-page watch
+ * stream is wired into the public surface (out of scope here).
+ */
+export function rerankBrandChangeFeed(
+  events: BrandChangeEvent[],
+): DigestBriefRerank<BrandChangeEvent> {
+  return rerankDigestBrief(events);
 }
 
 function brandChangeMove(ad: AdRecord): string {
