@@ -9,17 +9,28 @@ import {
 import type { AdRecord, SearchResponse } from "~/lib/types";
 
 // The /search loader returns a plain payload object for most branches, but the
-// anonymous fresh-search success branch (issue #1972 phase 1) returns a
-// `Response.json(...)` wrapper so it can Set-Cookie the browser's anonymous
-// /search id. Unwrap whichever shape came back so test assertions on the
-// payload (result.result, result.session, toMatchObject, ...) stay shape-stable
-// across both forms.
+// anonymous fresh-search success branch (issue #1972 phase 1) returns react-router
+// `data(...)` so it can Set-Cookie without a JSON Response. Unwrap whichever
+// shape came back so assertions on the payload stay shape-stable.
+function isDataWithResponseInit<T>(
+  value: unknown,
+): value is { type: "DataWithResponseInit"; data: T } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { type?: unknown }).type === "DataWithResponseInit" &&
+    "data" in value
+  );
+}
+
 async function unwrapLoaderResult<T>(
   loaderFn: (args: LoaderFunctionArgs) => Promise<T | Response>,
   args: LoaderFunctionArgs,
 ): Promise<T> {
   const out = await loaderFn(args);
-  return out instanceof Response ? (await out.json()) as T : out;
+  if (out instanceof Response) return (await out.json()) as T;
+  if (isDataWithResponseInit<T>(out)) return out.data;
+  return out;
 }
 
 const baseAd: AdRecord = {
@@ -1653,6 +1664,61 @@ describe("search loader", () => {
     expect(out instanceof Response).toBe(false);
   });
 
+  it("mints f9_anon_search on a fresh anonymous success via data(), not a JSON Response", async () => {
+    const env = { DB: {} };
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const sourceResult = {
+      ads: [baseAd],
+      searchIntent: "text" as const,
+      verifiedCount: 0,
+      likelyCount: 0,
+      unmatchedCount: 1,
+    };
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => env) }));
+    vi.doMock("~/lib/data.server", () => ({ listCollections: vi.fn() }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection: vi.fn().mockResolvedValue({
+        result: sourceResult,
+        selectedAd: baseAd,
+      }),
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const out = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa"),
+    } as never);
+
+    expect(out instanceof Response).toBe(false);
+    expect((out as { type?: string }).type).toBe("DataWithResponseInit");
+    const setCookie = new Headers(
+      (out as { init?: ResponseInit | null }).init?.headers,
+    ).get("Set-Cookie");
+    expect(setCookie ?? "").toMatch(/f9_anon_search=/);
+    expect((out as { data: { session: unknown; inputError: unknown } }).data).toMatchObject({
+      inputError: null,
+      session: null,
+    });
+  });
+
   it("forwards the limiter's Retry-After onto the 429 document response", async () => {
     // React Router only carries cookies from a thrown loader response onto
     // the final document unless the boundary route re-exports the header;
@@ -1674,8 +1740,9 @@ describe("search loader", () => {
       "Retry-After": "600",
       "Set-Cookie": expect.stringContaining("f9_anon_search="),
     });
-    // Success loader Response.json() carries Content-Type: application/json.
-    // That must never be copied onto the HTML document. Set-Cookie may be.
+    // A JSON Content-Type on loaderHeaders must never be copied onto the HTML
+    // document. Set-Cookie may be. data() does not set Content-Type; this keeps
+    // the document filter honest if a JSON Response ever returns on this path.
     expect(
       headers({
         loaderHeaders: new Headers({
@@ -1970,10 +2037,8 @@ describe("search loader", () => {
       null,
       { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
     );
-    // The success branch now returns Response.json(...) (issue #1972 phase 1)
-    // so it can Set-Cookie the anonymous /search id. The payload survives the
-    // JSON round-trip value-for-value; only the object identity is replaced, so
-    // compare deep-equality rather than object reference.
+    // The success branch now returns data(...) (issue #1972 phase 1) so it can
+    // Set-Cookie the anonymous /search id without a JSON Response.
     expect(result.result).toEqual(legacyResult);
     expect(result.relevanceApplied).toBe(false);
     expect(formatResultsPanelTitle(legacyResult, {

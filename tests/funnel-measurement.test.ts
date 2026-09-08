@@ -55,6 +55,21 @@ function makeFunnelPost(url: string, fields: Record<string, string>) {
   });
 }
 
+
+// Anonymous /search success mints f9_anon_search via react-router `data()`,
+// which wraps the payload. Funnel assertions compare the payload itself.
+function unwrapSearchLoaderData(out: unknown): unknown {
+  if (
+    typeof out === "object" &&
+    out !== null &&
+    (out as { type?: unknown }).type === "DataWithResponseInit" &&
+    "data" in out
+  ) {
+    return (out as { data: unknown }).data;
+  }
+  return out;
+}
+
 describe("funnel measurement gate", () => {
   it("is disabled by default and for any absent or non-explicit value", async () => {
     const { funnelMeasurementEnabled } = await import("~/lib/funnel-measurement.server");
@@ -712,7 +727,9 @@ describe("funnel measurement route boundaries", () => {
       "http://localhost/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com",
     );
 
-    const enabledData = await loader({ context: createContext(env), request } as never);
+    const enabledData = unwrapSearchLoaderData(
+      await loader({ context: createContext(env), request } as never),
+    );
     const enabledRecords = emittedFunnelRecords(logSpy);
     const operations = enabledRecords.map((record) => (record as { operation: string }).operation);
     expect(operations).toContain("funnel_search_preview_submit");
@@ -724,7 +741,9 @@ describe("funnel measurement route boundaries", () => {
 
     logSpy.mockClear();
     env = {};
-    const disabledData = await loader({ context: createContext(env), request } as never);
+    const disabledData = unwrapSearchLoaderData(
+      await loader({ context: createContext(env), request } as never),
+    );
     expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
     expect(disabledData).toEqual(enabledData);
   }, 30_000);
@@ -923,7 +942,9 @@ describe("funnel measurement route boundaries", () => {
       "http://localhost/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com",
       { headers: { "sec-gpc": "1" } },
     );
-    const result = await loader({ context: createContext(env), request } as never);
+    const result = unwrapSearchLoaderData(
+      await loader({ context: createContext(env), request } as never),
+    );
     expect(result).toMatchObject({ inputError: null, session: null });
     expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
   }, 30_000);
