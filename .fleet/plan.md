@@ -65,7 +65,7 @@ transition.
   `app/lib/offer-timeline-agent-tools.ts`, add `suppressedReason` to
   `OfferHistoryEntryPayload` and surface it (changes null) so MCP consumers
   report the suppressed reason instead of phantom field changes.
-- [ ] phase 3: Add `tests/offer-timeline-geo-variance-phantom.test.ts` (method
+- [x] phase 3: Add `tests/offer-timeline-geo-variance-phantom.test.ts` (method
   `@2026-08-09`: buildOfferLedger-based): feed the real sg (`https://www.nike.com/sg/`,
   7 Sept, CTA "Shop Now", "$149", "Nike. Just Do It. Nike.com") + fr
   (`https://www.nike.com/fr/`, 8 Sept, CTA
