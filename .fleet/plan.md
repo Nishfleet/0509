@@ -54,7 +54,7 @@ transition.
 
 ## Phases
 
-- [ ] phase 1: In `app/lib/offer-timeline.ts`, add `isLocaleSegment`,
+- [x] phase 1: In `app/lib/offer-timeline.ts`, add `isLocaleSegment`,
   `isCookieBannerOrConsent`, and `captureValidityReason` (importing
   `SUPPORTED_COUNTRIES` from `~/lib/countries`), add `suppressedReason: string | null` to `OfferLedgerEntry`, and wire the gate into
   `buildOfferLedger` so a geo-variance or cookie-banner pair emits a
