@@ -1,0 +1,11 @@
+[Unit]
+Description=Every 3h — 0509 sneaker-resale recall canary (issue #1945)
+
+[Timer]
+OnCalendar=*-*-* 03:00/3:00 Asia/Kolkata
+Persistent=true
+AccuracySec=2min
+Unit=0509-sneaker-resale-recall-canary.service
+
+[Install]
+WantedBy=timers.target
