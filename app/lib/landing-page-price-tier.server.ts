@@ -71,6 +71,33 @@ const USD_TO_EUR = 0.92;
 const GBP_TO_EUR = 1.17;
 
 /**
+ * Currency markers the extractor does not recognise, lowercased. If any
+ * appears in `price_text` (checked case-insensitively against the
+ * uppercased input), `parsePriceToEur` returns `null` rather than
+ * assuming the value is EUR — the extractor never invents an FX rate.
+ * `₹` and `¥` are matched literally; the codes are matched against the
+ * uppercased input. The two `Rs` forms cover both "Rs.1,999" and
+ * "Rs 1,999" when uppercased ("RS." / "RS ").
+ */
+const UNRECOGNISED_CURRENCY_MARKERS = [
+  "₹",
+  "rs.",
+  "rs ",
+  "inr",
+  "¥",
+  "jpy",
+  "cny",
+  "aud",
+  "cad",
+  "chf",
+  "sek",
+  "nok",
+  "dkk",
+  "rub",
+  "krw",
+] as const;
+
+/**
  * Match the first numeric run in the input — digits with optional decimal
  * point and thousands separators. Examples:
  *
@@ -87,8 +114,10 @@ const PRICE_NUMERIC_REGEX = /\d[\d,]*(?:\.\d+)?/;
 /**
  * Parse `price_text` into a numeric EUR value. Returns `null` when the
  * input carries no parseable number or when the currency marker is one
- * the extractor does not recognise (e.g. ₹ / INR) — the extractor never
- * invents an FX rate. When no currency marker is present at all, the
+ * the extractor does not recognise — the extractor never invents an FX
+ * rate. Unrecognised currency markers (₹/INR, Rs, ¥/JPY/CNY, AUD, CAD,
+ * CHF, SEK, NOK, DKK, RUB, KRW) return null; only EUR, USD, GBP, or no
+ * marker are recognised. When no currency marker is present at all, the
  * value is assumed to already be in EUR (the issue spec).
  *
  * Accepts the symbols and codes `€`, `£`, `$`, `USD`, `EUR`, `GBP` in any
@@ -107,6 +136,14 @@ export function parsePriceToEur(priceText: string): number | null {
   }
 
   const upper = priceText.toUpperCase();
+  // Unrecognised currency markers must return null (never assume EUR), so
+  // the check comes before the USD/GBP/EUR branches: "₹1999" must not
+  // silently become 1999 EUR.
+  for (const marker of UNRECOGNISED_CURRENCY_MARKERS) {
+    if (upper.includes(marker)) {
+      return null;
+    }
+  }
   // Order matters: check the more specific markers first so a string like
   // "USD $199" picks USD over the literal `$`.
   if (upper.includes("USD") || priceText.includes("$")) {
@@ -181,9 +218,19 @@ export async function loadPriceTierDistribution(
     "SELECT price_tier, COUNT(*) AS count FROM landing_page_snapshot GROUP BY price_tier",
   );
   for (const row of rows) {
-    const bucket = (row.price_tier ?? "unknown") as PriceTierBucket;
-    if (bucket in distribution) {
+    const bucket = row.price_tier;
+    if (
+      bucket === "under_30" ||
+      bucket === "30_to_100" ||
+      bucket === "100_to_250" ||
+      bucket === "over_250"
+    ) {
       distribution[bucket] = Number(row.count) || 0;
+    } else {
+      // NULL price_tier (legacy rows) and any unrecognised price_tier
+      // string both count into `unknown` — honest accounting, never a
+      // silently dropped row.
+      distribution.unknown += Number(row.count) || 0;
     }
   }
   return distribution;
