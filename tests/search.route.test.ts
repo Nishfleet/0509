@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LoaderFunctionArgs } from "react-router";
+import type { DataWithResponseInit, LoaderFunctionArgs } from "react-router";
 
 import {
   mapCustomerRouteError,
@@ -11,10 +11,18 @@ import type { AdRecord, SearchResponse } from "~/lib/types";
 // The /search loader returns a plain payload object for most branches, but the
 // anonymous fresh-search success branch (issue #1972 phase 1) returns react-router
 // `data(...)` so it can Set-Cookie without a JSON Response. Unwrap whichever
-// shape came back so assertions on the payload stay shape-stable.
+// shape came back so assertions on the payload stay shape-stable. Distribute
+// over DataWithResponseInit the same way react-router's ClientData helper does,
+// otherwise tsc sees `.result` as missing on the wrapper member of the union.
+type UnwrapLoaderData<T> = T extends Response
+  ? never
+  : T extends DataWithResponseInit<infer D>
+    ? D
+    : T;
+
 function isDataWithResponseInit<T>(
   value: unknown,
-): value is { type: "DataWithResponseInit"; data: T } {
+): value is DataWithResponseInit<T> {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -24,13 +32,15 @@ function isDataWithResponseInit<T>(
 }
 
 async function unwrapLoaderResult<T>(
-  loaderFn: (args: LoaderFunctionArgs) => Promise<T | Response>,
+  loaderFn: (args: LoaderFunctionArgs) => Promise<T>,
   args: LoaderFunctionArgs,
-): Promise<T> {
+): Promise<UnwrapLoaderData<T>> {
   const out = await loaderFn(args);
-  if (out instanceof Response) return (await out.json()) as T;
-  if (isDataWithResponseInit<T>(out)) return out.data;
-  return out;
+  if (out instanceof Response) {
+    return (await out.json()) as UnwrapLoaderData<T>;
+  }
+  if (isDataWithResponseInit(out)) return out.data as UnwrapLoaderData<T>;
+  return out as UnwrapLoaderData<T>;
 }
 
 const baseAd: AdRecord = {
