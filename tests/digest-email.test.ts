@@ -2020,3 +2020,94 @@ describe("buildDigestEmail — brief retention frame (lane 1)", () => {
     expect(email.subject).not.toContain("worth action");
   });
 });
+
+describe("value-tier swing section (issue #1976)", () => {
+  const baseInput = {
+    name: "Owner",
+    periodStart: "2026-06-01T00:00:00.000Z",
+    periodEnd: "2026-06-08T00:00:00.000Z",
+    cadence: "daily" as const,
+    fullDigestUrl: "https://0509.io/app/digests",
+    manageFrequencyUrl: "https://0509.io/app/notifications",
+    supportEmail: "support@0509.io",
+    supportMailto: "mailto:support@0509.io",
+    unsubscribeUrl: null,
+    items: [
+      digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+    ],
+  };
+
+  const fixtureSwing = {
+    distribution: {
+      under_30: 3,
+      "30_to_100": 5,
+      "100_to_250": 7,
+      over_250: 2,
+      unknown: 4,
+    },
+    last24h: {
+      under_30: 1,
+      "30_to_100": 2,
+      "100_to_250": 3,
+      over_250: 1,
+      unknown: 2,
+    },
+    swingCount: 2,
+    windowStartIso: "2026-06-07T00:00:00.000Z",
+  };
+
+  it("renders the top-of-brief section with the four-band counts, swing count, and unknown footnote", () => {
+    const email = buildDigestEmail({ ...baseInput, priceTierSwing: fixtureSwing });
+
+    expect(email.html).toContain("Value-tier swing");
+    // Four named bands, in ascending order, with the fixture counts.
+    expect(email.html).toContain("&lt;€30");
+    expect(email.html).toContain("€30–€100");
+    expect(email.html).toContain("€100–€250");
+    expect(email.html).toContain("&gt;€250");
+    expect(email.html).toContain(">3</td>");
+    expect(email.html).toContain(">5</td>");
+    expect(email.html).toContain(">7</td>");
+    expect(email.html).toContain(">2</td>");
+    // Swing line: two competitors moved into or out of the trainerflation band.
+    expect(email.html).toContain(
+      "2 tracked competitors moved into or out of the &gt;€250 band in the last 24h",
+    );
+    // Unknown bucket as a footnote, never inside the four bands.
+    expect(email.html).toContain("4 captures could not be priced");
+
+    expect(email.text).toContain("Value-tier swing");
+    expect(email.text).toContain(
+      "2 tracked competitors moved into or out of the >€250 band in the last 24h.",
+    );
+    expect(email.text).toContain("<€30: 3");
+    expect(email.text).toContain("€30–€100: 5");
+    expect(email.text).toContain("€100–€250: 7");
+    expect(email.text).toContain(">€250: 2");
+    expect(email.text).toContain("4 captures could not be priced");
+  });
+
+  it("renders the no-movement line when the swing count is zero", () => {
+    const email = buildDigestEmail({
+      ...baseInput,
+      priceTierSwing: { ...fixtureSwing, swingCount: 0 },
+    });
+    expect(email.html).toContain(
+      "No tracked competitor moved into or out of the &gt;€250 band in the last 24h",
+    );
+    expect(email.text).toContain(
+      "No tracked competitor moved into or out of the >€250 band in the last 24h.",
+    );
+  });
+
+  it("renders nothing when the swing aggregate is absent", () => {
+    const without = buildDigestEmail({ ...baseInput });
+    const withNull = buildDigestEmail({ ...baseInput, priceTierSwing: null });
+    expect(without.html).not.toContain("Value-tier swing");
+    expect(withNull.html).not.toContain("Value-tier swing");
+    expect(without.text).not.toContain("Value-tier swing");
+    expect(withNull.text).not.toContain("Value-tier swing");
+    // Byte-identical: the section is purely additive when present.
+    expect(without.html).toBe(withNull.html);
+  });
+});

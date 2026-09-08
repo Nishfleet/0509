@@ -108,6 +108,7 @@ import {
   TEAMS_PROVIDER,
 } from "~/lib/teams-webhook.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { loadPriceTierSwing, type PriceTierSwing } from "~/lib/landing-page-price-tier.server";
 
 // Facade re-exports: product code and tests import every delivery sender
 // from this module; the billing lifecycle domain lives in its own file.
@@ -1051,6 +1052,11 @@ async function deliverDigestToEmailTarget(
     userId: target.userId,
     targetId: target.id,
   });
+  // Value-tier swing (issue #1976): one bounded aggregate read, loaded here
+  // (this layer has env) and passed into the renderer precomputed — the
+  // digest-email module never queries D1 itself. A failed read renders no
+  // section rather than failing the digest send.
+  const priceTierSwing = await loadPriceTierSwing(env).catch(() => null);
   const email = renderDigestEmail(env, {
     digestRunId: input.digestRunId,
     name: input.userName,
@@ -1072,6 +1078,7 @@ async function deliverDigestToEmailTarget(
     nextScanAt: input.nextScanAt ?? null,
     nextScanLabel: input.nextScanLabel ?? null,
     firstBrief: input.firstBrief === true,
+    priceTierSwing,
   });
   const subject = input.proofEmailSubject ?? email.subject;
   const payloadSnapshot = {
@@ -2802,6 +2809,7 @@ function renderDigestEmail(
     nextScanAt?: string | null;
     nextScanLabel?: string | null;
     firstBrief?: boolean;
+    priceTierSwing?: PriceTierSwing | null;
   },
 ): ReturnType<typeof buildDigestEmail> {
   const baseUrl = appBaseUrl(env);
@@ -2830,6 +2838,7 @@ function renderDigestEmail(
     nextScanAt: input.nextScanAt ?? null,
     nextScanLabel: input.nextScanLabel ?? null,
     firstBrief: input.firstBrief === true,
+    priceTierSwing: input.priceTierSwing ?? null,
   });
 }
 
