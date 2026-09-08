@@ -76,6 +76,27 @@ export const DAILY_HEADERS = Object.freeze([
   "total_bytes",
 ]);
 
+// Auth-page availability probe (issue #1692). The Sign in / Sign up CTAs on
+// the /search preview link to these two pages; a 503 there blocks the only
+// conversion path at the first-value moment. The probe records their HTTP
+// status so the regression guard can detect a 5xx streak.
+export const AUTH_PAGES = Object.freeze(["/auth/login", "/auth/signup"]);
+
+export const AUTH_HEADERS = Object.freeze([
+  "run_at",
+  "path",
+  "status",
+  "outcome",
+  "elapsed_ms",
+]);
+
+// Pacing between the two auth-page fetches. The auth pages are separate
+// endpoints from /search and never touch the anonymous /search budget (20
+// req / 10 min / IP), but they must stay low-frequency: a 1s gap keeps the
+// whole pair under the shared-VPS rate limit that caused the original 503
+// (issue #1692 observed).
+export const AUTH_PROBE_SPACING_MS = 1_000;
+
 /**
  * @typedef {Object} LatencyStats
  * @property {number | null} p95Ms
@@ -414,6 +435,101 @@ function updateDailySummary(outputDir, runRecord) {
   );
 }
 
+// Any 5xx (or a transport error) on an auth page is an availability failure
+// for the guard to detect. 4xx statuses are recorded but not treated as an
+// outage: a 404/401 on an auth route is a misconfiguration, not a transient
+// availability blip.
+/**
+ * @param {number | null} status
+ */
+export function authOutcome(status) {
+  if (status == null) return "fetch_error";
+  if (status >= 500) return "error";
+  return "ok";
+}
+
+/** @param {number} ms */
+async function defaultSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch each auth page and record its HTTP status. Not paced by the /search
+ * limiter: these are separate endpoints that must stay low-frequency (a fixed
+ * gap between them), and must never be counted against the anonymous /search
+ * budget. Network errors are recorded as a fetch_error outcome.
+ *
+ * @param {{
+ *   baseUrl?: string,
+ *   paths?: readonly string[],
+ *   fetchImpl?: typeof fetch,
+ *   sleepImpl?: (ms: number) => Promise<void>,
+ *   nowImpl?: () => number,
+ *   userAgent?: string,
+ * }} [input]
+ * @returns {Promise<Array<{ runAt: string, path: string, status: number | null, outcome: string, elapsedMs: number }>>}
+ */
+export async function probeAuthPages({
+  baseUrl = DEFAULT_BASE_URL,
+  paths = AUTH_PAGES,
+  fetchImpl = fetch,
+  sleepImpl = defaultSleep,
+  nowImpl = () => Date.now(),
+  userAgent = SEARCH_LATENCY_PROBE_USER_AGENT,
+} = {}) {
+  const runAt = new Date().toISOString();
+  const records = [];
+  for (const path of paths) {
+    const startedAt = nowImpl();
+    let status = null;
+    try {
+      const response = await fetchImpl(`${baseUrl}${path}`, {
+        method: "GET",
+        headers: {
+          "user-agent": userAgent,
+          "cache-control": "no-cache",
+          pragma: "no-cache",
+          accept: "text/html,application/xhtml+xml",
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(30_000),
+      });
+      status = response.status;
+      await response.text();
+    } catch (_error) {
+      status = null;
+    }
+    const elapsedMs = nowImpl() - startedAt;
+    records.push({
+      runAt,
+      path,
+      status,
+      outcome: authOutcome(status),
+      elapsedMs,
+    });
+    await sleepImpl(AUTH_PROBE_SPACING_MS);
+  }
+  return records;
+}
+
+/**
+ * The auth-availability metric line the probe emits and CI greps for.
+ * @param {{ runAt: string, baseUrl: string, records: Array<{ path: string, status: number | null, outcome: string }> }} input
+ * @returns {string}
+ */
+export function formatAuthAvailabilityLine({ runAt, baseUrl, records }) {
+  const statuses = records.map((r) => `${r.path}=${r.status ?? "unreachable"}`).join(" ");
+  const failures = records.filter((r) => r.outcome === "error" || r.outcome === "fetch_error").length;
+  return [
+    "auth_availability_probe",
+    `run=${runAt}`,
+    `base_url=${baseUrl}`,
+    ...records.map((r) => `${r.path.replaceAll("/", "_").replaceAll("-", "_")}_status=${r.status ?? "unreachable"}`),
+    `auth_failures=${failures}`,
+    statuses ? statuses : "",
+  ].join(" ");
+}
+
 /**
  * Run the 25-domain latency probe. Pacing stays inside runLiveVerification
  * (sliding-window limiter, 20 req / 10 min), so a single run can never exceed
@@ -436,6 +552,8 @@ function updateDailySummary(outputDir, runRecord) {
  *   run: RunRecord,
  *   stats: LatencyStats,
  *   metricLine: string,
+ *   authResults: Array<{ runAt: string, path: string, status: number | null, outcome: string, elapsedMs: number }>,
+ *   authMetricLine: string,
  * }>}
  */
 export async function runLatencyProbe({
@@ -465,14 +583,31 @@ export async function runLatencyProbe({
   const run = buildRunRecord(runAt, baseUrl, results);
   const cardRows = buildCardRows(runAt, results);
 
+  const authRecords = await probeAuthPages({
+    baseUrl,
+    fetchImpl,
+    sleepImpl,
+    nowImpl,
+    userAgent,
+  });
+
   if (outputDir) {
     ensureDir(outputDir);
     writeRunAndCards(outputDir, run, cardRows);
     updateDailySummary(outputDir, run);
+    const authRows = authRecords.map((r) => [
+      r.runAt,
+      r.path,
+      r.status == null ? "" : String(r.status),
+      r.outcome,
+      String(r.elapsedMs),
+    ]);
+    appendCsv(join(outputDir, "auth.csv"), [...AUTH_HEADERS], authRows);
   }
 
   const metricLine = formatMetricLine({ runAt, baseUrl, stats });
-  return { runAt, baseUrl, results, run, stats, metricLine };
+  const authMetricLine = formatAuthAvailabilityLine({ runAt, baseUrl, records: authRecords });
+  return { runAt, baseUrl, results, run, stats, metricLine, authResults: authRecords, authMetricLine };
 }
 
 /**
@@ -545,6 +680,7 @@ async function main() {
   });
 
   emitLine(output.metricLine);
+  emitLine(output.authMetricLine);
   if (args.json) {
     emitLine(JSON.stringify(output, null, 2));
   }
