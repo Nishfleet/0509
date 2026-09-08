@@ -6,34 +6,24 @@
  * publisher writes (`search-v2:domain:<domain>:exact:<provider>:all:page-1`
  * keys) and only READS them — never INSERT, UPDATE, or DELETE.
  *
- * Two deliberate divergences from the sneaker adapter, both manager decisions
- * recorded for review:
- *   - NO `expires_at > now` SQL filter. The sneaker adapter's expiry gate
- *     works because its nightly publisher re-writes those rows that same
- *     tick; calendly.com / adspyder.io have NO scheduled writer, so a
- *     read-only adapter with an expiry gate would find zero fresh rows at
+ * Two deliberate divergences from the sneaker adapter (manager decisions
+ * recorded for review):
+ *   - NO `expires_at > now` SQL filter: calendly.com / adspyder.io have NO
+ *     scheduled writer, so an expiry gate would find zero fresh rows at
  *     04:00 UTC, derive an empty cohort, and the timeline freeze would
- *     persist (the exact failure this issue reports). The verdict itself is a
- *     durable per-domain evidence fact (the payload's ads + domainMatch
- *     levels); the row's age is surfaced via `cacheStatus` ("fresh" when
- *     `expires_at > now` at read time, else "stale") with `hasCoverage`
- *     computed from the payload regardless of expiry.
+ *     persist. The verdict is a durable per-domain evidence fact; the row's
+ *     age is surfaced via `cacheStatus` ("fresh" / "stale") with
+ *     `hasCoverage` computed from the payload regardless of expiry.
  *   - Candidate domains come from the indexable timeline sitemap set
  *     (`loadIndexableTimelineEntries`) instead of a seed list, which applies
  *     the existing complete-proof gate (`snapshotRowHasCompleteProof`) +
  *     non-ad-destination gate + `SITEMAP_TIMELINE_PATH_LIMIT` bound for free.
  *
- * Honesty contract (same shape as the sneaker adapter):
- *   - No live provider calls. Cache-only.
- *   - Missing D1 → empty `Map` / `[]` (degrade, never throw).
- *   - `route_context = 'public_search'` and `country = 'all'` only — the
- *     publisher's `exact`+`all` scope is the one the /ads/:domain loader and
- *     the sitemap read use.
- *   - `payload.source`/`payload.provider === 'demo'` rows are skipped — demo
- *     data must never back a public timeline.
- *   - Provider rollover = most-recent-fetched row wins; when the newest row
- *     is a demo payload, fall through to the next-newest non-demo row.
- *   - Missing `discovery_cache_entry` table on a transient D1 → empty `Map`.
+ * Honesty contract (same shape as the sneaker adapter): no live provider
+ * calls; missing D1 → empty `Map` / `[]` (degrade, never throw);
+ * `route_context = 'public_search'` and `country = 'all'` only; demo-payload
+ * rows are skipped; provider rollover = most-recent-fetched row wins with
+ * fall-through to the next-newest non-demo row.
  */
 
 import { queryIn } from "~/lib/data/d1.server";

@@ -2,57 +2,29 @@
  * Nightly sitemap-timeline cohort Offer Timeline backfill (issue #1958, phase 2).
  *
  * Sibling module to `app/lib/sneaker-resale-backfill.server.ts` (issue #1946)
- * and `app/lib/demo-brand-backfill.server.ts` (issue #1449). Same
+ * and `app/lib/demo-brand-backfill.server.ts` (issue #1449): same
  * `captureLandingPageSnapshot` write path, same `INSERT OR IGNORE` semantics,
- * same `requireScreenshot: true` honesty contract — but the cohort is the
- * sitemap-listed timeline domain set derived by phase 1's
- * `app/lib/sitemap-timeline-cohort.server.ts`: every domain in the indexable
- * timeline sitemap (`loadSitemapTimelineCandidateDomains` — the complete-proof
- * + non-ad-destination gate applied for free) minus the static
- * demo/sneaker-seed exclusions, filtered by the `public_search` discovery
- * cache tier verdict (`getSitemapTimelineTierByDomain`). A sitemap-listed
- * domain whose cache has no verified/likely coverage stays off the cohort —
- * its existing indexed /timeline/:domain ledger is honest and no phantom
- * timeline row is ever captured over it.
+ * same `requireScreenshot: true` honesty contract. The cohort is the
+ * sitemap-listed timeline domain set from phase 1 (`app/lib/sitemap-timeline-cohort.server.ts`):
+ * every domain in the indexable timeline sitemap minus the static
+ * demo/sneaker-seed exclusions, filtered by the `public_search` tier verdict.
+ * A sitemap-listed domain without verified/likely coverage stays off the
+ * cohort — its honest /timeline/:domain ledger is never overwritten by a
+ * phantom row.
  *
- * This module is the part of the fix that keeps every indexed Offer Timeline
- * current: a sitemap-listed domain's homepage is re-captured nightly so the
- * "newest dated offer state < 7 days" metric cannot decay to zero for
- * calendly.com / adspyder.io the way it froze in 2026-08/09.
+ * Honesty contract (same shape as `runSneakerResaleBackfill`): a row is only
+ * written when the capture pipeline returned a real snapshot (headline, CTA,
+ * price, artifacts); a failed capture is a per-domain `capture_failed` and
+ * never a written row; row ids are deterministic per (domain, UTC day) with
+ * `INSERT OR IGNORE` so a cron retry cannot double-append a day;
+ * `capture_method` is whatever the real pipeline reported; per-domain
+ * failures never abort the other domains; no-coverage candidates are filtered
+ * by `deriveSitemapTimelineCohort` before capture is ever called.
  *
- * Honesty contract (same shape as `runSneakerResaleBackfill`):
- *   * No fabricated data. A row is only written when the capture pipeline
- *     returned a real snapshot (headline, CTA, price, artifacts). A capture
- *     that could not produce a screenshot is recorded as a per-domain
- *     `capture_failed` and never written to the table.
- *   * Row ids are deterministic per (domain, UTC day) and inserts are
- *     `INSERT OR IGNORE`, so a cron retry cannot double-append a day.
- *   * capture_method is whatever the real pipeline reported
- *     (`browser_render` / `landing_page_fetch`) — never a seeded marker.
- *   * Per-domain failures (capture pipeline returning null, unexpected
- *     exception) are recorded and reported but never abort the other
- *     domains' captures.
- *   * A sitemap-listed domain whose discovery cache carries zero
- *     verified/likely ads is filtered out by `deriveSitemapTimelineCohort`
- *     before this module ever calls `captureLandingPageSnapshot`, so a
- *     no-coverage candidate cannot produce a phantom row.
- *
- * Two phase-2 carry-forwards from the phase-1 reviewer round (both manager
- * decisions, recorded for review):
- *   * Evidence age is surfaced in the summarize line (`stale=N`):
- *     `cacheStatus` ("fresh" / "stale") is computed against the tier
- *     row's `expires_at` with NO expiry gate (phase 1), so ops can see from
- *     the daily log how old the verdict evidence backing a capture was — and
- *     the per-run cohort derive keeps working with stale rows.
- *   * The cohort is bounded by `SITEMAP_TIMELINE_COHORT_CAP` (default 200):
- *     a future sitemap coverage explosion cannot blow the nightly Browser
- *     Run budget. The cap slices the derived cohort before per-domain
- *     processing; a `domains` subset (catch-up style callers) cannot push
- *     spend past the cap either.
- *
- * The module is deliberately small: it drives existing organs (the capture
- * pipeline, D1 data layer, phase 1's cohort derivation) and adds no schema.
- * Phase 3 wires it onto the daily rail in `workers/app.ts`.
+ * Manager decisions carried from reviews: evidence age is surfaced via
+ * `stale=N` in the summarize line (no expiry gate, phase 1); the cohort is
+ * bounded by `SITEMAP_TIMELINE_COHORT_CAP` (default 200) so a future sitemap
+ * coverage explosion cannot blow the nightly Browser Run budget.
  */
 
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";

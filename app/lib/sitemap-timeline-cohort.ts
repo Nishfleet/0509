@@ -12,11 +12,9 @@
  * off the cohort: its existing /timeline/:domain ledger is honest and must
  * not be overwritten by a phantom capture.
  *
- * This module is deliberately a pure helper: no D1 imports, no server-only
- * dependencies, no provider calls. The D1 lookups that produce
- * `tierByDomain` and the candidate-domain list live in
- * `app/lib/sitemap-timeline-cohort.server.ts`, which is also read-only.
- *
+ * Pure helper by design: no D1 imports, no server-only dependencies, no
+ * provider calls. The D1 lookups that produce `tierByDomain` and the
+ * candidate-domain list live in `app/lib/sitemap-timeline-cohort.server.ts`.
  * Sibling shape to `app/lib/sneaker-resale-cohort.ts`; types are defined
  * locally (never imported from the sneaker module) so the two cohorts can
  * evolve independently.
