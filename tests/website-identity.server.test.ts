@@ -82,6 +82,39 @@ describe("website-identity decode wiring", () => {
     expect(identity).toBeNull();
   });
 
+  it("still resolves identity when the homepage body exceeds the read cap (oversized e-commerce page)", async () => {
+    // A modern brand homepage routinely streams more than MAX_IDENTITY_RESPONSE_BYTES
+    // of markup (on.com ~620 KB, reebok.com ~1.5 MB decoded). The previous
+    // readResponseTextWithinLimit cancelled the stream and returned null the
+    // moment the running total crossed the cap, so any oversized homepage failed
+    // the WHOLE identity resolution — on.com / reebok.com resolved to null, their
+    // provider query degenerated to the bare domain label, and their /ads pages
+    // could not publish. The head (<title>, canonical, og:site_name) is inside the
+    // cap, so identity must parse the readable prefix instead of bailing.
+    const head = `<html><head>
+      <title>Reebok(R) Official Site | Life is Not a Spectator Sport</title>
+      <meta property="og:site_name" content="Reebok"/>
+      <link rel="canonical" href="https://www.reebok.com/"/>
+    </head><body>`;
+    // Push the body past the 250 KB cap with inert filler after the head.
+    const filler = "<div>" + "x".repeat(2_000_000) + "</div>";
+    const html = head + filler + "</body></html>";
+    mockFetch.mockResolvedValue(htmlResponse(html));
+
+    const identity = await resolveWebsiteIdentity("https://reebok.com");
+
+    expect(identity).not.toBeNull();
+    expect(identity?.registrableDomain).toBe("reebok.com");
+    expect(identity?.siteName).toBe("Reebok");
+    expect(identity?.title).toContain("Reebok");
+  });
+
+  it("returns null when a small empty body has no identity-bearing head", async () => {
+    mockFetch.mockResolvedValue(htmlResponse(""));
+    const identity = await resolveWebsiteIdentity("https://empty.example");
+    expect(identity).toBeNull();
+  });
+
   it("records mamaearth.in as a domain alias when mamaearth.com redirects there", async () => {
     mockFetch
       .mockResolvedValueOnce(
@@ -103,6 +136,52 @@ describe("website-identity decode wiring", () => {
 
     expect(identity?.registrableDomain).toBe("mamaearth.com");
     expect(identity?.domainAliases).toContain("mamaearth.in");
+  });
+});
+
+describe("curated identity overrides (sneaker-resale brands, issue #1950)", () => {
+  it("supplies GOAT's site name when the bot-blocked homepage cannot be fetched", async () => {
+    // goat.com's marketplace CDN returns 403 to scripted fetches regardless of
+    // user-agent, so the live fetch fails and identity would resolve to null —
+    // leaving the provider query on the bare label "goat", which surfaces
+    // keyword junk instead of GOAT's own ads. The curated site name keeps the
+    // provider question askable.
+    mockFetch.mockResolvedValue(
+      new Response(null, { status: 403, headers: { "content-type": "text/html" } }),
+    );
+
+    const identity = await resolveWebsiteIdentity("https://goat.com");
+
+    expect(identity).not.toBeNull();
+    expect(identity?.siteName).toBe("GOAT");
+    expect(identity?.aliases).toContain("GOAT");
+  });
+
+  it("adds on-running.com as a domain alias to a resolved on.com identity", async () => {
+    // The live on.com homepage resolves (with the oversized-page tolerance) to
+    // the "On" brand, but its redirect chain never touches on-running.com —
+    // the host On's ads still land on. The curated alias connects those ads.
+    mockFetch.mockResolvedValue(
+      htmlResponse(`<html><head>
+        <title>On | Swiss Performance Running Shoes</title>
+        <meta property="og:site_name" content="On"/>
+      </head><body></body></html>`),
+    );
+
+    const identity = await resolveWebsiteIdentity("https://on.com");
+
+    expect(identity).not.toBeNull();
+    expect(identity?.siteName).toBe("On");
+    expect(identity?.domainAliases).toContain("on-running.com");
+    expect(identity?.aliases).toContain("On");
+  });
+
+  it("does not fabricate verified coverage for a brand that runs no Meta ads", async () => {
+    // The curated facts only affect discovery. A brand with NO override (and no
+    // live identity) resolves to null and never gets a synthetic site name.
+    mockFetch.mockResolvedValue(new Response(null, { status: 403 }));
+    const identity = await resolveWebsiteIdentity("https://unknown-no-ads.example");
+    expect(identity).toBeNull();
   });
 });
 

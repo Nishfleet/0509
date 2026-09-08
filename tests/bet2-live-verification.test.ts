@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  BET2_BARE_EMPTY_PROBE_DOMAIN,
   BET2_DOMAINS,
   DEFAULT_BASE_URL,
   DEFAULT_REQUEST_SPACING_MS,
@@ -11,6 +12,7 @@ import {
   createPacedFetch,
   evaluateTermination,
   evaluateSection18Rerun,
+  evaluateTierModel,
   formatProbeLine,
   formatSummary,
   parseRetryAfterMs,
@@ -306,6 +308,93 @@ describe("evaluateSection18Rerun", () => {
     const verdict = evaluateSection18Rerun(results as never);
     expect(verdict.pass).toBe(false);
     expect(verdict.checks[0]?.detail).toContain("notion.so");
+  });
+});
+
+describe("evaluateTierModel", () => {
+  // A purpose-built nonsense domain (`.invalid`) that the caller probes for
+  // the bare-empty contract. It is the ONLY source of the genuine 0-candidate
+  // after #1396 page-scoped slack.com / tcs.com (those now have rows once
+  // their daily publisher lands, so they must not be the relied-on 0-cands).
+  const bareEmptyProbe = {
+    domain: BET2_BARE_EMPTY_PROBE_DOMAIN,
+    rowCount: 0,
+    outcome: "dead_end",
+    isWarming: false,
+    emptyReason: "no_results",
+    tierCounts: { verified: 0, likely: 0, unmatched: 0 },
+  };
+  const domainWithRows = {
+    domain: "nykaa.com",
+    rowCount: 17,
+    outcome: "verified",
+    isWarming: false,
+    emptyReason: null,
+    tierCounts: { verified: 0, likely: 12, unmatched: 5 },
+  };
+
+  it("passes when a non-verified labelled row and a genuine 0-candidate bare empty are both present", () => {
+    // slack.com / tcs.com now have rows (page-scoped per #1396); the
+    // bare-empty contract is satisfied by the purpose-built nonsense domain.
+    const verdict = evaluateTierModel([
+      domainWithRows,
+      { ...bareEmptyProbe },
+      // slack.com and tcs.com now carry rows like the rest of the 25-set:
+      { domain: "slack.com", rowCount: 6, outcome: "verified", isWarming: false, emptyReason: null, tierCounts: { verified: 1, likely: 5, unmatched: 0 } },
+      { domain: "tcs.com", rowCount: 9, outcome: "verified", isWarming: false, emptyReason: null, tierCounts: { verified: 9, likely: 0, unmatched: 0 } },
+    ] as never);
+    expect(verdict.pass).toBe(true);
+    const bareEmpty = verdict.checks.find(
+      (c) => c.name === "tier_model_true_zero_candidate_bare_empty",
+    );
+    expect(bareEmpty?.ok).toBe(true);
+    expect(bareEmpty?.detail).toContain(BET2_BARE_EMPTY_PROBE_DOMAIN);
+  });
+
+  it("fails check (b) when the purpose-built nonsense domain does NOT render the bare empty card", () => {
+    const verdict = evaluateTierModel([
+      domainWithRows,
+      // slack.com / tcs.com now have rows (page-scoped #1396) — no real
+      // cohort domain is a bare 0-candidate, and the nonsense probe also
+      // fails to render the bare empty card, so check (b) must fail.
+      { domain: "slack.com", rowCount: 6, outcome: "verified", isWarming: false, emptyReason: null, tierCounts: { verified: 1, likely: 5, unmatched: 0 } },
+      { domain: "tcs.com", rowCount: 9, outcome: "verified", isWarming: false, emptyReason: null, tierCounts: { verified: 9, likely: 0, unmatched: 0 } },
+      {
+        ...bareEmptyProbe,
+        // The nonsense probe unexpectedly has rows (or a different empty
+        // reason) — the bare-empty contract is not proven.
+        rowCount: 3,
+        tierCounts: { verified: 0, likely: 3, unmatched: 0 },
+      },
+    ] as never);
+    const bareEmpty = verdict.checks.find(
+      (c) => c.name === "tier_model_true_zero_candidate_bare_empty",
+    );
+    expect(bareEmpty?.ok).toBe(false);
+    expect(verdict.pass).toBe(false);
+  });
+
+  it("fails check (a) when no domain renders a non-verified labelled row", () => {
+    const verdict = evaluateTierModel([
+      {
+        ...domainWithRows,
+        tierCounts: { verified: 17, likely: 0, unmatched: 0 },
+      },
+      { ...bareEmptyProbe },
+    ] as never);
+    const labelled = verdict.checks.find(
+      (c) => c.name === "tier_model_non_verified_labelled_row_present",
+    );
+    expect(labelled?.ok).toBe(false);
+    expect(verdict.pass).toBe(false);
+  });
+
+  it("is a purpose-built `.invalid` nonsense domain that no advertiser can own", () => {
+    expect(BET2_BARE_EMPTY_PROBE_DOMAIN.endsWith(".invalid")).toBe(true);
+    // It must not collide with a real brand in the 25-domain set or rerun.
+    expect([...BET2_DOMAINS, ...SECTION_1_8_RERUN]).not.toContain(
+      BET2_BARE_EMPTY_PROBE_DOMAIN,
+    );
   });
 });
 
