@@ -174,6 +174,8 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     expect(identity?.siteName).toBe("On");
     expect(identity?.domainAliases).toContain("on-running.com");
     expect(identity?.aliases).toContain("On");
+    // The live shop label is demoted from query-driver to alias, not deleted.
+    expect(identity?.aliases).toContain("On Shop");
   });
 
   it("supplies On's brand site name even when the homepage is bot-blocked (issue #1993)", async () => {

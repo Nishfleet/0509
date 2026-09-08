@@ -46,7 +46,8 @@ const IDENTITY_OVERRIDES: Record<
   // read its homepage. The sneaker-resale seed list names the brand "GOAT";
   // without that term the provider query degenerates to the bare label "goat"
   // and surfaces keyword junk (mouth-tape, marketplace ads) instead of GOAT's
-  // own ads.
+  // own ads. The curated name also wins over a live one if the CDN ever
+  // unblocks, by design (see applyIdentityOverride pin).
   "goat.com": { siteName: "GOAT" },
   // On runs its ads across both on.com and its long-standing on-running.com
   // host (on-running.com now redirects into www.on.com). The live redirect
@@ -66,7 +67,9 @@ const IDENTITY_OVERRIDES: Record<
   // is bot-blocked for the scripted production crawler (like goat.com), so
   // live identity resolution cannot read a site name and the provider query
   // degenerates to the bare stem "reebok", which Meta Ad Library returns 0
-  // rows for. The curated site name keeps the provider question askable.
+  // rows for. The curated site name keeps the provider question askable and
+  // also wins over a live one if the block lifts, by design (see
+  // applyIdentityOverride pin).
   "reebok.com": { siteName: "Reebok" },
 };
 
