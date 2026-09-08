@@ -311,7 +311,7 @@ export function evaluateSneakerResaleRecall(results) {
  *   fetchImpl?: typeof fetch,
  *   sleepImpl?: (ms: number) => Promise<void>,
  * }} [input]
- * @returns {Promise<{ baseUrl: string, results: SneakerResaleProbe[], verdict: { pass: boolean, failures: SneakerResaleProbe[], noCoverage: SneakerResaleProbe[], identityGaps: { probe: SneakerResaleProbe, issue: string }[] } }>}
+ * @returns {Promise<{ baseUrl: string, results: SneakerResaleProbe[], verdict: { pass: boolean, failures: SneakerResaleProbe[], noCoverage: SneakerResaleProbe[], identityGaps: { probe: SneakerResaleProbe, issue: string }[], warming: SneakerResaleProbe[] } }>}
  */
 export async function runCanary({
   baseUrl = DEFAULT_BASE_URL,
