@@ -6,8 +6,11 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_THRESHOLD_MS,
   detectRegression,
+  detectAuthRegression,
   formatIssueBody,
+  formatAuthIssueBody,
   parseRuns,
+  parseAuthRecords,
 } from "../scripts/search-latency-regression-guard.mjs";
 
 function makeRuns(values: Array<{ runAt: string; p95Ms: number }>) {
@@ -141,5 +144,157 @@ describe("search.latency.regression.guard", () => {
     expect(body).toContain("5500");
     expect(body).toContain("Relates to #973");
     expect(body).toContain("Threshold: 5000 ms");
+  });
+
+  // --- auth-page availability guard (issue #1692) ---
+
+  function makeAuthRecords(
+    pages: Record<string, Array<{ runAt: string; status: number | null; outcome: string }>>,
+  ) {
+    const records: Array<{ runAt: string; path: string; status: number | null; outcome: string }> = [];
+    for (const [path, runs] of Object.entries(pages)) {
+      for (const r of runs) {
+        records.push({ runAt: r.runAt, path, status: r.status, outcome: r.outcome });
+      }
+    }
+    return records;
+  }
+
+  it("fails an issue when an auth page returns 5xx for 3+ consecutive runs", () => {
+    const records = makeAuthRecords({
+      "/auth/login": [
+        { runAt: "2026-09-05T10:00:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T10:30:00Z", status: 503, outcome: "error" },
+        { runAt: "2026-09-05T11:00:00Z", status: 503, outcome: "error" },
+        { runAt: "2026-09-05T11:30:00Z", status: 503, outcome: "error" },
+      ],
+      "/auth/signup": [
+        { runAt: "2026-09-05T10:00:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T10:30:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T11:00:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T11:30:00Z", status: 200, outcome: "ok" },
+      ],
+    });
+    const regression = detectAuthRegression(records);
+    expect(regression).not.toBeNull();
+    expect(regression!.title).toContain("auth");
+    expect(regression!.previous).toBeTruthy();
+  });
+
+  it("does not fire for an ongoing auth streak that was already reported", () => {
+    const records = makeAuthRecords({
+      "/auth/login": [
+        { runAt: "2026-09-05T10:00:00Z", status: 503, outcome: "error" },
+        { runAt: "2026-09-05T10:30:00Z", status: 503, outcome: "error" },
+        { runAt: "2026-09-05T11:00:00Z", status: 503, outcome: "error" },
+        { runAt: "2026-09-05T11:30:00Z", status: 503, outcome: "error" },
+      ],
+      "/auth/signup": [
+        { runAt: "2026-09-05T10:00:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T10:30:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T11:00:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T11:30:00Z", status: 200, outcome: "ok" },
+      ],
+    });
+    // The streak is already red at the earliest run; the prior run (none) is
+    // the only guard, so the edge detector must not re-fire.
+    expect(detectAuthRegression(records)).toBeNull();
+  });
+
+  it("fires when the streak begins with the first three runs ever", () => {
+    const records = makeAuthRecords({
+      "/auth/signup": [
+        { runAt: "2026-09-05T10:00:00Z", status: 503, outcome: "error" },
+        { runAt: "2026-09-05T10:30:00Z", status: 503, outcome: "error" },
+        { runAt: "2026-09-05T11:00:00Z", status: 503, outcome: "error" },
+      ],
+      "/auth/login": [
+        { runAt: "2026-09-05T10:00:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T10:30:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T11:00:00Z", status: 200, outcome: "ok" },
+      ],
+    });
+    expect(detectAuthRegression(records)).not.toBeNull();
+  });
+
+  it("does not fire with fewer than three runs", () => {
+    const records = makeAuthRecords({
+      "/auth/login": [
+        { runAt: "2026-09-05T10:00:00Z", status: 503, outcome: "error" },
+        { runAt: "2026-09-05T10:30:00Z", status: 503, outcome: "error" },
+      ],
+      "/auth/signup": [
+        { runAt: "2026-09-05T10:00:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T10:30:00Z", status: 200, outcome: "ok" },
+      ],
+    });
+    expect(detectAuthRegression(records)).toBeNull();
+  });
+
+  it("does not fire while the most recent auth runs are healthy", () => {
+    const records = makeAuthRecords({
+      "/auth/login": [
+        { runAt: "2026-09-05T10:00:00Z", status: 503, outcome: "error" },
+        { runAt: "2026-09-05T10:30:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T11:00:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T11:30:00Z", status: 200, outcome: "ok" },
+      ],
+      "/auth/signup": [
+        { runAt: "2026-09-05T10:00:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T10:30:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T11:00:00Z", status: 200, outcome: "ok" },
+        { runAt: "2026-09-05T11:30:00Z", status: 200, outcome: "ok" },
+      ],
+    });
+    expect(detectAuthRegression(records)).toBeNull();
+  });
+
+  it("formats an auth issue body naming the failing page and status", () => {
+    const regression = detectAuthRegression(
+      makeAuthRecords({
+        "/auth/login": [
+          { runAt: "2026-09-05T10:00:00Z", status: 503, outcome: "error" },
+          { runAt: "2026-09-05T10:30:00Z", status: 503, outcome: "error" },
+          { runAt: "2026-09-05T11:00:00Z", status: 503, outcome: "error" },
+        ],
+        "/auth/signup": [
+          { runAt: "2026-09-05T10:00:00Z", status: 200, outcome: "ok" },
+          { runAt: "2026-09-05T10:30:00Z", status: 200, outcome: "ok" },
+          { runAt: "2026-09-05T11:00:00Z", status: 200, outcome: "ok" },
+        ],
+      }),
+    );
+    expect(regression).not.toBeNull();
+    const body = formatAuthIssueBody(regression!);
+    expect(body).toContain("/auth/login");
+    expect(body).toContain("503");
+    expect(body).toContain("Consecutive failing runs: 3");
+  });
+
+  it("parses a real auth.csv written by the probe", () => {
+    const dir = mkdtempSync(join(tmpdir(), "search-latency-auth-guard-"));
+    try {
+      const csvPath = join(dir, "auth.csv");
+      writeFileSync(
+        csvPath,
+        [
+          "run_at,path,status,outcome,elapsed_ms",
+          "2026-09-05T10:00:00.000Z,/auth/login,200,ok,42",
+          "2026-09-05T10:00:00.000Z,/auth/signup,200,ok,41",
+          "2026-09-05T10:30:00.000Z,/auth/login,503,error,43",
+          "2026-09-05T10:30:00.000Z,/auth/signup,200,ok,44",
+          "2026-09-05T11:00:00.000Z,/auth/login,503,error,45",
+          "2026-09-05T11:00:00.000Z,/auth/signup,200,ok,46",
+          "2026-09-05T11:30:00.000Z,/auth/login,503,error,47",
+          "2026-09-05T11:30:00.000Z,/auth/signup,200,ok,48",
+        ].join("\n"),
+      );
+      const records = parseAuthRecords(csvPath);
+      expect(records).toHaveLength(8);
+      const regression = detectAuthRegression(records);
+      expect(regression).not.toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
