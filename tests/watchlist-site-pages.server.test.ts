@@ -4,6 +4,7 @@ import {
   beginWebsiteSiteScan,
   finalizeWebsiteSiteScan,
   getLatestCompleteWebsiteScanBaseline,
+  getLatestWebsiteSiteScanForWatchlist,
   listWebsitePageObservationsForRun,
   listWebsiteSiteScanPagesForRun,
   upsertWebsitePageObservation,
@@ -247,6 +248,24 @@ describe("website site scan storage", () => {
       "https://competitor.example/pricing",
     ]);
     expect(baseline!.observations).toHaveLength(1);
+  });
+
+  it("returns the latest scan of any status for honest coverage labels", async () => {
+    seedWatchlist("watch-1", "user-1", "competitor.example");
+    seedRun("run-1", "watch-1", "2026-08-01T01:00:00.000Z");
+
+    await beginWebsiteSiteScan(env, beginInput());
+    await upsertWebsiteSiteScanPage(env, pageInput());
+    await finalizeWebsiteSiteScan(
+      env,
+      finalizeInput({ status: "partial", inventoryHash: null }),
+    );
+
+    const latest = await getLatestWebsiteSiteScanForWatchlist(env, "watch-1");
+    expect(latest).not.toBeNull();
+    expect(latest!.scan.inventoryComplete).toBe(false);
+    expect(latest!.pages).toHaveLength(1);
+    expect(await getLatestCompleteWebsiteScanBaseline(env, "watch-1")).toBeNull();
   });
 
   it("rejects every stale-token write with zero mutations", async () => {

@@ -1077,6 +1077,7 @@ describe("watchlists route rendering", () => {
     },
     creativeWall: [],
     trendDailyActivity: [],
+    websiteCoverageLabel: "2 of 8 known pages watched; sitemap discovered 6; crawl reached 1; last full crawl <date>",
   };
 
   it("renders a selected competitor as one entity-owned detail surface", async () => {
@@ -1208,6 +1209,9 @@ describe("watchlists route rendering", () => {
 
     // The change feed is the default panel.
     expect(markup).toContain("What changed");
+    expect(markup).toContain('data-coverage="website"');
+    expect(markup).toContain("2 of 8 known pages watched");
+    expect(markup).not.toContain("whole site");
     expect(markup).toContain("f9-evidence-diff-plate");
     expect(markup).toContain("High confidence");
     expect(markup).toContain("This is the stored capture, not a re-render.");

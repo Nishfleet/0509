@@ -982,6 +982,51 @@ export async function listWebsitePageObservationsForRun(
 }
 
 /**
+ * Latest site-scan manifest for a watchlist, any status. Coverage UI uses
+ * this so an incomplete canary run still shows "X of Y known pages" instead
+ * of implying a whole-site watch. Null when no scan exists.
+ */
+export async function getLatestWebsiteSiteScanForWatchlist(
+  env: AppEnv,
+  watchlistId: string,
+): Promise<{
+  scan: WebsiteSiteScanRecord;
+  pages: WebsiteSiteScanPageRecord[];
+} | null> {
+  const scan = await queryOne<WebsiteSiteScanRow>(
+    env,
+    `
+      SELECT ws.*
+      FROM website_site_scan ws
+      INNER JOIN watchlist_run wr ON wr.id = ws.watchlist_run_id
+      WHERE ws.watchlist_id = ?
+      ORDER BY wr.started_at DESC, ws.watchlist_run_id DESC
+      LIMIT 1
+    `,
+    watchlistId,
+  );
+  if (!scan) {
+    return null;
+  }
+
+  const pages = await queryAll<WebsiteSiteScanPageRow>(
+    env,
+    `
+      SELECT *
+      FROM website_site_scan_page
+      WHERE site_scan_id = ?
+      ORDER BY stable_order ASC, canonical_url ASC
+    `,
+    scan.id,
+  );
+
+  return {
+    scan: toWebsiteSiteScanRecord(scan),
+    pages: pages.map(toWebsiteSiteScanPageRecord),
+  };
+}
+
+/**
  * The most recent complete scan strictly before `beforeRunId` (by run start
  * time), or the most recent complete scan when `beforeRunId` is omitted.
  * Partial and failed scans are excluded entirely, so they can never become or
