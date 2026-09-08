@@ -826,6 +826,19 @@ export interface SitemapEntry {
 }
 
 /**
+ * Date of the newest entry on the /changelog route — the app's own record of
+ * when customer-visible content last changed. Maintained BY HAND alongside the
+ * changelog itself: every time a release adds a changelog entry, this constant
+ * moves to that entry's date. It is a real content timestamp (the latest entry
+ * time), never a build-time clock read, so a sitemap lastmod drawn from it can
+ * never claim freshness newer than the site's actual last content change.
+ * Guarded against drift by tests/sitemap-static-lastmod.test.ts, which parses
+ * the newest `title="YYYY-MM-DD"` block out of app/routes/changelog.tsx and
+ * asserts this constant equals it.
+ */
+export const LATEST_CHANGELOG_ENTRY_DATE = "2026-09-06";
+
+/**
  * Static funnel paths with honest changefreq/priority tiers. lastmod is
  * deliberately omitted on static paths — the build has no per-page content
  * timestamp, and inventing one would be a false freshness claim. Dynamic
@@ -893,6 +906,24 @@ export const ROOT_SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] =
   );
 
 /**
+ * Keep a sitemap `<lastmod>` honest and parseable: only a W3C datetime date
+ * (`YYYY-MM-DD`, the format sitemaps.org/Google accept) passes through; any
+ * missing or malformed value degrades to omitting the element rather than
+ * emitting a timestamp crawlers cannot parse or that could misstate freshness.
+ */
+export function normalizeSitemapLastmod(value: string | undefined): string | undefined {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return undefined;
+  }
+  // Real-calendar-date check: rejects 2026-02-31 and friends.
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    return undefined;
+  }
+  return value;
+}
+
+/**
  * Render a sitemap urlset from an ordered entry list. Single builder shared by
  * the static fallback (`SITEMAP_XML` below, used when there is no D1 / no
  * dynamic data) and the production sitemap, which appends dynamic /ads/:domain
@@ -902,8 +933,9 @@ export const ROOT_SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] =
 export function renderSitemapXml(entries: readonly SitemapEntry[]): string {
   const urlBlocks = entries.map((entry) => {
     const children = [`<loc>${canonicalUrl(entry.path)}</loc>`];
-    if (entry.lastmod) {
-      children.push(`<lastmod>${entry.lastmod}</lastmod>`);
+    const lastmod = normalizeSitemapLastmod(entry.lastmod);
+    if (lastmod) {
+      children.push(`<lastmod>${lastmod}</lastmod>`);
     }
     if (entry.changefreq) {
       children.push(`<changefreq>${entry.changefreq}</changefreq>`);
@@ -933,7 +965,15 @@ ${urlBlocks.join("\n")}
 // bounded cache read at sitemap-render time (see app/lib/sitemap.server.ts);
 // sitemap generation never triggers live discovery. This static XML is the
 // no-DB fallback only.
-const SITEMAP_XML = renderSitemapXml(ROOT_SITEMAP_STATIC_ENTRIES);
+// No-DB fallback also carries real lastmod (issue #2031): the changelog's
+// latest entry date — a content timestamp, never a build-time clock read —
+// so crawlers see the same freshness signal as the production sitemap.
+const SITEMAP_XML = renderSitemapXml(
+  ROOT_SITEMAP_STATIC_ENTRIES.map((entry) => ({
+    ...entry,
+    lastmod: LATEST_CHANGELOG_ENTRY_DATE,
+  })),
+);
 
 // Keep /share/ CRAWLABLE on purpose: shared reports are de-indexed via the
 // `x-robots-tag: noindex, nofollow` header set in workers/security-headers.ts,

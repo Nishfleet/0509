@@ -111,7 +111,7 @@ import {
 } from "~/lib/offer-timeline.server";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
-import { renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
+import { renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, LATEST_CHANGELOG_ENTRY_DATE, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
 import { BUYER_SURFACE_LOCALE_IDS, type BuyerSurfaceLocaleId } from "~/lib/locale-markets";
 import type { AdRecord } from "~/lib/types";
 
@@ -537,7 +537,7 @@ export function staticSitemapEntriesForLocale(
  * `BUYER_SURFACE_LOCALE_IDS` (de, ja, pt-br, fr, es), gated by the worker.
  */
 export function buildLocaleSitemapXml(locale: BuyerSurfaceLocaleId): string {
-  return renderSitemapXml(staticSitemapEntriesForLocale(locale));
+  return renderSitemapXml(withStaticLastmod([], staticSitemapEntriesForLocale(locale)));
 }
 
 /**
@@ -555,10 +555,38 @@ export async function publicLocaleSitemapFile(
 }
 
 /**
+ * Attach the render-time static lastmod to every static entry: the changelog's
+ * latest entry date (the app's real "content last changed" record — issue
+ * #2031), with the /brands hub overridden by the newest /ads capture's
+ * fetched_at when one exists (a data-driven per-page freshness datum the brand
+ * entries already carry). Never a build-time clock read.
+ */
+export function withStaticLastmod(
+  brandEntries: readonly SitemapEntry[] = [],
+  staticEntries: readonly SitemapEntry[] = ROOT_SITEMAP_STATIC_ENTRIES,
+): SitemapEntry[] {
+  const newestBrandFetch = brandEntries
+    .map((entry) => entry.fetchedAt)
+    .filter((value): value is string => typeof value === "string")
+    .sort()
+    .at(-1);
+  return staticEntries.map((entry) => ({
+    ...entry,
+    lastmod:
+      entry.path === "/brands" && newestBrandFetch
+        ? newestBrandFetch.slice(0, 10)
+        : LATEST_CHANGELOG_ENTRY_DATE,
+  }));
+}
+
+/**
  * Full production sitemap body: static funnel entries first (with changefreq
  * and priority), then the dynamic indexable brand-page entries (with lastmod
  * from their cache fetched_at), then the dynamic indexable /timeline/:domain
- * entries (with lastmod from their newest snapshot capture). The root feed
+ * entries (with lastmod from their newest snapshot capture). Every static URL
+ * carries a render-time lastmod drawn from real data (issue #2031): the
+ * changelog's latest entry date, with /brands tracking its newest capture.
+ * The root feed
  * deliberately EXCLUDES every buyer-surface locale-prefixed path (those live
  * only in their own `/<locale>/sitemap.xml` — see
  * `ROOT_SITEMAP_STATIC_ENTRIES` in app/lib/seo.ts) so no URL is listed twice
@@ -569,7 +597,7 @@ export function buildSitemapXml(
   timelineEntries: readonly SitemapEntry[] = [],
 ): string {
   return renderSitemapXml([
-    ...ROOT_SITEMAP_STATIC_ENTRIES,
+    ...withStaticLastmod(brandEntries),
     ...brandEntries,
     ...timelineEntries,
   ]);
