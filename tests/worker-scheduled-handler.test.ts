@@ -50,8 +50,18 @@ async function loadWorker() {
     domains: [],
   });
   const summarizeSneakerResaleBackfill = vi.fn((result) =>
-    `sneaker-resale-backfill day=${result.day} captured=${result.capturedCount} failed=${result.failedCount} []`,
+    `sneaker-resale-backfill day=${result.day} cohort=${result.domains.length} captured=${result.capturedCount} failed=${result.failedCount} []`,
   );
+  const runAdsDomainPublisher = vi.fn().mockResolvedValue({
+    list: "sneaker-resale",
+    gate: "bet2_active",
+    attempted: 0,
+    published: 0,
+    skipped: 0,
+    failed: 0,
+    invalid: 0,
+    outcomes: [],
+  });
   const flushDeferredInstantAlerts = vi.fn().mockResolvedValue({ groups: 0 });
   const sendWeeklyBusinessNumbers = vi.fn().mockResolvedValue({ sent: false });
   const sendCustomerAtRiskAlert = vi.fn().mockResolvedValue({ sent: false });
@@ -96,6 +106,10 @@ async function loadWorker() {
   vi.doMock("../app/lib/sneaker-resale-backfill.server", () => ({
     runSneakerResaleBackfill,
     summarizeSneakerResaleBackfill,
+  }));
+  vi.doMock("../app/lib/ads-domain-publisher.server", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("../app/lib/ads-domain-publisher.server")>()),
+    runAdsDomainPublisher,
   }));
   vi.doMock("../app/lib/cron-failure-alert.server", () => ({ reportScheduledTaskFailure }));
   vi.doMock("../app/lib/monthly-recap.server", () => ({ sendMonthlyCustomerRecaps }));
@@ -160,6 +174,7 @@ async function loadWorker() {
     summarizeDemoBrandBackfill,
     runSneakerResaleBackfill,
     summarizeSneakerResaleBackfill,
+    runAdsDomainPublisher,
     flushDeferredInstantAlerts,
     scheduleBillingLifecycleEmailRecovery,
     scheduleDigestScheduleExhaustionRecovery,
@@ -626,5 +641,69 @@ describe("Worker scheduled handler", () => {
     // The demo-brand backfill still ran on the same rail — one sibling
     // failing must not poison the other's waitUntil.
     expect(loaded.runDemoBrandBackfill).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for the nightly publisher to land public_search rows before deriving the sneaker-resale cohort (issue #1946)", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    const scheduledTime = Date.parse("2026-09-05T04:00:00.000Z");
+
+    // The cohort verdict reads the publisher's public_search cache rows,
+    // which carry a 15-minute TTL. If the backfill ran as a sibling it
+    // would read before the publisher's awaited per-domain writes land and
+    // derive an empty cohort every night; regression: the backfill must
+    // not even be invoked until the publisher's promise resolves.
+    let resolvePublisher: (value: unknown) => void = () => {};
+    loaded.runAdsDomainPublisher.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePublisher = resolve;
+      }),
+    );
+
+    await loaded.worker.scheduled(
+      { cron: DAILY_DIGEST_CRON, scheduledTime } as never,
+      {} as never,
+      ctx as never,
+    );
+
+    expect(loaded.runSneakerResaleBackfill).not.toHaveBeenCalled();
+    resolvePublisher({
+      list: "sneaker-resale",
+      attempted: 2,
+      published: 2,
+      skipped: 0,
+      failed: 0,
+      invalid: 0,
+    });
+    await Promise.all(pending);
+
+    expect(loaded.runSneakerResaleBackfill).toHaveBeenCalledTimes(1);
+    // The publisher's own block still ran and logged on the same rail.
+    expect(loaded.runAdsDomainPublisher).toHaveBeenCalledTimes(1);
+  });
+
+  it("still runs the sneaker-resale backfill when the nightly publisher throws (issue #1946)", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    loaded.runAdsDomainPublisher.mockRejectedValueOnce(new Error("publisher pipeline down"));
+
+    await loaded.worker.scheduled(
+      {
+        cron: DAILY_DIGEST_CRON,
+        scheduledTime: Date.parse("2026-09-05T04:00:00.000Z"),
+      } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    // Best-effort capture against whatever rows exist; the empty-cohort
+    // guard keeps the honest 410, and the publisher pages via its own block.
+    expect(loaded.runSneakerResaleBackfill).toHaveBeenCalledTimes(1);
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      "ads_domain_publisher",
+      expect.any(Error),
+    );
   });
 });

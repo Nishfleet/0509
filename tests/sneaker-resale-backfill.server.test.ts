@@ -187,7 +187,7 @@ describe("summarizeSneakerResaleBackfill", () => {
       domains: [],
     });
 
-    expect(summary).toBe("sneaker-resale-backfill day=2026-09-07 captured=0 failed=0 []");
+    expect(summary).toBe("sneaker-resale-backfill day=2026-09-07 cohort=0 captured=0 failed=0 []");
   });
 });
 

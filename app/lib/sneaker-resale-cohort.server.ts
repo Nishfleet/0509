@@ -188,21 +188,30 @@ export async function getSneakerResaleTierByDomain(
 
   for (const [domain, domainRows] of rowsByDomain) {
     domainRows.sort((a, b) => b.fetched_at.localeCompare(a.fetched_at));
-    const latest = domainRows[0];
-    if (!latest) {
-      continue;
-    }
 
-    let payload: AdvertiserPayloadShape;
-    try {
-      payload = JSON.parse(latest.payload_json) as AdvertiserPayloadShape;
-    } catch {
-      continue;
+    // Fall through to the next-newest row when the newest is a demo payload:
+    // a fleet demo run minutes before the rail must not discard a slightly
+    // older but still-fresh legitimate commercial row for the same domain.
+    let pickedRow: DiscoveryCacheRow | null = null;
+    let payload: AdvertiserPayloadShape | null = null;
+    for (const row of domainRows) {
+      let candidate: AdvertiserPayloadShape;
+      try {
+        candidate = JSON.parse(row.payload_json) as AdvertiserPayloadShape;
+      } catch {
+        continue;
+      }
+      if (!candidate || typeof candidate !== "object") {
+        continue;
+      }
+      if (isDemoPayload(candidate)) {
+        continue;
+      }
+      pickedRow = row;
+      payload = candidate;
+      break;
     }
-    if (!payload || typeof payload !== "object") {
-      continue;
-    }
-    if (isDemoPayload(payload)) {
+    if (!pickedRow || !payload) {
       continue;
     }
 
