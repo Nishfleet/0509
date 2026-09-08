@@ -12,12 +12,10 @@ import {
 } from "~/lib/sitemap-timeline-cohort";
 
 /**
- * Phase-1 unit suite for the sitemap-timeline cohort (issue #1958). The
- * nightly sitemap-timeline backfill (phase 2) iterates the cohort this suite
- * guards; a cohort that ships a sitemap-listed domain with no verified/likely
- * coverage would capture a phantom timeline row over its honest existing
- * ledger, so every test pins the inclusion predicate (and the read-only D1
- * adapter's honesty guards) exactly.
+ * Phase-1 unit suite for the sitemap-timeline cohort (issue #1958). Pins the
+ * inclusion predicate (a cohort domain without verified/likely coverage would
+ * capture a phantom row over its honest existing ledger) and the read-only D1
+ * adapter's honesty guards.
  */
 
 const queryIn = vi.hoisted(() => vi.fn());
@@ -36,11 +34,16 @@ vi.mock("~/lib/data/d1.server", () => ({
 }));
 
 // The candidate-domain adapter wraps the EXISTING `loadIndexableTimelineEntries`
-// from the sitemap module; mock it at the adapter boundary so the mapping
-// behavior is pinned without driving the sitemap's own bounded D1 read.
+// from the sitemap module; mock at the adapter boundary.
 vi.mock("~/lib/sitemap.server", () => ({
   loadIndexableTimelineEntries,
 }));
+
+/** Fresh module load of the read-only adapter after vi.resetModules(). */
+async function adapter() {
+  vi.resetModules();
+  return import("~/lib/sitemap-timeline-cohort.server");
+}
 
 afterEach(() => {
   queryIn.mockReset();
@@ -287,15 +290,9 @@ describe("deriveSitemapTimelineCohort", () => {
 });
 
 describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-  });
-
   it("(h) builds the right candidate keys for calendly.com + adspyder.io and emits NO expiry filter", async () => {
     queryIn.mockResolvedValue([]);
-    const { getSitemapTimelineTierByDomain } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { getSitemapTimelineTierByDomain } = await adapter();
 
     const env = { DB: {} } as unknown as AppEnv;
     await getSitemapTimelineTierByDomain(env, ["calendly.com", "adspyder.io"]);
@@ -363,9 +360,7 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
       },
     ]);
 
-    const { getSitemapTimelineTierByDomain } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { getSitemapTimelineTierByDomain } = await adapter();
 
     const env = { DB: {} } as unknown as AppEnv;
     const tierByDomain = await getSitemapTimelineTierByDomain(env, [
@@ -425,9 +420,7 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
       },
     ]);
 
-    const { getSitemapTimelineTierByDomain } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { getSitemapTimelineTierByDomain } = await adapter();
 
     const env = { DB: {} } as unknown as AppEnv;
     const tierByDomain = await getSitemapTimelineTierByDomain(env, [
@@ -477,9 +470,7 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
       },
     ]);
 
-    const { getSitemapTimelineTierByDomain } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { getSitemapTimelineTierByDomain } = await adapter();
 
     const env = { DB: {} } as unknown as AppEnv;
     const tierByDomain = await getSitemapTimelineTierByDomain(env, [
@@ -521,9 +512,7 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
       },
     ]);
 
-    const { getSitemapTimelineTierByDomain } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { getSitemapTimelineTierByDomain } = await adapter();
 
     const env = { DB: {} } as unknown as AppEnv;
     const tierByDomain = await getSitemapTimelineTierByDomain(env, [
@@ -543,9 +532,7 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
   });
 
   it("(m) returns an empty map (no throw) when env.DB is missing", async () => {
-    const { getSitemapTimelineTierByDomain } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { getSitemapTimelineTierByDomain } = await adapter();
 
     const env = {} as unknown as AppEnv;
     const tierByDomain = await getSitemapTimelineTierByDomain(env, [
@@ -559,9 +546,7 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
   });
 
   it("returns an empty map when the domain list is empty (no D1 call)", async () => {
-    const { getSitemapTimelineTierByDomain } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { getSitemapTimelineTierByDomain } = await adapter();
 
     const env = { DB: {} } as unknown as AppEnv;
     const tierByDomain = await getSitemapTimelineTierByDomain(env, []);
@@ -572,9 +557,7 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
   it("treats a `no such table: discovery_cache_entry` error as an empty map (no throw)", async () => {
     queryIn.mockRejectedValue(new Error("no such table: discovery_cache_entry"));
 
-    const { getSitemapTimelineTierByDomain } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { getSitemapTimelineTierByDomain } = await adapter();
 
     const env = { DB: {} } as unknown as AppEnv;
     const tierByDomain = await getSitemapTimelineTierByDomain(env, [
@@ -603,9 +586,7 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
       },
     ]);
 
-    const { getSitemapTimelineTierByDomain } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { getSitemapTimelineTierByDomain } = await adapter();
 
     const env = { DB: {} } as unknown as AppEnv;
     const tierByDomain = await getSitemapTimelineTierByDomain(env, [
@@ -616,10 +597,6 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
 });
 
 describe("loadSitemapTimelineCandidateDomains (read-only D1 adapter)", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-  });
-
   it("maps sitemap timeline entries to deduped, ordered domains", async () => {
     loadIndexableTimelineEntries.mockResolvedValue([
       { path: "/timeline/calendly.com", lastmod: "2026-09-01" },
@@ -629,9 +606,7 @@ describe("loadSitemapTimelineCandidateDomains (read-only D1 adapter)", () => {
       { path: "/timeline/foo/bar", lastmod: "2026-09-01" },
     ]);
 
-    const { loadSitemapTimelineCandidateDomains } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { loadSitemapTimelineCandidateDomains } = await adapter();
 
     const env = { DB: {} } as unknown as AppEnv;
     const domains = await loadSitemapTimelineCandidateDomains(env);
@@ -642,9 +617,7 @@ describe("loadSitemapTimelineCandidateDomains (read-only D1 adapter)", () => {
   });
 
   it("returns [] (no sitemap read) when env.DB is missing", async () => {
-    const { loadSitemapTimelineCandidateDomains } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { loadSitemapTimelineCandidateDomains } = await adapter();
 
     const env = {} as unknown as AppEnv;
     const domains = await loadSitemapTimelineCandidateDomains(env);
@@ -655,14 +628,8 @@ describe("loadSitemapTimelineCandidateDomains (read-only D1 adapter)", () => {
 });
 
 describe("sitemapTimelineExcludedDomains (static, no D1)", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-  });
-
   it("contains the five demo brands and the sneaker-resale seed domains, deduped", async () => {
-    const { sitemapTimelineExcludedDomains } = await import(
-      "~/lib/sitemap-timeline-cohort.server"
-    );
+    const { sitemapTimelineExcludedDomains } = await adapter();
 
     const excluded = sitemapTimelineExcludedDomains();
 
