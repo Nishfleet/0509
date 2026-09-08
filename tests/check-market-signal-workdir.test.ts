@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-const scriptPath = join(__dirname, "..", "scripts", "check-market-signal-workdir.sh");
+const repoRoot = join(__dirname, "..");
+const scriptPath = join(repoRoot, "scripts", "check-market-signal-workdir.sh");
 
 // Regression guard for issue #1953: the 2026-09-08 daily market-signal run
 // failed at the clean-checkout gate because an UNTRACKED
@@ -115,6 +116,26 @@ describe("check-market-signal-workdir (issue #1953 regression guard)", () => {
     expect(result.stdout).toContain("still blocks the fast-forward");
   });
 
+  it("flags an untracked file where origin/main now has a directory (tree at the path)", () => {
+    const { work } = makeBehindFixture();
+    // origin/main turns 'a' (absent from HEAD) into a directory; an untracked
+    // FILE named 'a' on disk blocks the fast-forward — verified live.
+    mkdirSync(join(work, "a"), { recursive: true });
+    writeFileSync(join(work, "a", "f.txt"), "inner\n");
+    git(work, ["add", "a"]);
+    git(work, ["commit", "-qm", "a becomes a directory"]);
+    git(work, ["push", "-q", "origin", "main"]);
+    git(work, ["reset", "--hard", "-q", "HEAD~1"]);
+    writeFileSync(join(work, "a"), "scratch\n");
+    expect(git(work, ["status", "--porcelain"], false).stdout).toContain("?? a");
+
+    const result = runScript(work);
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("BLOCKER");
+    expect(result.stdout).toContain("now has a directory");
+  });
+
   it("passes a plain scratch file that is not on origin/main", () => {
     const { work } = makeBehindFixture();
     writeFileSync(join(work, "s1.html"), "<html>scratch</html>\n");
@@ -132,5 +153,44 @@ describe("check-market-signal-workdir (issue #1953 regression guard)", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("OK: no untracked-overwrite blocker");
+  });
+
+  it("exits 2 with a clear FATAL on a non-repo directory", () => {
+    const root = mkdtempSync(join(tmpdir(), "workdir-check-"));
+    cleanups.push(root);
+
+    const result = runScript(root);
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("not a git work tree");
+  });
+
+  it("exits 2 with a clear FATAL when the fetch fails", () => {
+    const root = mkdtempSync(join(tmpdir(), "workdir-check-"));
+    cleanups.push(root);
+    const work = join(root, "work");
+    mkdirSync(work);
+    git(work, ["init", "-q"]);
+    git(work, ["config", "user.name", "t"]);
+    git(work, ["config", "user.email", "t@test.local"]);
+    writeFileSync(join(work, "base.txt"), "base\n");
+    git(work, ["add", "base.txt"]);
+    git(work, ["commit", "-qm", "c1"]);
+    // no remote configured — the probe's fetch must fail as an operational
+    // failure (exit 2), never as a blocker (exit 1).
+    const result = runScript(work);
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("git fetch origin main failed");
+  });
+
+  it("is wired in package.json (signal:market:workdir-check)", () => {
+    const pkg = JSON.parse(
+      readFileSync(join(repoRoot, "package.json"), "utf8"),
+    ) as { scripts?: Record<string, string> };
+
+    expect(pkg.scripts?.["signal:market:workdir-check"]).toBe(
+      "bash scripts/check-market-signal-workdir.sh",
+    );
   });
 });

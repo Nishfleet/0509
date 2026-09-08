@@ -26,11 +26,14 @@
 #   0  no blocker — the workdir may fetch and fast-forward
 #   1  blocker — untracked file(s) at a path origin/main also has; the exact
 #      paths are printed, do NOT fetch/checkout/publish, fail loud
-#   2  operational failure (not a git work tree, fetch failed)
+#   2  operational failure (not a git work tree, fetch failed, bad WORKDIR)
 set -euo pipefail
 
 WORKDIR="${1:-${WORKDIR:-$PWD}}"
-cd "$WORKDIR"
+cd "$WORKDIR" || {
+    echo "FATAL: cannot change into workdir: $WORKDIR" >&2
+    exit 2
+}
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "FATAL: not a git work tree: $WORKDIR" >&2
@@ -53,13 +56,23 @@ blockers=0
 while IFS= read -r -d '' entry; do
     [[ "${entry:0:3}" == "?? " ]] || continue
     path="${entry:3}"
-    # Only a BLOB on the ref can be overwritten by the fast-forward; a tree
-    # (directory) at the same path is not an overwrite candidate.
-    [[ "$(git cat-file -t "origin/main:$path" 2>/dev/null)" == "blob" ]] || continue
-    if git show "origin/main:$path" | cmp -s - "$path"; then
-        echo "BLOCKER: untracked '$path' has the same content as origin/main:$path but still blocks the fast-forward (untracked file at a ref path): move it aside or commit it, then re-run"
+    # git cat-file -t fails when the path is absent from the target ref —
+    # then it is a plain scratch file and harmless. Any EXISTENCE on the ref
+    # is a blocker: git refuses the fast-forward both when the ref path is a
+    # blob with different content AND when the incoming ref turns an untracked
+    # file into a directory (tree at the path), verified live 2026-09-08.
+    type="$(git cat-file -t "origin/main:$path" 2>/dev/null || true)"
+    [[ -n "$type" ]] || continue
+    if [[ "$type" == "blob" ]]; then
+        if git show "origin/main:$path" | cmp -s - "$path"; then
+            echo "BLOCKER: untracked '$path' has the same content as origin/main:$path but still blocks the fast-forward (untracked file at a ref path): move it aside or commit it, then re-run"
+        else
+            echo "BLOCKER: untracked '$path' conflicts with origin/main:$path (different content — an agent likely left un-saved work here): move it aside or commit it, then re-run"
+        fi
+    elif [[ "$type" == "tree" ]]; then
+        echo "BLOCKER: untracked '$path' sits where origin/main now has a directory (the fast-forward would overwrite it): move it aside or commit it, then re-run"
     else
-        echo "BLOCKER: untracked '$path' conflicts with origin/main:$path (different content — an agent likely left un-saved work here): move it aside or commit it, then re-run"
+        echo "BLOCKER: untracked '$path' exists as a $type on origin/main (the fast-forward would overwrite it): move it aside or commit it, then re-run"
     fi
     blockers=$((blockers + 1))
 done < <(git status --porcelain -z --untracked-files=all)
