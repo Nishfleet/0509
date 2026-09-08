@@ -194,6 +194,19 @@ export async function sendMail(message, env, fetchImpl = globalThis.fetch) {
     res.status === 200 &&
     result &&
     ((result.delivered?.length ?? 0) > 0 || (result.queued?.length ?? 0) > 0);
+  if (ok) {
+    return {
+      ok: true,
+      httpStatus: res.status,
+      delivered: result.delivered,
+      queued: result.queued,
+      permanentBounces: result.permanent_bounces ?? [],
+      errors: [],
+    };
+  }
+  if (res.status === 200 && !result) {
+    apiErrors = [{ code: 0, message: "HTTP 200 but no result payload from the API" }];
+  }
   return {
     ok,
     httpStatus: res.status,
