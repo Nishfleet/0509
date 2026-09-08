@@ -720,6 +720,9 @@ export const SITEMAP_PATHS = [
   // indexed link keeps its equity; /proof is the legacy capture-rules
   // canonical kept out of the sitemap since it 301s to /capture-rules.
   "/capture-rules",
+  // Issue #2026: the buyer-facing "no phantom changes" guarantee page. Same
+  // rules source as /capture-rules, framed for a prospect evaluating a plan.
+  "/no-phantom-changes",
   "/ad-aggression",
   "/pricing",
   "/help",
@@ -780,6 +783,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/ja/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
   "/pt-br/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
   "/capture-rules": { changefreq: "monthly", priority: "0.5" },
+  "/no-phantom-changes": { changefreq: "monthly", priority: "0.5" },
   "/ad-aggression": { changefreq: "monthly", priority: "0.6" },
   "/pricing": { changefreq: "weekly", priority: "0.8" },
   "/compare": { changefreq: "weekly", priority: "0.8" },
