@@ -4,6 +4,8 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 
 ## Phase 1 — pure cohort helper + read-only D1 adapter (acceptance 3)
 
+- [x] phase 1: pure cohort helper + read-only D1 adapter mirroring deriveSneakerResaleCohort / getSneakerResaleTierByDomain; unit-testable without a DB; a domain whose tier lookup says no verified coverage keeps its honest existing timeline and stays off the cohort.
+
 - `app/lib/sitemap-timeline-cohort.ts` (new, PURE — no D1, no server imports): own types `SitemapTimelineTier { verifiedCount, likelyCount, unmatchedCount, hasCoverage, cacheStatus: "fresh"|"stale" }` and `SitemapTimelineCohortEntry { domain, tier }` (same shape as the sneaker tier, defined locally — do NOT import sneaker types); `canonicalizeSitemapTimelineDomain(input)` (lowercase, trim, strip trailing dot, strip leading `www.`, null for empty/non-string — same contract as sneaker); `timelineDomainFromSitemapPath(path)` returning the registrable domain from a `/timeline/:domain` path (null otherwise) and `timelineDomainsFromSitemapEntries(entries)` (dedupe, preserve order); `deriveSitemapTimelineCohort(domains, tierByDomain, excludedDomains)` — canonicalize each candidate, drop domains in `excludedDomains`, require `tier?.hasCoverage === true` (verified+likely >= 1) — a domain whose tier lookup says no verified coverage keeps its honest existing timeline and stays off the cohort. Match-level predicates come from the shared `~/lib/search-domain-match` (`isVerifiedDomainMatchLevel` / `isLikelyDomainMatchLevel`), same as the sneaker helper.
 - `app/lib/sitemap-timeline-cohort.server.ts` (new, read-only D1 adapter): 
   - `loadSitemapTimelineCandidateDomains(env)` — wraps the EXISTING `loadIndexableTimelineEntries(env)` (app/lib/sitemap.server.ts) and maps `SitemapEntry.path` `/timeline/:domain` → domains via `timelineDomainsFromSitemapEntries`. This applies the existing complete-proof gate (snapshotRowHasCompleteProof) + non-ad-destination gate + SITEMAP_TIMELINE_PATH_LIMIT bound for free — the sitemap-listed set is the candidacy set. Missing DB → [].
@@ -13,6 +15,8 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 
 ## Phase 2 — nightly timeline-cohort backfill module (acceptance 2)
 
+- [ ] phase 2: nightly timeline-cohort backfill module reusing captureLandingPageSnapshot with honest-capture semantics (requireScreenshot: true, per-brand failure isolation, deterministic row id, INSERT OR IGNORE); rows written only with real screenshot + page text.
+
 - `app/lib/sitemap-timeline-backfill.server.ts` (new) mirrors `app/lib/sneaker-resale-backfill.server.ts` exactly: `runSitemapTimelineBackfill(env, options?)` — build cohort = `loadSitemapTimelineCandidateDomains(env)` minus `sitemapTimelineExcludedDomains()` filtered by `deriveSitemapTimelineCohort(tierByDomain = getSitemapTimelineTierByDomain)`; per-brand try/catch isolation; `captureLandingPageSnapshot(env, https://www.<domain>/, { preferRendered: true, requireScreenshot: true, routeContext: "proof_capture", onFailure })` — a row is written ONLY with a real screenshot + page text; a failed capture is a per-brand `capture_failed` (recorded + reported, never fabricated as an offer state); deterministic row id `timeline-<domain>-<YYYY-MM-DD>` via `sitemapTimelineBackfillRowId(domain, day)`; `INSERT OR IGNORE` (a cron retry cannot double-append a day); `replaceAnalysisFields(env, "landing_page", rowId, buildLandingPageAnalysisFields(snapshot))`; `summarizeSitemapTimelineBackfill(result)` log line shaped `sitemap-timeline-backfill day=... cohort=N captured=... failed=... [domain:captured ...]`; missing DB / empty cohort / missing snapshot table → empty degraded result, never a throw. Bounded: an explicit `SITEMAP_TIMELINE_COHORT_CAP` constant (default 200) slices the derived cohort so a future sitemap coverage explosion cannot blow the nightly Browser Run budget.
 - `CAPTURE_HOMEPAGE` = `https://www.<domain>/` — the same shape the sneaker rail captures and the same shape the sitemap domain derivation accepts (registrable domain from hostname), so a written row immediately qualifies as a complete-proof sitemap candidate on the next read.
 - Inject seams for tests (`now`, `capture`, `tierLookup`, `excludedDomains`, `cohort`, `domains`) — same shape as the sneaker suite.
@@ -20,10 +24,14 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 
 ## Phase 3 — worker wiring + scheduled-handler tests (acceptance 1 + 5a)
 
+- [ ] phase 3: extend the EXISTING daily backfill rail in workers/app.ts (same scheduledTask block — NO new cron, NO new service, NO migration) with a bounded sitemap-timeline cohort: calendly.com and adspyder.io.
+
 - `workers/app.ts`: import `runSitemapTimelineBackfill` + `summarizeSitemapTimelineBackfill`; inside the EXISTING `scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily"` block add a SIBLING `ctx.waitUntil(runSitemapTimelineBackfill(env).then(log with day/cohort/captured/failed/summary, (error) => reportScheduledTaskFailure(env, "sitemap_timeline_backfill", error)))` — alongside runDemoBrandBackfill. MANAGER DECISION (recorded for review): NOT chained after publisherRun like sneaker. Sneaker's chain exists because its tier read gates on 15-min-TTL rows the publisher writes that tick; this cohort's tier read accepts any-age rows (Phase 1 decision), so there is no ordering hazard, a sibling keeps a publisher whole-run failure from coupling to the timeline capture, and runDemoBrandBackfill is the closer sibling shape. No new cron, no other worker changes.
 - `tests/worker-scheduled-handler.test.ts` (edit): add the `vi.doMock` for `sitemap-timeline-backfill.server` (runSitemapTimelineBackfill + summarizeSitemapTimelineBackfill) mirroring the sneaker mocks, plus three cases: (a) daily 04:00 cron invokes `runSitemapTimelineBackfill` once AND still invokes demo + sneaker backfills (the cohort expansion must not displace the existing rails); (b) the 3h (WARMUP_CRON) and weekly (NORMAL_CRON) crons do NOT invoke it; (c) a throw pages `reportScheduledTaskFailure(env, "sitemap_timeline_backfill", error)` while the demo backfill still ran.
 
 ## Phase 4 — real-D1 integration test (acceptance 5c + 4)
+
+- [ ] phase 4: real-D1 integration test applying the capture path against a calendly-like fixture — fresh row with a real screenshot written; no-coverage fixture writes nothing; per-day idempotency; three-night dated-ledger accumulation.
 
 - `tests/integration/sitemap-timeline-backfill.integration.test.ts` (new, workers project, real D1 via `tests/integration/fixtures.ts` + `apply-migrations.ts`, capture stubbed — the real pipeline needs Browser Rendering):
   - Covered fixture: seed one complete-proof snapshot row for a calendly-like REAL registrable domain (e.g. calendly.com — the sitemap domain derivation requires a real registrable hostname) so `loadSitemapTimelineCandidateDomains` candidacy is real; inject `tierLookup` with `hasCoverage: true`; run backfill; assert a fresh `timeline-calendly.com-<day>` row with a real screenshot + page-text artifact key (`screenshotArtifactKey`/`htmlArtifactKey` in metadata) is written and `loadOfferTimeline` renders the new dated state (screenshotHref/pageTextHref `/artifacts/...`).
@@ -31,6 +39,8 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
   - Per-day idempotency (second run → skipped_already_captured); three-night dated-ledger accumulation (3 rows, ascending dates, newest within 7 days); per-brand capture-failure isolation; production-builder path test: real `deriveSitemapTimelineCohort` over seeded sitemap candidates + fixture tier map, with the demo/sneaker exclusion flowing through (`sitemapTimelineExcludedDomains` real).
 
 ## Phase 5 — verification + reviewer round + PR
+
+- [ ] phase 5: full verification (all suites green, tsc clean, sgscan/crgate/repo tests), live acceptance-4 evidence, PR with Verification/run-proof receipts + reviewer round + arm.
 
 - Run `npx vitest run --configLoader runner --project node tests/sitemap-timeline-cohort.test.ts tests/sitemap-timeline-backfill.server.test.ts tests/worker-scheduled-handler.test.ts tests/sneaker-resale-backfill.server.test.ts` and `npx vitest run --configLoader runner --project workers tests/integration/sitemap-timeline-backfill.integration.test.ts tests/integration/sneaker-resale-backfill.integration.test.ts` — all green.
 - `npx tsc -b` clean on changed files. sgscan + crgate + repo tests per the standard gates.
@@ -57,7 +67,22 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 - `data/seed-lists/` — read-only; calendly/adspyder candidacy is sitemap-derived, no new seed list.
 - No timeline-cohort proof-hole catch-up; no hourly/daily cron addition; no new service or schema.
 
-## Phase 5 reviewer round (single reviewer pass, seat per find_senior_seat)
+## Reviewer rounds
+
+### Phase 1 reviewer round (2026-09-08, seat cursor/cursor-grok-4.6-high)
+
+Diff: `git diff origin/main..HEAD` (plan + cohort helper + adapter + unit suite). All 35 unit tests green before review.
+
+- **Act on (fixed)**: none.
+- **Consider (recorded, carried into later phases)**:
+  - Retention-decay premise flag: `public_search` rows have a 15-min TTL and the retention job deletes expired discovery_cache_entry rows after a 7-day grace (retention.server.ts:23,129-139). calendly/adspyder have no scheduled writer, so an un-refreshed tier read goes empty ~7 days after the last search-triggered write and the cohort silently reverts to the freeze. The no-expiry gate alone does not keep the cohort alive. Phase 5 must verify the two target domains still surface in the live tier read at current retention state; if the nightly rail must be durable regardless of search traffic, a follow-up (evidence refresh / retention carve-out) is a new issue, not this PR.
+  - Sitemap candidacy is oldest-first with an arbitrary cap (sitemap.server.ts:765-768: ORDER BY captured_at ASC LIMIT 100,000 then per-domain first-200). calendly/adspyder could fall outside that window at current table size. Phase 5 must verify both target domains appear in live loadIndexableTimelineEntries output.
+  - timelineDomainFromSitemapPath is not total over degenerate paths (/timeline/calendly.com?x=1, #fragment, single-label domains). Can never join the cohort (no matching cache key), so no phantom — Dismissed for this PR; noted for future strictness.
+  - Import coupling: the adapter value-imports SNEAKER_RESALE_SEED_LIST from sneaker-resale-backfill.server, dragging its module graph into consumers; the string is a registry key. No worker-bundle cost (sneaker backfill already bundled); Noted, not changed this PR.
+- **Noted**: seed-contents contract pin in tests; countSitemapTimelineTier unknown[] drift (harmless); cacheStatus has no consumer yet (phase 2 summarize surfaces it); D1 fan-out 500×3 keys ≈ 17 chunked SELECTs, shrinks to ~7 under phase 2's 200 CAP.
+- **Dismissed-with-reason**: lexical expires_at comparison (writers store ISO text; existing SQL gates use the same comparison); demo-row fall-through matches the fixed sneaker precedent; extractor not validating provider segment (SQL constrains candidates); no write path yet to review.
+
+### Phase 5 reviewer round (single reviewer pass, seat per find_senior_seat)
 - **Act on (fixed)**: (manager appends during the run)
 - **Warning (fixed)**: (manager appends during the run)
 - **Suggestion (fixed/noted)**: (manager appends during the run)
