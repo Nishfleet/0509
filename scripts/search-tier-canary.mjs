@@ -17,7 +17,8 @@ import { fileURLToPath } from "node:url";
 
 import { parseRetryAfterMs, parseSearchResponseHtml } from "./bet2-live-verification.mjs";
 
-// The §1.8 six-domain set (issue #1452). Each brand must render at least one
+// The §1.8 free-preview money-path set (issue #1452, extended with the
+// ridge.com alias-recall regression #2012). Each brand must render at least one
 // verified or likely row for a bare `q=<brand>` keyword search.
 export const SIX_DOMAINS = Object.freeze([
   "allbirds",
@@ -26,6 +27,7 @@ export const SIX_DOMAINS = Object.freeze([
   "gymshark",
   "hubspot",
   "mamaearth",
+  "ridge",
 ]);
 
 export const DEFAULT_BASE_URL = "https://0509.io";
@@ -51,8 +53,9 @@ export const KNOWN_ALIAS_GAPS = Object.freeze(new Map([["oura", "Nishfleet/0509#
 export const WARMING_RETRY_LIMIT = 1;
 export const WARMING_RETRY_DELAY_MS = 5_000;
 
-// Anonymous /search is 20 requests per 10 minutes per IP. The canary makes 6
-// requests (one per domain), but a scheduled run can collide with other search
+// Anonymous /search is 20 requests per 10 minutes per IP. The canary makes one
+// request per domain in SIX_DOMAINS (7 as of #2012), but a scheduled run can
+// collide with other search
 // canaries on the same runner IP, so a 429 is retried with the same backoff
 // the BET 2 verifier uses rather than treated as a dead-end.
 export const SEARCH_429_RETRY_LIMIT = 3;

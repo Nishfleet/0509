@@ -218,6 +218,26 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     const identity = await resolveWebsiteIdentity("https://unknown-no-ads.example");
     expect(identity).toBeNull();
   });
+
+  it("connects ridge.com to its ridgewallet.com/.eu landing hosts (issue #2012)", async () => {
+    // ridge.com is the buyer-typed domain, Ridge's ads land on ridgewallet.com
+    // and ridgewallet.eu. The live redirect chain never reveals the alias and
+    // the stem-extension matcher is same-TLD only, so without the curated
+    // override a bare website=ridge.com search dead-ends on "No verified ads
+    // for ridge.com" (issue #2012). The aliases must survive a FAILED live
+    // fetch (bot-blocked homepage) so the search still resolves.
+    mockFetch.mockResolvedValue(
+      new Response(null, { status: 403, headers: { "content-type": "text/html" } }),
+    );
+
+    const identity = await resolveWebsiteIdentity("https://ridge.com");
+
+    expect(identity).not.toBeNull();
+    expect(identity?.siteName).toBe("Ridge");
+    expect(identity?.aliases).toContain("Ridge");
+    expect(identity?.domainAliases).toContain("ridgewallet.com");
+    expect(identity?.domainAliases).toContain("ridgewallet.eu");
+  });
 });
 
 describe("extractTagContent tag allowlist", () => {

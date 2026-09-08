@@ -308,6 +308,75 @@ describe("goat.com mandatory regression (BET 2 — wrong-brand wall)", () => {
   });
 });
 
+describe("ridge.com mandatory regression (alias recall, issue #2012)", () => {
+  // Ridge is a real §1.8 money-path advertiser. ridge.com is the buyer-typed
+  // domain, but its ads land on the product domain ridgewallet.com (and
+  // regional ridgewallet.eu). The /ads/:domain publish layer already resolves
+  // the alias (issue #1446), yet /search?website=ridge.com dead-ended on
+  // "No verified ads for ridge.com" because the search matcher never saw the
+  // ridgewallet hosts: the live identity redirect chain hides the alias and
+  // the stem-extension rule is same-TLD only. The curated identity override
+  // (website-identity.server) supplies the aliases; this pins the matcher
+  // behaviour they must trigger.
+  const ridgeAliases = ["ridgewallet.com", "ridgewallet.eu", "Ridge"];
+  const kintsugiAd = (landing: string): AdRecord =>
+    ad({
+      metaAdId: "ridge-kintsugi",
+      advertiser: "The Ridge",
+      previewHeadline: "Inspired by the Japanese art of Kintsugi",
+      landingPageUrl: landing,
+    });
+
+  it("classifies a ridgewallet.com landing as a verified alias for ridge.com", () => {
+    const intent = parseSearchInputFromWebsiteField("ridge.com");
+    const explanation = explainDomainMatch(
+      kintsugiAd("https://ridgewallet.com/collections/all"),
+      intent,
+      new Set(ridgeAliases),
+    );
+
+    expect(explanation).not.toBeNull();
+    expect(explanation?.level).toBe("verified_alias");
+    expect(explanation?.confidenceCategory).toBe("verified");
+  });
+
+  it("classifies a ridgewallet.eu landing as a verified alias for ridge.com", () => {
+    // The live 2026-09-08 probe returned the Kintsugi ad landing on
+    // ridgewallet.eu/collections/kintsugi-capsule, labelled Unmatched.
+    const intent = parseSearchInputFromWebsiteField("ridge.com");
+    const explanation = explainDomainMatch(
+      kintsugiAd("https://ridgewallet.eu/collections/kintsugi-capsule"),
+      intent,
+      new Set(ridgeAliases),
+    );
+
+    expect(explanation).not.toBeNull();
+    expect(explanation?.level).toBe("verified_alias");
+    expect(explanation?.confidenceCategory).toBe("verified");
+  });
+
+  it("keeps an unrelated homonym (Blackberry Ridge) unmatched for ridge.com", () => {
+    // The alias must connect THE Ridge's ads, not every advertiser containing
+    // the word "ridge". An advertiser with no ridgewallet landing host and no
+    // brand-stem fold ("Blackberry Ridge" folds to "blackberryridge") stays
+    // off the verified set — same precision rule as the goat.com wall.
+    const intent = parseSearchInputFromWebsiteField("ridge.com");
+    const weddingVenue = ad({
+      metaAdId: "blackberry-ridge",
+      advertiser: "Blackberry Ridge",
+      previewHeadline: "Booking 2026 and 2027 dates!",
+      landingPageUrl: "https://blackberryridge.example/venue",
+    });
+    const classified = classifyDomainMatches([weddingVenue], intent, {
+      aliases: ridgeAliases,
+      includeUnverified: true,
+    });
+
+    expect(classified).toHaveLength(1);
+    expect(classified[0]?.match.confidenceCategory).not.toBe("verified");
+  });
+});
+
 describe("domainMatchTier", () => {
   it("maps verified levels to verified, brand-name to likely, and everything else to unmatched", () => {
     expect(domainMatchTier("exact_hostname")).toBe("verified");
