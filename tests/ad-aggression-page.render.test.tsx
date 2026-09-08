@@ -33,7 +33,7 @@ beforeEach(() => {
       ...actual,
       Link: ({ children, to, ...props }: MockLinkProps) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      useLocation: () => ({ pathname: "/ad-aggression" }),
+      useLocation: () => ({ pathname: "/methodology" }),
       useRouteLoaderData: () => undefined,
     };
   });
@@ -47,12 +47,12 @@ afterEach(() => {
 describe("Ad Aggression Score methodology page — render", () => {
   it("renders the formula, four sub-scores, band table, and worked example", async () => {
     const { default: MethodologyRoute, meta, links } = await import(
-      "~/routes/ad-aggression"
+      "~/routes/methodology"
     );
     const markup = renderToStaticMarkup(createElement(MethodologyRoute));
 
     // Core formula presence
-    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/ad-aggression");
+    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/methodology");
     expect(markup).toContain("Ad Aggression Score");
     expect(markup).toContain(`formula version ${AGGRESSION_FORMULA_VERSION}`);
 
@@ -123,7 +123,7 @@ describe("Ad Aggression Score methodology page — render", () => {
 
   it("emits WebPage and FAQ JSON-LD that match the visible page", async () => {
     const { default: MethodologyRoute } = await import(
-      "~/routes/ad-aggression"
+      "~/routes/methodology"
     );
     const markup = renderToStaticMarkup(createElement(MethodologyRoute));
     const blocks = parseLdJsonBlocks(markup);
@@ -146,7 +146,7 @@ describe("Ad Aggression Score methodology page — render", () => {
 
   it("TOC includes the worked example anchor", async () => {
     const { default: MethodologyRoute } = await import(
-      "~/routes/ad-aggression"
+      "~/routes/methodology"
     );
     const markup = renderToStaticMarkup(createElement(MethodologyRoute));
     expect(markup).toContain('href="#worked-example"');

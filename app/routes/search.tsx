@@ -2141,7 +2141,7 @@ export default function SearchRoute() {
                          card with no next step. The natural "why is this
                          empty?" answer is the public /capture-rules artifact
                          (BET 4 — "what we refuse to alert on"), with the
-                         /ad-aggression methodology page as the secondary
+                         /methodology methodology page as the secondary
                          "how the score works" handoff. Both pages already
                          exist; this wires the empty card to them so the
                          section action container is no longer empty for the
@@ -2157,7 +2157,7 @@ export default function SearchRoute() {
                         </Link>
                         <Link
                           className="f9-wk-lnk f9-wk-lnk--quiet"
-                          to="/ad-aggression"
+                          to="/methodology"
                         >
                           How the score works{" "}
                           <span aria-hidden="true" className="f9-wk-chev">

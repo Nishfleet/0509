@@ -49,12 +49,12 @@ export const BUYER_SURFACE_PATHS = [
   // Search is THE first purchase-intent moment (BET 2), so a non-EN buyer
   // completing the localised funnel must reach the same functional search
   // outcome instead of a 404 or a language jump back to EN `/search`
-  // (accept #1/#3). Competitor-monitoring, capture-rules and ad-aggression
+  // (accept #1/#3). Competitor-monitoring, capture-rules and methodology
   // are the surrounding trust/proof surfaces the localised buyer needs too.
   "/search",
   "/competitor-monitoring",
   "/capture-rules",
-  "/ad-aggression",
+  "/methodology",
 ] as const;
 export type BuyerSurfacePath = (typeof BUYER_SURFACE_PATHS)[number];
 

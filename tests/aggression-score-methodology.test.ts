@@ -33,7 +33,7 @@ beforeEach(() => {
       ...actual,
       Link: ({ children, to, ...props }: MockLinkProps) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      useLocation: () => ({ pathname: "/ad-aggression" }),
+      useLocation: () => ({ pathname: "/methodology" }),
       useRouteLoaderData: () => undefined,
     };
   });
@@ -47,11 +47,11 @@ afterEach(() => {
 describe("Ad Aggression Score methodology page", () => {
   it("publishes the formula, four sub-scores, bands, and evidence floor", async () => {
     const { default: MethodologyRoute, meta, links } = await import(
-      "~/routes/ad-aggression"
+      "~/routes/methodology"
     );
     const markup = renderToStaticMarkup(createElement(MethodologyRoute));
 
-    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/ad-aggression");
+    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/methodology");
     expect(AD_AGGRESSION_METHODOLOGY_PATH_LEGACY).toBe("/methodology/ad-aggression-score");
     expect(markup).toContain("Ad Aggression Score");
     expect(markup).toContain(`formula version ${AGGRESSION_FORMULA_VERSION}`);
@@ -92,7 +92,7 @@ describe("Ad Aggression Score methodology page", () => {
 
   it("emits WebPage and FAQ JSON-LD that match the visible page", async () => {
     const { default: MethodologyRoute } = await import(
-      "~/routes/ad-aggression"
+      "~/routes/methodology"
     );
     const markup = renderToStaticMarkup(createElement(MethodologyRoute));
     const blocks = parseLdJsonBlocks(markup);
@@ -133,57 +133,73 @@ describe("publicAggressionBands", () => {
 });
 
 /**
- * Legacy /methodology/ad-aggression-score → /ad-aggression 301 (issue #1263).
+ * Legacy methodology paths -> /methodology 301 (issues #1263, #2022).
  *
- * The old path was the canonical URL when issue #960 shipped the page; issue
- * #1263 renamed it to the shorter, quotable /ad-aggression path so the link
- * a buyer pastes into chat is short. A permanent 301 preserves the indexed
- * URL's ranking signal so the rename does not cost SEO equity. This test
- * pins the redirect so a future cleanup that drops the loader silently
- * regresses the page to a 404 — Google would then de-index the formula
- * page for every /ads/:domain visitor who lands there.
+ * The scored-page URL has moved twice: /methodology/ad-aggression-score (#960)
+ * -> /ad-aggression (#1263) -> /methodology (#2022). Each earlier path must
+ * stay a working 301 entry so external links and any indexed entries keep
+ * their equity. A permanent 301 preserves the indexed URL's ranking signal so
+ * the rename does not cost SEO equity. These tests pin the redirects so a
+ * future cleanup that drops a loader silently regresses the page to a 404 —
+ * Google would then de-index the formula page for every /ads/:domain visitor
+ * who lands there.
  */
-describe("Ad Aggression Score methodology legacy path redirect (issue #1263)", () => {
-  it("301-redirects /methodology/ad-aggression-score to /ad-aggression", async () => {
+describe("Ad Aggression Score methodology legacy path redirects (issues #1263/#2022)", () => {
+  it("301-redirects /methodology/ad-aggression-score to /methodology", async () => {
     const { loader } = await import("~/routes/methodology.ad-aggression-score-redirect");
     let captured: Response | null = null;
     try {
-      const result = loader({
+      loader({
         request: new Request("https://0509.io/methodology/ad-aggression-score"),
       } as Parameters<typeof loader>[0]);
-      captured = result as unknown as Response;
     } catch (thrown) {
-      // React Router's `redirect()` throws a Response, not returns one; the
-      // loader is `throw redirect(...)`, so the value never lands in the
-      // happy path. Capture the thrown response here.
       captured = thrown as Response;
     }
     expect(captured, "loader must throw a redirect Response").not.toBeNull();
     expect(captured!.status).toBe(301);
-    expect(captured!.headers.get("location")).toBe("/ad-aggression");
+    expect(captured!.headers.get("location")).toBe("/methodology");
   });
 
-  it("registers the legacy path as a 301 redirect route in app/routes.ts", async () => {
-    // Source-of-truth guard: the route entry MUST still exist. If somebody
-    // deletes the redirect, the 301 above keeps passing (the loader file is
-    // orphaned but still importable), so this guard pins the wiring too.
+  it("301-redirects the #1263-era /ad-aggression path to /methodology", async () => {
+    const { loader } = await import("~/routes/ad-aggression-redirect");
+    let captured: Response | null = null;
+    try {
+      loader({
+        request: new Request("https://0509.io/ad-aggression"),
+      } as Parameters<typeof loader>[0]);
+    } catch (thrown) {
+      captured = thrown as Response;
+    }
+    expect(captured, "loader must throw a redirect Response").not.toBeNull();
+    expect(captured!.status).toBe(301);
+    expect(captured!.headers.get("location")).toBe("/methodology");
+  });
+
+  it("registers the legacy paths as 301 redirect routes and the canonical at /methodology", async () => {
+    // Source-of-truth guard: the redirect route entries MUST still exist. If
+    // somebody deletes a redirect, its 301 above keeps passing (the loader
+    // file is orphaned but still importable), so this guard pins the wiring.
     const routesSource = await import("node:fs").then((fs) =>
       fs.readFileSync("app/routes.ts", "utf8"),
     );
     expect(routesSource).toMatch(
       /route\(\s*["']methodology\/ad-aggression-score["']\s*,\s*["']routes\/methodology\.ad-aggression-score-redirect(?:\.ts)?["']\s*\)/,
     );
-    // And the canonical route must be at /ad-aggression (not the legacy path).
     expect(routesSource).toMatch(
-      /route\(\s*["']ad-aggression["']\s*,\s*["']routes\/ad-aggression(?:\.tsx)?["']\s*\)/,
+      /route\(\s*["']ad-aggression["']\s*,\s*["']routes\/ad-aggression-redirect(?:\.ts)?["']\s*\)/,
+    );
+    // And the canonical route must be at /methodology (not a legacy path).
+    expect(routesSource).toMatch(
+      /route\(\s*["']methodology["']\s*,\s*["']routes\/methodology(?:\.tsx)?["']\s*\)/,
     );
   });
 
-  it("sitemap registers the canonical /ad-aggression, not the legacy path", async () => {
+  it("sitemap registers the canonical /methodology, not a legacy path", async () => {
     const { SITEMAP_PATHS } = await import("~/lib/seo");
-    expect(SITEMAP_PATHS as readonly string[]).toContain("/ad-aggression");
+    expect(SITEMAP_PATHS as readonly string[]).toContain("/methodology");
     expect(SITEMAP_PATHS as readonly string[]).not.toContain(
       "/methodology/ad-aggression-score",
     );
+    expect(SITEMAP_PATHS as readonly string[]).not.toContain("/ad-aggression");
   });
 });

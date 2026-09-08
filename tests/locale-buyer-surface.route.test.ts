@@ -37,7 +37,7 @@ describe("locale buyer-surface layout (issue #1501)", () => {
       "routes/$locale.search.tsx",
       "routes/$locale.competitor-monitoring.tsx",
       "routes/$locale.capture-rules.tsx",
-      "routes/$locale.ad-aggression.tsx",
+      "routes/$locale.methodology.tsx",
       // Programmatic /ads/:domain locale pages (issue #1562).
       "routes/$locale.ads.$domain.tsx",
     ]) {
@@ -77,7 +77,7 @@ describe("locale buyer-surface layout (issue #1501)", () => {
     // hreflang entry pointing at themselves plus every sibling locale and
     // the EN x-default. Self- and x-default canonicals are emitted
     // alongside hreflang by `canonicalLinks(...)` in each child file.
-    for (const splat of ["", "pricing", "help", "docs", "api/docs", "status", "changelog", "trust", "compare", "search", "competitor-monitoring", "capture-rules", "ad-aggression"]) {
+    for (const splat of ["", "pricing", "help", "docs", "api/docs", "status", "changelog", "trust", "compare", "search", "competitor-monitoring", "capture-rules", "methodology"]) {
       const entries = buyerSurfaceHreflangLinks(splat);
       // Every buyer-surface locale contributes a self-link; the EN
       // x-default follows. Self-link count equals the cluster size.
@@ -117,7 +117,7 @@ describe("locale buyer-surface layout (issue #1501)", () => {
       "~/routes/$locale.capture-rules"
     );
     const { default: localeAdAggressionRoute } = await import(
-      "~/routes/$locale.ad-aggression"
+      "~/routes/$locale.methodology"
     );
     const { default: localeAdsDomainRoute } = await import(
       "~/routes/$locale.ads.$domain"

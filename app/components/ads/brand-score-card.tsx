@@ -4,14 +4,15 @@ import { MIN_AGGRESSION_WINDOW_DAYS } from "~/lib/aggression-score";
 import type { BrandPageAggression } from "~/lib/brand-page.server";
 import { meterWidthClass } from "~/lib/meter-width";
 
-// Ad Aggression Score formula lives at /ad-aggression (issue #1263).
-// Inlined here as a literal string so the score-card source self-evidently
-// points at the canonical methodology page. The route file
-// (app/routes/ad-aggression.tsx) drives its own JSON-LD, meta tags, and the
-// sitemap from `AD_AGGRESSION_METHODOLOGY_PATH`; this file deliberately
+// Ad Aggression Score methodology lives at /methodology (issue #2022; the
+// canonical URL moved through /ad-aggression via #1263). Inlined here as a
+// literal string so the score-card source self-evidently
+// points at the canonical methodology page. The route
+// file (app/routes/methodology.tsx) drives its own JSON-LD, meta tags, and
+// the sitemap from `AD_AGGRESSION_METHODOLOGY_PATH`; this file deliberately
 // mirrors that path as a literal so grep / static checks (the issue's
 // termination) and the rendered `href` agree without indirection.
-const AD_AGGRESSION_METHODOLOGY_HREF = "/ad-aggression";
+const AD_AGGRESSION_METHODOLOGY_HREF = "/methodology";
 
 const COMPONENT_ROWS: { key: keyof BrandPageAggression["components"]; label: string }[] = [
   { key: "velocity", label: "Velocity" },
