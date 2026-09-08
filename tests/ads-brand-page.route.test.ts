@@ -268,6 +268,7 @@ describe("/ads/:domain loader", () => {
       pageTextHref: null,
       evidenceNote: "Captured on 25 Aug 2026, no screenshot",
       transition: null,
+      runExtentLabel: null,
     };
     const mocks = installBrandPageMocks({
       entry: cacheEntry(),

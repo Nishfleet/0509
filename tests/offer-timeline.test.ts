@@ -133,6 +133,209 @@ describe("buildOfferLedger", () => {
     expect(ledger[0]?.pageTextHref).toBeNull();
     expect(ledger[0]?.evidenceNote).toBe(note);
   });
+
+  it("collapses consecutive identical captures into ONE dated state (calendly 5-in-54s burst)", () => {
+    const ledger = buildOfferLedger([
+      snapshot({
+        id: "c1",
+        capturedAt: "2026-08-28T00:01:25.000Z",
+        canonicalUrl: "https://calendly.com/adflex360/brand-scaling-call",
+        headline: "Brand Scaling Call - Adflex Digital",
+        ctaText: "Show more",
+        priceText: null,
+        formPresent: false,
+        screenshotKey: SCREENSHOT_A,
+        pageTextKey: HTML_A,
+      }),
+      snapshot({
+        id: "c2",
+        capturedAt: "2026-08-28T00:01:40.000Z",
+        headline: "Brand Scaling Call - Adflex Digital",
+        ctaText: "Show more",
+        priceText: null,
+        formPresent: false,
+      }),
+      snapshot({
+        id: "c3",
+        capturedAt: "2026-08-28T00:01:54.000Z",
+        headline: "Brand Scaling Call - Adflex Digital",
+        ctaText: "Show more",
+        priceText: null,
+        formPresent: false,
+      }),
+      snapshot({
+        id: "c4",
+        capturedAt: "2026-08-28T00:02:07.000Z",
+        headline: "Brand Scaling Call - Adflex Digital",
+        ctaText: "Show more",
+        priceText: null,
+        formPresent: false,
+      }),
+      snapshot({
+        id: "c5",
+        capturedAt: "2026-08-28T00:02:19.000Z",
+        headline: "Brand Scaling Call - Adflex Digital",
+        ctaText: "Show more",
+        priceText: null,
+        formPresent: false,
+      }),
+    ]);
+
+    // 5 identical captures collapse to 1 dated state.
+    expect(ledger).toHaveLength(1);
+    const collapsed = ledger[0]!;
+    // Keeps the first capture's date and hrefs.
+    expect(collapsed.id).toBe("c1");
+    expect(collapsed.capturedAt).toBe("2026-08-28T00:01:25.000Z");
+    expect(collapsed.dateLabel).toBe(formatOfferDate("2026-08-28T00:01:25.000Z"));
+    expect(collapsed.screenshotHref).toBe(
+      `/artifacts/proof/${encodeURIComponent(SCREENSHOT_A)}`,
+    );
+    expect(collapsed.pageTextHref).toBe(`/artifacts/page-text/${encodeURIComponent(HTML_A)}`);
+    // Honest zero-change: no transition, first state on record.
+    expect(collapsed.transition).toBeNull();
+    // Run extent names the last capture.
+    expect(collapsed.runExtentLabel).toBe(
+      `unchanged since ${formatOfferDate("2026-08-28T00:02:19.000Z")}`,
+    );
+  });
+
+  it("collapses identical captures that share the same second (adspyder 3 same-second)", () => {
+    const ledger = buildOfferLedger([
+      snapshot({
+        id: "a1",
+        capturedAt: "2026-09-01T09:00:41.000Z",
+        headline: "Adspyder",
+        ctaText: "Start free trial",
+        formPresent: true,
+        screenshotKey: SCREENSHOT_A,
+        pageTextKey: HTML_A,
+      }),
+      snapshot({
+        id: "a2",
+        capturedAt: "2026-09-01T09:00:41.000Z",
+        headline: "Adspyder",
+        ctaText: "Start free trial",
+        formPresent: true,
+      }),
+      snapshot({
+        id: "a3",
+        capturedAt: "2026-09-01T09:00:41.000Z",
+        headline: "Adspyder",
+        ctaText: "Start free trial",
+        formPresent: true,
+      }),
+      snapshot({
+        id: "a4",
+        capturedAt: "2026-09-01T09:00:42.000Z",
+        headline: "Adspyder",
+        ctaText: "Start free trial",
+        formPresent: true,
+      }),
+    ]);
+
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]?.runExtentLabel).toBe(
+      `unchanged since ${formatOfferDate("2026-09-01T09:00:42.000Z")}`,
+    );
+  });
+
+  it("preserves a real before/after transition across an identical burst before a change", () => {
+    const ledger = buildOfferLedger([
+      snapshot({
+        id: "b1",
+        capturedAt: "2026-08-28T00:00:10.000Z",
+        headline: "Old headline",
+        ctaText: "Learn more",
+        formPresent: false,
+        screenshotKey: SCREENSHOT_A,
+        pageTextKey: HTML_A,
+      }),
+      snapshot({
+        id: "b2",
+        capturedAt: "2026-08-28T00:01:00.000Z",
+        headline: "Brand Scaling Call - Adflex Digital",
+        ctaText: "Show more",
+        formPresent: false,
+        screenshotKey: SCREENSHOT_B,
+        pageTextKey: HTML_B,
+      }),
+      snapshot({
+        id: "b3",
+        capturedAt: "2026-08-28T00:02:19.000Z",
+        headline: "Brand Scaling Call - Adflex Digital",
+        ctaText: "Show more",
+        formPresent: false,
+      }),
+    ]);
+
+    // b2/b3 are identical and collapse; b1 is distinct.
+    expect(ledger).toHaveLength(2);
+    expect(ledger[0]?.id).toBe("b1");
+    expect(ledger[0]?.runExtentLabel).toBeNull();
+    expect(ledger[1]?.id).toBe("b2");
+    expect(ledger[1]?.runExtentLabel).toBe(
+      `unchanged since ${formatOfferDate("2026-08-28T00:02:19.000Z")}`,
+    );
+    // The real field change still renders as a before/after transition.
+    expect(ledger[1]?.transition).toEqual({
+      headline: { before: "Old headline", after: "Brand Scaling Call - Adflex Digital" },
+      ctaText: { before: "Learn more", after: "Show more" },
+      priceText: null,
+      formPresent: null,
+    });
+  });
+
+  it("keeps a mid-sequence change visible as two states and a transition (mixed burst-then-change)", () => {
+    const ledger = buildOfferLedger([
+      snapshot({
+        id: "m1",
+        capturedAt: "2026-08-28T00:01:25.000Z",
+        headline: "Launch price",
+        ctaText: "Buy now",
+        priceText: "₹199",
+        formPresent: true,
+        screenshotKey: SCREENSHOT_A,
+        pageTextKey: HTML_A,
+      }),
+      snapshot({
+        id: "m2",
+        capturedAt: "2026-08-28T00:01:40.000Z",
+        headline: "Launch price",
+        ctaText: "Buy now",
+        priceText: "₹199",
+        formPresent: true,
+      }),
+      snapshot({
+        id: "m3",
+        capturedAt: "2026-08-28T00:01:54.000Z",
+        headline: "Launch price",
+        ctaText: "Buy now",
+        priceText: "₹299",
+        formPresent: true,
+        screenshotKey: SCREENSHOT_B,
+        pageTextKey: HTML_B,
+      }),
+    ]);
+
+    // m1/m2 identical collapse to one; m3 changes the price.
+    expect(ledger).toHaveLength(2);
+    expect(ledger[0]?.id).toBe("m1");
+    expect(ledger[0]?.runExtentLabel).toBe(
+      `unchanged since ${formatOfferDate("2026-08-28T00:01:40.000Z")}`,
+    );
+    expect(ledger[1]?.id).toBe("m3");
+    expect(ledger[1]?.runExtentLabel).toBeNull();
+    expect(ledger[1]?.transition?.priceText).toEqual({ before: "₹199", after: "₹299" });
+  });
+
+  it("renders singleton dated states with no run-extent label", () => {
+    const ledger = buildOfferLedger([
+      snapshot({ id: "s1", capturedAt: "2026-08-01T10:00:00.000Z", headline: "A" }),
+      snapshot({ id: "s2", capturedAt: "2026-08-10T10:00:00.000Z", headline: "B" }),
+    ]);
+    expect(ledger.map((entry) => entry.runExtentLabel)).toEqual([null, null]);
+  });
 });
 
 describe("offerStateAsOf", () => {
