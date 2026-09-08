@@ -33,9 +33,9 @@ function mockFetchResponse(body: string, status = 200): Response {
 }
 
 describe("canary.sneaker-resale-recall", () => {
-  it("loads the 26 sneaker-resale seed-list domains from the live list (issue #1279 added saucony.co.uk)", () => {
+  it("loads the 25 sneaker-resale seed-list domains from the live list (issue #1279 added saucony.co.uk; #2045 removed zappos.com while its /ads page 301s to /search)", () => {
     const domains = loadSneakerResaleDomains();
-    expect(domains.length).toBe(26);
+    expect(domains.length).toBe(25);
     expect(domains.map((d) => d.domain)).toContain("nike.com");
     expect(domains.map((d) => d.domain)).toContain("goat.com");
     expect(domains.map((d) => d.domain)).toContain("sneakerping.com");
@@ -203,7 +203,7 @@ describe("canary.sneaker-resale-recall", () => {
     // overnight (2026-09-09 03:00/03:03 IST). A settled non-warming 0-row
     // page still fails loud.
     const results = loadSneakerResaleDomains().map((entry) =>
-      entry.domain === "zappos.com"
+      entry.domain === "dsw.com"
         ? {
             domain: entry.domain,
             brand: entry.brand,
@@ -226,7 +226,7 @@ describe("canary.sneaker-resale-recall", () => {
     const verdict = evaluateSneakerResaleRecall(results);
     expect(verdict.pass).toBe(true);
     expect(verdict.failures).toEqual([]);
-    expect(verdict.warming.map((p) => p.domain)).toEqual(["zappos.com"]);
+    expect(verdict.warming.map((p) => p.domain)).toEqual(["dsw.com"]);
   });
 
   it("evaluateSneakerResaleRecall still fails a settled non-warming 0-row dead-end alongside a warming domain", () => {

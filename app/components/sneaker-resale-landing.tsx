@@ -34,7 +34,6 @@ export const SNEAKER_RESALE_BRAND_PAGES: ReadonlyArray<{ name: string; domain: s
   { name: "New Balance", domain: "newbalance.com" },
   { name: "Crocs", domain: "crocs.com" },
   { name: "Foot Locker", domain: "footlocker.com" },
-  { name: "Zappos", domain: "zappos.com" },
   { name: "DSW", domain: "dsw.com" },
   { name: "Vans", domain: "vans.com" },
   { name: "Converse", domain: "converse.com" },
