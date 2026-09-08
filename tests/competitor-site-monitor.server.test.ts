@@ -14,6 +14,7 @@ import {
   extractXmlText,
   parseSitemapIndexUrls,
   parseSitemapUrls,
+  emitWebsitePageChangeEvents,
   runWebsiteSiteScan,
   safeFetchDocument,
   selectWebsitePagesForRun,
@@ -25,6 +26,7 @@ import {
   beginWebsiteSiteScan,
   finalizeWebsiteSiteScan,
   getLatestCompleteWebsiteScanBaseline,
+  listWatchEventsForRun,
   listWebsitePageObservationsForRun,
   listWebsiteSiteScanPagesForRun,
   upsertWebsitePageObservation,
@@ -667,6 +669,10 @@ describe("runWebsiteSiteScan", () => {
     // External URL was skipped.
     expect(pages.some((page) => page.canonicalUrl === "https://external.example/not-ours")).toBe(false);
 
+    const observations = await listWebsitePageObservationsForRun(env, "watch-1", "run-1");
+    expect(observations.length).toBe(result.discoveredPageCount);
+    expect(await listWatchEventsForRun(env, "watch-1", "run-1")).toEqual([]);
+
     const manifest = await getLatestCompleteWebsiteScanBaseline(env, "watch-1");
     expect(manifest?.scan.inventoryComplete).toBe(true);
   });
@@ -706,6 +712,61 @@ describe("runWebsiteSiteScan", () => {
       .prepare("SELECT COUNT(*) AS total FROM website_site_scan_page")
       .get() as { total: number };
     expect(Number(count.total)).toBe(firstPages.length * 2);
+    expect(await listWatchEventsForRun(env, "watch-1", "run-2")).toEqual([]);
+  });
+
+  it("emits added and removed events when a later complete scan sees a different inventory", async () => {
+    const priorSitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://competitor.example/</loc></url>
+  <url><loc>https://competitor.example/about</loc></url>
+</urlset>`;
+    const currentSitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://competitor.example/</loc></url>
+  <url><loc>https://competitor.example/pricing</loc></url>
+</urlset>`;
+    const robots = { "https://competitor.example/robots.txt": { body: "User-agent: *\nDisallow: /admin\n" } };
+
+    await runWebsiteSiteScan(env, {
+      lease: LEASE_A,
+      rootUrl: "https://competitor.example/",
+      pageBudget: DEFAULT_PAGE_BUDGET,
+      fetchDocument: fixtureFetcher({
+        ...robots,
+        "https://competitor.example/sitemap.xml": { body: priorSitemap },
+      }),
+    });
+    expect(await listWatchEventsForRun(env, "watch-1", "run-1")).toEqual([]);
+
+    harness.sqlite
+      .prepare(
+        `INSERT INTO watchlist_run (id, watchlist_id, trigger_type, status, page_budget, pages_scanned, summary_json, started_at, processing_token, created_at, updated_at)
+         VALUES (?, ?, 'scheduled', 'running', 50, 0, '{}', ?, ?, ?, ?)`,
+      )
+      .run("run-2", "watch-1", "2026-08-02T01:00:00.000Z", "tok-b", "2026-08-02T01:00:00.000Z", "2026-08-02T01:00:00.000Z");
+
+    await runWebsiteSiteScan(env, {
+      lease: { ...LEASE_A, runId: "run-2", processingToken: "tok-b" },
+      rootUrl: "https://competitor.example/",
+      pageBudget: DEFAULT_PAGE_BUDGET,
+      fetchDocument: fixtureFetcher({
+        ...robots,
+        "https://competitor.example/sitemap.xml": { body: currentSitemap },
+      }),
+    });
+
+    const events = await listWatchEventsForRun(env, "watch-1", "run-2");
+    expect(events.map((event) => event.eventType).sort()).toEqual([
+      "website_page_added",
+      "website_page_removed",
+    ]);
+    expect(events.find((event) => event.eventType === "website_page_added")?.metadata.to).toBe(
+      "https://competitor.example/pricing",
+    );
+    expect(events.find((event) => event.eventType === "website_page_removed")?.metadata.from).toBe(
+      "https://competitor.example/about",
+    );
   });
 
   it("is honestly incomplete when the sitemap cannot be fetched", async () => {
@@ -841,6 +902,253 @@ describe("website_page_observation idempotency + noise", () => {
     expect(rows.length).toBe(1);
     expect(rows[0]?.contentHash).toBe("hash-full");
     expect(rows[0]?.fetchStatus).toBe("fetched");
+  });
+});
+
+// ==== Q2: change detection + website_page_* emission ====
+
+const LEASE_B: WebsiteScanLease = {
+  watchlistId: "watch-1",
+  runId: "run-2",
+  processingToken: "tok-b",
+};
+
+function applySiteScanMigrations(sqlite: ReturnType<typeof createSqliteD1>["sqlite"]) {
+  applyMigration(sqlite, "migrations/0000_auth.sql");
+  applyMigration(sqlite, "migrations/0001_app.sql");
+  applyMigration(sqlite, "migrations/0007_proof_first_change_alerts.sql");
+  applyMigration(sqlite, "migrations/0008_commercial_ad_ingestion_replacement.sql");
+  applyMigration(sqlite, "migrations/0009_discovery_query_leases.sql");
+  applyMigration(sqlite, "migrations/0022_hot_path_indexes.sql");
+  applyMigration(sqlite, "migrations/0047_monitoring_fanout_orchestration.sql");
+  sqlite.exec("PRAGMA foreign_keys = ON;");
+  applyMigration(sqlite, "migrations/0077_competitor_site_monitoring.sql");
+  applyMigration(sqlite, "migrations/0082_website_page_kind_careers_legal.sql");
+}
+
+function seedWatchlistOwner(sqlite: ReturnType<typeof createSqliteD1>["sqlite"]) {
+  sqlite
+    .prepare(
+      "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, 1, ?, ?)",
+    )
+    .run("user-1", "Owner", "owner@example.com", "2026-08-01T00:00:00.000Z", "2026-08-01T00:00:00.000Z");
+  sqlite
+    .prepare(
+      `INSERT INTO watchlist (id, user_id, name, target_type, target_id, target_fingerprint, target_label, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, 'advertiser', ?, ?, ?, 1, ?, ?)`,
+    )
+    .run("watch-1", "user-1", "Competitor", "https://competitor.example/", "fp-1", "Competitor", "2026-08-01T00:00:00.000Z", "2026-08-01T00:00:00.000Z");
+}
+
+async function seedCompleteScanWithPages(
+  env: AppEnv,
+  lease: WebsiteScanLease,
+  pages: readonly {
+    canonicalUrl: string;
+    pageKind: "home" | "pricing" | "changelog" | "about";
+    signals: WebsitePageObservationSignals;
+    contentHash: string;
+  }[],
+) {
+  await beginWebsiteSiteScan(env, {
+    ...lease,
+    rootUrl: "https://competitor.example/",
+    pageBudget: 50,
+  });
+  let order = 0;
+  for (const page of pages) {
+    await upsertWebsiteSiteScanPage(env, {
+      ...lease,
+      canonicalUrl: page.canonicalUrl,
+      discoverySource: order === 0 ? "watchlist_seed" : "sitemap_content",
+      pageKind: page.pageKind,
+      stableOrder: order,
+    });
+    await upsertWebsitePageObservation(env, {
+      ...lease,
+      canonicalUrl: page.canonicalUrl,
+      discoverySource: order === 0 ? "watchlist_seed" : "sitemap_content",
+      pageKind: page.pageKind,
+      contentHash: page.contentHash,
+      excerpt: page.signals.visibleTextExcerpt,
+      fetchStatus: "fetched",
+      httpStatus: 200,
+      normalizerVersion: "competitor-page-normalizer-v1",
+      signals: page.signals,
+    });
+    order += 1;
+  }
+  await finalizeWebsiteSiteScan(env, { ...lease, status: "complete" });
+}
+
+describe("emitWebsitePageChangeEvents", () => {
+  let harness: ReturnType<typeof createSqliteD1>;
+  let env: AppEnv;
+
+  beforeEach(() => {
+    harness = createSqliteD1();
+    applySiteScanMigrations(harness.sqlite);
+    env = { DB: harness.db } as AppEnv;
+    seedWatchlistOwner(harness.sqlite);
+    harness.sqlite
+      .prepare(
+        `INSERT INTO watchlist_run (id, watchlist_id, trigger_type, status, page_budget, pages_scanned, summary_json, started_at, processing_token, created_at, updated_at)
+         VALUES (?, ?, 'scheduled', 'running', 50, 0, '{}', ?, ?, ?, ?)`,
+      )
+      .run("run-1", "watch-1", "2026-08-01T01:00:00.000Z", "tok-a", "2026-08-01T01:00:00.000Z", "2026-08-01T01:00:00.000Z");
+    harness.sqlite
+      .prepare(
+        `INSERT INTO watchlist_run (id, watchlist_id, trigger_type, status, page_budget, pages_scanned, summary_json, started_at, processing_token, created_at, updated_at)
+         VALUES (?, ?, 'scheduled', 'running', 50, 0, '{}', ?, ?, ?, ?)`,
+      )
+      .run("run-2", "watch-1", "2026-08-01T03:00:00.000Z", "tok-b", "2026-08-01T03:00:00.000Z", "2026-08-01T03:00:00.000Z");
+  });
+
+  afterEach(() => {
+    harness.close();
+  });
+
+  it("emits added/removed/changed events and drops title/meta/form facts", async () => {
+    const homePrior: WebsitePageObservationSignals = {
+      ...SIGNALS,
+      title: "Home",
+      cta: "Buy now",
+      offer: "$19/mo",
+    };
+    const homeCurrent: WebsitePageObservationSignals = {
+      ...SIGNALS,
+      title: "Homesite",
+      metaDescription: "A different meta",
+      cta: "Get started",
+      offer: "$19/mo",
+      formPresent: true,
+    };
+
+    await seedCompleteScanWithPages(env, LEASE_A, [
+      {
+        canonicalUrl: "https://competitor.example/",
+        pageKind: "home",
+        signals: homePrior,
+        contentHash: "hash-home-1",
+      },
+      {
+        canonicalUrl: "https://competitor.example/about",
+        pageKind: "about",
+        signals: { ...SIGNALS, title: "About", cta: null },
+        contentHash: "hash-about-1",
+      },
+      {
+        canonicalUrl: "https://competitor.example/pricing",
+        pageKind: "pricing",
+        signals: { ...SIGNALS, title: "Pricing", offer: "$19/mo" },
+        contentHash: "hash-pricing-1",
+      },
+    ]);
+    await seedCompleteScanWithPages(env, LEASE_B, [
+      {
+        canonicalUrl: "https://competitor.example/",
+        pageKind: "home",
+        signals: homeCurrent,
+        contentHash: "hash-home-2",
+      },
+      {
+        canonicalUrl: "https://competitor.example/pricing",
+        pageKind: "pricing",
+        signals: { ...SIGNALS, title: "Pricing", offer: "$19/mo" },
+        contentHash: "hash-pricing-1",
+      },
+      {
+        canonicalUrl: "https://competitor.example/changelog",
+        pageKind: "changelog",
+        signals: { ...SIGNALS, title: "Changelog", cta: null },
+        contentHash: "hash-change-1",
+      },
+    ]);
+
+    const first = await emitWebsitePageChangeEvents(env, {
+      watchlistId: "watch-1",
+      runId: "run-2",
+      inventoryComplete: true,
+      captureAt: "2026-08-01T03:00:00.000Z",
+    });
+    const retry = await emitWebsitePageChangeEvents(env, {
+      watchlistId: "watch-1",
+      runId: "run-2",
+      inventoryComplete: true,
+      captureAt: "2026-08-01T03:00:00.000Z",
+    });
+    expect(retry.eventIds).toEqual(first.eventIds);
+
+    const events = await listWatchEventsForRun(env, "watch-1", "run-2");
+    const types = events.map((event) => event.eventType).sort();
+    expect(types).toEqual([
+      "website_page_added",
+      "website_page_changed",
+      "website_page_removed",
+    ]);
+
+    const added = events.find((event) => event.eventType === "website_page_added");
+    expect(added?.summary).toBe("https://competitor.example/changelog");
+    expect(added?.metadata).toMatchObject({
+      from: "",
+      to: "https://competitor.example/changelog",
+      canonicalUrl: "https://competitor.example/changelog",
+    });
+
+    const removed = events.find((event) => event.eventType === "website_page_removed");
+    expect(removed?.summary).toBe("https://competitor.example/about");
+    expect(removed?.metadata).toMatchObject({
+      from: "https://competitor.example/about",
+      to: "",
+    });
+
+    const changed = events.find((event) => event.eventType === "website_page_changed");
+    expect(changed?.summary).toContain("cta changed on https://competitor.example/");
+    expect(changed?.metadata).toMatchObject({
+      from: "Buy now",
+      to: "Get started",
+      field: "cta",
+    });
+    expect(changed?.baselineFromRunId).toBe("run-1");
+
+    expect(events.some((event) => String(event.metadata.field) === "title")).toBe(false);
+    expect(events.some((event) => String(event.metadata.field) === "meta")).toBe(false);
+    expect(events.some((event) => String(event.metadata.field) === "form")).toBe(false);
+    expect(await listWatchEventsForRun(env, "watch-1", "run-1")).toEqual([]);
+  });
+
+  it("does not emit page-removed when the current inventory is incomplete", async () => {
+    await seedCompleteScanWithPages(env, LEASE_A, [
+      {
+        canonicalUrl: "https://competitor.example/",
+        pageKind: "home",
+        signals: SIGNALS,
+        contentHash: "hash-home-1",
+      },
+      {
+        canonicalUrl: "https://competitor.example/about",
+        pageKind: "about",
+        signals: { ...SIGNALS, title: "About" },
+        contentHash: "hash-about-1",
+      },
+    ]);
+    await seedCompleteScanWithPages(env, LEASE_B, [
+      {
+        canonicalUrl: "https://competitor.example/",
+        pageKind: "home",
+        signals: SIGNALS,
+        contentHash: "hash-home-1",
+      },
+    ]);
+
+    await emitWebsitePageChangeEvents(env, {
+      watchlistId: "watch-1",
+      runId: "run-2",
+      inventoryComplete: false,
+      captureAt: "2026-08-01T03:00:00.000Z",
+    });
+    const events = await listWatchEventsForRun(env, "watch-1", "run-2");
+    expect(events.filter((event) => event.eventType === "website_page_removed")).toEqual([]);
   });
 });
 
