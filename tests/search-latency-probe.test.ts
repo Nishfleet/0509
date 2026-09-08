@@ -11,8 +11,11 @@ import {
   CARDS_HEADERS,
   DAILY_HEADERS,
   RUNS_HEADERS,
+  AUTH_HEADERS,
+  authOutcome,
   computeLatencyStats,
   formatMetricLine,
+  probeAuthPages,
   runLatencyProbe,
 } from "../scripts/search-latency-probe.mjs";
 
@@ -192,7 +195,11 @@ describe("search.latency.probe", () => {
     const calls: string[] = [];
     const fetchImpl = (async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
-      calls.push(url.searchParams.get("website") ?? "");
+      // Only the /search probes carry a `website` param; the auth-page probes
+      // (issue #1692) share this fetch injection point and must not be counted
+      // against the /search domain pacing assertion below.
+      const website = url.searchParams.get("website");
+      if (website) calls.push(website);
       return readyResponse(
         htmlForRows([{ tier: "verified", advertiser: "Test", summary: "Summary" }]),
       );
@@ -226,5 +233,87 @@ describe("search.latency.probe", () => {
     expect(line).toBe(
       "search_latency_probe run=2026-09-05T00:00:00.000Z base_url=https://0509.io time_to_first_visible_card_p95_ms=9000 time_to_first_visible_card_p50_ms=3000 time_to_first_visible_card_mean_ms=4333 samples=3 total_response_bytes=129 error_domains=0 rate_limited_domains=0",
     );
+  });
+
+  it("records a non-200 auth-page status as an availability failure (issue #1692)", async () => {
+    // A 503 on /auth/login (the transient status observed in issue #1692) and
+    // a healthy /auth/signup exercise the availability classifier end to end.
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/auth/login") return new Response("<html>login</html>", { status: 503 });
+      return new Response("<html>signup</html>", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const output = await runLatencyProbe({
+      baseUrl: "https://test.example",
+      domains: ["x.example"],
+      fetchImpl,
+      sleepImpl: async () => {},
+      nowImpl: () => 0,
+    });
+
+    // The 503 must surface as a failure, never be silently swallowed.
+    const login = output.authResults.find((r) => r.path === "/auth/login");
+    expect(login).toBeDefined();
+    expect(login!.status).toBe(503);
+    expect(login!.outcome).toBe("error");
+    const signup = output.authResults.find((r) => r.path === "/auth/signup");
+    expect(signup!.status).toBe(200);
+    expect(signup!.outcome).toBe("ok");
+    expect(output.authMetricLine).toContain("auth_failures=1");
+  });
+
+  it("writes the auth-page statuses to auth.csv (issue #1692)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "search-latency-auth-"));
+    try {
+      const fetchImpl = (async (input: RequestInfo | URL) => {
+        const url = new URL(input.toString());
+        if (url.pathname === "/auth/signup") return new Response("<html>signup</html>", { status: 500 });
+        return new Response("<html>ok</html>", { status: 200 });
+      }) as unknown as typeof fetch;
+
+      await runLatencyProbe({
+        baseUrl: "https://test.example",
+        domains: ["x.example"],
+        outputDir: dir,
+        fetchImpl,
+        sleepImpl: async () => {},
+        nowImpl: () => 0,
+      });
+
+      const auth = readFileSync(join(dir, "auth.csv"), "utf8");
+      expect(auth.split("\n")[0]).toBe(AUTH_HEADERS.join(","));
+      expect(auth).toContain("/auth/login,200,ok");
+      expect(auth).toContain("/auth/signup,500,error");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("classifies auth statuses: 5xx and network errors are failures, 4xx is not", () => {
+    expect(authOutcome(200)).toBe("ok");
+    expect(authOutcome(302)).toBe("ok");
+    expect(authOutcome(503)).toBe("error");
+    expect(authOutcome(500)).toBe("error");
+    expect(authOutcome(null)).toBe("fetch_error");
+    // A 4xx is a misconfiguration, not a transient outage; it must not read as
+    // a 5xx-style availability regression.
+    expect(authOutcome(404)).toBe("ok");
+  });
+
+  it("paces auth-page probes low-frequently without touching the /search window", async () => {
+    const sleepMs: number[] = [];
+    await probeAuthPages({
+      baseUrl: "https://test.example",
+      fetchImpl: (async () => new Response("<html>auth</html>", { status: 200 })) as unknown as typeof fetch,
+      sleepImpl: async (ms: number) => {
+        sleepMs.push(ms);
+      },
+      nowImpl: () => 0,
+    });
+    // Two pages => one gap between them; the spacing keeps the pair low-volume.
+    expect(sleepMs.length).toBeGreaterThanOrEqual(1);
+    // The auth spacing must be applied between consecutive page fetches.
+    expect(sleepMs[0]).toBeGreaterThan(0);
   });
 });

@@ -19,6 +19,10 @@ import { fileURLToPath } from "node:url";
 export const DEFAULT_THRESHOLD_MS = 5_000;
 export const DEFAULT_REPO = "Nishfleet/0509";
 
+// Auth-page availability guard (issue #1692). The guard fires when an auth
+// page (the Sign in / Sign up CTAs) returns 5xx for 3+ consecutive runs.
+export const DEFAULT_AUTH_CONSECUTIVE = 3;
+
 /**
  * @typedef {Object} RunSample
  * @property {string} runAt
@@ -172,6 +176,131 @@ export function formatIssueBody(regression) {
 }
 
 /**
+ * Parse an auth.csv written by scripts/search-latency-probe.mjs.
+ * @param {string} authPath
+ * @returns {Array<{ runAt: string, path: string, status: number | null, outcome: string }>}
+ */
+export function parseAuthRecords(authPath) {
+  const csv = readCsv(authPath);
+  if (!csv) return [];
+
+  const headers = csv.headers;
+  const runAtIdx = headers.indexOf("run_at");
+  const pathIdx = headers.indexOf("path");
+  const statusIdx = headers.indexOf("status");
+  const outcomeIdx = headers.indexOf("outcome");
+
+  return csv.rows
+    .map((row) => {
+      const status = emptyOrNumber(row[statusIdx]);
+      return {
+        runAt: row[runAtIdx] ?? "",
+        path: row[pathIdx] ?? "",
+        status: status,
+        outcome: row[outcomeIdx] ?? "",
+      };
+    })
+    .filter((r) => r.runAt && r.path);
+}
+
+/**
+ * Group auth records into per-run rows, one per auth page, ordered by run time.
+ * @param {Array<{ runAt: string, path: string, status: number | null, outcome: string }>} records
+ * @returns {Map<string, Array<{ runAt: string, path: string, status: number | null, outcome: string }>>}
+ */
+export function groupAuthRuns(records) {
+  const sorted = [...records].sort((a, b) => a.runAt.localeCompare(b.runAt));
+  const byRun = new Map();
+  for (const record of sorted) {
+    if (!byRun.has(record.runAt)) byRun.set(record.runAt, []);
+    byRun.get(record.runAt).push(record);
+  }
+  return byRun;
+}
+
+/**
+ * Decide whether a single auth record counts as an availability failure: a
+ * record is red when the page returned 5xx or was unreachable. A 4xx is not a
+ * transient outage (it is a misconfiguration) so it is not treated as a
+ * regression here.
+ * @param {{ outcome: string }} record
+ * @returns {boolean}
+ */
+export function isAuthFailure(record) {
+  return record.outcome === "error" || record.outcome === "fetch_error";
+}
+
+/**
+ * Edge detector for auth-page availability. Fires when the last
+ * `consecutiveRuns` runs each had at least one auth page in a failing (5xx /
+ * unreachable) state, and the run before the streak was not. One incident, one
+ * issue. Returns null while the guard should stay quiet.
+ * @param {Array<{ runAt: string, path: string, status: number | null, outcome: string }>} records
+ * @param {number} consecutiveRuns
+ * @returns {{
+ *   consecutiveRuns: number,
+ *   runs: Array<{ runAt: string, failures: Array<{ path: string, status: number | null }> }>,
+ *   previous: { runAt: string } | null,
+ *   title: string,
+ * } | null}
+ */
+export function detectAuthRegression(records, consecutiveRuns = DEFAULT_AUTH_CONSECUTIVE) {
+  const byRun = groupAuthRuns(records);
+  const runs = [...byRun.keys()];
+  if (runs.length < consecutiveRuns) return null;
+
+  const runEntries = runs.map((runAt) => ({
+    runAt,
+    records: byRun.get(runAt),
+  }));
+
+  const lastN = runEntries.slice(-consecutiveRuns);
+  const everyStreakRunRed = lastN.every((entry) =>
+    entry.records.some((r) => isAuthFailure(r)),
+  );
+  if (!everyStreakRunRed) return null;
+
+  const previous = runEntries[runEntries.length - consecutiveRuns - 1];
+  if (previous && previous.records.some((r) => isAuthFailure(r))) {
+    return null;
+  }
+
+  return {
+    consecutiveRuns,
+    runs: lastN.map((entry) => ({
+      runAt: entry.runAt,
+      failures: entry.records.filter((r) => isAuthFailure(r)).map((r) => ({
+        path: r.path,
+        status: r.status,
+      })),
+    })),
+    previous: previous ? { runAt: previous.runAt } : null,
+    title: `regression: /auth page returned 5xx for ${consecutiveRuns}+ consecutive runs`,
+  };
+}
+
+/**
+ * @param {NonNullable<ReturnType<typeof detectAuthRegression>>} regression
+ * @returns {string}
+ */
+export function formatAuthIssueBody(regression) {
+  const lines = [
+    `Auth page availability regression: an auth page returned a 5xx (or was unreachable) for ${regression.consecutiveRuns}+ consecutive probe runs.`,
+    "",
+    "| run_at | path | status |",
+    "|---|---|---|",
+  ];
+  for (const run of regression.runs) {
+    for (const failure of run.failures) {
+      lines.push(`| ${run.runAt} | ${failure.path} | ${failure.status ?? "unreachable"} |`);
+    }
+  }
+  lines.push("");
+  lines.push("Consecutive failing runs: " + String(regression.consecutiveRuns));
+  return lines.join("\n");
+}
+
+/**
  * @param {string} repo
  * @param {string} title
  * @param {string} body
@@ -200,11 +329,12 @@ function openIssue(repo, title, body, dryRun) {
 
 /**
  * @param {string[]} argv
- * @returns {{ runsCsv: string, repo: string, thresholdMs: number, dryRun: boolean, json: boolean }}
+ * @returns {{ runsCsv: string, authCsv: string, repo: string, thresholdMs: number, dryRun: boolean, json: boolean }}
  */
 function parseCliArgs(argv) {
   const parsed = {
     runsCsv: "",
+    authCsv: "",
     repo: DEFAULT_REPO,
     thresholdMs: DEFAULT_THRESHOLD_MS,
     dryRun: false,
@@ -214,6 +344,11 @@ function parseCliArgs(argv) {
     const arg = argv[i];
     if (arg === "--runs-csv" && argv[i + 1]) {
       parsed.runsCsv = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === "--auth-csv" && argv[i + 1]) {
+      parsed.authCsv = argv[i + 1];
       i += 1;
       continue;
     }
@@ -245,13 +380,19 @@ const invokedDirectly =
 
 async function main() {
   const args = parseCliArgs(process.argv.slice(2));
-  if (!args.runsCsv) {
-    console.error("search-latency-regression-guard: --runs-csv is required");
+  if (!args.runsCsv && !args.authCsv) {
+    console.error("search-latency-regression-guard: --runs-csv (or --auth-csv) is required");
     process.exit(2);
   }
 
-  const runs = parseRuns(args.runsCsv);
-  const regression = detectRegression(runs, args.thresholdMs);
+  const runs = args.runsCsv ? parseRuns(args.runsCsv) : [];
+  const regression = args.runsCsv ? detectRegression(runs, args.thresholdMs) : null;
+
+  const authRegression = args.authCsv
+    ? detectAuthRegression(parseAuthRecords(args.authCsv))
+    : null;
+
+  const firedAuth = authRegression ? openIssue(args.repo, authRegression.title, formatAuthIssueBody(authRegression), args.dryRun) : null;
 
   if (regression) {
     const title = "regression: /search p95 latency >5s for 3+ consecutive runs";
@@ -259,11 +400,29 @@ async function main() {
     const created = openIssue(args.repo, title, body, args.dryRun);
     if (args.json) {
       process.stdout.write(
-        `${JSON.stringify({ fired: true, title, created: created ? created.trim() : null })}\n`,
+        `${JSON.stringify({ fired: true, title, created: created ? created.trim() : null, authFired: Boolean(authRegression) })}\n`,
       );
     } else {
       process.stdout.write(
         `search-latency-regression-guard: p95 > ${args.thresholdMs} ms for 3+ consecutive runs\n`,
+      );
+      if (authRegression) {
+        process.stdout.write(
+          `search-latency-regression-guard: ${authRegression.title}\n`,
+        );
+      }
+    }
+    return;
+  }
+
+  if (authRegression) {
+    if (args.json) {
+      process.stdout.write(
+        `${JSON.stringify({ fired: true, title: authRegression.title, created: firedAuth ? firedAuth.trim() : null })}\n`,
+      );
+    } else {
+      process.stdout.write(
+        `search-latency-regression-guard: ${authRegression.title}\n`,
       );
     }
     return;
