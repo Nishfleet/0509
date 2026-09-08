@@ -46,7 +46,8 @@ const IDENTITY_OVERRIDES: Record<
   // read its homepage. The sneaker-resale seed list names the brand "GOAT";
   // without that term the provider query degenerates to the bare label "goat"
   // and surfaces keyword junk (mouth-tape, marketplace ads) instead of GOAT's
-  // own ads.
+  // own ads. The curated name also wins over a live one if the CDN ever
+  // unblocks, by design (see applyIdentityOverride pin).
   "goat.com": { siteName: "GOAT" },
   // On runs its ads across both on.com and its long-standing on-running.com
   // host (on-running.com now redirects into www.on.com). The live redirect
@@ -54,7 +55,22 @@ const IDENTITY_OVERRIDES: Record<
   // discoverable and On ads landing on on-running.com would not connect to a
   // searched on.com. The 2-char stem "on" also falls under the matcher's
   // stem-extension floor, so this alias is the load-bearing link.
-  "on.com": { domainAliases: ["on-running.com"] },
+  //
+  // on.com's live og:site_name is "On Shop" (not "On"), so trusting the live
+  // fetch leaves the provider query on "On Shop" — a term Meta Ad Library
+  // returns 0 ads for (the brand's page is "On"/"On Running"). The curated
+  // site name pins the query to the brand term the same way goat.com's does,
+  // so the pipeline asks Meta the right question even when the live homepage
+  // is bot-blocked or its og:site_name is a shop label.
+  "on.com": { siteName: "On", domainAliases: ["on-running.com"] },
+  // Reebok is a major global Meta advertiser, but its Shopify-hosted homepage
+  // is bot-blocked for the scripted production crawler (like goat.com), so
+  // live identity resolution cannot read a site name and the provider query
+  // degenerates to the bare stem "reebok", which Meta Ad Library returns 0
+  // rows for. The curated site name keeps the provider question askable and
+  // also wins over a live one if the block lifts, by design (see
+  // applyIdentityOverride pin).
+  "reebok.com": { siteName: "Reebok" },
 };
 
 const identityCache = new Map<string, { expiresAt: number; identity: WebsiteIdentity | null }>();
@@ -110,7 +126,10 @@ function applyIdentityOverride(
   const mergedDomainAliases = [...new Set([...domainAliases, ...(override.domainAliases ?? [])])];
 
   const overrideSiteName = override.siteName ?? null;
-  const siteName = live?.siteName ?? overrideSiteName;
+  // The curated name PINNS the provider query: on.com's live og:site_name is
+  // "On Shop" — a shop label Meta Ad Library returns 0 ads for — so a live
+  // site name must not displace the curated brand term (issue #1993).
+  const siteName = overrideSiteName ?? live?.siteName ?? null;
   if (!live && !siteName && mergedDomainAliases.length === 0) {
     return null;
   }
