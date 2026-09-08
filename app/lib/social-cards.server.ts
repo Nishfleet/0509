@@ -2,8 +2,9 @@
  * Per-route Open Graph social cards (issue #1572).
  *
  * The site-wide generic `og-image.png` is shared across every page, so a
- * programmatic buyer surface (`/ads/:domain`, `/compare/*`, `/switch/*`,
- * `/sneaker-resale`, `/competitor-monitoring`) gets an unbranded link card
+ * programmatic buyer surface (`/ads/:domain`, `/timeline/:domain`,
+ * `/compare/*`, `/switch/*`, `/sneaker-resale`,
+ * `/competitor-monitoring`) gets an unbranded link card
  * indistinguishable from any other 0509 page. This module generates a
  * page-specific SVG card for each of those surfaces and serves it under
  * `/social-card/...` from `workers/app.ts`, so each surface can point its
@@ -111,19 +112,20 @@ const CLUSTER_HEADLINES: Readonly<Record<string, { headline: string; subline: st
   },
 };
 
-export type SocialCardKind = "ads" | "compare" | "switch" | "cluster";
+export type SocialCardKind = "ads" | "timeline" | "compare" | "switch" | "cluster";
 
 export interface ParsedSocialCardPath {
   kind: SocialCardKind;
-  /** `domain` for ads, tool slug for compare/switch, cluster slug for cluster. */
+  /** `domain` for ads/timeline, tool slug for compare/switch, cluster slug for cluster. */
   slug: string;
 }
 
 /**
  * Recognise a `/social-card/...` pathname. Returns the parsed kind + slug, or
- * `null` when the pathname is not a social card path. The ads card slug is the
- * raw `:domain` segment (may contain dots, e.g. `nike.com`); compare/switch
- * slugs are single segments; cluster slugs are the two standalone surfaces.
+ * `null` when the pathname is not a social card path. The ads/timeline card
+ * slugs are the raw `:domain` segment (may contain dots, e.g. `nike.com`);
+ * compare/switch slugs are single segments; cluster slugs are the two
+ * standalone surfaces.
  */
 export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath | null {
   if (!pathname.startsWith("/social-card/")) return null;
@@ -131,6 +133,12 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
 
   const adsMatch = rest.match(/^ads\/(.+)\.svg$/);
   if (adsMatch) return { kind: "ads", slug: decodeURIComponent(adsMatch[1]) };
+
+  const timelineMatch = rest.match(/^timeline\/(.+)\.svg$/);
+  if (timelineMatch) return {
+    kind: "timeline",
+    slug: decodeURIComponent(timelineMatch[1]),
+  };
 
   const compareMatch = rest.match(/^compare\/([^/]+)\.svg$/);
   if (compareMatch) return { kind: "compare", slug: compareMatch[1] };
@@ -159,6 +167,19 @@ function renderSocialCard(parsed: ParsedSocialCardPath, request: Request): strin
         ? `Ad Aggression Score ${score} · ${SITE_NAME}`
         : `Meta ads tracking · ${SITE_NAME}`;
     return renderCard({ headline, subline });
+  }
+
+  if (parsed.kind === "timeline") {
+    // Same stateless recipe as the ads card: the brand display name rides in
+    // the `n` query param stamped by the /timeline/:domain route's loader, so
+    // the renderer never needs a second D1 read. Fall back to the slug (the
+    // raw domain) when `n` is absent so a raw card URL still renders.
+    const params = new URL(request.url).searchParams;
+    const brandName = params.get("n") ?? parsed.slug;
+    return renderCard({
+      headline: clampLine(brandName, 34),
+      subline: `offer timeline — what their landing page said, with proof · ${SITE_NAME}`,
+    });
   }
 
   if (parsed.kind === "compare") {
@@ -203,11 +224,11 @@ export function publicSocialCardForRequest(request: Request): {
   return {
     body,
     contentType: "image/svg+xml; charset=utf-8",
-    // Ads cards carry brand + score query params that change when the page's
-    // score updates, so a shorter cache keeps the card in step with the page.
-    // The static compare/switch/cluster cards are stable for a day.
+    // Ads and timeline cards carry brand query params, so a shorter cache
+    // keeps the card in step with the page. The static compare/switch/cluster
+    // cards are stable for a day.
     cacheControl:
-      parsed.kind === "ads"
+      parsed.kind === "ads" || parsed.kind === "timeline"
         ? "public, max-age=3600"
         : "public, max-age=86400",
   };
