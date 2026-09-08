@@ -7535,6 +7535,27 @@ reds soften --- */
   color: var(--ink-faint);
   text-align: right;
 }
+.f9-ads-tl-row-churn .f9-ads-tl-day {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.f9-ads-tl-what-churn {
+  font-family: var(--body, Inter, sans-serif);
+  font-weight: 400;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.f9-ads-tl-move-churn {
+  font-family: var(--body, Inter, sans-serif);
+  font-weight: 400;
+  color: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+}
 
 /* ---- AD WALL ---- */
 .f9-ads-wall {

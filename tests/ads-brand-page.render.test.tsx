@@ -96,6 +96,12 @@ const changeEvents = [
     source: "AD LIBRARY",
     move: "New ad entered rotation — a fresh summer creative",
     why: "Launched with 4 variants — they're testing which creative wins.",
+    // Every cached-ad change carries an eventType so `rerankBrandChangeFeed`
+    // can collapse it into the adChurn footnote (issue #1951). The fixture
+    // here is a single ad_new — the rerank collapses it to a counted line
+    // and the section renders "No offer changes this week" plus the
+    // footnote, never the move as a headline card.
+    eventType: "ad_new" as const,
     variantCount: 4,
   },
 ];
