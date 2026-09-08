@@ -83,6 +83,10 @@ describe("proof-metric-guard run script (issue #1985 metric)", () => {
     // Both halves of the metric are wired in.
     expect(run.stdout).toContain("canary-proof-screenshot-rate.mjs");
     expect(run.stdout).toContain("canary-proof-budget-skip-surface.mjs");
+    // BOTH rate legs enforce the issue's >=90% metric (not the canary's
+    // looser 80% alert-headroom default) so the guard observes exactly what
+    // #1985 promises on the real-watcher cohort too.
+    expect((run.stdout.match(/--threshold 90/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 
   it("keeps the budget-skip-surface leg (the half with no prior observer)", () => {
