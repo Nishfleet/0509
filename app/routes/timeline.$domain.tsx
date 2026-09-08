@@ -27,6 +27,7 @@ import {
   jsonLdScriptProps,
   offerTimelineDatasetJsonLd,
   publicSeoMeta,
+  timelineSocialCardUrl,
   webPageJsonLd,
 } from "~/lib/seo";
 
@@ -136,8 +137,20 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
       ? `Dated offer states for ${loaderData.domain}: headline, CTA, and price, with page text and a screenshot when we stored one.`
       : `No stored offer timeline for ${loaderData.domain} yet.`;
 
+  // Per-domain social card (issue #2029): share/preview of a timeline names
+  // the brand instead of the site-wide generic og-image.png, reusing the same
+  // generator + serving path the /ads/:domain cards already use.
+  const ogImageUrl = timelineSocialCardUrl(loaderData.domain, loaderData.brandName);
+  const ogImageAlt = `${loaderData.brandName} offer timeline — what their landing page said, with proof | Five to Nine`;
+
   return [
-    ...publicSeoMeta({ title, description, pathname: loaderData.canonicalPath }),
+    ...publicSeoMeta({
+      title,
+      description,
+      pathname: loaderData.canonicalPath,
+      ogImageUrl,
+      ogImageAlt,
+    }),
     { tagName: "link", rel: "canonical", href: canonicalUrl(loaderData.canonicalPath) },
     ...(loaderData.noindex ? [{ name: "robots", content: "noindex" }] : []),
   ];
