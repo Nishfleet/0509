@@ -33,12 +33,13 @@ function mockFetchResponse(body: string, status = 200): Response {
 }
 
 describe("canary.sneaker-resale-recall", () => {
-  it("loads the 25 sneaker-resale seed-list domains from the live list", () => {
+  it("loads the 26 sneaker-resale seed-list domains from the live list (issue #1279 added saucony.co.uk)", () => {
     const domains = loadSneakerResaleDomains();
-    expect(domains.length).toBe(25);
+    expect(domains.length).toBe(26);
     expect(domains.map((d) => d.domain)).toContain("nike.com");
     expect(domains.map((d) => d.domain)).toContain("goat.com");
     expect(domains.map((d) => d.domain)).toContain("sneakerping.com");
+    expect(domains.map((d) => d.domain)).toContain("saucony.co.uk");
   });
 
   it("probeSneakerResaleDomain parses verified/likely/unmatched rows from the rendered HTML", async () => {
