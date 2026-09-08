@@ -278,9 +278,19 @@ describe("mention resweep + digest", () => {
     expect(result.delivered).toBe(true);
 
     const call = mocks.sendPresenceDigestEmail.mock.calls[0] as [AppEnv, { idempotencyKey: string }];
+<<<<<<< HEAD
     // The key embeds the current ISO date (since.slice(0, 10)), which rolls
     // every day. Assert the shape, not a specific hard-coded month, so the
     // suite does not go red when the wall-clock month advances.
     expect(call[1].idempotencyKey).toMatch(/^presence-digest:user_\d{4}:\d{4}-\d{2}-\d{2}$/);
+=======
+    // The key embeds `since` = now minus the digest lookback (168h), same formula as
+    // deliverPresenceDigestForUser. Asserting a fixed calendar month made this test
+    // month-locked and it broke on the September rollover; derive the expected date
+    // from the same clock expression instead.
+    const lookbackMs = 168 * 60 * 60 * 1000;
+    const expectedSince = new Date(Date.now() - lookbackMs).toISOString().slice(0, 10);
+    expect(call[1].idempotencyKey).toMatch(new RegExp(`^presence-digest:user_\\d{4}:${expectedSince}$`));
+>>>>>>> origin/main
   });
 });
