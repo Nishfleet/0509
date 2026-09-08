@@ -1,46 +1,74 @@
 ## What
 
-Closes #1929. The moat page — `/timeline/:domain` — was absent from `https://0509.io/llms.txt`, so AI answer engines indexing the site via that map never pointed at the dated offer-state ledger. This PR extends the existing dynamic-brand-page pipeline to also list the same indexable `/timeline/:domain` URLs the sitemap emits.
+net-positive-because: the diff is the shipped capture-validity gate (helpers, wiring, render/MCP surfacing) plus its regression test — net-positive test+feature lines that are the smallest durable fix and its prevention mechanism, not speculative scaffolding.
 
-**Files**
+Closes #1996. `/timeline/:domain` was publishing geo-variance + cookie-banner capture artifacts as real offer transitions — e.g. the live Nike SG (`/sg/`, 7 Sept: "Shop Now", "$149") vs Nike FR (`/fr/`, 8 Sept: French consent CTA, price "—") pair rendered as a false "Nike changed their CTA and dropped their price" transition on the public indexed flagship surface. This PR lands a capture-validity gate so such pairs become an explicit suppressed state with a reason, never an offer transition, plus a regression gate that fails on the old code.
 
-- `app/lib/public-markdown.ts` — new `llmsPageForTimelinePath(path, lastmod?)` mirroring `llmsPageForBrandPath` (single-segment `/timeline/:domain` regex, locale prefixes and multi-segment paths fall out naturally); `buildLlmsText` now accepts an optional second arg with timeline entries; the rendered output gains a `Timelines:` block right under `Pages:`; bound by the imported `SITEMAP_TIMELINE_PATH_LIMIT` from `sitemap.server` so no parallel cap is invented.
-- `workers/app.ts` — `/llms.txt` branch now resolves both readers in parallel via `Promise.all([loadIndexableBrandPageEntries(env), loadIndexableTimelineEntries(env)])` so the two surfaces cannot diverge by construction. The no-D1 / no-table degradation inside `loadIndexableTimelineEntries` keeps the no-D1 / demo fallback byte-identical to today's static funnel.
-- `tests/public-markdown.test.ts` — four new tests: (a) `buildLlmsText` renders the offer-timeline line with newest-capture date and skips non-qualifying paths while staying `=== LLMS_TEXT` on the empty-arg call (acceptance 5a/5b/5c); (b) exactly one blank line between the `Timelines:` block and `Current product truth:`; (c) timeline section is capped at `SITEMAP_TIMELINE_PATH_LIMIT` entries with filter-first slice order; (d) brand-page contract is unchanged when timeline entries are also passed.
+**Logic — `app/lib/offer-timeline.ts`**
+
+- `geoLocaleSegment(url)` — returns the first path segment when it is a `SUPPORTED_COUNTRIES` ISO code (`/sg/` -> `"sg"`, `/fr/` -> `"fr"`), else null.
+- `isCookieBannerOrConsent(text)` — true when the text matches a curated consent/ads-personalization string list (French `"publicités personnalisées"`, `"gérer mes cookies"`, `"manage cookies"`, `"accept all cookies"`, `"privacy settings"`, etc.), case-insensitive substring. Tailored to consent phrases so a "Personalised winter sale" headline or a "Shop Now" CTA still diffs normally.
+- `captureValidityReason(previous, current)` — returns `"geo locale change"` when both canonical URLs carry a known locale segment and they differ; `"cookie banner / consent string"` when the current CTA/headline is a consent string; else null (genuine change diffs normally).
+- `buildOfferLedger` — between run-collapse and diff, computes the validity reason; when non-null, the entry is emitted with `transition: null` and `suppressedReason` set (no phantom change, no fake price `$149 -> —` disappearance). `OfferLedgerEntry` gains optional `suppressedReason`.
+
+**Phase 6 (follow-on): skip-suppressed diff baseline** — the diff/gate baseline is the last NON-suppressed emitted entry (`lastNonSuppressedEntry`), never the raw last one, so a later same-region capture can never diff against a suppressed placeholder (e.g. a "—" price or consent CTA) and fabricate a "price restored from —" transition. Suppressed states remain emitted as their own labeled dated states; only the baseline skips them.
+
+**Render + MCP — `app/components/offer-timeline-ledger.tsx`, `app/lib/offer-timeline-agent-tools.ts`**
+
+- Ledger renders `Capture suppressed: <reason>` when `transition` is null and `suppressedReason` is non-null (instead of the misleading "First offer on record.").
+- `OfferHistoryEntryPayload` gains `suppressedReason` and sets `changes: null` for suppressed states, so MCP consumers report the reason instead of fabricated field changes.
+
+**Tests**
+
+- `tests/offer-timeline-geo-variance-phantom.test.ts` — NEW regression gate (fleet-ops#366): (a) real sg+fr Nike pair emits NO offer transition (suppressed with `geo locale change`); (b) genuine same-geo `$149 -> $129` price edit still emits exactly one transition; (c) cookie-banner CTA swap on the SAME geo suppresses with the consent reason; (d) phase 6: sg -> fr(suppressed, "—") -> fr(real "$149") never emits a "price restored from —" transition.
+- `tests/offer-timeline.render.test.tsx` — suppressed entry renders as "Capture suppressed", not "First offer" and not a transition; proof hrefs kept.
+- `tests/offer-timeline-agent-tools.test.ts` — MCP payload surfaces suppressed reason with changes null.
+- `tests/offer-timeline.test.ts`, `tests/offer-timeline.server.test.ts` — green after the shape change (field populated automatically by `buildOfferLedger`).
+
+No D1 migration (pure read-side ledger/diff logic + a test). No DROP COLUMN / DROP TABLE / column rename / NOT NULL.
 
 ## Verification
 
-Real runs, on this branch, against the public-markdown unit suite + full node project:
+Real runs, on this branch, after rebase onto origin/main:
 
 ```
-$ npx vitest run --configLoader runner --project node tests/public-markdown.test.ts
+$ npx vitest run --project node tests/offer-timeline-geo-variance-phantom.test.ts
  Test Files  1 passed (1)
-      Tests  13 passed (13)
+      Tests  4 passed (4)
+
+$ npx vitest run --project node tests/offer-timeline.test.ts tests/offer-timeline.render.test.tsx tests/offer-timeline-agent-tools.test.ts tests/offer-timeline.server.test.ts
+ Test Files  4 passed (4)
+      Tests  42 passed (42)
 
 $ npx vitest run --configLoader runner --project node
- Test Files  602 passed (602)
-      Tests  7173 passed (7173)
+ Test Files  618 passed (618)
+      Tests  7368 passed (7368)
 
-$ npx tsc -b
-(no errors in app/lib/public-markdown.ts, workers/app.ts, tests/public-markdown.test.ts;
- pre-existing e2e/playwright errors in journey-* and playwright.config.ts are not
- introduced by this diff.)
+$ npx vitest run --project workers
+ Test Files  39 passed (39)
+      Tests  198 passed (198)
+
+$ NODE_OPTIONS="--max-old-space-size=8192" npx tsc -b
+(exit 0; default-heap OOM on this large monorepo is resolved with the larger heap)
 ```
 
-`run-proof:` the targeted `tests/public-markdown.test.ts` suite ran on this branch and went 13/13 green; the full node project (602 files, 7173 tests) re-ran green to confirm nothing else moved.
+`run-proof:` the target regression suite `tests/offer-timeline-geo-variance-phantom.test.ts` ran on this branch post-rebase and went 4/4 green; four related offer-timeline suites (42 tests) green; full node project (618 files, 7368 tests) and workers project (39 files, 198 tests) re-ran green; `tsc -b` exits 0 with the larger heap. The regression test FAILS on current main (the pre-gate pair diffs to a phantom Headline/CTA/Price change) and PASSES with the gate — it is the `bin/prove-one-run-check` receipt run.
 
-The production parity check is captured by the existing test scaffolding — `buildLlmsText()` keeps `=== LLMS_TEXT` byte-identical so any future regression in the no-D1 / demo / missing-table fallback breaks here before reaching production. The live confirm of parity between sitemap and llms.txt requires a deploy + warm D1 read; that is left to the auto-merge arm.
+## Reviewer round
 
-## Reviewer round (pstack `reviewer-senior`, seat cursor/cursor-grok-4.6-high)
+This is a product repo (0509), so the reviewer round ran via step 8 before arming.
 
 Adjudicated against `~/.pi/agent/skills/review-adjudication/SKILL.md`:
 
-- **Act on** (warning #1, acceptance 2 wording): the offer-timeline line copy now reads "at least one dated offer state" instead of the uncounted plural "dated offer states" — the loader returns no count, and the issue's own constraint was "no unsupported claim — if the ledger has one state, say one state." Test strings updated to match.
-- **Act on** (warning #2, cap stability): the `validCount` for the filter-first cap test is now `Math.min(200, SITEMAP_TIMELINE_PATH_LIMIT)` so the assertion stays stable if the shared cap moves below 200.
-- **Consider** (suggestion: `SITEMAP_TIMELINE_PATH_LIMIT` import pulls `sitemap.server` into this module's graph). Noted — `public-markdown` is server-only today, and `workers/app.ts` already imports the sitemap module. No client route imports `public-markdown`. Noted, not acted.
-- **Consider** (suggestion: no worker test that `/llms.txt` actually calls both loaders). Noted — a workers-side assertion would land in `tests/integration/` and expand scope; this PR stays in the unit-test lane.
-- **Noted** (suggestion: ~1000-line file size). Pre-existing layout; not this diff's problem.
-- **Dismissed with reason** (scope check warning): `.fleet/plan.md` and `.fleet/pr-body.md` are fleet paper (heavy-mode artifacts), not product files. Reviewer noted "Fleet paper should not block merge" — confirmed out of scope for the product review gate.
-- **Acceptance check** — all six bullets PASS post-fix.
+- **Act on** (phase 6 follow-on): base the gate AND diff on the last non-suppressed entry so a later same-region capture can never diff against a suppressed placeholder. Landed as `lastNonSuppressedEntry` + `tests/offer-timeline-geo-variance-phantom.test.ts` phase-6 case.
+- **Consider / Noted**: none outstanding — the optional `suppressedReason` field keeps back-compat; survivors in `tests/offer-timeline.test.ts` are populated via `buildOfferLedger`. Recorded, not re-delegated.
 
-`Closes #1929`
+## Acceptance
+
+All issue bullets pass post-fix:
+1. Capture-validity gate suppresses geo-locale-differing pairs + consent-CTA pairs as `capture_failed`-style suppressed states with a reason — never a transition.
+2. Price `$149 -> —` disappearance suppressed when the only cause is the geo switch.
+3. Regression test feeds the real sg+fr pair and asserts NO offer transition; a genuine same-geo price edit still emits exactly one transition.
+4. Test fails on current main, passes with the gate.
+
+`Closes #1996`
