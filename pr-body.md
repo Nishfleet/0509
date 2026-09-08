@@ -88,3 +88,18 @@ Not applicable — no new `bin/` files added.
   methodology" wording; source matches `grep methodology app/routes/*ads*`.
 - `sitemap.xml` lists `/methodology` (and no longer lists a redirect target).
 - `/ad-aggression` and `/methodology/ad-aggression-score` 301 to `/methodology`.
+
+### Salvage resume (fleet-ops#1204)
+
+Work resumed from the banked `wip/pi-issue-0509-2022-20260908T215253Z` state and
+re-verified end to end by a fresh run: `vitest --project node` 621 files /
+7430 tests green, `vitest --project workers` 41 files / 202 tests green,
+`react-router typegen` clean, `sgscan` no new findings, all PR-body gates
+(prove-one-run-check, fleet-exec-review-canary, fleet-no-agent-names-check,
+fleet-rebuild-verify-check, fleet-token-efficiency-check,
+research-before-build-check, fleet-organ-heartbeat-check) green.
+crgate: skipped — CodeRabbit not signed in on this machine.
+
+organ-heartbeat: app/routes + app/lib not-an-organ: marketing-surface diff touches no organ paths (gate SKIP: no fleet organ touched in the diff).
+
+loose-ends: none in scope — page, footer links, sitemap entry, and both 301 redirects ship; the issue's live `curl https://0509.io/...` checks land automatically after merge + deploy.
