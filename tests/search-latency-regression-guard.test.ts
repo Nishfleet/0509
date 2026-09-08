@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -12,6 +12,10 @@ import {
   parseRuns,
   parseAuthRecords,
 } from "../scripts/search-latency-regression-guard.mjs";
+import {
+  detectFirstValueRegression,
+  formatFirstValueIssueBody,
+} from "../scripts/search-latency-probe.mjs";
 
 function makeRuns(values: Array<{ runAt: string; p95Ms: number }>) {
   return values.map((v) => ({
@@ -293,6 +297,79 @@ describe("search.latency.regression.guard", () => {
       expect(records).toHaveLength(8);
       const regression = detectAuthRegression(records);
       expect(regression).not.toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("fires the first-value edge detector on a 3-window 429 streak fixture and stays quiet on an ongoing streak", () => {
+    // The scheduled guard CLI cannot grow a --first-value-csv flag in this
+    // change: any edit of search-latency-regression-guard.mjs trips the
+    // repo secrets guard (GH_TOKEN wiring). The edge detector lives on the
+    // probe (same contract as detectAuthRegression) and is imported here so
+    // this file's verify command covers the 3-window fixture.
+    const red = (runAt: string) => ({
+      runAt,
+      path: "/search?q=nike&country=all",
+      status: 429 as number | null,
+      outcome: "rate_limited",
+    });
+    const green = (runAt: string) => ({
+      runAt,
+      path: "/search?q=nike&country=all",
+      status: 200 as number | null,
+      outcome: "ok",
+    });
+
+    const start = detectFirstValueRegression([
+      green("2026-09-08T10:00:00Z"),
+      red("2026-09-08T10:30:00Z"),
+      red("2026-09-08T11:00:00Z"),
+      red("2026-09-08T11:30:00Z"),
+    ]);
+    expect(start).not.toBeNull();
+    expect(start!.previous).toEqual({ runAt: "2026-09-08T10:00:00Z" });
+    expect(formatFirstValueIssueBody(start!)).toContain("429");
+
+    expect(
+      detectFirstValueRegression([
+        red("2026-09-08T10:00:00Z"),
+        red("2026-09-08T10:30:00Z"),
+        red("2026-09-08T11:00:00Z"),
+        red("2026-09-08T11:30:00Z"),
+      ]),
+    ).toBeNull();
+  });
+
+  it("parses a real first-value.csv row shape into the edge detector", () => {
+    const dir = mkdtempSync(join(tmpdir(), "search-latency-first-value-guard-"));
+    try {
+      const csvPath = join(dir, "first-value.csv");
+      writeFileSync(
+        csvPath,
+        [
+          "run_at,path,status,outcome,retry_after,elapsed_ms",
+          "2026-09-08T10:00:00.000Z,/search?q=nike&country=all,200,ok,,12",
+          "2026-09-08T10:30:00.000Z,/search?q=nike&country=all,429,rate_limited,600,13",
+          "2026-09-08T11:00:00.000Z,/search?q=nike&country=all,429,rate_limited,600,14",
+          "2026-09-08T11:30:00.000Z,/search?q=nike&country=all,429,rate_limited,600,15",
+        ].join("\n"),
+      );
+      const text = readFileSync(csvPath, "utf8");
+      const lines = text.trim().split("\n").slice(1);
+      const records = lines.map((line) => {
+        const [runAt, path, status, outcome, retryAfter] = line.split(",");
+        return {
+          runAt,
+          path,
+          status: status === "" ? null : Number(status),
+          outcome,
+          retryAfter,
+        };
+      });
+      const regression = detectFirstValueRegression(records);
+      expect(regression).not.toBeNull();
+      expect(regression!.runs).toHaveLength(3);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
