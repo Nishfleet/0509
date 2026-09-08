@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the 0509 money-path availability canary every 5 minutes
+Documentation=https://github.com/Nishfleet/0509
+
+[Timer]
+# Every 5 minutes on the :1 and :6 offsets, clear of the liveness probe's
+# :2/:7 windows. Two consecutive samples = the 10-minute detection window
+# the detector requires (issue #2001).
+OnCalendar=*:1/5
+Persistent=true
+Unit=0509-money-path-canary.service
+
+[Install]
+WantedBy=timers.target

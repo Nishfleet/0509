@@ -43,6 +43,8 @@ import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 import { RuledList } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
 import { formatAdLongevityLabel } from "~/lib/ad-display";
+// Issue #2001 — bounded transient-retry for the money-path result step.
+import { withTransientRetry } from "~/lib/transient-retry.server";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { classifyAdRecordAngle } from "~/lib/ad-display";
 import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
@@ -709,7 +711,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     selectedAd,
     selectionEnrichmentPending,
     landingPageCaptureFailure,
-  } = await prepareSearchResultSelection(
+  } = await withTransientRetry(() =>
+    prepareSearchResultSelection(
     env,
     searchExecution.result,
     url.searchParams.get("selected"),
@@ -723,6 +726,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       // only way the snapshot reaches the HTML.
       ...(typeof waitUntil === "function" && session ? { waitUntil } : {}),
     },
+    ),
   );
 
   emitFunnelSearchResult(env, request, hydratedResult.ads.length);
@@ -769,7 +773,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ads: hydratedResult.ads,
   });
   const brandPageLink = brandPageCandidate
-    ? await resolveIndexableBrandPageLinkForDomain(env, brandPageCandidate)
+    // Issue #2001 — a transient D1 hiccup here used to 500 the whole money
+    // -path result step. One bounded retry on transient-looking failures;
+    // on hard failure the link degrades to null rather than failing the page.
+    ? await withTransientRetry(
+        () => resolveIndexableBrandPageLinkForDomain(env, brandPageCandidate),
+      )
     : null;
   // Issue 1554 cross-link: when the same searched brand domain is a known
   // switch target (MagicBrief / Panoramata / Visualping), surface its /switch/*
