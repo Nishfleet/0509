@@ -377,6 +377,49 @@ describe("ridge.com mandatory regression (alias recall, issue #2012)", () => {
   });
 });
 
+describe("zappos.com mandatory regression (apex↔www alias recall, issue #2059)", () => {
+  // Zappos is a major Meta advertiser whose 13 verified ads all land on
+  // www.zappos.com, while buyers type the apex zappos.com. The live identity
+  // redirect chain hides the www host, so the curated identity override
+  // (website-identity.server) supplies it as an audited alias; this pins the
+  // matcher behaviour the alias must trigger (verified, not Unmatched).
+  const zapposAliases = ["www.zappos.com", "Zappos"];
+  const zapposAd = (landing: string): AdRecord =>
+    ad({
+      metaAdId: "zappos-sneaker-drop",
+      advertiser: "Zappos",
+      previewHeadline: "Free shipping on every order",
+      landingPageUrl: landing,
+    });
+
+  it("classifies a www.zappos.com landing as a verified alias for zappos.com", () => {
+    const intent = parseSearchInputFromWebsiteField("zappos.com");
+    const explanation = explainDomainMatch(
+      zapposAd("https://www.zappos.com/sneakers"),
+      intent,
+      new Set(zapposAliases),
+    );
+
+    expect(explanation).not.toBeNull();
+    expect(explanation?.confidenceCategory).toBe("verified");
+  });
+
+  it("keeps an unrelated advertiser unmatched for zappos.com", () => {
+    const intent = parseSearchInputFromWebsiteField("zappos.com");
+    const other = ad({
+      metaAdId: "other-shoes",
+      advertiser: "Shoe Emporium",
+      landingPageUrl: "https://shoe-emporium.example/sale",
+    });
+    const classified = classifyDomainMatches([other], intent, {
+      aliases: zapposAliases,
+      includeUnverified: true,
+    });
+
+    expect(classified).toHaveLength(0);
+  });
+});
+
 describe("domainMatchTier", () => {
   it("maps verified levels to verified, brand-name to likely, and everything else to unmatched", () => {
     expect(domainMatchTier("exact_hostname")).toBe("verified");

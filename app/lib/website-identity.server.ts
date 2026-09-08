@@ -85,6 +85,16 @@ const IDENTITY_OVERRIDES: Record<
   // provider query to the brand term "Ridge" (the Meta advertiser page name)
   // even if the live homepage fetch fails or yields a shop-style label.
   "ridge.com": { siteName: "Ridge", domainAliases: ["ridgewallet.com", "ridgewallet.eu"] },
+  // Zappos (issue #2059). zappos.com is the buyer-typed domain, but Zappos's
+  // 13 verified Meta ads all land on the www host (www.zappos.com). The live
+  // apex homepage fetch does not surface that host in its redirect chain, so
+  // the alias is not discoverable, and without a curated site name the
+  // provider query degenerates — a bare website=zappos.com search settles on
+  // "No verified ads found for zappos.com" while q=zappos.com returns 13
+  // verified rows, and /ads/zappos.com refuses to publish. Same audited-alias
+  // rail as on.com/ridge.com; the curated site name pins the provider query
+  // to the brand term "Zappos".
+  "zappos.com": { siteName: "Zappos", domainAliases: ["www.zappos.com"] },
 };
 
 const identityCache = new Map<string, { expiresAt: number; identity: WebsiteIdentity | null }>();

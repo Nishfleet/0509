@@ -238,6 +238,26 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     expect(identity?.domainAliases).toContain("ridgewallet.com");
     expect(identity?.domainAliases).toContain("ridgewallet.eu");
   });
+
+  it("connects zappos.com to its www.zappos.com landing host (issue #2059)", async () => {
+    // Zappos's verified Meta ads all land on the www host, but the live apex
+    // redirect chain never reveals www.zappos.com, so the alias is not
+    // discoverable and a bare website=zappos.com search settled on
+    // "No verified ads found for zappos.com" while the 13 ads existed in the
+    // index (issue #2059). The curated site name pins the provider query to
+    // the brand term and the alias supplies the apex↔www link. The facts must
+    // survive a FAILED live fetch so the search still resolves.
+    mockFetch.mockResolvedValue(
+      new Response(null, { status: 403, headers: { "content-type": "text/html" } }),
+    );
+
+    const identity = await resolveWebsiteIdentity("https://zappos.com");
+
+    expect(identity).not.toBeNull();
+    expect(identity?.siteName).toBe("Zappos");
+    expect(identity?.aliases).toContain("Zappos");
+    expect(identity?.domainAliases).toContain("www.zappos.com");
+  });
 });
 
 describe("extractTagContent tag allowlist", () => {
