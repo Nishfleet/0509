@@ -354,6 +354,11 @@ describe("evaluateTierModel", () => {
   it("fails check (b) when the purpose-built nonsense domain does NOT render the bare empty card", () => {
     const verdict = evaluateTierModel([
       domainWithRows,
+      // slack.com / tcs.com now have rows (page-scoped #1396) — no real
+      // cohort domain is a bare 0-candidate, and the nonsense probe also
+      // fails to render the bare empty card, so check (b) must fail.
+      { domain: "slack.com", rowCount: 6, outcome: "verified", isWarming: false, emptyReason: null, tierCounts: { verified: 1, likely: 5, unmatched: 0 } },
+      { domain: "tcs.com", rowCount: 9, outcome: "verified", isWarming: false, emptyReason: null, tierCounts: { verified: 9, likely: 0, unmatched: 0 } },
       {
         ...bareEmptyProbe,
         // The nonsense probe unexpectedly has rows (or a different empty
