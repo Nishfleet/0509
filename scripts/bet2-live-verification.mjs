@@ -923,10 +923,13 @@ export function evaluateSection18Rerun(results) {
  * plus the §1.8 rerun, when run from `main`, plus the purpose-built nonsense
  * domain probed for the bare-empty contract). A run with no 0-candidate
  * domains (every brand has rows) fails (b) deliberately — the bare empty card
- * is the contract for a nonsense domain, and the caller probes
- * BET2_BARE_EMPTY_PROBE_DOMAIN (a `.invalid` domain no advertiser can ever
- * own) for that side-effect, so the check no longer depends on slack.com /
- * tcs.com being the live 0-candidate rows (they are page-scoped per #1396).
+ * is the contract for a nonsense domain. The caller always includes
+ * BET2_BARE_EMPTY_PROBE_DOMAIN (an RFC-2606 `.invalid` domain no advertiser
+ * can ever own), so a genuine 0-candidate is always present and the check no
+ * longer depends on slack.com / tcs.com being the live 0-candidate rows
+ * (they are page-scoped per #1396, so they now have rows once their daily
+ * publisher lands). If another real cohort domain is also a genuine 0-candidate
+ * that renders the bare empty card, that only reinforces the contract.
  * @param {ProbeResult[]} results
  * @returns {{ pass: boolean, checks: any[] }}
  */
@@ -1116,20 +1119,28 @@ async function main() {
   // lands. This keeps the assertion meaningful without depending on the
   // live brand mix flipping to 0-candidate. The default `canary:bet2` run
   // (no `--assert-tier-model`) never probes it.
-  const tierModelProbe =
-    assertTierModel
-      ? probeDomain({
-          domain: BET2_BARE_EMPTY_PROBE_DOMAIN,
-          baseUrl,
-          beforeRequest: () => limiter.acquire(),
-        })
-      : null;
+  const tierModelProbe = assertTierModel
+    ? await runLiveVerification({
+        domains: [BET2_BARE_EMPTY_PROBE_DOMAIN],
+        baseUrl,
+        paceRequests: false,
+        beforeRequest: () => limiter.acquire(),
+        requestSpacingMs: spacingMs,
+        onResult: (probe, index, total) => {
+          if (index === 1) {
+            emitLine("");
+            emitLine("bare-empty tier-model probe (.invalid nonsense domain):");
+          }
+          emitLine(formatProbeLine(probe, index, total));
+        },
+      })
+    : null;
   const tierModelVerdict =
     assertTierModel && tierModelProbe
       ? evaluateTierModel([
           ...run.results,
           ...(rerun ? rerun.results : []),
-          tierModelProbe,
+          ...tierModelProbe.results,
         ])
       : { pass: true, checks: [] };
   const pass = verdict.pass && rerunVerdict.pass && tierModelVerdict.pass;
@@ -1153,6 +1164,9 @@ async function main() {
       bet2Set: { results: run.results, summary: run.summary },
       section1_8Rerun: rerun
         ? { results: rerun.results, summary: rerun.summary }
+        : null,
+      bareEmptyProbe: tierModelProbe
+        ? { results: tierModelProbe.results, summary: tierModelProbe.summary }
         : null,
       termination: {
         pass,
