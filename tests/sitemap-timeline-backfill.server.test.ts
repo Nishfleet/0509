@@ -442,7 +442,7 @@ describe("runSitemapTimelineBackfill (idempotency + subset paths)", () => {
     expect(captureStub).not.toHaveBeenCalled();
   });
 
-  it("restricts the run to a caller-supplied domains subset", async () => {
+  it("restricts the run to a caller-supplied, canonicalized domains subset", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
     execute.mockResolvedValue({});
@@ -455,48 +455,18 @@ describe("runSitemapTimelineBackfill (idempotency + subset paths)", () => {
       return snapshotForUrl(url);
     });
 
-    const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
-      cohort: cohort(
-        { domain: "calendly.com" },
-        { domain: "adspyder.io" },
-        { domain: "notion.com" },
-      ),
-      domains: ["calendly.com"],
-      capture: captureStub as never,
-    });
-
-    expect(result.capturedCount).toBe(1);
-    expect(capturedDomains).toEqual(["calendly.com"]);
-  });
-
-  it("canonicalizes the caller-supplied domains subset (WWW.Calendly.com === calendly.com)", async () => {
-    const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
-    replaceAnalysisFields.mockResolvedValue(undefined);
-
-    const capturedDomains: string[] = [];
-    const captureStub = vi.fn(async (_env: AppEnv, url: string) => {
-      const domain = url.replace(/^https:\/\/www\./, "").replace(/\/$/, "");
-      capturedDomains.push(domain);
-      return snapshotForUrl(url);
-    });
-
+    // "WWW.Calendly.com." canonicalizes to calendly.com (parity with
+    // `canonicalizeSneakerResaleDomain`); the sloppy input still resolves to
+    // the right cohort entry and adspyder.io is filtered out by the subset.
     const result = await runSitemapTimelineBackfill(env, {
       now: new Date("2026-09-05T01:00:00.000Z"),
       cohort: cohort({ domain: "calendly.com" }, { domain: "adspyder.io" }),
-      // WWW. prefix and trailing dot are stripped before the cohort lookup
-      // so a caller with sloppy domain input still gets the right cohort
-      // entry — parity with `canonicalizeSneakerResaleDomain`.
       domains: ["WWW.Calendly.com."],
       capture: captureStub as never,
     });
 
     expect(result.capturedCount).toBe(1);
     expect(capturedDomains).toEqual(["calendly.com"]);
-    // The other cohort entry (adspyder.io) was filtered out by the subset.
-    expect(capturedDomains).not.toContain("adspyder.io");
   });
 });
 
