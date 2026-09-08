@@ -87,6 +87,7 @@ export {
   finalizeWebsiteSiteScan,
   listWebsiteSiteScanPagesForRun,
   listWebsitePageObservationsForRun,
+  getLatestWebsiteSiteScanForWatchlist,
   getLatestCompleteWebsiteScanBaseline,
   type BeginWebsiteSiteScanInput,
   type UpsertWebsiteSiteScanPageInput,

@@ -75,6 +75,12 @@ export interface PlanEntitlements {
   priorityScanSlots: number | null;
   monitoringQueuePriority: MonitoringQueuePriority;
   metaSourceStatus: "unavailable" | "limited" | "priority";
+  /**
+   * Full-Site Watch rotating-batch page cap (packet 5). Free/Scout stay low;
+   * Starter and Agency step up. Hard-capped by DEFAULT_PAGE_BUDGET in the
+   * scanner so a catalog typo cannot fetch thousands of pages.
+   */
+  sitePageBudget: number;
   features: ReadonlySet<PlanFeature>;
 }
 
@@ -158,6 +164,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     priorityScanSlots: null,
     monitoringQueuePriority: 2,
     metaSourceStatus: "unavailable",
+    sitePageBudget: 5,
     features: new Set(FREE_FEATURES),
   },
   scout: {
@@ -171,6 +178,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     priorityScanSlots: null,
     monitoringQueuePriority: 2,
     metaSourceStatus: "limited",
+    sitePageBudget: 10,
     features: new Set(SCOUT_FEATURES),
   },
   starter: {
@@ -184,6 +192,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     priorityScanSlots: null,
     monitoringQueuePriority: 1,
     metaSourceStatus: "limited",
+    sitePageBudget: 25,
     features: new Set(STARTER_FEATURES),
   },
   agency: {
@@ -198,6 +207,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     priorityScanSlots: 25,
     monitoringQueuePriority: 0,
     metaSourceStatus: "priority",
+    sitePageBudget: 50,
     features: new Set(AGENCY_FEATURES),
   },
 };
@@ -211,6 +221,11 @@ export function parsePlanFamily(value: string | null | undefined): PlanFamily {
 
 export function getPlanEntitlements(planFamily: PlanFamily): PlanEntitlements {
   return ENTITLEMENTS[planFamily];
+}
+
+/** Full-Site Watch page budget for this plan. Never reads DEFAULT_PAGE_BUDGET. */
+export function getSitePageBudget(planFamily: PlanFamily): number {
+  return getPlanEntitlements(planFamily).sitePageBudget;
 }
 
 export function getPlanLimit(planFamily: PlanFamily, resource: PlanResource): number {

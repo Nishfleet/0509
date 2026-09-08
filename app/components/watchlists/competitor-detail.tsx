@@ -75,6 +75,7 @@ type DetailData = ComponentProps<typeof EventChangesSection>["data"] &
     recentDeliveryAttempts: PublicDeliveryAttemptSummary[];
     showPresenceNav: boolean;
     latestRunCaptureAttempts?: ComponentProps<typeof RecentChecksSection>["latestRunCaptureAttempts"];
+    websiteCoverageLabel?: string | null;
   };
 
 export interface CompetitorDetailProps {
@@ -381,6 +382,11 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
 
   return (
     <>
+      {data.websiteCoverageLabel ? (
+        <p className="f9-wk-dim" data-coverage="website">
+          {data.websiteCoverageLabel}
+        </p>
+      ) : null}
       <EventChangesSection
         checksExpanded={props.checksExpanded}
         data={data}
