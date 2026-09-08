@@ -79,6 +79,11 @@ export interface AppEnv {
   /** Local release-proof guard. Never configure this in preview or production. */
   E2E_PROVIDER_NETWORK_DENY?: string;
   E2E_TEST_MODE?: string;
+  /** Google Search Console ownership verification token. Rendered as a
+   * <meta name="google-site-verification"> head tag when set; unset means no
+   * tag and no behavior change. The value comes from the owner's Search
+   * Console property (wrangler secret), never from the repo. */
+  GOOGLE_SITE_VERIFICATION?: string;
   /**
    * Explicit server-side gate for anonymous funnel measurement (see
    * docs/funnel-measurement-spec.md). Absent or any value other than
