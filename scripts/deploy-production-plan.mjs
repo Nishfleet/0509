@@ -407,9 +407,13 @@ export function buildProductionDeployPlan({
       // `wrangler secret put` after `npm run deploy` returns, and it dies
       // when Cloudflare's "currently deployed" mark lags behind `wrangler
       // deploy` (run 34079008963: "Secret edit failed ... latest version of
-      // your Worker isn't currently deployed."). Sync the token here first
-      // with a bounded retry — the retry is the poll for the mark, and once
-      // a put lands, the workflow step's identical put is a no-op rewrite.
+      // your Worker isn't currently deployed.") OR when a PR-CI preview
+      // upload (preview-assert on pull_request/merge_group) advanced the
+      // script's latest version without deploying it (#1981). Sync the token
+      // here first with a bounded retry — the retry is the poll for the mark
+      // and re-promotes via `wrangler deploy` when the latest version is a
+      // stale preview upload — and once a put lands, the workflow step's
+      // identical put is a no-op rewrite.
       // Classic `secret put` only; `wrangler versions secret put` stays
       // rejected ("Failed to parse body as FormData", run 31514742997).
       //
