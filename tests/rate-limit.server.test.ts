@@ -7,6 +7,8 @@ import {
   enforcePublicSearchSelectionRateLimit,
   enforceRequestRateLimit,
   enforceSearchSelectionRateLimit,
+  PUBLIC_SEARCH_ANON_BROWSER_LIMIT,
+  PUBLIC_SEARCH_IP_BACKSTOP_LIMIT,
   rateLimitPolicyFor,
 } from "~/lib/rate-limit.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -146,28 +148,96 @@ describe("enforceRequestRateLimit", () => {
     consoleError.mockRestore();
   });
 
-  it("blocks anonymous public search after the configured route limit", async () => {
+  it("gives each anonymous browser its own budget while keeping a per-IP backstop", async () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const request = new Request("https://0509.io/search?query=nykaa", {
-      headers: {
-        "cf-connecting-ip": "203.0.113.11",
-        "user-agent": "vitest",
-      },
-    });
+    const request = (userAgent: string) =>
+      new Request("https://0509.io/search?query=nykaa", {
+        headers: { "cf-connecting-ip": "203.0.113.11", "user-agent": userAgent },
+      });
 
-    for (let index = 0; index < 20; index += 1) {
-      await expect(enforcePublicSearchRateLimit(request, env)).resolves.toBeNull();
+    // 20 searches under ONE anonymousId pass; the 21st under the SAME id is 429.
+    for (let index = 0; index < PUBLIC_SEARCH_ANON_BROWSER_LIMIT; index += 1) {
+      await expect(
+        enforcePublicSearchRateLimit(request(`vitest-${index}`), env, undefined, "browser-a"),
+      ).resolves.toBeNull();
+    }
+    const blockedOwn = await enforcePublicSearchRateLimit(
+      request("vitest-21"),
+      env,
+      undefined,
+      "browser-a",
+    );
+    expect(blockedOwn?.status).toBe(429);
+
+    // A DIFFERENT anonymousId on the SAME IP still passes (per-browser buckets).
+    await expect(
+      enforcePublicSearchRateLimit(request("vitest-22"), env, undefined, "browser-b"),
+    ).resolves.toBeNull();
+  });
+
+  it("lets a fresh anonymous browser search even when its shared per-IP bucket is near the ceiling", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const request = (userAgent: string) =>
+      new Request("https://0509.io/search?query=nykaa", {
+        headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": userAgent },
+      });
+
+    // Push the shared per-IP public-search ceiling (100/10min) near its limit
+    // with cookie-less / new-id requests — the fleet or other NAT visitors
+    // share this counter.
+    for (let index = 0; index < PUBLIC_SEARCH_IP_BACKSTOP_LIMIT - 1; index += 1) {
+      await expect(enforcePublicSearchRateLimit(request(`visitor-${index}`), env)).resolves.toBeNull();
     }
 
-    const blocked = await enforcePublicSearchRateLimit(request, env);
+    // A genuinely fresh no-cookie browser (new anonId) can still issue a search
+    // even though the shared per-IP counter is near its ceiling.
+    await expect(
+      enforcePublicSearchRateLimit(request("fresh-browser"), env, undefined, "fresh-browser-id"),
+    ).resolves.toBeNull();
+  });
+
+  it("lets a fresh browser search after 19 other browsers on the same NAT IP already searched", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const request = new Request("https://0509.io/search?query=nykaa", {
+      headers: { "cf-connecting-ip": "203.0.113.55" },
+    });
+
+    for (let index = 0; index < PUBLIC_SEARCH_ANON_BROWSER_LIMIT - 1; index += 1) {
+      await expect(
+        enforcePublicSearchRateLimit(request, env, undefined, `nat-browser-${index}`),
+      ).resolves.toBeNull();
+    }
+
+    await expect(
+      enforcePublicSearchRateLimit(request, env, undefined, "nat-browser-fresh"),
+    ).resolves.toBeNull();
+  });
+
+  it("keeps the per-IP public-search backstop throttling once the IP ceiling is exceeded", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const request = (userAgent: string) =>
+      new Request("https://0509.io/search?query=nykaa", {
+        headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": userAgent },
+      });
+
+    for (let index = 0; index < PUBLIC_SEARCH_IP_BACKSTOP_LIMIT; index += 1) {
+      await expect(enforcePublicSearchRateLimit(request(`agent-${index}`), env)).resolves.toBeNull();
+    }
+
+    // Even a brand-new anonymousId cannot bypass the exhausted per-IP backstop.
+    const blocked = await enforcePublicSearchRateLimit(
+      request("fresh"),
+      env,
+      undefined,
+      "any-browser",
+    );
     expect(blocked?.status).toBe(429);
-    await expect(blocked?.json()).resolves.toMatchObject({ error: "rate_limited" });
   });
 
   it("does not let anonymous public search reset quota by rotating user agent", async () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
 
-    for (let index = 0; index < 20; index += 1) {
+    for (let index = 0; index < PUBLIC_SEARCH_IP_BACKSTOP_LIMIT; index += 1) {
       const request = new Request("https://0509.io/search?query=nykaa", {
         headers: {
           "cf-connecting-ip": "203.0.113.12",

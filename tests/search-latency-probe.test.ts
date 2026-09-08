@@ -12,9 +12,17 @@ import {
   DAILY_HEADERS,
   RUNS_HEADERS,
   AUTH_HEADERS,
+  FIRST_VALUE_HEADERS,
+  FIRST_VALUE_PATH,
+  FIRST_VALUE_PROBE_USER_AGENT,
   authOutcome,
   computeLatencyStats,
+  detectFirstValueRegression,
+  firstValueOutcome,
+  formatFirstValueIssueBody,
+  formatFirstValueLine,
   formatMetricLine,
+  probeAnonymousFirstValue,
   probeAuthPages,
   runLatencyProbe,
 } from "../scripts/search-latency-probe.mjs";
@@ -315,5 +323,142 @@ describe("search.latency.probe", () => {
     expect(sleepMs.length).toBeGreaterThanOrEqual(1);
     // The auth spacing must be applied between consecutive page fetches.
     expect(sleepMs[0]).toBeGreaterThan(0);
+  });
+
+  it("classifies anonymous first-value statuses: 429 is rate_limited, 5xx is error", () => {
+    expect(firstValueOutcome(200)).toBe("ok");
+    expect(firstValueOutcome(302)).toBe("ok");
+    expect(firstValueOutcome(429)).toBe("rate_limited");
+    expect(firstValueOutcome(503)).toBe("error");
+    expect(firstValueOutcome(null)).toBe("fetch_error");
+  });
+
+  it("walks a fresh no-cookie /search and records 429 as a first-value miss", async () => {
+    const seenHeaders: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/search" && url.searchParams.get("q") === "nike") {
+        const headers = new Headers(init?.headers);
+        seenHeaders.push(headers.get("cookie") ?? "");
+        seenHeaders.push(headers.get("user-agent") ?? "");
+        return new Response("Too many searches", {
+          status: 429,
+          headers: { "retry-after": "600" },
+        });
+      }
+      return readyResponse(
+        htmlForRows([{ tier: "verified", advertiser: "Test", summary: "Summary" }]),
+      );
+    }) as unknown as typeof fetch;
+
+    const output = await runLatencyProbe({
+      baseUrl: "https://test.example",
+      domains: ["x.example"],
+      fetchImpl,
+      sleepImpl: async () => {},
+      nowImpl: () => 0,
+    });
+
+    expect(output.firstValueResult.status).toBe(429);
+    expect(output.firstValueResult.outcome).toBe("rate_limited");
+    expect(output.firstValueResult.retryAfter).toBe("600");
+    expect(output.firstValueResult.path).toBe(FIRST_VALUE_PATH);
+    expect(output.firstValueMetricLine).toContain("outcome=rate_limited");
+    // Fresh evaluator: no Cookie header, dedicated canary user-agent.
+    expect(seenHeaders[0]).toBe("");
+    expect(seenHeaders[1]).toBe(FIRST_VALUE_PROBE_USER_AGENT);
+  });
+
+  it("writes first-value.csv without consuming a Cookie header", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "search-latency-first-value-"));
+    try {
+      const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(input.toString());
+        if (url.pathname === "/search" && !url.searchParams.get("website")) {
+          expect(new Headers(init?.headers).get("cookie")).toBeNull();
+          return new Response("<html>ok</html>", { status: 200 });
+        }
+        return readyResponse(
+          htmlForRows([{ tier: "verified", advertiser: "Test", summary: "Summary" }]),
+        );
+      }) as unknown as typeof fetch;
+
+      await runLatencyProbe({
+        baseUrl: "https://test.example",
+        domains: ["x.example"],
+        outputDir: dir,
+        fetchImpl,
+        sleepImpl: async () => {},
+        nowImpl: () => 0,
+      });
+
+      const csv = readFileSync(join(dir, "first-value.csv"), "utf8");
+      expect(csv.split("\n")[0]).toBe(FIRST_VALUE_HEADERS.join(","));
+      expect(csv).toContain(",200,ok,");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("fires the first-value edge detector on a 3-window red streak and stays quiet on an ongoing streak", () => {
+    const red = (runAt: string) => ({
+      runAt,
+      path: FIRST_VALUE_PATH,
+      status: 429,
+      outcome: "rate_limited" as const,
+    });
+    const green = (runAt: string) => ({
+      runAt,
+      path: FIRST_VALUE_PATH,
+      status: 200,
+      outcome: "ok" as const,
+    });
+
+    const start = detectFirstValueRegression([
+      green("2026-09-08T10:00:00Z"),
+      red("2026-09-08T10:30:00Z"),
+      red("2026-09-08T11:00:00Z"),
+      red("2026-09-08T11:30:00Z"),
+    ]);
+    expect(start).not.toBeNull();
+    expect(start!.previous).toEqual({ runAt: "2026-09-08T10:00:00Z" });
+    expect(formatFirstValueIssueBody(start!)).toContain("429");
+
+    expect(
+      detectFirstValueRegression([
+        red("2026-09-08T10:00:00Z"),
+        red("2026-09-08T10:30:00Z"),
+        red("2026-09-08T11:00:00Z"),
+        red("2026-09-08T11:30:00Z"),
+      ]),
+    ).toBeNull();
+
+    expect(
+      detectFirstValueRegression([
+        red("2026-09-08T10:00:00Z"),
+        red("2026-09-08T10:30:00Z"),
+      ]),
+    ).toBeNull();
+
+    expect(
+      detectFirstValueRegression([
+        red("2026-09-08T10:00:00Z"),
+        red("2026-09-08T10:30:00Z"),
+        red("2026-09-08T11:00:00Z"),
+      ]),
+    ).not.toBeNull();
+  });
+
+  it("does not send a Cookie header on the dedicated first-value walk", async () => {
+    let cookieHeader: string | null = "sentinel";
+    await probeAnonymousFirstValue({
+      baseUrl: "https://test.example",
+      fetchImpl: (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        cookieHeader = new Headers(init?.headers).get("cookie");
+        return new Response("ok", { status: 200 });
+      }) as unknown as typeof fetch,
+      nowImpl: () => 0,
+    });
+    expect(cookieHeader).toBeNull();
   });
 });
