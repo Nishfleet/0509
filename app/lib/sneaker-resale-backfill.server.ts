@@ -42,6 +42,7 @@ import {
   captureLandingPageSnapshot,
   type LandingPageCaptureFailureDetail,
 } from "~/lib/landing-pages.server";
+import { extractPriceTier } from "~/lib/landing-page-price-tier.server";
 import { loadOfferTimeline } from "~/lib/offer-timeline.server";
 import {
   canonicalizeSneakerResaleDomain,
@@ -318,9 +319,10 @@ export async function runSneakerResaleBackfill(
             ocr_text,
             translated_text,
             captured_at,
-            created_at
+            created_at,
+            price_tier
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
         `,
         rowId,
         snapshot.rawUrl,
@@ -336,6 +338,7 @@ export async function runSneakerResaleBackfill(
         typeof snapshot.formPresent === "boolean" ? (snapshot.formPresent ? 1 : 0) : null,
         snapshot.capturedAt,
         nowIso(),
+        extractPriceTier(snapshot.priceText),
       );
       await replaceAnalysisFields(
         env,
