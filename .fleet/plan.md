@@ -76,7 +76,7 @@ transition.
   still emits exactly one transition. This test fails on current main
   (the pair currently diffs to Headline/CTA/Price "changed") and passes once the
   gate lands.
-- [ ] phase 4: Keep existing suites green after the `OfferLedgerEntry`
+- [x] phase 4: Keep existing suites green after the `OfferLedgerEntry`
   `suppressedReason` shape change: update `tests/offer-timeline.render.test.tsx`
   (the `entry()` literal helper needs `suppressedReason: null`; add a case that
   renders a suppressed entry), and confirm `tests/offer-timeline.test.ts`,
