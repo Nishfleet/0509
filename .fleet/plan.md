@@ -59,7 +59,7 @@ transition.
   `SUPPORTED_COUNTRIES` from `~/lib/countries`), add `suppressedReason: string | null` to `OfferLedgerEntry`, and wire the gate into
   `buildOfferLedger` so a geo-variance or cookie-banner pair emits a
   suppressed state (transition null, reason set) and never an offer transition.
-- [ ] phase 2: In `app/components/offer-timeline-ledger.tsx`, render
+- [x] phase 2: In `app/components/offer-timeline-ledger.tsx`, render
   "Capture suppressed: <reason>" when `transition` is null and
   `suppressedReason` is non-null (in place of "First offer on record."); in
   `app/lib/offer-timeline-agent-tools.ts`, add `suppressedReason` to
