@@ -1,29 +1,24 @@
 /**
  * Read-only D1 adapter for the sitemap-timeline cohort (issue #1958, phase 1).
  *
- * Sibling mirror of `app/lib/sneaker-resale-cohort.server.ts` (issue #1946):
- * the tier read queries the SAME `public_search` discovery cache rows the BET
- * publisher writes (`search-v2:domain:<domain>:exact:<provider>:all:page-1`
- * keys) and only READS them — never INSERT, UPDATE, or DELETE.
+ * Sibling mirror of `sneaker-resale-cohort.server.ts` (issue #1946): the tier
+ * read queries the SAME `public_search` discovery cache rows the BET publisher
+ * writes and only READS them.
  *
- * Two deliberate divergences from the sneaker adapter (manager decisions
- * recorded for review):
+ * Two deliberate divergences (manager decisions, recorded for review):
  *   - NO `expires_at > now` SQL filter: calendly.com / adspyder.io have NO
- *     scheduled writer, so an expiry gate would find zero fresh rows at
- *     04:00 UTC, derive an empty cohort, and the timeline freeze would
- *     persist. The verdict is a durable per-domain evidence fact; the row's
- *     age is surfaced via `cacheStatus` ("fresh" / "stale") with
- *     `hasCoverage` computed from the payload regardless of expiry.
+ *     scheduled writer, so an expiry gate would find zero fresh rows at 04:00
+ *     UTC and the freeze would persist. Row age surfaces via `cacheStatus`
+ *     ("fresh" / "stale"); `hasCoverage` is computed regardless of expiry.
  *   - Candidate domains come from the indexable timeline sitemap set
- *     (`loadIndexableTimelineEntries`) instead of a seed list, which applies
- *     the existing complete-proof gate (`snapshotRowHasCompleteProof`) +
- *     non-ad-destination gate + `SITEMAP_TIMELINE_PATH_LIMIT` bound for free.
+ *     (`loadIndexableTimelineEntries`) instead of a seed list, applying the
+ *     complete-proof gate + non-ad-destination gate + `SITEMAP_TIMELINE_PATH_LIMIT`
+ *     bound for free.
  *
- * Honesty contract (same shape as the sneaker adapter): no live provider
- * calls; missing D1 → empty `Map` / `[]` (degrade, never throw);
- * `route_context = 'public_search'` and `country = 'all'` only; demo-payload
- * rows are skipped; provider rollover = most-recent-fetched row wins with
- * fall-through to the next-newest non-demo row.
+ * Honesty contract: no live provider calls; missing D1 → empty `Map` / `[]`
+ * (degrade, never throw); `route_context = 'public_search'` and
+ * `country = 'all'` only; demo payloads skipped; provider rollover =
+ * most-recent-fetched wins with fall-through to the next-newest non-demo row.
  */
 
 import { queryIn } from "~/lib/data/d1.server";
