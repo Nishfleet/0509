@@ -84,7 +84,7 @@ transition.
   `tests/offer-timeline.server.test.ts` still pass (they build entries via
   `buildOfferLedger`, which now populates the field automatically — only the
   render helper's explicit literal breaks).
-- [ ] phase 5: Run the full verification gate — `npm test` (both node + workers
+- [x] phase 5: Run the full verification gate — `npm test` (both node + workers
   projects) and typecheck/eslint — and confirm green; verify the scripted
   test passes and produces NO migration and NO D1 DROP/rename (pure read-side
   ledger change; no `migrations/**` edit).
