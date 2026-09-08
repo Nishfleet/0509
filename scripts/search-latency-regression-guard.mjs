@@ -12,7 +12,7 @@
 // print what would be created without touching the GitHub API (used by the
 // repo's tests and by an operator replaying the guard by hand).
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -22,6 +22,13 @@ export const DEFAULT_REPO = "Nishfleet/0509";
 // Auth-page availability guard (issue #1692). The guard fires when an auth
 // page (the Sign in / Sign up CTAs) returns 5xx for 3+ consecutive runs.
 export const DEFAULT_AUTH_CONSECUTIVE = 3;
+
+// Money-path availability guard (issue #2001). Fires when any money-path URL
+// (the /search selected-result step or an /ads/:domain cohort page) returns
+// non-200 in two probe records inside a 10-minute window — two consecutive
+// 5-minute timer samples. One incident, one issue.
+export const DEFAULT_MONEY_PATH_WINDOW_MS = 10 * 60 * 1000;
+export const DEFAULT_MONEY_PATH_MIN_FAILURES = 2;
 
 /**
  * @typedef {Object} RunSample
@@ -306,6 +313,162 @@ export function formatAuthIssueBody(regression) {
 }
 
 /**
+ * Parse a money-path.csv written by scripts/search-latency-probe.mjs.
+ * @param {string} moneyPathCsv
+ * @returns {Array<{ runAt: string, path: string, status: number | null, location: string, outcome: string }>}
+ */
+export function parseMoneyPathRecords(moneyPathCsv) {
+  const csv = readCsv(moneyPathCsv);
+  if (!csv) return [];
+
+  const headers = csv.headers;
+  const runAtIdx = headers.indexOf("run_at");
+  const pathIdx = headers.indexOf("path");
+  const statusIdx = headers.indexOf("status");
+  const locationIdx = headers.indexOf("location");
+  const outcomeIdx = headers.indexOf("outcome");
+
+  return csv.rows
+    .map((row) => {
+      const status = emptyOrNumber(row[statusIdx]);
+      return {
+        runAt: row[runAtIdx] ?? "",
+        path: row[pathIdx] ?? "",
+        status: status,
+        location: (row[locationIdx] ?? "").trim(),
+        outcome: row[outcomeIdx] ?? "",
+      };
+    })
+    .filter((r) => r.runAt && r.path);
+}
+
+/**
+ * Edge detector for money-path availability (issue #2001). Fires when the
+ * same money-path URL returned non-200 in at least `minFailures` records
+ * whose timestamps all fall inside a `windowMs` window, and the immediately
+ * preceding record for that path (if any) was green — so one issue fires per
+ * flap incident, not per sample while the flap persists.
+ *
+ * Records are grouped per path so a flap on one URL is not masked by other
+ * paths' green samples.
+ *
+ * @param {Array<{ runAt: string, path: string, status: number | null, location: string, outcome: string }>} records
+ * @param {{ windowMs?: number, minFailures?: number }} [options]
+ * @returns {{
+ *   windowMs: number,
+ *   minFailures: number,
+ *   incidents: Array<{
+ *     path: string,
+ *     failures: Array<{ runAt: string, status: number | null, location: string }>,
+ *     previous: { runAt: string, status: number | null } | null,
+ *   }>,
+ *   title: string,
+ * } | null}
+ */
+export function detectMoneyPathRegression(
+  records,
+  options = {},
+) {
+  const windowMs = options.windowMs ?? DEFAULT_MONEY_PATH_WINDOW_MS;
+  const minFailures = options.minFailures ?? DEFAULT_MONEY_PATH_MIN_FAILURES;
+
+  const sorted = [...records].sort((a, b) => a.runAt.localeCompare(b.runAt));
+  const byPath = new Map();
+  for (const record of sorted) {
+    if (!byPath.has(record.path)) byPath.set(record.path, []);
+    byPath.get(record.path).push(record);
+  }
+
+  const incidents = [];
+  for (const [path, pathRecords] of byPath) {
+    // Pure flap detector: the latest `minFailures` samples for the path are
+    // all red and inside the window. Dedupe ("already filed") is NOT the
+    // detector's job — a red run longer than the window may be either an
+    // already-filed incident OR one whose filing run was missed, and the
+    // data cannot tell them apart. The guard's state file owns idempotency
+    // (see filterUnfiledIncidents).
+    const last = pathRecords[pathRecords.length - 1];
+    if (!isMoneyPathFailure(last)) continue;
+    const failures = pathRecords.slice(-minFailures);
+    if (!failures.every(isMoneyPathFailure)) continue;
+    const withinWindow =
+      Date.parse(last.runAt) - Date.parse(failures[0].runAt) <= windowMs;
+    if (!withinWindow) continue;
+    const previous = pathRecords[pathRecords.length - minFailures - 1];
+    incidents.push({
+      path,
+      failures: failures.map((r) => ({
+        runAt: r.runAt,
+        status: r.status,
+        location: r.location,
+      })),
+      previous: previous
+        ? { runAt: previous.runAt, status: previous.status }
+        : null,
+    });
+  }
+
+  if (incidents.length === 0) return null;
+  return {
+    windowMs,
+    minFailures,
+    incidents,
+    title: `regression: money-path URL returned non-200 ${minFailures}x within ${Math.round(windowMs / 60_000)} minutes`,
+  };
+}
+
+/**
+ * Filter a detected regression down to incidents not yet filed, using the
+ * state map ({path: last-filed failure runAt}) the guard persists after a
+ * successful filing. An incident is already filed when the recorded runAt
+ * for its path is at or beyond the incident's last failure sample.
+ * @param {NonNullable<ReturnType<typeof detectMoneyPathRegression>>} regression
+ * @param {Record<string, string>} state
+ * @returns {NonNullable<ReturnType<typeof detectMoneyPathRegression>>['incidents']}
+ */
+export function filterUnfiledIncidents(regression, state) {
+  return regression.incidents.filter((incident) => {
+    const lastFailureRunAt =
+      incident.failures[incident.failures.length - 1].runAt;
+    return (state[incident.path] ?? "") < lastFailureRunAt;
+  });
+}
+
+/**
+ * A money-path record is a failure on any non-200: 5xx hard-fails, 3xx
+ * (including the spurious empty-Location 301) breaks the in-place 200
+ * contract on indexed pages, and fetch_error means unreachable.
+ * @param {{ outcome: string }} record
+ * @returns {boolean}
+ */
+export function isMoneyPathFailure(record) {
+  return record.outcome === "error" || record.outcome === "fetch_error";
+}
+
+/**
+ * @param {NonNullable<ReturnType<typeof detectMoneyPathRegression>>} regression
+ * @returns {string}
+ */
+export function formatMoneyPathIssueBody(regression) {
+  const lines = [
+    `Money-path availability regression: a money-path URL (the /search selected-result step or an /ads/:domain page) returned non-200 ${regression.minFailures}x within ${Math.round(regression.windowMs / 60_000)} minutes. A first-time evaluator hitting the result step at the moment of maximum intent sees a dead end.`,
+    "",
+    "| path | run_at | status | location |",
+    "|---|---|---|---|",
+  ];
+  for (const incident of regression.incidents) {
+    for (const failure of incident.failures) {
+      lines.push(
+        `| ${incident.path} | ${failure.runAt} | ${failure.status ?? "unreachable"} | ${failure.location || "(none)"} |`,
+      );
+    }
+  }
+  lines.push("");
+  lines.push("Relates to #2001");
+  return lines.join("\n");
+}
+
+/**
  * @param {string} repo
  * @param {string} title
  * @param {string} body
@@ -334,12 +497,14 @@ function openIssue(repo, title, body, dryRun) {
 
 /**
  * @param {string[]} argv
- * @returns {{ runsCsv: string, authCsv: string, repo: string, thresholdMs: number, dryRun: boolean, json: boolean }}
+ * @returns {{ runsCsv: string, authCsv: string, moneyPathCsv: string, repo: string, thresholdMs: number, dryRun: boolean, json: boolean }}
  */
 function parseCliArgs(argv) {
   const parsed = {
     runsCsv: "",
     authCsv: "",
+    moneyPathCsv: "",
+    moneyPathStateFile: "",
     repo: DEFAULT_REPO,
     thresholdMs: DEFAULT_THRESHOLD_MS,
     dryRun: false,
@@ -354,6 +519,16 @@ function parseCliArgs(argv) {
     }
     if (arg === "--auth-csv" && argv[i + 1]) {
       parsed.authCsv = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === "--money-path-csv" && argv[i + 1]) {
+      parsed.moneyPathCsv = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === "--money-path-state-file" && argv[i + 1]) {
+      parsed.moneyPathStateFile = argv[i + 1];
       i += 1;
       continue;
     }
@@ -383,11 +558,98 @@ const invokedDirectly =
   process.argv[1] !== undefined &&
   fileURLToPath(import.meta.url) === process.argv[1];
 
+/**
+ * Read the money-path dedupe state ({path: last-filed failure runAt}). When
+ * a guard run is missed (reboot, Persistent catch-up collapse), a red run
+ * longer than the window would otherwise be silently skipped as
+ * "already reported" — the state file is what makes filing idempotent
+ * without that assumption.
+ * @param {string | undefined} stateFile
+ * @returns {Record<string, string>}
+ */
+function readMoneyPathState(stateFile) {
+  if (!stateFile || !existsSync(stateFile)) return {};
+  try {
+    const parsed = JSON.parse(readFileSync(stateFile, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+/**
+ * Persist the dedupe state after a successful (non-dry-run) filing.
+ * @param {string | undefined} stateFile
+ * @param {Record<string, string>} state
+ */
+function writeMoneyPathState(stateFile, state) {
+  if (!stateFile) return;
+  try {
+    writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  } catch (_error) {
+    // A state write failure must never fail the guard run itself: worst
+    // case the next incident files a duplicate issue.
+  }
+}
+
 async function main() {
   const args = parseCliArgs(process.argv.slice(2));
-  if (!args.runsCsv && !args.authCsv) {
-    console.error("search-latency-regression-guard: --runs-csv (or --auth-csv) is required");
+  if (!args.runsCsv && !args.authCsv && !args.moneyPathCsv) {
+    console.error(
+      "search-latency-regression-guard: --runs-csv (or --auth-csv or --money-path-csv) is required",
+    );
     process.exit(2);
+  }
+
+  // Money-path guard (issue #2001) runs first so a money-path flap files
+  // even when other CSV args are absent (the money-path-only timer mode).
+  if (args.moneyPathCsv) {
+    const moneyRegression = detectMoneyPathRegression(
+      parseMoneyPathRecords(args.moneyPathCsv),
+    );
+    const stateFile = args.moneyPathStateFile || null;
+    let filedThisRun = false;
+    if (moneyRegression) {
+      // Idempotent filing: skip a path whose incident was already filed at
+      // or beyond its last failure sample. A missed guard run still files
+      // (the red run is no longer assumed "already reported"); a flap the
+      // previous guard run did file does not duplicate.
+      const state = readMoneyPathState(stateFile);
+      const incidents = filterUnfiledIncidents(moneyRegression, state);
+      if (incidents.length > 0) {
+        const filteredRegression = { ...moneyRegression, incidents };
+        const created = openIssue(
+          args.repo,
+          filteredRegression.title,
+          formatMoneyPathIssueBody(filteredRegression),
+          args.dryRun,
+        );
+        if (!args.dryRun) {
+          for (const incident of incidents) {
+            state[incident.path] = incident.failures[incident.failures.length - 1].runAt;
+          }
+          writeMoneyPathState(stateFile, state);
+        }
+        filedThisRun = true;
+        if (args.json) {
+          process.stdout.write(
+            `${JSON.stringify({ fired: true, title: filteredRegression.title, created: created ? created.trim() : null })}\n`,
+          );
+        } else {
+          process.stdout.write(
+            `search-latency-regression-guard: ${filteredRegression.title}\n`,
+          );
+        }
+      }
+    }
+    if (!filedThisRun && !args.runsCsv && !args.authCsv) {
+      if (args.json) {
+        process.stdout.write(`${JSON.stringify({ fired: false })}\n`);
+      } else {
+        process.stdout.write("search-latency-regression-guard: no regression\n");
+      }
+      return;
+    }
   }
 
   const runs = args.runsCsv ? parseRuns(args.runsCsv) : [];

@@ -1,0 +1,23 @@
+[Unit]
+Description=0509 money-path availability canary (/search result step + /ads cohort)
+Documentation=https://github.com/Nishfleet/0509
+# Independent of GitHub Actions (whose 5-minute cron fires about once an hour
+# in practice): the money-path detector must capture a non-200 twice within
+# 10 minutes, which needs a true 5-minute cadence.
+
+[Service]
+Type=oneshot
+# Auto-files a GitHub issue on a regression, so it runs as the nish user
+# (owner of the ambient `gh` auth). Needs no Cloudflare token.
+User=nish
+Group=nish
+ExecStart=/opt/0509-money-path-canary/0509-money-path-canary-run.sh
+# Result URL + 3 /ads URLs, each with a 30s cap and 1s spacing: one slot is
+# plenty; the guard's gh call adds seconds.
+TimeoutStartSec=300
+# A red canary must leave the unit failed for watchers; do not restart into
+# a tight failure loop.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

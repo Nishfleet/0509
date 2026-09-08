@@ -52,6 +52,11 @@
  */
 
 import { Link, redirect, useLoaderData } from "react-router";
+
+// Issue #2001 — a single transient D1/KV read hiccup used to surface as a
+// spurious cache-miss 301 (or a 500) on the money-path /ads/:domain step.
+// The bounded retry gives one extra attempt before the miss/redirect path.
+import { withTransientRetry } from "~/lib/transient-retry.server";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useState } from "react";
 
@@ -284,10 +289,12 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   }
 
   try {
-    snapshot = await loadBrandPageCacheSnapshot(env, {
-      domain: brand.domain,
-      visitorCountry,
-    });
+    snapshot = await withTransientRetry(() =>
+      loadBrandPageCacheSnapshot(env, {
+        domain: brand.domain,
+        visitorCountry,
+      }),
+    );
   } catch (error) {
     // A cache-read hiccup must degrade to the redirect below, never a 500 and
     // never a live-provider fallback.
