@@ -47,6 +47,7 @@ vi.mock("~/lib/landing-pages.server", () => ({
 // Mock at the adapter boundary (wraps `loadIndexableTimelineEntries`).
 vi.mock("~/lib/sitemap.server", () => ({
   loadIndexableTimelineEntries,
+  loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([]),
 }));
 
 afterEach(() => {
