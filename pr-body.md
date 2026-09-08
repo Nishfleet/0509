@@ -92,8 +92,12 @@ Not applicable — no new `bin/` files added.
 ### Salvage resume (fleet-ops#1204)
 
 Work resumed from the banked `wip/pi-issue-0509-2022-20260908T215253Z` state and
-re-verified end to end by a fresh run: `vitest --project node` 621 files /
-7430 tests green, `vitest --project workers` 41 files / 202 tests green,
+re-verified end to end by a fresh run. The branch was then rebased onto the
+moved `origin/main` (`fe534bbc`, PRs #2035/#2036/#2038 landed mid-flight; the
+new `/no-phantom-changes` registry entries from #2026 were kept and the
+methodology canonical switched to `/methodology` in the same resolution), and
+the full suite re-ran to green on the rebased head: `vitest --project node`
+7439 tests green, `vitest --project workers` 202 tests green,
 `react-router typegen` clean, `sgscan` no new findings, all PR-body gates
 (prove-one-run-check, fleet-exec-review-canary, fleet-no-agent-names-check,
 fleet-rebuild-verify-check, fleet-token-efficiency-check,
