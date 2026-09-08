@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DAILY_DIGEST_CRON,
   DISCOVERY_WARMUP_CRON,
+  REGULAR_MONITORING_CRON,
   WEEKLY_DIGEST_CRON,
 } from "../workers/schedule";
 
@@ -749,7 +750,10 @@ describe("Worker scheduled handler", () => {
   });
 
   it("does not run the sitemap-timeline backfill on the 3-hour or weekly crons (issue #1958)", async () => {
-    for (const cron of [WARMUP_CRON, NORMAL_CRON]) {
+    // The literal 3-hourly and weekly crons rather than the warmup/hourly
+    // surrogates: the daily rail must be the ONLY rail that runs the
+    // nightly sitemap-timeline backfill (issue #1958, phase 5).
+    for (const cron of [REGULAR_MONITORING_CRON, WEEKLY_DIGEST_CRON]) {
       const loaded = await loadWorker();
       const { ctx, pending } = createContext();
       await loaded.worker.scheduled(
