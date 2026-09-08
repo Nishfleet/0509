@@ -1,0 +1,321 @@
+name: D1 remote restore evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact main commit authorized for remote restore evidence
+        required: true
+        type: string
+      operation:
+        description: Explicit production operation for this manual run
+        required: true
+        type: choice
+        options:
+          - apply_and_restore
+  push:
+    # Every push to main produces fresh, exact-commit evidence for the commit
+    # that just landed. The deploy gate's fresh-exact-24h policy refuses
+    # anything older than 24h, and refuses to match a different commit even
+    # when the migration ledger and the workflow shape are unchanged. A daily
+    # 02:17 IST schedule (below) therefore still leaves a race window: a push
+    # at 02:18 IST waits 24h for the next schedule, and any deploy of that
+    # commit in between is blocked even though the schema has not moved. A
+    # push trigger closes that window commit-by-commit.
+    #
+    # Same low-traffic design as schedule: the restore job queues behind any
+    # running deploy in the shared 0509-production-provider-mutations
+    # concurrency group, so the only contention is the export itself, which
+    # is the operation already in the schedule. The 4m32s measured drill is
+    # the cost per push; with main advancing about 12 commits per day the
+    # provider lane is occupied for roughly an hour a day. That is the cost
+    # of removing the 24h race window without weakening the gate.
+    #
+    # The push branch and the existing 02:17 IST schedule intentionally
+    # overlap: the schedule is the safety net for any day no push lands, and
+    # the push branch is what makes a deploy of a just-merged commit able to
+    # pass without first waiting for the next schedule.
+    branches: [main]
+  schedule:
+    # Daily, 02:17 IST - the same low-traffic window the twice-weekly schedule
+    # used, now every night (Nish, 2026-08-07).
+    #
+    # Twice weekly left restore evidence stale for most of the week. Evidence is
+    # only accepted while it is under 24h old for a migration- or
+    # restore-critical release, so a Tuesday schema change had no valid proof
+    # and the release stopped. On 2026-08-06 that stranded 14 merged changes for
+    # a day and needed a hand-dispatched drill to clear.
+    #
+    # A nightly drill also closes a quieter gap: this workflow's export is the
+    # only thing currently writing to backups/d1/ in R2. d1-backup-r2.yml is
+    # workflow_dispatch-only with no schedule, and its last runs failed on
+    # 2026-07-30 - so backup cadence has in practice been drill cadence.
+    - cron: "47 20 * * *"
+
+concurrency:
+  group: 0509-production-provider-mutations
+  cancel-in-progress: false
+  queue: max
+
+permissions:
+  contents: read
+
+jobs:
+  authorize_release:
+    name: Authorize exact restore candidate
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      sha: ${{ steps.authorize.outputs.sha }}
+    steps:
+      - name: Authorize restore request
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          OPERATION: ${{ inputs.operation || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          # An unattended run (schedule or push to main) backs up whatever
+          # main is and must NOT carry an operator-supplied expected_sha, so
+          # nothing can smuggle a chosen commit into an unattended run. A
+          # manual run still has to name the exact commit and have it match.
+          case "$GITHUB_EVENT_NAME" in
+            schedule|push)
+              test -z "$EXPECTED_SHA"
+              ;;
+            workflow_dispatch)
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              test "$OPERATION" = "apply_and_restore"
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+  apply_and_restore:
+    name: Apply migrations for apply_and_restore
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.operation == 'apply_and_restore' &&
+      needs.authorize_release.result == 'success'
+    needs: authorize_release
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: production
+    env:
+      D1_DATABASE_NAME: "0509"
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
+      PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized apply checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$PINNED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
+      - name: Reconfirm frozen main before pre-migration backup
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance, same rationale as deploy-production.yml's
+          # post-gate reconfirm (#630): this step re-verifies the exact SHA the
+          # authorize step already pinned. A push landing during the run's
+          # npm-ci/lane-acquire window must not abort the unattended nightly
+          # drill - it would leave the night with no fresh restore evidence,
+          # which is exactly what stranded releases on 2026-08-11. The CAS
+          # script records the move loudly; every other CAS failure stays
+          # fail-closed, and the schedule's empty-expected_sha contract in
+          # authorize still forbids smuggling a chosen commit.
+          TOLERATE_MAIN_DRIFT: "1"
+        run: ./scripts/ci-verify-provider-main-cas.sh
+      - name: Create pre-migration D1-to-R2 backup
+        id: pre_migration_backup
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
+        run: node scripts/d1-backup-to-r2.mjs
+      - name: Remove run-scoped plaintext backup files
+        if: always()
+        run: node scripts/d1-backup-local-cleanup.mjs
+      - name: Reconfirm frozen main before migration apply
+        if: success() && steps.pre_migration_backup.outcome == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance (same rationale as the step above): the
+          # apply targets exactly the pinned SHA's migrations, so a mid-run
+          # move of main is recorded, not fatal.
+          TOLERATE_MAIN_DRIFT: "1"
+        run: ./scripts/ci-verify-provider-main-cas.sh
+      - name: Apply exact repository migrations remotely
+        if: success() && steps.pre_migration_backup.outcome == 'success'
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_APPLY_AND_RESTORE_AUTOMATION_APPROVED: "0509-apply-and-restore"
+        run: |
+          set -euo pipefail
+          test "$D1_APPLY_AND_RESTORE_AUTOMATION_APPROVED" = "0509-apply-and-restore"
+          npx wrangler d1 migrations apply 0509 --remote
+  restore:
+    if: "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'push' || needs.apply_and_restore.result == 'success')"
+    needs:
+      - authorize_release
+      - apply_and_restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    environment: production
+    env:
+      D1_DATABASE_NAME: "0509"
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
+      PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized restore checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$PINNED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
+      - name: Reconfirm frozen main before restore mutation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Post-pin drift tolerance (same rationale as the apply job's
+          # reconfirms): the restore evidence is generated for exactly the
+          # pinned SHA, so a mid-run move of main is recorded, not fatal.
+          TOLERATE_MAIN_DRIFT: "1"
+        run: ./scripts/ci-verify-provider-main-cas.sh
+      - name: Create fresh backup and prove an isolated remote restore
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
+          D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
+          D1_REMOTE_RESTORE_MAX_SQL_BYTES: ${{ vars.D1_REMOTE_RESTORE_MAX_SQL_BYTES }}
+        run: |
+          set -euo pipefail
+          umask 077
+          node scripts/d1-remote-restore-evidence.mjs \
+            --output test-results/d1-remote-restore-evidence.json
+      - name: Remove run-scoped plaintext backup files
+        if: always()
+        run: node scripts/d1-backup-local-cleanup.mjs
+      - name: Archive permission-preserving restore evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(stat -c '%a' test-results/d1-remote-restore-evidence.json)" = "600"
+          tar --format=posix -czf \
+            "test-results/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz" \
+            -C test-results \
+            d1-remote-restore-evidence.json
+      - name: Preserve private restore evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
+          path: test-results/d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}.tar.gz
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 8
+
+  cleanup:
+    name: Confirm scratch D1 cleanup
+    if: "always() && needs.authorize_release.result == 'success'"
+    needs:
+      - authorize_release
+      - apply_and_restore
+      - restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: production
+    env:
+      PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized cleanup checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$PINNED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: npm ci --ignore-scripts
+      - name: Delete every exact scratch database from this run
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
+        run: node scripts/d1-remote-restore-evidence.mjs --cleanup-only

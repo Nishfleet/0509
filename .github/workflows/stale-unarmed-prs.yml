@@ -1,0 +1,97 @@
+name: Stale unarmed PRs
+
+# GitHub-native replacement for the retired hand-built
+# `fleet-loose-ends-canary` (fleet-ops#4146): flag open PRs that have sat for
+# over 24h without auto-merge armed, so a forgotten PR surfaces instead of
+# drifting. This is a nudge only — it never closes anything
+# (`days-before-close: -1`).
+#
+# Why a pre-step: `actions/stale` cannot see a PR's auto-merge state, so it
+# cannot itself tell an armed PR from an unarmed one. The "Track unarmed PRs"
+# step maintains a small internal marker label (`stale-unarmed-candidate`) on
+# exactly the open PRs that lack auto-merge, and drops it (plus any
+# `stale-unarmed` label) from PRs that are armed. `actions/stale` then runs
+# only over that marked set. The marker is an implementation detail, not a
+# user-facing signal.
+#
+# Label lifecycle:
+#   - `stale-unarmed` is added by actions/stale to a marked PR once it has had
+#     no activity for 24h, together with a comment.
+#   - `remove-stale-when-updated` drops `stale-unarmed` when the PR is updated.
+#   - The pre-step drops both labels from a PR the moment it is auto-merge
+#     armed (checked on every run, so at most one 12h window of staleness).
+
+on:
+  schedule:
+    # Every 12 hours. Non-zero minute to avoid the top-of-hour burst.
+    - cron: "17 */12 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: stale-unarmed-prs
+  cancel-in-progress: true
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Track unarmed PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="${{ github.repository }}"
+          # Ensure both labels exist. `gh pr edit --add-label` / `--remove-label`
+          # fail when the label is not in the repo, so create them first
+          # (idempotent with --force).
+          gh label create stale-unarmed --repo "$repo" \
+            --color fbca04 --description "Open PR >24h without auto-merge armed" --force >/dev/null
+          gh label create stale-unarmed-candidate --repo "$repo" \
+            --color d4c5f9 --description "Internal tracking marker for the stale-unarmed workflow" --force >/dev/null
+          # Maintain the marker on exactly the open PRs without auto-merge.
+          # `gh pr edit --add-label` / `--remove-label` are idempotent (adding
+          # an existing label and removing a missing one are both no-ops), so
+          # no presence check is needed. --limit 1000 so no open PR is skipped
+          # (gh pr list defaults to 30, newest first — the oldest, most stale
+          # PRs would be the ones dropped).
+          gh pr list --repo "$repo" --state open --limit 1000 \
+            --json number,autoMergeRequest \
+            --jq '.[] | "\(.number)\t\(.autoMergeRequest != null)"' |
+          while IFS=$'\t' read -r num armed; do
+            if [ "$armed" = "true" ]; then
+              gh pr edit "$num" --repo "$repo" --remove-label stale-unarmed >/dev/null
+              gh pr edit "$num" --repo "$repo" --remove-label stale-unarmed-candidate >/dev/null
+            else
+              gh pr edit "$num" --repo "$repo" --add-label stale-unarmed-candidate >/dev/null
+            fi
+          done
+
+      - name: Mark stale unarmed PRs
+        uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          repo-token: ${{ github.token }}
+          # Restrict to PRs: never mark issues stale, mark PRs after 1 day of
+          # inactivity. (`only-issue-types` filters GitHub issue *types*, not
+          # PR-vs-issue, so it cannot restrict the run to PRs.)
+          days-before-issue-stale: -1
+          days-before-pr-stale: 1
+          days-before-close: -1
+          only-pr-labels: stale-unarmed-candidate
+          exempt-draft-pr: true
+          exempt-pr-labels: no-auto-merge
+          stale-pr-label: stale-unarmed
+          stale-pr-message: |
+            This PR has had no activity for over 24 hours and does not have
+            auto-merge armed.
+
+            If it is ready, arm auto-merge so it lands when its checks pass.
+            If it is still in progress or deliberately waiting, no action is
+            needed — this is just a nudge. The PR will not be closed
+            automatically.
+          remove-stale-when-updated: true
+          operations-per-run: 100
