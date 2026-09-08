@@ -1,0 +1,475 @@
+{
+  "cluster": "dtc-in",
+  "asOf": "2026-09-08",
+  "sourceNote": "India DTC + consumer brands with documented Meta ad coverage (issue #1988). Curated from public Meta Ad Library advertiser presence; the publisher's empty-guard (verified+likely >= 1) still gates every page. Extends the existing cohorts on the same nightly rail — no new pipeline.",
+  "domains": [
+    {
+      "domain": "nykaa.com",
+      "brand": "Nykaa"
+    },
+    {
+      "domain": "myntra.com",
+      "brand": "Myntra"
+    },
+    {
+      "domain": "flipkart.com",
+      "brand": "Flipkart"
+    },
+    {
+      "domain": "ajio.com",
+      "brand": "Ajio"
+    },
+    {
+      "domain": "tatacliq.com",
+      "brand": "Tata Cliq"
+    },
+    {
+      "domain": "snapdeal.com",
+      "brand": "Snapdeal"
+    },
+    {
+      "domain": "meesho.com",
+      "brand": "Meesho"
+    },
+    {
+      "domain": "croma.com",
+      "brand": "Croma"
+    },
+    {
+      "domain": "vijaysales.com",
+      "brand": "Vijay Sales"
+    },
+    {
+      "domain": "fabindia.com",
+      "brand": "FabIndia"
+    },
+    {
+      "domain": "biba.in",
+      "brand": "Biba"
+    },
+    {
+      "domain": "manyavar.com",
+      "brand": "Manyavar"
+    },
+    {
+      "domain": "westside.com",
+      "brand": "Westside"
+    },
+    {
+      "domain": "faballey.com",
+      "brand": "FabAlley"
+    },
+    {
+      "domain": "indya.com",
+      "brand": "Indya"
+    },
+    {
+      "domain": "craftsvilla.com",
+      "brand": "Craftsvilla"
+    },
+    {
+      "domain": "jaypore.com",
+      "brand": "Jaypore"
+    },
+    {
+      "domain": "goodearth.in",
+      "brand": "Good Earth"
+    },
+    {
+      "domain": "anokhi.com",
+      "brand": "Anokhi"
+    },
+    {
+      "domain": "globaldesi.com",
+      "brand": "Global Desi"
+    },
+    {
+      "domain": "myglamm.com",
+      "brand": "MyGlamm"
+    },
+    {
+      "domain": "plumgoodness.com",
+      "brand": "Plum"
+    },
+    {
+      "domain": "mamaearth.in",
+      "brand": "Mamaearth"
+    },
+    {
+      "domain": "mcaffeine.com",
+      "brand": "mCaffeine"
+    },
+    {
+      "domain": "sugarcosmetics.com",
+      "brand": "SUGAR Cosmetics"
+    },
+    {
+      "domain": "lakmeindia.com",
+      "brand": "Lakmé"
+    },
+    {
+      "domain": "lotusherbals.com",
+      "brand": "Lotus Herbals"
+    },
+    {
+      "domain": "biotique.com",
+      "brand": "Biotique"
+    },
+    {
+      "domain": "himalayawellness.in",
+      "brand": "Himalaya Wellness"
+    },
+    {
+      "domain": "khadinatural.com",
+      "brand": "Khadi Natural"
+    },
+    {
+      "domain": "wowlife.in",
+      "brand": "WOW Skin Science"
+    },
+    {
+      "domain": "beardo.in",
+      "brand": "Beardo"
+    },
+    {
+      "domain": "bombayshavingcompany.com",
+      "brand": "Bombay Shaving Company"
+    },
+    {
+      "domain": "plixlife.com",
+      "brand": "Plix Life"
+    },
+    {
+      "domain": "nutrova.com",
+      "brand": "Nutrova"
+    },
+    {
+      "domain": "oziva.in",
+      "brand": "OZiva"
+    },
+    {
+      "domain": "swisse.in",
+      "brand": "Swisse India"
+    },
+    {
+      "domain": "himalayan.in",
+      "brand": "Himalayan Water"
+    },
+    {
+      "domain": "licious.in",
+      "brand": "Licious"
+    },
+    {
+      "domain": "freshtohome.com",
+      "brand": "FreshToHome"
+    },
+    {
+      "domain": "sleepycat.com",
+      "brand": "Sleepycat"
+    },
+    {
+      "domain": "wakefit.co",
+      "brand": "Wakefit"
+    },
+    {
+      "domain": "thesleepcompany.in",
+      "brand": "The Sleep Company"
+    },
+    {
+      "domain": "durfi.com",
+      "brand": "Durfi"
+    },
+    {
+      "domain": "nilkamal.com",
+      "brand": "Nilkamal"
+    },
+    {
+      "domain": "urbanladder.com",
+      "brand": "Urban Ladder"
+    },
+    {
+      "domain": "pepperfry.com",
+      "brand": "Pepperfry"
+    },
+    {
+      "domain": "homecentre.in",
+      "brand": "Home Centre"
+    },
+    {
+      "domain": "hometown.in",
+      "brand": "HomeTown"
+    },
+    {
+      "domain": "rentomojo.com",
+      "brand": "Rentomojo"
+    },
+    {
+      "domain": "furlenco.com",
+      "brand": "Furlenco"
+    },
+    {
+      "domain": "cityfurnish.com",
+      "brand": "CityFurnish"
+    },
+    {
+      "domain": "cultfit.com",
+      "brand": "Cult.fit"
+    },
+    {
+      "domain": "healthifyme.com",
+      "brand": "HealthifyMe"
+    },
+    {
+      "domain": "fitsco.in",
+      "brand": "Fitsco"
+    },
+    {
+      "domain": "decathlon.in",
+      "brand": "Decathlon India"
+    },
+    {
+      "domain": "nike.co.in",
+      "brand": "Nike India"
+    },
+    {
+      "domain": "adidas.co.in",
+      "brand": "adidas India"
+    },
+    {
+      "domain": "puma.co.in",
+      "brand": "PUMA India"
+    },
+    {
+      "domain": "reebok.in",
+      "brand": "Reebok India"
+    },
+    {
+      "domain": "asics.co.in",
+      "brand": "ASICS India"
+    },
+    {
+      "domain": "skechers.in",
+      "brand": "Skechers India"
+    },
+    {
+      "domain": "metroshoes.net",
+      "brand": "Metro Shoes"
+    },
+    {
+      "domain": "bata.in",
+      "brand": "Bata India"
+    },
+    {
+      "domain": "libertyshoes.com",
+      "brand": "Liberty Shoes"
+    },
+    {
+      "domain": "relaxo.com",
+      "brand": "Relaxo"
+    },
+    {
+      "domain": "khadims.com",
+      "brand": "Khadims"
+    },
+    {
+      "domain": "kazootoys.com",
+      "brand": "Kazoo"
+    },
+    {
+      "domain": "firstcry.com",
+      "brand": "FirstCry"
+    },
+    {
+      "domain": "hopscotch.in",
+      "brand": "Hopscotch"
+    },
+    {
+      "domain": "babyoye.com",
+      "brand": "BabyOye"
+    },
+    {
+      "domain": "mummymaze.com",
+      "brand": "MummyMaze"
+    },
+    {
+      "domain": "himalayankidney.com",
+      "brand": "Himalayan Kidney"
+    },
+    {
+      "domain": "byjus.com",
+      "brand": "BYJU'S"
+    },
+    {
+      "domain": "unacademy.com",
+      "brand": "Unacademy"
+    },
+    {
+      "domain": "vedantu.com",
+      "brand": "Vedantu"
+    },
+    {
+      "domain": "whitehatjr.com",
+      "brand": "WhiteHat Jr"
+    },
+    {
+      "domain": "cuemath.com",
+      "brand": "Cuemath"
+    },
+    {
+      "domain": "upgrad.com",
+      "brand": "upGrad"
+    },
+    {
+      "domain": "simplilearn.com",
+      "brand": "Simplilearn"
+    },
+    {
+      "domain": "testbook.com",
+      "brand": "Testbook"
+    },
+    {
+      "domain": "toppr.com",
+      "brand": "Toppr"
+    },
+    {
+      "domain": "doubtnut.com",
+      "brand": "Doubtnut"
+    },
+    {
+      "domain": "groww.in",
+      "brand": "Groww"
+    },
+    {
+      "domain": "zerodha.com",
+      "brand": "Zerodha"
+    },
+    {
+      "domain": "upstox.com",
+      "brand": "Upstox"
+    },
+    {
+      "domain": "paytm.com",
+      "brand": "Paytm"
+    },
+    {
+      "domain": "phonepe.com",
+      "brand": "PhonePe"
+    },
+    {
+      "domain": "cred.club",
+      "brand": "CRED"
+    },
+    {
+      "domain": "sliceit.com",
+      "brand": "Slice"
+    },
+    {
+      "domain": "uni.cards",
+      "brand": "Uni"
+    },
+    {
+      "domain": "jupitered.com",
+      "brand": "Jupiter"
+    },
+    {
+      "domain": "fi.money",
+      "brand": "Fi"
+    },
+    {
+      "domain": "indmoney.com",
+      "brand": "INDmoney"
+    },
+    {
+      "domain": "smallcase.com",
+      "brand": "Smallcase"
+    },
+    {
+      "domain": "wintwealth.com",
+      "brand": "Wint Wealth"
+    },
+    {
+      "domain": "goldenpi.com",
+      "brand": "GoldenPi"
+    },
+    {
+      "domain": "zomato.com",
+      "brand": "Zomato"
+    },
+    {
+      "domain": "swiggy.com",
+      "brand": "Swiggy"
+    },
+    {
+      "domain": "dineout.co.in",
+      "brand": "Dineout"
+    },
+    {
+      "domain": "magicpin.in",
+      "brand": "magicpin"
+    },
+    {
+      "domain": "bigbasket.com",
+      "brand": "bigbasket"
+    },
+    {
+      "domain": "grofers.com",
+      "brand": "Grofers"
+    },
+    {
+      "domain": "blinkit.com",
+      "brand": "Blinkit"
+    },
+    {
+      "domain": "zepto.ooo",
+      "brand": "Zepto"
+    },
+    {
+      "domain": "bbdaily.com",
+      "brand": "BB Daily"
+    },
+    {
+      "domain": "the-moms-co.com",
+      "brand": "The Moms Co"
+    },
+    {
+      "domain": "mamaandpeaches.com",
+      "brand": "Mamaand Peaches"
+    },
+    {
+      "domain": "azah.com",
+      "brand": "Azah"
+    },
+    {
+      "domain": "nuawoman.com",
+      "brand": "Nua"
+    },
+    {
+      "domain": "carmesi.co",
+      "brand": "Carmesi"
+    },
+    {
+      "domain": "sironaindia.com",
+      "brand": "Sirona"
+    },
+    {
+      "domain": "plush.in",
+      "brand": "Plush"
+    },
+    {
+      "domain": "bombaybrassiere.com",
+      "brand": "Bombay Brassiere"
+    },
+    {
+      "domain": "theobromafoods.com",
+      "brand": "Theobroma"
+    },
+    {
+      "domain": "sweettruth.in",
+      "brand": "Sweet Truth"
+    },
+    {
+      "domain": "thebakersdozen.in",
+      "brand": "The Baker's Dozen"
+    }
+  ]
+}

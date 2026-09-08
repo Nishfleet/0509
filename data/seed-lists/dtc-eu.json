@@ -1,0 +1,451 @@
+{
+  "cluster": "dtc-eu",
+  "asOf": "2026-09-08",
+  "sourceNote": "EU DTC + consumer brands with documented Meta ad coverage (issue #1988). Curated from public Meta Ad Library advertiser presence; the publisher's empty-guard (verified+likely >= 1) still gates every page. Extends the existing cohorts on the same nightly rail — no new pipeline.",
+  "domains": [
+    {
+      "domain": "asos.com",
+      "brand": "ASOS"
+    },
+    {
+      "domain": "boohoo.com",
+      "brand": "boohoo"
+    },
+    {
+      "domain": "prettylittlething.com",
+      "brand": "PrettyLittleThing"
+    },
+    {
+      "domain": "missguided.co.uk",
+      "brand": "Missguided"
+    },
+    {
+      "domain": "namshi.com",
+      "brand": "Namshi"
+    },
+    {
+      "domain": "zalando.com",
+      "brand": "Zalando"
+    },
+    {
+      "domain": "aboutyou.com",
+      "brand": "ABOUT YOU"
+    },
+    {
+      "domain": "mango.com",
+      "brand": "Mango"
+    },
+    {
+      "domain": "massimodutti.com",
+      "brand": "Massimo Dutti"
+    },
+    {
+      "domain": "pullandbear.com",
+      "brand": "Pull&Bear"
+    },
+    {
+      "domain": "bershka.com",
+      "brand": "Bershka"
+    },
+    {
+      "domain": "stradivarius.com",
+      "brand": "Stradivarius"
+    },
+    {
+      "domain": "oysho.com",
+      "brand": "Oysho"
+    },
+    {
+      "domain": "decathlon.com",
+      "brand": "Decathlon"
+    },
+    {
+      "domain": "sportsdirect.com",
+      "brand": "Sports Direct"
+    },
+    {
+      "domain": "schuh.co.uk",
+      "brand": "Schuh"
+    },
+    {
+      "domain": "size.co.uk",
+      "brand": "size?"
+    },
+    {
+      "domain": "spacenk.com",
+      "brand": "Space NK"
+    },
+    {
+      "domain": "lookfantastic.com",
+      "brand": "Lookfantastic"
+    },
+    {
+      "domain": "cultbeauty.com",
+      "brand": "Cult Beauty"
+    },
+    {
+      "domain": "beautybay.com",
+      "brand": "Beauty Bay"
+    },
+    {
+      "domain": "superdrug.com",
+      "brand": "Superdrug"
+    },
+    {
+      "domain": "boots.com",
+      "brand": "Boots"
+    },
+    {
+      "domain": "thebodyshop.com",
+      "brand": "The Body Shop"
+    },
+    {
+      "domain": "lush.com",
+      "brand": "Lush"
+    },
+    {
+      "domain": "rituals.com",
+      "brand": "Rituals"
+    },
+    {
+      "domain": "nuxe.com",
+      "brand": "Nuxe"
+    },
+    {
+      "domain": "caudalie.com",
+      "brand": "Caudalie"
+    },
+    {
+      "domain": "bioderma.com",
+      "brand": "Bioderma"
+    },
+    {
+      "domain": "laroche-posay.com",
+      "brand": "La Roche-Posay"
+    },
+    {
+      "domain": "vichy.com",
+      "brand": "Vichy"
+    },
+    {
+      "domain": "clinique.com",
+      "brand": "Clinique"
+    },
+    {
+      "domain": "esteelauder.com",
+      "brand": "Estée Lauder"
+    },
+    {
+      "domain": "lancome.com",
+      "brand": "Lancôme"
+    },
+    {
+      "domain": "yslbeauty.com",
+      "brand": "YSL Beauty"
+    },
+    {
+      "domain": "dior.com",
+      "brand": "Dior"
+    },
+    {
+      "domain": "chanel.com",
+      "brand": "Chanel"
+    },
+    {
+      "domain": "guerlain.com",
+      "brand": "Guerlain"
+    },
+    {
+      "domain": "clarins.com",
+      "brand": "Clarins"
+    },
+    {
+      "domain": "sensilis.com",
+      "brand": "Sensilis"
+    },
+    {
+      "domain": "isdin.com",
+      "brand": "ISDIN"
+    },
+    {
+      "domain": "cantabrialabs.com",
+      "brand": "Cantabria Labs"
+    },
+    {
+      "domain": "sebamed.com",
+      "brand": "Sebamed"
+    },
+    {
+      "domain": "eucerin.com",
+      "brand": "Eucerin"
+    },
+    {
+      "domain": "nivea.com",
+      "brand": "Nivea"
+    },
+    {
+      "domain": "beiersdorf.com",
+      "brand": "Beiersdorf"
+    },
+    {
+      "domain": "weleda.com",
+      "brand": "Weleda"
+    },
+    {
+      "domain": "avene.com",
+      "brand": "Avène"
+    },
+    {
+      "domain": "ducray.com",
+      "brand": "Ducray"
+    },
+    {
+      "domain": "pierre-fabre.com",
+      "brand": "Pierre Fabre"
+    },
+    {
+      "domain": "made.com",
+      "brand": "Made.com"
+    },
+    {
+      "domain": "sofa.com",
+      "brand": "Sofa.com"
+    },
+    {
+      "domain": "nest.co.uk",
+      "brand": "Nest.co.uk"
+    },
+    {
+      "domain": "dunelm.com",
+      "brand": "Dunelm"
+    },
+    {
+      "domain": "argos.co.uk",
+      "brand": "Argos"
+    },
+    {
+      "domain": "currys.co.uk",
+      "brand": "Currys"
+    },
+    {
+      "domain": "ao.com",
+      "brand": "AO.com"
+    },
+    {
+      "domain": "johnlewis.com",
+      "brand": "John Lewis"
+    },
+    {
+      "domain": "marksandspencer.com",
+      "brand": "Marks & Spencer"
+    },
+    {
+      "domain": "next.co.uk",
+      "brand": "Next"
+    },
+    {
+      "domain": "debenhams.com",
+      "brand": "Debenhams"
+    },
+    {
+      "domain": "houseoffraser.co.uk",
+      "brand": "House of Fraser"
+    },
+    {
+      "domain": "very.co.uk",
+      "brand": "Very"
+    },
+    {
+      "domain": "littlewoods.com",
+      "brand": "Littlewoods"
+    },
+    {
+      "domain": "jdwilliams.com",
+      "brand": "JD Williams"
+    },
+    {
+      "domain": "riverisland.com",
+      "brand": "River Island"
+    },
+    {
+      "domain": "newlook.com",
+      "brand": "New Look"
+    },
+    {
+      "domain": "primark.com",
+      "brand": "Primark"
+    },
+    {
+      "domain": "peacocks.co.uk",
+      "brand": "Peacocks"
+    },
+    {
+      "domain": "bonmarche.co.uk",
+      "brand": "Bonmarché"
+    },
+    {
+      "domain": "wallis.co.uk",
+      "brand": "Wallis"
+    },
+    {
+      "domain": "evans.co.uk",
+      "brand": "Evans"
+    },
+    {
+      "domain": "dorothyperkins.com",
+      "brand": "Dorothy Perkins"
+    },
+    {
+      "domain": "topshop.com",
+      "brand": "Topshop"
+    },
+    {
+      "domain": "topman.com",
+      "brand": "Topman"
+    },
+    {
+      "domain": "burton.co.uk",
+      "brand": "Burton"
+    },
+    {
+      "domain": "missselfridge.com",
+      "brand": "Miss Selfridge"
+    },
+    {
+      "domain": "superdry.com",
+      "brand": "Superdry"
+    },
+    {
+      "domain": "jackwills.com",
+      "brand": "Jack Wills"
+    },
+    {
+      "domain": "fatface.com",
+      "brand": "FatFace"
+    },
+    {
+      "domain": "whitecompany.com",
+      "brand": "The White Company"
+    },
+    {
+      "domain": "sweatybetty.com",
+      "brand": "Sweaty Betty"
+    },
+    {
+      "domain": "net-a-porter.com",
+      "brand": "Net-a-Porter"
+    },
+    {
+      "domain": "matchesfashion.com",
+      "brand": "MatchesFashion"
+    },
+    {
+      "domain": "mytheresa.com",
+      "brand": "Mytheresa"
+    },
+    {
+      "domain": "farfetch.com",
+      "brand": "Farfetch"
+    },
+    {
+      "domain": "ssense.com",
+      "brand": "SSENSE"
+    },
+    {
+      "domain": "endclothing.com",
+      "brand": "END."
+    },
+    {
+      "domain": "mrporter.com",
+      "brand": "MR PORTER"
+    },
+    {
+      "domain": "oakley.com",
+      "brand": "Oakley"
+    },
+    {
+      "domain": "ray-ban.com",
+      "brand": "Ray-Ban"
+    },
+    {
+      "domain": "persol.com",
+      "brand": "Persol"
+    },
+    {
+      "domain": "oliverpeoples.com",
+      "brand": "Oliver Peoples"
+    },
+    {
+      "domain": "vans.eu",
+      "brand": "Vans EU"
+    },
+    {
+      "domain": "timberland.com",
+      "brand": "Timberland"
+    },
+    {
+      "domain": "drmartens.com",
+      "brand": "Dr. Martens"
+    },
+    {
+      "domain": "clarks.com",
+      "brand": "Clarks"
+    },
+    {
+      "domain": "ecco.com",
+      "brand": "ECCO"
+    },
+    {
+      "domain": "geox.com",
+      "brand": "Geox"
+    },
+    {
+      "domain": "loake.com",
+      "brand": "Loake"
+    },
+    {
+      "domain": "church-footwear.com",
+      "brand": "Church's"
+    },
+    {
+      "domain": "camper.com",
+      "brand": "Camper"
+    },
+    {
+      "domain": "birkenstock.com",
+      "brand": "Birkenstock"
+    },
+    {
+      "domain": "superga.com",
+      "brand": "Superga"
+    },
+    {
+      "domain": "toms.com",
+      "brand": "TOMS"
+    },
+    {
+      "domain": "ugg.com",
+      "brand": "UGG"
+    },
+    {
+      "domain": "hunterboots.com",
+      "brand": "Hunter"
+    },
+    {
+      "domain": "barbour.com",
+      "brand": "Barbour"
+    },
+    {
+      "domain": "belstaff.com",
+      "brand": "Belstaff"
+    },
+    {
+      "domain": "aquascutum.com",
+      "brand": "Aquascutum"
+    },
+    {
+      "domain": "burberry.com",
+      "brand": "Burberry"
+    }
+  ]
+}
