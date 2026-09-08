@@ -1365,7 +1365,10 @@ function BrandAdsResults({
             <span className="f9-ads-hl">Be the first to know.</span>
           </h2>
           <div className="f9-ads-closer-cta">
-            <Link className="f9-ads-watch-btn" to={signupPath}>
+            {/* Issue #2051: the closer carries the same competitor prefill
+                href as the hero CTA — identical labels must behave
+                identically (judge finding, PR #2063). */}
+            <Link className="f9-ads-watch-btn" to={trackSignupPath}>
               {`${watchLabel} →`}
             </Link>
             <Link className="f9-ads-ghost" to={liveSearchPath}>
