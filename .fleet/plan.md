@@ -105,7 +105,7 @@ transition.
 - `OfferLedgerEntry` consumers beyond the four named files (search for
   `transition:`/`OfferLedgerEntry` usages) must not break from the new optional
   `suppressedReason` field; it is optional to keep back-compat.
-- [ ] phase 6: Base the transition gate AND the before/after diff on the last
+- [x] phase 6: Base the transition gate AND the before/after diff on the last
   NON-suppressed emitted entry, never a suppressed one, so a later same-region
   capture can never diff against a suppressed (cookie-banner / "—") state and
   reintroduce a phantom "price restored from —"-style transition. Add a test
