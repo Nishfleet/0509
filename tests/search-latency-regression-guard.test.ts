@@ -7,10 +7,14 @@ import {
   DEFAULT_THRESHOLD_MS,
   detectRegression,
   detectAuthRegression,
+  detectMoneyPathRegression,
+  filterUnfiledIncidents,
   formatIssueBody,
   formatAuthIssueBody,
+  formatMoneyPathIssueBody,
   parseRuns,
   parseAuthRecords,
+  parseMoneyPathRecords,
 } from "../scripts/search-latency-regression-guard.mjs";
 import {
   detectFirstValueRegression,
@@ -373,5 +377,155 @@ describe("search.latency.regression.guard", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+describe("search.latency.regression.guard: money-path canary (issue #2001)", () => {
+  const moneyRecord = (runAt: string, path: string, status: number | null, location = "") => ({
+    runAt,
+    path,
+    status,
+    location,
+    outcome: status == null ? "fetch_error" : status === 200 ? "ok" : "error",
+  });
+
+  it("fires when a money-path URL returns 500 twice within 10 minutes", () => {
+    const records = [
+      moneyRecord("2026-09-08T13:50:00Z", "/search?mode=advertiser&selected=1702938977100376", 200),
+      moneyRecord("2026-09-08T13:55:00Z", "/search?mode=advertiser&selected=1702938977100376", 500),
+      moneyRecord("2026-09-08T14:00:00Z", "/search?mode=advertiser&selected=1702938977100376", 500),
+    ];
+    const regression = detectMoneyPathRegression(records);
+    expect(regression).not.toBeNull();
+    expect(regression!.incidents).toHaveLength(1);
+    expect(regression!.incidents[0]!.failures).toHaveLength(2);
+    expect(regression!.incidents[0]!.previous!.status).toBe(200);
+  });
+
+  it("fires on the spurious empty-Location 301 on an /ads cohort page", () => {
+    const records = [
+      moneyRecord("2026-09-08T13:50:00Z", "/ads/walmart.com", 200, "/search?q=walmart.com"),
+      moneyRecord("2026-09-08T13:55:00Z", "/ads/walmart.com", 301, ""),
+      moneyRecord("2026-09-08T14:00:00Z", "/ads/walmart.com", 301, ""),
+    ];
+    const regression = detectMoneyPathRegression(records);
+    expect(regression).not.toBeNull();
+    expect(regression!.incidents[0]!.path).toBe("/ads/walmart.com");
+    expect(regression!.incidents[0]!.failures.every((f) => f.location === "")).toBe(true);
+  });
+
+  it("does not fire on a single non-200 sample (one-off blip)", () => {
+    const records = [
+      moneyRecord("2026-09-08T13:55:00Z", "/search?mode=advertiser&selected=1702938977100376", 500),
+      moneyRecord("2026-09-08T14:00:00Z", "/search?mode=advertiser&selected=1702938977100376", 200),
+    ];
+    expect(detectMoneyPathRegression(records)).toBeNull();
+  });
+
+  it("still fires on a 3-long red run whose start was missed by a skipped guard run", () => {
+    const records = [
+      moneyRecord("2026-09-08T13:45:00Z", "/ads/mailchimp.com", 200),
+      moneyRecord("2026-09-08T13:50:00Z", "/ads/mailchimp.com", 500),
+      moneyRecord("2026-09-08T13:55:00Z", "/ads/mailchimp.com", 500),
+      moneyRecord("2026-09-08T14:00:00Z", "/ads/mailchimp.com", 500),
+    ];
+    const regression = detectMoneyPathRegression(records);
+    expect(regression).not.toBeNull();
+    expect(regression!.incidents[0]!.path).toBe("/ads/mailchimp.com");
+  });
+
+  it("does not fire when the two failures fall outside the 10-minute window", () => {
+    const records = [
+      moneyRecord("2026-09-08T13:40:00Z", "/ads/adobe.com", 500),
+      moneyRecord("2026-09-08T14:00:00Z", "/ads/adobe.com", 500),
+    ];
+    expect(detectMoneyPathRegression(records)).toBeNull();
+  });
+
+  it("detector fires on an ongoing streak; the state filter dedupes an already-filed incident", () => {
+    const records = [
+      moneyRecord("2026-09-08T13:45:00Z", "/ads/canva.com", 500),
+      moneyRecord("2026-09-08T13:50:00Z", "/ads/canva.com", 500),
+      moneyRecord("2026-09-08T13:55:00Z", "/ads/canva.com", 500),
+      moneyRecord("2026-09-08T14:00:00Z", "/ads/canva.com", 500),
+    ];
+    // The detector is a pure flap detector: it fires while the flap runs.
+    const regression = detectMoneyPathRegression(records);
+    expect(regression).not.toBeNull();
+    // Idempotent filing lives in filterUnfiledIncidents: once the guard has
+    // filed this path at or beyond its last failure sample, the incident is
+    // dropped; a NEW failure sample (later runAt) re-arms filing.
+    const filedAt = "2026-09-08T14:00:00Z";
+    expect(
+      filterUnfiledIncidents(regression!, { "/ads/canva.com": filedAt }),
+    ).toHaveLength(0);
+    const withNewFailure = [
+      ...records,
+      moneyRecord("2026-09-08T14:05:00Z", "/ads/canva.com", 500),
+    ];
+    const next = detectMoneyPathRegression(withNewFailure)!;
+    expect(filterUnfiledIncidents(next, { "/ads/canva.com": filedAt })).toHaveLength(1);
+  });
+
+  it("tracks per-path incidents independently", () => {
+    const records = [
+      moneyRecord("2026-09-08T13:55:00Z", "/ads/canva.com", 200),
+      moneyRecord("2026-09-08T13:55:00Z", "/ads/mailchimp.com", 500),
+      moneyRecord("2026-09-08T14:00:00Z", "/ads/canva.com", 200),
+      moneyRecord("2026-09-08T14:00:00Z", "/ads/mailchimp.com", 500),
+    ];
+    const regression = detectMoneyPathRegression(records);
+    expect(regression).not.toBeNull();
+    expect(regression!.incidents).toHaveLength(1);
+    expect(regression!.incidents[0]!.path).toBe("/ads/mailchimp.com");
+  });
+
+  it("parses a real money-path.csv written by the probe and fires on it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "money-path-guard-"));
+    const csvPath = join(dir, "money-path.csv");
+    try {
+      const runAt = "2026-09-08T13:55:00.000Z";
+      writeFileSync(
+        csvPath,
+        [
+          "run_at,path,status,location,outcome,elapsed_ms",
+          `${runAt},/search?mode=advertiser&selected=1702938977100376,200,,ok,120`,
+          `${runAt},/ads/hm.com,200,,ok,90`,
+          `${runAt},/ads/atlassian.com,200,,ok,95`,
+          `${runAt},/ads/adobe.com,200,,ok,88`,
+        ].join("\n") + "\n",
+        "utf8",
+      );
+      // A single green run never fires...
+      expect(detectMoneyPathRegression(parseMoneyPathRecords(csvPath))).toBeNull();
+
+      // ...then two stubbed-500 samples within 10 minutes fire the detector.
+      const firedAt = "2026-09-08T14:00:00.000Z";
+      const records = parseMoneyPathRecords(csvPath);
+      records.push(
+        moneyRecord(firedAt, "/ads/adobe.com", 500),
+        moneyRecord("2026-09-08T14:05:00.000Z", "/ads/adobe.com", 500),
+      );
+      const regression = detectMoneyPathRegression(records);
+      expect(regression).not.toBeNull();
+      expect(formatMoneyPathIssueBody(regression!)).toContain("/ads/adobe.com");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("probe's moneyPathOutcome classifies a stubbed 500 as a failure", async () => {
+    const { probeMoneyPathUrl, moneyPathOutcome } = await import(
+      "../scripts/search-latency-probe.mjs"
+    );
+    expect(moneyPathOutcome(500)).toBe("error");
+    expect(moneyPathOutcome(301)).toBe("error");
+    expect(moneyPathOutcome(200)).toBe("ok");
+    const record = await probeMoneyPathUrl("https://example.test", "/ads/adobe.com", {
+      fetchImpl: (async () =>
+        new Response("boom", { status: 500 })) as unknown as typeof fetch,
+      nowImpl: () => 0,
+    });
+    expect(record.status).toBe(500);
+    expect(record.outcome).toBe("error");
   });
 });

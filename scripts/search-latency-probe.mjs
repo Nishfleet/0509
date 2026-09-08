@@ -529,6 +529,168 @@ export async function probeAuthPages({
   return records;
 }
 
+// Money-path availability canary (issue #2001). The /search selected-result
+// step (the money path: search -> result -> pricing) and the /ads/:domain
+// cohort intermittently answered 5xx (result step) or a spurious 301 under
+// cold-instance/burst load. The probe records each URL's HTTP status so the
+// regression guard can auto-file when any money-path URL returns non-200
+// twice within 10 minutes. The /ads cohort is bounded per run (a rotating
+// slice) so a 5-minute cadence never reproduces the sequential-curl burst
+// that itself caused flaps.
+export const MONEY_PATH_RESULT_PATH =
+  "/search?mode=advertiser&query=nike&country=all&platform=all&creativeType=all&status=all&trackingRole=competitor&selected=1702938977100376";
+export const MONEY_PATH_ADS_COHORT = Object.freeze([
+  "/ads/walmart.com",
+  "/ads/atlassian.com",
+  "/ads/adobe.com",
+  "/ads/amazon.com",
+  "/ads/hm.com",
+  "/ads/canva.com",
+  "/ads/mailchimp.com",
+]);
+export const MONEY_PATH_ADS_PER_RUN = 3;
+export const MONEY_PATH_PROBE_USER_AGENT = "0509-money-path-canary/1.0";
+export const MONEY_PATH_HEADERS = Object.freeze([
+  "run_at",
+  "path",
+  "status",
+  "location",
+  "outcome",
+  "elapsed_ms",
+]);
+export const MONEY_PATH_PROBE_SPACING_MS = 1_000;
+
+/**
+ * Classify a money-path status. 5xx and 3xx (including the spurious
+ * empty-Location 301) are money-path failures: 5xx is the observed
+ * hard-fail flap, and a 3xx breaks the contract that the result step and
+ * indexed /ads pages answer 200 in place. 429 is recorded as rate_limited
+ * and is NOT a flap failure: the /ads brand-page rate limiter reacts to the
+ * canary's own paced requests (a live run observed 3/3 cohort URLs 429ing
+ * under the canary UA), and a 429 does not dead-end a buyer the way a 500
+ * or a spurious redirect does. fetch_error means unreachable.
+ * @param {number | null} status
+ */
+export function moneyPathOutcome(status) {
+  if (status == null) return "fetch_error";
+  if (status === 200) return "ok";
+  if (status === 429) return "rate_limited";
+  return "error";
+}
+
+/**
+ * Fetch one money-path URL and record status + Location header (the flap
+ * presented as a 301 with an empty Location, so both are persisted).
+ * @param {string} baseUrl
+ * @param {string} path
+ * @param {{ fetchImpl?: typeof fetch, nowImpl?: () => number, userAgent?: string }} [options]
+ * @returns {Promise<{ runAt: string, path: string, status: number | null, location: string, outcome: string, elapsedMs: number }>}
+ */
+export async function probeMoneyPathUrl(baseUrl, path, options = {}) {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const nowImpl = options.nowImpl ?? (() => Date.now());
+  const userAgent = options.userAgent ?? MONEY_PATH_PROBE_USER_AGENT;
+  const runAt = new Date().toISOString();
+  const startedAt = nowImpl();
+  let status = null;
+  let location = "";
+  try {
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method: "GET",
+      headers: {
+        "user-agent": userAgent,
+        "cache-control": "no-cache",
+        pragma: "no-cache",
+        accept: "text/html,application/xhtml+xml",
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(30_000),
+    });
+    status = response.status;
+    location = response.headers.get("location")?.trim() ?? "";
+    await response.text();
+  } catch (_error) {
+    status = null;
+  }
+  return {
+    runAt,
+    path,
+    status,
+    location,
+    outcome: moneyPathOutcome(status),
+    elapsedMs: nowImpl() - startedAt,
+  };
+}
+
+/**
+ * Probe the money-path slice: the result URL every run, plus a bounded,
+ * deterministic rotating slice of the /ads cohort (MONEY_PATH_ADS_PER_RUN
+ * URLs, advancing one window per run so the whole cohort cycles without a
+ * sequential burst).
+ * @param {{
+ *   baseUrl?: string,
+ *   resultPath?: string,
+ *   adsCohort?: readonly string[],
+ *   adsPerRun?: number,
+ *   adsWindow?: number,
+ *   fetchImpl?: typeof fetch,
+ *   sleepImpl?: (ms: number) => Promise<void>,
+ *   nowImpl?: () => number,
+ *   userAgent?: string,
+ * }} [input]
+ * @returns {Promise<Array<{ runAt: string, path: string, status: number | null, location: string, outcome: string, elapsedMs: number }>>}
+ */
+export async function probeMoneyPath({
+  baseUrl = DEFAULT_BASE_URL,
+  resultPath = MONEY_PATH_RESULT_PATH,
+  adsCohort = MONEY_PATH_ADS_COHORT,
+  adsPerRun = MONEY_PATH_ADS_PER_RUN,
+  adsWindow = 0,
+  fetchImpl,
+  sleepImpl = defaultSleep,
+  nowImpl,
+  userAgent,
+} = {}) {
+  const paths = [resultPath];
+  if (adsPerRun > 0 && adsCohort.length > 0) {
+    const start = ((adsWindow % adsCohort.length) + adsCohort.length) % adsCohort.length;
+    const take = Math.min(adsPerRun, adsCohort.length);
+    for (let i = 0; i < take; i += 1) {
+      paths.push(adsCohort[(start + i) % adsCohort.length]);
+    }
+  }
+  const records = [];
+  for (const path of paths) {
+    records.push(
+      await probeMoneyPathUrl(baseUrl, path, { fetchImpl, nowImpl, userAgent }),
+    );
+    await sleepImpl(MONEY_PATH_PROBE_SPACING_MS);
+  }
+  return records;
+}
+
+/**
+ * Metric line for the money-path probe.
+ * @param {{ runAt: string, baseUrl: string, records: Array<{ path: string, status: number | null, outcome: string, location: string }> }} input
+ * @returns {string}
+ */
+export function formatMoneyPathLine({ runAt, baseUrl, records }) {
+  const failures = records.filter(
+    (r) => r.outcome === "error" || r.outcome === "fetch_error",
+  ).length;
+  return [
+    "money_path_probe",
+    `run=${runAt}`,
+    `base_url=${baseUrl}`,
+    ...records.map(
+      (r) =>
+        `${r.path.replaceAll("/", "_").replaceAll("?", "_").replaceAll("&", "_").replaceAll("=", "_")}_status=${r.status ?? "unreachable"}` +
+        (r.outcome === "error" && !r.location ? " (no-location)" : ""),
+    ),
+    `money_path_failures=${failures}`,
+  ].join(" ");
+}
+
 /**
  * Classify a first-value /search status. 429 is the defect this canary
  * guards; 5xx / unreachable are recorded but the edge detector only fires
@@ -830,7 +992,7 @@ export async function runLatencyProbe({
 
 /**
  * @param {string[]} argv
- * @returns {{ baseUrl: string, outputDir: string, domains: string, json: boolean }}
+ * @returns {{ baseUrl: string, outputDir: string, domains: string, json: boolean, moneyPathOnly: boolean, adsWindow: number }}
  */
 function parseCliArgs(argv) {
   const parsed = {
@@ -838,6 +1000,8 @@ function parseCliArgs(argv) {
     outputDir: "",
     domains: "",
     json: false,
+    moneyPathOnly: false,
+    adsWindow: 0,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -860,6 +1024,15 @@ function parseCliArgs(argv) {
       parsed.json = true;
       continue;
     }
+    if (arg === "--money-path-only") {
+      parsed.moneyPathOnly = true;
+      continue;
+    }
+    if (arg === "--ads-window" && argv[i + 1]) {
+      parsed.adsWindow = Number(argv[i + 1]) || 0;
+      i += 1;
+      continue;
+    }
   }
   return parsed;
 }
@@ -876,8 +1049,45 @@ function emitLine(line) {
   writeSync(1, `${line}\n`);
 }
 
+/**
+ * Money-path-only mode (issue #2001): the lightweight slice the 5-minute
+ * systemd timer runs. Probes the result URL plus the rotating /ads slice,
+ * appends money-path.csv, and emits the metric line — never the 25-domain
+ * latency set, so a 5-minute cadence stays inside the /ads rate budget.
+ * @param {{ baseUrl: string, outputDir: string, json: boolean, adsWindow: number }} args
+ */
+async function runMoneyPathOnly(args) {
+  const records = await probeMoneyPath({
+    baseUrl: args.baseUrl,
+    adsWindow: args.adsWindow,
+  });
+  if (args.outputDir) {
+    ensureDir(args.outputDir);
+    appendCsv(
+      join(args.outputDir, "money-path.csv"),
+      [...MONEY_PATH_HEADERS],
+      records.map((r) => [
+        r.runAt,
+        r.path,
+        r.status == null ? "" : String(r.status),
+        r.location,
+        r.outcome,
+        String(r.elapsedMs),
+      ]),
+    );
+  }
+  emitLine(formatMoneyPathLine({ runAt: records[0]?.runAt ?? new Date().toISOString(), baseUrl: args.baseUrl, records }));
+  if (args.json) {
+    emitLine(JSON.stringify({ records }, null, 2));
+  }
+}
+
 async function main() {
   const args = parseCliArgs(process.argv.slice(2));
+  if (args.moneyPathOnly) {
+    await runMoneyPathOnly(args);
+    return;
+  }
   const domains = args.domains
     ? args.domains.split(",").map((d) => d.trim())
     : undefined;
