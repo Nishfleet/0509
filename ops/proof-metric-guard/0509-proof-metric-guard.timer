@@ -1,0 +1,15 @@
+[Unit]
+Description=Run the 0509 proof screenshot-metric guard every six hours
+Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
+
+[Timer]
+# Every 6h offset at :22 (distinct from the screenshot-rate guard's :37 so
+# the two D1-reading units do not stampede the DB on the same tick). The guard measures a rolling 7-day window, so a 6h cadence overlaps
+# enough that any single-window regression is observed within one run window
+# (issue #1985 metric: 7-day screenshot rate + budget-skip surface).
+OnCalendar=*:22/6
+Persistent=true
+Unit=0509-proof-metric-guard.service
+
+[Install]
+WantedBy=timers.target

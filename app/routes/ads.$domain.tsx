@@ -66,6 +66,7 @@ import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+import { rerankDigestBrief } from "~/lib/digest-rerank";
 import { CAPTURE_RULES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
 import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
@@ -1192,23 +1193,39 @@ function BrandAdsResults({
         />
       ) : null}
 
-      {/* 4. WHAT CHANGED THIS WEEK — only when real change events exist */}
-      {data.changeEvents.length > 0 ? (
-        <section className="f9-ads-sec" aria-labelledby="brand-changed-title">
-          <div className="f9-container">
-            <div className="f9-ads-sec-head">
-              <div className="f9-ads-sec-head-left">
-                <span className="f9-ads-sec-eyebrow">The reason to watch</span>
-                <h2 id="brand-changed-title">What changed this week</h2>
+      {/* 4. WHAT CHANGED THIS WEEK — apply the BET 1 re-rank (#1897) so a bare
+          ad_new never appears as a headline "move" with a screenshot (issue
+          #1951). Landing-page commercial-field changes are the headline
+          cards; ad_new / ad_inactive collapse into a single counted line. */}
+      {(() => {
+        // The shared BET 1 helper from #1897, imported from the client-safe
+        // module it lives in — `rerankBrandChangeFeed` in brand-page.server
+        // delegates to exactly this function, so the digest and the /ads page
+        // still cannot drift, but the client bundle does not pull in the
+        // server-only module (issue #1951 CI build failure).
+        const { headlineItems, adChurnSummary } = rerankDigestBrief(data.changeEvents);
+        const hasHeadline = headlineItems.length > 0;
+        const hasChurn = adChurnSummary.total > 0;
+        if (!hasHeadline && !hasChurn) return null;
+        return (
+          <section className="f9-ads-sec" aria-labelledby="brand-changed-title">
+            <div className="f9-container">
+              <div className="f9-ads-sec-head">
+                <div className="f9-ads-sec-head-left">
+                  <span className="f9-ads-sec-eyebrow">The reason to watch</span>
+                  <h2 id="brand-changed-title">What changed this week</h2>
+                </div>
+                <span className="f9-ads-sec-meta">
+                  {hasHeadline
+                    ? `${headlineItems.length} ${headlineItems.length === 1 ? "move" : "moves"} · each with a saved screenshot`
+                    : "No offer changes this week"}
+                </span>
               </div>
-              <span className="f9-ads-sec-meta">
-                {`${data.changeEvents.length} ${data.changeEvents.length === 1 ? "move" : "moves"} · each with a saved screenshot`}
-              </span>
+              <BrandChangeTimeline events={headlineItems} churn={adChurnSummary} />
             </div>
-            <BrandChangeTimeline events={data.changeEvents} />
-          </div>
-        </section>
-      ) : null}
+          </section>
+        );
+      })()}
 
       <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} timelineIndexable={data.timelineIndexable} />
       <BrandCaptureFailures summary={data.captureFailuresSummary} domain={data.domain} signupPath={signupPath} />
@@ -1576,6 +1593,10 @@ function BrandAdsShell({
       source: "AD LIBRARY",
       move: "New ad entered rotation — a fresh summer creative",
       why: "Launched with 3 variants — they're testing which creative wins.",
+      // The example is a teaching shell, not a real rerank output — tag it
+      // as an ad_new so the now-required `eventType` is set everywhere a
+      // BrandChangeEvent is constructed.
+      eventType: "ad_new",
       variantCount: 3,
     },
   ];
