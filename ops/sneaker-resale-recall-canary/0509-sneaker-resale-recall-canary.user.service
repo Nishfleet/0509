@@ -1,0 +1,36 @@
+[Unit]
+Description=0509 sneaker-resale recall canary — seed-list recall guard (issue #1945)
+# Fails (exit non-zero) when any sneaker-resale seed-list brand with genuine
+# Meta ad coverage returns 0 verified/likely rows on production /search
+# (a dead-end or blanket-unmatched). The sneaker-resale cluster is the
+# strongest, most-consistent buyer signal across the daily market reports;
+# its 25 seed-list brands must each render >=1 verified/likely row or the
+# /ads/:domain page cannot publish and the brand dead-ends in the free
+# preview. The existing search-tier-canary guards only the six §1.8 domains
+# and is not scheduled, so this cluster had no recall guard at all.
+# Deliberately a user unit on the fleet VPS (like 0509-demo-brand-timeline-
+# canary, issue #1899): the worker GitHub App token cannot create or update
+# .github/workflows files, and the check needs no secrets — only outbound
+# HTTPS to 0509.io.
+# Runs from a dedicated read-only checkout that self-syncs to main on every
+# run (ExecStartPre), so it never touches the shared products/0509 checkout.
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/nish/workspaces/agent-state/0509-sneaker-resale-recall-canary
+Environment=HOME=/home/nish
+Environment=PATH=/home/nish/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStartPre=/usr/bin/env git -C /home/nish/workspaces/agent-state/0509-sneaker-resale-recall-canary fetch origin main
+ExecStartPre=/usr/bin/env git -C /home/nish/workspaces/agent-state/0509-sneaker-resale-recall-canary reset --hard origin/main
+ExecStart=/usr/bin/env node scripts/canary-sneaker-resale-recall.mjs --base-url https://0509.io
+# Evidence: one plain-text run log; the unit's failed state is the loud
+# signal (systemctl --user list-units --failed) and the log keeps the
+# per-domain tier counts for observe-to-close.
+StandardOutput=append:/home/nish/workspaces/agent-state/cron-output/0509-sneaker-resale-recall-canary.log
+StandardError=inherit
+# 25 fetches with 429 backoff worst case must still finish; the anonymous
+# /search budget is 20 req / 10 min / IP, so the tail domains can go through
+# several 60s backoffs. Generous bound; the canary fails loud on any dead-end.
+TimeoutStartSec=45min
+# A failed canary must stay failed for operators; do not restart into a loop.
+Restart=no
