@@ -32,7 +32,7 @@ function mockFetchResponse(body: string, status = 200): Response {
 }
 
 describe("search.tier.canary", () => {
-  it("exposes the six-domain set", () => {
+  it("exposes the §1.8 money-path set (issue #1452, ridge added by #2012)", () => {
     expect(SIX_DOMAINS).toEqual([
       "allbirds",
       "notion",
@@ -40,6 +40,7 @@ describe("search.tier.canary", () => {
       "gymshark",
       "hubspot",
       "mamaearth",
+      "ridge",
     ]);
   });
 

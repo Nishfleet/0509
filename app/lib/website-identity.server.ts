@@ -71,6 +71,20 @@ const IDENTITY_OVERRIDES: Record<
   // also wins over a live one if the block lifts, by design (see
   // applyIdentityOverride pin).
   "reebok.com": { siteName: "Reebok" },
+  // Ridge (issue #2012). ridge.com is the buyer-typed domain, but Ridge's ads
+  // land on the product domain ridgewallet.com (and regional variants like
+  // ridgewallet.eu). The live redirect chain from ridge.com never touches a
+  // ridgewallet host, so the alias is not discoverable, and the stem-extension
+  // matcher cannot bridge it either: "ridgewallet" is a stem extension of
+  // "ridge" only on the SAME generic TLD (ridge.com vs ridgewallet.com works,
+  // but a ridgewallet.eu landing fails the .com suffix check). The /ads/:domain
+  // publish layer already resolves ridge.com -> ridgewallet.com (issue #1446
+  // canonical aliases), so coverage exists — the search surface just could not
+  // connect it, dead-ending a §1.8 money-path brand. The curated aliases feed
+  // the same audited-alias path on.com uses. The curated site name pins the
+  // provider query to the brand term "Ridge" (the Meta advertiser page name)
+  // even if the live homepage fetch fails or yields a shop-style label.
+  "ridge.com": { siteName: "Ridge", domainAliases: ["ridgewallet.com", "ridgewallet.eu"] },
 };
 
 const identityCache = new Map<string, { expiresAt: number; identity: WebsiteIdentity | null }>();
