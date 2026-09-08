@@ -179,6 +179,33 @@ const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
 const SEARCH_DELAY_SESSION_KEY = "f9.search.recent-delay.v1";
 
+// Anonymous per-browser identity for /search (issue #1972 phase 1). Each
+// anonymous BROWSER gets its own public-search budget via this cookie, so a
+// fresh no-cookie evaluator on a shared/NAT IP can search even when the
+// shared per-IP counter is near its ceiling. Persistent for a 30-day browsing
+// session; HttpOnly + SameSite=Lax + Path=/ so it survives navigation and is
+// not reachable from scripts.
+const ANON_SEARCH_COOKIE = "f9_anon_search";
+const ANON_SEARCH_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+const ANON_SEARCH_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function readAnonSearchCookie(request: Request): string | null {
+  const prefix = `${ANON_SEARCH_COOKIE}=`;
+  for (const part of (request.headers.get("cookie") ?? "").split(";")) {
+    const cookie = part.trim();
+    if (!cookie.startsWith(prefix)) continue;
+    const value = cookie.slice(prefix.length).trim();
+    if (ANON_SEARCH_ID_RE.test(value)) return value;
+  }
+  return null;
+}
+
+function buildAnonSearchSetCookie(value: string): string {
+  return `${ANON_SEARCH_COOKIE}=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${ANON_SEARCH_COOKIE_MAX_AGE_SECONDS}`;
+}
+
 export const links: LinksFunction = () => canonicalLinks("/search");
 
 export const meta: MetaFunction = () =>
@@ -188,15 +215,26 @@ export const meta: MetaFunction = () =>
     pathname: "/search",
   });
 
-// When the search loader throws a 429 (anonymous limiter), React Router only
-// merges cookies from the thrown response's headers onto the final document
-// response unless the boundary route forwards them. Copy Retry-After through
-// here so the rate-limited document keeps the limiter's recovery signal. For
-// every other request errorHeaders is undefined and nothing is added.
-export const headers: HeadersFunction = ({ errorHeaders }) => {
+// Loader header forwarding: React Router merges loader response headers onto
+// the final document response ONLY if the boundary route forwards them via
+// this export (the Set-Cookie here — the anonymous /search browser budget,
+// issue #1972 phase 1 — plus any future loader headers). When the search
+// loader throws a 429 (anonymous limiter), copy Retry-After through as well so
+// the rate-limited document keeps the limiter's recovery signal. For a normal
+// request errorHeaders is undefined and only loaderHeaders pass through.
+export const headers: HeadersFunction = ({ errorHeaders, loaderHeaders }) => {
   const documentHeaders: Record<string, string> = {};
+  // Forward loader response headers (the anonymous /search Set-Cookie budget)
+  // onto the final document response.
+  if (loaderHeaders) {
+    loaderHeaders.forEach((value, key) => {
+      documentHeaders[key] = value;
+    });
+  }
   const retryAfter = errorHeaders?.get("retry-after");
   if (retryAfter) documentHeaders["Retry-After"] = retryAfter;
+  const setCookie = errorHeaders?.get("set-cookie");
+  if (setCookie) documentHeaders["Set-Cookie"] = setCookie;
   return documentHeaders;
 };
 
@@ -237,6 +275,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       }
     : { showPresenceNav: false };
   const url = new URL(request.url);
+  // Anonymous per-browser search identity (issue #1972 phase 1): a fresh
+  // no-cookie browser gets a brand-new id that is passed to the limiter AND,
+  // when the search succeeds, persisted via Set-Cookie so the browser keeps
+  // its own per-browser /search budget instead of sharing the fleet's single
+  // per-IP counter with other anonymous visitors on the same NAT IP. When a
+  // cookie is already present we reuse it (no new cookie on success); signed-in
+  // searches never set it.
+  const incomingAnonSearchId = readAnonSearchCookie(request);
+  const anonymousSearchId = incomingAnonSearchId ?? crypto.randomUUID();
+  const isFreshAnonymousId = incomingAnonSearchId === null;
   // The visitor-geo country is a UI preselection, never a silently committed
   // filter. An anonymous visitor who never picked a country gets the global
   // search ("all countries"): committing cf-ipcountry into an anonymous
@@ -381,6 +429,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       request,
       env,
       cloudflare?.ctx,
+      anonymousSearchId,
     );
     if (rateLimitResponse) {
       const { emitFunnelSearchError } = await import("~/lib/funnel-measurement.server");
@@ -392,10 +441,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       // when the window clears. The route-level headers() export below
       // forwards that header onto the final document response.
       const retryAfterSeconds = rateLimitResponse.headers.get("retry-after");
+      const continuePath = `/auth/signup?redirectTo=${encodeURIComponent(
+        `${url.pathname}${url.search}`,
+      )}`;
       throw new Response(
         JSON.stringify({
           error: "rate_limited",
           message: PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
+          continuePath,
           ...(retryAfterSeconds ? { retryAfter: Number(retryAfterSeconds) } : {}),
         }),
         {
@@ -404,6 +457,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
             "content-type": "application/json; charset=utf-8",
             "cache-control": "no-store",
             ...(retryAfterSeconds ? { "retry-after": retryAfterSeconds } : {}),
+            ...(isFreshAnonymousId
+              ? { "Set-Cookie": buildAnonSearchSetCookie(anonymousSearchId) }
+              : {}),
           },
         },
       );
@@ -731,7 +787,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ? switchPageForDomain(brandPageCandidate)
     : null;
 
-  return {
+  const searchPayload = {
     mode: parsed.mode,
     filters: filtersForForms,
     fingerprint: parsed.fingerprint,
@@ -758,6 +814,21 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     watchedWatchlist,
     ...navFlags,
   };
+  // Issue #1972 phase 1: when an anonymous visitor's very first search
+  // succeeded and there was NO incoming anonymous cookie, persist the fresh
+  // browser identity via Set-Cookie so that browser keeps its own per-browser
+  // /search budget on later searches instead of sharing the shared-IP counter
+  // with other anonymous visitors on the same NAT IP. Only this successful
+  // fresh-search branch is wrapped — the idle/validation/HEAD/invalid early
+  // returns above never set the cookie, and signed-in requests (session set)
+  // never do either. The route-level headers() export forwards this
+  // Set-Cookie onto the final document response.
+  if (!session && isFreshAnonymousId) {
+    return Response.json(searchPayload, {
+      headers: { "Set-Cookie": buildAnonSearchSetCookie(anonymousSearchId) },
+    });
+  }
+  return searchPayload;
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {

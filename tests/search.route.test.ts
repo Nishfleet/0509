@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { LoaderFunctionArgs } from "react-router";
 
 import {
   mapCustomerRouteError,
@@ -6,6 +7,20 @@ import {
   PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE,
 } from "~/lib/customer-route-error";
 import type { AdRecord, SearchResponse } from "~/lib/types";
+
+// The /search loader returns a plain payload object for most branches, but the
+// anonymous fresh-search success branch (issue #1972 phase 1) returns a
+// `Response.json(...)` wrapper so it can Set-Cookie the browser's anonymous
+// /search id. Unwrap whichever shape came back so test assertions on the
+// payload (result.result, result.session, toMatchObject, ...) stay shape-stable
+// across both forms.
+async function unwrapLoaderResult<T>(
+  loaderFn: (args: LoaderFunctionArgs) => Promise<T | Response>,
+  args: LoaderFunctionArgs,
+): Promise<T> {
+  const out = await loaderFn(args);
+  return out instanceof Response ? (await out.json()) as T : out;
+}
 
 const baseAd: AdRecord = {
   metaAdId: "meta-boat-1",
@@ -136,7 +151,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search"),
     } as never);
@@ -179,7 +194,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search"),
     } as never);
@@ -224,7 +239,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search"),
     } as never);
@@ -303,7 +318,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?q=nike&country=all"),
     } as never);
@@ -313,6 +328,7 @@ describe("search loader", () => {
       expect.any(Request),
       env,
       undefined,
+      expect.any(String),
     );
     expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
       env,
@@ -405,7 +421,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?query=nykaa", {
         headers: { "cf-ipcountry": "DE" },
@@ -480,7 +496,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?query=nykaa&country=Germany", {
         headers: { "cf-ipcountry": "DE" },
@@ -556,7 +572,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?query=nykaa", {
         headers: { "cf-ipcountry": "DE" },
@@ -633,7 +649,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?q=nykaa"),
     } as never);
@@ -643,6 +659,7 @@ describe("search loader", () => {
       expect.any(Request),
       env,
       undefined,
+      expect.any(String),
     );
     // The q= alias must run the same advertiser query as the canonical
     // query= deep link — the shared link actually executes, never idles.
@@ -715,7 +732,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?q="),
     } as never);
@@ -772,7 +789,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?website=https://www.samplebrand.com"),
     } as never);
@@ -824,7 +841,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?website=samplebrand&query=samplebrand"),
     } as never);
@@ -894,7 +911,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?query=nykaa"),
     } as never);
@@ -980,7 +997,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?query=nykaa&selected=meta-boat-1"),
     } as never);
@@ -1522,9 +1539,118 @@ describe("search loader", () => {
       expect.any(Request),
       env,
       undefined,
+      expect.any(String),
     );
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+  });
+
+  it("puts a free-account continue path on the anonymous 429 and sets the browser cookie when it was missing", async () => {
+    const env = { DB: {} };
+    const rateLimitedResponse = new Response(
+      JSON.stringify({ error: "rate_limited" }),
+      {
+        status: 429,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "retry-after": "600",
+        },
+      },
+    );
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => env) }));
+    vi.doMock("~/lib/data.server", () => ({ listCollections: vi.fn() }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(rateLimitedResponse),
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn(),
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection: vi.fn(),
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const blocked = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa"),
+    } as never).catch((error: unknown) => error);
+
+    expect(blocked).toBeInstanceOf(Response);
+    const response = blocked as Response;
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "rate_limited",
+      continuePath: "/auth/signup?redirectTo=%2Fsearch%3Fquery%3Dnykaa",
+    });
+    expect(response.headers.get("Set-Cookie") ?? "").toMatch(/f9_anon_search=/);
+  });
+
+  it("reuses an existing anonymous /search cookie instead of minting a new id", async () => {
+    const env = { DB: {} };
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const sourceResult = {
+      ads: [baseAd],
+      searchIntent: "text" as const,
+      verifiedCount: 0,
+      likelyCount: 0,
+      unmatchedCount: 1,
+    };
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => env) }));
+    vi.doMock("~/lib/data.server", () => ({ listCollections: vi.fn() }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection: vi.fn().mockResolvedValue({
+        result: sourceResult,
+        selectedAd: baseAd,
+      }),
+    }));
+
+    const existingId = "11111111-1111-4111-8111-111111111111";
+    const { loader } = await import("~/routes/search");
+    const out = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa", {
+        headers: { cookie: `f9_anon_search=${existingId}` },
+      }),
+    } as never);
+
+    expect(enforcePublicSearchRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      env,
+      undefined,
+      existingId,
+    );
+    // Existing cookie: no new Set-Cookie on the success payload.
+    expect(out instanceof Response).toBe(false);
   });
 
   it("forwards the limiter's Retry-After onto the 429 document response", async () => {
@@ -1537,6 +1663,17 @@ describe("search loader", () => {
         errorHeaders: new Headers({ "retry-after": "600" }),
       } as never),
     ).toEqual({ "Retry-After": "600" });
+    expect(
+      headers({
+        errorHeaders: new Headers({
+          "retry-after": "600",
+          "set-cookie": "f9_anon_search=11111111-1111-4111-8111-111111111111; Path=/",
+        }),
+      } as never),
+    ).toMatchObject({
+      "Retry-After": "600",
+      "Set-Cookie": expect.stringContaining("f9_anon_search="),
+    });
     // No error headers → no header surgery on ordinary documents.
     expect(headers({} as never)).toEqual({});
   });
@@ -1601,6 +1738,11 @@ describe("search loader", () => {
 
     // A sign-in path that returns to the original search is provided
     expect(html).toMatch(/auth\/login\?redirectTo=/);
+    // First-time evaluators get a free-account continue path that does not
+    // require a pre-existing account before any first value.
+    expect(html).toMatch(/Continue in a signed-in account \(free\)/);
+    expect(html).toMatch(/auth\/signup\?redirectTo=/);
+    expect(html).toMatch(/data-testid="rate-limit-continue"/);
 
     vi.doUnmock("react-router");
     vi.doUnmock("~/components/dashboard-shell");
@@ -1641,7 +1783,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?query=nykaa", {
         method: "HEAD",
@@ -1711,7 +1853,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?website=https://www.nykaa.com"),
     } as never);
@@ -1797,7 +1939,7 @@ describe("search loader", () => {
     }));
 
     const { formatResultsPanelTitle, loader } = await import("~/routes/search");
-    const result = await loader({
+    const result = await unwrapLoaderResult(loader, {
       context: createContext(env),
       request: new Request("http://localhost/search?website=https://www.nykaa.com"),
     } as never);
@@ -1816,7 +1958,11 @@ describe("search loader", () => {
       null,
       { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
     );
-    expect(result.result).toBe(legacyResult);
+    // The success branch now returns Response.json(...) (issue #1972 phase 1)
+    // so it can Set-Cookie the anonymous /search id. The payload survives the
+    // JSON round-trip value-for-value; only the object identity is replaced, so
+    // compare deep-equality rather than object reference.
+    expect(result.result).toEqual(legacyResult);
     expect(result.relevanceApplied).toBe(false);
     expect(formatResultsPanelTitle(legacyResult, {
       displayDomain: "nykaa.com",

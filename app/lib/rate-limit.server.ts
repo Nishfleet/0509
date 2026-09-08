@@ -66,17 +66,68 @@ export async function enforceRequestRateLimit(
   return enforceRateLimitPolicy(request, env, policy, ctx);
 }
 
+export const PUBLIC_SEARCH_IP_BACKSTOP_LIMIT = 100;
+export const PUBLIC_SEARCH_ANON_BROWSER_LIMIT = 20;
+const PUBLIC_SEARCH_WINDOW_SECONDS = 10 * 60;
+
+/**
+ * Anonymous /search budget (issue #1972).
+ *
+ * The old single GLOBAL per-IP 20/10min bucket dead-ended a genuine
+ * first-time evaluator on a shared/NAT IP: the fleet's own traffic and other
+ * anonymous visitors shared the same counter, so the evaluator's very first
+ * search could already be 429. This gives each anonymous BROWSER its own
+ * 20/10min budget while keeping a higher per-IP ceiling as an abuse backstop.
+ *
+ * Two stacked buckets, always in this order:
+ *  1. Per-IP abuse backstop (scope "public-search-ip", 100/10min). Bounds a
+ *     no-cookie attacker or a whole NAT fan-out. Fail-open: a D1 hiccup must
+ *     never dead-end an evaluator.
+ *  2. Per-browser bucket (scope "public-search-anon-browser", 20/10min) keyed
+ *     by `anonymousBrowserId` via `keySeed`. Each browser gets its own share
+ *     of the shared IP. Fail-open for the same reason.
+ *
+ * IP is checked first so an exhausted NAT/backstop 429s everyone, including a
+ * brand-new browser id. A browser that already spent its own 20 is then
+ * throttled by bucket 2 even when the IP still has room.
+ */
 export async function enforcePublicSearchRateLimit(
   request: Request,
   env: AppEnv,
   ctx?: ExecutionContext,
+  anonymousBrowserId?: string,
 ): Promise<Response | null> {
-  return enforceRateLimitPolicy(
+  const ipBackstop = await enforceRateLimitPolicy(
     request,
     env,
-    { scope: "public-search", limit: 20, windowSeconds: 10 * 60, failClosed: false, keyByIpOnly: true },
+    {
+      scope: "public-search-ip",
+      limit: PUBLIC_SEARCH_IP_BACKSTOP_LIMIT,
+      windowSeconds: PUBLIC_SEARCH_WINDOW_SECONDS,
+      failClosed: false,
+      keyByIpOnly: true,
+    },
     ctx,
   );
+  if (ipBackstop) return ipBackstop;
+
+  if (anonymousBrowserId && anonymousBrowserId.trim()) {
+    const browserLimit = await enforceRateLimitPolicy(
+      request,
+      env,
+      {
+        scope: "public-search-anon-browser",
+        limit: PUBLIC_SEARCH_ANON_BROWSER_LIMIT,
+        windowSeconds: PUBLIC_SEARCH_WINDOW_SECONDS,
+        failClosed: false,
+        keySeed: anonymousBrowserId,
+      },
+      ctx,
+    );
+    if (browserLimit) return browserLimit;
+  }
+
+  return null;
 }
 
 export async function enforcePublicSearchSelectionRateLimit(

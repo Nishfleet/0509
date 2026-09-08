@@ -97,6 +97,23 @@ export const AUTH_HEADERS = Object.freeze([
 // (issue #1692 observed).
 export const AUTH_PROBE_SPACING_MS = 1_000;
 
+// Anonymous first-value canary (issue #1972). A fresh no-cookie /search walk
+// that asserts the result step is reachable (not a 429) on the shared IP.
+// Uses its own user-agent so the per-browser bucket is not the visitor's, and
+// sends no Cookie header so it matches a first-time evaluator. One GET per
+// probe run cannot fill the 100/10min per-IP backstop, so it does not create
+// the false-positive 429 it guards against.
+export const FIRST_VALUE_PATH = "/search?q=nike&country=all";
+export const FIRST_VALUE_PROBE_USER_AGENT = "0509-anonymous-first-value-canary/1.0";
+export const FIRST_VALUE_HEADERS = Object.freeze([
+  "run_at",
+  "path",
+  "status",
+  "outcome",
+  "retry_after",
+  "elapsed_ms",
+]);
+
 /**
  * @typedef {Object} LatencyStats
  * @property {number | null} p95Ms
@@ -517,6 +534,173 @@ export async function probeAuthPages({
  * @param {{ runAt: string, baseUrl: string, records: Array<{ path: string, status: number | null, outcome: string }> }} input
  * @returns {string}
  */
+/**
+ * Classify a first-value /search status. 429 is the defect this canary
+ * guards; 5xx / unreachable are recorded but the edge detector only fires
+ * on rate_limited so a transient 5xx does not open a search-budget incident.
+ * @param {number | null} status
+ * @returns {"ok" | "rate_limited" | "error" | "fetch_error"}
+ */
+export function firstValueOutcome(status) {
+  if (status == null) return "fetch_error";
+  if (status === 429) return "rate_limited";
+  if (status >= 500) return "error";
+  return "ok";
+}
+
+/**
+ * Fresh no-cookie GET of /search?q=nike&country=all. Must not send a Cookie
+ * header and must not reuse the 25-domain latency probe user-agent, so the
+ * walk is a genuine first-time evaluation and does not share that probe's
+ * per-browser 20-slot bucket.
+ *
+ * @param {{
+ *   baseUrl?: string,
+ *   path?: string,
+ *   fetchImpl?: typeof fetch,
+ *   nowImpl?: () => number,
+ *   userAgent?: string,
+ * }} [input]
+ * @returns {Promise<{ runAt: string, path: string, status: number | null, outcome: string, retryAfter: string, elapsedMs: number }>}
+ */
+export async function probeAnonymousFirstValue({
+  baseUrl = DEFAULT_BASE_URL,
+  path = FIRST_VALUE_PATH,
+  fetchImpl = fetch,
+  nowImpl = () => Date.now(),
+  userAgent = FIRST_VALUE_PROBE_USER_AGENT,
+} = {}) {
+  const runAt = new Date().toISOString();
+  const startedAt = nowImpl();
+  let status = null;
+  let retryAfter = "";
+  try {
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method: "GET",
+      headers: {
+        "user-agent": userAgent,
+        "cache-control": "no-cache",
+        pragma: "no-cache",
+        accept: "text/html,application/xhtml+xml",
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(30_000),
+    });
+    status = response.status;
+    retryAfter = response.headers.get("retry-after")?.trim() ?? "";
+    await response.text();
+  } catch (_error) {
+    status = null;
+  }
+  return {
+    runAt,
+    path,
+    status,
+    outcome: firstValueOutcome(status),
+    retryAfter,
+    elapsedMs: nowImpl() - startedAt,
+  };
+}
+
+/**
+ * Metric line the probe emits and CI greps for.
+ * @param {{ runAt: string, baseUrl: string, record: { path: string, status: number | null, outcome: string, retryAfter: string } }} input
+ * @returns {string}
+ */
+export function formatFirstValueLine({ runAt, baseUrl, record }) {
+  return [
+    "anonymous_first_value_probe",
+    `run=${runAt}`,
+    `base_url=${baseUrl}`,
+    `path=${record.path}`,
+    `status=${record.status ?? "unreachable"}`,
+    `outcome=${record.outcome}`,
+    `retry_after=${record.retryAfter || "none"}`,
+  ].join(" ");
+}
+
+export const DEFAULT_FIRST_VALUE_CONSECUTIVE = 3;
+
+/**
+ * Edge detector for anonymous first-value /search. Fires at the START of a
+ * red streak: the last `consecutiveRuns` runs were all rate_limited (HTTP
+ * 429), and the run before them (if any) was not. One incident, one issue.
+ * Same edge-detector contract as detectAuthRegression on the latency guard.
+ *
+ * @param {Array<{ runAt: string, path: string, status: number | null, outcome: string, retryAfter?: string }>} records
+ * @param {number} [consecutiveRuns]
+ * @returns {{
+ *   consecutiveRuns: number,
+ *   runs: Array<{ runAt: string, path: string, status: number | null, retryAfter?: string }>,
+ *   previous: { runAt: string } | null,
+ *   title: string,
+ * } | null}
+ */
+export function detectFirstValueRegression(
+  records,
+  consecutiveRuns = DEFAULT_FIRST_VALUE_CONSECUTIVE,
+) {
+  if (records.length < consecutiveRuns) return null;
+
+  const lastN = records.slice(-consecutiveRuns);
+  const everyStreakRunRed = lastN.every((r) => r.outcome === "rate_limited");
+  if (!everyStreakRunRed) return null;
+
+  const previous = records[records.length - consecutiveRuns - 1];
+  if (previous && previous.outcome === "rate_limited") {
+    return null;
+  }
+
+  return {
+    consecutiveRuns,
+    runs: lastN.map((r) => ({
+      runAt: r.runAt,
+      path: r.path,
+      status: r.status,
+      retryAfter: r.retryAfter,
+    })),
+    previous: previous ? { runAt: previous.runAt } : null,
+    title:
+      "regression: anonymous /search first-value session rate-limited for " +
+      String(consecutiveRuns) +
+      "+ consecutive windows",
+  };
+}
+
+/**
+ * @param {NonNullable<ReturnType<typeof detectFirstValueRegression>>} regression
+ * @returns {string}
+ */
+export function formatFirstValueIssueBody(regression) {
+  const lines = [
+    "Anonymous first-value /search regression: a fresh no-cookie /search walk returned HTTP 429 for 3+ consecutive probe windows, so a first-time evaluator on the shared IP cannot reach the result step.",
+    "",
+    "| run_at | path | status | retry_after |",
+    "|---|---|---|---|",
+  ];
+  for (const run of regression.runs) {
+    lines.push(
+      "| " +
+        run.runAt +
+        " | " +
+        run.path +
+        " | " +
+        String(run.status ?? "unreachable") +
+        " | " +
+        (run.retryAfter || "none") +
+        " |",
+    );
+  }
+  lines.push("");
+  lines.push("Consecutive failing runs: " + String(regression.consecutiveRuns));
+  return lines.join("\n");
+}
+
+/**
+ * The auth-availability metric line the probe emits and CI greps for.
+ * @param {{ runAt: string, baseUrl: string, records: Array<{ path: string, status: number | null, outcome: string }> }} input
+ * @returns {string}
+ */
 export function formatAuthAvailabilityLine({ runAt, baseUrl, records }) {
   const statuses = records.map((r) => `${r.path}=${r.status ?? "unreachable"}`).join(" ");
   const failures = records.filter((r) => r.outcome === "error" || r.outcome === "fetch_error").length;
@@ -554,6 +738,8 @@ export function formatAuthAvailabilityLine({ runAt, baseUrl, records }) {
  *   metricLine: string,
  *   authResults: Array<{ runAt: string, path: string, status: number | null, outcome: string, elapsedMs: number }>,
  *   authMetricLine: string,
+ *   firstValueResult: { runAt: string, path: string, status: number | null, outcome: string, retryAfter: string, elapsedMs: number },
+ *   firstValueMetricLine: string,
  * }>}
  */
 export async function runLatencyProbe({
@@ -567,6 +753,15 @@ export async function runLatencyProbe({
   onResult,
 } = {}) {
   const runAt = new Date().toISOString();
+  // First-value canary runs BEFORE the 25-domain set so it measures a genuine
+  // first-time evaluator on the shared IP, not a walk that already spent 25
+  // anonymous slots in this same process.
+  const firstValueResult = await probeAnonymousFirstValue({
+    baseUrl,
+    fetchImpl,
+    nowImpl,
+  });
+
   const { results } = await runLiveVerification({
     domains,
     baseUrl,
@@ -603,11 +798,39 @@ export async function runLatencyProbe({
       String(r.elapsedMs),
     ]);
     appendCsv(join(outputDir, "auth.csv"), [...AUTH_HEADERS], authRows);
+    appendCsv(
+      join(outputDir, "first-value.csv"),
+      [...FIRST_VALUE_HEADERS],
+      [[
+        firstValueResult.runAt,
+        firstValueResult.path,
+        firstValueResult.status == null ? "" : String(firstValueResult.status),
+        firstValueResult.outcome,
+        firstValueResult.retryAfter,
+        String(firstValueResult.elapsedMs),
+      ]],
+    );
   }
 
   const metricLine = formatMetricLine({ runAt, baseUrl, stats });
   const authMetricLine = formatAuthAvailabilityLine({ runAt, baseUrl, records: authRecords });
-  return { runAt, baseUrl, results, run, stats, metricLine, authResults: authRecords, authMetricLine };
+  const firstValueMetricLine = formatFirstValueLine({
+    runAt,
+    baseUrl,
+    record: firstValueResult,
+  });
+  return {
+    runAt,
+    baseUrl,
+    results,
+    run,
+    stats,
+    metricLine,
+    authResults: authRecords,
+    authMetricLine,
+    firstValueResult,
+    firstValueMetricLine,
+  };
 }
 
 /**
@@ -681,6 +904,7 @@ async function main() {
 
   emitLine(output.metricLine);
   emitLine(output.authMetricLine);
+  emitLine(output.firstValueMetricLine);
   if (args.json) {
     emitLine(JSON.stringify(output, null, 2));
   }
