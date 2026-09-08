@@ -23,3 +23,10 @@ Manager mode (heavy). Reuse the existing nightly offer-timeline backfill pattern
 - `data/seed-lists/sneaker-resale.json` (read-only).
 - `app/routes/ads.$domain.tsx` / `app/routes/timeline.$domain.tsx` (write the row, the routes already render the section).
 - `migrations/**` / `workers/wrangler.toml` / `.github/workflows/**` (untouched).
+
+## Phase 4 reviewer round (single reviewer pass, seat cursor/cursor-grok-4.6-high)
+
+- **Act on (fixed)**: the nightly tier read gates on `expires_at > now` (15-min public_search TTL) while the publisher is a sibling waitUntil — the backfill would read before the publisher's awaited per-domain writes land and derive an empty cohort (captured=0) every night, so /timeline/:domain would never leave 410. Fixed by chaining `runSneakerResaleBackfill` after the publisher's promise on the same daily block (workers/app.ts), with the catch-up comment documenting the ordering contract; regression tests added (deferred-publisher ordering + publisher-throws best-effort).
+- **Warning (fixed)**: a newest-row demo payload `continue`d the whole domain, silently discarding a still-fresh legitimate commercial row. The adapter now falls through to the next-newest non-demo row; regression test added.
+- **Suggestion (fixed)**: `summarizeSneakerResaleBackfill` now emits `cohort=N` so an empty-cohort night is visible in the operator log.
+- **Suggestion (noted, no change)**: `cacheStatus` on the tier map is informational only — no downstream reader; dropping it would churn tests for no behavior gain.

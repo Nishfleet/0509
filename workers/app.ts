@@ -468,8 +468,9 @@ export default {
     // thrown, and a whole-run failure surfaces through the same scheduled-
     // task alert channel as the backfill.
     if (scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily") {
+      const publisherRun = runAdsDomainPublisher(env, ctx);
       ctx.waitUntil(
-        runAdsDomainPublisher(env, ctx).then(
+        publisherRun.then(
           (result) => {
             if (result.attempted > 0) {
               console.log("ads domain publisher completed", {
@@ -487,35 +488,30 @@ export default {
             reportScheduledTaskFailure(env, "ads_domain_publisher", error),
         ),
       );
-    }
-
-    // Nightly sneaker-resale Offer Timeline backfill (issue #1946): rides
-    // the same 04:00 daily rail as the demo-brand backfill (issue #1449)
-    // and the BET 5a publisher for the same release-soak reason — a new
-    // wrangler cron would escape the CHECK that accepts only the four
-    // production crons. The cohort is derived from
-    // `data/seed-lists/sneaker-resale.json` filtered by the
-    // `public_search` discovery-cache tier verdict (phase 1) so a brand
-    // with no verified/likely ad row keeps the honest 410 shell — no
-    // phantom offer. Per-brand failure isolation matches the demo-brand
-    // pattern; a whole-run failure surfaces through the same scheduled-
-    // task alert channel as the other daily-rail blocks. Rollback =
-    // removing this block (the digest cron and watchlist runs continue
-    // untouched).
-    if (scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily") {
       ctx.waitUntil(
-        runSneakerResaleBackfill(env).then(
-          (result) => {
-            console.log("sneaker resale backfill completed", {
-              day: result.day,
-              captured: result.capturedCount,
-              failed: result.failedCount,
-              summary: summarizeSneakerResaleBackfill(result),
-            });
-          },
-          (error) =>
-            reportScheduledTaskFailure(env, "sneaker_resale_backfill", error),
-        ),
+        publisherRun
+          // Issue #1946: the sneaker-resale cohort verdict reads the
+          // publisher's `public_search` cache rows, which carry a 15-minute
+          // TTL. As a sibling waitUntil it would read before the publisher's
+          // awaited per-domain writes land, derive an empty tier map, and
+          // capture zero brands every night. Chain after the publisher's
+          // promise so this tick's rows are fresh; a publisher whole-run
+          // failure still lets the backfill run best-effort (it pages via
+          // its own block) and the empty-cohort guard keeps the honest 410.
+          .catch(() => undefined)
+          .then(() => runSneakerResaleBackfill(env))
+          .then(
+            (result) => {
+              console.log("sneaker resale backfill completed", {
+                day: result.day,
+                captured: result.capturedCount,
+                failed: result.failedCount,
+                summary: summarizeSneakerResaleBackfill(result),
+              });
+            },
+            (error) =>
+              reportScheduledTaskFailure(env, "sneaker_resale_backfill", error),
+          ),
       );
     }
 

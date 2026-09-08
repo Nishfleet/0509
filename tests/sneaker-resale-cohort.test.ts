@@ -414,6 +414,52 @@ describe("getSneakerResaleTierByDomain (read-only D1 adapter)", () => {
     expect(tierByDomain.size).toBe(0);
   });
 
+  it("falls through a demo-source row to an older non-demo row for the same domain (issue #1946)", async () => {
+    const now = Date.now();
+    const demoFetchedAt = new Date(now - 5 * 60 * 1000).toISOString();
+    const commercialFetchedAt = new Date(now - 25 * 60 * 1000).toISOString();
+    const expiresAt = new Date(now + 10 * 60 * 1000).toISOString();
+    const demoKey = "search-v2:domain:stockx.com:exact:demo:all:page-1";
+    const commercialKey =
+      "search-v2:domain:stockx.com:exact:meta_library_browser:all:page-1";
+    queryIn.mockResolvedValue([
+      {
+        cache_key: demoKey,
+        fetched_at: demoFetchedAt,
+        expires_at: expiresAt,
+        payload_json: JSON.stringify({
+          ads: [],
+          source: "demo",
+          provider: "demo",
+        }),
+      },
+      {
+        cache_key: commercialKey,
+        fetched_at: commercialFetchedAt,
+        expires_at: expiresAt,
+        payload_json: JSON.stringify({
+          ads: [{ domainMatch: { level: "registrable_domain" } }],
+        }),
+      },
+    ]);
+
+    const { getSneakerResaleTierByDomain } = await import(
+      "~/lib/sneaker-resale-cohort.server"
+    );
+
+    const env = { DB: {} } as unknown as AppEnv;
+    const tierByDomain = await getSneakerResaleTierByDomain(env, ["stockx.com"]);
+    // The newest row is a demo payload; the still-fresh commercial row from
+    // the same freshness window must win, not be silently discarded.
+    expect(tierByDomain.get("stockx.com")).toEqual({
+      verifiedCount: 1,
+      likelyCount: 0,
+      unmatchedCount: 0,
+      hasCoverage: true,
+      cacheStatus: "fresh",
+    });
+  });
+
   it("passes route_context='public_search' AND expires_at>now AND country='all' AND the cache_key list to queryIn", async () => {
     queryIn.mockResolvedValue([]);
     const { getSneakerResaleTierByDomain } = await import(

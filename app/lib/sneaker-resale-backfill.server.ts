@@ -433,5 +433,5 @@ export function summarizeSneakerResaleBackfill(
         return `${r.domain}:error${r.error ? `:${r.error}` : ""}`;
     }
   });
-  return `sneaker-resale-backfill day=${result.day} captured=${result.capturedCount} failed=${result.failedCount} [${lines.join(" ")}]`;
+  return `sneaker-resale-backfill day=${result.day} cohort=${result.domains.length} captured=${result.capturedCount} failed=${result.failedCount} [${lines.join(" ")}]`;
 }
