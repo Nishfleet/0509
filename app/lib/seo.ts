@@ -62,6 +62,56 @@ export function timelineSocialCardUrl(domain: string, brandName: string): string
   return `${canonicalUrl(`/social-card/timeline/${domain}.svg`)}?${params.toString()}`;
 }
 
+export interface SearchShareMeta {
+  title: string;
+  description: string;
+  ogImageUrl: string;
+  ogImageAlt: string;
+}
+
+/**
+ * Resolve the share meta for a `/search` result that settled on a single
+ * competitor (issue #2039). The `/search` result page is the top-of-funnel
+ * first-value share moment — a visitor shares a resolved competitor lookup
+ * (DM/email/Social/Slack) before creating an account — so a resolved single
+ * brand must render that brand's per-competitor social card and name it in
+ * the title/description, instead of the site-wide generic `og-image.png`.
+ *
+ * resolution rule: a competitor counts as resolved only when a valid
+ * `?website=` input normalized to exactly one brand — i.e. both `host` (the
+ * card's domain slug) and `displayName` (the card face) are set. `?website=`
+ * is the loader's only unambiguous single-brand signal: `competitorWebsite`
+ * is never populated for a bare `?query=` keyword lookup, which may match many
+ * brands, so gating on `displayName`+`host` keeps a wrong-brand card off an
+ * ambiguous keyword hit. When nothing resolves (idle `/search`, invalid input,
+ * multi-match keyword) returns `null` so the caller keeps the generic
+ * "Find competitor ads" meta untouched.
+ *
+ * The returned `ogImageUrl` is the same encoded SVG card the `/ads/:domain`
+ * surface already renders, so a shared search-result link carries the same
+ * "the competitor is behind this" conviction as a shared brand page.
+ */
+export function searchShareMeta(input: {
+  website: string | null;
+  host: string | null;
+  displayName: string | null;
+  score?: number | null;
+}): SearchShareMeta | null {
+  const { website, host, displayName } = input;
+  const score = input.score ?? null;
+  if (!website || !host || !displayName) {
+    return null;
+  }
+  const ogImageUrl = adsSocialCardUrl(host, displayName, score);
+  const ogImageAlt = `${displayName} Meta ads — see what changed — Five to Nine`;
+  return {
+    title: `${displayName} Meta ads — see what changed | Five to Nine`,
+    description: `Every public Meta ad ${displayName} is running right now — see what changed, compare offers, and track their spend. Free preview, no account needed.`,
+    ogImageUrl,
+    ogImageAlt,
+  };
+}
+
 export function compareSocialCardUrl(toolSlug: string): string {
   return canonicalUrl(`/social-card/compare/${toolSlug}.svg`);
 }
