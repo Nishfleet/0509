@@ -10,6 +10,7 @@ const {
   hasVisibleFocusTreatment,
   focusAdvanceKey,
   horizontalOverflowPx,
+  layoutViewportY,
   reducedMotionIssues,
 } = evaluatorModule;
 const {
@@ -78,6 +79,12 @@ describe("release experience pure contract evaluators", () => {
   it("identifies the checked-out candidate without requiring a deleted feature branch", () => {
     expect(resolveReleaseCandidateBase({})).toBe("HEAD");
     expect(resolveReleaseCandidateBase({ E2E_RELEASE_BASE: "release/base" })).toBe("release/base");
+  });
+
+  it("maps a visual-viewport-negative box back to the layout origin", () => {
+    expect(layoutViewportY(-31.734375, 31.734375)).toBe(0);
+    expect(layoutViewportY(-11, 0)).toBe(-11);
+    expect(layoutViewportY(80, 0)).toBe(80);
   });
 
   it("calculates document and nested horizontal overflow", () => {

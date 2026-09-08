@@ -99,3 +99,16 @@ describe("homepage desktop first viewport (#1212)", () => {
     expect(heroCase).toMatch(/margin-bottom:\s*10px/);
   });
 });
+
+describe("setup checklist mobile fold (#1383 reland)", () => {
+  it("restacks the tracking CTA under the field at 640px so it cannot overlap at y=-32", () => {
+    const budget = lastMedia(640, ".f9-evidence-setup-primary");
+    expect(budget).toMatch(
+      /\.f9-evidence-setup-primary > \.f9-evidence-cta \{\s*grid-column:\s*1;\s*grid-row:\s*2;/,
+    );
+    expect(budget).toMatch(
+      /\.f9-evidence-setup-primary > \.f9-evidence-setup-hint \{\s*grid-column:\s*1;\s*grid-row:\s*3;/,
+    );
+    expect(budget).toMatch(/\.f9-evidence-setup-primary \{\s*grid-template-columns:\s*1fr;/);
+  });
+});
