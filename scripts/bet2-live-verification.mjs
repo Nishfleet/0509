@@ -80,6 +80,17 @@ export const SECTION_1_8_RERUN = Object.freeze([
   "oura.com",
 ]);
 
+// Purpose-built nonsense domain that is guaranteed to stay a genuine 0-
+// candidate (no advertiser will ever own it) and thus keeps rendering the
+// bare empty card. The tier-model assertion's `true_zero_candidate_bare_empty`
+// contract is proven against THIS domain instead of depending on real brands
+// like slack.com / tcs.com which #1396 page-scoped (they now have rows once
+// their daily publisher lands). `.invalid` is RFC 2606 reserved, so the
+// domain can never resolve to a real advertiser. Probed only when
+// `--assert-tier-model` is passed, so the default canary is untouched.
+export const BET2_BARE_EMPTY_PROBE_DOMAIN =
+  "bet2-zero-candidate-probe.invalid";
+
 // BET 2 (#951) streams progress via client-side warming polls every 2 s.
 // This script cannot copy that cadence: anonymous /search is 20 requests
 // per 10 minutes per IP, and 2 s polls would burn the budget on one cold
@@ -909,10 +920,13 @@ export function evaluateSection18Rerun(results) {
  *       unverified.
  *
  * Both checks are over the FULL probe set passed in (the 25-domain cohort
- * plus the §1.8 rerun, when run from `main`). A run with no 0-candidate
+ * plus the §1.8 rerun, when run from `main`, plus the purpose-built nonsense
+ * domain probed for the bare-empty contract). A run with no 0-candidate
  * domains (every brand has rows) fails (b) deliberately — the bare empty card
- * is the contract for a nonsense domain, and the canary's 25-domain set
- * includes slack.com / tcs.com which are genuine 0-candidate today.
+ * is the contract for a nonsense domain, and the caller probes
+ * BET2_BARE_EMPTY_PROBE_DOMAIN (a `.invalid` domain no advertiser can ever
+ * own) for that side-effect, so the check no longer depends on slack.com /
+ * tcs.com being the live 0-candidate rows (they are page-scoped per #1396).
  * @param {ProbeResult[]} results
  * @returns {{ pass: boolean, checks: any[] }}
  */
@@ -1092,13 +1106,30 @@ async function main() {
     : { pass: true, checks: [] };
   // The tier-model assertion runs over the full probe set (cohort + rerun)
   // so a previously-bare-dead-end brand that now has raw candidates (e.g.
-  // allbirds) and a genuine 0-candidate domain (e.g. slack.com) are both in
-  // scope. Skipped unless `--assert-tier-model` is passed.
-  const tierModelVerdict =
+  // allbirds) and a purpose-built nonsense domain are both in scope.
+  // Skipped unless `--assert-tier-model` is passed.
+  //
+  // The bare-empty contract (a genuine 0-candidate renders the bare empty
+  // card) is proven against BET2_BARE_EMPTY_PROBE_DOMAIN, a `.invalid`
+  // domain no advertiser can own — NOT against slack.com / tcs.com, which
+  // #1396 page-scoped and which now have rows once their daily publisher
+  // lands. This keeps the assertion meaningful without depending on the
+  // live brand mix flipping to 0-candidate. The default `canary:bet2` run
+  // (no `--assert-tier-model`) never probes it.
+  const tierModelProbe =
     assertTierModel
+      ? probeDomain({
+          domain: BET2_BARE_EMPTY_PROBE_DOMAIN,
+          baseUrl,
+          beforeRequest: () => limiter.acquire(),
+        })
+      : null;
+  const tierModelVerdict =
+    assertTierModel && tierModelProbe
       ? evaluateTierModel([
           ...run.results,
           ...(rerun ? rerun.results : []),
+          tierModelProbe,
         ])
       : { pass: true, checks: [] };
   const pass = verdict.pass && rerunVerdict.pass && tierModelVerdict.pass;
