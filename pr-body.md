@@ -1,3 +1,5 @@
+net-positive-because: adds the D1 expand/contract phase-1 column and the deterministic price-tier extractor that the issue requires — the extraction is the load-bearing new code (190 + 30 lines) and the rest is the required real-D1 integration proof (443 lines of tests) plus the INSERT-path wiring (15 lines); it is the issue's own acceptance, not control-plane machinery.
+
 ## Why
 
 Issue #1279 — track Saucony as a watchlist brand for 7 days; refresh price-tier distribution across current watchlists. The market-signal report on 2026-08-27 (StockX midyear "Big Facts" + an "end of trainerflation" piece rejecting £250 trainers) names a value-tier swing in soft-resale; the existing 0509 /ads/ surface has no sneaker-resale brand and no per-row price-tier signal. The data layer needed to surface that swing is the `landing_page_snapshot.price_tier` column populated at INSERT time, plus a deterministic 4-band extractor the digest can read without re-fetching any page.
