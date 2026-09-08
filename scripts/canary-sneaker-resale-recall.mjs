@@ -246,21 +246,34 @@ export function evaluateSneakerResaleRecall(results) {
     if (probe.tierCounts.verified + probe.tierCounts.likely > 0) {
       continue;
     }
-    // 0 verified/likely. A known genuine-no-ads brand is reported as
-    // no-coverage and does not fail — the honest "not evidence of inactivity"
-    // copy, no page. A persistent 429 (rowCount 0, rateLimited) is never a
-    // no-coverage verdict: the run could not confirm the domain, so it fails.
+    // A run that could not confirm a domain's coverage — a persistent 429
+    // (rateLimited) or a network error — is NEVER a pass, no matter which
+    // carve-out the domain is in. The guard cannot prove the brand has no
+    // coverage (or that its gap still holds) if the request never returned a
+    // settled page; "cannot confirm" must fail loud, exactly as the reference
+    // search-tier canary does for a persistent 429.
+    if (probe.rateLimited || probe.requestError) {
+      failures.push(probe);
+      continue;
+    }
+    // 0 verified/likely on a CONFIRMED settled page. A known genuine-no-ads
+    // brand is reported as no-coverage and does not fail — the honest "not
+    // evidence of inactivity" copy, no page (issue #1945 verify). A brand not
+    // in any carve-out that dead-ends (0 rows) or blanket-unmatches is a real
+    // recall/alias regression and fails.
     if (KNOWN_NO_COVERAGE.has(probe.domain)) {
       noCoverage.push(probe);
       continue;
     }
     // A brand with a documented identity-resolution gap (a major advertiser
     // whose ads the pipeline does not yet connect to its domain) is surfaced
-    // as a known gap with its tracking issue, not hard-failed — mirroring
-    // search-tier-canary's known-alias-gap handling. A gap brand with rows
-    // present but all Unmatched, or 0 rows, is the named gap's symptom, not a
-    // NEW regression; the guard still measures the healthy tier-label path for
-    // it and will hard-fail the moment it diverges further or after the fix.
+    // as a known gap with its tracking issue rather than hard-failed —
+    // mirroring search-tier-canary's known-alias-gap handling and the issue's
+    // "fix the identity gap, defer the pipeline change" classification. The
+    // gap's current symptom (0 rows / blanket-unmatched) is the documented
+    // state, surfed every run. The moment the pipeline fix lands the probe
+    // returns rows and the brand drops out of this set; a confirmable 429 or
+    // request error above still fails regardless.
     const gapIssue = KNOWN_IDENTITY_GAPS.get(probe.domain);
     if (gapIssue) {
       identityGaps.push({ probe, issue: gapIssue });
@@ -320,8 +333,32 @@ const invokedDirectly =
   process.argv[1] !== undefined &&
   fileURLToPath(import.meta.url) === process.argv[1];
 
+/**
+ * Parse `--base-url <url>` from argv (the issue's documented verify command is
+ * `node scripts/canary-sneaker-resale-recall.mjs --base-url <url>`). Mirrors the
+ * simple `--key=value` style used by the sibling ads-domain-publisher, extended
+ * with a space-separated value form. Unknown flags are ignored (the canary is
+ * read-only).
+ * @param {string[]} argv
+ * @returns {{ baseUrl: string }}
+ */
+function parseArgs(argv) {
+  let baseUrl = process.env.SNEAKER_RESALE_CANARY_BASE_URL ?? DEFAULT_BASE_URL;
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    const eq = /^--base-url=(.*)$/.exec(arg);
+    if (eq) {
+      baseUrl = eq[1] || DEFAULT_BASE_URL;
+    } else if (arg === "--base-url" && i + 1 < argv.length) {
+      baseUrl = argv[i + 1] || DEFAULT_BASE_URL;
+      i += 1;
+    }
+  }
+  return { baseUrl };
+}
+
 async function main() {
-  const baseUrl = process.env.SNEAKER_RESALE_CANARY_BASE_URL ?? DEFAULT_BASE_URL;
+  const { baseUrl } = parseArgs(process.argv.slice(2));
   const domains = loadSneakerResaleDomains();
   emitLine(`sneaker-resale recall canary starting @ ${baseUrl} (n=${domains.length})`);
   const { results, verdict } = await runCanary({ baseUrl });
