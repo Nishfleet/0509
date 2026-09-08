@@ -67,6 +67,16 @@ export const KNOWN_IDENTITY_GAPS = Object.freeze(new Map([
   ["goat.com", "Nishfleet/0509#1950"],
   ["on.com", "Nishfleet/0509#1950"],
   ["reebok.com", "Nishfleet/0509#1950"],
+  // Live-evidenced 2026-09-09 ~04:45 IST (senior auditor): zappos ads EXIST and
+  // are VERIFIED — /search?q=zappos.com returns 13 rows, all 13 verified, 11
+  // linking www.zappos.com — but the website=zappos.com (apex) probe connects 0
+  // (settled "No verified ads found for zappos.com", NOT warming — the #2037
+  // warming carve-out does not apply), /ads/zappos.com 301s to /search?q=, and
+  // the sitemap dropped it after 2026-09-06's indexable capture. Same apex↔www
+  // identity-resolution class as goat/on/reebok: the fix is a curated
+  // IDENTITY_OVERRIDES entry (ridge.com precedent, #2014), tracked in the issue.
+  // Auto-drops the moment the pipeline fix lands and the probe returns rows.
+  ["zappos.com", "Nishfleet/0509#2059"],
 ]));
 
 // A cold domain can return a warming page (0 rows) on the first hit. The
