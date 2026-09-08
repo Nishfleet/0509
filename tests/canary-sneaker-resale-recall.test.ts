@@ -193,4 +193,69 @@ describe("canary.sneaker-resale-recall", () => {
     const { verdict } = await runCanary({ baseUrl: "https://0509.io", fetchImpl });
     expect(verdict.pass).toBe(true);
   });
+
+  it("evaluateSneakerResaleRecall fails a persistent 429 even on a carve-out domain", () => {
+    // A run that cannot confirm a domain (persistent 429 / request error) is
+    // never a pass, regardless of which carve-out the domain is in. sneakerping
+    // is in KNOWN_NO_COVERAGE, but a rate-limited probe must fail: "cannot
+    // confirm" is not "no coverage". All other domains return verified rows.
+    const results = loadSneakerResaleDomains().map((entry) =>
+      entry.domain === "sneakerping.com"
+        ? {
+            domain: entry.domain,
+            brand: entry.brand,
+            status: 429,
+            rowCount: 0,
+            rateLimited: true,
+            tierCounts: { verified: 0, likely: 0, unmatched: 0 },
+            headline: null,
+            isWarming: false,
+          }
+        : {
+            domain: entry.domain,
+            brand: entry.brand,
+            status: 200,
+            rowCount: 2,
+            tierCounts: { verified: 1, likely: 1, unmatched: 0 },
+            headline: "1 verified ad",
+            isWarming: false,
+          },
+    );
+    const verdict = evaluateSneakerResaleRecall(results);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.failures.map((f) => f.domain)).toEqual(["sneakerping.com"]);
+    expect(verdict.noCoverage).toEqual([]);
+  });
+
+  it("evaluateSneakerResaleRecall fails a request error even on an identity-gap domain", () => {
+    // goat.com is a known identity gap, but a network error that returns no
+    // settled page must still fail the guard — the gap's current state cannot
+    // be confirmed. All other domains return verified rows.
+    const results = loadSneakerResaleDomains().map((entry) =>
+      entry.domain === "goat.com"
+        ? {
+            domain: entry.domain,
+            brand: entry.brand,
+            status: null,
+            rowCount: 0,
+            requestError: "ECONNRESET",
+            tierCounts: { verified: 0, likely: 0, unmatched: 0 },
+            headline: null,
+            isWarming: false,
+          }
+        : {
+            domain: entry.domain,
+            brand: entry.brand,
+            status: 200,
+            rowCount: 2,
+            tierCounts: { verified: 1, likely: 1, unmatched: 0 },
+            headline: "1 verified ad",
+            isWarming: false,
+          },
+    );
+    const verdict = evaluateSneakerResaleRecall(results);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.failures.map((f) => f.domain)).toEqual(["goat.com"]);
+    expect(verdict.identityGaps).toEqual([]);
+  });
 });
