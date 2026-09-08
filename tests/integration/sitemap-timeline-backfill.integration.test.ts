@@ -107,20 +107,11 @@ function makeStubCapture(day: string, index: number) {
   return snapshotFor;
 }
 
-/**
- * Real sitemap candidacy: the sitemap read derives /timeline/:domain from the
- * canonical_url hostname, and `loadSitemapTimelineCandidateDomains` applies
- * the complete-proof gate (issue #1284) + non-ad-destination gate. Seeding a
- * complete-proof row per fixture domain (distinct old captured_at, no
- * ad_observation rows referencing them → never an ad destination) makes each
- * a genuine indexable timeline candidate.
- */
+/** Seeding a complete-proof row per fixture domain (old captured_at, no
+ * ad_observation references) makes each a genuine sitemap candidate. */
 async function seedSitemapCandidate(domain: string, capturedAt: string): Promise<void> {
   const day = capturedAt.slice(0, 10);
-  // Keys must pass the proof-gate key-shape validation ([a-f0-9-]+ segment)
-  // — a readable `seed-<domain>` key would fail `isValidProofScreenshotKey` /
-  // `isValidProofPageTextKey` and the row would not be a complete-proof
-  // candidate. Use the same hex32 builder the capture stub uses.
+  // Keys must pass the proof-gate key-shape validation ([a-f0-9-]+ segment).
   const hex = hex32(`seed-${domain}-${day}`);
   const htmlKey = `landing-pages/${day}/${hex}.html`;
   const screenshotKey = `landing-pages/${day}/${hex}.jpeg`;
