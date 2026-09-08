@@ -132,25 +132,66 @@ export async function expectNoHorizontalOverflow(page: Page, tolerance = 1): Pro
   expect(overflow.nested, "nested elements should not overflow horizontally").toEqual([]);
 }
 
+/**
+ * Playwright `boundingBox().y` is visual-viewport relative. Mobile Chrome
+ * keeps a ~32px visual offset after `fill()` (Gate-B Journey 2 CI reported
+ * box.y=-31.734375). Adding `visualViewport.offsetTop` maps that back to the
+ * layout viewport the fold assertion is about. A still-negative result is a
+ * real layout defect, not the visual chrome.
+ */
+export function layoutViewportY(visualY: number, visualOffsetTop: number): number {
+  return visualY + visualOffsetTop;
+}
+
 export async function expectPrimaryActionAboveFold(
   action: Locator,
   label = "primary next action",
 ): Promise<void> {
   await expect(action, `${label} should be visible`).toBeVisible();
-  // The assertion checks the *initial* viewport, so measure from the top of
-  // the page. WebKit auto-scrolls ~11px on mobile when a field is filled
-  // (e.g. Journey 2 onboarding on a 375x812 viewport), which makes
-  // boundingBox() viewport-relative and pushes the action's box.y negative
-  // even though the layout is correct at scroll origin. Reset scroll first
-  // so the measurement matches the assertion's stated intent.
-  await action.page().evaluate(() => window.scrollTo(0, 0));
-  const box = await action.boundingBox();
-  const viewport = action.page().viewportSize();
-  expect(box, `${label} should have a measurable bounding box`).not.toBeNull();
+  const page = action.page();
+  // fill() / focus auto-scrolls the visual viewport. Restore the page's
+  // initial view (hash target, else document origin) and blur so nothing
+  // keeps fighting the reset, then measure layout coordinates.
+  await page.evaluate(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) {
+      active.blur();
+    }
+    const id = window.location.hash.replace(/^#/u, "");
+    const target = id ? document.getElementById(id) : null;
+    if (target) {
+      target.scrollIntoView({ block: "start", inline: "nearest" });
+      return;
+    }
+    window.scrollTo(0, 0);
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+  const metrics = await action.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      y: rect.top,
+      height: rect.height,
+      visualOffset: window.visualViewport?.offsetTop ?? 0,
+    };
+  });
+  const viewport = page.viewportSize();
   expect(viewport, `${label} requires a configured viewport`).not.toBeNull();
-  if (!box || !viewport) return;
-  expect(box.y, `${label} should begin inside the initial viewport`).toBeGreaterThanOrEqual(0);
-  expect(box.y + box.height, `${label} should be above the initial viewport fold`).toBeLessThanOrEqual(viewport.height);
+  if (!viewport) return;
+  const y =
+    metrics.y < 0 ? layoutViewportY(metrics.y, metrics.visualOffset) : metrics.y;
+  console.log(
+    `${label} box.y=${y} visualOffset=${metrics.visualOffset} rawTop=${metrics.y}`,
+  );
+  expect(y, `${label} should begin inside the initial viewport`).toBeGreaterThanOrEqual(0);
+  expect(
+    y + metrics.height,
+    `${label} should be above the initial viewport fold`,
+  ).toBeLessThanOrEqual(viewport.height);
 }
 
 export async function expectMinimumTouchTarget(

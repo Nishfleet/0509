@@ -8294,6 +8294,20 @@ reds soften --- */
     grid-template-columns: 1fr;
     margin-inline: 12px;
   }
+
+  /* Desktop parks the CTA in column 2, row 1 so it sits beside the field.
+     A one-column grid would otherwise keep that placement and invent a
+     second implicit column — the button then overlaps the field and can
+     land ~32px above it (Gate-B Journey 2 mobile, box.y=-31.7). Stack it. */
+  .f9-evidence-setup-primary > .f9-evidence-cta {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .f9-evidence-setup-primary > .f9-evidence-setup-hint {
+    grid-column: 1;
+    grid-row: 3;
+  }
 }
 
 /* ============================================================
