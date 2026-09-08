@@ -78,7 +78,10 @@ run_leg() {
 # Each `run_leg ... || code=$?` captures the canary exit code without aborting
 # under `set -e`; a 0 exit leaves the code at its init value.
 worst=0
-run_leg "screenshot-rate watcher (168h)" "${RATE_CANARY}" --window-hours "${WINDOW_HOURS}" --file-issue || worst=$?
+# Rate legs both enforce the issue's >=90% metric (not the rate canary's
+# looser 80% alert-headroom default) so the guard observes exactly what #1985
+# promises: >=90% of NEW real succeeded captures carry a screenshot key.
+run_leg "screenshot-rate watcher (168h)" "${RATE_CANARY}" --window-hours "${WINDOW_HOURS}" --threshold 90 --file-issue || worst=$?
 paid_code=0
 run_leg "screenshot-rate paid-tier (168h)" "${RATE_CANARY}" --cohort paid-tier --threshold 90 --window-hours "${WINDOW_HOURS}" --file-issue || paid_code=$?
 if [[ "${paid_code}" -gt "${worst}" ]]; then
