@@ -64,6 +64,7 @@ function entry(overrides: Partial<OfferLedgerEntry> = {}): OfferLedgerEntry {
     pageTextHref: `/artifacts/page-text/${encodeURIComponent(HTML_A)}`,
     evidenceNote: null,
     transition: null,
+    runExtentLabel: null,
     ...overrides,
   };
 }
@@ -280,5 +281,41 @@ describe("/timeline/:domain render", () => {
     const description = metas.find((m) => m.name === "description")?.content ?? "";
     expect(description).not.toContain("each with the stored screenshot and page text");
     expect(description).toContain("a screenshot when we stored one");
+  });
+
+  it("renders a collapsed run as one state with an honest run-extent note (issue #1957)", async () => {
+    const collapsedEntry = entry({
+      id: "calendly-burst-1",
+      capturedAt: "2026-08-28T00:01:25.000Z",
+      dateLabel: "28 Aug 2026",
+      headline: "Brand Scaling Call - Adflex Digital",
+      ctaText: "Show more",
+      formPresent: false,
+      transition: null,
+      runExtentLabel: "unchanged since 28 Aug 2026",
+    });
+
+    const markup = await render(
+      data({
+        domain: "calendly.com",
+        brandName: "Calendly",
+        canonicalPath: "/timeline/calendly.com",
+        sharePath: "/timeline/calendly.com",
+        shareUrl: "https://0509.io/timeline/calendly.com",
+        entries: [collapsedEntry],
+      }),
+    );
+
+    // The collapse keeps the first capture's date as the visible state date.
+    expect(markup).toContain("28 Aug 2026");
+    // The run extent is shown honestly, not as repeated rows.
+    expect(markup).toContain("unchanged since 28 Aug 2026");
+    // A captured burst collapses to one row of the same offer.
+    expect(markup.match(/Brand Scaling Call - Adflex Digital/g)).toHaveLength(1);
+  });
+
+  it("renders no run-extent note on a normal singleton state (issue #1957)", async () => {
+    const markup = await render(data());
+    expect(markup).not.toContain("unchanged since");
   });
 });
