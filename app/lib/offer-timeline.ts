@@ -78,6 +78,15 @@ export interface OfferLedgerEntry {
   evidenceNote: string | null;
   /** Null on the first dated state — there is no prior offer to diff. */
   transition: OfferTransition | null;
+  /**
+   * The run's extent when consecutive captures were identical (issue #1957).
+   * Non-null on a collapsed dated state: the snapshot stayed unchanged
+   * through a later capture, so the state is shown once with an honest
+   * "unchanged since <date>" note instead of repeated identical rows.
+   * Null on a normal singleton state that changed, or on the first dated
+   * state.
+   */
+  runExtentLabel: string | null;
 }
 
 export function parseAsOfDate(value: string | null | undefined): string | null {
@@ -136,30 +145,91 @@ export function canonicalUrlBelongsToDomain(canonicalUrl: string, domain: string
   return hostname === needle || hostname === `www.${needle}` || hostname.endsWith(`.${needle}`);
 }
 
+function offerFieldsEqual(left: OfferSnapshotInput, right: OfferSnapshotInput): boolean {
+  return (
+    left.headline === right.headline &&
+    left.ctaText === right.ctaText &&
+    left.priceText === right.priceText &&
+    left.formPresent === right.formPresent
+  );
+}
+
+/**
+ * Build the dated offer-state ledger (issue #1957).
+ *
+ * Consecutive captures that are identical in all four commercial fields
+ * (headline, CTA, price, form present) collapse into ONE dated state so that
+ * capture-retry bursts do not render as many distinct "dated offer states"
+ * with empty transitions. The collapsed entry keeps the run's first capture's
+ * date and artifact hrefs, and carries a `runExtentLabel` (e.g. "unchanged
+ * since 2 Sept 2026") so a genuinely persistent offer stays visible as a run
+ * rather than as repeated identical rows. A real field change between runs
+ * still produces a before/after transition.
+ */
 export function buildOfferLedger(snapshots: readonly OfferSnapshotInput[]): OfferLedgerEntry[] {
   const ordered = [...snapshots].sort((left, right) => {
     const byTime = left.capturedAt.localeCompare(right.capturedAt);
     return byTime !== 0 ? byTime : left.id.localeCompare(right.id);
   });
 
-  return ordered.map((snapshot, index) => {
-    const previous = index > 0 ? ordered[index - 1] : undefined;
-    return {
-      id: snapshot.id,
-      capturedAt: snapshot.capturedAt,
-      dateLabel: formatOfferDate(snapshot.capturedAt),
-      canonicalUrl: snapshot.canonicalUrl,
-      headline: snapshot.headline,
-      ctaText: snapshot.ctaText,
-      priceText: snapshot.priceText,
-      formPresent: snapshot.formPresent,
-      screenshotHref: proofScreenshotSrc(snapshot.screenshotKey),
-      pageTextHref: proofPageTextSrc(snapshot.pageTextKey),
-      captureMethod: snapshot.captureMethod ?? null,
-      evidenceNote: snapshot.evidenceNote ?? null,
-      transition: previous ? diffOffer(previous, snapshot) : null,
-    };
-  });
+  const entries: OfferLedgerEntry[] = [];
+  let runStart = 0;
+
+  for (let index = 0; index < ordered.length; index += 1) {
+    const current = ordered[index]!;
+    const next = index + 1 < ordered.length ? ordered[index + 1] : undefined;
+    const runContinues = next !== undefined && offerFieldsEqual(current, next);
+    if (runContinues) {
+      continue;
+    }
+
+    // `current` is the last snapshot of a maximal identical run in
+    // [runStart..index]. Emit ONE collapsed state for the whole run.
+    const firstInRun = ordered[runStart]!;
+    const runLength = index - runStart + 1;
+    const previousState = entries.length > 0 ? entries[entries.length - 1] : undefined;
+
+    entries.push({
+      id: firstInRun.id,
+      capturedAt: firstInRun.capturedAt,
+      dateLabel: formatOfferDate(firstInRun.capturedAt),
+      canonicalUrl: firstInRun.canonicalUrl,
+      headline: firstInRun.headline,
+      ctaText: firstInRun.ctaText,
+      priceText: firstInRun.priceText,
+      formPresent: firstInRun.formPresent,
+      screenshotHref: proofScreenshotSrc(firstInRun.screenshotKey),
+      pageTextHref: proofPageTextSrc(firstInRun.pageTextKey),
+      captureMethod: firstInRun.captureMethod ?? null,
+      evidenceNote: firstInRun.evidenceNote ?? null,
+      transition: previousState
+        ? diffOfferBetweenStates(previousState, firstInRun)
+        : null,
+      runExtentLabel:
+        runLength > 1 ? `unchanged since ${formatOfferDate(current.capturedAt)}` : null,
+    });
+
+    runStart = index + 1;
+  }
+
+  return entries;
+}
+
+/**
+ * Diff the commercial fields of a previously emitted dated state against the
+ * first snapshot of the next distinct run. Both arguments are uniform within
+ * their own run, so comparing their representatives yields the real transition.
+ */
+function diffOfferBetweenStates(
+  previous: OfferLedgerEntry,
+  firstInRun: OfferSnapshotInput,
+): OfferTransition {
+  return {
+    headline: changeIfDifferent(previous.headline, firstInRun.headline),
+    ctaText: changeIfDifferent(previous.ctaText, firstInRun.ctaText),
+    priceText: changeIfDifferent(previous.priceText, firstInRun.priceText),
+    formPresent: changeIfDifferent(previous.formPresent, firstInRun.formPresent),
+  };
 }
 
 export function offerStateAsOf(
@@ -176,15 +246,6 @@ export function offerStateAsOf(
     }
   }
   return match;
-}
-
-function diffOffer(before: OfferSnapshotInput, after: OfferSnapshotInput): OfferTransition {
-  return {
-    headline: changeIfDifferent(before.headline, after.headline),
-    ctaText: changeIfDifferent(before.ctaText, after.ctaText),
-    priceText: changeIfDifferent(before.priceText, after.priceText),
-    formPresent: changeIfDifferent(before.formPresent, after.formPresent),
-  };
 }
 
 function changeIfDifferent<T>(before: T, after: T): OfferFieldChange<T> | null {
