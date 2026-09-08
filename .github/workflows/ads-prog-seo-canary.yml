@@ -1,0 +1,115 @@
+name: Programmatic SEO union canary
+
+# Always-on canary for issue #1455: the /ads/:domain programmatic-SEO union.
+#
+# BET 5's /ads/:domain surface only counts as a real surface when each
+# populated page satisfies ALL THREE conditions simultaneously:
+#   (a) it does NOT serve `<meta name="robots" content="noindex">`,
+#   (b) it is listed in the production sitemap, AND
+#   (c) it is reachable from `/search?q=<brand>` via a brand-page link.
+#
+# This workflow provides the LIVE, always-on daily half of the union (the
+# part that must hit the real production server to be meaningful):
+#
+#   - it fetches the production sitemap and samples **every** `/ads/:domain`
+#     URL it lists (the populated, indexable set — thin pages are excluded by
+#     the #1283 sitemap/noindex parity guards, so iterating the sitemap *is*
+#     iterating the populated pages the issue names),
+#   - for each it asserts the page is served indexable — i.e. it carries no
+#     `<meta name="robots" content="noindex">` tag — and that it is sitemap-
+#     listed (inherent in starting from the sitemap),
+#   - it fails loud (non-zero exit) if any page fails.
+#
+# The deterministic *render-level* half of the union — including condition (c)
+# (the /search -> /ads/:domain brand-page handoff), which loads client-side on
+# the live page and is therefore not reliably assertable by a plain curl of
+# the search route — is covered by the merged unit canary
+# `tests/ads-programmatic-seo.canary.test.tsx` (issue #1455, run in `npm test`
+# on every CI push). Together the scheduled live gate here and that
+# deterministic test assert the full three-condition union without ever
+# reporting a flaky false negative from the async search surface.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Daily. The /ads surface turns over on a weekly discovery cadence
+    # (#1622 seed-list publisher), so a once-a-day tripwire is the smallest
+    # interval that still surfaces a same-day noindex/sitemap regression while
+    # keeping the live-fetch load negligible.
+    - cron: "23 5 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ads-programmatic-seo-canary
+  cancel-in-progress: false
+
+jobs:
+  live-union:
+    # Read-only live probe. It only fetches public URLs (the sitemap and
+    # /ads/:domain pages); it never mutates state, so it runs the default
+    # token and needs `contents: read` only. Keep it on a hosted runner; a
+    # scheduled live-fetch gate does not need a self-hosted seat.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Assert every sitemap /ads page is indexable (union conditions a+b)
+        # A canary that cannot prove anything must fail LOUD, never exit 0.
+        # `bash` runs the existing live parity script; `set -euo pipefail`
+        # propagates its non-zero exit when any sitemap /ads page serves
+        # noindex. SEO_PARITY_MAX_SAMPLE is raised high enough to cover every
+        # /ads/:domain URL the sitemap lists (54 today) rather than the fast
+        # default sample of 10, satisfying acceptance #2's "fetches each
+        # /ads/<domain> URL".
+        id: union
+        shell: bash
+        env:
+          SEO_PARITY_SITE: https://0509.io
+          SEO_PARITY_MAX_SAMPLE: 300
+        run: |
+          set -euo pipefail
+          bash tests/seo/sitemap-noindex-parity.test.sh
+          echo "state=green" >> "$GITHUB_OUTPUT"
+
+      - name: Persist canary evidence
+        if: ${{ always() }}
+        shell: bash
+        env:
+          # Honest published state: the union step only writes `green` when
+          # every sitemap /ads page is indexable (set -euo pipefail aborts the
+          # step before the GITHUB_OUTPUT write on any noindex violation). Any
+          # other failure path leaves the state unset, and the evidence records
+          # it as red — never a false green.
+          STATE: ${{ steps.union.outputs.state || 'red' }} # nosemgrep: no-hand-built-state-ledger-tombstone — a GitHub Actions step-output reference (the union step's `state` output), not a hand-rolled state/ledger/tombstone file. The artifact is the canary evidence JSON written below, not orchestration state.
+          RUN_ID: ${{ github.run_id }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import datetime
+
+          with open("ads-prog-seo-canary-evidence.json", "w", encoding="utf-8") as f:
+              json.dump({
+                  "canary": "ads.programmatic.seo.canary.live-union",
+                  "state": os.environ["STATE"],
+                  "runId": int(os.environ["RUN_ID"]),
+                  "headSha": os.environ["HEAD_SHA"],
+                  "generatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              }, f, sort_keys=True, separators=(",", ":"))
+              f.write("\n")
+          PY
+
+      - name: Upload canary evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ads-prog-seo-canary-evidence
+          path: ads-prog-seo-canary-evidence.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
