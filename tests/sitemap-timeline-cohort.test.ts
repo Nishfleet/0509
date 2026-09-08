@@ -642,7 +642,7 @@ describe("sitemapTimelineExcludedDomains (static, no D1)", () => {
       "~/lib/sitemap-timeline-cohort"
     );
     const seedDomains = new Set(
-      (resolveSeedList(SNEAKER_RESALE_SEED_LIST).domains ?? [])
+      (resolveSeedList(SNEAKER_RESALE_SEED_LIST)?.domains ?? [])
         .map((entry) => canonicalizeSitemapTimelineDomain(entry?.domain))
         .filter((d): d is string => d !== null),
     );
