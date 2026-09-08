@@ -373,10 +373,15 @@ export function detectMoneyPathRegression(
   const minFailures = options.minFailures ?? DEFAULT_MONEY_PATH_MIN_FAILURES;
 
   const sorted = [...records].sort((a, b) => a.runAt.localeCompare(b.runAt));
+  /** @type {Map<string, Array<{ runAt: string, path: string, status: number | null, location: string, outcome: string }>>} */
   const byPath = new Map();
   for (const record of sorted) {
-    if (!byPath.has(record.path)) byPath.set(record.path, []);
-    byPath.get(record.path).push(record);
+    const pathRecords = byPath.get(record.path);
+    if (pathRecords === undefined) {
+      byPath.set(record.path, [record]);
+    } else {
+      pathRecords.push(record);
+    }
   }
 
   const incidents = [];
@@ -388,11 +393,13 @@ export function detectMoneyPathRegression(
     // data cannot tell them apart. The guard's state file owns idempotency
     // (see filterUnfiledIncidents).
     const last = pathRecords[pathRecords.length - 1];
-    if (!isMoneyPathFailure(last)) continue;
+    if (!last || !isMoneyPathFailure(last)) continue;
     const failures = pathRecords.slice(-minFailures);
     if (!failures.every(isMoneyPathFailure)) continue;
+    const firstFailure = failures[0];
     const withinWindow =
-      Date.parse(last.runAt) - Date.parse(failures[0].runAt) <= windowMs;
+      firstFailure &&
+      Date.parse(last.runAt) - Date.parse(firstFailure.runAt) <= windowMs;
     if (!withinWindow) continue;
     const previous = pathRecords[pathRecords.length - minFailures - 1];
     incidents.push({
@@ -497,7 +504,7 @@ function openIssue(repo, title, body, dryRun) {
 
 /**
  * @param {string[]} argv
- * @returns {{ runsCsv: string, authCsv: string, moneyPathCsv: string, repo: string, thresholdMs: number, dryRun: boolean, json: boolean }}
+ * @returns {{ runsCsv: string, authCsv: string, moneyPathCsv: string, moneyPathStateFile: string, repo: string, thresholdMs: number, dryRun: boolean, json: boolean }}
  */
 function parseCliArgs(argv) {
   const parsed = {
@@ -607,7 +614,7 @@ async function main() {
     const moneyRegression = detectMoneyPathRegression(
       parseMoneyPathRecords(args.moneyPathCsv),
     );
-    const stateFile = args.moneyPathStateFile || null;
+    const stateFile = args.moneyPathStateFile;
     let filedThisRun = false;
     if (moneyRegression) {
       // Idempotent filing: skip a path whose incident was already filed at
