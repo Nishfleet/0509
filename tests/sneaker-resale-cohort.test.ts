@@ -424,7 +424,7 @@ describe("getSneakerResaleTierByDomain (read-only D1 adapter)", () => {
     await getSneakerResaleTierByDomain(env, ["stockx.com", "goat.com"]);
 
     expect(queryIn).toHaveBeenCalledTimes(1);
-    const call = queryIn.mock.calls[0]?.[0];
+    const call = queryIn.mock.calls[0]?.[1];
     expect(call).toBeDefined();
     const sql = call.buildSql("?,?,?,?,?,?");
     expect(sql).toContain("FROM discovery_cache_entry");
