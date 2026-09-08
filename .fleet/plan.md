@@ -17,16 +17,16 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 
 ## Files
 
-- `app/lib/sitemap-timeline-cohort.ts` (new) — pure cohort derivation + path extractors + canonicalizer.
-- `app/lib/sitemap-timeline-cohort.server.ts` (new) — read-only D1 adapter: candidate domains (wraps loadIndexableTimelineEntries), tier read (no expiry gate), static exclusion set (demo ∪ sneaker seeds).
-- `app/lib/sitemap-timeline-backfill.server.ts` (new) — nightly capture module: row id, INSERT OR IGNORE, per-brand isolation, summarize, SITEMAP_TIMELINE_COHORT_CAP (200).
-- `workers/app.ts` — imports + sibling `ctx.waitUntil` in the existing daily block; failure name `sitemap_timeline_backfill`; no cron changes.
-- `tests/sitemap-timeline-cohort.test.ts` (new), `tests/sitemap-timeline-backfill.server.test.ts` (new), `tests/worker-scheduled-handler.test.ts` (edit), `tests/integration/sitemap-timeline-backfill.integration.test.ts` (new).
+- `app/lib/sitemap-timeline-cohort.ts` — pure cohort derivation + path extractors + canonicalizer.
+- `app/lib/sitemap-timeline-cohort.server.ts` — read-only D1 adapter: candidates (wraps loadIndexableTimelineEntries), tier read (no expiry gate), static exclusion set.
+- `app/lib/sitemap-timeline-backfill.server.ts` — nightly capture module (row id, INSERT OR IGNORE, per-brand isolation, summarize, SITEMAP_TIMELINE_COHORT_CAP).
+- `workers/app.ts` — sibling `ctx.waitUntil` in the existing daily block; failure name `sitemap_timeline_backfill`; no cron changes.
+- Tests: `tests/sitemap-timeline-cohort.test.ts`, `tests/sitemap-timeline-backfill.server.test.ts`, `tests/worker-scheduled-handler.test.ts`, `tests/integration/sitemap-timeline-backfill.integration.test.ts`.
 
 ## Out of scope
 
-- `migrations/**`, wrangler cron config, `.github/workflows/**`, verifier/deploy/GitHub paths — untouched (landing_page_snapshot already exists).
-- `app/routes/timeline.$domain.tsx`, `app/lib/sitemap.server.ts`, the sneaker/demo backfill modules and `data/seed-lists/` — read/reused, NOT modified.
+- No migrations, wrangler cron config, workflows, verifier/deploy/GitHub paths.
+- Read/reused, NOT modified: timeline route, sitemap module, sneaker/demo backfill modules, data/seed-lists.
 
 ## Reviewer rounds (seat cursor/cursor-grok-4.6-high; full buckets in the PR body)
 
