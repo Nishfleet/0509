@@ -16,6 +16,7 @@ export default [
   route("trust", "routes/trust.tsx"),
   route("proof", "routes/proof.tsx"),
   route("capture-rules", "routes/capture-rules.tsx"),
+  route("no-phantom-changes", "routes/no-phantom-changes.tsx"),
   route("bots/presence", "routes/bots.presence.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),

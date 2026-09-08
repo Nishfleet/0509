@@ -1,4 +1,4 @@
-import { useLoaderData, useRouteLoaderData } from "react-router";
+import { useLoaderData, useRouteLoaderData, Link } from "react-router";
 import type { HeadersArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
@@ -95,6 +95,13 @@ export default function PricingRoute() {
         commercialLaunch={commercialLaunch}
         initialPricingPreview={routeData.pricingPreview?.available ? routeData.pricingPreview : null}
       />
+      {/* Issue #2026: the buyer-facing "no phantom changes" guarantee sits one
+          click from the plans — the proof claim a buyer evaluating a price is
+          actually weighing. */}
+      <p className="f9-ads-proof-note f9-wk-dim">
+        {"No phantom changes: if we send it, the page really changed. "}
+        <Link to="/no-phantom-changes">Read the capture-validity rule set</Link>
+      </p>
       <MarketingFooter />
     </main>
   );

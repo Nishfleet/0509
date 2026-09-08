@@ -93,7 +93,10 @@ export default function TrustRoute() {
           error pages, anti-bot challenge walls, cookie walls, partial SPA shells, and churn that is not a real
           change. See the{" "}
           <Link to="/capture-rules">capture rules</Link> for the full, checkable list, including which
-          changes are corroborated by a screenshot and which alert without one.
+          changes are corroborated by a screenshot and which alert without one. The buyer-side
+          statement of the same guarantee —{" "}
+          <Link to="/no-phantom-changes">no phantom changes: if we send it, the page really changed</Link>
+          — carries the full rule set including geo-variance and takedown/restore suppression.
         </p>
       </PublicDocBlock>
 

@@ -172,6 +172,14 @@ export const CAPTURE_VALIDITY_PUBLIC_PATH = "/capture-rules";
 export const CAPTURE_RULES_PUBLIC_PATH = "/capture-rules";
 
 /**
+ * Buyer-surface alias path for the no-phantom-changes guarantee page (issue
+ * #2026). The page is the buyer-facing statement of the same rule set
+ * /capture-rules enumerates; it lives in app/routes/no-phantom-changes.tsx
+ * and is listed in SITEMAP_PATHS.
+ */
+export const NO_PHANTOM_CHANGES_PUBLIC_PATH = "/no-phantom-changes";
+
+/**
  * Full in-page href for the budget-skip block, e.g. `/capture-rules#budget-skip`.
  * Declared after `CAPTURE_RULES_PUBLIC_PATH` (const is not hoisted).
  */
