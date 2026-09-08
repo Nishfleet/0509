@@ -135,6 +135,7 @@ import {
   canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
+  searchShareMeta,
   webPageJsonLd,
 } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
@@ -211,12 +212,33 @@ function buildAnonSearchSetCookie(value: string): string {
 
 export const links: LinksFunction = () => canonicalLinks("/search");
 
-export const meta: MetaFunction = () =>
-  publicSeoMeta({
-    title: searchTitle,
-    description: searchDescription,
+export const meta: MetaFunction<typeof loader> = (args) => {
+  // The existing tests invoke `meta()` with no loader args (idle page), so
+  // treat an undefined arg as the unresolved/empty case and keep the generic
+  // share meta.
+  const loaderData = args?.loaderData ?? null;
+  // Issue #2039: a resolved single-competitor /search result (a valid
+  // `?website=` that normalized to one brand) is the top-of-funnel share
+  // moment before signup, so it must render that brand's encoded social card
+  // (and name the brand in the share title/description) instead of the
+  // site-wide generic og-image.png. Idle /search, invalid input, and multi-
+  // match keyword hits return null here and keep the generic card. `canonical`
+  // stays `/search` via `links()` (canonicalLinks) — this is a share-image/
+  // social-title change only, not a new indexable URL.
+  const share = loaderData
+    ? searchShareMeta({
+        website: loaderData.competitorWebsite.raw,
+        host: loaderData.competitorWebsite.host,
+        displayName: loaderData.competitorWebsite.displayName,
+      })
+    : null;
+  return publicSeoMeta({
+    title: share?.title ?? searchTitle,
+    description: share?.description ?? searchDescription,
     pathname: "/search",
+    ...(share ? { ogImageUrl: share.ogImageUrl, ogImageAlt: share.ogImageAlt } : {}),
   });
+};
 
 // React Router already merges Set-Cookie from a successful loader `data()`
 // result onto the HTML document. Other loader headers are NOT merged unless
