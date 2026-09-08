@@ -151,7 +151,7 @@ describe("buyer-surface locale cluster (issue #1501)", () => {
     expect(matchBuyerSurfaceSplat("search")).toBe("search");
     expect(matchBuyerSurfaceSplat("competitor-monitoring")).toBe("competitor-monitoring");
     expect(matchBuyerSurfaceSplat("capture-rules")).toBe("capture-rules");
-    expect(matchBuyerSurfaceSplat("ad-aggression")).toBe("ad-aggression");
+    expect(matchBuyerSurfaceSplat("methodology")).toBe("methodology");
     // Sub-paths that aren't a registered buyer surface (e.g. /compare/magicbrief
     // is its own named route, not part of the cluster) must 404 so the
     // cluster stays bounded.

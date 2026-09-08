@@ -342,8 +342,8 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // 2026-08-30: /compare hub joined the sitemap — the bare route now serves the
   // comparison-cluster index instead of 404 (issue #1470).
   // 2026-09: Ad Aggression Score methodology path renamed from
-  // /methodology/ad-aggression-score to /ad-aggression (issue #1263). The old
-  // path now 301-redirects; the sitemap lists the canonical one only so we
+  // /methodology/ad-aggression-score to /methodology (issues #1263/#2022). The
+  // old paths now 301-redirect; the sitemap lists the canonical one only so we
   // never index a redirect target alongside its origin.
   // 2026-09: /compare/visualping and /compare/foreplay left the sitemap
   // (issue #1481) — each is a duplicate that canonicalizes to its more
@@ -367,7 +367,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",
     "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale",
     "/pt-br/sneaker-resale",
-    "/capture-rules", "/no-phantom-changes", "/ad-aggression", "/pricing", "/help", "/docs", "/api/docs",
+    "/capture-rules", "/no-phantom-changes", "/methodology", "/pricing", "/help", "/docs", "/api/docs",
     "/status", "/changelog", "/trust", "/privacy", "/terms",
   ],
   e2eRoutePaths: [
