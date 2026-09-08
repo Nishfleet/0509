@@ -643,7 +643,7 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
  * emitted as FAQPage JSON-LD from this same array, so the structured data can
  * never drift from the visible copy. Every answer is grounded in content the
  * page already shows: the Ad Aggression Score card (public formula at
- * /ad-aggression, four sub-scores Velocity/Testing/
+ * /methodology, four sub-scores Velocity/Testing/
  * Freshness/Persistence), the visible "Last checked …" stamp and the
  * scheduled-scan cadence (Scout every 6h, Starter/Agency every 3h), the
  * verified-link vs matching-only distinction the page already labels, and
@@ -1268,20 +1268,20 @@ function BrandAdsResults({
             partnerCampaignAdIds={data.partnerCampaignAdIds}
           />
 
-          {/* AD-AGGRESSION METHODOLOGY FOOTER — "/ad-aggression" cross-link
-              (issue #1552). The Ad Aggression Score card is the page's named
-              differentiator, but the score alone is a number with no
-              explanation for the buyer landing from an SEO query. This footer
-              points that curiosity at the public formula — a link magnet that
-              converts the score into trust. Shown only on populated pages (≥1
-              verified-linked ad), which is exactly when the score can render;
-              a matched-but-unverified wall has no score to explain. Internal
-              nav, same tab. */}
+          {/* AD-AGGRESSION METHODOLOGY FOOTER — "/methodology" cross-link
+              (issue #1552 canonical updated by #2022 to /methodology). The Ad
+              Aggression Score card is the page's named differentiator, but the
+              score alone is a number with no explanation for the buyer landing
+              from an SEO query. This footer points that curiosity at the public
+              methodology page — a link magnet that converts the score into
+              trust. Shown only on populated pages (≥1 verified-linked ad),
+              which is exactly when the score can render; a matched-but-unverified
+              wall has no score to explain. Internal nav, same tab. */}
           {data.verifiedLinkCount > 0 ? (
             <p className="f9-wk-dim f9-ads-wall-foot">
               {"The Ad Aggression Score comes from a public formula, not a black box. "}
               <Link to={AD_AGGRESSION_METHODOLOGY_PATH}>
-                How the Ad Aggression Score is calculated
+                How this Ad Aggression Score is calculated — read the methodology
               </Link>
             </p>
           ) : null}

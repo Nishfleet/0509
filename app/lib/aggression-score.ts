@@ -33,16 +33,28 @@ export const AGGRESSION_FORMULA_VERSION = 1;
 /**
  * Public methodology page for the formula documented in this module.
  *
- * Path history: previously `/methodology/ad-aggression-score` (issue #960).
- * Renamed to `/ad-aggression` for issue #1263 — short, quotable, link-magnet.
- * The old path 301-redirects to this one in `app/routes.ts` so any external
- * link or sitemap entry pointing at the old URL keeps its equity.
+ * Path history: previously `/methodology/ad-aggression-score` (issue #960);
+ * promoted to `/ad-aggression` for issue #1263 — short, quotable, link-magnet;
+ * promoted again to `/methodology` for issue #2022 — the SEO direction thread
+ * asks for the scoring method as its own linkable, indexable "methodology"
+ * page (sitemap + /ads cross-links name it as methodology). The two older
+ * paths 301-redirect to this one in `app/routes.ts`, so any external link or
+ * sitemap entry pointing at them keeps its equity. The published formula is
+ * unchanged — only the canonical URL moved.
  */
-export const AD_AGGRESSION_METHODOLOGY_PATH = "/ad-aggression" as const;
+export const AD_AGGRESSION_METHODOLOGY_PATH = "/methodology" as const;
 
-/** Old canonical path; kept here so the redirect stays the only redirect source. */
+/** First canonical path; kept so the redirect stays the only redirect source. */
 export const AD_AGGRESSION_METHODOLOGY_PATH_LEGACY =
 	"/methodology/ad-aggression-score" as const;
+
+/**
+ * Second-prior canonical path (issue #1263). Redirected to
+ * `AD_AGGRESSION_METHODOLOGY_PATH` so indexed equity from the /ad-aggression
+ * era keeps flowing to the /methodology page.
+ */
+export const AD_AGGRESSION_METHODOLOGY_PATH_AD_AGGRESSION_LEGACY =
+	"/ad-aggression" as const;
 
 export interface AggressionScoreComponents {
 	/** 0-25: launch rate — new ads per week over the observed window. */

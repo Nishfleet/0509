@@ -108,7 +108,7 @@ describe("BreadcrumbList on category / top-level pages (issue #1463)", () => {
   it.each([
     ["sneaker-resale", ["Home", "Sneaker resale"]],
     ["capture-rules", ["Home", "Capture rules"]],
-    ["ad-aggression", ["Home", "Ad Aggression Score"]],
+    ["methodology", ["Home", "Ad Aggression Score"]],
   ])("%s carries a Home → page trail and visible nav", async (route, names) => {
     const markup = await renderDefault(route);
     expect(crumbNames(itemsOf(breadcrumb(markup)))).toEqual(names);
