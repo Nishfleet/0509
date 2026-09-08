@@ -85,6 +85,11 @@ describe("release experience pure contract evaluators", () => {
     expect(layoutViewportY(-31.734375, 31.734375)).toBe(0);
     expect(layoutViewportY(-11, 0)).toBe(-11);
     expect(layoutViewportY(80, 0)).toBe(80);
+    // Both directions with a non-zero offset: negative rawTop maps up to
+    // the layout origin, positive rawTop maps further down (so y + height
+    // can cross the fold and must fail the fold check).
+    expect(layoutViewportY(-31.734375, 31.734375)).toBe(0);
+    expect(layoutViewportY(10, 32)).toBe(42);
   });
 
   it("calculates document and nested horizontal overflow", () => {
