@@ -41,12 +41,23 @@ echo "seo-parity: sitemap lists ${#ads_urls[@]} /ads URLs; sampling up to ${MAX_
 
 failures=0
 for url in "${ads_urls[@]:0:${MAX_SAMPLE}}"; do
-  body="$(curl "${CURL_OPTS[@]}" "$url")"
-  if printf '%s\n' "$body" | grep -q '<meta name="robots" content="noindex">'; then
+  body_file="$(mktemp)"
+  http_code="$(curl "${CURL_OPTS[@]}" --write-out '%{http_code}' --output "$body_file" "$url" || true)"
+  body="$(cat "$body_file")"
+  rm -f "$body_file"
+  # Fail loud on a non-2xx status or an empty body: a page that errors (5xx)
+  # or returns nothing might carry no noindex meta and would otherwise be
+  # reported as "ok — indexable", silently green in a canary whose whole job
+  # is to fail loud on a broken surface (issue #1455 acceptance #2). The
+  # tagless/empty shape proves nothing about indexability.
+  if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ] || [ -z "$body" ]; then
+    echo "seo-parity: FAIL — ${url} returned HTTP ${http_code} (${#body} bytes)" >&2
+    failures=$((failures + 1))
+  elif printf '%s\n' "$body" | grep -q '<meta name="robots" content="noindex">'; then
     echo "seo-parity: FAIL — ${url} serves <meta name=\"robots\" content=\"noindex\">" >&2
     failures=$((failures + 1))
   else
-    echo "seo-parity: ok — ${url} is indexable"
+    echo "seo-parity: ok — ${url} is indexable (HTTP ${http_code})"
   fi
 done
 
