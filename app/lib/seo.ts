@@ -55,6 +55,13 @@ export function adsSocialCardUrl(domain: string, brandName: string, score: numbe
   return `${canonicalUrl(`/social-card/ads/${domain}.svg`)}?${params.toString()}`;
 }
 
+export function timelineSocialCardUrl(domain: string, brandName: string): string {
+  const params = new URLSearchParams({ n: brandName });
+  // canonicalUrl strips query strings, so build the canonical path first and
+  // append the brand query param afterwards (same recipe as the ads card).
+  return `${canonicalUrl(`/social-card/timeline/${domain}.svg`)}?${params.toString()}`;
+}
+
 export function compareSocialCardUrl(toolSlug: string): string {
   return canonicalUrl(`/social-card/compare/${toolSlug}.svg`);
 }
