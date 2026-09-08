@@ -249,10 +249,15 @@ export function detectAuthRegression(records, consecutiveRuns = DEFAULT_AUTH_CON
   const runs = [...byRun.keys()];
   if (runs.length < consecutiveRuns) return null;
 
-  const runEntries = runs.map((runAt) => ({
-    runAt,
-    records: byRun.get(runAt),
-  }));
+  const runEntries = runs.map((runAt) => {
+    // `runs` is derived from `byRun.keys()`, so every key is present and the
+    // record list is never undefined; `get` returning undefined is a type
+    // system artifact, not a runtime possibility here.
+    const records = /** @type {Array<{ runAt: string, path: string, status: number | null, outcome: string }>} */ (
+      byRun.get(runAt)
+    );
+    return { runAt, records };
+  });
 
   const lastN = runEntries.slice(-consecutiveRuns);
   const everyStreakRunRed = lastN.every((entry) =>

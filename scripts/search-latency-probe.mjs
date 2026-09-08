@@ -439,6 +439,9 @@ function updateDailySummary(outputDir, runRecord) {
 // for the guard to detect. 4xx statuses are recorded but not treated as an
 // outage: a 404/401 on an auth route is a misconfiguration, not a transient
 // availability blip.
+/**
+ * @param {number | null} status
+ */
 export function authOutcome(status) {
   if (status == null) return "fetch_error";
   if (status >= 500) return "error";
@@ -549,6 +552,8 @@ export function formatAuthAvailabilityLine({ runAt, baseUrl, records }) {
  *   run: RunRecord,
  *   stats: LatencyStats,
  *   metricLine: string,
+ *   authResults: Array<{ runAt: string, path: string, status: number | null, outcome: string, elapsedMs: number }>,
+ *   authMetricLine: string,
  * }>}
  */
 export async function runLatencyProbe({
