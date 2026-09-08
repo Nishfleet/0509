@@ -16,18 +16,11 @@ import {
 } from "~/lib/sitemap-timeline-cohort";
 
 /**
- * Phase-2 unit suite for the sitemap-timeline cohort nightly backfill
- * (issue #1958). Pure helpers (`sitemapTimelineBackfillRowId`,
- * `summarizeSitemapTimelineBackfill`) plus the no-D1 / no-cohort /
- * per-domain-failure / CAP branches of `runSitemapTimelineBackfill` are
- * exercised on the `node` project. The real D1 path (idempotency, ledger
- * accumulation, cohort inclusion predicate against a fresh local D1) lives
- * in `tests/integration/sitemap-timeline-backfill.integration.test.ts`
- * (phase 4).
- *
- * The node project shares a module registry with the sneaker-resale suite,
- * so every mock is a hoisted re-declare and `afterEach` restores + resets —
- * a stale sneaker-suite mock must never leak into this suite's assertions.
+ * Phase-2 unit suite (issue #1958): pure helpers plus the no-D1 / no-cohort /
+ * per-domain-failure / CAP branches of `runSitemapTimelineBackfill` on the
+ * `node` project. The real D1 path lives in the integration suite (phase 4).
+ * The node project shares a module registry with the sneaker-resale suite, so
+ * every mock is a hoisted re-declare and `afterEach` restores + resets.
  */
 
 const queryOne = vi.hoisted(() => vi.fn());
@@ -52,10 +45,8 @@ vi.mock("~/lib/landing-pages.server", () => ({
 }));
 
 // The candidate-domain adapter wraps the EXISTING
-// `loadIndexableTimelineEntries` from the sitemap module; mock it at the
-// adapter boundary (same seam as the phase-1 cohort suite) so the default
-// production candidate path is testable without driving the sitemap's own
-// D1 read.
+// `loadIndexableTimelineEntries` from the sitemap module; mock at the
+// adapter boundary so the default production candidate path is testable.
 vi.mock("~/lib/sitemap.server", () => ({
   loadIndexableTimelineEntries,
 }));
@@ -130,11 +121,7 @@ function tierLookupFor(
   };
 }
 
-/**
- * A real-shaped `LandingPageSnapshotData` for a given capture URL. Shared by
- * every write-path capture stub so the INSERT-column assertions see the real
- * snapshot fields (CAPTURE_HOMEPAGE shape `https://www.<domain>/`).
- */
+/** A real-shaped `LandingPageSnapshotData` for a capture URL. */
 function snapshotForUrl(url: string) {
   const domain = url.replace(/^https:\/\/www\./, "").replace(/\/$/, "");
   return {
