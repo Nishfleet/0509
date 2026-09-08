@@ -368,12 +368,13 @@ export function emitFunnelFirstBriefViewed(env: AppEnv, request: Request) {
 }
 
 /**
- * BET 7 (issue #1862): a signup completed — the magic-link verification
- * established a session for a brand-new workspace. Fires inside the same
- * request that set the session cookies, so the standard GPC opt-out applies.
- * Coarse workspace-scoped count only — no email, name, or user id ever
- * reaches a record. Only emitted when `mode === "signup"`; returning users
- * sign in via the login path and never trip this.
+ * BET 7 (issue #1862, OAuth follow-up #1872): a signup completed — a
+ * brand-new workspace was created. Fires on the magic-link verification
+ * request (mode `signup`) and on the Better Auth OAuth callback request that
+ * created a brand-new user. Returning users sign in via the login path and
+ * never trip this. Fires inside the same request that set the session
+ * cookies, so the standard GPC opt-out applies. Coarse workspace-scoped
+ * count only — no email, name, or user id ever reaches a record.
  */
 export function emitFunnelSignupCompleted(env: AppEnv, request: Request) {
   emitFunnelEvent(env, "signup_completed", {}, request);

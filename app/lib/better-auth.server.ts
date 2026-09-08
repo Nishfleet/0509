@@ -90,6 +90,30 @@ export function isBetterAuthOAuthProvider(value: string): value is BetterAuthOAu
   return BETTER_AUTH_OAUTH_PROVIDERS.includes(value as BetterAuthOAuthProvider);
 }
 
+/**
+ * True when this request is Better Auth's OAuth provider callback
+ * (`GET ${BETTER_AUTH_BASE_PATH}/callback/:provider`). The OAuth flow finishes
+ * a brand-new signup here — the only seam where a brand-new workspace is
+ * created from OAuth (a returning user signs in via the same callback but
+ * their user already exists, so no workspace is created). Used to distinguish
+ * an OAuth-driven `databaseHooks.user.create` from the magic-link signup path
+ * (which fires the same create hook from `/auth/better/magic-link`). Only the
+ * allowlisted providers count; anything else is not an OAuth completion.
+ */
+export function isBetterAuthOauthCallbackRequest(request: Request): boolean {
+  try {
+    const pathname = new URL(request.url).pathname;
+    const prefix = `${BETTER_AUTH_BASE_PATH}/callback/`;
+    if (!pathname.startsWith(prefix)) {
+      return false;
+    }
+    const provider = pathname.slice(prefix.length).split("/", 1)[0];
+    return isBetterAuthOAuthProvider(provider);
+  } catch {
+    return false;
+  }
+}
+
 export function isBetterAuthPasskeyEnabled(env: AppEnv) {
   return isBetterAuthConfigured(env);
 }
@@ -176,6 +200,29 @@ export function getBetterAuth(env: AppEnv, request: Request) {
             });
             if (user.emailVerified) {
               await maybeSendWelcomeEmail(env, user);
+            }
+            // BET 7 follow-up (issue #1872): a brand-new workspace was just
+            // created through the Better Auth OAuth callback (`/api/auth/
+            // callback/:provider`) instead of the magic-link path. Emit the
+            // coarse workspace-scoped `signup_completed` funnel event so
+            // scouts measuring signup -> activation do not undercount OAuth
+            // signups. This hook fires for EVERY brand-new user, including
+            // magic-link signups (which already emit `signup_completed` in
+            // completeBetterAuthMagicLinkSignIn) — gating on the OAuth
+            // callback path keeps each signup counted exactly once. A
+            // returning OAuth user already exists, so NO `user.create` fires
+            // here and no event is emitted (only new workspaces count). The
+            // emit is gated by FUNNEL_MEASUREMENT_ENABLED and never fails the
+            // sign-in flow.
+            if (isBetterAuthOauthCallbackRequest(request)) {
+              try {
+                const { emitFunnelSignupCompleted } = await import(
+                  "~/lib/funnel-measurement.server"
+                );
+                emitFunnelSignupCompleted(env, request);
+              } catch {
+                // Measurement must never block the OAuth completion.
+              }
             }
           },
         },
