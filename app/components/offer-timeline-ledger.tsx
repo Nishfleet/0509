@@ -62,6 +62,9 @@ export function OfferTimelineLedger({ entries }: { entries: OfferLedgerEntry[] }
             <time className="f9-timeline-date" dateTime={entry.capturedAt.slice(0, 10)}>
               {entry.dateLabel}
             </time>
+            {entry.runExtentLabel ? (
+              <p className="f9-timeline-run-extent">{entry.runExtentLabel}</p>
+            ) : null}
             <div className="f9-timeline-body">
               <p className="f9-timeline-headline">{entry.headline}</p>
               <p className="f9-timeline-fields">

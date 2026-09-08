@@ -28,6 +28,7 @@ function entry(overrides: Partial<OfferLedgerEntry> = {}): OfferLedgerEntry {
     pageTextHref: `/artifacts/page-text/${encodeURIComponent(HTML)}`,
     evidenceNote: null,
     transition: null,
+    runExtentLabel: null,
     ...overrides,
   };
 }
