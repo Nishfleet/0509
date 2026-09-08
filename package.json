@@ -36,6 +36,7 @@
     "canary:search-latency": "node scripts/search-latency-probe.mjs",
     "canary:search-stream": "node scripts/search-stream-canary.mjs",
     "canary:search-tier": "node scripts/search-tier-canary.mjs",
+    "canary:sneaker-resale-recall": "node scripts/canary-sneaker-resale-recall.mjs",
     "gate-c:soak:start": "node scripts/gate-c-soak.mjs start",
     "gate-c:soak:finalize": "node scripts/gate-c-soak.mjs finalize",
     "gate-c:soak:restore": "node scripts/release-evidence-archive.mjs restore",
