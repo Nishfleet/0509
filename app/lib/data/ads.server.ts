@@ -24,6 +24,7 @@ import {
 } from "~/lib/data/helpers.server";
 import { toPersistedDiscoveryRouteContext } from "~/lib/discovery-cache.server";
 import type { AppEnv } from "~/lib/env.server";
+import { extractPriceTier } from "~/lib/landing-page-price-tier.server";
 import type {
   AdRecord,
   AdDiscoveryProvider,
@@ -177,9 +178,10 @@ export async function createLandingPageSnapshot(
         ocr_text,
         translated_text,
         captured_at,
-        created_at
+        created_at,
+        price_tier
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
     `,
     id,
     snapshot.rawUrl,
@@ -195,6 +197,7 @@ export async function createLandingPageSnapshot(
     typeof snapshot.formPresent === "boolean" ? (snapshot.formPresent ? 1 : 0) : null,
     snapshot.capturedAt,
     timestamp,
+    extractPriceTier(snapshot.priceText),
   );
 
   await replaceAnalysisFields(env, "landing_page", id, buildLandingPageAnalysisFields(snapshot));
