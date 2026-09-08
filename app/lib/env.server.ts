@@ -68,6 +68,14 @@ export interface AppEnv {
    * for competitor websites. Off by default; when off, zero behavior change,
    * zero site-scan writes, zero events. */
   FULLSITE_WATCH_ENABLED?: string;
+  /**
+   * Optional host allowlist for the first Full-Site Watch canary. Space- or
+   * comma-separated hostnames (www. is ignored). When set, only matching
+   * advertiser websites are scanned; when empty, every watchlist with a
+   * public website URL participates. Rollback of the canary is emptying this
+   * list or flipping FULLSITE_WATCH_ENABLED off.
+   */
+  FULLSITE_WATCH_CANARY_HOSTS?: string;
   /** Local release-proof guard. Never configure this in preview or production. */
   E2E_PROVIDER_NETWORK_DENY?: string;
   E2E_TEST_MODE?: string;
@@ -213,6 +221,53 @@ function parseEnvFlag(value: string | undefined) {
 /** Full-Site Watch gate. When false, no site scans run and nothing writes. */
 export function isFullSiteWatchEnabled(env: AppEnv) {
   return parseEnvFlag(env.FULLSITE_WATCH_ENABLED);
+}
+
+function normalizeFullSiteWatchHost(value: string): string {
+  return value.trim().toLowerCase().replace(/\.$/, "").replace(/^www\./, "");
+}
+
+/** Hosts allowed while the production canary is in force. Empty = every host. */
+export function parseFullSiteWatchCanaryHosts(env: AppEnv): string[] {
+  const raw = env.FULLSITE_WATCH_CANARY_HOSTS?.trim();
+  if (!raw) {
+    return [];
+  }
+  return [
+    ...new Set(
+      raw
+        .split(/[\s,]+/)
+        .map(normalizeFullSiteWatchHost)
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/**
+ * True when Full-Site Watch may scan this website URL. The feature flag is
+ * still required; a canary host list, when present, further restricts to
+ * those hostnames (and their subdomains).
+ */
+export function isFullSiteWatchAllowedForHost(env: AppEnv, websiteUrl: string): boolean {
+  if (!isFullSiteWatchEnabled(env)) {
+    return false;
+  }
+  const canary = parseFullSiteWatchCanaryHosts(env);
+  if (canary.length === 0) {
+    return true;
+  }
+  let host: string;
+  try {
+    host = normalizeFullSiteWatchHost(new URL(websiteUrl).hostname);
+  } catch {
+    return false;
+  }
+  if (!host) {
+    return false;
+  }
+  return canary.some(
+    (allowed) => host === allowed || host.endsWith(`.${allowed}`),
+  );
 }
 
 /** BET 7 — same-session first brief gate (issue #1276). Default off. */

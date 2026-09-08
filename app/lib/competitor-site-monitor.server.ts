@@ -64,9 +64,10 @@ import { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
 // ==== Constants ====
 
 /**
- * Default rotating-batch page budget. Packet 5 (plan metering) owns the
- * per-tier replacement of this default with plan-entitlement budgets; until
- * then the design's free-tier cap is the standing bound.
+ * Default rotating-batch page budget and hard safety ceiling. Packet 5
+ * (plan metering) supplies the per-tier value via plan-entitlements
+ * `sitePageBudget`; this constant remains the clamp so a catalog typo
+ * cannot fetch thousands of pages.
  */
 export const DEFAULT_PAGE_BUDGET = 50;
 

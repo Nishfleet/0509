@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   appOrigin,
+  isFullSiteWatchAllowedForHost,
+  isFullSiteWatchEnabled,
   isSignupFirstBriefEnabled,
   isWhatsAppWebhookConfigured,
+  parseFullSiteWatchCanaryHosts,
 } from "~/lib/env.server";
 
 describe("appOrigin", () => {
@@ -77,5 +80,33 @@ describe("isSignupFirstBriefEnabled", () => {
 
   it("treats whitespace-padded truthy values as enabled", () => {
     expect(isSignupFirstBriefEnabled({ SIGNUP_FIRST_BRIEF_ENABLED: " 1 " })).toBe(true);
+  });
+});
+
+describe("Full-Site Watch canary host gate", () => {
+  it("is off when the flag is absent", () => {
+    expect(isFullSiteWatchEnabled({})).toBe(false);
+    expect(
+      isFullSiteWatchAllowedForHost({}, "https://www.nike.com/"),
+    ).toBe(false);
+  });
+
+  it("lets every host through when the flag is on and the canary list is empty", () => {
+    const env = { FULLSITE_WATCH_ENABLED: "true" };
+    expect(isFullSiteWatchEnabled(env)).toBe(true);
+    expect(parseFullSiteWatchCanaryHosts(env)).toEqual([]);
+    expect(isFullSiteWatchAllowedForHost(env, "https://nykaa.com/")).toBe(true);
+  });
+
+  it("restricts scans to the canary hosts when a list is set", () => {
+    const env = {
+      FULLSITE_WATCH_ENABLED: "true",
+      FULLSITE_WATCH_CANARY_HOSTS: "nike.com www.nike.com",
+    };
+    expect(parseFullSiteWatchCanaryHosts(env)).toEqual(["nike.com"]);
+    expect(isFullSiteWatchAllowedForHost(env, "https://www.nike.com/")).toBe(true);
+    expect(isFullSiteWatchAllowedForHost(env, "https://nike.com/in")).toBe(true);
+    expect(isFullSiteWatchAllowedForHost(env, "https://shop.nike.com/")).toBe(true);
+    expect(isFullSiteWatchAllowedForHost(env, "https://www.nykaa.com/")).toBe(false);
   });
 });
