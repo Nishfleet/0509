@@ -110,6 +110,12 @@ const changeEvents = [
     source: "AD LIBRARY",
     move: "New ad entered rotation",
     why: "Launched with 4 variants.",
+    // The /ads/:domain "what changed this week" feed now carries an
+    // eventType on every row so `rerankBrandChangeFeed` can collapse
+    // ad_new into a counted line (issue #1951). The fixture here is a
+    // single ad_new — the rerank surfaces it as the churn footnote, never
+    // a headline card.
+    eventType: "ad_new" as const,
     variantCount: 4,
   },
 ];
