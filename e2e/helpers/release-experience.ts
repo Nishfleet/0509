@@ -136,8 +136,9 @@ export async function expectNoHorizontalOverflow(page: Page, tolerance = 1): Pro
  * Playwright `boundingBox().y` is visual-viewport relative. Mobile Chrome
  * keeps a ~32px visual offset after `fill()` (Gate-B Journey 2 CI reported
  * box.y=-31.734375). Adding `visualViewport.offsetTop` maps that back to the
- * layout viewport the fold assertion is about. A still-negative result is a
- * real layout defect, not the visual chrome.
+ * layout viewport the fold assertion is about — unconditionally, so a
+ * positive rawTop with a non-zero offset cannot sneak past the fold check.
+ * A still-negative result is a real layout defect, not the visual chrome.
  */
 export function layoutViewportY(visualY: number, visualOffsetTop: number): number {
   return visualY + visualOffsetTop;
@@ -182,8 +183,7 @@ export async function expectPrimaryActionAboveFold(
   const viewport = page.viewportSize();
   expect(viewport, `${label} requires a configured viewport`).not.toBeNull();
   if (!viewport) return;
-  const y =
-    metrics.y < 0 ? layoutViewportY(metrics.y, metrics.visualOffset) : metrics.y;
+  const y = layoutViewportY(metrics.y, metrics.visualOffset);
   process.stdout.write(
     `GATE-B ${label} box.y=${y} visualOffset=${metrics.visualOffset} rawTop=${metrics.y}\n`,
   );
