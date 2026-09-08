@@ -245,9 +245,6 @@ describe("deriveSitemapTimelineCohort", () => {
 
   it("(e) exclusion is normalized through the canonicalizer (www./case/trailing dot)", () => {
     const covered = makeTier({ verifiedCount: 1, hasCoverage: true });
-    // Candidate spelled differently from the exclusion entry: the canonicalizer
-    // must still match them (www.Nike.com vs nike.com, Calendly.com. vs
-    // calendly.com).
     const cohort = deriveSitemapTimelineCohort(
       ["Calendly.com", "www.Nike.com"],
       new Map([
