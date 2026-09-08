@@ -1,0 +1,30 @@
+-- Issue #1279: price-tier distribution over the tracked-competitors
+-- landing-page corpus, grouped into four EUR bands — `<€30`, `€30–€100`,
+-- `€100–€250`, `>€250` — so the daily digest can report "Value-tier swing"
+-- without re-fetching any page.
+--
+-- D1 expand/contract phase 1 — additive only, no DROP / NOT NULL / rename:
+--
+--   price_tier  the deterministic price-band id derived from `price_text`
+--               by `extractPriceTier` in
+--               `app/lib/landing-page-price-tier.server.ts`. One of
+--               `under_30`, `30_to_100`, `100_to_250`, `over_250`, or
+--               `unknown`. NULL on rows where the extractor was never run
+--               (legacy snapshots written before the extractor existed)
+--               and on rows where `price_text` is itself NULL.
+--
+-- The column is nullable with no default: every existing row stays
+-- untouched and falls through as NULL. The plan explicitly classifies the
+-- backfill as best-effort and not load-bearing ("no existing row is forced
+-- to a non-null value — `unknown` is acceptable"). Historical rows will be
+-- re-classified naturally as the monitoring workflow re-captures them and
+-- `createLandingPageSnapshot` (phase 2) writes `price_tier` at INSERT time
+-- using the new extractor. The four named-band totals therefore reflect
+-- only the rows that were successfully parsed, which is the
+-- honest-accounting policy documented at the top of the extractor module.
+--
+-- Future phases may rename the column, DROP it, or fold the distribution
+-- into a derived summary table — those moves are out of scope for phase 1.
+-- The migration applies at the standard migration cadence
+-- (`scripts/d1-apply-migrations.mjs` / `wrangler d1 migrations apply`).
+ALTER TABLE landing_page_snapshot ADD COLUMN price_tier TEXT;
