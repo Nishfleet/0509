@@ -34,3 +34,14 @@ Replace the current "1 move · each with a saved screenshot" rendering — which
 - `app/lib/digest-rerank.ts`. The shared helper stays as-is; this PR only consumes it.
 - `tests/digest-rerank.test.ts`. The 17 existing rerank tests already cover `rerankDigestBrief` exhaustively; this PR adds a brand-page-level fixture, not a rerank-level one.
 - Any change to `app/lib/brand-page.server.ts`'s offer timeline, capture failures, or aggression score helpers.
+
+## Reviewer round (seat cursor/cursor-grok-4.6-high) — adjudication (issue #1951)
+
+Reviewer output on `origin/main...HEAD`: **Critical: none. Warnings: none.** Every Act-on bucket is empty → no worker re-delegation needed (one-retry-per-phase rule not triggered).
+
+- Consider — `ads.$domain.tsx` cache-miss teaching shell (exampleEvents) still visually dresses a bare ad_new as a headline "move" row ("New" badge). Pre-existing, aria-hidden, explicitly labeled "Example — this is what a watched brand looks like", not the real /ads surface. **Adjudication: Consider (not acting).** The issue's acceptance targets the real rendered surface and the regression test pins that surface. Re-routing the teaching shell is a cosmetic change to a non-shipped teaching state and would widen scope. Recorded for a possible follow-up, not re-delegated.
+- Consider — `otherItems` from the shared rerank is silently dropped; no test pins a hypothetical non-headline/non-churn type vanishing. Docstring documents this honestly and every feed row today is ad_new. **Adjudication: Consider (not acting).** The promise is documented; a guard would be additive hardening, out of this issue's scope.
+- Noted — `movesThisWeek={data.changeEvents.length}` stat-line cell still counts raw change events; semantically accurate (counts new creatives), not a regression.
+- Noted — plan.md rewrite is normal per-lane planning churn; not a protected file.
+
+Decisions: land the diff as-is (all critical/warning buckets empty). Follow-up candidates for new issues, not folded into #1951: (1) route the cache-miss example shell through rerankBrandChangeFeed; (2) pin the non-headline/non-churn "otherItems" handling with a one-line test.
