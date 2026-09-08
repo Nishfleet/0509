@@ -143,10 +143,15 @@ describe("saucony-watchlist (issue #1279)", () => {
       )
       .bind("%saucony%")
       .all<{ canonical_url: string; price_tier: string | null }>();
-    const sauconySnapshots = (tierRows.results ?? []).filter((row) =>
-      row.canonical_url.includes("saucony.com") ||
-      row.canonical_url.includes("saucony.co.uk"),
-    );
+    const sauconySnapshots = (tierRows.results ?? []).filter((row) => {
+      let host: string;
+      try {
+        host = new URL(row.canonical_url).hostname.toLowerCase();
+      } catch {
+        return false;
+      }
+      return host === "saucony.com" || host === "saucony.co.uk";
+    });
     expect(sauconySnapshots.length).toBeGreaterThanOrEqual(2);
     for (const row of sauconySnapshots) {
       expect(row.price_tier).toBe("100_to_250");
