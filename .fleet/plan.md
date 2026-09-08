@@ -40,7 +40,7 @@ Manager mode (heavy). The nightly offer-timeline backfill rail (issue #1449) cov
 
 ## Phase 5 — verification + reviewer round + PR
 
-- [ ] phase 5: full verification (all suites green, tsc clean, sgscan/crgate/repo tests), live acceptance-4 evidence, PR with Verification/run-proof receipts + reviewer round + arm.
+- [x] phase 5: full verification (all suites green, tsc clean, sgscan/crgate/repo tests), live acceptance-4 evidence, PR with Verification/run-proof receipts + reviewer round + arm.
 
 - Run `npx vitest run --configLoader runner --project node tests/sitemap-timeline-cohort.test.ts tests/sitemap-timeline-backfill.server.test.ts tests/worker-scheduled-handler.test.ts tests/sneaker-resale-backfill.server.test.ts` and `npx vitest run --configLoader runner --project workers tests/integration/sitemap-timeline-backfill.integration.test.ts tests/integration/sneaker-resale-backfill.integration.test.ts` — all green.
 - `npx tsc -b` clean on changed files. sgscan + crgate + repo tests per the standard gates.
@@ -117,7 +117,13 @@ Diff: `git diff e02011a9..HEAD` (integration suite). 17 integration tests green 
 - **Noted**: `capturedAt = ${day}T0${index+1}:30:00.000Z` produces invalid ISO for index >= 9 (footgun; all indexes used are 0-7; sneaker sibling has the same trap); arrayContaining vs exact toEqual complementarity; per-file cross-test accumulation handled honestly (distinct UTC days + exact id-scoped counts); capture-stub null without onFailure → reasonCode null is the honest contract; exclusion fixture is real (stockx.com/nike.com in the actual seed JSON).
 - **Dismissed-with-reason**: "real screenshot" is a stub key not browser-rendered (Browser Rendering explicitly out of CI scope, sneaker precedent; hex32 keys pass the real proof validators, so the href assertions stay honest); `as never` casts (sneaker shape); fixed fixture dates (all now injected, zero wall-clock dependence); hasCoverage: true for excluded domains in the covered fixture (forces the real static exclusion to do the dropping — the exact regression the exclusion test must prove).
 
-### Phase 5 reviewer round (single reviewer pass, seat per find_senior_seat)
-- **Act on (fixed)**: (manager appends during the run)
-- **Warning (fixed)**: (manager appends during the run)
-- **Suggestion (fixed/noted)**: (manager appends during the run)
+### Phase 5 reviewer round (single reviewer pass, seat cursor/cursor-grok-4.6-high, 2026-09-08)
+
+Diff: `git diff origin/main..HEAD` (four phases + phase-5 test pin). 93 node tests + 17 real-D1 integration tests green before review; reviewer re-ran both projects (7338 node / 191 workers) and confirmed green. Fork-point corruption check: branch rebased onto origin/main 2026-09-08 — the pre-rebase stale-tree diff (search-latency deletions) was a fork-point artifact; post-rebase diff touches only workers/app.ts + app/lib (3 new files) + tests + .fleet/plan.md.
+
+- **Act on (fixed)**: none.
+- **Warning (fixed)**: none.
+- **Suggestion (fixed)**: the scheduled-handler "does not run on the 3h or weekly crons" case fired surrogate strings (WARMUP_CRON 6-hourly, NORMAL_CRON hourly), not the literal REGULAR_MONITORING_CRON / WEEKLY_DIGEST_CRON constants the acceptance names. Pinned to the literal constants (1f9748e4, phase-5 worker retry); suite 22/22 green.
+- **Consider (recorded, follow-up candidates — all non-blocking hybrids of phase-1/2/4 carries)**: (1) the real D1 tier adapter getSitemapTimelineTierByDomain is never exercised against real D1 (every integration run injects tierLookup) — no-coverage fixture proves the backfill honors hasCoverage:false, not that production's adapter emits the right verdict; live acceptance-4 verification is the residual net, a discovery_cache_entry-seeded fixture is a follow-up issue candidate. (2) missing-landing_page_snapshot-table degrade logs identically to a quiet night (cohort=0 captured=0 failed=0) — a degraded=missing_snapshot_table marker in the summarize line is a follow-up candidate. (3) CAP slice runs before the domains-subset filter — no caller passes domains today, future hygiene only.
+- **Noted**: manager decision 1 (no-expiry tier read) is sound — calendly/adspyder have no scheduled writer, an expiry gate would empty the cohort at night and perpetuate the freeze; verdict is a durable evidence fact, age surfaced via cacheStatus fresh/stale; the sneaker SQL gate uses the same lexical expires_at comparison. Manager decision 2 (sibling, not chained after publisher) is sound for a sharper reason than the plan recorded: the only same-tick publisher writes are seed-list domains and the entire seed list sits in the static exclusion set, so no same-tick-dependent row can be a cohort candidate; residual first-tick races self-heal in one night.
+- **Dismissed-with-reason**: stale-verdict nightly captures are not a phantom-timeline vector (the verdict only gates inclusion; the written row is a real screenshot + page text of the page's current state); sibling read missing same-tick publisher coverage (target rows written by non-nightly paths; publisher seeds all excluded); missing-table degrade divergence from sneaker (planned carry, default path must never throw, failure channel stays live).
