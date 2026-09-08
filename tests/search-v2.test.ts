@@ -55,6 +55,31 @@ describe("search v2 cache isolation", () => {
     expect(buildSearchV2SavedQuery(intent, "broader", filters).filters.query).toBe("nykaa");
   });
 
+  it("prefers the resolved site name over the bare domain label for sneaker-resale brands (issue #1950)", () => {
+    // The whole point of identity resolution is that a bare registrable stem
+    // ("goat", "on", "reebok") is a poor Meta Ad Library query: "goat" surfaces
+    // keyword junk and "on" is ambiguous. Once identity supplies the site name,
+    // the provider term must be the site name so the brand's own ads surface and
+    // its /ads page can publish.
+    const goat = parseSearchInputFromWebsiteField("https://goat.com");
+    const on = parseSearchInputFromWebsiteField("https://on.com");
+    const reebok = parseSearchInputFromWebsiteField("https://reebok.com");
+
+    const goatQuery = buildSearchV2SavedQuery(goat, "exact", filters, {
+      identityAliases: ["GOAT"],
+    });
+    const onQuery = buildSearchV2SavedQuery(on, "exact", filters, {
+      identityAliases: ["On Shop"],
+    });
+    const reebokQuery = buildSearchV2SavedQuery(reebok, "exact", filters, {
+      identityAliases: ["Reebok"],
+    });
+
+    expect(goatQuery.filters.query).toBe("GOAT");
+    expect(onQuery.filters.query).toBe("On Shop");
+    expect(reebokQuery.filters.query).toBe("Reebok");
+  });
+
   it("uses distinct keys for domain exact vs broader scope", () => {
     const intent = parseSearchInputFromWebsiteField("okara.ai");
     const exact = buildSearchV2CacheKey({
@@ -228,6 +253,40 @@ describe("search v2 proof policy", () => {
 
     expect(result.verifiedCount).toBe(1);
     expect(result.ads[0]?.domainMatch?.level).not.toBe("unverified_text_candidate");
+  });
+
+  it("verifies On ads landing on the curated on-running.com alias against on.com", async () => {
+    // on.com / on-running.com are the same brand (On Running). The live
+    // on.com redirect chain never touches on-running.com, and the 2-char stem
+    // "on" is below the stem-extension floor, so the curated domain alias is
+    // what lets an ad that lands on on-running.com verify against a searched
+    // on.com (issue #1950 on.com ↔ on-running.com).
+    const on = parseSearchInputFromWebsiteField("https://on.com");
+    const result = await applySearchV2PostFilter(
+      {},
+      {
+        ads: [
+          ad({
+            metaAdId: "on-running-shoe",
+            advertiser: "On",
+            landingPageUrl: "https://www.on-running.com/us/cloudrunner",
+          }),
+        ],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "miss",
+      },
+      {
+        queryIntent: on,
+        scope: "exact",
+        displayDomain: "on.com",
+        identityAliases: ["On Shop"],
+        domainAliases: ["on-running.com"],
+      },
+    );
+
+    expect(result.verifiedCount).toBe(1);
+    expect(result.ads[0]?.domainMatch?.level).toBe("verified_alias");
   });
 });
 
