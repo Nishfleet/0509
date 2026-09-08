@@ -87,15 +87,19 @@ describe("dry-run path (no network)", () => {
   });
 
   it("does not write a receipt on the dry-run path", async () => {
-    const writes: string[] = [];
-    await main(["--doc", "docs/x.md"], {
+    const writeFile = vi.fn(() => {
+      throw new Error("dry-run path must not write");
+    });
+    const code = await main(["--doc", "docs/x.md"], {
       stdout: () => {},
       readFile: () => ADSTACK_FIXTURE,
+      writeFile,
       fetchImpl: () => {
         throw new Error("no network");
       },
     });
-    expect(writes).toEqual([]);
+    expect(code).toBe(0);
+    expect(writeFile).not.toHaveBeenCalled();
   });
 
   it("fails with a clear error when the doc has no To: and no --to override", async () => {
