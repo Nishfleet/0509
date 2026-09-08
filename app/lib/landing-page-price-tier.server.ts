@@ -235,3 +235,118 @@ export async function loadPriceTierDistribution(
   }
   return distribution;
 }
+
+/**
+ * Same shape as `loadPriceTierDistribution`, restricted to snapshots
+ * captured at or after `sinceIso`. NULL / unrecognised tiers bucket into
+ * `unknown`, exactly as the all-time read does.
+ */
+export async function loadPriceTierDistributionSince(
+  env: AppEnv,
+  sinceIso: string,
+): Promise<PriceTierDistribution> {
+  const distribution: PriceTierDistribution = {
+    under_30: 0,
+    "30_to_100": 0,
+    "100_to_250": 0,
+    over_250: 0,
+    unknown: 0,
+  };
+  type Row = { price_tier: string | null; count: number };
+  const rows = await queryAll<Row>(
+    env,
+    "SELECT price_tier, COUNT(*) AS count FROM landing_page_snapshot WHERE captured_at >= ?1 GROUP BY price_tier",
+    sinceIso,
+  );
+  for (const row of rows) {
+    const bucket = row.price_tier;
+    if (
+      bucket === "under_30" ||
+      bucket === "30_to_100" ||
+      bucket === "100_to_250" ||
+      bucket === "over_250"
+    ) {
+      distribution[bucket] = Number(row.count) || 0;
+    } else {
+      distribution.unknown += Number(row.count) || 0;
+    }
+  }
+  return distribution;
+}
+
+export interface PriceTierSwing {
+  /** All-time four-band distribution (the counts the section renders). */
+  distribution: PriceTierDistribution;
+  /** Same distribution restricted to the last 24h of captures. */
+  last24h: PriceTierDistribution;
+  /**
+   * Number of tracked pages whose band moved INTO or OUT OF the `over_250`
+   * (trainerflation) band, where the newer capture of the pair falls inside
+   * the last-24h window.
+   */
+  swingCount: number;
+  /** Inclusive window start (`nowIso` minus 24h), for the section copy. */
+  windowStartIso: string;
+}
+
+/**
+ * The read-switch consumer for the digest's "Value-tier swing" section
+ * (issue #1976, phase 3 of the #1279 expand/contract sequence). Three
+ * bounded reads:
+ *
+ * 1. the all-time distribution (`loadPriceTierDistribution`),
+ * 2. the last-24h distribution (second aggregate over
+ *    `captured_at >= now-24h`, as the issue prescribes),
+ * 3. the swing count — one windowed query that pairs each page's latest
+ *    snapshot with its immediately preceding snapshot and counts the
+ *    distinct pages where exactly one side of the pair sits in the
+ *    `over_250` band and the newer capture is inside the 24h window.
+ *
+ * `captured_at` is an ISO-8601 TEXT column, so the window comparison is a
+ * plain lexicographic string compare against an ISO timestamp — no date
+ * functions, no timezone drift. The swing query is bounded the same way as
+ * the distributions: SQLite 3.25+ window functions are available in D1,
+ * and the result is a single scalar row regardless of corpus size.
+ *
+ * A page whose FIRST snapshot ever lands in the window has no previous
+ * band to compare, so it is never counted as a swing — a new page is not
+ * a price move.
+ */
+export async function loadPriceTierSwing(
+  env: AppEnv,
+  nowIso: string = new Date().toISOString(),
+): Promise<PriceTierSwing> {
+  const windowStartMs = Date.parse(nowIso) - 24 * 60 * 60 * 1000;
+  const windowStartIso = new Date(windowStartMs).toISOString();
+
+  const [distribution, last24h, swingRows] = await Promise.all([
+    loadPriceTierDistribution(env),
+    loadPriceTierDistributionSince(env, windowStartIso),
+    queryAll<{ swing: number }>(
+      env,
+      `WITH ordered AS (
+         SELECT canonical_url,
+                price_tier,
+                captured_at,
+                LAG(price_tier) OVER (
+                  PARTITION BY canonical_url ORDER BY captured_at
+                ) AS prev_tier
+         FROM landing_page_snapshot
+       )
+       SELECT COUNT(DISTINCT canonical_url) AS swing
+       FROM ordered
+       WHERE captured_at >= ?1
+         AND price_tier IN ('under_30', '30_to_100', '100_to_250', 'over_250')
+         AND prev_tier IN ('under_30', '30_to_100', '100_to_250', 'over_250')
+         AND (price_tier = 'over_250') != (prev_tier = 'over_250')`,
+      windowStartIso,
+    ),
+  ]);
+
+  return {
+    distribution,
+    last24h,
+    swingCount: Number(swingRows[0]?.swing) || 0,
+    windowStartIso,
+  };
+}

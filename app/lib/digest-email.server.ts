@@ -35,6 +35,10 @@ import {
   type AdChurnSummary,
 } from "~/lib/digest-rerank";
 import { firstBriefEmailSubject } from "~/lib/first-brief";
+import {
+  PRICE_TIER_BANDS,
+  type PriceTierSwing,
+} from "~/lib/landing-page-price-tier.server";
 import { safeTimeZone } from "~/lib/safe-timezone";
 import type { WatchPeriodTriageStatus } from "~/lib/watch-event-evaluator.server";
 import {
@@ -156,6 +160,15 @@ export interface DigestEmailInput {
   nextScanAt?: string | null;
   nextScanLabel?: string | null;
   firstBrief?: boolean;
+  /**
+   * Value-tier swing (issue #1976): the precomputed price-tier aggregate +
+   * trainerflation band-move count, loaded by the delivery layer via
+   * `loadPriceTierSwing(env)`. Absent renders nothing at all — the email is
+   * byte-identical without it. This module never queries D1 itself (same
+   * rule as the aggression-score note above): the caller passes the
+   * aggregate in.
+   */
+  priceTierSwing?: PriceTierSwing | null;
 }
 
 export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
@@ -240,6 +253,9 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   });
   const retentionHtml = renderEmailRetentionBlock(retention);
   const retentionTextLines = renderEmailRetentionText(retention);
+  // Value-tier swing (issue #1976): top-of-brief, deterministic, no LLM.
+  const valueTierSwingHtml = renderValueTierSwingSectionHtml(input.priceTierSwing ?? null);
+  const valueTierSwingText = renderValueTierSwingSectionText(input.priceTierSwing ?? null);
 
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
@@ -253,6 +269,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
         <p style="${EMAIL_CASE_META_STYLE}">Evidence mix:</p>
         <p style="margin: 0; color: ${EMAIL_CASE_INK};">${escapeHtml(proofMixLabel(proofMix))}</p>
       </div>
+      ${valueTierSwingHtml}
       ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
       ${renderTrendSectionHtml(trendLines)}
@@ -282,6 +299,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     ...retentionTextLines,
     "",
+    ...valueTierSwingText,
     ...renderEmailAccountabilityText(accountability),
     ...renderTrendSectionText(trendLines),
     "",
@@ -1218,6 +1236,57 @@ function renderStrategySectionHtml(strategyParagraph: string | null) {
         <p style="${EMAIL_CASE_EYEBROW_STYLE}">AI summary of the week</p>
         <p style="margin: 0; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(strategyParagraph)}</p>
       </div>`;
+}
+
+/**
+ * Value-tier swing (issue #1976) — top-of-brief section, deterministic only.
+ * Renders the four-band counts from the price-tier aggregate (`<€30`,
+ * `€30–€100`, `€100–€250`, `>€250`), the unknown bucket as a footnote, and
+ * the trainerflation band-move count. No LLM, no invented copy: every number
+ * comes from `loadPriceTierSwing(env)`, loaded by the delivery layer.
+ */
+function renderValueTierSwingSectionHtml(swing: PriceTierSwing | null) {
+  if (!swing) {
+    return "";
+  }
+  const bandRows = PRICE_TIER_BANDS.map(
+    (band) => `
+          <tr>
+            <td style="font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT}; padding: 8px 0; border-bottom: 1px dotted ${EMAIL_CASE_LINE};">${escapeHtml(band.label)}</td>
+            <td style="font-family: ${EMAIL_MONO_FONT}; font-size: 12px; text-align: right; color: ${EMAIL_CASE_INK}; padding: 8px 0; border-bottom: 1px dotted ${EMAIL_CASE_LINE};">${swing.distribution[band.id]}</td>
+          </tr>`,
+  ).join("");
+  const swingLine =
+    swing.swingCount > 0
+      ? `<p style="margin: 0 0 10px; color: ${EMAIL_CASE_INK};">${swing.swingCount} tracked competitor${swing.swingCount === 1 ? "" : "s"} moved into or out of the &gt;€250 band in the last 24h.</p>`
+      : `<p style="margin: 0 0 10px; color: ${EMAIL_CASE_INK};">No tracked competitor moved into or out of the &gt;€250 band in the last 24h.</p>`;
+  return `
+      <h2 style="${EMAIL_CASE_DISPLAY_STYLE}">Value-tier swing</h2>
+      ${swingLine}
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 20px; background-color: ${EMAIL_CASE_CARD};">
+        ${bandRows}
+      </table>
+      <p style="margin: -12px 0 18px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; color: ${EMAIL_CASE_INK_FAINT};">${swing.distribution.unknown} capture${swing.distribution.unknown === 1 ? "" : "s"} could not be priced and are not counted in the bands above.</p>
+  `;
+}
+
+/** Text-part twin of the HTML section. Empty array renders nothing. */
+function renderValueTierSwingSectionText(swing: PriceTierSwing | null): string[] {
+  if (!swing) {
+    return [];
+  }
+  const swingLine =
+    swing.swingCount > 0
+      ? `${swing.swingCount} tracked competitor${swing.swingCount === 1 ? "" : "s"} moved into or out of the >€250 band in the last 24h.`
+      : "No tracked competitor moved into or out of the >€250 band in the last 24h.";
+  return [
+    "Value-tier swing",
+    swingLine,
+    ...PRICE_TIER_BANDS.map(
+      (band) => `${band.label}: ${swing.distribution[band.id]}`,
+    ),
+    `${swing.distribution.unknown} capture${swing.distribution.unknown === 1 ? "" : "s"} could not be priced and are not counted in the bands above.`,
+  ];
 }
 
 function renderTrendSectionHtml(lines: Array<{ text: string }>) {
