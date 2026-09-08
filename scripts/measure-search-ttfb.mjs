@@ -19,16 +19,27 @@
 // limiter. The only new code is the six-domain cohort constant and the focused
 // termination wrapper.
 //
+// Measure caveats (same as every sibling probe): this measures the SSR HTML
+// stream's first row byte, not a literal browser paint, and proxy/CDN caching
+// means it cannot guarantee a cold uncached query — it is the metric's real,
+// reproducible detector, not a literal gold-button press. With n=6 samples the
+// nearest-rank p95 is the maximum, so the gate effectively requires all six
+// pinned domains under the ceiling — the conservative reading of a tail metric.
+//
+// Two verdict checks: `p95_first_card_at_or_below_ceiling` (the issue's metric)
+// plus `six_domains_sampled` — a subscription guard that refuses to PASS an
+// under-sampled window (a 429/5xx/warming domain drops its first-card sample).
+//
 // Terminology (accept):
 //   node scripts/measure-search-ttfb.mjs
 //   # Expected: p95_first_card_ms < 5000 over the six-domain §1.8 set.
 //   # Exits non-zero when the p95 first-card ceiling trips.
 //
 // This script is measurement AND verdict: it exits non-zero when the p95
-// first-card check trips, so a scheduled run (the provisioned timer / CI)
-// fails loud. Anonymous /search is 20 req / 10 min / IP, so every call goes
-// through the same sliding-window limiter as bet2-live-verification.mjs.
-
+// first-card check trips (or the six-domain subscription is under-sampled), so
+// a scheduled run (the provisioned timer / CI) fails loud. Anonymous /search is
+// 20 req / 10 min / IP, so every call goes through the same sliding-window
+// limiter as bet2-live-verification.mjs.
 import { writeSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -64,27 +75,45 @@ export const SEARCH_TTFB_USER_AGENT = "0509-search-ttfb/1.0";
  * Focused termination for the issue #2032 metric. Unlike the streaming canary
  * this gate is ONLY the first-card-paint assertion the metric names — dead-end
  * and verified-share are product-recall concerns covered by #2024/#1858, not
- * the perceived-latency metric here. Kept as the first-card check from
- * `evaluateTermination` so verdict semantics stay identical to the shared
- * machinery (p95 null => fail).
+ * the perceived-latency metric here. It admits two checks:
+ *
+ *   - `p95_first_card_at_or_below_ceiling` from the shared `evaluateTermination`
+ *     (p95 null => fail), and
+ *   - `six_domains_sampled` — a subscription guard: the gate must FAIL if any
+ *     pinned domain produced NO first-card sample (a 429/5xx/warming outcome
+ *     drops its `firstCardAtMs` from `summarizeResults`). `sampledCount` is the
+ *     number of probed domains that actually painted a first card; when it is
+ *     below the six-domain cohort the p95 of whatever survived is meaningless,
+ *     so the gate refuses to pass on an under-subscribed window.
  *
  * @param {ReturnType<typeof summarizeResults>} summary
- * @param {{ p95CeilingMs?: number }} [thresholds]
- * @returns {{ pass: boolean, check: { name: string, ok: boolean, observed: unknown, threshold: number, detail: string } }}
+ * @param {{ p95CeilingMs?: number, sampledCount?: number }} [thresholds]
+ * @returns {{ pass: boolean, checks: Array<{ name: string, ok: boolean, observed: unknown, threshold: number | null, detail: string }> }}
  */
 export function evaluateTtfbTermination(summary, thresholds = {}) {
   const p95Ceiling = thresholds.p95CeilingMs ?? TTFB_P95_CEILING_MS;
+  const sampledCount = thresholds.sampledCount ?? summary.total;
   const full = evaluateTermination(summary, {
     p95FirstCardCeilingMs: p95Ceiling,
   });
   const byName = new Map(full.checks.map((check) => [check.name, check]));
-  const check = byName.get("p95_first_card_at_or_below_ceiling");
-  if (!check) {
+  const p95check = byName.get("p95_first_card_at_or_below_ceiling");
+  if (!p95check) {
     throw new Error(
       "evaluateTermination did not produce check \"p95_first_card_at_or_below_ceiling\"",
     );
   }
-  return { pass: check.ok, check };
+  const sampledCheck = {
+    name: "six_domains_sampled",
+    ok: sampledCount >= MEASURE_TTFB_DOMAINS.length,
+    observed: sampledCount,
+    threshold: MEASURE_TTFB_DOMAINS.length,
+    detail: `first-card samples: ${sampledCount}/${MEASURE_TTFB_DOMAINS.length}`,
+  };
+  return {
+    pass: p95check.ok && sampledCheck.ok,
+    checks: [p95check, sampledCheck],
+  };
 }
 
 /**
@@ -99,6 +128,7 @@ export function evaluateTtfbTermination(summary, thresholds = {}) {
  *   nowImpl?: () => number,
  *   requestSpacingMs?: number,
  *   userAgent?: string,
+ *   paceRequests?: boolean,
  *   onResult?: (probe: import("./bet2-live-verification.mjs").ProbeResult, index: number, total: number) => void,
  *   beforeRequest?: () => Promise<void> | void,
  * }} [input]
@@ -114,11 +144,21 @@ export async function runSearchTtfb(input = {}) {
     nowImpl: input.nowImpl,
     requestSpacingMs: input.requestSpacingMs ?? DEFAULT_REQUEST_SPACING_MS,
     userAgent: input.userAgent ?? SEARCH_TTFB_USER_AGENT,
-    paceRequests: false,
+    // Default to pace=true (internal limiter built by runLiveVerification) so
+    // a caller that forgets `beforeRequest` still throttles to the anonymous
+    // /search budget — mirroring the sibling runSearchStreamCanary. The CLI's
+    // main() overrides to the shared external limiter it already acquired.
+    paceRequests: input.paceRequests ?? true,
     onResult: input.onResult,
     beforeRequest: input.beforeRequest,
   });
-  const verdict = evaluateTtfbTermination(run.summary);
+  // Count the domains that actually painted a first card (status 200 with a
+  // firstCardAtMs) so the subscription guard can refuse an under-sampled
+  // window where 429/5xx/warming dropped pinned domains from the metric.
+  const sampledCount = run.results.filter(
+    (r) => r.status === 200 && r.firstCardAtMs !== null,
+  ).length;
+  const verdict = evaluateTtfbTermination(run.summary, { sampledCount });
   return { run, verdict };
 }
 
@@ -137,10 +177,12 @@ export function formatTtfbSummary({ run, verdict }) {
     }  ceiling=${TTFB_P95_CEILING_MS}ms  warming=${run.summary.warmingDomains}  errors=${run.summary.errorDomains}`,
   );
   lines.push("");
-  lines.push("TTFB termination check:");
-  lines.push(
-    `  ${verdict.check.ok ? "PASS" : "FAIL"} ${verdict.check.name}: ${verdict.check.detail}`,
-  );
+  lines.push("TTFB termination checks:");
+  for (const check of verdict.checks) {
+    lines.push(
+      `  ${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.detail}`,
+    );
+  }
   return lines;
 }
 
@@ -234,7 +276,7 @@ async function main() {
           summary: run.summary,
           termination: {
             pass: verdict.pass,
-            check: verdict.check,
+            checks: verdict.checks,
           },
         },
         null,
