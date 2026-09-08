@@ -48,7 +48,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         plan,
         watchlistLimit,
         brandWebsite: branding.brandWebsite,
-        prefillWebsite: source.searchParams.get("website")?.trim() ?? "",
+        // Issue #2051: accept `competitor` as an alias of the prefill param.
+        prefillWebsite:
+          source.searchParams.get("website")?.trim() ||
+          source.searchParams.get("competitor")?.trim() ||
+          "",
         prefillCountry: source.searchParams.get("country")?.trim() ?? "",
         resumeSetup: true,
         visitorCountry: defaultCountryForVisitor(
@@ -72,7 +76,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
 
   const target = new URLSearchParams();
-  for (const key of ["website", "country"]) {
+  for (const key of ["website", "country", "competitor"]) {
     const value = source.searchParams.get(key)?.trim();
     if (value) target.set(key, value);
   }
