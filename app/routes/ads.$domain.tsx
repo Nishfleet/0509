@@ -74,7 +74,7 @@ import type {
   BrandIntelTeaser,
   BrandPageAggression,
 } from "~/lib/brand-page.server";
-import { brandOwnedAdIdSet } from "~/lib/brand-page.server";
+import { brandOwnedAdIdSet, rerankBrandChangeFeed } from "~/lib/brand-page.server";
 import { isSeededBrandDomain } from "~/lib/ads-domain-publisher.server";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 import type { CaptureFailuresSummary } from "~/lib/offer-timeline.server";
@@ -1192,23 +1192,34 @@ function BrandAdsResults({
         />
       ) : null}
 
-      {/* 4. WHAT CHANGED THIS WEEK — only when real change events exist */}
-      {data.changeEvents.length > 0 ? (
-        <section className="f9-ads-sec" aria-labelledby="brand-changed-title">
-          <div className="f9-container">
-            <div className="f9-ads-sec-head">
-              <div className="f9-ads-sec-head-left">
-                <span className="f9-ads-sec-eyebrow">The reason to watch</span>
-                <h2 id="brand-changed-title">What changed this week</h2>
+      {/* 4. WHAT CHANGED THIS WEEK — apply the BET 1 re-rank (#1897) so a bare
+          ad_new never appears as a headline "move" with a screenshot (issue
+          #1951). Landing-page commercial-field changes are the headline
+          cards; ad_new / ad_inactive collapse into a single counted line. */}
+      {(() => {
+        const { headlineItems, adChurnSummary } = rerankBrandChangeFeed(data.changeEvents);
+        const hasHeadline = headlineItems.length > 0;
+        const hasChurn = adChurnSummary.total > 0;
+        if (!hasHeadline && !hasChurn) return null;
+        return (
+          <section className="f9-ads-sec" aria-labelledby="brand-changed-title">
+            <div className="f9-container">
+              <div className="f9-ads-sec-head">
+                <div className="f9-ads-sec-head-left">
+                  <span className="f9-ads-sec-eyebrow">The reason to watch</span>
+                  <h2 id="brand-changed-title">What changed this week</h2>
+                </div>
+                <span className="f9-ads-sec-meta">
+                  {hasHeadline
+                    ? `${headlineItems.length} ${headlineItems.length === 1 ? "move" : "moves"} · each with a saved screenshot`
+                    : "No offer changes this week"}
+                </span>
               </div>
-              <span className="f9-ads-sec-meta">
-                {`${data.changeEvents.length} ${data.changeEvents.length === 1 ? "move" : "moves"} · each with a saved screenshot`}
-              </span>
+              <BrandChangeTimeline events={headlineItems} churn={adChurnSummary} />
             </div>
-            <BrandChangeTimeline events={data.changeEvents} />
-          </div>
-        </section>
-      ) : null}
+          </section>
+        );
+      })()}
 
       <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} timelineIndexable={data.timelineIndexable} />
       <BrandCaptureFailures summary={data.captureFailuresSummary} domain={data.domain} signupPath={signupPath} />
@@ -1576,6 +1587,10 @@ function BrandAdsShell({
       source: "AD LIBRARY",
       move: "New ad entered rotation — a fresh summer creative",
       why: "Launched with 3 variants — they're testing which creative wins.",
+      // The example is a teaching shell, not a real rerank output — tag it
+      // as an ad_new so the now-required `eventType` is set everywhere a
+      // BrandChangeEvent is constructed.
+      eventType: "ad_new",
       variantCount: 3,
     },
   ];

@@ -1,32 +1,36 @@
-# Plan — Offer timeline cohort for sneaker-resale cluster (issue #1946)
+# Plan — `/ads/:domain` "What changed this week" surfaces ad_new as headline (issue #1951)
 
-Manager mode (heavy). Reuse the existing nightly offer-timeline backfill pattern (issue #1449) and extend it to the populated sneaker-resale cluster. The new cohort is derived from `data/seed-lists/sneaker-resale.json` AND a non-empty verified/likely ad-tier check — never a phantom timeline. Same daily rail, same `captureLandingPageSnapshot` write path, same `landing_page_snapshot` table. No new cron, no new service, no new schema.
+Manager mode (heavy). Apply the BET 1 re-rank (issue #1897) to the public /ads surface. Reuse the existing `rerankDigestBrief` helper from `app/lib/digest-rerank.ts` so the digest and the /ads page cannot drift again. Stay in scope: `app/routes/ads.$domain.tsx`, `app/lib/brand-page.server.ts`, `app/components/ads/brand-change-timeline.tsx` plus a single new regression test. No migration, no workflow file, no verifier/deploy file touched.
 
-## Phases
+## Goal
+Replace the current "1 move · each with a saved screenshot" rendering — which dresses a bare `ad_new` as a headline "move" — with the BET 1 split: landing_page_* events are the headline (with before/after + screenshot), ad_new/ad_inactive collapse into a single counted footnote line, and a brand with zero landing_page_* events renders the honest "No offer changes this week; N new creatives in the wall" message with no headline card.
 
-- [x] phase 1: cohort derivation (pure helper + read-only D1 tier lookup) — `deriveSneakerResaleCohort(seedList, tierByDomain)` in `app/lib/sneaker-resale-cohort.ts` filters seed entries to domains where `verifiedCount + likelyCount >= 1`; `getSneakerResaleTierByDomain(env, domains)` in `app/lib/sneaker-resale-cohort.server.ts` reads only the existing `public_search` cache (no live provider calls, no schema change) and returns `{ domain -> { verified, likely, hasCoverage } }`; a domain with no cache row or `unmatched`-only cache row is `hasCoverage: false`; unit test under `tests/sneaker-resale-cohort.test.ts`.
-- [x] phase 2: nightly sneaker-resale backfill — `app/lib/sneaker-resale-backfill.server.ts` with `runSneakerResaleBackfill(env, options?)` mirroring `runDemoBrandBackfill` (same `captureLandingPageSnapshot` write path, same `requireScreenshot: true` semantics, per-brand failure isolation, INSERT OR IGNORE on deterministic id `sneaker-<domain>-<YYYY-MM-DD>`, never a phantom offer); `SneakerResaleBackfillStatus` union + per-domain result type + `summarizeSneakerResaleBackfill(result)` log line; integration test under `tests/integration/sneaker-resale-backfill.integration.test.ts` covering real D1 path.
-- [x] phase 3: worker wiring — `workers/app.ts` adds a sibling `ctx.waitUntil` for `runSneakerResaleBackfill` on the same daily rail, with `reportScheduledTaskFailure` escalation; no new wrangler cron; worker-entry-point coverage added to the existing `tests/worker-scheduled-handler.test.ts` (node project, three new cases) per the amendment note below.
-- [ ] phase 4: verification + PR — `npx vitest run` green across changed suites, `npx tsc -b` clean on changed files, all PR-body canary scripts exit 0, PR body carries `Verification:` / `run-proof:` / `research:` / `help-first:` receipts; arm `gh pr merge --auto --squash`.
+## Acceptance-driven phases
 
-## Files to touch
-- `app/lib/sneaker-resale-cohort.ts` (new) — pure cohort derivation.
-- `app/lib/sneaker-resale-cohort.server.ts` (new) — read-only D1 tier adapter.
-- `app/lib/sneaker-resale-backfill.server.ts` (new) — nightly backfill.
-- `workers/app.ts` — sibling `ctx.waitUntil` on the daily rail.
-- `tests/sneaker-resale-cohort.test.ts` (new) — phase 1 unit suite.
-- `tests/integration/sneaker-resale-backfill.integration.test.ts` (new) — phase 2 real D1 suite.
-- `tests/integration/sneaker-resale-backfill.scheduled-rail.test.ts` (new) — phase 3 worker entry-point suite. *Amended: tests added to the existing `tests/worker-scheduled-handler.test.ts` (node project) so the worker entry-point coverage matches the pattern `runDemoBrandBackfill` already uses for issue #1449 (no separate integration file exists for that worker entry-point either).*
+- [x] phase 1: shared type + helper — in `app/lib/brand-page.server.ts` add `eventType: WatchEventType` to `BrandChangeEvent`; thread `eventType: 'ad_new'` through `buildBrandChangeFeed`'s every emitted row; expose a new pure `rerankBrandChangeFeed(events)` helper that delegates to `rerankDigestBrief` from `app/lib/digest-rerank.ts` so the digest and the /ads surface cannot drift by construction. Keep the cap (`BRAND_CHANGE_FEED_MAX_ROWS = 5`) at the existing 5.
+- [x] phase 2: route render — in `app/routes/ads.$domain.tsx` replace `data.changeEvents` with `rerankBrandChangeFeed(data.changeEvents)` (headlineItems / adChurnSummary / otherItems); when `headlineItems` is empty and `adChurnSummary.total === 0` hide the section (no fake card); when `headlineItems` is empty but churn > 0 render the honest "No offer changes this week; N new creatives in the wall." footnote with NO screenshot card; when `headlineItems.length > 0` render them as cards and append the churn footnote as the closing line; drop the misleading "each with a saved screenshot" meta string for the empty-headline case (use "No offer changes this week" instead). `movesThisWeek={data.changeEvents.length}` on the stat line stays unchanged.
+- [x] phase 3: regression test + verify — add `tests/ads-brand-page-what-changed.test.tsx` with one fixture {ad_new x3, landing_page_offer_changed x1} that asserts (a) the single headline move is the offer change, (b) ad_new appears only as a counted line, (c) no ad_new row carries a standalone "move" screenshot card; add a second fixture {ad_new x2, zero landing_page_*} asserting (d) the section renders the "No offer changes this week" footnote with no headline card. Run `npx vitest run --configLoader runner --project node tests/ads-brand-page-what-changed.test.tsx tests/ads-brand-page.signals.test.ts tests/digest-rerank.test.ts` green; then `npx vitest run --configLoader runner --project node` (full node project) green; then the two `curl` checks from the issue's verify block (live `/ads/stockx.com` returns 0 matches for `'New ad entered rotation'`).
 
-## Out of scope
-- `app/lib/demo-brand-backfill.server.ts` (untouched).
-- `data/seed-lists/sneaker-resale.json` (read-only).
-- `app/routes/ads.$domain.tsx` / `app/routes/timeline.$domain.tsx` (write the row, the routes already render the section).
-- `migrations/**` / `workers/wrangler.toml` / `.github/workflows/**` (untouched).
+## Files to Modify
+- `app/lib/brand-page.server.ts` — add `eventType` to `BrandChangeEvent`, thread it through `buildBrandChangeFeed`, export `rerankBrandChangeFeed`.
+- `app/routes/ads.$domain.tsx` — call `rerankBrandChangeFeed`, branch the render on headlineItems vs adChurnSummary.
+- `app/components/ads/brand-change-timeline.tsx` — add an optional `churn` prop so the component renders the single counted footnote line at the bottom of the timeline when churn > 0 (kept optional so the existing test surface continues to work).
 
-## Phase 4 reviewer round (single reviewer pass, seat cursor/cursor-grok-4.6-high)
+## New Files
+- `tests/ads-brand-page-what-changed.test.tsx` — regression test covering acceptance bullets 3 and 4 from the issue.
 
-- **Act on (fixed)**: the nightly tier read gates on `expires_at > now` (15-min public_search TTL) while the publisher is a sibling waitUntil — the backfill would read before the publisher's awaited per-domain writes land and derive an empty cohort (captured=0) every night, so /timeline/:domain would never leave 410. Fixed by chaining `runSneakerResaleBackfill` after the publisher's promise on the same daily block (workers/app.ts), with the catch-up comment documenting the ordering contract; regression tests added (deferred-publisher ordering + publisher-throws best-effort).
-- **Warning (fixed)**: a newest-row demo payload `continue`d the whole domain, silently discarding a still-fresh legitimate commercial row. The adapter now falls through to the next-newest non-demo row; regression test added.
-- **Suggestion (fixed)**: `summarizeSneakerResaleBackfill` now emits `cohort=N` so an empty-cohort night is visible in the operator log.
-- **Suggestion (noted, no change)**: `cacheStatus` on the tier map is informational only — no downstream reader; dropping it would churn tests for no behavior gain.
+## Risks
+- The current `data.changeEvents` is `BrandChangeEvent[]`. Adding `eventType: WatchEventType` is additive — every existing test that constructs a `BrandChangeEvent` (only `tests/ads-brand-page.signals.test.ts`'s `buildBrandChangeFeed` block) feeds through the helper which now sets the field, so existing assertions like `expect(feed[0]?.id).toEqual('today')` keep passing.
+- `BrandChangeEvent` is shared between the public route and `tests/ads-brand-page.signals.test.ts`; the new field must remain optional OR be set on every code path that produces an event. Default to "always set" (server-only emit site in `buildBrandChangeFeed`) so no consumer needs an optional-handling branch.
+- `BrandChangeTimeline` is rendered in two places: `app/routes/ads.$domain.tsx:1169` (live) and `app/routes/ads.$domain.tsx:1576` (example). The churn footnote is a new prop with default `null` so neither call site breaks.
+- The route's headline-item cards currently lack `before` / `after` text fields — `BrandChangeEvent` already carries `move` and `why` strings. The fix uses those as the headline body. A landing_page_* event with structured before/after will use `move: "Offer moved from $X to $Y"`; the current `BrandChangeMove` templates do not produce that, but the helper accepts whatever `eventType` the route sets. The route stays data-agnostic.
+- `rerankDigestBrief` is already the canonical helper — do NOT duplicate or re-implement.
+- `data.changeEvents` is rebuilt on every loader call. `rerankDigestBrief` is O(N log N) with N ≤ 5 (capped), so this is free.
+- No migration. No workflow. No verifier/deploy file. No `bin/fleet-*` script change.
+
+## Out of scope (deliberately not touched)
+- Adding a landing_page_* event source to the public /ads page. The current `data.changeEvents` is fed exclusively from cached Meta Ad Library results (`buildBrandChangeFeed(verifiedLinkedAds, now)`); landing_page_* watch events live in the `watch_event` table keyed by `watchlist_id`, which is per-user and not exposed publicly. Wiring a landing_page_* event stream to the public surface is a different issue (likely related to #1946).
+- `app/components/ads/brand-change-timeline.tsx` row layout beyond the new `churn` prop. The existing `.f9-ads-tl-row` markup is preserved.
+- `app/lib/digest-rerank.ts`. The shared helper stays as-is; this PR only consumes it.
+- `tests/digest-rerank.test.ts`. The 17 existing rerank tests already cover `rerankDigestBrief` exhaustively; this PR adds a brand-page-level fixture, not a rerank-level one.
+- Any change to `app/lib/brand-page.server.ts`'s offer timeline, capture failures, or aggression score helpers.
