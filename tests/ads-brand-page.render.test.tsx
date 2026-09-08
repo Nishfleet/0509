@@ -1109,8 +1109,8 @@ describe("/ads/:domain — capture-validity proof cross-link (issue #1320)", () 
   });
 });
 
-describe("/ads/:domain — ad-aggression methodology footer cross-link (issue #1552)", () => {
-  const anchor = "How the Ad Aggression Score is calculated";
+describe("/ads/:domain — methodology footer cross-link (issues #1552, #2022)", () => {
+  const anchor = "How this Ad Aggression Score is calculated — read the methodology";
 
   it("links the methodology page from the ad wall footer on every populated page, including the five live demo brands", async () => {
     const methodologyHref = `href="${AD_AGGRESSION_METHODOLOGY_PATH}"`;

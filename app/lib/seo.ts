@@ -715,12 +715,13 @@ export const SITEMAP_PATHS = [
   // indexable. The genuinely translated sneaker-resale cluster
   // (`/de/sneaker-resale` etc., listed above) stays in the sitemap because
   // its content differs per locale.
-  // Canonical Ad Aggression Score formula page (issue #1263). The old
-  // /methodology/ad-aggression-score path now 301-redirects here so any
-  // indexed link keeps its equity; /proof is the legacy capture-rules
-  // canonical kept out of the sitemap since it 301s to /capture-rules.
+  // Canonical Ad Aggression Score methodology page (issue #2022). Path history:
+  // /methodology/ad-aggression-score (#960) -> /ad-aggression (#1263) ->
+  // /methodology (#2022). The older paths 301-redirect here so any indexed
+  // link keeps its equity; /proof is the legacy capture-rules canonical kept
+  // out of the sitemap since it 301s to /capture-rules.
   "/capture-rules",
-  "/ad-aggression",
+  "/methodology",
   "/pricing",
   "/help",
   "/docs",
@@ -780,7 +781,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/ja/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
   "/pt-br/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
   "/capture-rules": { changefreq: "monthly", priority: "0.5" },
-  "/ad-aggression": { changefreq: "monthly", priority: "0.6" },
+  "/methodology": { changefreq: "monthly", priority: "0.6" },
   "/pricing": { changefreq: "weekly", priority: "0.8" },
   "/compare": { changefreq: "weekly", priority: "0.8" },
   "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },

@@ -399,7 +399,7 @@ const LLMS_PAGE_DETAILS = {
     title: "What we refuse to alert on (Deutsch)",
     description: "Public capture-validity rules: the landing-page captures that never become alerts.",
   },
-  "/de/ad-aggression": {
+  "/de/methodology": {
     title: "Ad Aggression Score methodology (Deutsch)",
     description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
   },
@@ -467,7 +467,7 @@ const LLMS_PAGE_DETAILS = {
     title: "What we refuse to alert on (日本語)",
     description: "Public capture-validity rules: the landing-page captures that never become alerts.",
   },
-  "/ja/ad-aggression": {
+  "/ja/methodology": {
     title: "Ad Aggression Score methodology (日本語)",
     description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
   },
@@ -535,7 +535,7 @@ const LLMS_PAGE_DETAILS = {
     title: "What we refuse to alert on (Português, Brasil)",
     description: "Public capture-validity rules: the landing-page captures that never become alerts.",
   },
-  "/pt-br/ad-aggression": {
+  "/pt-br/methodology": {
     title: "Ad Aggression Score methodology (Português, Brasil)",
     description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
   },
@@ -603,7 +603,7 @@ const LLMS_PAGE_DETAILS = {
     title: "What we refuse to alert on (Français)",
     description: "Public capture-validity rules: the landing-page captures that never become alerts.",
   },
-  "/fr/ad-aggression": {
+  "/fr/methodology": {
     title: "Ad Aggression Score methodology (Français)",
     description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
   },
@@ -671,7 +671,7 @@ const LLMS_PAGE_DETAILS = {
     title: "What we refuse to alert on (Español)",
     description: "Public capture-validity rules: the landing-page captures that never become alerts.",
   },
-  "/es/ad-aggression": {
+  "/es/methodology": {
     title: "Ad Aggression Score methodology (Español)",
     description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
   },
@@ -680,7 +680,7 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Public capture-validity rules: the landing-page captures that never become alerts.",
   },
-  "/ad-aggression": {
+  "/methodology": {
     title: "Ad Aggression Score methodology",
     description:
       "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",

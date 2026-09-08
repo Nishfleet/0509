@@ -39,7 +39,7 @@ export default function ChangelogRoute() {
       <PublicDocBlock title="2026-09-06">
         <ul className="f9-doc-list">
           <li>The /trust page no longer lists &quot;landing-page snapshots&quot; as a stored data category — we do not store them, so the trust surface now says only what we actually keep.</li>
-          <li>A finished zero-verified /search now links onward to /capture-rules and /ad-aggression, so a visitor who sees &quot;no verified ads&quot; can read why we refused to count thin captures and how the score is computed, instead of hitting a dead end.</li>
+          <li>A finished zero-verified /search now links onward to /capture-rules and /methodology, so a visitor who sees &quot;no verified ads&quot; can read why we refused to count thin captures and how the score is computed, instead of hitting a dead end.</li>
           <li>Alias brand pages like /ads/ridge.com and /ads/oura.com now redirect to their populated canonical page (/ads/ridgewallet.com, /ads/ouraring.com), so a buyer who types the natural domain lands on the page that actually has the ads, not a competing near-empty URL.</li>
           <li>Programmatic buyer surfaces — /ads/:domain, /compare/*, /switch/*, /sneaker-resale, /competitor-monitoring — now each render their own Open Graph card, so a link shared to a specific brand or comparison page previews that page instead of one generic site card.</li>
           <li>Locale compare hub pages (e.g. /de/compare) now link to their locale-prefixed children, so a visitor on a localized hub reaches the localized comparison page instead of a 404.</li>

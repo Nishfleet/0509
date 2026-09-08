@@ -68,11 +68,17 @@ export default [
   route("ads/:domain", "routes/ads.$domain.tsx"),
   route("brands", "routes/brands.tsx"),
   route("timeline/:domain", "routes/timeline.$domain.tsx"),
-  // Canonical Ad Aggression Score formula page (issue #1263). Previously lived
-  // at /methodology/ad-aggression-score (issue #960); that path now 301s here
-  // via the route below so any indexed link keeps its equity.
-  route("ad-aggression", "routes/ad-aggression.tsx"),
-  // Legacy alias — 301 to the canonical /ad-aggression path so existing
+  // Canonical Ad Aggression Score methodology page. Path history: issue #960
+  // shipped /methodology/ad-aggression-score; #1263 promoted it to
+  // /ad-aggression; #2022 promotes the methodology page itself to /methodology
+  // (the SEO direction asks for the scoring method as its own linkable,
+  // indexable methodology page — sitemap + /ads cross-links name it as
+  // methodology). Both older paths 301 here so indexed links keep their equity.
+  route("methodology", "routes/methodology.tsx"),
+  // Legacy alias — 301 to the canonical /methodology path so existing
+  // /ad-aggression links and sitemap entries keep working (issue #1263 era).
+  route("ad-aggression", "routes/ad-aggression-redirect.ts"),
+  // Legacy alias — 301 to the canonical /methodology path so existing
   // /methodology/ad-aggression-score links and sitemap entries keep working.
   route("methodology/ad-aggression-score", "routes/methodology.ad-aggression-score-redirect.ts"),
   route("compare", "routes/compare.tsx"),
@@ -144,7 +150,7 @@ export default [
     route("search", "routes/$locale.search.tsx"),
     route("competitor-monitoring", "routes/$locale.competitor-monitoring.tsx"),
     route("capture-rules", "routes/$locale.capture-rules.tsx"),
-    route("ad-aggression", "routes/$locale.ad-aggression.tsx"),
+    route("methodology", "routes/$locale.methodology.tsx"),
     // Programmatic /ads/:domain under every locale prefix (issue #1562):
     // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
     // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com

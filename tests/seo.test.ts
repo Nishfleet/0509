@@ -59,7 +59,7 @@ describe("public SEO files", () => {
     expect(sitemap?.body).not.toContain("<loc>https://0509.io/ja/sneaker-resale</loc>");
     expect(sitemap?.body).not.toContain("<loc>https://0509.io/pt-br/sneaker-resale</loc>");
     expect(sitemap?.body).toContain(
-      "<loc>https://0509.io/ad-aggression</loc>",
+      "<loc>https://0509.io/methodology</loc>",
     );
     // Metadata: static entries carry changefreq and priority.
     expect(sitemap?.body).toContain("<changefreq>daily</changefreq>");

@@ -18,7 +18,7 @@ const LOCALE_FIRST_VALUE_ROUTES = [
   "search",
   "competitor-monitoring",
   "capture-rules",
-  "ad-aggression",
+  "methodology",
 ] as const;
 
 describe("locale first-value search funnel (issue #1578)", () => {
@@ -47,7 +47,7 @@ describe("locale first-value search funnel (issue #1578)", () => {
     expect(typeof searchRoute).toBe("function");
     expect(typeof loader).toBe("function");
     expect(typeof action).toBe("function");
-    for (const route of ["competitor-monitoring", "capture-rules", "ad-aggression"]) {
+    for (const route of ["competitor-monitoring", "capture-rules", "methodology"]) {
       const mod = await import(`~/routes/$locale.${route}`);
       expect(typeof mod.default, `${route} default`).toBe("function");
     }
@@ -102,7 +102,7 @@ describe("locale first-value search funnel (issue #1578)", () => {
   it("a localised surface funnels the search moment to the locale-prefixed /search, not EN", () => {
     // accept #3: locale pages must link to /{locale}/search. EN pathnames
     // keep /search unchanged.
-    for (const route of ["search", "competitor-monitoring", "capture-rules", "ad-aggression"]) {
+    for (const route of ["search", "competitor-monitoring", "capture-rules", "methodology"]) {
       for (const locale of BUYER_SURFACE_LOCALE_IDS) {
         expect(localeSearchPathname(`/${locale}/${route}`), `/${locale}/${route}`).toBe(
           `/${locale}/search`,
