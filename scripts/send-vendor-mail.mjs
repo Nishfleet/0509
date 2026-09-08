@@ -64,10 +64,13 @@ export function parseDoc(markdown) {
   }
 
   const headerValue = (label) => {
-    const line = section.find((l) =>
-      new RegExp(`^\\*\\*?${label}\\s*:`, "i").test(l) ||
-      new RegExp(`^${label}\\s*:`, "i").test(l),
-    );
+    // No dynamic RegExp here: the label is compared as a plain string so
+    // sgscan's ReDoS heuristic (detect-non-literal-regexp) stays quiet.
+    const prefix = `${label.toLowerCase()}:`;
+    const line = section.find((l) => {
+      const t = l.replace(/^\*+/, "").trim().toLowerCase();
+      return t.startsWith(prefix);
+    });
     if (!line) return undefined;
     // Value is conventionally in backticks; fall back to the raw text.
     const ticked = line.match(/`([^`]+)`/);
