@@ -105,6 +105,36 @@ fixture test_refactor_net_positive '{"files": [
   {"filename": "tests/a.test.ts", "status": "modified", "patch": "-it(\"a\", () => {});\n+it(\"a\", () => {});\n+it(\"b\", () => {});"}]}'
 run_fixture test_refactor_net_positive PASS
 
+# --- lockfile-only diffs (issue #1947) --------------------------------------
+# A Dependabot bump rewrites only the lockfile. Its content is machine-
+# generated version/integrity text, never gate-weakening signal, so a
+# lockfile-only PR must PASS regardless of what the lockfile bytes look like.
+# These fixtures pin the explicit LOCKFILE_PATH exclusion.
+
+# #1579's exact 3-line diff: a pure version bump of @simplewebauthn/server.
+fixture lockfile_only_bump '{"files": [
+  {"filename": "package-lock.json", "status": "modified",
+   "patch": "+      \"version\": \"13.3.3\",\n+      \"resolved\": \"https://registry.npmjs.org/@simplewebauthn/server/-/server-13.3.3.tgz\",\n+      \"integrity\": \"sha512-LelX/lcy5cjc15A86i/aNxHhB5eU7dd20QsbP0VLAf9e38+SLlsnqCCyecx3xqfGofhmX05h1J9fKRYWxw+luA==\",\n-      \"version\": \"13.3.1\",\n-      \"resolved\": \"https://registry.npmjs.org/@simplewebauthn/server/-/server-13.3.1.tgz\",\n-      \"integrity\": \"sha512-GV/oM/qeycWn8p42JZIMJBsXWQcNFg+nJFzeQTnMA4gN8mXg0+HZFWJerHg8ZN/zlveMS3iV1wzuFpOVWS/46w==\""}]}'
+run_fixture lockfile_only_bump PASS
+
+# A lockfile diff whose text coincidentally resembles a skip marker and an
+# assertion (the #1589 shape: `@babel/helper-skip-transparent-expression-
+# wrappers`, `@cloudflare/vitest-plugin`, `"integrity": "sha512-..."`). The
+# exclusion must keep it green — this is the false-positive class the issue
+# reports.
+fixture lockfile_skip_like_text '{"files": [
+  {"filename": "package-lock.json", "status": "modified",
+   "patch": "+        \"@babel/helper-skip-transparent-expression-wrappers\": \"^7.29.7\",\n+    \"node_modules/@babel/helper-skip-transparent-expression-wrappers\": {\n+      \"resolved\": \"https://registry.npmjs.org/@babel/helper-skip-transparent-expression-wrappers/-/helper-skip-transparent-expression-wrappers-7.29.7.tgz\",\n+        \"@cloudflare/vitest-plugin\": \"^1.1.2\",\n+      \"resolved\": \"https://registry.npmjs.org/@cloudflare/vitest-plugin/-/vitest-plugin-1.1.2.tgz\",\n+      \"integrity\": \"sha512-abcdefghijklmnopqrstuvwxyz==\",\n-        \"@cloudflare/vitest-plugin\": \"^1.0.0\",\n-      \"resolved\": \"https://registry.npmjs.org/@cloudflare/vitest-plugin/-/vitest-plugin-1.0.0.tgz\""}]}'
+run_fixture lockfile_skip_like_text PASS
+
+# The exclusion must NOT weaken the gate for real test files. A genuine
+# `it.skip(` in a test path with no `test-removal-justified:` trailer still
+# FAILS — the negative control that proves the narrowing is scoped to
+# lockfiles only.
+fixture lockfile_negative_control '{"files": [
+  {"filename": "tests/auth.test.ts", "status": "modified", "patch": "-it(\"a\", () => {});\n+it.skip(\"a\", () => {});"}]}'
+run_fixture lockfile_negative_control FAIL "test disabled in tests/auth.test.ts"
+
 # --- test-integrity: deletion ----------------------------------------------
 fixture test_deleted '{"files": [{"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"}]}'
 run_fixture test_deleted FAIL "test file deleted: tests/auth.test.ts"
