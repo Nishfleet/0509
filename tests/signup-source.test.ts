@@ -6,6 +6,7 @@ import { MAGICBRIEF_MIGRATION_SOURCE, PRICING_FREE_SIGNUP_SOURCE } from "~/lib/f
 import {
   ALLOWED_SIGNUP_SOURCES,
   allowlistedSignupSource,
+  DIGEST_FOOTER_SIGNUP_SOURCE,
   LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
   readSignupSourceCookie,
   SIGNUP_SOURCE_COOKIE,
@@ -18,6 +19,8 @@ describe("allowlisted signup_source", () => {
     expect(allowlistedSignupSource(MAGICBRIEF_MIGRATION_SOURCE)).toBe(MAGICBRIEF_MIGRATION_SOURCE);
     expect(ALLOWED_SIGNUP_SOURCES).toContain(PRICING_FREE_SIGNUP_SOURCE);
     expect(allowlistedSignupSource(PRICING_FREE_SIGNUP_SOURCE)).toBe(PRICING_FREE_SIGNUP_SOURCE);
+    expect(ALLOWED_SIGNUP_SOURCES).toContain(DIGEST_FOOTER_SIGNUP_SOURCE);
+    expect(allowlistedSignupSource(DIGEST_FOOTER_SIGNUP_SOURCE)).toBe(DIGEST_FOOTER_SIGNUP_SOURCE);
     expect(allowlistedSignupSource("locale-de-sneaker-resale")).toBe("locale-de-sneaker-resale");
     expect([...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES]).toEqual([
       "locale-en-sneaker-resale",

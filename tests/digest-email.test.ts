@@ -2111,3 +2111,76 @@ describe("value-tier swing section (issue #1976)", () => {
     expect(without.html).toBe(withNull.html);
   });
 });
+
+describe("growth2 digest attribution and forward lines (issue #2146)", () => {
+  const base = {
+    name: "Owner",
+    periodStart: "2026-06-01T00:00:00.000Z",
+    periodEnd: "2026-06-08T00:00:00.000Z",
+    cadence: "weekly" as const,
+    timeZone: "UTC",
+    fullDigestUrl: "https://0509.io/app/digests",
+    manageFrequencyUrl: "https://0509.io/app/notifications",
+    supportEmail: "support@0509.io",
+    supportMailto: "mailto:support@0509.io",
+    unsubscribeUrl: null,
+    items: [digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed")],
+  };
+
+  it("shows the free attribution footer on free digests and not on paid", () => {
+    const free = buildDigestEmail({
+      ...base,
+      upgradeNote: "Upgrade to track more competitors.",
+      upgradeUrl: "https://0509.io/#pricing",
+    });
+    const paid = buildDigestEmail({ ...base });
+
+    // Free: footer line present in both parts, linking to the allowlisted URL.
+    // The HTML splits the line around the anchor, so assert the two halves.
+    expect(free.html).toContain("Brief by Five to Nine.");
+    expect(free.html).toContain("Watch one competitor free");
+    expect(free.html).toContain("https://0509.io/?source=digest_footer");
+    expect(free.text).toContain("Brief by Five to Nine. Watch one competitor free: https://0509.io/?source=digest_footer");
+
+    // Paid: no footer line at all.
+    expect(paid.html).not.toContain("Watch one competitor free");
+    expect(paid.text).not.toContain("Watch one competitor free");
+  });
+
+  it("carries the forward line on every plan", () => {
+    const free = buildDigestEmail({
+      ...base,
+      upgradeNote: "Upgrade to track more competitors.",
+    });
+    const paid = buildDigestEmail({ ...base });
+
+    expect(free.html).toContain("Forward this to whoever needs it; every claim keeps its source link.");
+    expect(free.text).toContain("Forward this to whoever needs it; every claim keeps its source link.");
+    expect(paid.html).toContain("Forward this to whoever needs it; every claim keeps its source link.");
+    expect(paid.text).toContain("Forward this to whoever needs it; every claim keeps its source link.");
+  });
+
+  it("appends the share URL only on Starter+ when the digest already has one", () => {
+    const shareUrl = "https://0509.io/share/abc123";
+    const paidWithShare = buildDigestEmail({ ...base, shareUrl });
+    const paidWithoutShare = buildDigestEmail({ ...base });
+    const freeWithShare = buildDigestEmail({
+      ...base,
+      upgradeNote: "Upgrade to track more competitors.",
+      shareUrl,
+    });
+
+    // Starter+ with an existing share URL: appended in both parts.
+    expect(paidWithShare.html).toContain("Share this brief:");
+    expect(paidWithShare.html).toContain(shareUrl);
+    expect(paidWithShare.text).toContain(`Share this brief: ${shareUrl}`);
+
+    // Starter+ without a share URL: nothing appended.
+    expect(paidWithoutShare.html).not.toContain("Share this brief:");
+    expect(paidWithoutShare.text).not.toContain("Share this brief:");
+
+    // Free never gets a share link, even when a share URL is present (must-not).
+    expect(freeWithShare.html).not.toContain("Share this brief:");
+    expect(freeWithShare.text).not.toContain("Share this brief:");
+  });
+});

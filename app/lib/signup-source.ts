@@ -36,12 +36,23 @@ export const SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE = "search_warming_exhausted"
  */
 export const GUIDE_TRACK_ADS_SIGNUP_SOURCE = "guide_track_ads";
 
+/**
+ * The exact signup-URL marker the free-plan digest footer's attribution link
+ * appends (issue #2146). Same contract as the MagicBrief and pricing-free
+ * markers: compared server-side against this allowlisted constant, and the
+ * raw marker value is never stored in a record or a funnel field. It selects
+ * the `digest_footer` signup source so scouts can measure free signups that
+ * arrive from the digest brief's footer link.
+ */
+export const DIGEST_FOOTER_SIGNUP_SOURCE = "digest_footer";
+
 export const ALLOWED_SIGNUP_SOURCES = [
   MAGICBRIEF_MIGRATION_SOURCE,
   PRICING_FREE_SIGNUP_SOURCE,
   ...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
   SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE,
   GUIDE_TRACK_ADS_SIGNUP_SOURCE,
+  DIGEST_FOOTER_SIGNUP_SOURCE,
 ] as const;
 
 export type AllowedSignupSource = (typeof ALLOWED_SIGNUP_SOURCES)[number];
