@@ -129,6 +129,18 @@ export function clusterSocialCardUrl(slug: "sneaker-resale" | "competitor-monito
 }
 
 /**
+ * Per-category social card URL for the /brands/:category pages (issue #2067).
+ * The card SVG is generated under `/social-card/brands/<slug>.svg` by
+ * `app/lib/social-cards.server.ts` and derives its headline from the category
+ * slug alone (stateless, like the compare/switch cards). The route stamps its
+ * `og:image` with this URL so a shared category page carries a branded card
+ * instead of the site-wide generic `og-image.png`.
+ */
+export function brandsCategorySocialCardUrl(categorySlug: string): string {
+  return canonicalUrl(`/social-card/brands/${categorySlug}.svg`);
+}
+
+/**
  * Canonical consolidation for the duplicate /compare/* pairs (issue #1481).
  *
  * Every entry maps a loser URL to the winner it must canonicalize to. The
@@ -438,6 +450,40 @@ export function breadcrumbJsonLd(input: {
       position: index + 1,
       name: item.name,
       item: canonicalUrl(item.pathname),
+    })),
+  } as const;
+}
+
+/** One enumerated link in an ItemList (issue #2067). */
+export interface ItemListJsonLdEntry {
+  name: string;
+  url: string;
+}
+
+/**
+ * schema.org ItemList for a page that enumerates a curated set of links
+ * (issue #2067 — the /brands/:category pages listing their brands). The
+ * page `url` is derived from `pathname` via `canonicalUrl` so it can never
+ * drift from the page's canonical tag; each entry's `item` URL is passed
+ * through as-is — the caller supplies already-canonical /ads/:domain URLs,
+ * and this builder never rewrites a link it was handed. Positions are
+ * 1-based in the order given, matching the visible list order.
+ */
+export function itemListJsonLd(input: {
+  name: string;
+  pathname: string;
+  items: ReadonlyArray<ItemListJsonLdEntry>;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: input.name,
+    url: canonicalUrl(input.pathname),
+    itemListElement: input.items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: item.url,
     })),
   } as const;
 }
@@ -828,6 +874,16 @@ export interface SitemapEntry {
   adCount?: number;
   /** ISO timestamp of the underlying cache fetch; used by llms.txt. */
   fetchedAt?: string;
+  /**
+   * The Ad Aggression Score (0-100) for a /ads/:domain entry, computed in
+   * `app/lib/sitemap.server.ts` from the row's cached ads with the same
+   * `computeBrandPageAggressionScore` the page's loader uses. Number when the
+   * observed window clears the 14-day floor; null when deferred (too recent,
+   * or no first-seen date) — consumed by the /brands/:category pages so a
+   * category list can show an honest score or a "pending" line (issue #2067).
+   * Not a field static `/brands`-style entries set.
+   */
+  score?: number | null;
 }
 
 /**
