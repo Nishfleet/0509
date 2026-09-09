@@ -39,11 +39,15 @@ import { execute, queryOne } from "~/lib/data/d1.server";
 import { jsonValue, nowIso } from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
+  startLandingPagePipelineVolumeInstrumentation,
+} from "~/lib/cta-pipeline-stage-counts.server";
+import {
   captureLandingPageSnapshot,
   type LandingPageCaptureFailureDetail,
 } from "~/lib/landing-pages.server";
 import { extractPriceTier } from "~/lib/landing-page-price-tier.server";
 import { loadOfferTimeline } from "~/lib/offer-timeline.server";
+import type { LandingPagePipelineCounters } from "~/lib/landing-page-pipeline-instrumentation.server";
 import {
   canonicalizeSneakerResaleDomain,
   deriveSneakerResaleCohort,
@@ -118,6 +122,7 @@ export interface SneakerResaleBackfillOptions {
       requireScreenshot: boolean;
       routeContext: "proof_capture";
       onFailure: (detail: LandingPageCaptureFailureDetail) => void;
+      instrumentation?: LandingPagePipelineCounters | null;
     },
   ) => Promise<LandingPageSnapshotData | null>;
   /**
@@ -275,14 +280,28 @@ export async function runSneakerResaleBackfill(
       }
 
       let reasonCode: string | null = null;
-      const snapshot = await capture(env, sneakerResaleHomepage(entry.domain), {
-        preferRendered: true,
-        requireScreenshot: true,
-        routeContext: "proof_capture",
-        onFailure: (detail) => {
-          reasonCode = detail.reasonCode;
-        },
+      // Issue #2077: instrument each capture so cta_pipeline_stage_counts
+      // fills for the backfill volume path.
+      const instr = startLandingPagePipelineVolumeInstrumentation({
+        watchlistId: "sneaker_resale_backfill",
+        scanId: rowId,
+        adId: null,
       });
+      let snapshot: LandingPageSnapshotData | null = null;
+      try {
+        snapshot = await capture(env, sneakerResaleHomepage(entry.domain), {
+          preferRendered: true,
+          requireScreenshot: true,
+          routeContext: "proof_capture",
+          onFailure: (detail) => {
+            reasonCode = detail.reasonCode;
+          },
+          instrumentation: instr.instrumentation,
+        });
+        instr.recordCaptureOutcome(snapshot, reasonCode);
+      } finally {
+        await instr.finish(env);
+      }
 
       if (!snapshot) {
         results.push({
