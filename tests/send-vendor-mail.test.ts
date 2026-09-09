@@ -60,8 +60,7 @@ describe("parseDoc", () => {
 
   it("reports a clear error when To: is missing (segwise-style doc)", () => {
     const parsed = parseDoc(SEGWISE_FIXTURE);
-    expect(parsed.errors).toBeDefined();
-    expect(parsed.errors.join("\n")).toMatch(/no `To:` header/);
+    expect(parsed.errors && parsed.errors.join("\n")).toMatch(/no `To:` header/);
   });
 });
 
@@ -165,7 +164,7 @@ describe("real send (--send)", () => {
   const env = { CLOUDFLARE_API_TOKEN: "test-token", CLOUDFLARE_ACCOUNT_ID: "test-account" };
 
   it("POSTs to the Email Sending REST API with the token in the header only", async () => {
-    const fetchImpl = vi.fn(async () =>
+    const fetchImpl = vi.fn<[string | URL | Request, RequestInit?], Promise<Response>>(async () =>
       new Response(
         JSON.stringify({
           success: true,
@@ -185,7 +184,7 @@ describe("real send (--send)", () => {
     });
     expect(code).toBe(0);
     expect(written.join("\n")).toContain("### Send receipt");
-    const [url, init] = fetchImpl.mock.calls[0];
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(
       "https://api.cloudflare.com/client/v4/accounts/test-account/email/sending/send",
     );
