@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LoaderFunctionArgs } from "react-router";
 
 import {
   PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
@@ -91,10 +90,13 @@ describe("budget-exhausted anonymous /search (issue #2047)", () => {
     await mockAnonLoaderDeps(env, budgetExhausted);
 
     const { loader } = await import("~/routes/search");
+    // Cast matches tests/search.route.test.ts (same loader, same shape);
+    // react-router 8's LoaderFunctionArgs adds url/pattern/params the test
+    // harness does not exercise, so a full literal would over-specify.
     const thrown = await loader({
       context: createContext(env),
       request: new Request("http://localhost/search?q=nike&country=all"),
-    } as LoaderFunctionArgs).catch((error: unknown) => error);
+    } as never).catch((error: unknown) => error);
 
     expect(thrown).toBeInstanceOf(Response);
     const response = thrown as Response;
