@@ -28,7 +28,9 @@ import {
   type ArchiveAdTenureInput,
   type DomainArchive,
 } from "~/lib/archive";
+import { adHasVerifiedDomainLink } from "~/lib/brand-page.server";
 import { queryAll } from "~/lib/data/d1.server";
+import { parseJson } from "~/lib/data/helpers.server";
 import {
   toWatchEventRecord,
   type WatchEventRow,
@@ -44,7 +46,7 @@ import {
 } from "~/lib/offer-timeline.server";
 import { buildOfferLedger, type OfferLedgerEntry } from "~/lib/offer-timeline";
 import { proofScreenshotSrc } from "~/lib/proof-screenshot";
-import type { WatchlistRecord } from "~/lib/types";
+import type { AdRecord, WatchlistRecord } from "~/lib/types";
 
 const ARCHIVE_EVENT_LIMIT = 200;
 const ARCHIVE_SNAPSHOT_LIMIT = 200;
@@ -65,6 +67,8 @@ interface AdTenureRow {
   first_seen_at: string | null;
   last_seen_at: string | null;
   is_active: number;
+  raw_json: string | null;
+  landing_page_url: string | null;
   first_observed_at?: string | null;
   last_observed_at?: string | null;
 }
@@ -80,9 +84,13 @@ function tenureRowToInput(row: AdTenureRow): ArchiveAdTenureInput {
 }
 
 /**
- * Stored ads whose landing page belongs to `domain` — the same rows the
- * public `/ads/:domain` wall already shows, so first/last-seen tenure here is
- * a public-ad fact, not a workspace secret.
+ * Stored ads whose landing page belongs to `domain` AND carry verified link
+ * evidence to that domain — the same rows the public `/ads/:domain` wall
+ * shows as the tracked competitor's ads. A landing-page URL match alone is
+ * not enough: resellers/affiliates that merely link to the brand's domain
+ * would otherwise be presented as the tracked competitor's ads. Applying
+ * `adHasVerifiedDomainLink` (the wall's own filter) keeps the public tenure
+ * strip to public-ad facts only.
  */
 async function listPublicDomainAdTenure(
   env: AppEnv,
@@ -98,7 +106,9 @@ async function listPublicDomainAdTenure(
           ad.preview_headline,
           ad.first_seen_at,
           ad.last_seen_at,
-          ad.is_active
+          ad.is_active,
+          ad.raw_json,
+          ad.landing_page_url
         FROM ad
         WHERE
           ${domainUrlPredicates("ad.landing_page_url")}
@@ -108,7 +118,19 @@ async function listPublicDomainAdTenure(
       ...domainUrlBindings(domain),
       ARCHIVE_AD_LIMIT,
     );
-    return rows.map(tenureRowToInput);
+    return rows
+      .filter((row) => {
+        // Hydrate only the fields `adHasVerifiedDomainLink` reads (domainMatch
+        // level + landing host) from raw_json so the same verified-link
+        // evidence the /ads/:domain wall trusts is available to the filter.
+        const raw = parseJson<Partial<AdRecord> | null>(row.raw_json, null) ?? {};
+        const ad = {
+          domainMatch: raw.domainMatch,
+          landingPageUrl: row.landing_page_url ?? raw.landingPageUrl ?? null,
+        } as AdRecord;
+        return adHasVerifiedDomainLink(ad, domain);
+      })
+      .map(tenureRowToInput);
   } catch {
     // The tenure strip is additive; a read failure must never take the
     // public timeline down.
