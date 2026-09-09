@@ -357,10 +357,16 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("via partner");
   });
 
-  it("hides Offer timeline entirely when there are no stored offer states", async () => {
+  it("renders an honest collecting Offer timeline with the cross-link when no states are stored yet (issue #2021)", async () => {
+    // A tracked brand (timeline in the sitemap's indexable set) with no
+    // stored offer states renders the collecting state and links to its
+    // indexable /timeline/:domain — never a bare missing section for a
+    // tracked brand, and never a link to a 410.
     const markup = await render(populated({ offerTimelineEntries: [] }));
 
-    expect(markup).not.toContain("brand-offer-timeline-title");
+    expect(markup).toContain("brand-offer-timeline-title");
+    expect(markup).toContain("Collecting — no offer states recorded yet");
+    expect(markup).toContain('href="/timeline/nike.com"');
     expect(markup).not.toContain("Full offer timeline");
   });
 
@@ -431,16 +437,17 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).toContain("Full offer timeline for gymshark.com");
   });
 
-  it("renders no /timeline cross-link when the brand has no stored timeline (no broken link)", async () => {
-    // Regression for #1296: a domain with no timeline must not emit a link to
-    // /timeline/:domain — that would point at a 410 Gone page (see
-    // timeline.$domain.tsx). The whole section hides instead.
+  it("renders no /timeline cross-link or section when the timeline is not indexable (no broken link)", async () => {
+    // Regression for #1296: a domain whose /timeline/:domain the sitemap does
+    // not list must not emit a link to it (the route would 410 an untracked
+    // domain, issue #2021). The whole section hides instead.
     const markup = await render(
       populated({
         domain: "gymshark.com",
         brandName: "Gymshark",
         canonicalPath: "/ads/gymshark.com",
         offerTimelineEntries: [],
+        timelineIndexable: false,
       }),
     );
 

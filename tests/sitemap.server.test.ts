@@ -35,6 +35,7 @@ import {
   BRAND_PAGE_PRIORITY_NEAR_EXPIRY_MS,
   BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS,
   buildSitemapXml,
+  collectingTimelineEntries,
   indexableBrandPageEntriesFromRows,
   indexableTimelineEntriesFromRows,
   isIndexableBrandPageRow,
@@ -43,6 +44,7 @@ import {
   SITEMAP_TIMELINE_PATH_LIMIT,
   SITEMAP_TIMELINE_READ_LIMIT,
   timelineDomainFromSnapshotRow,
+  timelineSitemapEntries,
   type SitemapCacheRow,
   type TimelineSitemapRow,
 } from "~/lib/sitemap.server";
@@ -847,6 +849,72 @@ describe("timelineDomainFromSnapshotRow", () => {
         snapshotRow({ canonical_url: "file:///tmp/landing.html" }),
       ),
     ).toBeNull();
+  });
+});
+
+describe("collectingTimelineEntries / timelineSitemapEntries (issue #2021)", () => {
+  const brand = (domain: string) => ({ path: `/ads/${domain}` });
+
+  it("emits a collecting /timeline entry for every tracked /ads brand not yet capture-backed", () => {
+    const brandEntries = [brand("gymshark.com"), brand("hubspot.com"), brand("calendly.com")];
+    const timelineEntries = [{ path: "/timeline/calendly.com", lastmod: "2026-09-01" }];
+
+    const collecting = collectingTimelineEntries(brandEntries, timelineEntries);
+
+    expect(collecting.map((e) => e.path)).toEqual([
+      "/timeline/gymshark.com",
+      "/timeline/hubspot.com",
+    ]);
+    // No lastmod: nothing is captured yet, so there is no honest lastmod.
+    expect(collecting[0].lastmod).toBeUndefined();
+    expect(collecting[0].changefreq).toBe("weekly");
+    expect(collecting[0].priority).toBe("0.3");
+  });
+
+  it("never invents a domain from a non-/ads or multi-segment path", () => {
+    const collecting = collectingTimelineEntries(
+      [{ path: "/compare/adspyder" }, { path: "/ads/hubspot.com/about" }, { path: "/ads/" }],
+      [],
+    );
+    expect(collecting).toEqual([]);
+  });
+
+  it("merges capture-backed first, then collecting, capped at SITEMAP_TIMELINE_PATH_LIMIT", () => {
+    const captureBacked = Array.from({ length: 3 }, (_, i) => ({
+      path: `/timeline/backed-${i}.com`,
+      lastmod: "2026-09-01",
+    }));
+    const brandEntries = Array.from(
+      { length: SITEMAP_TIMELINE_PATH_LIMIT + 1 },
+      (_, i) => brand(`cohort-${i}.com`),
+    );
+
+    const merged = timelineSitemapEntries(brandEntries, captureBacked);
+
+    expect(merged).toHaveLength(SITEMAP_TIMELINE_PATH_LIMIT);
+    // Capture-backed entries (with lastmod) all survive the cap.
+    expect(merged.slice(0, 3).map((e) => e.path)).toEqual([
+      "/timeline/backed-0.com",
+      "/timeline/backed-1.com",
+      "/timeline/backed-2.com",
+    ]);
+    expect(merged[3].lastmod).toBeUndefined();
+  });
+
+  it("puts collecting /timeline locs in the sitemap XML with no lastmod", () => {
+    const xml = buildSitemapXml(
+      [brand("gymshark.com"), brand("calendly.com")],
+      timelineSitemapEntries(
+        [brand("gymshark.com"), brand("calendly.com")],
+        [{ path: "/timeline/calendly.com", lastmod: "2026-09-01" }],
+      ),
+    );
+    expect(xml).toContain("<loc>https://0509.io/timeline/gymshark.com</loc>");
+    expect(xml).toContain("<loc>https://0509.io/timeline/calendly.com</loc>");
+    expect(xml).toContain("<lastmod>2026-09-01</lastmod>");
+    expect(xml).not.toMatch(
+      /<loc>https:\/\/0509\.io\/timeline\/gymshark\.com<\/loc><lastmod>/,
+    );
   });
 });
 

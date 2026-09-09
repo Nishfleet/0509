@@ -20,13 +20,23 @@ import {
 // earlier in the same tick — the beforeEach factory can win, making tests
 // flake. Registering once per test removes the override race entirely
 // (fleet-ops FleetMainRed 2026-09-06).
-function mockTimelineEntries(paths: string[]) {
+function mockTimelineEntries(
+  paths: string[],
+  opts: { brandPaths?: string[] } = {},
+) {
   vi.resetModules();
-  vi.doMock("~/lib/sitemap.server", () => ({
-    loadIndexableTimelineEntries: vi.fn().mockResolvedValue(
-      paths.map((path) => ({ path })),
-    ),
-  }));
+  vi.doMock("~/lib/sitemap.server", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("~/lib/sitemap.server")>();
+    return {
+      ...actual,
+      loadIndexableTimelineEntries: vi.fn().mockResolvedValue(
+        paths.map((path) => ({ path })),
+      ),
+      loadIndexableBrandPageEntries: vi
+        .fn()
+        .mockResolvedValue((opts.brandPaths ?? []).map((path) => ({ path }))),
+    };
+  });
 }
 
 afterEach(() => {
@@ -57,11 +67,30 @@ describe("loadIndexableTimelineDomains", () => {
     expect(domains.size).toBe(1);
   });
 
+  it("includes collecting entries for the tracked /ads cohort (issue #2021)", async () => {
+    mockTimelineEntries(["/timeline/calendly.com"], {
+      brandPaths: ["/ads/gymshark.com", "/ads/calendly.com", "/compare/adspyder"],
+    });
+    const { loadIndexableTimelineDomains } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    const domains = await loadIndexableTimelineDomains({} as never);
+    // /ads cohort brands gain an indexable timeline path; non-/ads paths do
+    // not; already-capture-backed domains are not duplicated.
+    expect(domains.has("gymshark.com")).toBe(true);
+    expect(domains.has("calendly.com")).toBe(true);
+    expect(domains.size).toBe(2);
+  });
+
   it("degrades to an empty set on a sitemap hiccup (never 500s the page)", async () => {
     vi.resetModules();
-    vi.doMock("~/lib/sitemap.server", () => ({
-      loadIndexableTimelineEntries: vi.fn().mockRejectedValue(new Error("D1 down")),
-    }));
+    vi.doMock("~/lib/sitemap.server", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("~/lib/sitemap.server")>();
+      return {
+        ...actual,
+        loadIndexableTimelineEntries: vi.fn().mockRejectedValue(new Error("D1 down")),
+      };
+    });
     const { loadIndexableTimelineDomains } = await import(
       "~/lib/ads-internal-links.server"
     );

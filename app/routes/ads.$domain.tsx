@@ -956,14 +956,40 @@ function BrandOfferTimeline({
   entries: OfferLedgerEntry[];
   /**
    * True when this domain's `/timeline/:domain` is in the sitemap's indexable
-   * set (issue #1931). The ledger section renders whenever entries exist, but
-   * the cross-link to the full timeline only appears when the sitemap would
-   * list that URL — so a demo/empty/410 timeline is never linked.
+   * set (issue #1931, collecting-aware per issue #2021). The ledger section
+   * renders whenever entries exist, but the cross-link to the full timeline
+   * only appears when the sitemap would list that URL — so a route the
+   * timeline never serves is never linked.
    */
   timelineIndexable: boolean;
 }) {
   if (entries.length === 0) {
-    return null;
+    // Issue #2021: a tracked brand with no stored offer states yet still
+    // links to its (indexable) collecting timeline — honest "collecting"
+    // state, never a link to a 410. Untracked domains keep the section hidden.
+    if (!timelineIndexable) {
+      return null;
+    }
+    return (
+      <section className="f9-ads-sec" aria-labelledby="brand-offer-timeline-title">
+        <div className="f9-container">
+          <div className="f9-ads-sec-head">
+            <div className="f9-ads-sec-head-left">
+              <span className="f9-ads-sec-eyebrow">Landing-page offers</span>
+              <h2 id="brand-offer-timeline-title">Offer timeline</h2>
+            </div>
+            <span className="f9-ads-sec-meta">Collecting</span>
+          </div>
+          <p className="f9-timeline-empty">
+            Collecting — no offer states recorded yet. Once monitoring captures this
+            landing page, the dated ledger lands here.
+          </p>
+          <p className="f9-timeline-also">
+            <Link to={`/timeline/${encodeURIComponent(domain)}`}>{`Offer timeline for ${domain}`}</Link>
+          </p>
+        </div>
+      </section>
+    );
   }
 
   const stateWord = entries.length === 1 ? "dated state" : "dated states";
@@ -1445,11 +1471,15 @@ function BrandAdsResults({
           pages. This section cross-links this page to a deterministic set of
           OTHER indexable brand pages (the current domain is always excluded)
           plus the /brands hub, so every sitemap /ads page carries at least
-          one internal link to another /ads page. Hidden when there are no
-          OTHER indexable brand pages (single-brand sitemap or a cache hiccup)
-          OR when this page itself has zero verified-linked ads — the same
-          combined conditional the BreadcrumbList honors (issue #1454): a
-          populated page (verifiedLinkCount > 0) may carry both blocks, and a
+          one internal link to another /ads page. Since issue #2048 the
+          cluster is >=10 siblings (RELATED_BRAND_LINK_COUNT) so the
+          programmatic /ads cohort is a connected crawlable graph — rendered
+          via <BrowseTrackedCompetitors> as the "More tracked brands" cluster.
+          Hidden when there are no OTHER indexable brand pages (single-brand
+          sitemap or a cache hiccup) OR when this page itself has zero
+          verified-linked ads — the same combined conditional the
+          BreadcrumbList honors (issue #1454): a populated page
+          (verifiedLinkCount > 0) may carry both blocks, and a
           verifiedLinkCount = 0 page must carry NEITHER. It never invents a
           brand. */}
       {data.verifiedLinkCount > 0 && data.relatedBrands.length > 0 ? (

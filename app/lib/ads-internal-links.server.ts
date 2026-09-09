@@ -18,6 +18,7 @@ import { PUBLIC_PROOF_FEATURED_WEBSITE } from "~/lib/public-proof.server";
 import {
   loadIndexableBrandPageEntries,
   loadIndexableTimelineEntries,
+  timelineSitemapEntries,
 } from "~/lib/sitemap.server";
 import type { AppEnv } from "~/lib/env.server";
 
@@ -93,10 +94,11 @@ export async function resolveIndexableBrandPageLinkForDomain(
  * Load the set of registrable domains whose `/timeline/:domain` page is in
  * the sitemap's indexable set (issue #1931).
  *
- * Reuses `loadIndexableTimelineEntries` — the exact signal the sitemap uses —
- * so a public funnel page can never point at a `/timeline/:domain` that the
- * route would 410 (empty ledger) or that the sitemap would refuse to list
- * (proof-gated, ad-destination, or a domain the route 404s on). Cache-only:
+ * Reuses the sitemap's own timeline entry set — capture-backed entries plus
+ * the collecting entries the sitemap emits for the tracked /ads cohort
+ * (issue #2021) — so a public funnel page can never point at a
+ * `/timeline/:domain` that the route would refuse to serve (404) or that the
+ * sitemap would refuse to list. Cache-only:
  * never triggers live discovery or scraping.
  *
  * Returns a `Set` of registrable domains (lowercased, no `www.` prefix) whose
@@ -105,7 +107,11 @@ export async function resolveIndexableBrandPageLinkForDomain(
  */
 export async function loadIndexableTimelineDomains(env: AppEnv): Promise<Set<string>> {
   try {
-    const entries = await loadIndexableTimelineEntries(env);
+    const [brandEntries, timelineEntries] = await Promise.all([
+      loadIndexableBrandPageEntries(env),
+      loadIndexableTimelineEntries(env),
+    ]);
+    const entries = timelineSitemapEntries(brandEntries, timelineEntries);
     const domains = new Set<string>();
     for (const entry of entries) {
       const domain = timelineDomainFromSitemapPath(entry.path);
@@ -127,8 +133,8 @@ export async function loadIndexableTimelineDomains(env: AppEnv): Promise<Set<str
  * null when that timeline is not in the sitemap's indexable set (issue #1931).
  *
  * The returned path is safe to link: it is present only when the sitemap's own
- * indexability decision (`loadIndexableTimelineEntries`) lists it, so a
- * demo/empty/410 timeline is never linked. Cache-only.
+ * indexability decision (capture-backed or collecting, issue #2021) lists it,
+ * so a route the timeline never serves is never linked. Cache-only.
  */
 export async function resolveIndexableTimelineLinkForDomain(
   env: AppEnv,
