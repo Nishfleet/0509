@@ -7,6 +7,10 @@ import {
   readDigestIntelligence,
 } from "~/lib/change-intelligence";
 import {
+  adChurnFootnoteLine,
+  rerankDigestBrief,
+} from "~/lib/digest-rerank";
+import {
   buildDigestEmail,
   buildScanTroubleEmail,
   renderEmailAccountabilityBlock,
@@ -3414,79 +3418,93 @@ function deliveryAttemptSummaryStatus(status: DeliveryAttemptRecord["status"]) {
   return "failed";
 }
 
-function renderDigestSlackText(input: {
+export function renderDigestSlackText(input: {
   cadenceLabel: string;
   periodStart: string;
   periodEnd: string;
   items: DigestDeliveryItem[];
   timeZone?: string | null;
 }) {
-  const lines = [
-    `*Five to Nine ${escapeSlackText(input.cadenceLabel)}: ${input.items.length} competitor changes*`,
-    `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`,
-  ];
-
-  if (input.items.length === 0) {
-    return [...lines, "No digest changes yet."].join("\n");
-  }
-
-  for (const item of input.items.slice(0, 10)) {
-    const intelligence = readDigestIntelligence(item.metadata);
-    const scoreLabel = intelligence.priorityScore === null
-      ? intelligence.priorityBand
-      : `${intelligence.priorityBand} - ${intelligence.priorityScore}/100`;
-    lines.push(
-      [
-        `• *${escapeSlackText(item.watchlistName)}*: ${escapeSlackText(item.title)}`,
-        `  ${escapeSlackText(item.summary)}`,
-        `  Priority: ${escapeSlackText(scoreLabel)}`,
-        `  Next: ${escapeSlackText(intelligence.recommendedAction)}`,
-        `  Evidence: ${escapeSlackText(intelligence.proofTrail)}`,
-      ].join("\n"),
-    );
-  }
-
-  if (input.items.length > 10) {
-    lines.push(`+${input.items.length - 10} more changes in Five to Nine.`);
-  }
-
-  return lines.join("\n\n");
+  return renderDigestChatText({ ...input, syntax: {
+    header: (line) => `*${line}*`,
+    bullet: (s, t) => `• *${s}*: ${t}`,
+    meta: (t) => `  ${t}`,
+    label: (m) => `  ${m}: `,
+  } });
 }
 
-function renderDigestTeamsText(input: {
+export function renderDigestTeamsText(input: {
   cadenceLabel: string;
   periodStart: string;
   periodEnd: string;
   items: DigestDeliveryItem[];
   timeZone?: string | null;
 }) {
-  const lines = [
-    `**Five to Nine ${escapeSlackText(input.cadenceLabel)}: ${input.items.length} competitor changes**`,
+  return renderDigestChatText({ ...input, syntax: {
+    header: (line) => `**${line}**`,
+    bullet: (s, t) => `• **${s}**: ${t}`,
+    meta: (t) => `  ${t}`,
+    label: (m) => `  **${m}:** `,
+  } });
+}
+
+function renderDigestChatText(input: {
+  cadenceLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  items: DigestDeliveryItem[];
+  timeZone?: string | null;
+  syntax: {
+    header: (line: string) => string;
+    bullet: (watchlistName: string, title: string) => string;
+    meta: (line: string) => string;
+    label: (label: string) => string;
+  };
+}) {
+  const { syntax } = input;
+  const total = input.items.length;
+  const lines: string[] = [
+    syntax.header(`Five to Nine ${escapeSlackText(input.cadenceLabel)}: ${total} competitor changes`),
     `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`,
   ];
 
-  if (input.items.length === 0) {
+  if (total === 0) {
     return [...lines, "No digest changes yet."].join("\n");
   }
 
-  for (const item of input.items.slice(0, 10)) {
+  // BET 1 (issue 2053): deliver the same ranked brief on the chat channels as
+  // the email does. Creative churn (ad_new / ad_inactive) collapses into a
+  // single counted footnote — it never leads, and it never renders as a list of
+  // individual "new ad" bullets. Landing-page commercial-field changes head the
+  // brief ordered by the why-this-matters score, so the headline stream is the
+  // same everywhere.
+  const rerank = rerankDigestBrief(input.items);
+  const headline = [...rerank.headlineItems, ...rerank.otherItems];
+  const displayed = headline.slice(0, 10);
+  for (const item of displayed) {
     const intelligence = readDigestIntelligence(item.metadata);
     const scoreLabel = intelligence.priorityScore === null
       ? intelligence.priorityBand
       : `${intelligence.priorityBand} - ${intelligence.priorityScore}/100`;
     lines.push(
       [
-        `• **${escapeSlackText(item.watchlistName)}**: ${escapeSlackText(item.title)}`,
-        `  ${escapeSlackText(item.summary)}`,
-        `  **Priority:** ${escapeSlackText(scoreLabel)}`,
-        `  **Next:** ${escapeSlackText(intelligence.recommendedAction)}`,
-        `  **Evidence:** ${escapeSlackText(intelligence.proofTrail)}`,
+        syntax.bullet(escapeSlackText(item.watchlistName), escapeSlackText(item.title)),
+        syntax.meta(escapeSlackText(item.summary)),
+        `${syntax.label("Priority")}${escapeSlackText(scoreLabel)}`,
+        `${syntax.label("Next")}${escapeSlackText(intelligence.recommendedAction)}`,
+        `${syntax.label("Evidence")}${escapeSlackText(intelligence.proofTrail)}`,
       ].join("\n"),
     );
   }
 
-  if (input.items.length > 10) {
-    lines.push(`+${input.items.length - 10} more changes in Five to Nine.`);
+  const churnFootnote = adChurnFootnoteLine(rerank.adChurnSummary);
+  if (churnFootnote) {
+    lines.push(syntax.meta(churnFootnote));
+  }
+
+  const omitted = headline.length - displayed.length;
+  if (omitted > 0) {
+    lines.push(syntax.meta(`+${omitted} more changes in Five to Nine.`));
   }
 
   return lines.join("\n\n");
