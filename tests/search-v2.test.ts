@@ -426,6 +426,58 @@ describe("verified advertiser page-id scoping", () => {
   });
 });
 
+describe("curated page-id scoping (issue #1982)", () => {
+  // GOAT and On Running are major Meta advertisers whose brand-name keyword
+  // queries ("GOAT", "On") surface tens of thousands of junk rows instead of
+  // the brand's own ads. The curated Meta Page id scopes the provider search
+  // to the brand's exact page (view_all_page_id) so its own ads surface. The
+  // matcher still verifies each ad lands on the brand's domain — a curated
+  // page id never fabricates a verified row.
+  it("propagates a curated page id into the saved query for page-scoped search", () => {
+    const goat = parseSearchInputFromWebsiteField("https://goat.com");
+    const query = buildSearchV2SavedQuery(goat, "exact", filters, {
+      identityAliases: ["GOAT"],
+      pageId: "746493592053334",
+    });
+    expect(query.filters.query).toBe("GOAT");
+    expect(query.filters.pageId).toBe("746493592053334");
+  });
+
+  it("uses a distinct cache key for page-scoped vs keyword-scoped search", () => {
+    const goat = parseSearchInputFromWebsiteField("https://goat.com");
+    const keywordKey = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent: goat,
+      scope: "exact",
+      country: "all",
+    });
+    const pageScopedKey = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent: goat,
+      scope: "exact",
+      country: "all",
+      pageId: "746493592053334",
+    });
+    expect(keywordKey).not.toBe(pageScopedKey);
+    expect(pageScopedKey).toContain("page:746493592053334");
+    // The keyword key keeps the legacy "page-1" cursor segment.
+    expect(keywordKey).toContain("page-1");
+    expect(keywordKey).not.toContain("page:");
+  });
+
+  it("omits the pageId segment when no curated id exists (legacy parity)", () => {
+    const nykaa = parseSearchInputFromWebsiteField("https://nykaa.com");
+    const key = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent: nykaa,
+      scope: "exact",
+      country: "all",
+    });
+    expect(key).not.toContain("page:");
+    expect(key).toContain("page-1");
+  });
+});
+
 describe("website identity SSRF guard", () => {
   afterEach(() => {
     clearWebsiteIdentityCacheForTests();

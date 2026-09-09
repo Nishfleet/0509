@@ -139,12 +139,13 @@ describe("canary.sneaker-resale-recall", () => {
   });
 
   it("evaluateSneakerResaleRecall surfaces (does not fail) known identity-gap brands", () => {
-    // goat.com / on.com / reebok.com (issue #1950) and footlocker.com
-    // (issue #2068) are classified as
-    // identity-resolution gaps (major advertisers whose ads the pipeline does
-    // not yet connect to their domain). The canary reports them with their
-    // tracking issue rather than hard-failing the guard, mirroring
-    // search-tier-canary's alias-gap handling.
+    // reebok.com (issue #1950) and footlocker.com (issue #2068) are classified
+    // as identity-resolution gaps (major advertisers whose ads the pipeline
+    // does not yet connect to their domain). goat.com and on.com were removed
+    // from this set by issue #1982 (curated page-id scoping connects their
+    // ads). The canary reports the remaining gaps with their tracking issue
+    // rather than hard-failing the guard, mirroring search-tier-canary's
+    // alias-gap handling.
     const results = loadSneakerResaleDomains().map((entry) => ({
       domain: entry.domain,
       brand: entry.brand,
@@ -160,13 +161,7 @@ describe("canary.sneaker-resale-recall", () => {
     expect(verdict.pass).toBe(true);
     expect(verdict.failures).toEqual([]);
     expect(verdict.identityGaps.map((g) => g.probe.domain).sort()).toEqual([
-      // zappos.com is NOT here: issue #2045 removed it from the seed list
-      // entirely while its /ads page 301s to /search, so the canary never
-      // probes it (the identity-gap treatment in #2059 lives in the
-      // recall-canary config, not this seed list).
       "footlocker.com",
-      "goat.com",
-      "on.com",
       "reebok.com",
     ]);
     for (const { probe, issue } of verdict.identityGaps) {
@@ -372,10 +367,11 @@ describe("canary.sneaker-resale-recall", () => {
     expect(verdict.noCoverage).toEqual([]);
   });
 
-  it("evaluateSneakerResaleRecall fails a request error even on an identity-gap domain", () => {
-    // goat.com is a known identity gap, but a network error that returns no
-    // settled page must still fail the guard — the gap's current state cannot
-    // be confirmed. All other domains return verified rows.
+  it("evaluateSneakerResaleRecall fails a request error even on a former identity-gap domain", () => {
+    // goat.com was a known identity gap (issue #1950) until issue #1982's
+    // curated page-id scoping connected its ads. A network error that returns
+    // no settled page must still fail the guard — the domain's current state
+    // cannot be confirmed. All other domains return verified rows.
     const results = loadSneakerResaleDomains().map((entry) =>
       entry.domain === "goat.com"
         ? {
