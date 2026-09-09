@@ -189,7 +189,7 @@ for (const viewport of viewports) {
 
     // First visit: establish the product promise without an account.
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1, name: /saved the proof|before the call/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /See the Meta ads.*any competitor is.*running.*right now/i })).toBeVisible();
     await expect(page.getByText("No account needed.", { exact: true })).toBeVisible();
     const trialLink = page.getByRole("link", { name: "Try with Nykaa" });
     await expect(trialLink).toBeVisible();
