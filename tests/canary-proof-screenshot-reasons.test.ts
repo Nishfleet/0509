@@ -4,6 +4,7 @@ import {
   buildReasonQuery,
   mapReasonRows,
   parseArgs,
+  renderHumanReport,
   rowsFromWranglerJson,
   summarize,
   validateReasons,
@@ -198,6 +199,22 @@ describe("canary-proof-screenshot-reasons (#2082)", () => {
       expect(report.silent).toEqual([
         { reason: "succeeded_no_screenshot_unclassified", n: 1 },
       ]);
+    });
+  });
+
+  describe("renderHumanReport", () => {
+    it("tags the real budget skip_reason value as structural", () => {
+      const report = renderHumanReport({
+        reasons: [
+          { reason: "launch_canary_stripped", n: 61 },
+          { reason: "skipped_due_to_budget", n: 7 },
+        ],
+        windowHours: 48,
+        checkedAt: "2026-09-09T00:00:00.000Z",
+        local: false,
+      });
+      expect(report).toMatch(/skipped_due_to_budget \[structural\]: 7/);
+      expect(report).toMatch(/launch_canary_stripped \[structural\]: 61/);
     });
   });
 });
