@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { classifyCaptureValidity } from "~/lib/capture-validity.server";
 import {
@@ -14,6 +14,7 @@ import {
   recordCtaPipelineStageCounts,
 } from "~/lib/cta-pipeline-stage-counts.server";
 import type { LandingPageSnapshotData, ProofCaptureRecord } from "~/lib/types";
+import type { AppEnv } from "~/lib/env.server";
 import { appEnv, db } from "./fixtures";
 
 /**
@@ -424,5 +425,60 @@ describe("cta pipeline stage counters on real D1 (issue #1565)", () => {
     expect(counts.validity_passed).toBe(1);
     expect(counts.dom_extracted).toBe(1);
     expect(counts.diff_computed).toBe(1);
+  });
+
+  it("surfaces a missing D1 binding instead of silently returning (issue #1960)", async () => {
+    // Guards that the recorder no longer swallows the no-DB case: an operator
+    // must be able to tell "no rows because the writer is never reached"
+    // apart from "no rows because the Worker has no D1 binding."
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await recordCtaPipelineStageCounts(
+        { DB: undefined } as unknown as AppEnv,
+        fullSuccessfulCounters(),
+        new Date(`2026-09-07T12:00:00.000Z`),
+      );
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const emitted = JSON.parse(errorSpy.mock.calls[0][0] as string);
+      expect(emitted.event).toBe("cta_pipeline_stage_counts_writer");
+      expect(emitted.ok).toBe(false);
+      expect(emitted.reason).toBe("no_d1_binding");
+      // Nothing was logged as a success write.
+      expect(logSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+  });
+
+  it("surfaces a D1 write failure instead of swallowing it (issue #1960)", async () => {
+    // The previously empty `catch {}` hid the real cause of an empty table.
+    // Regression: a broken writer must emit a diagnosable error line.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const failingDb = {
+        prepare: () => ({
+          bind: () => ({
+            run: async () => {
+              throw new Error("database is locked");
+            },
+          }),
+        }),
+      };
+      await recordCtaPipelineStageCounts(
+        { DB: failingDb } as unknown as AppEnv,
+        fullSuccessfulCounters(),
+        new Date(`2026-09-08T12:00:00.000Z`),
+      );
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const emitted = JSON.parse(errorSpy.mock.calls[0][0] as string);
+      expect(emitted.event).toBe("cta_pipeline_stage_counts_writer");
+      expect(emitted.ok).toBe(false);
+      expect(emitted.reason).toBe("d1_write_failed");
+      expect(emitted.error).toContain("database is locked");
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });
