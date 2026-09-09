@@ -428,9 +428,10 @@ describe("cta pipeline stage counters on real D1 (issue #1565)", () => {
   });
 
   it("surfaces a missing D1 binding instead of silently returning (issue #1960)", async () => {
-    // Guards that the recorder no longer swallows the no-DB case: an operator
-    // must be able to tell "no rows because the writer is never reached"
-    // apart from "no rows because the Worker has no D1 binding."
+    // Diagnostic-branch test (not a real-D1 write test): the recorder must no
+    // longer swallow the no-DB case, so an operator can tell "no rows because
+    // the writer is never reached" apart from "no rows because the Worker has
+    // no D1 binding."
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
@@ -453,8 +454,9 @@ describe("cta pipeline stage counters on real D1 (issue #1565)", () => {
   });
 
   it("surfaces a D1 write failure instead of swallowing it (issue #1960)", async () => {
-    // The previously empty `catch {}` hid the real cause of an empty table.
-    // Regression: a broken writer must emit a diagnosable error line.
+    // Diagnostic-branch test (not a real-D1 write test): the previously empty
+    // `catch {}` hid the real cause of an empty table. Regression: a broken
+    // writer must emit a diagnosable error line.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const failingDb = {

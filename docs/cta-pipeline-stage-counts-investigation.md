@@ -97,7 +97,9 @@ write." That is the silent-failure genre at #1500.
 It still never throws (telemetry must not break a scan). A future operator reading an empty
 table can now distinguish, from logs alone, "writer never reached"
 (no writer lines, empty table) from "writer runs but breaks" (`d1_write_failed` lines).
-Two integration tests pin both branches.
+Two diagnostic-branch integration tests pin both branches (the missing-binding and
+write-failure paths; the real-D1 write path is covered by the pre-existing tests in this
+file).
 
 Note on the `wrote > 0` success guard: `ctaPipelineStageCountsFromCounters` always yields
 `checks_started: 1`, so every real invocation of the recorder writes at least one row and the
@@ -134,7 +136,7 @@ follow-up (see issue #2077 / PR body).
 - **Acceptance bullet 4** ("a short note on the root cause lands in
   `docs/cta-pipeline-stage-counts-investigation.md`") — this doc. **Closed.**
 - The recruiter-reported "silent failure" of the writer (#1500 framing) — the observer
-  gap in one hand-write path. **Closed** by the `ctta_pipeline_stage_counts_writer`
+  gap in one hand-write path. **Closed** by the `cta_pipeline_stage_counts_writer`
   diagnostics + 2 integration tests, which pass against real local D1.
 - **Acceptance bullets 1–3** (COUNT>0, six stages present for a day, steady
   `landing_pipeline_check` stream) — **not closed here**: they require the volume-path
