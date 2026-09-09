@@ -19,6 +19,7 @@ import {
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
+import { FREE_PREVIEW_SEARCH_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import metaAdLibraryCitations from "~/data/compare/meta-ad-library-citations.json";
 
@@ -76,6 +77,12 @@ const manualCosts: readonly CompareClaimCard[] = [
     detail:
       "Close the tab and the moment is gone — nothing is saved, nothing is timestamped, and nobody is emailed when something moves. Screenshots live in your downloads folder, if you took them.",
   },
+  {
+    title: "Scheduled scraper or MCP call",
+    detail:
+      "A DIY pipeline can poll the library for you: Apify's jy-labs/meta-ad-library-multi-search-scraper runs at $10 per 1,000 results, and scheduled with onlyNewAds it delivers new-ad detection. It does not deliver a landing-page diff, an offer timeline, screenshot proof, or a worth-action verdict.",
+    sourceId: "apify-meta-ad-library-scraper",
+  },
 ];
 
 const fiveToNineAdds = [
@@ -102,6 +109,11 @@ const fiveToNineAdds = [
 // Library alternative?"). Every answer is grounded in this page's own copy —
 // the three comparison sections above — nothing new promised.
 export const metaAdLibraryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
+  {
+    question: "Does the Meta Ad Library have alerts or a follow button?",
+    answer:
+      "No. The Ad Library has no follow button, no saved searches, no alerts and no export — every check is a manual revisit, and commercial ads drop out once they go inactive. Five to Nine exists to close exactly that gap: paid plans check watched competitors every 3–6 hours, confirmed changes are saved with source-linked proof, and alerts and briefs bring the changes to you.",
+  },
   {
     question: "What does the Meta Ad Library give you for free?",
     answer:
@@ -142,18 +154,22 @@ export default function CompareMetaAdLibraryRoute() {
           <span>Five to Nine vs checking the Meta Ad Library by hand</span>
         </p>
         <h1 className="ld-wall ld-wall-compact">
-          The Ad Library is free and public. Checking it every day is the expensive part.
+          Follow any brand&rsquo;s Meta ads the way you follow people on Instagram.
         </h1>
         <p className="ld-deck-copy">
-          Five to Nine reads the same public Meta Ad Library you can open right now — then does
-          the part humans skip: checking on a schedule, diffing against last time, and saving the
-          evidence.
+          The Ad Library has no follow, save, alert or export — and commercial ads drop out once
+          they go inactive, so the ad you meant to go back to is simply gone (AdLibrary&rsquo;s
+          limitations audit, May 17, 2026).
+          <Cite citations={citations} id="adlibrary-limitations" /> Five to Nine is the missing
+          follow button: it checks watched brands on a schedule, diffs against last time, and
+          saves the evidence.
         </p>
 
         <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
           <input
             aria-label="Competitor website"
             name="website"
+            defaultValue={FREE_PREVIEW_SEARCH_DOMAIN}
             placeholder="paste-a-competitor-website.com…"
             type="text"
             inputMode="url"
@@ -221,7 +237,8 @@ export default function CompareMetaAdLibraryRoute() {
         </h2>
         <CompareAdsExampleLink />
         <p className="ld-pricing-note">
-          Paste a competitor website into the <Link to="/search">search preview</Link> — no
+          Paste a competitor website into the{" "}
+          <Link to={`/search?website=${FREE_PREVIEW_SEARCH_DOMAIN}`}>search preview</Link> — no
           account needed — and see what is publicly available before deciding anything. Questions
           about coverage on your competitors? Email{" "}
           <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll answer honestly, including
