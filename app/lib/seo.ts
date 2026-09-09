@@ -750,6 +750,9 @@ export const SITEMAP_PATHS = [
   // the page renders an honest quiet state instead of noindexing when
   // nothing moved, so it never serves a noindex page from the sitemap.
   "/briefs/weekly",
+  // Issue #2152: /guides/* how-to cluster. One static entry — the guide is
+  // stable long-form copy, so it never serves a noindex shell.
+  "/guides/how-to-track-competitor-ads",
   "/compare",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
@@ -851,6 +854,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/search": { changefreq: "weekly", priority: "0.9" },
   "/brands": { changefreq: "weekly", priority: "0.6" },
   "/briefs/weekly": { changefreq: "weekly", priority: "0.6" },
+  "/guides/how-to-track-competitor-ads": { changefreq: "monthly", priority: "0.6" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
   "/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
   "/de/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
