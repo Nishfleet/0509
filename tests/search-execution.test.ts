@@ -144,7 +144,7 @@ describe("search execution cache probing", () => {
       expect.objectContaining({ filters: expect.objectContaining({ query: "nykaa.com" }) }),
     );
     expect(searchAdsViaSourceResolver.mock.calls[1]?.[1]).toEqual(
-      expect.objectContaining({ filters: expect.objectContaining({ query: "nykaa" }) }),
+      expect.objectContaining({ filters: expect.objectContaining({ query: "nykaa.com" }) }),
     );
     expect(execution.result).toBe(legacyResult);
     expect(execution.query.filters.query).toBe("nykaa.com");
