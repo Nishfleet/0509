@@ -68,6 +68,9 @@ export default [
   route("ops", "routes/ops.tsx"),
   route("ads/:domain", "routes/ads.$domain.tsx"),
   route("brands", "routes/brands.tsx"),
+  // Public weekly brief of stored offer moves across sitemap-indexable
+  // brands (issue #2143). Stored rows only — never triggers live scraping.
+  route("briefs/weekly", "routes/briefs.weekly.tsx"),
   route("timeline/:domain", "routes/timeline.$domain.tsx"),
   // Canonical Ad Aggression Score methodology page. Path history: issue #960
   // shipped /methodology/ad-aggression-score; #1263 promoted it to
