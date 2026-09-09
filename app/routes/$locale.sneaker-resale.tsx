@@ -1,7 +1,10 @@
 import { useLoaderData } from "react-router";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
-import { SneakerResaleLanding } from "~/components/sneaker-resale-landing";
+import {
+  SneakerResaleLanding,
+  sneakerResaleIndexableTimelineDomains,
+} from "~/components/sneaker-resale-landing";
 import {
   isSneakerResaleLocaleId,
   sneakerResaleMarket,
@@ -25,9 +28,25 @@ export const links: LinksFunction = () => sneakerResaleHreflangLinks();
 export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const locale = localeFromParams(params);
   const { getEnv } = await import("~/lib/context.server");
+  const env = getEnv(context);
   const { emitFunnelLocaleSegmentView } = await import("~/lib/funnel-measurement.server");
-  emitFunnelLocaleSegmentView(getEnv(context), request, locale);
-  return { locale };
+  emitFunnelLocaleSegmentView(env, request, locale);
+
+  // Same #2100 empty-guard as the EN /sneaker-resale loader: only link a
+  // /timeline/:domain that the sitemap already lists.
+  let timelineDomains: string[] = [];
+  try {
+    const { loadIndexableTimelineDomains } = await import("~/lib/ads-internal-links.server");
+    timelineDomains = sneakerResaleIndexableTimelineDomains(
+      await loadIndexableTimelineDomains(env),
+    );
+  } catch (error) {
+    console.warn("Sneaker-resale timeline link load failed; omitting timeline links.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+  }
+
+  return { locale, timelineDomains };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
@@ -50,6 +69,11 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 };
 
 export default function SneakerResaleLocaleRoute() {
-  const { locale } = useLoaderData<typeof loader>();
-  return <SneakerResaleLanding locale={locale} />;
+  const data = useLoaderData<typeof loader>();
+  return (
+    <SneakerResaleLanding
+      locale={data.locale}
+      timelineDomains={data.timelineDomains ?? []}
+    />
+  );
 }
