@@ -18,8 +18,46 @@
  */
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
 import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
+// @ts-ignore — Vite inlines the .ttf as a base64 data URI with ?inline.
+import interBoldDataUri from "../assets/fonts/Inter-Bold.ttf?inline";
+// @ts-ignore — Vite inlines the .ttf as a base64 data URI with ?inline.
+import interSemiBoldDataUri from "../assets/fonts/Inter-SemiBold.ttf?inline";
 
 let resvgReady: Promise<void> | null = null;
+
+/**
+ * Embedded Inter fonts for the card text. The card SVG uses
+ * `font-family="Inter, Arial, sans-serif"` with font-weight 800 (wordmark +
+ * headline) and 600 (subline). Workerd has no system fonts, so resvg would
+ * silently skip every `<text>` node and ship a blank gradient card; embedding
+ * the two weights via `fontBuffers` makes the brand name and headline render.
+ *
+ * Vite's `?inline` query bundles the .ttf as a `data:font/ttf;base64,...`
+ * string (the workerd runtime has no filesystem, so `?arraybuffer` cannot be
+ * used and `?raw` corrupts binary bytes). We decode the base64 payload once
+ * at module load and hand the raw TrueType bytes to resvg.
+ */
+function dataUriToBytes(dataUri: string): Uint8Array {
+  const marker = ";base64,";
+  const offset = dataUri.indexOf(marker);
+  if (offset === -1) {
+    throw new Error("Expected a base64 data URI for the embedded font");
+  }
+  const base64 = dataUri.slice(offset + marker.length);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i) & 0xff;
+  }
+  return bytes;
+}
+
+const CARD_FONT_BUFFERS: Uint8Array[] = [
+  dataUriToBytes(interBoldDataUri as string),
+  dataUriToBytes(interSemiBoldDataUri as string),
+];
+
+export { CARD_FONT_BUFFERS };
 
 /** Initialize the wasm once; reset the promise on failure so a retry is possible. */
 function ensureResvg(): Promise<void> {
@@ -42,7 +80,14 @@ const PNG_CACHE_MAX = 256;
  */
 export async function rasterizeSocialCardPng(svg: string): Promise<Uint8Array> {
   await ensureResvg();
-  const resvg = new Resvg(svg, { fitTo: { mode: "original" } });
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: "original" },
+    font: {
+      fontBuffers: CARD_FONT_BUFFERS,
+      defaultFontFamily: "Inter",
+      sansSerifFamily: "Inter",
+    },
+  });
   return resvg.render().asPng();
 }
 
