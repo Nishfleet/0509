@@ -150,9 +150,10 @@ function applyIdentityOverride(
   const mergedDomainAliases = [...new Set([...domainAliases, ...(override.domainAliases ?? [])])];
 
   const overrideSiteName = override.siteName ?? null;
-  // The curated name PINNS the provider query: on.com's live og:site_name is
-  // "On Shop" — a shop label Meta Ad Library returns 0 ads for — so a live
-  // site name must not displace the curated brand term (issue #1993).
+  // The curated name wins as the matching alias: on.com's live og:site_name
+  // is "On Shop" — a shop label, not the advertiser page. A live site name
+  // must not displace the curated brand term (issue #1993). The Meta query
+  // itself is the registrable domain (issue #1999), not this alias.
   const siteName = overrideSiteName ?? live?.siteName ?? null;
   if (!live && !siteName && mergedDomainAliases.length === 0) {
     return null;

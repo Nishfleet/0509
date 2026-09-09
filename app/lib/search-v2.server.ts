@@ -66,23 +66,25 @@ export function resolveVerifiedAdvertiserPageId(
 
 export function buildDomainProviderQuery(
   intent: ParsedSearchQuery,
+  // Identity aliases still classify rows after scrape (on-running.com,
+  // ridgewallet.com). They must not pick the Meta query: live 2026-09-09,
+  // website=on.com asked Meta for identityAliases[0] ("On" / "On Shop") and
+  // returned 0 verified rows, while q=on.com returned 30 verified (issue #1999).
   identityAliases: string[] = [],
 ) {
   if (intent.intent !== "domain") {
     return null;
   }
 
-  // Meta Ad Library cannot search by destination domain. Query with the
-  // brand-sized term that can discover candidates, then verify the website
-  // connection below. Exact vs broader is a proof policy, not a provider
+  // Meta Ad Library cannot search by destination domain. The registrable
+  // domain is the term a buyer types and the term the live keyword path
+  // already proves (q=on.com, q=reebok.com, q=footlocker.com). Site-name
+  // aliases ("On", "GOAT", "Reebok") stay on the matcher; using them as the
+  // provider query is what left website=on.com / website=reebok.com empty
+  // after #1950 / #1993. Exact vs broader is a proof policy, not a provider
   // search mode.
-  // Prefer the resolved website identity (site name, title) as the search
-  // query because generic domain labels like "slack" or "tcs" are too
-  // ambiguous for Meta Ad Library. Fall back to the broader provider query
-  // (domain label) if no identity is available.
-  return identityAliases[0] ??
-    buildBroaderProviderQuery(intent) ??
-    intent.registrableDomain ??
+  void identityAliases;
+  return intent.registrableDomain ??
     intent.comparableHostname ??
     intent.originalInput;
 }
