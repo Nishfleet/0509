@@ -1,80 +1,64 @@
-## What
+## Why
 
-net-positive-because: the diff is the shipped capture-validity gate (helpers, wiring, render/MCP surfacing) plus its regression test — net-positive test+feature lines that are the smallest durable fix and its prevention mechanism, not speculative scaffolding.
+Issue #2108 — generalize signup attribution beyond the six hardcoded strings. Production D1 ground truth: 15 users, 0 signups Jul-Sep, 0 real paying customers. The existing `signup_source` column (migration 0080) has a SQL `CHECK` that admits exactly five literals, so any new slug or `ref:<eTLD+1>` referer marker is rejected at write time. This PR opens the allowlist to lowercase slugs and referer-derived markers, in code and in the D1 schema, so signup attribution can grow without a migration per campaign.
 
-Closes #1996. `/timeline/:domain` was publishing geo-variance + cookie-banner capture artifacts as real offer transitions — e.g. the live Nike SG (`/sg/`, 7 Sept: "Shop Now", "$149") vs Nike FR (`/fr/`, 8 Sept: French consent CTA, price "—") pair rendered as a false "Nike changed their CTA and dropped their price" transition on the public indexed flagship surface. This PR lands a capture-validity gate so such pairs become an explicit suppressed state with a reason, never an offer transition, plus a regression gate that fails on the old code.
+This is the orchestrator re-spec (2026-09-09T16:43Z) — it overrides step 2's file list because the original `files:` scope could not meet the `accept:` criterion (the 0080 CHECK rejects any value outside the five literals; SQLite cannot ALTER a CHECK in place).
 
-**Logic — `app/lib/offer-timeline.ts`**
+## Scope
 
-- `geoLocaleSegment(url)` — returns the first path segment when it is a `SUPPORTED_COUNTRIES` ISO code (`/sg/` -> `"sg"`, `/fr/` -> `"fr"`), else null.
-- `isCookieBannerOrConsent(text)` — true when the text matches a curated consent/ads-personalization string list (French `"publicités personnalisées"`, `"gérer mes cookies"`, `"manage cookies"`, `"accept all cookies"`, `"privacy settings"`, etc.), case-insensitive substring. Tailored to consent phrases so a "Personalised winter sale" headline or a "Shop Now" CTA still diffs normally.
-- `captureValidityReason(previous, current)` — returns `"geo locale change"` when both canonical URLs carry a known locale segment and they differ; `"cookie banner / consent string"` when the current CTA/headline is a consent string; else null (genuine change diffs normally).
-- `buildOfferLedger` — between run-collapse and diff, computes the validity reason; when non-null, the entry is emitted with `transition: null` and `suppressedReason` set (no phantom change, no fake price `$149 -> —` disappearance). `OfferLedgerEntry` gains optional `suppressedReason`.
+- `migrations/0087_signup_source_open_allowlist.sql` (new) — rebuilds the `user` and `signup_source_pending` CHECK constraints (create-copy-drop-rename, so child FK references to `user` are never rewritten) so `signup_source` accepts: NULL, the five existing literals, `pricing-free`, `for_agencies`, and any value matching `length(signup_source) BETWEEN 1 AND 44 AND signup_source NOT GLOB '*[^a-z0-9:.-]*'` (lowercase slugs and `ref:<eTLD+1>`). Keeps NOT NULL on the pending table; recreates `idx_user_email_nocase` and `idx_signup_source_pending_expires`.
+- `app/lib/signup-source.ts` (modified) — `allowlistedSignupSource` now also accepts lowercase slugs (`/^[a-z0-9][a-z0-9-]{0,39}$/`) and `ref:<eTLD+1>` markers (`/^ref:[a-z0-9.-]{1,40}$/`); the six existing constants keep working. `signupSourceFromRequest` falls back to `ref:<eTLD+1>` derived from the `Referer` header (coarse domain only, never the full URL or query string).
+- `tests/signup-source.test.ts` (modified) — slug accepted, junk rejected, referer-derived value stored, cookie round-trip unchanged, and a shared fixture list asserted against both the code rule and the migration SQL.
+- `tests/integration/signup-source.integration.test.ts` (modified) — referer-derived `ref:example.com` persisted end to end on real D1, open slug persisted, 0087 CHECK accepts/rejects the same fixture list as the code rule, and the rebuilt `user` table keeps its email index and inbound foreign keys.
 
-**Phase 6 (follow-on): skip-suppressed diff baseline** — the diff/gate baseline is the last NON-suppressed emitted entry (`lastNonSuppressedEntry`), never the raw last one, so a later same-region capture can never diff against a suppressed placeholder (e.g. a "—" price or consent CTA) and fabricate a "price restored from —" transition. Suppressed states remain emitted as their own labeled dated states; only the baseline skips them.
+## D1 expand/contract
 
-**Render + MCP — `app/components/offer-timeline-ledger.tsx`, `app/lib/offer-timeline-agent-tools.ts`**
-
-- Ledger renders `Capture suppressed: <reason>` when `transition` is null and `suppressedReason` is non-null (instead of the misleading "First offer on record.").
-- `OfferHistoryEntryPayload` gains `suppressedReason` and sets `changes: null` for suppressed states, so MCP consumers report the reason instead of fabricated field changes.
-
-**Tests**
-
-- `tests/offer-timeline-geo-variance-phantom.test.ts` — NEW regression gate (fleet-ops#366): (a) real sg+fr Nike pair emits NO offer transition (suppressed with `geo locale change`); (b) genuine same-geo `$149 -> $129` price edit still emits exactly one transition; (c) cookie-banner CTA swap on the SAME geo suppresses with the consent reason; (d) phase 6: sg -> fr(suppressed, "—") -> fr(real "$149") never emits a "price restored from —" transition.
-- `tests/offer-timeline.render.test.tsx` — suppressed entry renders as "Capture suppressed", not "First offer" and not a transition; proof hrefs kept.
-- `tests/offer-timeline-agent-tools.test.ts` — MCP payload surfaces suppressed reason with changes null.
-- `tests/offer-timeline.test.ts`, `tests/offer-timeline.server.test.ts` — green after the shape change (field populated automatically by `buildOfferLedger`).
-
-No D1 migration (pure read-side ledger/diff logic + a test). No DROP COLUMN / DROP TABLE / column rename / NOT NULL.
+This is a single-phase schema change (rebuild the CHECK constraints). No `DROP COLUMN`, no `DROP TABLE` of a live table (the rebuild drops the old table only after copying into the replacement), no rename of a column, no `NOT NULL` without a DEFAULT. The migration is validated by the real-D1 integration tests (the `workers` vitest project applies the full migration set to local D1).
 
 ## Verification
 
-Real runs, on this branch, after rebase onto origin/main:
+Real-D1 leg (workers vitest project, applies all migrations including 0087 to local D1):
 
 ```
-$ npx vitest run --project node tests/offer-timeline-geo-variance-phantom.test.ts
- Test Files  1 passed (1)
-      Tests  4 passed (4)
-
-$ npx vitest run --project node tests/offer-timeline.test.ts tests/offer-timeline.render.test.tsx tests/offer-timeline-agent-tools.test.ts tests/offer-timeline.server.test.ts
- Test Files  4 passed (4)
-      Tests  42 passed (42)
-
-$ npx vitest run --configLoader runner --project node
- Test Files  618 passed (618)
-      Tests  7368 passed (7368)
-
-$ npx vitest run --project workers
- Test Files  39 passed (39)
-      Tests  198 passed (198)
-
-$ NODE_OPTIONS="--max-old-space-size=8192" npx tsc -b
-(exit 0; default-heap OOM on this large monorepo is resolved with the larger heap)
+NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner tests/signup-source.test.ts tests/integration/signup-source.integration.test.ts
 ```
 
-`run-proof:` the target regression suite `tests/offer-timeline-geo-variance-phantom.test.ts` ran on this branch post-rebase and went 4/4 green; four related offer-timeline suites (42 tests) green; full node project (618 files, 7368 tests) and workers project (39 files, 198 tests) re-ran green; `tsc -b` exits 0 with the larger heap. The regression test FAILS on current main (the pre-gate pair diffs to a phantom Headline/CTA/Price change) and PASSES with the gate — it is the `bin/prove-one-run-check` receipt run.
+→ 2 files, 23 tests passed (15 unit + 8 integration). The accept criterion is proven: a signup arriving with only `Referer: https://example.com/page` persists `ref:example.com` on `user.signup_source` (integration test "persists a referer-derived ref:<eTLD+1> marker end to end").
 
-## Reviewer round (product repo, one round — seat cursor/cursor-grok-4.6-high)
+Type check:
 
-Ran via step 8 before arming (`bin/fleet-review-arm-check` exit 0 → senior seat usable). Reviewer ran `npx vitest run --project node` on the five offer-timeline suites (46/46 green) and assessed the diff vs the issue acceptance.
+```
+NODE_OPTIONS=--max-old-space-size=6144 npm run typecheck
+```
 
-Adjudicated against `~/.pi/agent/skills/review-adjudication/SKILL.md`:
+→ exit 0.
 
-- **Act on**: none — reviewer reported zero critical and zero warning findings.
-- **Consider** (`"accept all"`/`"reject all"` are bare 2-word substrings with no cookie/consent context, a small genuine-CTA false-positive risk): NOTED, recorded, not re-delegated. The rest of the consent list is phrase-level and generic offer verbs ("Shop Now") are deliberately absent; the two bare phrases carry a minor risk that is within the issue's conservative prefer-never-fabricate scope. Documented in `.fleet/plan.md` as an accepted over-breadth tradeoff.
-- **Consider** (geo-switch suppression permanently deafens the timeline to real new-region changes until the baseline is deliberately re-anchored): NOTED, recorded, not re-delegated. This is the phase-6 codified intended behavior (see `.fleet/plan.md` phase 6); re-anchoring the baseline on region adoption is the deeper fix the issue explicitly calls out of scope. `.fleet/plan.md` risk table records the decision.
-- **Noted** (`geoLocaleSegment` treats any ISO-2 first path segment as a locale, e.g. `/in/`): harmless given the segment must match a real `SUPPORTED_COUNTRIES` code; not covered by tests.
-- **Dismissed-with-reason** (conditional-`suppressedReason`/plain-paragraph render): back-compat call sites must keep compiling; proof hrefs are preserved and the suppressed state is explicit with a reason — exactly acceptance bullet 1.
-- **Acceptance check** — all four bullets PASS.
+Regression (the `user` rebuild must keep child-table writes intact):
 
-The two Consider items are deliberate over-breadth tradeoffs of a conservative never-fabricate design, recorded here and in `.fleet/plan.md` as required, and are not re-delegated (manager mode: Consider/Noted are recorded, not acted-on).
+```
+NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner --project workers tests/integration/watch-event-writes.integration.test.ts tests/integration/saucony-watchlist.integration.test.ts tests/integration/signup-first-brief.integration.test.ts tests/integration/retention-sweep-state.integration.test.ts tests/integration/website-scan-baseline.integration.test.ts
+```
 
-## Acceptance
+→ 5 files, 32 tests passed.
 
-All issue bullets pass post-fix:
-1. Capture-validity gate suppresses geo-locale-differing pairs + consent-CTA pairs as `capture_failed`-style suppressed states with a reason — never a transition.
-2. Price `$149 -> —` disappearance suppressed when the only cause is the geo switch.
-3. Regression test feeds the real sg+fr pair and asserts NO offer transition; a genuine same-geo price edit still emits exactly one transition.
-4. Test fails on current main, passes with the gate.
+run-proof: tests/signup-source.test.ts (15 tests) + tests/integration/signup-source.integration.test.ts (8 tests, real D1) + 5 regression integration files (32 tests, real D1) all green in the same vitest workers-project run; `npm run typecheck` exit 0.
 
-`Closes #1996`
+net-positive-because: this is the issue's own acceptance — the open allowlist (code + D1 schema) is the load-bearing new code, and the rest is the required real-D1 integration proof plus the referer-derivation wiring. It is product work, not control-plane machinery.
+
+## Termination note (check-d1-migrations-synced.mjs)
+
+The issue's termination command ends with `node scripts/check-d1-migrations-synced.mjs`. That script is a **deploy-time** check (it runs in `scripts/deploy-production-plan.mjs` with `includeCloudflareCredentials: true`) that compares the local `migrations/` ledger against the **remote production D1** ledger via `wrangler d1 migrations list 0509 --remote`. It requires Cloudflare production credentials (`CLOUDFLARE_API_TOKEN` or OAuth) that do not exist on this worker VPS, and it is production-gated by repo rules. It would also report 0087 as pending (expected — the migration is applied at deploy time, not by the worker PR).
+
+The migration is instead validated by the real-D1 integration tests, which apply the full migration set (including 0087) to local D1 and assert both the READ and WRITE paths. This matches the precedent of migration PR #1964 (0086), which also validated via real-D1 integration tests and left the production sync check to deploy time.
+
+loose-ends: 0509#2108-check-d1-migrations-synced (deploy-time check requires Cloudflare prod credentials not present on the worker VPS; migration validated by real-D1 integration tests, production sync verified at deploy).
+
+## Reviewer round (cursor/cursor-grok-4.6-high)
+
+- **Act on** — `migrations/0087` CHECK literal lists omitted `for_agencies`, which the code allowlist accepts via the exact-match branch; the open shape `[a-z0-9:.-]` rejects the underscore, so a `for_agencies` signup was silently dropped at write time (violates step 2b "code and DB never disagree"). Fixed: added `for_agencies` to both CHECK literal lists and to the `ACCEPTED_BY_BOTH` fixture lists in both test files. Verified: `tests/signup-source.test.ts` (15), `tests/integration/signup-source.integration.test.ts` (8, real D1), `tests/for-agencies.route.test.ts` (8) all green; `npm run typecheck` exit 0.
+- **Consider** — the `ACCEPTED_BY_BOTH` fixture lists are duplicated across two test files with a "keep in sync" comment but no enforcement. Noted; a shared fixture module is a follow-up, not a blocker.
+- **Consider** — `isOwnDomain` hardcodes `0509.io`/`0509.in`, duplicating `signupSourceCookieDomain`. Noted; deriving both from one source is a follow-up.
+- **Noted** — referer fallback attributes any external referer as `ref:<domain>` (intended accept behavior); the §4 event allowlist is untouched per must-not.
+- **Noted** — `PRAGMA foreign_keys` toggle in 0087; the rename-into-place order preserves child references regardless.
+
+Closes #2108

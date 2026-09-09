@@ -4,9 +4,37 @@ import {
   applySignupSourceToNewUser,
   readUserSignupSource,
   rememberAllowlistedSignupSource,
+  signupSourceFromRequest,
 } from "~/lib/signup-source";
 
 import { appEnv, db, ISO_T0, seedUser, uid } from "./fixtures";
+
+/**
+ * Fixtures where the code rule and the 0087 CHECK constraint must agree
+ * (issue #2108 step 2c). Mirrors the list in tests/signup-source.test.ts —
+ * keep the two in sync.
+ */
+const ACCEPTED_BY_BOTH = [
+  "ref:example.com",
+  "pricing-free",
+  "for_agencies",
+  "magicbrief-migration",
+  "locale-de-sneaker-resale",
+  "summer-2026-launch",
+  "search_warming_exhausted",
+  "guide_track_ads",
+  "a",
+];
+const REJECTED_BY_BOTH = [
+  "My Campaign",
+  "a?b",
+  "ref:EXAMPLE.com",
+  "https://example.com/page",
+  "ref:example.com?x=1",
+  "<script>",
+  "",
+  "x".repeat(45),
+];
 
 /**
  * Expand-phase signup_source (issue 1200): the column must exist on real D1
@@ -113,5 +141,121 @@ describe("signup_source against real D1", () => {
     await applySignupSourceToNewUser(appEnv, { user: { id: userId, email } });
 
     expect(await readUserSignupSource(appEnv, userId)).toBe("locale-en-sneaker-resale");
+  });
+
+  it("persists a referer-derived ref:<eTLD+1> marker end to end (issue #2108 accept)", async () => {
+    const userId = await seedUser(uid("src_ref"));
+    const email = `${userId}@example.test`;
+    await db().prepare("UPDATE user SET email = ? WHERE id = ?").bind(email, userId).run();
+
+    // A signup arriving with only `Referer: https://example.com/page`.
+    const request = new Request("https://0509.io/auth/signup", {
+      headers: { referer: "https://example.com/page" },
+    });
+    const derived = signupSourceFromRequest(request);
+    expect(derived).toBe("ref:example.com");
+
+    expect(await rememberAllowlistedSignupSource(appEnv, { email, source: derived })).toBe(
+      "ref:example.com",
+    );
+    expect(await applySignupSourceToNewUser(appEnv, { user: { id: userId, email } })).toBe(
+      "ref:example.com",
+    );
+    expect(await readUserSignupSource(appEnv, userId)).toBe("ref:example.com");
+
+    const row = await db()
+      .prepare("SELECT signup_source FROM user WHERE id = ?")
+      .bind(userId)
+      .first<{ signup_source: string | null }>();
+    expect(row?.signup_source).toBe("ref:example.com");
+  });
+
+  it("persists an open slug through remember+apply and reads it back", async () => {
+    const userId = await seedUser(uid("src_slug"));
+    const email = `${userId}@example.test`;
+    await db().prepare("UPDATE user SET email = ? WHERE id = ?").bind(email, userId).run();
+
+    expect(
+      await rememberAllowlistedSignupSource(appEnv, { email, source: "summer-2026-launch" }),
+    ).toBe("summer-2026-launch");
+    expect(await applySignupSourceToNewUser(appEnv, { user: { id: userId, email } })).toBe(
+      "summer-2026-launch",
+    );
+    expect(await readUserSignupSource(appEnv, userId)).toBe("summer-2026-launch");
+  });
+
+  it("0087 CHECK constraints accept and reject the same fixture list as the code rule", async () => {
+    for (const fixture of ACCEPTED_BY_BOTH) {
+      const userId = uid("src_ok");
+      await db()
+        .prepare(
+          `INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt, signup_source)
+           VALUES (?, ?, ?, 1, ?, ?, ?)`,
+        )
+        .bind(userId, "Fixture", `${userId}@example.test`, ISO_T0, ISO_T0, fixture)
+        .run();
+      const pendingEmail = `${uid("src_ok")}@example.test`;
+      await db()
+        .prepare(
+          `INSERT INTO signup_source_pending (email, signup_source, created_at, expires_at)
+           VALUES (?, ?, ?, ?)`,
+        )
+        .bind(pendingEmail, fixture, ISO_T0, "2026-01-02T00:00:00.000Z")
+        .run();
+    }
+
+    for (const fixture of REJECTED_BY_BOTH) {
+      const userId = uid("src_no");
+      await expect(
+        db()
+          .prepare(
+            `INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt, signup_source)
+             VALUES (?, ?, ?, 1, ?, ?, ?)`,
+          )
+          .bind(userId, "Fixture", `${userId}@example.test`, ISO_T0, ISO_T0, fixture)
+          .run(),
+      ).rejects.toThrow();
+      await expect(
+        db()
+          .prepare(
+            `INSERT INTO signup_source_pending (email, signup_source, created_at, expires_at)
+             VALUES (?, ?, ?, ?)`,
+          )
+          .bind(`${uid("src_no")}@example.test`, fixture, ISO_T0, "2026-01-02T00:00:00.000Z")
+          .run(),
+      ).rejects.toThrow();
+    }
+  });
+
+  it("rebuilt user table keeps its email index and inbound foreign keys", async () => {
+    const index = await db()
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_user_email_nocase'",
+      )
+      .first<{ name: string }>();
+    expect(index?.name).toBe("idx_user_email_nocase");
+
+    // The rebuild creates user_new, copies, drops user, then renames
+    // user_new into place — child tables must still reference `user`, never
+    // a dropped rename target.
+    const sessionTable = await db()
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'session'")
+      .first<{ sql: string }>();
+    expect(sessionTable?.sql).toContain("REFERENCES user(id)");
+    expect(sessionTable?.sql).not.toContain("user_old");
+
+    const userId = await seedUser(uid("src_fk"));
+    await db()
+      .prepare(
+        `INSERT INTO session (id, expiresAt, token, createdAt, updatedAt, userId)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(uid("sess"), "2026-01-02T00:00:00.000Z", uid("tok"), ISO_T0, ISO_T0, userId)
+      .run();
+    const session = await db()
+      .prepare("SELECT userId FROM session WHERE userId = ?")
+      .bind(userId)
+      .first<{ userId: string }>();
+    expect(session?.userId).toBe(userId);
   });
 });

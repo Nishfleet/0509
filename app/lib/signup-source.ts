@@ -1,14 +1,19 @@
 import { execute, queryOne } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
 import { MAGICBRIEF_MIGRATION_SOURCE, PRICING_FREE_SIGNUP_SOURCE } from "~/lib/funnel-measurement.server";
+import { registrableDomainFromHostname } from "~/lib/search-query";
 
 /**
- * Durable allowlisted signup attribution (issue 1200).
+ * Durable allowlisted signup attribution (issue 1200, generalized in 2108).
  *
  * Funnel events stay anonymous and request-scoped. This module is the only
  * path that may persist a signup marker onto a user row. Callers pass the
- * raw `source=` query (or form field); only an exact allowlisted constant
- * is stored. The raw query string never lands in SQL or in the cookie.
+ * raw `source=` query (or form field); only an allowlisted shape is stored:
+ * an exact constant, a lowercase slug, or a `ref:<eTLD+1>` referer marker.
+ * The raw query string and full URLs never land in SQL or in the cookie.
+ *
+ * The accepted shapes mirror the CHECK constraints rebuilt by migration
+ * 0087_signup_source_open_allowlist.sql so code and D1 never disagree.
  */
 
 export const SIGNUP_SOURCE_COOKIE = "f9_signup_source";
@@ -52,24 +57,70 @@ export const ALLOWED_SIGNUP_SOURCES = [
   GUIDE_TRACK_ADS_SIGNUP_SOURCE,
 ] as const;
 
-export type AllowedSignupSource = (typeof ALLOWED_SIGNUP_SOURCES)[number];
+/**
+ * Open allowlist shapes (issue #2108). Keep these in lockstep with the CHECK
+ * constraints in migrations/0087_signup_source_open_allowlist.sql:
+ * - slug: `/^[a-z0-9][a-z0-9-]{0,39}$/` (campaign markers, max 40 chars)
+ * - referer marker: `/^ref:[a-z0-9.-]{1,40}$/` (`ref:` + eTLD+1, max 44 chars)
+ * No free text, no uppercase, no query strings, no full URLs.
+ */
+const SIGNUP_SOURCE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const SIGNUP_SOURCE_REF_PATTERN = /^ref:[a-z0-9.-]{1,40}$/;
 
-export function allowlistedSignupSource(
-  raw: string | null | undefined,
-): AllowedSignupSource | null {
+export function allowlistedSignupSource(raw: string | null | undefined): string | null {
   if (!raw) {
     return null;
   }
   const trimmed = raw.trim();
-  return ALLOWED_SIGNUP_SOURCES.find((source) => source === trimmed) ?? null;
+  if ((ALLOWED_SIGNUP_SOURCES as readonly string[]).includes(trimmed)) {
+    return trimmed;
+  }
+  if (SIGNUP_SOURCE_SLUG_PATTERN.test(trimmed) || SIGNUP_SOURCE_REF_PATTERN.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
 }
 
 export function signupSourceFromRequest(request: Request, formSource?: string | null) {
   const urlSource = new URL(request.url).searchParams.get("source");
-  return allowlistedSignupSource(urlSource) ?? allowlistedSignupSource(formSource);
+  return (
+    allowlistedSignupSource(urlSource) ??
+    allowlistedSignupSource(formSource) ??
+    refererSignupSource(request)
+  );
 }
 
-export function signupSourceCookieHeader(request: Request, source: AllowedSignupSource) {
+/**
+ * Coarse referer attribution (issue #2108 step 2): when no `source=` matches,
+ * keep only the referer's registrable domain (eTLD+1) as `ref:<domain>` —
+ * never the full URL, path, or query string.
+ */
+function refererSignupSource(request: Request): string | null {
+  const referer = request.headers.get("referer");
+  if (!referer) {
+    return null;
+  }
+  let hostname: string;
+  try {
+    hostname = new URL(referer).hostname;
+  } catch {
+    return null;
+  }
+  // Skip the site's own domain: a signup page resend or internal navigation
+  // carries a self-referer that would otherwise clobber a previously-remembered
+  // external attribution via the ON CONFLICT DO UPDATE in
+  // rememberAllowlistedSignupSource (issue #2108 reviewer round).
+  if (isOwnDomain(hostname)) {
+    return null;
+  }
+  const domain = registrableDomainFromHostname(hostname);
+  if (!domain) {
+    return null;
+  }
+  return allowlistedSignupSource(`ref:${domain}`);
+}
+
+export function signupSourceCookieHeader(request: Request, source: string) {
   const parts = [
     `${SIGNUP_SOURCE_COOKIE}=${encodeURIComponent(source)}`,
     "HttpOnly",
@@ -87,7 +138,7 @@ export function signupSourceCookieHeader(request: Request, source: AllowedSignup
   return parts.join("; ");
 }
 
-export function readSignupSourceCookie(request: Request): AllowedSignupSource | null {
+export function readSignupSourceCookie(request: Request): string | null {
   const prefix = `${SIGNUP_SOURCE_COOKIE}=`;
   for (const part of (request.headers.get("cookie") ?? "").split(";")) {
     const cookie = part.trim();
@@ -111,7 +162,7 @@ export function readSignupSourceCookie(request: Request): AllowedSignupSource | 
 export async function rememberAllowlistedSignupSource(
   env: AppEnv,
   input: { email: string; source: string | null | undefined },
-): Promise<AllowedSignupSource | null> {
+): Promise<string | null> {
   const source = allowlistedSignupSource(input.source);
   if (!source) {
     return null;
@@ -156,13 +207,13 @@ export async function rememberAllowlistedSignupSource(
 export async function applySignupSourceToNewUser(
   env: AppEnv,
   input: { user: { id: string; email?: string | null }; request?: Request },
-): Promise<AllowedSignupSource | null> {
+): Promise<string | null> {
   const userId = input.user.id;
   if (!env.DB || !userId) {
     return null;
   }
   const email = normalizeSignupEmail(input.user.email ?? "");
-  let source: AllowedSignupSource | null = null;
+  let source: string | null = null;
   if (email) {
     try {
       const row = await queryOne<{ signup_source: string }>(
@@ -217,7 +268,7 @@ export async function applySignupSourceToNewUser(
 export async function readUserSignupSource(
   env: AppEnv,
   userId: string,
-): Promise<AllowedSignupSource | null> {
+): Promise<string | null> {
   if (!env.DB || !userId) {
     return null;
   }
@@ -242,4 +293,9 @@ function signupSourceCookieDomain(request: Request) {
     return "0509.in";
   }
   return undefined;
+}
+
+function isOwnDomain(hostname: string) {
+  const h = hostname.toLowerCase();
+  return h === "0509.io" || h.endsWith(".0509.io") || h === "0509.in" || h.endsWith(".0509.in");
 }
