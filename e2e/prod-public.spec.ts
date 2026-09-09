@@ -221,8 +221,12 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
     expect(await llms.text()).toContain("Five to Nine");
 
     // AI crawler policy (docs/ai-crawler-policy.md, "answers yes, training
-    // no"): training crawlers are denied while AI answer engines stay
-    // allowed by the wildcard group — robots.txt and llms.txt must agree.
+    // no"): Cloudflare managed robots still names the training deny list
+    // (GPTBot, ClaudeBot, …). The full allow/deny matrix, including the
+    // explicit Google-Extended / OAI-SearchBot / PerplexityBot grounding
+    // groups, lives in tests/robots-aeo-policy.test.ts (issue #2061). This
+    // live smoke only pins signals that are already on production AND stay
+    // true after deploy, so the check does not race the worker rollout.
     const robots = await request.get(new URL("/robots.txt", baseURL).toString());
     expect(robots.ok()).toBeTruthy();
     const robotsText = await robots.text();
@@ -230,8 +234,7 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
     expect(robotsText).toContain("User-agent: ClaudeBot");
     expect(robotsText).toContain("User-agent: Google-Extended");
     expect(robotsText).toContain("Disallow: /");
-    expect(robotsText).not.toContain("User-agent: PerplexityBot");
-    expect(robotsText).not.toContain("User-agent: OAI-SearchBot");
+    expect(robotsText).toContain("Content-Signal");
 
     const invalidShare = await gotoPublicPage(page, "/share/not-a-real-share-token");
     expect(invalidShare?.status()).toBe(404);
