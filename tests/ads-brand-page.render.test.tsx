@@ -141,6 +141,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     relatedBrands: [],
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
+    recentWatchChanges: [],
     ...overrides,
   };
 }

@@ -74,6 +74,7 @@ function fixture(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoaderD
     noindex: false,
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
+    recentWatchChanges: [],
     ...overrides,
   } as BrandPageLoaderData;
 }
