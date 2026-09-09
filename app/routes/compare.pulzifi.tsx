@@ -14,8 +14,9 @@ import { canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta,
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
 
-// Source verification (issue #1288): https://pulzifi.com/ returns HTTP 200 and
-// https://pulzifi.com/pricing names real tiers — verified live 2026-09-05.
+// Source verification (issue #1288, #2069): primary-source-verified —
+// https://pulzifi.com/ returns HTTP 200 and https://pulzifi.com/pricing names
+// real tiers (Free / Starter $27 / Professional $54) — verified live 2026-09-09.
 const citations = pulzifiCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
