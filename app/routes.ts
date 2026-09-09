@@ -114,6 +114,7 @@ export default [
   // guide for the "how to track competitor ads" query class, ending in the
   // no-account /search preview (source=guide_track_ads).
   route("guides/how-to-track-competitor-ads", "routes/guides.how-to-track-competitor-ads.tsx"),
+  route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
   // Locale-prefixed buyer-surface cluster (issue #1501): /de, /de/pricing,
