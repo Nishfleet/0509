@@ -12,6 +12,7 @@ import {
   timelineSocialCardUrl,
 } from "~/lib/seo";
 import type { BrandPageLoaderData } from "~/routes/ads.$domain";
+import type { OfferTimelineLoaderData } from "~/routes/timeline.$domain";
 
 type MetaEntry = { property?: string; name?: string; content?: string; title?: string };
 
@@ -85,14 +86,14 @@ describe("publicSeoMeta og:image override", () => {
 describe("social card URL builders", () => {
   it("adsSocialCardUrl encodes the brand name and score", () => {
     const url = adsSocialCardUrl("nike.com", "Nike", 72);
-    expect(url).toContain("/social-card/ads/nike.com.svg?");
+    expect(url).toContain("/social-card/ads/nike.com.png?");
     expect(url).toContain("n=Nike");
     expect(url).toContain("s=72");
   });
 
   it("adsSocialCardUrl omits the score when null (deferred < 14-day floor)", () => {
     const url = adsSocialCardUrl("nike.com", "Nike", null);
-    expect(url).toContain("/social-card/ads/nike.com.svg?");
+    expect(url).toContain("/social-card/ads/nike.com.png?");
     expect(url).toContain("n=Nike");
     expect(url).not.toContain("s=");
   });
@@ -111,7 +112,7 @@ describe("social card URL builders", () => {
 
   it("timelineSocialCardUrl encodes the brand name on the timeline card path", () => {
     const url = timelineSocialCardUrl("nike.com", "Nike");
-    expect(url).toContain("/social-card/timeline/nike.com.svg?");
+    expect(url).toContain("/social-card/timeline/nike.com.png?");
     expect(url).toContain("n=Nike");
     expect(url).toMatch(/^https:\/\/0509\.io\/social-card\/timeline\//);
   });
@@ -123,7 +124,15 @@ describe("parseSocialCardPathname", () => {
       kind: "ads",
       slug: "nike.com",
     });
+    expect(parseSocialCardPathname("/social-card/ads/nike.com.png")).toEqual({
+      kind: "ads",
+      slug: "nike.com",
+    });
     expect(parseSocialCardPathname("/social-card/timeline/nike.com.svg")).toEqual({
+      kind: "timeline",
+      slug: "nike.com",
+    });
+    expect(parseSocialCardPathname("/social-card/timeline/nike.com.png")).toEqual({
       kind: "timeline",
       slug: "nike.com",
     });
@@ -151,35 +160,37 @@ describe("parseSocialCardPathname", () => {
 describe("publicSocialCardForRequest", () => {
   it("renders an ads card stamping the brand name and score", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/ads/nike.com.svg?n=Nike&s=72"),
+      new Request("https://0509.io/social-card/ads/nike.com.png?n=Nike&s=72"),
     );
     expect(res?.contentType).toBe("image/svg+xml; charset=utf-8");
     expect(res?.body).toContain("Nike");
     expect(res?.body).toContain("Ad Aggression Score 72");
     expect(res?.body).toContain("Five to Nine");
+    expect(res?.kind).toBe("ads");
   });
 
   it("renders a timeline card stamping the brand and offer-timeline copy", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/timeline/nike.com.svg?n=Nike"),
+      new Request("https://0509.io/social-card/timeline/nike.com.png?n=Nike"),
     );
     expect(res?.contentType).toBe("image/svg+xml; charset=utf-8");
     expect(res?.body).toContain("Nike");
     expect(res?.body).toContain("offer timeline");
     expect(res?.body).toContain("Five to Nine");
     expect(res?.cacheControl).toBe("public, max-age=3600");
+    expect(res?.kind).toBe("timeline");
   });
 
   it("renders a timeline card from the domain slug when n is omitted", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/timeline/nike.com.svg"),
+      new Request("https://0509.io/social-card/timeline/nike.com.png"),
     );
     expect(res?.body).toContain("nike.com");
   });
 
   it("renders an ads card without a score when s is omitted", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/ads/nike.com.svg?n=Nike"),
+      new Request("https://0509.io/social-card/ads/nike.com.png?n=Nike"),
     );
     expect(res?.body).toContain("Nike");
     expect(res?.body).not.toContain("Ad Aggression Score 72");
@@ -219,7 +230,7 @@ describe("publicSocialCardForRequest", () => {
 
   it("XML-escapes brand text so it cannot break the SVG", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/ads/x.svg?n=A%26B%3Cscript%3E"),
+      new Request("https://0509.io/social-card/ads/x.png?n=A%26B%3Cscript%3E"),
     );
     expect(res?.body).toContain("A&amp;B&lt;script&gt;");
     expect(res?.body).not.toContain("<script>");
@@ -319,7 +330,7 @@ describe("/ads/:domain meta stamps a branded og:image", () => {
     const meta = routeModule.meta({ loaderData: baseData });
     const img = ogImage(meta);
     expect(img).not.toBe(GENERIC_OG_IMAGE);
-    expect(img).toMatch(/^https:\/\/0509\.io\/social-card\/ads\/nike\.com\.svg\?/);
+    expect(img).toMatch(/^https:\/\/0509\.io\/social-card\/ads\/nike\.com\.png\?/);
     expect(img).toContain("n=Nike");
     expect(img).toContain("s=72");
     expect(ogImageAlt(meta)).toContain("Nike");
@@ -361,10 +372,119 @@ describe("/timeline/:domain meta stamps a branded og:image (issue #2029)", () =>
     const title = meta.find((e) => e.title !== undefined)?.title as string;
     expect(title).toContain("Nike");
     expect(ogImage(meta)).not.toBe(GENERIC_OG_IMAGE);
-    expect(ogImage(meta)).toMatch(/^https:\/\/0509\.io\/social-card\/timeline\/nike\.com\.svg\?/);
+    expect(ogImage(meta)).toMatch(/^https:\/\/0509\.io\/social-card\/timeline\/nike\.com\.png\?/);
     expect(ogImage(meta)).toContain("n=Nike");
     expect(ogImageAlt(meta)).toContain("Nike");
     expect(ogImageAlt(meta)).toContain("offer timeline");
     expect(twitterImage(meta)).toBe(ogImage(meta));
+  });
+});
+
+/**
+ * Route-level regression gate (issue #2089): every /ads/:domain and
+ * /timeline/:domain page in the sitemap cohort must declare an og:image:type
+ * that matches the content-type actually served at its og:image URL. The
+ * worker rasterizes these cards to PNG (image/png), so a page that advertises
+ * image/png while the fetched asset is SVG (or vice-versa) fails here — the
+ * exact mix-and-match the issue observed on live production.
+ */
+describe("/ads and /timeline sitemap cohort og:image:type matches served content-type (issue #2089)", () => {
+  // Representative sitemap cohort: the same domains the live sitemap appends
+  // as dynamic /ads/:domain and /timeline/:domain entries. Each page's meta
+  // is rendered through the real route module, so a regression that re-points
+  // a card at an SVG URL (or mis-declares its type) fails CI.
+  const ADS_COHORT = ["nike.com", "nykaa.com"] as const;
+  const TIMELINE_COHORT = ["nike.com", "nykaa.com"] as const;
+
+  function ogImageType(entries: readonly MetaEntry[]): string | undefined {
+    return entries.find((e) => e.property === "og:image:type")?.content;
+  }
+
+  it.each(ADS_COHORT)("/ads/%s og:image:type matches the served PNG content-type", async (domain) => {
+    const routeModule = (await import("~/routes/ads.$domain")) as unknown as {
+      meta: (args: { loaderData: BrandPageLoaderData }) => readonly MetaEntry[];
+    };
+    const meta = routeModule.meta({
+      loaderData: {
+        domain,
+        brandName: domain.split(".")[0],
+        hasCachedAds: true,
+        ads: [],
+        verifiedLinkedAds: [],
+        checkedAgo: "about 2 hours ago",
+        lastCheckedAt: "2026-09-01T10:00:00.000Z",
+        freshForLiveClaim: false,
+        brandOwnedAdCount: 6,
+        verifiedLinkCount: 6,
+        unverifiedMatchCount: 0,
+        partnerCampaignAdIds: [],
+        teaser: null,
+        aggression: {
+          score: 72,
+          components: { velocity: 22, testing: 19, freshness: 20, persistence: 11 },
+          bandId: "all_out",
+          bandLabel: "All-out",
+          bandInterpretation: "Running an all-out launch and testing push.",
+          formulaVersion: 1 as never,
+          windowDays: 21,
+          adsPerWeek: 6,
+          adCount: 6,
+          activeCount: 6,
+        },
+        observationDays: null,
+        changeEvents: [],
+        offerTimelineEntries: [],
+        timelineIndexable: true,
+        adLibraryCountry: "India",
+        noindex: false,
+        relatedBrands: [],
+        canonicalPath: `/ads/${domain}`,
+        captureFailuresSummary: null,
+        recentWatchChanges: [],
+      },
+    });
+    const image = ogImage(meta);
+    const type = ogImageType(meta);
+    expect(image, `/ads/${domain} missing og:image`).toBeTruthy();
+    expect(image, `/ads/${domain} og:image must be a .png URL`).toMatch(/\.png\?/);
+    expect(image, `/ads/${domain} og:image must not point at svg`).not.toMatch(/\.svg(\?|$)/);
+    expect(type, `/ads/${domain} og:image:type`).toBe("image/png");
+    // The served content-type at the og:image URL is image/png (the worker
+    // rasterizes ads cards to PNG), so the declared type must match it.
+    const served = publicSocialCardForRequest(
+      new Request(`https://0509.io/social-card/ads/${domain}.png?n=${domain.split(".")[0]}&s=72`),
+    );
+    expect(served?.kind).toBe("ads");
+  });
+
+  it.each(TIMELINE_COHORT)("/timeline/%s og:image:type matches the served PNG content-type", async (domain) => {
+    const routeModule = (await import("~/routes/timeline.$domain")) as unknown as {
+      meta: (args: { loaderData: OfferTimelineLoaderData }) => readonly MetaEntry[];
+    };
+    const meta = routeModule.meta({
+      loaderData: {
+        domain,
+        brandName: domain.split(".")[0],
+        canonicalPath: `/timeline/${domain}`,
+        sharePath: `/timeline/${domain}`,
+        shareUrl: `https://0509.io/timeline/${domain}`,
+        shareEnabled: true,
+        asOf: null,
+        asOfState: null,
+        entries: [],
+        noindex: false,
+        collecting: false,
+      },
+    });
+    const image = ogImage(meta);
+    const type = ogImageType(meta);
+    expect(image, `/timeline/${domain} missing og:image`).toBeTruthy();
+    expect(image, `/timeline/${domain} og:image must be a .png URL`).toMatch(/\.png\?/);
+    expect(image, `/timeline/${domain} og:image must not point at svg`).not.toMatch(/\.svg(\?|$)/);
+    expect(type, `/timeline/${domain} og:image:type`).toBe("image/png");
+    const served = publicSocialCardForRequest(
+      new Request(`https://0509.io/social-card/timeline/${domain}.png?n=${domain.split(".")[0]}`),
+    );
+    expect(served?.kind).toBe("timeline");
   });
 });

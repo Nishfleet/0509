@@ -143,10 +143,14 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   if (!pathname.startsWith("/social-card/")) return null;
   const rest = pathname.slice("/social-card/".length);
 
-  const adsMatch = rest.match(/^ads\/(.+)\.svg$/);
+  // Ads and timeline cards are rasterized to PNG (issue #2089): the canonical
+  // URL is `.png` and the legacy `.svg` URL is kept as an alias that also
+  // serves PNG bytes, so cached links and the issue's termination probe keep
+  // working. Compare/switch/cluster cards stay SVG (issue #2083's scope).
+  const adsMatch = rest.match(/^ads\/(.+)\.(?:svg|png)$/);
   if (adsMatch) return { kind: "ads", slug: decodeURIComponent(adsMatch[1]) };
 
-  const timelineMatch = rest.match(/^timeline\/(.+)\.svg$/);
+  const timelineMatch = rest.match(/^timeline\/(.+)\.(?:svg|png)$/);
   if (timelineMatch) return {
     kind: "timeline",
     slug: decodeURIComponent(timelineMatch[1]),
@@ -223,11 +227,19 @@ function renderSocialCard(parsed: ParsedSocialCardPath, request: Request): strin
  * returned by `publicSeoFileForPathname` so `workers/app.ts` can serve it
  * through the same `publicFileResponse` helper.
  */
-export function publicSocialCardForRequest(request: Request): {
+export interface SocialCardFile {
   body: string;
   contentType: string;
   cacheControl: string;
-} | null {
+  /**
+   * Card kind, so the worker can rasterize the ads/timeline cards to PNG
+   * (issue #2089) while leaving the compare/switch/cluster cards as SVG
+   * (issue #2083's scope).
+   */
+  kind: SocialCardKind;
+}
+
+export function publicSocialCardForRequest(request: Request): SocialCardFile | null {
   const url = new URL(request.url);
   const parsed = parseSocialCardPathname(url.pathname);
   if (!parsed) return null;
@@ -243,5 +255,6 @@ export function publicSocialCardForRequest(request: Request): {
       parsed.kind === "ads" || parsed.kind === "timeline"
         ? "public, max-age=3600"
         : "public, max-age=86400",
+    kind: parsed.kind,
   };
 }
