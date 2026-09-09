@@ -76,7 +76,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export const meta = (args: { data?: RootLoaderData }) => {
-  const tags = [{ title: "Five to Nine" }];
+  const tags: Array<{ title: string } | { name: string; content: string }> = [
+    { title: "Five to Nine" },
+  ];
   const verification = args.data?.googleSiteVerification?.trim();
   if (verification) {
     tags.push({ name: "google-site-verification", content: verification });
