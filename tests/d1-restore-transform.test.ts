@@ -219,6 +219,56 @@ describe("D1 restore transform", () => {
     expect(enforced(result.sql)).toEqual({ we_id: "we-1", cid: "ec-1", title: "New ad detected" });
   });
 
+  it("keeps oversized-column UPDATE chunks after their INSERT when child rows are reordered", () => {
+    // Split and reorder were pinned separately. Combined, a post-0077 export
+    // emits watch_event (with a >90 KiB column) before event_candidate. The
+    // splitter turns that INSERT into a prefix INSERT plus UPDATE ... || chunk
+    // appends; if those UPDATEs stay kind:"other" and reorder moves only the
+    // INSERT, the chunks run first, match 0 rows, and the restore truncates.
+    const metadata = "x".repeat(100_000);
+    const source = [
+      "PRAGMA defer_foreign_keys=TRUE;",
+      'CREATE TABLE "watch_event"(id TEXT PRIMARY KEY, candidate_id TEXT, metadata_json TEXT, FOREIGN KEY (candidate_id) REFERENCES event_candidate(id));',
+      'CREATE TABLE "event_candidate"(id TEXT PRIMARY KEY, title TEXT);',
+      `INSERT INTO "watch_event" ("id","candidate_id","metadata_json") VALUES('we-1','ec-1',${sqlString(metadata)});`,
+      `INSERT INTO "event_candidate" ("id","title") VALUES('ec-1','New ad detected');`,
+      "",
+    ].join("\n");
+
+    const result = transformD1RestoreSql(source);
+    expect(result.transformed).toBe(1);
+    expect(Math.max(...result.statementBytes)).toBeLessThanOrEqual(DEFAULT_MAX_STATEMENT_BYTES);
+
+    const parentInsert = result.statements.findIndex((statement) =>
+      /^\s*INSERT\s+INTO\s+"event_candidate"/iu.test(statement),
+    );
+    const childInsert = result.statements.findIndex((statement) =>
+      /^\s*INSERT\s+INTO\s+"watch_event"/iu.test(statement),
+    );
+    const updateIndexes = result.statements.flatMap((statement, index) =>
+      /^\s*UPDATE\s+"watch_event"\s+SET\s+"metadata_json"/iu.test(statement) ? [index] : [],
+    );
+    expect(parentInsert).toBeGreaterThanOrEqual(0);
+    expect(childInsert).toBeGreaterThanOrEqual(0);
+    expect(updateIndexes.length).toBeGreaterThan(0);
+    expect(parentInsert).toBeLessThan(childInsert);
+    for (const updateIndex of updateIndexes) {
+      expect(updateIndex).toBeGreaterThan(childInsert);
+    }
+
+    const database = new DatabaseSync(":memory:");
+    try {
+      database.exec("PRAGMA foreign_keys = ON;");
+      database.exec(result.sql);
+      const stored = database
+        .prepare("SELECT length(metadata_json) AS n FROM watch_event WHERE id = 'we-1'")
+        .get() as { n: number };
+      expect(stored.n).toBe(100_000);
+    } finally {
+      database.close();
+    }
+  });
+
   it("allows an explicit key map when a data-only export omits schema", () => {
     const value = "v".repeat(20_000);
     const source = `INSERT INTO ad (id, raw_json) VALUES ('ad-1', ${sqlString(value)});`;
