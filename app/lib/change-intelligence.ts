@@ -12,7 +12,10 @@ export interface ChangeIntelligenceSummary {
   proofTrail: string;
 }
 
-type DigestAdEnrichment = Pick<AdRecord, "creativeImageUrl" | "analysisFields">;
+type DigestAdEnrichment = Pick<
+  AdRecord,
+  "creativeImageUrl" | "analysisFields" | "variantCount"
+>;
 
 export function digestCadenceLabel(cadence: DigestCadence | undefined) {
   return cadence === "daily" ? "daily brief" : "weekly digest";
@@ -714,6 +717,20 @@ function digestMetricMetadata(
   if (spend) result.observedSpend = spend;
   if (impressions) result.observedImpressions = impressions;
   if (reach) result.observedReach = reach;
+  // Issue #2151 (re-scoped): surface the "×N versions" arm only. The
+  // impressions-bucket arm was dropped because Meta does not publish
+  // impression-range buckets on logged-out commercial cards (#2148).
+  // variantCount is a real stored field; a count of 1 or absent means the
+  // advertiser is not testing variants, so no versions line is emitted.
+  const variantCount =
+    typeof metadata?.variantCount === "number"
+      ? metadata.variantCount
+      : typeof ad?.variantCount === "number"
+        ? ad.variantCount
+        : null;
+  if (variantCount !== null && variantCount > 1) {
+    result.variantCount = String(variantCount);
+  }
   return result;
 }
 

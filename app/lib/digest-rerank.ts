@@ -55,6 +55,14 @@ export interface AdChurnSummary {
   newCount: number;
   retiredCount: number;
   total: number;
+  /**
+   * Issue #2151 (re-scoped): the largest stored variantCount among the new
+   * ads, when any new ad is actually testing variants (count > 1). Null when
+   * no new ad carries a variant split, so the footnote never fabricates a
+   * figure. The impressions-bucket arm was dropped (#2148: Meta does not
+   * publish impression-range buckets on logged-out commercial cards).
+   */
+  maxNewVariantCount: number | null;
 }
 
 export interface DigestBriefRerank<T extends DigestRerankItem> {
@@ -153,12 +161,20 @@ export function rerankDigestBrief<T extends DigestRerankItem>(
   const other: { item: T; index: number }[] = [];
   let newCount = 0;
   let retiredCount = 0;
+  let maxNewVariantCount: number | null = null;
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (isAdChurnEventType(item.eventType)) {
       if (item.eventType === "ad_new") {
         newCount += 1;
+        const variantCount = readVariantCount(item.metadata);
+        if (variantCount !== null && variantCount > 1) {
+          maxNewVariantCount =
+            maxNewVariantCount === null
+              ? variantCount
+              : Math.max(maxNewVariantCount, variantCount);
+        }
       } else if (item.eventType === "ad_inactive") {
         retiredCount += 1;
       }
@@ -176,9 +192,28 @@ export function rerankDigestBrief<T extends DigestRerankItem>(
 
   return {
     headlineItems: headline.map((entry) => entry.item),
-    adChurnSummary: { newCount, retiredCount, total: newCount + retiredCount },
+    adChurnSummary: {
+      newCount,
+      retiredCount,
+      total: newCount + retiredCount,
+      maxNewVariantCount,
+    },
     otherItems: other.map((entry) => entry.item),
   };
+}
+
+/**
+ * Read the stored variantCount from an item's metadata. Accepts a number or
+ * a numeric string; returns null when absent or not a positive integer, so
+ * the caller never emits a fabricated figure.
+ */
+function readVariantCount(metadata: Record<string, unknown> | undefined): number | null {
+  const raw = metadata?.variantCount;
+  const count = typeof raw === "number" ? raw : typeof raw === "string" ? Number.parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(count) || count <= 1) {
+    return null;
+  }
+  return count;
 }
 
 /**
@@ -198,6 +233,12 @@ export function adChurnFootnoteLine(summary: AdChurnSummary): string | null {
   }
   if (summary.retiredCount > 0) {
     parts.push(`${summary.retiredCount} retired`);
+  }
+  // Issue #2151 (re-scoped): name the "×N versions" arm when a new ad is
+  // actually testing variants. Only the largest count is named — the line
+  // stays a single counted footnote, never a fabricated figure.
+  if (summary.maxNewVariantCount !== null) {
+    parts.push(`as ${summary.maxNewVariantCount} versions`);
   }
   return `${parts.join(", ")} — open the wall to see them.`;
 }
