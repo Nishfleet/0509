@@ -35,6 +35,7 @@ import { registrableDomainFromLandingPage } from "~/lib/competitor-website";
 import { queryAll, queryIn } from "~/lib/data/d1.server";
 import { parseJson } from "~/lib/data/helpers.server";
 import type { WatchEventRow } from "~/lib/data/watchlist-rows.server";
+import { appBaseUrl } from "~/lib/delivery-email-core.server";
 import { buildDigestEmail } from "~/lib/digest-email.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { DigestTrustItem } from "~/lib/proof-classification";
@@ -88,10 +89,38 @@ function isMissingTableError(error: unknown, table: string): boolean {
  * used verbatim on the public page. The change mark (from/to) rides in the
  * metadata so the digest builder renders the actual competitor change.
  */
+
+/**
+ * The only metadata keys the public sample brief may carry. The raw stored
+ * metadata can embed customer identifiers (e.g. `proofTargetIdentity` is
+ * built as `[watchlistId, adId, canonicalPageIdentity].join(":")`), so the
+ * whole record is never spread — only this known-safe allowlist is extracted,
+ * mirroring the safe keys the real digest orchestration reads.
+ */
+const SAMPLE_BRIEF_SAFE_METADATA_KEYS = [
+  "from",
+  "to",
+  "sourceUrl",
+  "proofUrl",
+  "landingPageUrl",
+  "websiteUrl",
+  "websiteProofUrl",
+  "canonicalUrl",
+  "capturedAt",
+  "beforeCapturedAt",
+] as const;
+
 function watchEventRowToDigestItem(
   row: SampleBriefWatchEventRow,
 ): DigestTrustItem {
-  const metadata = parseJson<Record<string, unknown>>(row.metadata_json, {});
+  const raw = parseJson<Record<string, unknown>>(row.metadata_json, {});
+  const metadata: Record<string, unknown> = {};
+  for (const key of SAMPLE_BRIEF_SAFE_METADATA_KEYS) {
+    const value = raw[key];
+    if (typeof value === "string" && value.trim()) {
+      metadata[key] = value.trim();
+    }
+  }
   return {
     eventType: row.event_type,
     title: formatWatchEventTypeLabel(row.event_type),
@@ -134,9 +163,18 @@ export async function loadSampleBrief(env: AppEnv): Promise<SampleBriefData> {
   }
 
   // Newest-first: the sitemap's indexable set is ordered by the sitemap's own
-  // recency signal, so the first domain with a stored event wins.
+  // recency signal, so the first domain with a stored event wins. The
+  // advertiser-watchlist candidate set is loaded ONCE (not per domain) so a
+  // crawl of this public page never issues a full-table scan per candidate.
+  const watchlistCandidates = await loadAdvertiserWatchlistCandidates(env);
+  const baseUrl = appBaseUrl(env);
   for (const link of links) {
-    const events = await loadRecentEventsForDomain(env, link.domain, periodStart);
+    const events = await loadRecentEventsForDomain(
+      env,
+      link.domain,
+      periodStart,
+      watchlistCandidates,
+    );
     if (events.length > 0) {
       const items = events.map(watchEventRowToDigestItem);
       const digest = buildDigestEmail({
@@ -145,8 +183,8 @@ export async function loadSampleBrief(env: AppEnv): Promise<SampleBriefData> {
         periodEnd,
         items,
         cadence: "weekly",
-        fullDigestUrl: `https://0509.io/ads/${link.domain}`,
-        manageFrequencyUrl: "https://0509.io/auth/signup",
+        fullDigestUrl: `${baseUrl}/ads/${link.domain}`,
+        manageFrequencyUrl: `${baseUrl}/auth/signup`,
         supportEmail: SUPPORT_EMAIL,
         supportMailto: SUPPORT_MAILTO,
         unsubscribeUrl: null,
@@ -176,23 +214,19 @@ export async function loadSampleBrief(env: AppEnv): Promise<SampleBriefData> {
 }
 
 /**
- * Load confirmed watch_events for a single registrable domain captured in the
- * last 30 days, newest first, capped at SAMPLE_BRIEF_EVENT_LIMIT. Returns []
- * when no watchlist tracks the domain or D1 is absent.
+ * Load the active advertiser-watchlist candidate set (id + target URL) once.
+ * PII by construction: only the watchlist id and target URL are selected —
+ * the watchlist name (a customer-supplied string) is never read. Returns []
+ * on a missing table or D1 hiccup so the page degrades to the quiet-brief.
  */
-async function loadRecentEventsForDomain(
+async function loadAdvertiserWatchlistCandidates(
   env: AppEnv,
-  domain: string,
-  since: string,
-): Promise<SampleBriefWatchEventRow[]> {
+): Promise<{ id: string; target_id: string }[]> {
   if (!env.DB) {
     return [];
   }
-  let candidates: { id: string; target_id: string }[];
   try {
-    // PII by construction: only the watchlist id and target URL are selected —
-    // the watchlist name (a customer-supplied string) is never read.
-    candidates = await queryAll<{ id: string; target_id: string }>(
+    return await queryAll<{ id: string; target_id: string }>(
       env,
       `
         SELECT id, target_id
@@ -210,7 +244,24 @@ async function loadRecentEventsForDomain(
     });
     return [];
   }
+}
 
+/**
+ * Load confirmed watch_events for a single registrable domain captured in the
+ * last 30 days, newest first, capped at SAMPLE_BRIEF_EVENT_LIMIT. Returns []
+ * when no watchlist tracks the domain or D1 is absent. The advertiser
+ * candidate set is passed in (loaded once by the caller) so this never
+ * re-scans the watchlist table per domain.
+ */
+async function loadRecentEventsForDomain(
+  env: AppEnv,
+  domain: string,
+  since: string,
+  candidates: { id: string; target_id: string }[],
+): Promise<SampleBriefWatchEventRow[]> {
+  if (!env.DB) {
+    return [];
+  }
   const watchlistIds = candidates
     .filter((row) => registrableDomainFromLandingPage(row.target_id) === domain)
     .map((row) => row.id);
@@ -301,8 +352,8 @@ function buildQuietBriefHtml(
         noActionLine: "No action needed right now.",
       },
     },
-    fullDigestUrl: domain ? `https://0509.io/ads/${domain}` : "https://0509.io",
-    manageFrequencyUrl: "https://0509.io/auth/signup",
+    fullDigestUrl: domain ? `${appBaseUrl(env)}/ads/${domain}` : appBaseUrl(env),
+    manageFrequencyUrl: `${appBaseUrl(env)}/auth/signup`,
     supportEmail: SUPPORT_EMAIL,
     supportMailto: SUPPORT_MAILTO,
     unsubscribeUrl: null,
