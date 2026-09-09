@@ -21,10 +21,19 @@ export const LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES = [
   "locale-pt-br-sneaker-resale",
 ] as const;
 
+/**
+ * The exact signup-URL marker the /search warming-exhausted signup block
+ * appends (issue 2134): a search whose 60s warming poll budget ran out offers
+ * a create-account CTA so the first brief lands by email when the capture
+ * finishes.
+ */
+export const SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE = "search_warming_exhausted";
+
 export const ALLOWED_SIGNUP_SOURCES = [
   MAGICBRIEF_MIGRATION_SOURCE,
   PRICING_FREE_SIGNUP_SOURCE,
   ...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
+  SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE,
 ] as const;
 
 export type AllowedSignupSource = (typeof ALLOWED_SIGNUP_SOURCES)[number];

@@ -1370,6 +1370,10 @@ export default function SearchRoute() {
   // up forever next to a still-warming server state.
   const warmingPollExhausted =
     isSearchWarming && warmingPollCount >= SEARCH_WARMING_POLL_LIMIT;
+  // Issue 2134: the exhausted warming state is a signup capture. Same href as
+  // the page's create-account CTA (competitor prefill preserved), plus the
+  // allowlisted `source=` marker so the signup is attributed.
+  const warmingExhaustedSignupPath = `${signupTrackingPath}&source=search_warming_exhausted`;
   // BET 2 (issue 951): the command stays pending while the search is warming,
   // EVEN when partial results have already painted (visibleAds.length > 0).
   // The first cards landed but the scroll-and-collect passes are still
@@ -2388,6 +2392,30 @@ export default function SearchRoute() {
                             : (discoverySummary ??
                               "Try another competitor website.")}
                       </p>
+                    ) : null}
+                    {warmingPollExhausted ? (
+                      /* Issue 2134: the exhausted warming poll is a signup
+                         capture — the same create-account CTA block as the
+                         detail pane's, keeping the competitor prefill and
+                         adding the allowlisted source marker on the link. */
+                      <DetailBlock>
+                        <p className="f9-wk-note">
+                          Still capturing {competitorWatchLabel}. Create the
+                          free account and the first brief lands in your inbox
+                          when it finishes.
+                        </p>
+                        <div className="f9-wk-acts">
+                          <Link
+                            className="f9-wk-lnk"
+                            to={warmingExhaustedSignupPath}
+                          >
+                            Create account to track this competitor{" "}
+                            <span aria-hidden="true" className="f9-wk-chev">
+                              &rsaquo;
+                            </span>
+                          </Link>
+                        </div>
+                      </DetailBlock>
                     ) : null}
                     {isSearchWarming ? (
                       <div className="f9-wk-acts">
