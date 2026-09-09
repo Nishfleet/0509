@@ -10498,6 +10498,19 @@ a.f9-wk-btn {
   white-space: nowrap;
 }
 
+/* Issue 2150 (re-scoped): the "×N versions" label on a /search row when a
+   creative runs more than one version. A flat label in the same family as the
+   tier badge — the workspace language layer's boringness budget is law
+   (BL-030), so it is a quiet word, not a pill. */
+.f9-wk-versions {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* BET 2 tier badge (issue 1482): the confidence marker on each search row.
    One badge per row, tier in the class; bet2-live-verification counts these
    spans, so the markup contract stays stable. Verified (green), Likely

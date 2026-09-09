@@ -61,13 +61,26 @@ export function SearchResultRow({
   const summary = formatResultCardSummary(ad);
   const tierLabel = formatResultTierLabel(ad);
   const tier = domainMatchTier(ad.domainMatch?.level);
+  // Issue 2150 (re-scoped): the "N ads use this creative" count Meta already
+  // publishes on Ad Library cards is parsed into `variantCount` but was never
+  // labelled on the /search row. When a creative runs more than one version,
+  // name it so a buyer can see the testing at a glance. Never rendered when
+  // the count is missing or 1 — a bare "×1 versions" would be noise.
+  const versionsLabel =
+    ad.variantCount && ad.variantCount > 1 ? (
+      <span className="f9-wk-versions">{`×${ad.variantCount} versions`}</span>
+    ) : null;
   const say = ad.domainMatch ? (
     <>
       <TierBadge level={ad.domainMatch.level} />
       {summary}
+      {versionsLabel}
     </>
   ) : (
-    summary
+    <>
+      {summary}
+      {versionsLabel}
+    </>
   );
   return (
     <RuledRow
