@@ -72,6 +72,11 @@ export default [
   // brands (issue #2143). Stored rows only — never triggers live scraping.
   route("briefs/weekly", "routes/briefs.weekly.tsx"),
   route("timeline/:domain", "routes/timeline.$domain.tsx"),
+  // Public full-text AEO feed (issue #2043). The body is served by
+  // workers/app.ts before the router runs; this registration exists so the
+  // sitemap route-registry canary accepts /llms-full.txt as a registered
+  // path. See app/routes/llms-full.txt.ts.
+  route("llms-full.txt", "routes/llms-full.txt.ts"),
   // Canonical Ad Aggression Score methodology page. Path history: issue #960
   // shipped /methodology/ad-aggression-score; #1263 promoted it to
   // /ad-aggression; #2022 promotes the methodology page itself to /methodology
