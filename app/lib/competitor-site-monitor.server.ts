@@ -19,6 +19,7 @@
  * recorded honestly as incomplete — completeness is never claimed.
  */
 
+import { scoreWebsitePageChange } from "~/lib/change-criticality.server";
 import {
   canonicalizeCompetitorSiteUrl,
   classifyCompetitorSitePage,
@@ -1130,18 +1131,6 @@ function summaryForFact(fact: WebsitePageChange): string {
   return fact.canonicalUrl;
 }
 
-/**
- * Customer importance for emitted website_page_* events. These clear the
- * balanced instant-alert gate (75) so a real page change reaches the customer
- * through the existing instant-alert path, while staying below the quiet-mode
- * gate (90) so a quiet workspace is not spammed by page churn.
- */
-const WEBSITE_PAGE_EVENT_IMPORTANCE: Partial<Record<WatchEventType, number>> = {
-  website_page_added: 80,
-  website_page_removed: 80,
-  website_page_changed: 82,
-};
-
 export interface EmitWebsitePageChangeEventsInput {
   watchlistId: string;
   runId: string;
@@ -1195,6 +1184,7 @@ export async function emitWebsitePageChangeEvents(
   for (const fact of [...structuralFacts, ...fieldFacts]) {
     const eventType = watchEventTypeForFact(fact);
     if (eventType == null) continue;
+    const criticality = scoreWebsitePageChange(fact);
     const eventId = await createWatchEvent(env, {
       watchlistId: input.watchlistId,
       runId: input.runId,
@@ -1203,7 +1193,7 @@ export async function emitWebsitePageChangeEvents(
       baselineFromRunId: prior.scan.watchlistRunId,
       title: formatWatchEventTypeLabel(eventType),
       summary: summaryForFact(fact),
-      importanceScore: WEBSITE_PAGE_EVENT_IMPORTANCE[eventType] ?? 0,
+      importanceScore: criticality.score,
       metadata: {
         from: fact.before ?? "",
         to: fact.after ?? "",
@@ -1211,6 +1201,8 @@ export async function emitWebsitePageChangeEvents(
         field: fact.field,
         kind: fact.kind,
         dedupeKey: fact.dedupeKey,
+        criticalityBand: criticality.band,
+        criticalityReasons: criticality.reasons,
       },
     });
     eventIds.push(eventId);
