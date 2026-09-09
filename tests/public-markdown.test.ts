@@ -166,12 +166,14 @@ describe("public markdown", () => {
     // file cannot be read as implying unrestricted AI participation.
     expect(LLMS_TEXT).toContain("AI answer and reference engines may use this file");
     expect(LLMS_TEXT).toContain("ai-train=no");
-    // The denied training-crawler list must match the Cloudflare managed-robots
-    // deny list and the shared constant (app/lib/seo.ts AI_TRAINING_CRAWLERS);
-    // this pins every agent by name so a removed entry fails loudly.
+    // The denied training-crawler list must match the shared constant
+    // (app/lib/seo.ts AI_TRAINING_CRAWLERS); this pins every agent by name so
+    // a removed entry fails loudly. Google-Extended is a grounding engine
+    // (issue #2061), not a training crawler, so it must stay off this list.
     AI_TRAINING_CRAWLERS.forEach((agent) => {
       expect(LLMS_TEXT, `${agent} should be named in the llms.txt deny list`).toContain(agent);
     });
+    expect(LLMS_TEXT).not.toContain("Google-Extended");
   });
 
   it("gives llms.txt a real link list on the canonical origin", () => {
