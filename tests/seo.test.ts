@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { publicSeoFileForPathname } from "~/lib/seo";
+import {
+	AI_TRAINING_CRAWLERS,
+	GROUNDING_ENGINES,
+	publicSeoFileForPathname,
+} from "~/lib/seo";
 
 import { pricingOffersJsonLd } from "~/lib/seo";
 
@@ -89,34 +93,25 @@ describe("public SEO files", () => {
 		const robots = publicSeoFileForPathname("/robots.txt");
 
 		// The Cloudflare managed-robots zone feature is the source of truth for
-		// the AI-training deny list. The repo file only holds the wildcard allow
-		// rules and the Sitemap so the served file does not repeat the block.
-		for (const agent of [
-			"Amazonbot",
-			"Applebot-Extended",
-			"Bytespider",
-			"CCBot",
-			"ClaudeBot",
-			"CloudflareBrowserRenderingCrawler",
-			"Google-Extended",
-			"GPTBot",
-			"meta-externalagent",
-		]) {
-			expect(robots?.body, `${agent} should not be in repo robots.txt`).not.toContain(
+		// the AI-training deny list. The worker file must not re-add a Disallow: /
+		// group for those bots (issue #1459). Google-Extended is a grounding
+		// engine as of issue #2061 — still no Disallow here.
+		for (const agent of [...AI_TRAINING_CRAWLERS, "Google-Extended"]) {
+			expect(robots?.body, `${agent} should not be training-denied in repo robots.txt`).not.toContain(
 				`User-agent: ${agent}\nDisallow: /`,
 			);
 		}
 
-		// AI answer/reference engines are NOT named in any deny group; they
-		// fall through to the wildcard allow group.
-		for (const agent of [
-			"PerplexityBot",
-			"OAI-SearchBot",
-			"ChatGPT-User",
-			"Claude-By-Cloudflare",
-			"Googlebot",
-		]) {
-			expect(robots?.body, `${agent} should not be denied`).not.toContain(
+		// Grounding / AI-answer engines are named explicitly (issue #2061),
+		// not left as a wildcard accident. Other answer engines still fall
+		// through to the wildcard allow group.
+		for (const agent of GROUNDING_ENGINES) {
+			expect(robots?.body, `${agent} should be named as a grounding engine`).toContain(
+				`User-agent: ${agent}\nAllow:`,
+			);
+		}
+		for (const agent of ["ChatGPT-User", "Claude-By-Cloudflare", "Googlebot"]) {
+			expect(robots?.body, `${agent} should not be named (wildcard is enough)`).not.toContain(
 				`User-agent: ${agent}`,
 			);
 		}

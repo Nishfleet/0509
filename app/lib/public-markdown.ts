@@ -3,8 +3,8 @@ import {
   CUSTOMER_SUPPORT_PATHS,
   auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
-// Shared with the robots.txt deny list in app/lib/seo.ts (docs/ai-crawler-policy.md)
-// so robots.txt and llms.txt always name the same denied training crawlers.
+// Shared with AI_TRAINING_CRAWLERS in app/lib/seo.ts (docs/ai-crawler-policy.md)
+// so llms.txt and the training-deny set always name the same crawlers.
 // SITEMAP_PATHS + canonicalUrl keep the llms.txt link list on the same
 // canonical origin and route set as sitemap.xml.
 import { AI_TRAINING_CRAWLERS, SITEMAP_PATHS, canonicalUrl } from "~/lib/seo";
