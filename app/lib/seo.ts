@@ -758,6 +758,11 @@ export const SITEMAP_PATHS = [
   "/compare/foreplay-spyder",
   "/compare/panoramata",
   "/compare/adspyder",
+  // BET 8 switch/intent pages (issue #2081). Production /sitemap.xml is
+  // buildSitemapXml → ROOT_SITEMAP_STATIC_ENTRIES, which is this list minus
+  // locale prefixes. lastmod is deliberately omitted: these pages have no
+  // per-page content timestamp, and inventing one fails the #2031 honesty
+  // clause. Keep all three in this list; the #2081 canary fails if any drop.
   "/switch/magicbrief",
   "/switch/panoramata",
   "/switch/visualping",

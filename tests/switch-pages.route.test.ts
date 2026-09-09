@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CAPTURE_VALIDITY_REASON_CODES } from "~/lib/capture-validity.server";
 import { NO_PHANTOM_CHANGE_RULES, SWITCH_PAGES, SWITCH_SLUGS } from "~/lib/switch-pages";
-import { SITEMAP_PATHS } from "~/lib/seo";
+import { ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_PATHS } from "~/lib/seo";
+import { buildSitemapXml } from "~/lib/sitemap.server";
 
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
@@ -63,6 +64,15 @@ describe("BET 8 switch pages", () => {
   it("lists every switch path in the public sitemap set", () => {
     for (const page of Object.values(SWITCH_PAGES)) {
       expect(SITEMAP_PATHS as readonly string[]).toContain(page.pathname);
+    }
+  });
+
+  it("keeps every switch path in the production root sitemap XML (issue #2081)", () => {
+    const xml = buildSitemapXml([]);
+    const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((entry) => entry.path);
+    for (const page of Object.values(SWITCH_PAGES)) {
+      expect(rootPaths).toContain(page.pathname);
+      expect(xml).toContain(`<loc>https://0509.io${page.pathname}</loc>`);
     }
   });
 

@@ -19,6 +19,7 @@ import {
   SITEMAP_PATHS,
   SITEMAP_STATIC_ENTRIES,
 } from "~/lib/seo";
+import { SWITCH_PAGES } from "~/lib/switch-pages";
 import routes from "~/routes";
 import {
   snapshotRowHasCompleteProof,
@@ -1397,6 +1398,42 @@ describe("SITEMAP_PATHS", () => {
     // The canonicalized losers never appear as distinct sitemap URLs.
     expect(rootPaths).not.toContain("/compare/visualping");
     expect(rootPaths).not.toContain("/compare/foreplay");
+  });
+
+  it("lists every live /switch/:slug page in the production sitemap XML (issue #2081)", () => {
+    // Production /sitemap.xml is buildSitemapXml (workers/app.ts →
+    // publicSitemapFile), not the static publicSeoFileForPathname fallback.
+    // Pinning ROOT_SITEMAP_STATIC_ENTRIES + the rendered XML means a later
+    // locale-filter or static-list edit cannot drop BET 8's demand-capture
+    // pages while SITEMAP_PATHS still contains them. lastmod stays omitted:
+    // switch pages have no per-page content timestamp, and inventing one
+    // would fail the issue #2031 honesty clause below.
+    const xml = buildSitemapXml([]);
+    const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);
+    const switchPages = Object.values(SWITCH_PAGES);
+    expect(switchPages.map((page) => page.pathname).sort()).toEqual([
+      "/switch/magicbrief",
+      "/switch/panoramata",
+      "/switch/visualping",
+    ]);
+    for (const page of switchPages) {
+      expect(rootPaths, `${page.pathname} dropped from root sitemap`).toContain(
+        page.pathname,
+      );
+      const entry = ROOT_SITEMAP_STATIC_ENTRIES.find((e) => e.path === page.pathname);
+      expect(entry, `${page.pathname} missing from static entries`).toBeTruthy();
+      expect(entry?.changefreq, `${page.pathname} wrong changefreq`).toBe("weekly");
+      expect(entry?.priority, `${page.pathname} wrong priority`).toBe("0.7");
+      expect(entry?.lastmod, `${page.pathname} fabricated lastmod`).toBeUndefined();
+      expect(xml).toContain(`<loc>https://0509.io${page.pathname}</loc>`);
+      expect(xml).not.toMatch(
+        new RegExp(
+          `<loc>https://0509\\.io${page.pathname}</loc><lastmod>`,
+        ),
+      );
+    }
+    expect(rootPaths.filter((path) => path === "/switch")).toHaveLength(0);
+    expect(xml).not.toContain("<loc>https://0509.io/switch</loc>");
   });
 
   it("renders at least 10 indexable /ads/:domain + /compare/* locs in the built sitemap (issue #1878 termination)", () => {
