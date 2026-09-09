@@ -66,7 +66,7 @@ describe("locale sitemaps are locale-scoped (issue #1561, accept #4)", () => {
 });
 
 describe("root vs locale sitemap non-overlap (issue #1561, accept #3 + #5)", () => {
-  it("no <loc> is byte-identical between the root and any locale sitemap", () => {
+  it("keeps no <loc> byte-identical between the root and any locale sitemap", () => {
     const rootBody = buildSitemapXml([], []);
     const rootLocs = new Set(locsFromXml(rootBody));
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
@@ -78,31 +78,81 @@ describe("root vs locale sitemap non-overlap (issue #1561, accept #3 + #5)", () 
     }
   });
 
-  it("the root sitemap contains no buyer-surface locale-prefixed URL at all", () => {
-    const rootLocs = locsFromXml(buildSitemapXml([], []));
+  it("lists buyer-surface locale URLs in the root sitemap, grouped with hreflang alternates (issue #2030)", () => {
+    // Issue #2030 reverses the #1570 doorway concern: instead of dozens of
+    // discrete byte-identical <loc> entries, the buyer-surface locale cluster
+    // is now listed with the reciprocal sitemap-hreflang alternate set, so
+    // Google maps all six variants as one page. Locale subpaths (e.g.
+    // /de/pricing, /ja/compare/panoramata) appear as <loc> entries, each
+    // carrying an <xhtml:link hreflang> alternate for every sibling locale
+    // plus the EN x-default.
+    const rootBody = buildSitemapXml([], []);
+    const rootLocs = locsFromXml(rootBody);
+
+    // Every shipped locale is discoverable from the root feed.
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-      const prefix = localePrefixFor(locale);
-      for (const loc of rootLocs) {
-        expect(
-          loc.startsWith(prefix),
-          `root sitemap lists a ${locale}-prefixed URL directly: ${loc}`,
-        ).toBe(false);
-      }
+      expect(
+        rootLocs.some((loc) => loc.startsWith(`${SITE}/${locale}/`)),
+        `root sitemap must discover the ${locale} locale cluster`,
+      ).toBe(true);
     }
+
+    // A representative buyer-surface subpath is listed as a locale <loc>
+    // AND carries the full reciprocal alternate set.
+    const dePricing = `<loc>https://0509.io/de/pricing</loc>`;
+    expect(rootBody).toContain(dePricing);
+    const dePricingBlock = rootBody.match(
+      /<url><loc>https:\/\/0509\.io\/de\/pricing<\/loc>\s*((?!<\/url>).)*<\/url>/s,
+    )?.[0] ?? "";
+    expect(dePricingBlock).toContain(
+      `<xhtml:link rel="alternate" hreflang="de" href="https://0509.io/de/pricing"/>`,
+    );
+    expect(dePricingBlock).toContain(
+      `<xhtml:link rel="alternate" hreflang="ja" href="https://0509.io/ja/pricing"/>`,
+    );
+    expect(dePricingBlock).toContain(
+      `<xhtml:link rel="alternate" hreflang="x-default" href="https://0509.io/pricing"/>`,
+    );
   });
 
-  it("the static fallback sitemap (no-D1) is scoped the same as the dynamic root", () => {
+  it("the EN sibling of each buyer-surface cluster also carries the alternates (issue #2030)", () => {
+    // The sitemap hreflang pattern requires every URL in a cluster (including
+    // the canonical EN page) to list the full reciprocal alternate set, so
+    // Google does not see a one-way annotation.
+    const rootBody = buildSitemapXml([], []);
+    const enPricingBlock =
+      rootBody.match(
+        /<url><loc>https:\/\/0509\.io\/pricing<\/loc>\s*<changefreq>weekly<\/changefreq><priority>0\.8<\/priority>(.*?)<\/url>/s,
+      )?.[1] ?? "";
+    expect(enPricingBlock).toContain(
+      `<xhtml:link rel="alternate" hreflang="de" href="https://0509.io/de/pricing"/>`,
+    );
+    expect(enPricingBlock).toContain(
+      `<xhtml:link rel="alternate" hreflang="x-default" href="https://0509.io/pricing"/>`,
+    );
+  });
+
+  it("keeps noindex/empty and the genuinely translated sneaker-resale cluster OUT of the root feed (issue #2030 accept #3)", () => {
+    // The dynamic /ads/:domain brand pages never appear as static locale
+    // entries; the honest-green sneaker-resale cluster stays only in its own
+    // /<locale>/sitemap.xml (#1561). The root may NOT list sneaker-resale
+    // locale URLs (they live in the locale feeds) nor any /ad locale page.
+    const rootBody = buildSitemapXml([], []);
+    expect(rootBody).not.toContain("<loc>https://0509.io/de/sneaker-resale</loc>");
+    expect(rootBody).not.toContain("<loc>https://0509.io/ja/sneaker-resale</loc>");
+    expect(rootBody).not.toContain("<loc>https://0509.io/pt-br/sneaker-resale</loc>");
+    expect(rootBody).not.toContain("<loc>https://0509.io/de/ads/");
+  });
+
+  it("the static fallback sitemap (no-D1) lists the same locale cluster as the dynamic root", () => {
     const staticBody = publicSeoFileForPathname("/sitemap.xml")?.body ?? "";
     const staticLocs = locsFromXml(staticBody);
-    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-      const prefix = localePrefixFor(locale);
-      for (const loc of staticLocs) {
-        expect(
-          loc.startsWith(prefix),
-          `static fallback lists a ${locale}-prefixed URL directly: ${loc}`,
-        ).toBe(false);
-      }
-    }
+    // The no-DB fallback serves the same ROOT_SITEMAP_STATIC_ENTRIES catalog,
+    // so it discovers the locale cluster too — the two feeds never drift.
+    expect(
+      staticLocs.some((loc) => loc.startsWith(`${SITE}/de/`)),
+      "static fallback must share the locale cluster with the dynamic root",
+    ).toBe(true);
     // The static fallback still covers the EN funnel.
     expect(staticBody).toContain("<loc>https://0509.io/pricing</loc>");
     expect(staticBody).toContain("<loc>https://0509.io/sneaker-resale</loc>");

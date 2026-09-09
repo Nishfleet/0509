@@ -11,6 +11,7 @@ import {
   useRouteLoaderData,
 } from "react-router";
 import { useEffect, useLayoutEffect, useRef } from "react";
+import type { LinkHTMLAttributes } from "react";
 
 import { getCloudflareContext } from "~/lib/cloudflare-context";
 import type { LoaderFunctionArgs } from "react-router";
@@ -27,6 +28,7 @@ import {
 } from "~/lib/siterep-widget";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { htmlLangForPathname } from "~/lib/locale-markets";
+import { buyerSurfaceHreflangLinksForPathname } from "~/lib/seo";
 import { applyTheme, THEME_BOOT_SCRIPT, THEME_COLOR_LIGHT } from "~/lib/theme-client";
 import type { AppSession, PricingPlan, UsageBundle } from "~/lib/types";
 export {
@@ -248,6 +250,34 @@ export function GoogleFontsStylesheet() {
 }
 
 /**
+ * Reciprocal buyer-surface hreflang `<link>` tags for canonical EN pages
+ * (issue #2030). The locale routes already emit the cluster from their own
+ * `links`; the EN side of each cluster (/, /pricing, /compare/*, /switch/*, ...)
+ * is emitted here from the current pathname so Google sees the locale cluster
+ * as one page instead of 30 duplicate-ish doorway texts. Locale-prefixed and
+ * non-buyer paths render nothing (their own routes / no cluster handle them),
+ * so no page ever gets a duplicate or a one-way annotation.
+ */
+function BuyerSurfaceHreflang() {
+  const location = useLocation();
+  const links = buyerSurfaceHreflangLinksForPathname(location.pathname);
+  if (!links) {
+    return null;
+  }
+  return (
+    <>
+      {links.map((link) => (
+        <link
+          key={`${link.hreflang}:${link.href}`}
+          rel={link.rel}
+          {...({ hreflang: link.hreflang, href: link.href } as unknown as LinkHTMLAttributes<HTMLLinkElement>)}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
  * Keeps the workspace dark-mode attribute correct across client-side
  * navigations (marketing must stay light even when the workspace is dark)
  * and reacts to OS theme / other-tab preference changes. The pre-paint
@@ -304,6 +334,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <meta charSet="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <Meta />
+          <BuyerSurfaceHreflang />
           <Links />
           <GoogleFontsStylesheet />
         </head>
@@ -322,6 +353,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="theme-color" content={THEME_COLOR_LIGHT} suppressHydrationWarning />
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <Meta />
+        <BuyerSurfaceHreflang />
         <Links />
         <GoogleFontsStylesheet />
       </head>
