@@ -49,8 +49,6 @@ export const ALLOWED_SIGNUP_SOURCES = [
   GUIDE_TRACK_ADS_SIGNUP_SOURCE,
 ] as const;
 
-export type AllowedSignupSource = (typeof ALLOWED_SIGNUP_SOURCES)[number];
-
 /**
  * Open allowlist shapes (issue #2108). Keep these in lockstep with the CHECK
  * constraints in migrations/0087_signup_source_open_allowlist.sql:
@@ -98,6 +96,13 @@ function refererSignupSource(request: Request): string | null {
   try {
     hostname = new URL(referer).hostname;
   } catch {
+    return null;
+  }
+  // Skip the site's own domain: a signup page resend or internal navigation
+  // carries a self-referer that would otherwise clobber a previously-remembered
+  // external attribution via the ON CONFLICT DO UPDATE in
+  // rememberAllowlistedSignupSource (issue #2108 reviewer round).
+  if (isOwnDomain(hostname)) {
     return null;
   }
   const domain = registrableDomainFromHostname(hostname);
@@ -280,4 +285,9 @@ function signupSourceCookieDomain(request: Request) {
     return "0509.in";
   }
   return undefined;
+}
+
+function isOwnDomain(hostname: string) {
+  const h = hostname.toLowerCase();
+  return h === "0509.io" || h.endsWith(".0509.io") || h === "0509.in" || h.endsWith(".0509.in");
 }
