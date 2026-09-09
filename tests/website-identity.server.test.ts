@@ -20,6 +20,7 @@ vi.mock("~/lib/public-url.server", () => ({
 import {
   clearWebsiteIdentityCacheForTests,
   extractTagContent,
+  getCuratedAdvertiserPageId,
   resolveWebsiteIdentity,
 } from "~/lib/website-identity.server";
 
@@ -145,7 +146,8 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     // user-agent, so the live fetch fails and identity would resolve to null —
     // leaving the provider query on the bare label "goat", which surfaces
     // keyword junk instead of GOAT's own ads. The curated site name keeps the
-    // provider question askable.
+    // provider question askable. The curated page id scopes the search to
+    // GOAT's Meta page so its own ads surface (issue #1982).
     mockFetch.mockResolvedValue(
       new Response(null, { status: 403, headers: { "content-type": "text/html" } }),
     );
@@ -155,6 +157,7 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     expect(identity).not.toBeNull();
     expect(identity?.siteName).toBe("GOAT");
     expect(identity?.aliases).toContain("GOAT");
+    expect(identity?.advertiserPageId).toBe("746493592053334");
   });
 
   it("adds on-running.com as a domain alias to a resolved on.com identity", async () => {
@@ -176,6 +179,7 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     expect(identity?.aliases).toContain("On");
     // The live shop label is demoted from query-driver to alias, not deleted.
     expect(identity?.aliases).toContain("On Shop");
+    expect(identity?.advertiserPageId).toBe("238939146624");
   });
 
   it("supplies On's brand site name even when the homepage is bot-blocked (issue #1993)", async () => {
@@ -193,6 +197,7 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     expect(identity?.siteName).toBe("On");
     expect(identity?.aliases).toContain("On");
     expect(identity?.domainAliases).toContain("on-running.com");
+    expect(identity?.advertiserPageId).toBe("238939146624");
   });
 
   it("supplies Reebok's site name when the homepage is bot-blocked (issue #1993)", async () => {
@@ -257,6 +262,16 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     expect(identity?.siteName).toBe("Zappos");
     expect(identity?.aliases).toContain("Zappos");
     expect(identity?.domainAliases).toContain("www.zappos.com");
+  });
+
+  it("exposes curated page ids for the loader/sitemap to re-derive cache keys (issue #1982)", () => {
+    // The /ads/:domain loader and sitemap re-derive the same page-scoped cache
+    // key the publisher wrote via getCuratedAdvertiserPageId, without a network
+    // fetch. Returns null for domains with no curated page id (the common case).
+    expect(getCuratedAdvertiserPageId("goat.com")).toBe("746493592053334");
+    expect(getCuratedAdvertiserPageId("on.com")).toBe("238939146624");
+    expect(getCuratedAdvertiserPageId("nykaa.com")).toBeNull();
+    expect(getCuratedAdvertiserPageId("unknown.example")).toBeNull();
   });
 });
 

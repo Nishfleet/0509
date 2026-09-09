@@ -19,6 +19,15 @@ export interface SearchV2Context {
   displayDomain: string;
   identityAliases: string[];
   domainAliases: string[];
+  /**
+   * Curated Meta Page id for the brand, when identity resolution supplied one.
+   * Scopes the provider search to that exact page (`view_all_page_id`) instead
+   * of a keyword query, so the brand's own ads surface instead of keyword
+   * junk. Null when no curated id exists (the common case). The matcher still
+   * verifies each ad lands on the brand's domain — a curated page id never
+   * fabricates a verified row (issue #1982).
+   */
+  advertiserPageId: string | null;
 }
 
 export interface SearchV2Result extends SearchResponse {
@@ -221,6 +230,7 @@ export async function buildSearchV2Context(
     displayDomain: queryIntent.registrableDomain,
     identityAliases: identity?.aliases ?? [],
     domainAliases: identity?.domainAliases ?? [],
+    advertiserPageId: identity?.advertiserPageId ?? null,
   };
 }
 
@@ -230,17 +240,29 @@ export function buildSearchV2CacheKey(input: {
   scope: SearchScope;
   country: string;
   cursor?: string | null;
+  /**
+   * Curated Meta Page id scoping the search. Included in the key so a
+   * page-scoped search does not collide with a stale keyword-scoped cache
+   * entry for the same domain (issue #1982).
+   */
+  pageId?: string | null;
 }) {
   if (input.intent.intent === "domain" && input.intent.registrableDomain) {
-    return [
+    const base = [
       "search-v2",
       "domain",
       input.intent.registrableDomain,
       input.scope,
       input.provider.trim().toLowerCase(),
       input.country.trim().toLowerCase().replace(/\s+/g, "-"),
-      (input.cursor ?? "page-1").trim(),
-    ].join(":");
+    ];
+    // A curated page id gets its own key segment so a page-scoped search
+    // bypasses any stale keyword-scoped cache entry for the same domain.
+    if (input.pageId) {
+      base.push(`page:${input.pageId}`);
+    }
+    base.push((input.cursor ?? "page-1").trim());
+    return base.join(":");
   }
 
   return buildDiscoveryCacheKey({

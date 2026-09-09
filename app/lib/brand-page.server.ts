@@ -52,6 +52,7 @@ import {
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { buildSearchV2CacheKey, buildSearchV2SavedQuery } from "~/lib/search-v2.server";
 import type { AdRecord, WatchEventType } from "~/lib/types";
+import { getCuratedAdvertiserPageId } from "~/lib/website-identity.server";
 
 /** Path params beyond this length are rejected before any parsing. */
 const BRAND_PAGE_DOMAIN_MAX_LENGTH = 80;
@@ -969,6 +970,7 @@ export function deriveBrandPageLookupForCountry(
   if (queryIntent && useDomainKey) {
     const v2Query = buildSearchV2SavedQuery(queryIntent, "exact", parsed.filters);
     const v2Country = v2Query.filters.country || ALL_COUNTRIES_VALUE;
+    const pageId = getCuratedAdvertiserPageId(queryIntent.registrableDomain ?? "");
     return {
       fingerprint: parsed.fingerprint,
       country: v2Country,
@@ -978,6 +980,7 @@ export function deriveBrandPageLookupForCountry(
         scope: "exact",
         country: v2Country,
         cursor: null,
+        pageId,
       }),
       usedDomainKey: true,
     };
