@@ -99,7 +99,7 @@ async function seedCompleteFirstBrief() {
     proofCaptureId,
   });
 
-  // Mark the watchlist as scanned so shouldEnsureFirstBrief is satisfied.
+  // An active watchlist is enough to try filing (live scan or cached ads).
   await db()
     .prepare("UPDATE watchlist SET last_scanned_at = ?, updated_at = ? WHERE id = ?")
     .bind(ISO_T0, ISO_T0, watchlistId)
