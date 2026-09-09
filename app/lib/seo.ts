@@ -117,11 +117,20 @@ export function searchShareMeta(input: {
 }
 
 export function compareSocialCardUrl(toolSlug: string): string {
-  return canonicalUrl(`/social-card/compare/${toolSlug}.svg`);
+  // Raster twin of the generated SVG card (issue #2083). Facebook/X/LinkedIn
+  // scrapers refuse SVG og:images, so the /compare/:slug pages advertise the
+  // committed PNG under public/social-card/compare/<slug>.png — the same
+  // static-PNG path as the site-wide og-image.png. The SVG renderer stays on
+  // /social-card/compare/<slug>.svg for cached links.
+  return canonicalUrl(`/social-card/compare/${toolSlug}.png`);
 }
 
 export function switchSocialCardUrl(toolSlug: string): string {
-  return canonicalUrl(`/social-card/switch/${toolSlug}.svg`);
+  // Raster twin of the generated SVG card (issue #2083). Same rationale as
+  // compareSocialCardUrl: the /switch/:slug pages advertise the committed PNG
+  // under public/social-card/switch/<slug>.png; the SVG renderer stays on
+  // /social-card/switch/<slug>.svg for cached links.
+  return canonicalUrl(`/social-card/switch/${toolSlug}.png`);
 }
 
 export function clusterSocialCardUrl(slug: "sneaker-resale" | "competitor-monitoring"): string {
