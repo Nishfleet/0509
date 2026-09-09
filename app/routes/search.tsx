@@ -2393,6 +2393,23 @@ export default function SearchRoute() {
                               "Try another competitor website.")}
                       </p>
                     ) : null}
+                    {/* Issue 2137: while an anonymous search is warming and
+                        the poll budget is still live, sell the sample brief
+                        under the warming indicator — the wait is the moment
+                        to show the Monday email it turns into. The panel
+                        unmounts with this empty state the moment results or
+                        an error commit. */}
+                    {isSearchWarming && !warmingPollExhausted && !data.session ? (
+                      <div className="f9-wk-acts">
+                        <Link className="f9-wk-lnk" to="/sample-brief">
+                          While we pull their ads: this is the brief you&rsquo;d
+                          get Monday{" "}
+                          <span aria-hidden="true" className="f9-wk-chev">
+                            &rsaquo;
+                          </span>
+                        </Link>
+                      </div>
+                    ) : null}
                     {warmingPollExhausted ? (
                       /* Issue 2134: the exhausted warming poll is a signup
                          capture — the same create-account CTA block as the
@@ -2841,6 +2858,15 @@ export default function SearchRoute() {
                     <div className="f9-wk-acts">
                       <Link className="f9-wk-lnk" to={signupTrackingPath}>
                         Create account to track this competitor{" "}
+                        <span aria-hidden="true" className="f9-wk-chev">
+                          &rsaquo;
+                        </span>
+                      </Link>
+                      {/* Issue 2137: beside the account ask, show what the
+                          account sends — the real Monday brief for a brand
+                          like this one. */}
+                      <Link className="f9-wk-lnk" to="/sample-brief">
+                        See Monday&rsquo;s email for a brand like this{" "}
                         <span aria-hidden="true" className="f9-wk-chev">
                           &rsaquo;
                         </span>

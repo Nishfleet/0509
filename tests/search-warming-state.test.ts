@@ -87,6 +87,31 @@ async function renderWarmingSearch() {
 	return renderToStaticMarkup(createElement(SearchRoute));
 }
 
+const nykaaAdFixture = {
+	metaAdId: "meta-nykaa-1",
+	advertiser: "Nykaa",
+	body: "Flat 30% off on serums.",
+	previewHeadline: "Glow sale",
+	previewSubhead: "Weekend only",
+	hook: "Glow sale",
+	offer: "Flat 30% off",
+	cta: "Shop now",
+	format: "image",
+	languageLabel: "English",
+	destinationType: "website",
+	landingPageUrl: "https://www.nykaa.com/glow-sale",
+	adSnapshotUrl: "https://www.facebook.com/ads/library/?id=meta-nykaa-1",
+	countries: ["India"],
+	platforms: ["Instagram"],
+	firstSeenAt: null,
+	lastSeenAt: null,
+	active: true,
+	researchSummary: "Live Browser Run fixture",
+	source: "meta_library_browser",
+	analysisFields: [],
+	tags: [],
+};
+
 // BET 2 (issue #951): loader data for the partial-streaming state — the first
 // batch of ads has landed (discoveryPartial + warming), the scroll is still
 // running. The route must paint the rows AND a real progress banner.
@@ -94,36 +119,67 @@ const partialWarmingLoaderData = {
 	...warmingLoaderData,
 	result: {
 		...warmingLoaderData.result,
-		ads: [
-			{
-				metaAdId: "meta-nykaa-1",
-				advertiser: "Nykaa",
-				body: "Flat 30% off on serums.",
-				previewHeadline: "Glow sale",
-				previewSubhead: "Weekend only",
-				hook: "Glow sale",
-				offer: "Flat 30% off",
-				cta: "Shop now",
-				format: "image",
-				languageLabel: "English",
-				destinationType: "website",
-				landingPageUrl: "https://www.nykaa.com/glow-sale",
-				adSnapshotUrl: "https://www.facebook.com/ads/library/?id=meta-nykaa-1",
-				countries: ["India"],
-				platforms: ["Instagram"],
-				firstSeenAt: null,
-				lastSeenAt: null,
-				active: true,
-				researchSummary: "Live Browser Run fixture",
-				source: "meta_library_browser",
-				analysisFields: [],
-				tags: [],
-			},
-		],
+		ads: [nykaaAdFixture],
 		discoveryPartial: true,
 		discoverySummary: "Showing the first ads while we load more from the Ad Library.",
 	},
 };
+
+// Issue 2137: loader data for a committed anonymous results page — the check
+// finished (no discoveryProgress), and one ad is selected so the detail pane
+// renders the anonymous create-account CTA the sample-brief line sits beside.
+const committedResultsLoaderData = {
+	...warmingLoaderData,
+	result: {
+		...warmingLoaderData.result,
+		ads: [nykaaAdFixture],
+		cacheStatus: "hit" as const,
+		discoveryStatus: "healthy" as const,
+		discoveryProgress: undefined,
+		discoverySummary: null,
+	},
+	selectedAd: nykaaAdFixture,
+};
+
+// Issue 2137: a committed non-warming empty state (an error/other commit) —
+// the warming sample-brief panel must not survive into it.
+const committedEmptyLoaderData = {
+	...warmingLoaderData,
+	result: {
+		...warmingLoaderData.result,
+		discoveryProgress: undefined,
+		discoverySummary:
+			"Fresh checks are delayed, so coverage may be incomplete.",
+	},
+};
+
+async function renderSearchWithLoaderData(loaderData: Record<string, unknown>) {
+	vi.doMock("react-router", async () => {
+		const actual = await vi.importActual<typeof import("react-router")>("react-router");
+		const React = await import("react");
+
+		return {
+			...actual,
+			Form: ({ children, ...props }: MockFormProps) => React.createElement("form", props, children),
+			Link: ({ children, to, ...props }: MockLinkProps) =>
+				React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+			useActionData: vi.fn().mockReturnValue(undefined),
+			useLoaderData: vi.fn().mockReturnValue(loaderData),
+			useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: originalSearch, hash: "" }),
+			useNavigate: vi.fn().mockReturnValue(vi.fn()),
+			useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+			useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
+			useRouteLoaderData: vi.fn().mockReturnValue({ session: null }),
+		};
+	});
+
+	vi.doMock("~/components/dashboard-shell", () => ({
+		DashboardShell: ({ children }: { children: ReactNode }) => createElement("main", null, children),
+	}));
+
+	const { default: SearchRoute } = await import("~/routes/search");
+	return renderToStaticMarkup(createElement(SearchRoute));
+}
 
 async function renderPartialWarmingSearch() {
 	vi.doMock("react-router", async () => {
@@ -310,5 +366,81 @@ describe("public search warming recovery", () => {
 		const partialMarkup = await renderPartialWarmingSearch();
 		expect(partialMarkup).not.toContain("Still capturing");
 		expect(partialMarkup).not.toContain("search_warming_exhausted");
+	});
+
+	it("sells the sample brief under the warming indicator while an anonymous search warms (issue #2137)", async () => {
+		const markup = await renderWarmingSearch();
+
+		// The compact panel links to the real Monday brief while the check runs.
+		expect(markup).toContain("While we pull their ads:");
+		expect(markup).toContain("get Monday");
+		expect(markup).toContain('href="/sample-brief"');
+		// It sits under the warming indicator, before the retry actions.
+		const indicatorIdx = markup.indexOf("Checking the Ad Library now");
+		const panelIdx = markup.indexOf('href="/sample-brief"');
+		const retryIdx = markup.indexOf("Retry this search");
+		expect(indicatorIdx).toBeGreaterThan(-1);
+		expect(panelIdx).toBeGreaterThan(indicatorIdx);
+		expect(retryIdx).toBeGreaterThan(panelIdx);
+	});
+
+	it("adds the sample-brief line beside the create-account CTA on anonymous result pages (issue #2137)", async () => {
+		const markup = await renderSearchWithLoaderData(committedResultsLoaderData);
+
+		// The detail pane's anonymous capture carries both links…
+		expect(markup).toContain("Create account to track this competitor");
+		expect(markup).toContain("email for a brand like this");
+		expect(markup).toContain('href="/sample-brief"');
+		// …with the brief line beside (after) the create-account CTA.
+		const ctaIdx = markup.indexOf("Create account to track this competitor");
+		const briefIdx = markup.indexOf("email for a brand like this");
+		expect(ctaIdx).toBeGreaterThan(-1);
+		expect(briefIdx).toBeGreaterThan(ctaIdx);
+	});
+
+	it("removes the warming sample-brief panel the moment results or a non-warming state commit (issue #2137)", async () => {
+		// Rows committed while the scroll keeps running: the panel is gone even
+		// though the search is still warming.
+		const partialMarkup = await renderPartialWarmingSearch();
+		expect(partialMarkup).toContain("meta-nykaa-1");
+		expect(partialMarkup).not.toContain("While we pull their ads");
+		expect(partialMarkup).not.toContain('href="/sample-brief"');
+
+		// A committed non-warming state (no results, no progress flag) carries
+		// no panel either.
+		const committedMarkup = await renderSearchWithLoaderData(committedEmptyLoaderData);
+		expect(committedMarkup).not.toContain("While we pull their ads");
+		expect(committedMarkup).not.toContain('href="/sample-brief"');
+	});
+
+	it("removes the warming sample-brief panel once the warming poll exhausts (issue #2137)", async () => {
+		vi.useFakeTimers();
+		let root: Root | null = null;
+		let container: HTMLDivElement | null = null;
+		try {
+			const mounted = await mountWarmingSearch();
+			root = mounted.root;
+			container = mounted.container;
+
+			// Budget live: the panel is up. (Asserted via href — the mocked Link
+			// drops text children under createRoot.)
+			expect(container.querySelector('a[href="/sample-brief"]')).not.toBeNull();
+
+			const { SEARCH_WARMING_POLL_LIMIT } = await import("~/routes/search");
+			for (let step = 0; step < SEARCH_WARMING_POLL_LIMIT; step += 1) {
+				await act(async () => {
+					vi.advanceTimersByTime(5_000);
+				});
+			}
+
+			// Exhausted: the panel is gone; the signup capture owns the state.
+			expect(container.querySelector('a[href="/sample-brief"]')).toBeNull();
+			expect(container.textContent).toContain("Still capturing nykaa.com.");
+		} finally {
+			if (root) {
+				await act(async () => root?.unmount());
+			}
+			container?.remove();
+		}
 	});
 });
