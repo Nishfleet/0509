@@ -143,3 +143,57 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
+
+  fullsite-runs:
+    # Issue #2110: Full-Site Watch broad-rollout liveness. With
+    # FULLSITE_WATCH_CANARY_HOSTS emptied (wrangler.jsonc), every scheduled
+    # monitoring cycle may write `website_site_scan` rows; a silently dead
+    # scan path leaves the table empty. This job runs the read-only D1 check
+    # (`canary:fullsite-runs`, a single COUNT(*) SELECT — no DDL/DML) so that
+    # silent death turns this canary red. Until the script's hardcoded grace
+    # instant (2026-09-11T00:00:00Z) an empty table is a WARN and exits 0.
+    #
+    # Not a deploy gate. Putting this check on the post-deploy chain would
+    # roll back the emptied canary before the 04:00 UTC scan can write rows.
+    #
+    # CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN live in the `production`
+    # environment (the same secrets d1-backup-r2.yml reads), so this job must
+    # declare `environment: production` — same fail-loud rule as the Meta
+    # readiness probe above: a canary that cannot check must fail, not skip.
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Setup node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+
+      - run: npm ci --ignore-scripts
+
+      - name: Refuse empty Cloudflare secrets
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || missing+=(CLOUDFLARE_API_TOKEN)
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || missing+=(CLOUDFLARE_ACCOUNT_ID)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "fullsite-runs canary: red (missing ${missing[*]}; a canary that cannot check must fail, not skip as success)" >&2
+            exit 1
+          fi
+
+      - name: Check website_site_scan has rows
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npm run canary:fullsite-runs
