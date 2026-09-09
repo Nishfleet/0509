@@ -280,6 +280,28 @@ enabled only when **all** pass:
 
 **This PR passes none of the above gates. It only writes this specification.**
 
+### 8.7 Retention window (2026-09-09)
+
+Funnel events are structured JSON lines written through `app/lib/log.server.ts`
+(`console.log`). Workers Logs (Cloudflare Workers observability) is the only store.
+There is no D1 table, KV key, or R2 object for funnel events.
+
+The retention bound is that platform window. It is not a product retention period
+Nish has approved (§6 still requires that approval before enablement):
+
+- Workers Paid (this account): 7 days
+- Workers Free: 3 days
+- Platform maximum: 7 days
+
+Source: Cloudflare Workers Logs Limits and Pricing,
+https://developers.cloudflare.com/workers/observability/logs/workers-logs/
+(docs last updated 2026-08-11).
+
+Account deletion has no funnel residue to clean. Events are request-scoped log
+lines with no per-user row, so existing account-deletion flows have nothing extra
+to delete. Tests in `tests/funnel-measurement.test.ts` prove logs-only emission
+and the absence of per-user funnel rows.
+
 ## 9. Review checklist against current surfaces
 
 Truth recorded on 2026-08-06 against the repository at the base of this branch:
