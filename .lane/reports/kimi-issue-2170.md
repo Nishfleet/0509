@@ -1,6 +1,6 @@
 # Lane evidence — kimi/issue-2170
 
-Issue: Nishfleet/0509 #2170 — elevate: rebuild the first viewport around the free live-search promise (nish-reserved PR).
+Issue: Nishfleet/0509 #2170 — rebuild the first viewport around the free live-search promise (nish-reserved PR).
 
 ## What changed
 
