@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import { Form, Link } from "react-router";
 
+import { ArchiveLedger } from "~/components/archive-ledger";
 import { CompetitorDossierPanel } from "~/components/competitor-dossier";
 import { CreativeWall } from "~/components/creative-wall";
 import { SecondaryAction, TertiaryAction } from "~/components/evidence/cta";
@@ -18,6 +19,7 @@ import { FirstScanBanner } from "~/components/watchlists/first-scan-banner";
 import { RecentChecksSection } from "~/components/watchlists/recent-checks-section";
 import { RecentEvidenceChecksCard } from "~/components/watchlists/recent-evidence-checks-card";
 import { WatchlistSetupCard } from "~/components/watchlists/watchlist-setup-card";
+import type { DomainArchive } from "~/lib/archive";
 import type { PublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { WatchlistRecord } from "~/lib/types";
@@ -76,6 +78,8 @@ type DetailData = ComponentProps<typeof EventChangesSection>["data"] &
     showPresenceNav: boolean;
     latestRunCaptureAttempts?: ComponentProps<typeof RecentChecksSection>["latestRunCaptureAttempts"];
     websiteCoverageLabel?: string | null;
+    /** The proof archive (issue #2173) — loaded only when the Archive tab is open. */
+    archive?: DomainArchive | null;
   };
 
 export interface CompetitorDetailProps {
@@ -341,6 +345,10 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
     );
   }
 
+  if (props.activeTab === "archive") {
+    return <ArchivePanel props={props} />;
+  }
+
   if (props.activeTab === "evidence") {
     return (
       <>
@@ -413,6 +421,59 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           </Link>
         ) : null}
       </p>
+    </>
+  );
+}
+
+/**
+ * The Archive tab (issue #2173): the full dated record of everything the
+ * account captured for this competitor — the same engine the public
+ * `/timeline/:domain` renders — plus the export and frozen-snapshot share
+ * actions that let the customer take the record out.
+ */
+function ArchivePanel({ props }: { props: CompetitorDetailProps }) {
+  const { data, watchlist } = props;
+  const archive = data.archive ?? null;
+  return (
+    <>
+      <section aria-labelledby="competitor-archive-title" className="f9-watchdetail-section">
+        <h3 id="competitor-archive-title">The record</h3>
+        <p className="f9-wk-dim">
+          Every captured change for this competitor — when it was captured, how, what changed, and
+          the proof on file. Gaps in capture are shown as gaps, never smoothed.
+        </p>
+        <div className="f9-watchdetail-local-actions">
+          {props.canExport ? (
+            <>
+              <TertiaryAction href={`/export/archive/${watchlist.id}`}>Export CSV</TertiaryAction>
+              <TertiaryAction href={`/export/archive/${watchlist.id}?format=json`}>
+                Export JSON
+              </TertiaryAction>
+            </>
+          ) : null}
+          {props.canShare ? (
+            <Form method="post">
+              <input name="intent" type="hidden" value="share-archive" />
+              <input name="watchlistId" type="hidden" value={watchlist.id} />
+              <SubmitButton
+                className="f9-evidence-cta f9-evidence-cta--rank3"
+                intent="share-archive"
+                pendingLabel="Freezing…"
+              >
+                Share a frozen snapshot
+              </SubmitButton>
+            </Form>
+          ) : null}
+        </div>
+      </section>
+      {archive ? (
+        <ArchiveLedger archive={archive} headingId="competitor-archive-ledger-title" />
+      ) : (
+        <p className="f9-wk-dim">
+          The archive could not be loaded just now. Refresh to try again — the captures on file are
+          not affected.
+        </p>
+      )}
     </>
   );
 }
