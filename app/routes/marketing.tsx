@@ -714,6 +714,7 @@ export default function MarketingRoute() {
             <Link to={publicSearchTrialPath}>Try the search preview</Link>
             <Link to="/competitor-monitoring">Read the methodology</Link>
             {featuredAdsLink ? <Link to={featuredAdsLink.path}>See a live example</Link> : null}
+            <Link to="/briefs/weekly">This week&apos;s offer moves</Link>
             <Link to="/capture-rules">What we refuse to alert on</Link>
             <a href="#pricing">See plans</a>
           </div>

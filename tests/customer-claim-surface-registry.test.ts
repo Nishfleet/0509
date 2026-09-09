@@ -369,7 +369,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // /ads/:domain pages (issue #1562) — all serve English copy.
   // The genuinely translated sneaker-resale cluster stays in the sitemap.
   sitemapPaths: [
-    "/", "/search", "/brands", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
+    "/", "/search", "/brands", "/briefs/weekly", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
     "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief",
