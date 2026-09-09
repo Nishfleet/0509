@@ -367,22 +367,6 @@
       "expiry": "connector, rollout, plan or public-copy change"
     },
     {
-      "claimId": "COMPARE-MIGRATION-AFTERNOON",
-      "text": "Collections and watchlists can be set up here in an afternoon with founder-assisted migration.",
-      "surface": "MagicBrief comparison page",
-      "audience": "prospective buyers",
-      "owner": "growth and support",
-      "source": [
-        "app/routes/compare.magicbrief.tsx"
-      ],
-      "requiredGate": "G11-SELF-SERVE-PARITY,G11-SUPPORT-COMMS",
-      "requiredEvidence": "documented bounded migration procedure and internal completion timing; otherwise remove the time promise",
-      "status": "removed_from_product_contract",
-      "assessment": "The unsupported migrate-in-an-afternoon promise is removed from the comparison and marketing surfaces; bounded human migration help remains without a time guarantee.",
-      "classification": "discovered",
-      "expiry": "comparison copy or migration workflow change"
-    },
-    {
       "claimId": "SEO-CANONICAL-INDEXING",
       "text": "0509.io is canonical; only intended public routes are indexable and private/token/operator surfaces remain non-indexed.",
       "surface": "metadata, robots, sitemap and security headers",
@@ -666,7 +650,7 @@
     {
       "claimId": "AUDIT-SAVES-SCREENSHOTS",
       "page": "/",
-      "selector": "homepage meta description + hero deck, competitor-monitoring meta + hero, pricing evidence-usage copy, compare/magicbrief migration FAQ",
+      "selector": "homepage meta description + hero deck, competitor-monitoring meta + hero, pricing evidence-usage copy",
       "sentence": "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then files source-linked proof — page text and the source link — plus a screenshot when the capture includes one.",
       "claimed": true,
       "verified": true,
@@ -731,17 +715,6 @@
       "verified": true,
       "verify": "test -f app/routes/search.tsx && grep -qF 'No account needed' app/routes/marketing.tsx && grep -qF 'No account needed' app/routes/competitor-monitoring.tsx",
       "test": "tests/marketing-rebuild.test.ts",
-      "followUp": null
-    },
-    {
-      "claimId": "AUDIT-MIGRATION-SELF-SERVE",
-      "page": "/compare/magicbrief",
-      "selector": "compare/magicbrief migration FAQ",
-      "sentence": "For competitor-list migration and change monitoring, yes: your tracked brands import as watchlists, and paid plans check them every 3–6 hours with source-linked proof. For browsing saved creative collections and boards, no — that saved work does not transfer.",
-      "claimed": true,
-      "verified": true,
-      "verify": "test -f app/routes/compare.magicbrief.tsx && grep -qF 'MIGRATION_SIGNUP_PATH' app/routes/compare.magicbrief.tsx && ! grep -qF 'in an afternoon' app/routes/compare.magicbrief.tsx",
-      "test": "tests/marketing-magicbrief-cta.test.ts",
       "followUp": null
     },
     {

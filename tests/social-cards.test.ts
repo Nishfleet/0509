@@ -101,7 +101,7 @@ describe("social card URL builders", () => {
 
   it("compareSocialCardUrl and switchSocialCardUrl build the card path", () => {
     expect(compareSocialCardUrl("panoramata")).toBe(canonicalUrl("/social-card/compare/panoramata.svg"));
-    expect(switchSocialCardUrl("magicbrief")).toBe(canonicalUrl("/social-card/switch/magicbrief.svg"));
+    expect(switchSocialCardUrl("panoramata")).toBe(canonicalUrl("/social-card/switch/panoramata.svg"));
   });
 
   it("clusterSocialCardUrl builds the standalone surface card path", () => {
@@ -141,9 +141,9 @@ describe("parseSocialCardPathname", () => {
       kind: "compare",
       slug: "panoramata",
     });
-    expect(parseSocialCardPathname("/social-card/switch/magicbrief.svg")).toEqual({
+    expect(parseSocialCardPathname("/social-card/switch/panoramata.svg")).toEqual({
       kind: "switch",
-      slug: "magicbrief",
+      slug: "panoramata",
     });
     expect(parseSocialCardPathname("/social-card/sneaker-resale.svg")).toEqual({
       kind: "cluster",
@@ -207,9 +207,9 @@ describe("publicSocialCardForRequest", () => {
 
   it("renders a switch card naming the source tool", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/switch/magicbrief.svg"),
+      new Request("https://0509.io/social-card/switch/panoramata.svg"),
     );
-    expect(res?.body).toContain("Switch from MagicBrief");
+    expect(res?.body).toContain("Switch from Panoramata");
   });
 
   it("renders cluster cards for the standalone buyer surfaces", () => {
@@ -255,7 +255,7 @@ describe("every programmatic buyer surface stamps a non-generic og:image", () =>
     expect(ogImageAlt(meta), `${routeId} missing og:image:alt`).toBeTruthy();
   });
 
-  it.each(["switch.magicbrief", "switch.panoramata", "switch.visualping"])(
+  it.each(["switch.panoramata", "switch.visualping"])(
     "%s stamps a /social-card/switch og:image + alt",
     async (routeId) => {
       const routeModule = (await import(`~/routes/${routeId}`)) as {

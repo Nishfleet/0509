@@ -38,7 +38,6 @@ import type { CompareCitations } from "~/components/compare-citations";
 import adspyCitations from "~/data/compare/adspy-citations.json";
 import adspyderCitations from "~/data/compare/adspyder-citations.json";
 import foreplaySpyderCitations from "~/data/compare/foreplay-spyder-citations.json";
-import magicbriefCitations from "~/data/compare/magicbrief-citations.json";
 import metaAdLibraryCitations from "~/data/compare/meta-ad-library-citations.json";
 import panoramataCitations from "~/data/compare/panoramata-citations.json";
 import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
@@ -67,7 +66,6 @@ export const PUBLIC_MARKDOWN_PATHS = [
   // stays excluded (noted in the ticket, deliberately out of scope).
   "/methodology",
   "/pricing",
-  "/compare/magicbrief",
   "/compare/meta-ad-library",
   "/compare/visualping-ad-libraries",
   "/compare/spyland",
@@ -143,11 +141,7 @@ const LLMS_PAGE_DETAILS = {
   "/compare": {
     title: "Compare Five to Nine vs the alternatives",
     description:
-      "Index of side-by-side comparisons of Five to Nine's competitor ad and landing-page change monitoring against Visualping, MagicBrief, Panoramata, Foreplay, Spyland, Pulzifi and more.",
-  },
-  "/compare/magicbrief": {
-    title: "Five to Nine vs MagicBrief",
-    description: "How Five to Nine compares with MagicBrief.",
+      "Index of side-by-side comparisons of Five to Nine's competitor ad and landing-page change monitoring against Visualping, Panoramata, Foreplay, Spyland, Pulzifi and more.",
   },
   "/compare/meta-ad-library": {
     title: "Five to Nine vs Meta Ad Library",
@@ -193,11 +187,6 @@ const LLMS_PAGE_DETAILS = {
     title: "Five to Nine vs AdSpy",
     description:
       "How Five to Nine's source-backed change proof compares with AdSpy's $149/mo ad-spy database and its weak 2.4/5 review rating.",
-  },
-  "/switch/magicbrief": {
-    title: "MagicBrief alternative",
-    description:
-      "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
   },
   "/switch/panoramata": {
     title: "Panoramata alternative",
@@ -277,7 +266,7 @@ const LLMS_PAGE_DETAILS = {
   "/de/compare": {
     title: "Vergleichen (Deutsch)",
     description:
-      "Index der Vergleiche von Five to Nine mit Visualping, MagicBrief, Panoramata, Foreplay und anderen.",
+      "Index der Vergleiche von Five to Nine mit Visualping, Panoramata, Foreplay und anderen.",
   },
   "/ja/pricing": {
     title: "価格表 (日本語)",
@@ -313,7 +302,7 @@ const LLMS_PAGE_DETAILS = {
   "/ja/compare": {
     title: "比較 (日本語)",
     description:
-      "Five to NineのVisualping、MagicBrief、Panoramata、Foreplayとの比較インデックス。",
+      "Five to NineのVisualping、Panoramata、Foreplayとの比較インデックス。",
   },
   "/pt-br/pricing": {
     title: "Preços (Português, Brasil)",
@@ -349,7 +338,7 @@ const LLMS_PAGE_DETAILS = {
   "/pt-br/compare": {
     title: "Comparar (Português, Brasil)",
     description:
-      "Índice de comparações do Five to Nine com Visualping, MagicBrief, Panoramata, Foreplay e outros.",
+      "Índice de comparações do Five to Nine com Visualping, Panoramata, Foreplay e outros.",
   },
   "/fr/pricing": {
     title: "Tarifs (Français)",
@@ -385,7 +374,7 @@ const LLMS_PAGE_DETAILS = {
   "/fr/compare": {
     title: "Comparer (Français)",
     description:
-      "Index des comparaisons de Five to Nine avec Visualping, MagicBrief, Panoramata, Foreplay et plus.",
+      "Index des comparaisons de Five to Nine avec Visualping, Panoramata, Foreplay et plus.",
   },
   "/es/pricing": {
     title: "Precios (Español)",
@@ -421,11 +410,7 @@ const LLMS_PAGE_DETAILS = {
   "/es/compare": {
     title: "Comparar (Español)",
     description:
-      "Índice de comparaciones de Five to Nine con Visualping, MagicBrief, Panoramata, Foreplay y más.",
-  },
-  "/de/compare/magicbrief": {
-    title: "Five to Nine vs MagicBrief (Deutsch)",
-    description: "How Five to Nine compares with MagicBrief.",
+      "Índice de comparaciones de Five to Nine con Visualping, Panoramata, Foreplay y más.",
   },
   "/de/compare/meta-ad-library": {
     title: "Five to Nine vs Meta Ad Library (Deutsch)",
@@ -463,10 +448,6 @@ const LLMS_PAGE_DETAILS = {
     title: "Five to Nine vs AdSpyder (Deutsch)",
     description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
   },
-  "/de/switch/magicbrief": {
-    title: "MagicBrief alternative (Deutsch)",
-    description: "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
-  },
   "/de/switch/panoramata": {
     title: "Panoramata alternative (Deutsch)",
     description: "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job.",
@@ -490,10 +471,6 @@ const LLMS_PAGE_DETAILS = {
   "/de/methodology": {
     title: "Ad Aggression Score methodology (Deutsch)",
     description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
-  },
-  "/ja/compare/magicbrief": {
-    title: "Five to Nine vs MagicBrief (日本語)",
-    description: "How Five to Nine compares with MagicBrief.",
   },
   "/ja/compare/meta-ad-library": {
     title: "Five to Nine vs Meta Ad Library (日本語)",
@@ -531,10 +508,6 @@ const LLMS_PAGE_DETAILS = {
     title: "Five to Nine vs AdSpyder (日本語)",
     description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
   },
-  "/ja/switch/magicbrief": {
-    title: "MagicBrief alternative (日本語)",
-    description: "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
-  },
   "/ja/switch/panoramata": {
     title: "Panoramata alternative (日本語)",
     description: "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job.",
@@ -558,10 +531,6 @@ const LLMS_PAGE_DETAILS = {
   "/ja/methodology": {
     title: "Ad Aggression Score methodology (日本語)",
     description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
-  },
-  "/pt-br/compare/magicbrief": {
-    title: "Five to Nine vs MagicBrief (Português, Brasil)",
-    description: "How Five to Nine compares with MagicBrief.",
   },
   "/pt-br/compare/meta-ad-library": {
     title: "Five to Nine vs Meta Ad Library (Português, Brasil)",
@@ -599,10 +568,6 @@ const LLMS_PAGE_DETAILS = {
     title: "Five to Nine vs AdSpyder (Português, Brasil)",
     description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
   },
-  "/pt-br/switch/magicbrief": {
-    title: "MagicBrief alternative (Português, Brasil)",
-    description: "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
-  },
   "/pt-br/switch/panoramata": {
     title: "Panoramata alternative (Português, Brasil)",
     description: "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job.",
@@ -626,10 +591,6 @@ const LLMS_PAGE_DETAILS = {
   "/pt-br/methodology": {
     title: "Ad Aggression Score methodology (Português, Brasil)",
     description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
-  },
-  "/fr/compare/magicbrief": {
-    title: "Five to Nine vs MagicBrief (Français)",
-    description: "How Five to Nine compares with MagicBrief.",
   },
   "/fr/compare/meta-ad-library": {
     title: "Five to Nine vs Meta Ad Library (Français)",
@@ -667,10 +628,6 @@ const LLMS_PAGE_DETAILS = {
     title: "Five to Nine vs AdSpyder (Français)",
     description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
   },
-  "/fr/switch/magicbrief": {
-    title: "MagicBrief alternative (Français)",
-    description: "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
-  },
   "/fr/switch/panoramata": {
     title: "Panoramata alternative (Français)",
     description: "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job.",
@@ -694,10 +651,6 @@ const LLMS_PAGE_DETAILS = {
   "/fr/methodology": {
     title: "Ad Aggression Score methodology (Français)",
     description: "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
-  },
-  "/es/compare/magicbrief": {
-    title: "Five to Nine vs MagicBrief (Español)",
-    description: "How Five to Nine compares with MagicBrief.",
   },
   "/es/compare/meta-ad-library": {
     title: "Five to Nine vs Meta Ad Library (Español)",
@@ -734,10 +687,6 @@ const LLMS_PAGE_DETAILS = {
   "/es/compare/adspyder": {
     title: "Five to Nine vs AdSpyder (Español)",
     description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
-  },
-  "/es/switch/magicbrief": {
-    title: "MagicBrief alternative (Español)",
-    description: "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not. Try the free preview.",
   },
   "/es/switch/panoramata": {
     title: "Panoramata alternative (Español)",
@@ -1211,10 +1160,6 @@ ${sources}
 const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
   "/methodology": METHODOLOGY_MARKDOWN,
   "/pricing": PRICING_MARKDOWN,
-  "/compare/magicbrief": compareMarkdown(
-    magicbriefCitations as CompareCitations,
-    "MagicBrief alternative: your competitor list imports as watchlists; collections, boards, and analytics history do not transfer. See what moves.",
-  ),
   "/compare/meta-ad-library": compareMarkdown(
     metaAdLibraryCitations as CompareCitations,
     "The Meta Ad Library is free and public — it's the source Five to Nine reads. What manual checking costs you, and what scheduled checks, diffs, saved screenshots, and email briefs add.",

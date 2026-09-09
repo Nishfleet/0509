@@ -1,6 +1,6 @@
 import { execute, queryOne } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
-import { MAGICBRIEF_MIGRATION_SOURCE, PRICING_FREE_SIGNUP_SOURCE } from "~/lib/funnel-measurement.server";
+import { PRICING_FREE_SIGNUP_SOURCE } from "~/lib/funnel-measurement.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
 
 /**
@@ -56,7 +56,6 @@ export const FOR_AGENCIES_SIGNUP_SOURCE = "for_agencies";
 export const SAMPLE_BRIEF_SIGNUP_SOURCE = "sample_brief";
 
 export const ALLOWED_SIGNUP_SOURCES = [
-  MAGICBRIEF_MIGRATION_SOURCE,
   PRICING_FREE_SIGNUP_SOURCE,
   FOR_AGENCIES_SIGNUP_SOURCE,
   SAMPLE_BRIEF_SIGNUP_SOURCE,

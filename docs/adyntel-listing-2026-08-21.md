@@ -182,7 +182,7 @@ Subject: `Tool for your ad-spy comparison: Five to Nine (competitor monitoring w
   190,689 bytes fetched 2026-08-21; `grep -ci 'five to nine\|0509'` = 0.
 - Live product URLs referenced above — all HTTP 200 on 2026-08-21:
   `https://0509.io`, `https://0509.io/search`,
-  `https://0509.io/auth/signup`, `https://0509.io/compare/magicbrief`.
+  `https://0509.io/auth/signup`.
 
 ## re-verified 2026-09-09
 
@@ -198,7 +198,7 @@ Fresh pass done by the growth2 send-off sheet work (issue #2133):
   2026-09-09; `grep -ci 'five to nine\|0509'` = 0.
 - Live product URLs referenced above — all HTTP 200 on 2026-09-09:
   `https://0509.io`, `https://0509.io/search`,
-  `https://0509.io/auth/signup`, `https://0509.io/compare/magicbrief`.
+  `https://0509.io/auth/signup`.
 
 No field, URL, or requirement changed since the 2026-08-21 prep. The two
 prepared emails stay paste-ready; the send step remains an owner action.

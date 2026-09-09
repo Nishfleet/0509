@@ -1,4 +1,8 @@
 import {
+  LEGACY_VENDOR_COMPARE_PATH,
+  LEGACY_VENDOR_SWITCH_PATH,
+} from "./routes/legacy-vendor-redirect";
+import {
   type RouteConfig,
   index,
   route,
@@ -103,7 +107,11 @@ export default [
   // /methodology/ad-aggression-score links and sitemap entries keep working.
   route("methodology/ad-aggression-score", "routes/methodology.ad-aggression-score-redirect.ts"),
   route("compare", "routes/compare.tsx"),
-  route("compare/magicbrief", "routes/compare.magicbrief.tsx"),
+  // Issue #2127 wiped a vendor's compare/switch pages. The legacy URLs (and
+  // their locale twins below) 301 to the /compare hub through one loader
+  // file with explicit ids; the paths are exported by that file so the route
+  // config, the loader, and its test share one source of truth.
+  route(LEGACY_VENDOR_COMPARE_PATH, "routes/legacy-vendor-redirect.ts", { id: "compare-legacy-vendor-redirect" }),
   route("compare/meta-ad-library", "routes/compare.meta-ad-library.tsx"),
   route("compare/visualping", "routes/compare.visualping.tsx"),
   // Singular visualping-ad-library is a canonicalized loser (issue #1548):
@@ -119,7 +127,7 @@ export default [
   route("compare/panoramata", "routes/compare.panoramata.tsx"),
   route("compare/adspyder", "routes/compare.adspyder.tsx"),
   route("compare/adspy", "routes/compare.adspy.tsx"),
-  route("switch/magicbrief", "routes/switch.magicbrief.tsx"),
+  route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "switch-legacy-vendor-redirect" }),
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
   route("competitor-monitoring", "routes/competitor-monitoring.tsx"),
@@ -154,7 +162,7 @@ export default [
     // per #1562's canonicalisation rule. Before this the locale hub links 200'd
     // but every locale-prefixed child 404'd, so a non-EN visitor following /
     // de/compare to a vendor fell back to English or hit a dead route.
-    route("compare/magicbrief", "routes/$locale.compare.magicbrief.tsx"),
+    route(LEGACY_VENDOR_COMPARE_PATH, "routes/legacy-vendor-redirect.ts", { id: "locale-compare-legacy-vendor-redirect" }),
     route("compare/meta-ad-library", "routes/$locale.compare.meta-ad-library.tsx"),
     route("compare/visualping", "routes/$locale.compare.visualping.tsx"),
     route("compare/visualping-ad-library", "routes/$locale.compare.visualping-ad-library.tsx"),
@@ -166,7 +174,7 @@ export default [
     route("compare/panoramata", "routes/$locale.compare.panoramata.tsx"),
     route("compare/adspyder", "routes/$locale.compare.adspyder.tsx"),
     route("compare/adspy", "routes/$locale.compare.adspy.tsx"),
-    route("switch/magicbrief", "routes/$locale.switch.magicbrief.tsx"),
+    route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "locale-switch-legacy-vendor-redirect" }),
     route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),
     route("switch/visualping", "routes/$locale.switch.visualping.tsx"),
     // First-value search funnel + supporting trust/proof surfaces (issue 1578):

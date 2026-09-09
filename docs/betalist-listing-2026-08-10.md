@@ -211,7 +211,7 @@ Every claim in this document was re-checked against live sources:
 | Meta ads tracking status current | Graduation commit `ac393f02` (PR #638) merged on main 2026-08-12: Meta ads tracking no longer beta, gated by green production canary | Guardrail line in this document updated by that commit; rollback = restore the beta caveat if the canary turns red |
 | Launch age | Production domains live since 2026-06-15 (`README.md` production note) | ~8.5 weeks as of 2026-08-12 — still inside "recently launched" but trending toward the weaker fit (see Launch-status wording) |
 | Tagline matches live site | Homepage SEO title + hero in `app/routes/marketing.tsx`: "Know when competitors change the offer." | Recommended tagline is identical to the live page copy |
-| No stale beta wording | `grep -i "beta\|early access" app/routes/marketing.tsx app/routes/compare.magicbrief.tsx` returns nothing | No customer-facing beta caveat remains to conflict with the listing; eligibility row updated to drop the stale "beta caveat" phrase |
+| No stale beta wording | `grep -i "beta\|early access" app/routes/marketing.tsx` returns nothing | No customer-facing beta caveat remains to conflict with the listing; eligibility row updated to drop the stale "beta caveat" phrase |
 | Logo asset exists | `brand/five-to-nine-colored-logo.svg` in repo | Asset checklist item 1 is ready to upload |
 
 ### re-verified 2026-09-09

@@ -28,8 +28,6 @@ export const SITE_REP_PUBLIC_WIDGET_PATHS = Object.freeze([
   "/trust",
   "/privacy",
   "/terms",
-  "/compare/magicbrief",
-  "/switch/magicbrief",
   "/switch/panoramata",
   "/switch/visualping",
   "/methodology",

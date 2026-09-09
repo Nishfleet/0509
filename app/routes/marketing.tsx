@@ -661,18 +661,6 @@ export default function MarketingRoute() {
             <strong>Free search preview</strong>
             <span>Paste a competitor site — no account needed.</span>
           </Link>
-
-          {/* MagicBrief wind-down callout (issue 965). Uses the migration page's
-              existing headline, not new copy. Revertible per the issue rollback.
-              #1212 sits both pills on one desktop row so the search submit
-              stays inside 1440x900 with a Nykaa-length wall. */}
-          <Link
-            className="f9-announcement f9-migration-callout"
-            to="/compare/magicbrief"
-          >
-            <strong>Moving from MagicBrief?</strong>
-            <span>Bring your competitor list. Gain the receipts.</span>
-          </Link>
         </div>
 
         <p className="ld-case">

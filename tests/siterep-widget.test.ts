@@ -60,7 +60,7 @@ describe("Site Rep widget install", () => {
 
   it("loads only on public human-facing routes", () => {
     expect(normalizeSiteRepWidgetPathname("/help/")).toBe("/help");
-    expect(normalizeSiteRepWidgetPathname("/compare/magicbrief///")).toBe("/compare/magicbrief");
+    expect(normalizeSiteRepWidgetPathname("/switch/panoramata///")).toBe("/switch/panoramata");
 
     for (const pathname of [
       "/",
@@ -73,10 +73,8 @@ describe("Site Rep widget install", () => {
       "/trust",
       "/privacy",
       "/terms",
-      "/compare/magicbrief",
-      "/compare/magicbrief/",
-      "/switch/magicbrief",
       "/switch/panoramata",
+      "/switch/panoramata/",
       "/switch/visualping",
       "/methodology",
     ]) {

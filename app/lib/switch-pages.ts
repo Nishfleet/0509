@@ -2,7 +2,7 @@ import type { DemoBrandPageDomain } from "~/lib/demo-brand-pages";
 import { FREE_PREVIEW_SEARCH_DOMAIN } from "~/lib/demo-brand-pages";
 import type { FaqJsonLdEntry } from "~/lib/seo";
 
-export type SwitchSlug = "magicbrief" | "panoramata" | "visualping";
+export type SwitchSlug = "panoramata" | "visualping";
 
 export type PublishedCaptureValidityReasonCode =
   | "landing_challenge_page"
@@ -33,9 +33,7 @@ export interface SwitchPage {
    * Domain the free-preview CTA searches (issue 2123). A tracked demo brand
    * whose production /search returns verified ads — never this page's own
    * vendor domain, which renders "0 ads found". Copy may still name the
-   * vendor; the search query must be the demo competitor. Omitted only where
-   * the CTA is deliberately left unchanged: MagicBrief is being wiped in
-   * issue 2127 and keeps its existing CTA until that lands.
+   * vendor; the search query must be the demo competitor.
    */
   previewSearchDomain?: DemoBrandPageDomain;
   kicker: string;
@@ -105,90 +103,6 @@ export const NO_PHANTOM_CHANGE_RULES: ReadonlyArray<
 ];
 
 export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
-  magicbrief: {
-    slug: "magicbrief",
-    productName: "MagicBrief",
-    pathname: "/switch/magicbrief",
-    title: "MagicBrief alternative | Five to Nine",
-    description:
-      "MagicBrief closed 31 July 2026. Your competitor list can import as watchlists; collections and analytics do not transfer. Try the free preview.",
-    ctaBrand: "magicbrief.com",
-    kicker: "Switch from MagicBrief",
-    headline: "MagicBrief closed. Here is what actually moves.",
-    deck: "MagicBrief's own FAQ says the platform closed on 31 July 2026 at 8 PM EST. The successor is Canva Grow, sold inside Canva Business. Paste your competitor list here. Collections, boards, and analytics history stay behind.",
-    cardLine: "MagicBrief closed. Paste your competitor list; collections and analytics stay behind. See what actually moves.",
-    complaint: {
-      kicker: "The public record",
-      heading: "The platform closed.",
-      quote:
-        "With Canva Grow now live, MagicBrief will close on July 31, 2026.",
-      source: {
-        href: "https://magicbrief.com/faqs",
-        label: "MagicBrief FAQ, checked 2026-08-26",
-        checked: "2026-08-26",
-      },
-    },
-    furtherSources: [
-      {
-        href: "https://magicbrief.com/post/magicbrief-canva-acquisition",
-        label: "MagicBrief's Canva acquisition post",
-        checked: "2026-08-26",
-      },
-      {
-        href: "https://www.businesswire.com/news/home/20260625870253/en/",
-        label: "Canva Grow 2.0 announcement",
-        checked: "2026-08-08",
-      },
-    ],
-    transfers: [
-      {
-        title: "Your tracked brands",
-        detail:
-          "A plain list of domains, URLs, or brand names, pasted or as a CSV, imports as watchlists with notes, tags, and client labels. That is what transfers.",
-      },
-      {
-        title: "A preview before anything is written",
-        detail:
-          "You see the rows first. Duplicates and invalid rows are flagged, never silently dropped. Keep your original export as the record of what the import carried.",
-      },
-    ],
-    doesNotTransfer: [
-      {
-        title: "Collections and boards",
-        detail:
-          "Saved ad libraries, boards, and saved creative evidence do not transfer. Five to Nine does not migrate them.",
-      },
-      {
-        title: "Analytics and report history",
-        detail:
-          "Spend, impressions, reach, charts, and report dates are not imported. MagicBrief's FAQ says Insights can export as CSV until shutdown; Inspire collections have no bulk export.",
-      },
-      {
-        title: "Past screenshots",
-        detail:
-          "Historical evidence from MagicBrief does not carry over. New watches save page text and the source link going forward, plus a screenshot when the capture includes one.",
-      },
-    ],
-    relatedComparePath: "/compare/magicbrief",
-    extraSection: null,
-    faqEntries: [
-      {
-        question: "Is Five to Nine a MagicBrief alternative?",
-        answer:
-          "For competitor-list migration and change monitoring, yes. MagicBrief's own FAQ says the platform closed on 31 July 2026 at 8 PM EST; the successor is Canva Grow, sold inside Canva Business. Five to Nine watches your competitors and saves page text, the source link, and a screenshot when the capture includes one.",
-      },
-      {
-        question: "What transfers from MagicBrief?",
-        answer:
-          "Your tracked brands, pasted or as a CSV, import as watchlists with notes, tags, and client labels. You see the rows first — duplicates and invalid rows are flagged, never silently dropped. That is what transfers.",
-      },
-      {
-        question: "What does not transfer from MagicBrief?",
-        answer:
-          "Saved ad libraries, boards, analytics and report history, and past screenshots stay behind. Five to Nine does not migrate them — keep your original export as the record of what the import carried.",
-      },
-    ],
-  },
   panoramata: {
     slug: "panoramata",
     productName: "Panoramata",
@@ -369,7 +283,7 @@ export const SWITCH_SLUGS = Object.keys(SWITCH_PAGES) as SwitchSlug[];
 
 /**
  * Map a searched brand domain onto its /switch/* destination page (issue
- * 1554). Only the three named switching triggers (MagicBrief, Panoramata,
+ * 1554). Only the two named switching triggers (Panoramata and
  * Visualping) resolve — never a `<label>.com` guess from the query text
  * alone. Same normalization as the /ads/:domain resolver (trim + lowercase +
  * strip `www.`) so a `?website=` domain search and a V2-resolved brand both
@@ -378,8 +292,6 @@ export const SWITCH_SLUGS = Object.keys(SWITCH_PAGES) as SwitchSlug[];
 export function switchPageForDomain(domain: string): SwitchPage | null {
   const normalized = domain.trim().toLowerCase().replace(/^www\./, "");
   switch (normalized) {
-    case "magicbrief.com":
-      return SWITCH_PAGES.magicbrief;
     case "panoramata.co":
       return SWITCH_PAGES.panoramata;
     case "visualping.io":

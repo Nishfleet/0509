@@ -62,7 +62,7 @@ describe("guides how-to-track-competitor-ads route", () => {
     // chrome links the compare/switch cluster site-wide, so scope the check
     // to the page body between the header and footer).
     const body = markup.split("</header>")[1]?.split("<footer")[0] ?? markup;
-    expect(body).not.toMatch(/Panoramata|Foreplay|Spyder|Visualping|MagicBrief|AdSpyder/iu);
+    expect(body).not.toMatch(/Panoramata|Foreplay|Spyder|Visualping|AdSpyder/iu);
     expect(body).not.toMatch(/WhatsApp/iu);
     // Shared marketing chrome.
     expect(markup).toContain("Named for 05:09");

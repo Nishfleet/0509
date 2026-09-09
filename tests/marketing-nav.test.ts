@@ -96,7 +96,6 @@ describe("MarketingNav (shared public nav)", () => {
 
 	it("is the header used by landing, all compare pages, switch pages, and the legal doc shell", async () => {
 		const marketing = readFileSync("app/routes/marketing.tsx", "utf8");
-		const magicbrief = readFileSync("app/routes/compare.magicbrief.tsx", "utf8");
 		const metaLibrary = readFileSync("app/routes/compare.meta-ad-library.tsx", "utf8");
 		const visualping = readFileSync("app/routes/compare.visualping.tsx", "utf8");
 		const visualpingAdLibrary = readFileSync("app/routes/compare.visualping-ad-libraries.tsx", "utf8");
@@ -109,7 +108,6 @@ describe("MarketingNav (shared public nav)", () => {
 		const switchLanding = readFileSync("app/components/switch-landing.tsx", "utf8");
 
 		expect(marketing).toMatch(/<MarketingNav\b[^>]*\/>/);
-		expect(magicbrief).toMatch(/<MarketingNav\b[^>]*\/>/);
 		expect(metaLibrary).toMatch(/<MarketingNav\b[^>]*\/>/);
 		expect(visualping).toMatch(/<MarketingNav\b[^>]*\/>/);
 		expect(visualpingAdLibrary).toMatch(/<MarketingNav\b[^>]*\/>/);

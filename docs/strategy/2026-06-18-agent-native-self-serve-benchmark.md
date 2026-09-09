@@ -38,7 +38,7 @@ The live public posture remains pilot-ready, not broad launch-ready, until produ
 
 ### Ad inspiration and ad-library products
 
-Examples: Foreplay, MagicBrief, Minea, BigSpy, AdSpy, Adbeat.
+Examples: Foreplay, Minea, BigSpy, AdSpy, Adbeat.
 
 Strengths:
 
@@ -53,7 +53,6 @@ Weaknesses 0509 can exploit:
 - They are mostly research and inspiration databases first.
 - They optimize for "find winning ads", not "tell me exactly what changed since last night and prove it".
 - They do not obviously own a buyer-trust loop around proof policy, delivery certainty, source status, and action history.
-- MagicBrief is closing on July 31, 2026, which creates buyer migration noise but also shows the ad-creative workflow category is consolidating around larger creative suites like Canva.
 
 Implication:
 
@@ -297,7 +296,6 @@ External sources checked:
 - https://www.foreplay.co/pricing
 - https://www.foreplay.co/api
 - https://www.foreplay.co/mcp
-- https://magicbrief.com/
 - https://www.crayon.co/
 - https://klue.com/
 - https://klue.com/ai-in-competitive-intelligence-report-2026

@@ -47,12 +47,12 @@ function collectRouteFiles(nodes: unknown[]): string[] {
   return files;
 }
 
-/** EN `file:` value for a locale child, e.g. `/compare/magicbrief` -> `routes/$locale.compare.magicbrief.tsx`. */
+/** EN `file:` value for a locale child, e.g. `/compare/panoramata` -> `routes/$locale.compare.panoramata.tsx`. */
 function localeFileForChild(child: string): string {
   return `routes/$locale.${child.split("/").filter(Boolean).join(".")}.tsx`;
 }
 
-/** On-disk locale child route file, e.g. `/compare/magicbrief` -> `app/routes/$locale.compare.magicbrief.tsx`. */
+/** On-disk locale child route file, e.g. `/compare/panoramata` -> `app/routes/$locale.compare.panoramata.tsx`. */
 function localeFileOnDiskForChild(child: string): string {
   return `app/${localeFileForChild(child)}`;
 }
@@ -85,12 +85,12 @@ afterEach(() => {
 });
 
 describe("locale compare/switch child routes (issue #1563)", () => {
-  it("ships exactly the 11 child routes (8 compare + 3 switch)", () => {
-    // The compare set is 8, not 10: /compare/visualping and
+  it("ships exactly the 9 child routes (7 compare + 2 switch)", () => {
+    // The compare set is 7, not 9: /compare/visualping and
     // /compare/foreplay are canonicalized duplicates that left the locale
     // child set with the EN URLs (issue #1481). Their $locale.compare.*
     // route files stay registered so those URLs still render 200.
-    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(11);
+    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(9);
   });
 
   it("registers every locale child route under :locale in routes.ts", () => {
@@ -156,10 +156,10 @@ describe("locale compare/switch child routes (issue #1563)", () => {
   });
 
   it("renders the EN compare body under a locale prefix (not an empty shell)", async () => {
-    const { default: Route } = await import("~/routes/$locale.compare.magicbrief");
+    const { default: Route } = await import("~/routes/$locale.compare.panoramata");
     const markup = renderToStaticMarkup(createElement(Route));
     expect(markup).toMatch(/<h1/);
-    expect(markup).toContain("Moving from MagicBrief?");
+    expect(markup).toContain("Panoramata");
   });
 
   it("renders the EN switch body under a locale prefix", async () => {
@@ -189,7 +189,7 @@ describe("locale compare/switch child routes (issue #1563)", () => {
     // lang="en" and canonical→EN, so listing them as distinct indexable
     // surfaces would be a duplicate-content doorway pattern. They stay
     // reachable (200, canonical→EN) but are excluded from the sitemap.
-    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(11);
+    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(9);
     expect(BUYER_SURFACE_LOCALE_IDS).toHaveLength(5);
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       for (const child of BUYER_SURFACE_CHILD_PATHS) {
