@@ -139,12 +139,13 @@ describe("canary.sneaker-resale-recall", () => {
   });
 
   it("evaluateSneakerResaleRecall surfaces (does not fail) known identity-gap brands", () => {
-    // goat.com / on.com / reebok.com (issue #1950), zappos.com (issue
-    // #2059) and footlocker.com (issue #2068) are classified as
-    // identity-resolution gaps (major advertisers whose ads the pipeline does
-    // not yet connect to their domain). The canary reports them with their
-    // tracking issue rather than hard-failing the guard, mirroring
-    // search-tier-canary's alias-gap handling.
+    // goat.com / reebok.com (issue #1950), zappos.com (issue #2059) and
+    // footlocker.com (issue #2068) are classified as identity-resolution gaps
+    // (major advertisers whose ads the pipeline does not yet connect to their
+    // domain). The canary reports them with their tracking issue rather than
+    // hard-failing the guard, mirroring search-tier-canary's alias-gap
+    // handling. on.com dropped out (issue #1982): the curated name now drives
+    // the provider query, so its probe returns verified/likely rows.
     const results = loadSneakerResaleDomains().map((entry) => ({
       domain: entry.domain,
       brand: entry.brand,
@@ -162,7 +163,6 @@ describe("canary.sneaker-resale-recall", () => {
     expect(verdict.identityGaps.map((g) => g.probe.domain).sort()).toEqual([
       "footlocker.com",
       "goat.com",
-      "on.com",
       "reebok.com",
       "zappos.com",
     ]);

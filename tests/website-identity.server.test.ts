@@ -17,6 +17,8 @@ vi.mock("~/lib/public-url.server", () => ({
   resolvePublicRedirectUrl: vi.fn((location: string | null) => location ?? null),
 }));
 
+import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
+import { buildDomainProviderQuery } from "~/lib/search-v2.server";
 import {
   clearWebsiteIdentityCacheForTests,
   extractTagContent,
@@ -176,6 +178,33 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     expect(identity?.aliases).toContain("On");
     // The live shop label is demoted from query-driver to alias, not deleted.
     expect(identity?.aliases).toContain("On Shop");
+  });
+
+  it("puts the curated name FIRST so it drives the provider query (issue #1982)", async () => {
+    // The provider query driver is identityAliases[0] (search-v2.server's
+    // buildDomainProviderQuery). #1993 pinned the siteName FIELD for on.com,
+    // but the alias list still sorted the live og:site_name "On Shop" first —
+    // so the Meta query kept riding a 0-ad term and website=on.com settled on
+    // a settled-empty page while On's verified ads existed. The pinned term
+    // must sort first so the driver reads "On" (issue #1982).
+    mockFetch.mockResolvedValue(
+      htmlResponse(`<html><head>
+        <title>On | Swiss Performance Running Shoes</title>
+        <meta property="og:site_name" content="On Shop"/>
+      </head><body></body></html>`),
+    );
+
+    const identity = await resolveWebsiteIdentity("https://on.com");
+
+    expect(identity?.aliases[0]).toBe("On");
+
+    // Full driver chain: the term the pipeline feeds Meta for a bare
+    // website=on.com search is the pinned brand term, not the shop label.
+    const intent = parseSearchInputFromWebsiteField("on.com");
+    expect(intent.intent).toBe("domain");
+    expect(
+      buildDomainProviderQuery(intent, identity?.aliases ?? []),
+    ).toBe("On");
   });
 
   it("supplies On's brand site name even when the homepage is bot-blocked (issue #1993)", async () => {

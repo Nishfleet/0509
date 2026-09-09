@@ -60,8 +60,10 @@ const IDENTITY_OVERRIDES: Record<
   // fetch leaves the provider query on "On Shop" — a term Meta Ad Library
   // returns 0 ads for (the brand's page is "On"/"On Running"). The curated
   // site name pins the query to the brand term the same way goat.com's does,
-  // so the pipeline asks Meta the right question even when the live homepage
-  // is bot-blocked or its og:site_name is a shop label.
+  // and since #1982 the PIN also drives the query itself: the curated name is
+  // first in `aliases`, so `identityAliases[0]` — the term
+  // buildDomainProviderQuery feeds Meta — is the pinned brand term, not the
+  // 0-ad shop label.
   "on.com": { siteName: "On", domainAliases: ["on-running.com"] },
   // Reebok is a major global Meta advertiser, but its Shopify-hosted homepage
   // is bot-blocked for the scripted production crawler (like goat.com), so
@@ -136,6 +138,14 @@ export async function resolveWebsiteIdentity(domainUrl: string): Promise<Website
  * site name still lets the pipeline ask the provider the right question.
  * Curated facts never fabricate a verified row; the brand must genuinely run
  * Meta ads landing on its own domain for the matcher to classify one.
+ *
+ * The curated site name is FIRST in `aliases`, not last. The search pipeline's
+ * provider query driver is `identityAliases[0]` (search-v2.server's
+ * `buildDomainProviderQuery`), so a live shop label that sorts ahead of the
+ * curated term — on.com's og:site_name "On Shop", a term Meta Ad Library
+ * returns 0 ads for — would keep driving the provider query no matter what
+ * `siteName` says (issue #1982). Demoting the live label to a trailing alias
+ * implements the #1993 pin the site-name field already has.
  */
 function applyIdentityOverride(
   live: WebsiteIdentity | null,
@@ -165,12 +175,20 @@ function applyIdentityOverride(
     baseAliases.add(overrideSiteName);
   }
 
+  // The pinned brand term leads the alias list: `identityAliases[0]` is the
+  // provider query driver (buildDomainProviderQuery), so a live shop label
+  // must not sort ahead of it (issue #1982 — "On Shop" drove on.com's Meta
+  // query into a 0-ad term).
+  const aliases = siteName
+    ? [siteName, ...[...baseAliases].filter((alias) => alias !== siteName)]
+    : [...baseAliases];
+
   return {
     registrableDomain,
     canonicalUrl: live?.canonicalUrl ?? null,
     title: live?.title ?? null,
     siteName,
-    aliases: siteName ? [...new Set([...baseAliases, siteName])] : [...baseAliases],
+    aliases,
     domainAliases: mergedDomainAliases,
     resolvedAt: live?.resolvedAt ?? new Date().toISOString(),
   };

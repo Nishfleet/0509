@@ -65,7 +65,16 @@ export const KNOWN_NO_COVERAGE = Object.freeze(new Set(["sneakerping.com"]));
 // it ever regresses again.
 export const KNOWN_IDENTITY_GAPS = Object.freeze(new Map([
   ["goat.com", "Nishfleet/0509#1950"],
-  ["on.com", "Nishfleet/0509#1950"],
+  // goat.com residual (2026-09-09, issue #1982): the identity layer is DONE —
+  // the curated term "GOAT" drives the Meta query (and since #1982 the pinned
+  // name leads identityAliases[0] for every override brand). The residual is
+  // PROVIDER RECALL, not alias matching: the Ad Library keyword scrape for
+  // "GOAT" surfaces a text-match junk row (thegoatco.au mouth-tape, "Mentions
+  // goat in ad text only") and none of GOAT's own page ads, so 0 verified/
+  // likely keep coming back. Removing this entry before the provider surfaces
+  // GOAT's own ads would hard-fail the scheduled guard on a gap the identity
+  // layer cannot close. Tracked in the follow-up (page-scoped scrape needs
+  // GOAT's Meta page id).
   ["reebok.com", "Nishfleet/0509#1950"],
   // Live-evidenced 2026-09-09 ~04:45 IST (senior auditor): zappos ads EXIST and
   // are VERIFIED — /search?q=zappos.com returns 13 rows, all 13 verified, 11
