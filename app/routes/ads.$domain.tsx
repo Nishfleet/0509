@@ -57,6 +57,7 @@ import { Link, redirect, useLoaderData } from "react-router";
 // spurious cache-miss 301 (or a 500) on the money-path /ads/:domain step.
 // The bounded retry gives one extra attempt before the miss/redirect path.
 import { withTransientRetry } from "~/lib/transient-retry.server";
+import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useState } from "react";
 
@@ -230,7 +231,15 @@ export interface BrandPageLoaderData {
   recentWatchChanges: AdsDomainRecentChange[];
 }
 
-export async function loader({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
+/**
+ * Upper bound on a single per-competitor D1 read (issue #2097). D1 reads are
+ * normally sub-100ms; a read that blows past this is a hung platform call, and
+ * the timeout lets the page degrade (retry, then the cache-miss redirect /
+ * 503 gate) instead of stalling the SSR until the Worker wall-clock kills it.
+ */
+const BRAND_PAGE_D1_TIMEOUT_MS = 4_000;
+
+async function brandPageLoaderCore({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
   const { normalizeBrandPageDomain } = await import("~/lib/brand-page.server");
   const brand = normalizeBrandPageDomain(params.domain);
   if (!brand) {
@@ -305,14 +314,19 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
 
   try {
     snapshot = await withTransientRetry(() =>
-      loadBrandPageCacheSnapshot(env, {
-        domain: brand.domain,
-        visitorCountry,
-      }),
+      promiseWithTimeout(
+        loadBrandPageCacheSnapshot(env, {
+          domain: brand.domain,
+          visitorCountry,
+        }),
+        BRAND_PAGE_D1_TIMEOUT_MS,
+        "Brand page cache read timed out.",
+      ),
     );
   } catch (error) {
-    // A cache-read hiccup must degrade to the redirect below, never a 500 and
-    // never a live-provider fallback.
+    // A cache-read hiccup OR a timed-out read must degrade to the redirect
+    // below, never a 500 and never a live-provider fallback (issue #2097:
+    // the timeout bounds a hung D1 read so the page never stalls).
     console.warn("Brand page cache read failed; redirecting to /search.", {
       errorName: error instanceof Error ? error.name : typeof error,
     });
@@ -544,6 +558,35 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     captureFailuresSummary,
     recentWatchChanges,
   };
+}
+
+/**
+ * Body-level gate (issue #2097): the /ads/:domain acquisition surface must
+ * NEVER SSR the generic "Something went wrong" error-boundary body under
+ * HTTP 200. Every D1 read inside the core loader already degrades (timeout +
+ * retry + try/catch → null/[]/false), but a residual throw from a compute or
+ * parse path would still bubble to the root ErrorBoundary and render as a
+ * 200 "Something went wrong" — the thin error body Google indexed. This
+ * wrapper converts any uncaught error into an honest 503 ("Temporarily
+ * unavailable") so the page degrades with the correct HTTP status instead of
+ * a thin error body. Thrown Responses (the 404 for a bad domain, the 301
+ * cache-miss redirect, the 429 rate limit) pass through unchanged — only
+ * real exceptions become 503.
+ */
+export async function loader(args: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
+  try {
+    return await brandPageLoaderCore(args);
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    console.warn(
+      "Brand page loader failed; degrading to 503 so the page never SSRs the generic error boundary under 200 (issue #2097).",
+      { errorName: error instanceof Error ? error.name : typeof error },
+    );
+    throw new Response("Temporarily unavailable", {
+      status: 503,
+      statusText: "Temporarily unavailable",
+    });
+  }
 }
 
 /**
