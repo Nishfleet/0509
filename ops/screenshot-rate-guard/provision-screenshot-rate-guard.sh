@@ -10,8 +10,11 @@
 # auto-files a GitHub issue on a failed verdict. Two cohorts run every tick,
 # each on a rolling 48h window: the watcher cohort (all real watcher captures,
 # alert < 80%, issues #1327/#1747) and the paid-tier cohort (paid-plan watcher
-# captures, alert < 90%, issue #1876 acceptance 4). The unit fails when either
-# cohort's verdict fails with a sufficient sample.
+# captures, alert < 90%, issue #1876 acceptance 4). A third check (issue #2082)
+# runs the screenshot-reasons canary, which reports the dominant
+# screenshot-failure/skip reasons with counts and fails when a screenshot-less
+# capture carries no recorded reason (silent degradation). The unit fails when
+# any check's verdict fails with a sufficient sample.
 #
 # Run as root on the VPS:  sudo ops/screenshot-rate-guard/provision-screenshot-rate-guard.sh
 #
