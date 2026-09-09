@@ -2,6 +2,7 @@ import { Form, Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
+import { LiveBrandProof } from "~/components/live-brand-proof";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
@@ -19,7 +20,7 @@ import {
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
-import { FREE_PREVIEW_SEARCH_DOMAIN } from "~/lib/demo-brand-pages";
+import { FREE_PREVIEW_SEARCH_DOMAIN, LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import metaAdLibraryCitations from "~/data/compare/meta-ad-library-citations.json";
 
@@ -245,6 +246,8 @@ export default function CompareMetaAdLibraryRoute() {
           &ldquo;the Ad Library alone is enough for you.&rdquo;
         </p>
       </section>
+
+      <LiveBrandProof domain={LIVE_BRAND_PROOF_DOMAIN} brandName="Nike" />
 
       <CompareCitationsFooter citations={citations} />
 

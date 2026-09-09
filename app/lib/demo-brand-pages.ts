@@ -24,3 +24,14 @@ export type DemoBrandPageDomain = (typeof DEMO_BRAND_PAGE_DOMAINS)[number];
  */
 export const FREE_PREVIEW_SEARCH_DOMAIN: DemoBrandPageDomain =
   DEMO_BRAND_PAGE_DOMAINS[0];
+
+/**
+ * The tracked demo brand the sitemap-canonical `/compare/*` pages link to as
+ * their "See it on a live brand" worked example (issue 2124). Must be a
+ * domain whose production `/ads/:domain` page returns HTTP 200 with verified
+ * ads and is listed in the live sitemap — never a screenshot fixture, never a
+ * vendor-owned domain. nike.com also has a live `/timeline/nike.com` offer
+ * history page, so the proof block can link both surfaces.
+ */
+export const LIVE_BRAND_PROOF_DOMAIN: DemoBrandPageDomain =
+  DEMO_BRAND_PAGE_DOMAINS[0];
