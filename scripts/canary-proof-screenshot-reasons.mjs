@@ -44,10 +44,14 @@ const DEFAULT_WINDOW_HOURS = 48;
 export const CANARY_KIND = "launch_readiness_real_capture";
 
 /** Reasons that are STRUCTURAL (deliberate, not a capture-path regression) and
- * are surfaced as such rather than treated as silent degradation. */
+ * are surfaced as such rather than treated as silent degradation.
+ * `skipped_due_to_budget` is the actual `proof_capture.skip_reason` value the
+ * capture path writes (monitoring.server.ts); `budget_skip` is retained as the
+ * generic label the human-report tests use. */
 export const STRUCTURAL_REASONS = new Set([
   "launch_canary_stripped",
   "budget_skip",
+  "skipped_due_to_budget",
 ]);
 
 /** Reasons that mean a capture produced no screenshot AND no recorded reason
