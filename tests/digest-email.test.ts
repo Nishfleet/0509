@@ -79,8 +79,11 @@ describe("buildDigestEmail", () => {
       ],
     });
 
-    // 9 total changes; 6 are headline-worthy (landing_page_*), 3 are churn.
-    expect(email.subject).toBe("9 changes found, 6 worth action");
+    // Issue #2175: the subject leads with the single most critical change
+    // (top-ranked item), never a count. The count story stays in the body.
+    expect(email.subject).toBe(
+      "Nykaa changed a landing page offer — captured 05:30 GMT+5:30",
+    );
     expect(email.text).toContain("9 changes found, 6 worth action.");
     expect(email.html).toContain("Top moves");
     // Group headers with per-group counts (Nykaa has 2 of the top 5).
@@ -922,8 +925,10 @@ describe("zero-noise triage digest emails (2026-08-06)", () => {
 			unsubscribeUrl: null,
 		});
 
-		// SubjectForDigest leads with the top competitor name.
-		expect(email.subject).toBe("Nykaa leads 2 competitor moves worth seeing");
+		// Issue #2175: the subject leads with the top-ranked change itself.
+		expect(email.subject).toBe(
+			"Nykaa changed a landing page offer — captured 00:00 UTC",
+		);
 		expect(email.html).toContain("Landing page offer changed");
 		expect(email.html).toContain("CTA changed");
 		expect(email.html).toContain("Verified evidence");
@@ -2109,5 +2114,201 @@ describe("value-tier swing section (issue #1976)", () => {
     expect(withNull.text).not.toContain("Value-tier swing");
     // Byte-identical: the section is purely additive when present.
     expect(without.html).toBe(withNull.html);
+  });
+});
+
+describe("change brief that sells (issue #2175)", () => {
+  const briefBase = {
+    name: "Owner",
+    periodStart: "2026-06-01T00:00:00.000Z",
+    periodEnd: "2026-06-08T00:00:00.000Z",
+    cadence: "weekly" as const,
+    timeZone: "UTC",
+    fullDigestUrl: "https://0509.io/app/digests?digest=digest-1",
+    manageFrequencyUrl: "https://0509.io/app/notifications",
+    supportEmail: "support@0509.io",
+    supportMailto: "mailto:support@0509.io",
+    unsubscribeUrl: "https://0509.io/unsubscribe?sig=test",
+  };
+
+  function briefItem(overrides: Record<string, unknown> = {}) {
+    const base = digestItem(
+      "Nykaa",
+      "Landing page offer changed",
+      95,
+      "proof_backed",
+    );
+    return {
+      ...base,
+      metadata: {
+        ...base.metadata,
+        from: "20% off your first order",
+        to: "30% off everything",
+        beforeCapturedAt: "2026-06-01T09:00:00.000Z",
+        capturedAt: "2026-06-08T09:12:00.000Z",
+      },
+      ...overrides,
+    };
+  }
+
+  it("every change row carries mark, capture times, criticality + reasons, and the meaning line", () => {
+    const email = buildDigestEmail({
+      ...briefBase,
+      items: [briefItem()],
+    });
+
+    // Change-led subject with the change's own capture time.
+    expect(email.subject).toBe(
+      "Nykaa changed the offer to 30% off everything — captured 09:12 UTC",
+    );
+    // The change mark.
+    expect(email.html).toContain(
+      "Changed: “20% off your first order” → “30% off everything”",
+    );
+    expect(email.text).toContain(
+      'Changed: "20% off your first order" → "30% off everything"',
+    );
+    // Capture timestamps for both sides.
+    expect(email.html).toContain("Before: 1 Jun 2026, 09:00 UTC");
+    expect(email.html).toContain("Now: 8 Jun 2026, 09:12 UTC");
+    expect(email.text).toContain(
+      "Before: 1 Jun 2026, 09:00 UTC · Now: 8 Jun 2026, 09:12 UTC",
+    );
+    // Criticality band with its reasons.
+    expect(email.html).toMatch(/Criticality: (Material|Critical|Routine)/);
+    expect(email.html).toContain("price or offer terms moved");
+    expect(email.text).toContain("price or offer terms moved");
+    // The deterministic what-this-usually-means line.
+    expect(email.html).toContain("discount pressure");
+    expect(email.text).toContain("What this usually means:");
+    expect(email.text).toContain("discount pressure");
+  });
+
+  it("rows without a screenshot pair state the honest reason instead of a broken image", () => {
+    const email = buildDigestEmail({
+      ...briefBase,
+      items: [briefItem()],
+    });
+    // proof_backed item with no stored screenshot artifact on file.
+    expect(email.html).toContain(
+      "No screenshot captured — the stored proof has no screenshot artifact on file.",
+    );
+    expect(email.text).toContain(
+      "No screenshot captured — the stored proof has no screenshot artifact on file.",
+    );
+    expect(email.html).not.toContain("<img");
+  });
+
+  it("renders the one-click forward line with plain-text parity when a share URL is provided", () => {
+    const email = buildDigestEmail({
+      ...briefBase,
+      items: [briefItem()],
+      forwardUrl: "https://0509.io/share/forward-token-1",
+    });
+    expect(email.html).toContain("Forward this brief to a teammate or client:");
+    expect(email.html).toContain("https://0509.io/share/forward-token-1");
+    expect(email.text).toContain(
+      "Forward this brief to a teammate or client: https://0509.io/share/forward-token-1",
+    );
+  });
+
+  it("omits the forward line entirely when no share URL is provided (plan-gated)", () => {
+    const email = buildDigestEmail({ ...briefBase, items: [briefItem()] });
+    expect(email.html).not.toContain("Forward this brief");
+    expect(email.text).not.toContain("Forward this brief");
+  });
+
+  it("quiet brief shows one real public-cohort move instead of a bare all-quiet", () => {
+    const email = buildDigestEmail({
+      ...briefBase,
+      items: [],
+      heartbeat: { runs: 4, watchlistsChecked: 2, adsSeen: 40 },
+      publicMove: {
+        brandName: "nike.com",
+        fieldLabel: "its offer",
+        changedAt: "2026-06-07T10:00:00.000Z",
+        url: "https://0509.io/timeline/nike.com",
+      },
+      forwardUrl: "https://0509.io/share/forward-token-2",
+    });
+    expect(email.subject).toContain("All quiet");
+    expect(email.html).toContain("Elsewhere this week");
+    expect(email.html).toContain("nike.com");
+    expect(email.html).toContain("changed its offer on 7 Jun 2026");
+    expect(email.html).toContain("https://0509.io/timeline/nike.com");
+    expect(email.text).toContain(
+      "Elsewhere this week: nike.com changed its offer on 7 Jun 2026. Public record: https://0509.io/timeline/nike.com",
+    );
+    expect(email.text).toContain(
+      "Forward this brief to a teammate or client: https://0509.io/share/forward-token-2",
+    );
+  });
+
+  it("quiet brief without a public move renders the classic all-quiet body", () => {
+    const email = buildDigestEmail({
+      ...briefBase,
+      items: [],
+      heartbeat: { runs: 4, watchlistsChecked: 2, adsSeen: 40 },
+    });
+    expect(email.html).not.toContain("Elsewhere this week");
+    expect(email.text).not.toContain("Elsewhere this week");
+  });
+
+  it("snapshot: active brief", () => {
+    const email = buildDigestEmail({
+      ...briefBase,
+      items: [
+        briefItem(),
+        digestItem(
+          "boAt",
+          "Landing page CTA changed",
+          80,
+          "scan_backed",
+          "ev-boat",
+          "landing_page_cta_changed",
+        ),
+      ],
+      forwardUrl: "https://0509.io/share/forward-token-1",
+    });
+    expect({
+      subject: email.subject,
+      preheader: email.preheader,
+      html: email.html,
+      text: email.text,
+    }).toMatchSnapshot();
+  });
+
+  it("snapshot: quiet brief", () => {
+    const email = buildDigestEmail({
+      ...briefBase,
+      items: [],
+      heartbeat: { runs: 4, watchlistsChecked: 2, adsSeen: 40 },
+      publicMove: {
+        brandName: "nike.com",
+        fieldLabel: "its offer",
+        changedAt: "2026-06-07T10:00:00.000Z",
+        url: "https://0509.io/timeline/nike.com",
+      },
+    });
+    expect({
+      subject: email.subject,
+      preheader: email.preheader,
+      html: email.html,
+      text: email.text,
+    }).toMatchSnapshot();
+  });
+
+  it("snapshot: failure-state brief", () => {
+    const email = buildDigestEmail({
+      ...briefBase,
+      items: [],
+    });
+    expect(email.subject).toBe("Your brief is missing its period record");
+    expect({
+      subject: email.subject,
+      preheader: email.preheader,
+      html: email.html,
+      text: email.text,
+    }).toMatchSnapshot();
   });
 });

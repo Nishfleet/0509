@@ -1,0 +1,294 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`change brief that sells (issue #2175) > snapshot: active brief 1`] = `
+{
+  "html": "
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">2 changes found, 2 worth action. 1 verified evidence · 1 check-spotted.</div>
+    <div style="font-family: Inter, system-ui, sans-serif; background-color: #fffdf8; color: #171611; line-height: 1.5;">
+      <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #171611;">Five to Nine weekly digest</p>
+      <h1 style="margin: 0 0 12px; font-family: "Bricolage Grotesque", Georgia, "Times New Roman", serif; font-size: 25px; line-height: 1.24; font-weight: 800; letter-spacing: -0.2px; color: #171611;">2 changes found, 2 worth action.</h1>
+			<p style="margin: 0 0 18px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; letter-spacing: 0.04em; color: #6e6a5e;">1 Jun 2026 to 8 Jun 2026</p>
+      <div style="margin: 0 0 18px; padding: 14px 16px; border: 1.5px solid #171611; border-radius: 0; background-color: #fffdf8; box-shadow: 4px 4px 0 rgba(23, 22, 17, 0.14);">
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;">Priority mix:</p>
+        <p style="margin: 0 0 10px; color: #171611;">1 high · 1 medium · 0 low</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;">Evidence mix:</p>
+        <p style="margin: 0; color: #171611;">1 verified evidence · 1 check-spotted</p>
+      </div>
+      
+      
+      <div style="margin: 0 0 18px; padding: 14px 16px; border: 1.5px solid #171611; border-radius: 0; background-color: #fffdf8; box-shadow: 4px 4px 0 rgba(23, 22, 17, 0.14);">
+        <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #171611;">Brief retention</p>
+        <div style="margin: 0 0 12px;"><p style="margin: 0; padding: 6px 0; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;; border-bottom: 1px dotted #e0ddd4">Since last brief: <span style="color: #6e6a5e;">2 changes filed — first brief on file, so this sets the baseline.</span></p><p style="margin: 0; padding: 6px 0; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;; border-bottom: 1px dotted #e0ddd4">Accountable reviewer: <span style="color: #6e6a5e;">Owner</span></p><p style="margin: 0; padding: 6px 0; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;; border-bottom: 1px dotted #e0ddd4">Confidence: <span style="color: #6e6a5e;">Medium confidence — at least one filed change is backed by stored proof.</span></p><p style="margin: 0; padding: 6px 0; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;">Expiry: <span style="color: #6e6a5e;">Expiry unset — no next scheduled check is on file.</span></p></div>
+      </div>
+  
+      
+      <div style="margin: 0 0 18px; padding: 14px 16px; border: 1.5px solid #171611; border-radius: 0; background-color: #fffdf8; box-shadow: 4px 4px 0 rgba(23, 22, 17, 0.14);">
+        <p style="margin: 0 0 10px; color: #171611;"><strong>Why this matters:</strong> This period matters because pricing or offers moved (1 change) and landing page CTA changed (1) — compare before your next campaign decision.</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Accountable reviewer:</strong> Owner</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Next action:</strong> Review the changes in this brief before your next campaign decision.</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Confidence:</strong> Medium confidence — changes are check-spotted but not yet verified against stored evidence.</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Fresh until:</strong> Fresh until the next weekly check, Mon 8 Jun, 3:00 am.</p>
+      </div>
+  
+      
+      <h2 style="margin: 0 0 12px; font-family: "Bricolage Grotesque", Georgia, "Times New Roman", serif; font-size: 19px; line-height: 1.25; font-weight: 800; letter-spacing: -0.2px; text-transform: uppercase; color: #171611;">Trends this period</h2>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 20px; background-color: #fffdf8;">
+        
+          <tr>
+            <td style="font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; letter-spacing: 0.04em; color: #55524a; padding: 8px 0; border-bottom: 1px dotted #e0ddd4;">Changed CTAs 1× this period</td>
+          </tr>
+          <tr>
+            <td style="font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; letter-spacing: 0.04em; color: #55524a; padding: 8px 0; border-bottom: 1px dotted #e0ddd4;">Changed pricing 1× this period</td>
+          </tr>
+          <tr>
+            <td style="font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; letter-spacing: 0.04em; color: #55524a; padding: 8px 0;">Most common channel: Landing page (2)</td>
+          </tr>
+      </table>
+  
+      <h2 style="margin: 0 0 12px; font-family: "Bricolage Grotesque", Georgia, "Times New Roman", serif; font-size: 19px; line-height: 1.25; font-weight: 800; letter-spacing: -0.2px; text-transform: uppercase; color: #171611;">Top moves</h2>
+      
+      <div style="margin: 0 0 24px;">
+        <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #171611;"><strong>Nykaa</strong><span style="color: #6e6a5e;"> · 1 change</span></p>
+        
+    <div style="margin: 0 0 18px; padding: 14px 16px; border: 1.5px solid #171611; border-radius: 0; background-color: #fffdf8; box-shadow: 4px 4px 0 rgba(23, 22, 17, 0.14);">
+      <p style="margin: 0 0 8px;">
+        <span style="display:inline-block; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; padding:3px 8px; border:1px solid #064d31; border-radius:0; color:#064d31; background-color:#d9f6e8;">Live</span>
+        <span style="font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;">High priority · 95/100 · Verified evidence · Saved evidence · just now · 8 Jun 2026, 00:00</span>
+      </p>
+      <p style="margin: 0 0 6px; font-size: 16px; line-height: 1.35; font-weight: 700; color: #171611;">Landing page offer changed</p>
+      <p style="margin: 0 0 10px; color: #55524a;">Landing page offer changed summary with enough detail for review.</p>
+      <p style="margin: 0 0 8px; color: #55524a; font-size: 13px; word-break: break-word;">Changed: “20% off your first order” → “30% off everything”</p>
+      
+      <p style="margin: 0 0 8px; color: #55524a; font-size: 12px;">No screenshot captured — the stored proof has no screenshot artifact on file.</p>
+      <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;">Before: 1 Jun 2026, 09:00 UTC · Now: 8 Jun 2026, 09:12 UTC</p>
+      <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;">Criticality: Material (70/100) — price or offer terms moved</p>
+      <p style="margin: 0 0 10px; color: #55524a; font-size: 13px;"><em>An offer or price move usually means new discount pressure on your positioning.</em></p>
+      
+      <div style="margin: 0 0 12px;"><p style="margin: 0; padding: 6px 0; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;">Suggested next action: <span style="color: #6e6a5e;">Review before the next campaign decision.</span></p></div>
+      <p style="margin: 0;">
+        <a href="https://0509.io/app/watchlists?watchlist=wl-nykaa&amp;event=ev-nykaa" style="color: #064d31; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none;">Review in Five to Nine →</a>
+      </p>
+    </div>
+  
+      </div>
+      <div style="margin: 0 0 24px;">
+        <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #171611;"><strong>boAt</strong><span style="color: #6e6a5e;"> · 1 change</span></p>
+        
+    <div style="margin: 0 0 18px; padding: 14px 16px; border: 1.5px solid #171611; border-radius: 0; background-color: #fffdf8; box-shadow: 4px 4px 0 rgba(23, 22, 17, 0.14);">
+      <p style="margin: 0 0 8px;">
+        <span style="display:inline-block; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; padding:3px 8px; border:1px solid #171611; border-radius:0; color:#171611; background-color:#f4f1e8;">Check-spotted</span>
+        <span style="font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;">Medium priority · 80/100 · Check-spotted · Scheduled check · just now · 8 Jun 2026, 00:00</span>
+      </p>
+      <p style="margin: 0 0 6px; font-size: 16px; line-height: 1.35; font-weight: 700; color: #171611;">Landing page CTA changed</p>
+      <p style="margin: 0 0 10px; color: #55524a;">Landing page CTA changed summary with enough detail for review.</p>
+      
+      
+      <p style="margin: 0 0 8px; color: #55524a; font-size: 12px;">No screenshot yet — this change is still unconfirmed.</p>
+      
+      <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;">Criticality: Material (70/100) — the CTA text changed</p>
+      <p style="margin: 0 0 10px; color: #55524a; font-size: 13px;"><em>A CTA change usually means the competitor is pushing a different next step — purchase, signup, or lead capture.</em></p>
+      
+      <div style="margin: 0 0 12px;"><p style="margin: 0; padding: 6px 0; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;">Suggested next action: <span style="color: #6e6a5e;">Review before the next campaign decision.</span></p></div>
+      <p style="margin: 0;">
+        <a href="https://0509.io/app/watchlists?watchlist=wl-boat&amp;event=ev-boat" style="color: #064d31; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none;">Review in Five to Nine →</a>
+      </p>
+    </div>
+  
+      </div>
+      
+      
+      <p style="margin: 0 0 20px;">
+        <a href="https://0509.io/app/digests?digest=digest-1" style="display: inline-block; background-color: #171611; color: #f4f1e8; text-decoration: none; padding: 13px 20px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; border: 1.5px solid #171611; box-shadow: 3px 3px 0 #16c47f;">View full brief</a>
+      </p>
+      <p style="margin: 0 0 20px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; letter-spacing: 0.04em; color: #55524a;">
+        Forward this brief to a teammate or client: <a href="https://0509.io/share/forward-token-1" style="color: #064d31; font-weight: 700; text-decoration: underline;">open the share view →</a>
+      </p><p style="margin: 0; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; line-height: 1.6; color: #6e6a5e;">
+        Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Some items are flagged for a quick look before you share this externally. No proof, no claim.
+        Manage frequency in <a href="https://0509.io/app/notifications" style="color: #6e6a5e;">Notifications</a>, unsubscribe below, or contact <a href="mailto:support@0509.io" style="color: #6e6a5e;">support@0509.io</a>.
+      </p>
+    </div>
+  ",
+  "preheader": "2 changes found, 2 worth action. 1 verified evidence · 1 check-spotted.",
+  "subject": "Nykaa changed the offer to 30% off everything — captured 09:12 UTC",
+  "text": "Five to Nine weekly digest
+
+2 changes found, 2 worth action.
+1 Jun 2026 to 8 Jun 2026
+
+Priority mix: 1 high · 1 medium · 0 low
+Evidence mix: 1 verified evidence · 1 check-spotted
+
+Brief retention:
+Since last brief: 2 changes filed — first brief on file, so this sets the baseline.
+Accountable reviewer: Owner
+Confidence: Medium confidence — at least one filed change is backed by stored proof.
+Expiry: Expiry unset — no next scheduled check is on file.
+
+Why this matters: This period matters because pricing or offers moved (1 change) and landing page CTA changed (1) — compare before your next campaign decision.
+Accountable reviewer: Owner
+Next action: Review the changes in this brief before your next campaign decision.
+Confidence: Medium confidence — changes are check-spotted but not yet verified against stored evidence.
+Fresh until: Fresh until the next weekly check, Mon 8 Jun, 3:00 am.
+
+
+Trends this period:
+- Changed CTAs 1× this period
+- Changed pricing 1× this period
+- Most common channel: Landing page (2)
+
+Top moves:
+Nykaa (1 change)
+1. Landing page offer changed
+   Evidence status: Live
+   What changed: Landing page offer changed summary with enough detail for review.
+   Changed: "20% off your first order" → "30% off everything"
+   No screenshot captured — the stored proof has no screenshot artifact on file.
+   Before: 1 Jun 2026, 09:00 UTC · Now: 8 Jun 2026, 09:12 UTC
+   Criticality: Material (70/100) — price or offer terms moved
+   What this usually means: An offer or price move usually means new discount pressure on your positioning.
+   Priority: High priority (95/100)
+   Source status: Verified evidence
+   Source type: Saved evidence
+   Timestamp: 8 Jun 2026, 00:00
+   Suggested next action: Review before the next campaign decision.
+   Review in Five to Nine: https://0509.io/app/watchlists?watchlist=wl-nykaa&event=ev-nykaa
+
+boAt (1 change)
+2. Landing page CTA changed
+   Evidence status: Check-spotted
+   What changed: Landing page CTA changed summary with enough detail for review.
+   No screenshot yet — this change is still unconfirmed.
+   Criticality: Material (70/100) — the CTA text changed
+   What this usually means: A CTA change usually means the competitor is pushing a different next step — purchase, signup, or lead capture.
+   Priority: Medium priority (80/100)
+   Source status: Check-spotted
+   Source type: Scheduled check
+   Timestamp: 8 Jun 2026, 00:00
+   Suggested next action: Review before the next campaign decision.
+   Review in Five to Nine: https://0509.io/app/watchlists?watchlist=wl-boat&event=ev-boat
+
+
+View full brief: https://0509.io/app/digests?digest=digest-1
+Forward this brief to a teammate or client: https://0509.io/share/forward-token-1
+Manage frequency: https://0509.io/app/notifications
+Unsubscribe: https://0509.io/unsubscribe?sig=test
+Support: support@0509.io
+
+Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Some items are flagged for a quick look before you share this externally. No proof, no claim.",
+}
+`;
+
+exports[`change brief that sells (issue #2175) > snapshot: failure-state brief 1`] = `
+{
+  "html": "
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">This brief has no period record — the materiality reason and next action are unavailable.</div>
+    <div style="font-family: Inter, system-ui, sans-serif; background-color: #fffdf8; color: #171611; line-height: 1.5;">
+      <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #171611;">Five to Nine weekly digest</p>
+      <h1 style="margin: 0 0 12px; font-family: "Bricolage Grotesque", Georgia, "Times New Roman", serif; font-size: 25px; line-height: 1.24; font-weight: 800; letter-spacing: -0.2px; color: #171611;">This brief is missing its period record.</h1>
+      <p style="margin: 0 0 18px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; letter-spacing: 0.04em; color: #6e6a5e;">1 Jun 2026 to 8 Jun 2026</p>
+      
+      <div style="margin: 0 0 18px; padding: 14px 16px; border: 1.5px solid #171611; border-radius: 0; background-color: #fffdf8; box-shadow: 4px 4px 0 rgba(23, 22, 17, 0.14);">
+        <p style="margin: 0 0 10px; color: #171611;"><strong>Why this matters:</strong> No materiality record for this period — treat this brief as unverified until a fresh check files a record.</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Accountable reviewer:</strong> Owner</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Next action:</strong> Contact support — this brief is missing its period record and cannot be reviewed as filed.</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Confidence:</strong> No confidence record for this period — treat every claim in this brief as unverified.</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Fresh until:</strong> Fresh until the next weekly check, Mon 8 Jun, 3:00 am.</p>
+      </div>
+  
+      <p style="margin: 0 0 20px;">
+        <a href="https://0509.io/app/digests?digest=digest-1" style="display: inline-block; background-color: #171611; color: #f4f1e8; text-decoration: none; padding: 13px 20px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; border: 1.5px solid #171611; box-shadow: 3px 3px 0 #16c47f;">Open the briefs page</a>
+      </p>
+      <p style="margin: 0; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; line-height: 1.6; color: #6e6a5e;">
+        Manage frequency in <a href="https://0509.io/app/notifications" style="color: #6e6a5e;">Notifications</a>, unsubscribe below, or contact <a href="mailto:support@0509.io" style="color: #6e6a5e;">support@0509.io</a>.
+      </p>
+    </div>
+  ",
+  "preheader": "This brief has no period record — the materiality reason and next action are unavailable.",
+  "subject": "Your brief is missing its period record",
+  "text": "Five to Nine weekly digest
+
+This brief is missing its period record.
+1 Jun 2026 to 8 Jun 2026
+
+Why this matters: No materiality record for this period — treat this brief as unverified until a fresh check files a record.
+Accountable reviewer: Owner
+Next action: Contact support — this brief is missing its period record and cannot be reviewed as filed.
+Confidence: No confidence record for this period — treat every claim in this brief as unverified.
+Fresh until: Fresh until the next weekly check, Mon 8 Jun, 3:00 am.
+
+Open the briefs page: https://0509.io/app/digests?digest=digest-1
+Manage frequency: https://0509.io/app/notifications
+Unsubscribe: https://0509.io/unsubscribe?sig=test
+Support: support@0509.io",
+}
+`;
+
+exports[`change brief that sells (issue #2175) > snapshot: quiet brief 1`] = `
+{
+  "html": "
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">4 checks across 2 competitors found no action-worthy movement.</div>
+    <div style="font-family: Inter, system-ui, sans-serif; background-color: #fffdf8; color: #171611; line-height: 1.5;">
+      <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #171611;">Five to Nine weekly digest</p>
+      <h1 style="margin: 0 0 12px; font-family: "Bricolage Grotesque", Georgia, "Times New Roman", serif; font-size: 25px; line-height: 1.24; font-weight: 800; letter-spacing: -0.2px; color: #171611;">All quiet: no competitor moves worth action this period.</h1>
+      <p style="margin: 0 0 18px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; letter-spacing: 0.04em; color: #6e6a5e;">1 Jun 2026 to 8 Jun 2026</p>
+      <p style="margin: 0 0 16px; color: #55524a;">
+        We ran 4 checks across 2 competitors
+        and reviewed 40 ads. Completed checks found no action-worthy movement across the sources that ran. No proof, no claim.
+      </p>
+      
+      <div style="margin: 0 0 18px; padding: 14px 16px; border: 1.5px solid #171611; border-radius: 0; background-color: #fffdf8; box-shadow: 4px 4px 0 rgba(23, 22, 17, 0.14);">
+        <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #171611;">Elsewhere this week</p>
+        <p style="margin: 0 0 6px; color: #171611;"><strong>nike.com</strong> changed its offer on 7 Jun 2026.</p>
+        <p style="margin: 0; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; letter-spacing: 0.04em;"><a href="https://0509.io/timeline/nike.com" style="color: #064d31; font-weight: 700; text-decoration: underline;">See the public record →</a></p>
+      </div>
+      
+      <div style="margin: 0 0 18px; padding: 14px 16px; border: 1.5px solid #171611; border-radius: 0; background-color: #fffdf8; box-shadow: 4px 4px 0 rgba(23, 22, 17, 0.14);">
+        <p style="margin: 0 0 8px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #171611;">Brief retention</p>
+        <div style="margin: 0 0 12px;"><p style="margin: 0; padding: 6px 0; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;; border-bottom: 1px dotted #e0ddd4">Since last brief: <span style="color: #6e6a5e;">No filed changes this period — the brief is anchored to the previous run on file.</span></p><p style="margin: 0; padding: 6px 0; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;; border-bottom: 1px dotted #e0ddd4">Accountable reviewer: <span style="color: #6e6a5e;">Owner</span></p><p style="margin: 0; padding: 6px 0; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;; border-bottom: 1px dotted #e0ddd4">Confidence: <span style="color: #6e6a5e;">Confidence unavailable — no filed events on this brief.</span></p><p style="margin: 0; padding: 6px 0; font-family:"IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #55524a;">Expiry: <span style="color: #6e6a5e;">Expiry unset — no next scheduled check is on file.</span></p></div>
+      </div>
+  
+      
+      <div style="margin: 0 0 18px; padding: 14px 16px; border: 1.5px solid #171611; border-radius: 0; background-color: #fffdf8; box-shadow: 4px 4px 0 rgba(23, 22, 17, 0.14);">
+        <p style="margin: 0 0 10px; color: #171611;"><strong>Why this matters:</strong> No action-worthy movement across 2 competitors — 4 checks completed and 40 ads reviewed.</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Accountable reviewer:</strong> Owner</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Next action:</strong> We check again at the next scheduled scan.</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Confidence:</strong> High confidence — completed checks reviewed the sources that ran.</p>
+        <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Fresh until:</strong> Fresh until the next weekly check, Mon 8 Jun, 3:00 am.</p>
+      </div>
+  
+      <p style="margin: 0 0 20px;">
+        <a href="https://0509.io/app/digests?digest=digest-1" style="display: inline-block; background-color: #171611; color: #f4f1e8; text-decoration: none; padding: 13px 20px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; border: 1.5px solid #171611; box-shadow: 3px 3px 0 #16c47f;">Review digest history</a>
+      </p>
+      <p style="margin: 0; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; line-height: 1.6; color: #6e6a5e;">
+        Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="https://0509.io/app/notifications" style="color: #6e6a5e;">Notifications</a>, unsubscribe below, or contact <a href="mailto:support@0509.io" style="color: #6e6a5e;">support@0509.io</a>.
+      </p>
+    </div>
+  ",
+  "preheader": "4 checks across 2 competitors found no action-worthy movement.",
+  "subject": "All quiet: no competitor moves worth action this period (including your Monday brief)",
+  "text": "Five to Nine weekly digest
+
+All quiet: no competitor moves worth action this period.
+1 Jun 2026 to 8 Jun 2026
+
+4 checks across 2 competitors reviewed 40 ads. Completed checks found no action-worthy movement across the sources that ran.
+
+Elsewhere this week: nike.com changed its offer on 7 Jun 2026. Public record: https://0509.io/timeline/nike.com
+Brief retention:
+Since last brief: No filed changes this period — the brief is anchored to the previous run on file.
+Accountable reviewer: Owner
+Confidence: Confidence unavailable — no filed events on this brief.
+Expiry: Expiry unset — no next scheduled check is on file.
+Why this matters: No action-worthy movement across 2 competitors — 4 checks completed and 40 ads reviewed.
+Accountable reviewer: Owner
+Next action: We check again at the next scheduled scan.
+Confidence: High confidence — completed checks reviewed the sources that ran.
+Fresh until: Fresh until the next weekly check, Mon 8 Jun, 3:00 am.
+
+
+Review digest history: https://0509.io/app/digests?digest=digest-1
+Manage frequency: https://0509.io/app/notifications
+Unsubscribe: https://0509.io/unsubscribe?sig=test
+Support: support@0509.io",
+}
+`;

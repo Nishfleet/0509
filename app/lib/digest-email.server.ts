@@ -15,6 +15,16 @@ import {
 } from "~/lib/change-intelligence";
 import { deriveBriefRetentionFields } from "~/lib/brief-retention";
 import {
+  buildChangeLeadSubject,
+  changeBriefCriticalityLine,
+  changeBriefMeaningLine,
+  changeBriefNoScreenshotReason,
+  formatChangeBriefTime,
+  readChangeBriefCaptureTimes,
+  readChangeBriefCriticality,
+  readChangeBriefMark,
+} from "~/lib/change-brief.server";
+import {
   isLandingPageEventType,
   landingPageChangedFieldLabel,
 } from "~/lib/change-mark";
@@ -169,6 +179,28 @@ export interface DigestEmailInput {
    * aggregate in.
    */
   priceTierSwing?: PriceTierSwing | null;
+  /**
+   * Issue #2175 do-step 3: one-click "forward to a teammate / client" link —
+   * the live share view of this digest, resolved (or created) by the delivery
+   * layer through the existing share-link machinery, plan-gated on
+   * `share_links`. Absent renders nothing — the email is byte-identical.
+   */
+  forwardUrl?: string | null;
+  /**
+   * Issue #2175 do-step 4 (quiet weeks): one real public-cohort move from the
+   * stored public offer-timeline corpus (`loadWeeklyPublicMoves`, shared with
+   * #2147). Rendered only by the all-quiet brief; absent renders the classic
+   * all-quiet body unchanged. Never a watched-competitor fact.
+   */
+  publicMove?: DigestPublicMove | null;
+}
+
+/** The quiet-brief public-cohort move line's facts (see `publicMove`). */
+export interface DigestPublicMove {
+  brandName: string;
+  fieldLabel: string;
+  changedAt: string;
+  url: string;
 }
 
 export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
@@ -199,9 +231,12 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const cadenceLabel = digestCadenceLabel(input.cadence);
   const firstBriefCompetitor =
     input.items.find((item) => item.watchlistName?.trim())?.watchlistName ?? "";
+  // Issue #2175 do-step 2: the subject leads with the single most critical
+  // change (top-ranked item), never a count. The first-brief activation email
+  // keeps its own subject — a baseline welcome is not a change brief.
   const subject = input.firstBrief
     ? firstBriefEmailSubject(firstBriefCompetitor)
-    : subjectForDigest(input.items.length, actionCount, topItems);
+    : subjectForDigest(topItems, input.timeZone);
   const totalEligibleEvents = input.totalEligibleEvents ?? input.items.length;
   const includedEvents = input.includedEvents ?? input.items.length;
   const omittedEvents = input.omittedEvents ?? Math.max(totalEligibleEvents - includedEvents, 0);
@@ -280,7 +315,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">View full brief</a>
       </p>
-      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
+      ${renderForwardLineHtml(input.forwardUrl)}${renderUpgradeNoteHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
         Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Some items are flagged for a quick look before you share this externally. No proof, no claim.
         Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(input.supportEmail)}</a>.
       </p>
@@ -309,6 +344,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     omittedCount > 0 ? `${omittedCount} more change${omittedCount === 1 ? " is" : "s are"} in the full brief.` : null,
     "",
     `View full brief: ${input.fullDigestUrl}`,
+    ...renderForwardLineText(input.forwardUrl),
     ...renderUpgradeNoteText(input),
     `Manage frequency: ${input.manageFrequencyUrl}`,
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
@@ -482,6 +518,11 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     ? `<p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">${renderTriageRecordText(triage, input.timeZone)}</p>`
     : "";
   const recordText = triage ? renderTriageRecordText(triage, input.timeZone) : null;
+  // Issue #2175 do-step 4: a quiet week still sells — the brief shows one real
+  // public-cohort move (stored public offer-timeline corpus, shared loader
+  // with #2147) instead of a bare "all quiet". Absent move renders nothing.
+  const publicMoveHtml = renderPublicMoveHtml(input.publicMove ?? null, input.timeZone);
+  const publicMoveText = renderPublicMoveText(input.publicMove ?? null, input.timeZone);
   // Brief-as-retention-loop (lane 1, 2026-08-20): the all-quiet heartbeat is
   // a brief like any other — it still carries the four retention fields so
   // the customer can tell "checked and nothing moved" from "nothing ran".
@@ -523,12 +564,13 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
         and reviewed ${heartbeat.adsSeen} ad${heartbeat.adsSeen === 1 ? "" : "s"}. Completed checks found no action-worthy movement across the sources that ran. No proof, no claim.
       </p>
       ${recordHtml}
+      ${publicMoveHtml}
       ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Review digest history</a>
       </p>
-      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
+      ${renderForwardLineHtml(input.forwardUrl)}${renderUpgradeNoteHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
         Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
@@ -541,10 +583,12 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors reviewed ${heartbeat.adsSeen} ads. Completed checks found no action-worthy movement across the sources that ran.`,
     ...(recordText ? ["", recordText] : []),
+    ...(publicMoveText ? ["", publicMoveText] : []),
     ...retentionTextLines,
     ...renderEmailAccountabilityText(accountability),
     "",
     `Review digest history: ${input.fullDigestUrl}`,
+    ...renderForwardLineText(input.forwardUrl),
     ...renderUpgradeNoteText(input),
     `Manage frequency: ${input.manageFrequencyUrl}`,
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
@@ -929,36 +973,29 @@ function summarizeAdChurn(items: DigestTrustItem[]): AdChurnSummary {
   return rerankDigestBrief(items.filter((item) => isDigestDecisionCandidate(item))).adChurnSummary;
 }
 
-function subjectForDigest(totalCount: number, actionCount: number, topItems: DigestTrustItem[]) {
-  if (topItems.length === 0 || actionCount === 0) {
-    return `${totalCount} changes found, review needed`;
+/**
+ * Issue #2175 do-step 2: the digest subject leads with the single most
+ * critical change — the top-ranked item's competitor, what moved, and when it
+ * was captured ("Nike changed the offer to 30% off — captured 09:12 UTC") —
+ * never a count. The count story still lives in the H1 and preheader. When no
+ * item ranked (a period with no decision candidates), the fallback names the
+ * state, still without a count.
+ */
+function subjectForDigest(
+  topItems: DigestTrustItem[],
+  timeZone: string | null | undefined,
+) {
+  const lead = topItems[0];
+  if (!lead) {
+    return "Competitor changes are ready to review";
   }
-  if (totalCount > topItems.length) {
-    return `${totalCount} changes found, ${actionCount} worth action`;
-  }
-  // Lead with the top competitor name rather than a bare count — the name is
-  // the recognizable hook. Stays honest: "made N moves" when a single
-  // competitor drove them, "leads N moves" when several did.
-  const uniqueNames = uniqueLabels(
-    topItems.map((item) => sanitizeSubjectComponent(item.watchlistName ?? "")),
-  );
-  const topName = uniqueNames[0] ?? "";
-  const moveCount = topItems.length;
-  if (topName) {
-    if (uniqueNames.length === 1) {
-      return sanitizeEmailSubject(
-        moveCount === 1
-          ? `${topName} made a competitor move worth seeing`
-          : `${topName} made ${moveCount} moves worth seeing`,
-      );
-    }
-    return sanitizeEmailSubject(
-      `${topName} leads ${moveCount} competitor moves worth seeing`,
-    );
-  }
-  return sanitizeEmailSubject(
-    `${moveCount} competitor move${moveCount === 1 ? "" : "s"} worth seeing`,
-  );
+  return buildChangeLeadSubject({
+    competitor: lead.watchlistName ?? "",
+    eventType: lead.eventType,
+    title: lead.title,
+    metadata: lead.metadata ?? null,
+    timeZone,
+  });
 }
 
 function renderTopMoveHtml(
@@ -980,6 +1017,49 @@ function renderTopMoveHtml(
   const metricLines = readMetricBandLines(item.metadata);
   const creativeHtml = renderCreativeThumbnailHtml(item.metadata);
   const landingEvidenceHtml = renderLandingPageEvidenceHtml(item, timeZone);
+  // Issue #2175 do-step 1: every change row carries the change mark, both
+  // capture timestamps, the criticality band with its reasons, one
+  // deterministic "what this usually means" line, and either the before/after
+  // screenshots or the honest reason none is shown — all derived from stored
+  // facts (change-brief.server.ts), never invented.
+  const briefFactInput = {
+    eventType: item.eventType,
+    metadata: item.metadata ?? null,
+    title: item.title,
+  };
+  const briefMark = readChangeBriefMark(briefFactInput);
+  const briefCriticality = readChangeBriefCriticality(briefFactInput);
+  const briefMeaning = changeBriefMeaningLine(briefFactInput);
+  const briefCaptures = readChangeBriefCaptureTimes(item.metadata ?? null);
+  // The landing evidence block already renders the mark, both capture times,
+  // and the screenshot pair (or its own honest pending line) for landing-page
+  // items with artifact intent — the brief lines never duplicate it.
+  const showsLandingEvidence = landingEvidenceHtml.length > 0;
+  const showsCreative = creativeHtml.length > 0;
+  const briefNoScreenshotReason =
+    showsLandingEvidence || showsCreative
+      ? null
+      : changeBriefNoScreenshotReason({
+          eventType: item.eventType,
+          metadata: item.metadata ?? null,
+          proofStatus: classification.status,
+          provisional:
+            classification.status === "scan_spotted" ||
+            Boolean(item.metadata?.needsReview),
+        });
+  const briefMarkHtml =
+    !showsLandingEvidence && briefMark
+      ? `<p style="margin: 0 0 8px; color: ${EMAIL_CASE_INK_SOFT}; font-size: 13px; word-break: break-word;">Changed: “${escapeHtml(briefMark.from)}” → “${escapeHtml(briefMark.to)}”</p>`
+      : "";
+  const briefCapturesHtml =
+    !showsLandingEvidence && briefCaptures
+      ? `<p style="margin: 0 0 8px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">Before: ${escapeHtml(formatChangeBriefTime(briefCaptures.beforeCapturedAt, timeZone))} · Now: ${escapeHtml(formatChangeBriefTime(briefCaptures.nowCapturedAt, timeZone))}</p>`
+      : "";
+  const briefNoScreenshotHtml = briefNoScreenshotReason
+    ? `<p style="margin: 0 0 8px; color: ${EMAIL_CASE_INK_SOFT}; font-size: 12px;">${escapeHtml(briefNoScreenshotReason)}</p>`
+    : "";
+  const briefCriticalityHtml = `<p style="margin: 0 0 8px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(changeBriefCriticalityLine(briefCriticality))}</p>`;
+  const briefMeaningHtml = `<p style="margin: 0 0 10px; color: ${EMAIL_CASE_INK_SOFT}; font-size: 13px;"><em>${escapeHtml(briefMeaning)}</em></p>`;
   // WP-24: top-move links land on the watchlist event row when ids exist.
   // W2-C: derive the deep-link origin from the env-built fullDigestUrl (same
   // source the "View full brief" link uses) instead of the hardcoded default,
@@ -1006,7 +1086,12 @@ function renderTopMoveHtml(
       </p>
       <p style="margin: 0 0 6px; font-size: 16px; line-height: 1.35; font-weight: 700; color: ${EMAIL_CASE_INK};">${heading}</p>
       <p style="margin: 0 0 10px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(truncate(summary, 220))}</p>
+      ${briefMarkHtml}
       ${landingEvidenceHtml || creativeHtml}
+      ${briefNoScreenshotHtml}
+      ${briefCapturesHtml}
+      ${briefCriticalityHtml}
+      ${briefMeaningHtml}
       ${metricLines
         .map(
           (line) =>
@@ -1147,6 +1232,29 @@ function renderTopMoveText(
     landingEvidenceLines.length > 0
       ? null
       : creativeThumbnailTextNote(item.metadata);
+  // Issue #2175 do-step 1: plain-text parity for the per-row brief facts —
+  // mark, capture times, criticality band + reasons, the deterministic
+  // meaning line, and the honest no-screenshot reason when no visual proof
+  // is shown.
+  const briefFactInput = {
+    eventType: item.eventType,
+    metadata: item.metadata ?? null,
+    title: item.title,
+  };
+  const briefMark = readChangeBriefMark(briefFactInput);
+  const briefCaptures = readChangeBriefCaptureTimes(item.metadata ?? null);
+  const showsLandingEvidence = landingEvidenceLines.length > 0;
+  const briefNoScreenshotReason =
+    showsLandingEvidence || creativeNote
+      ? null
+      : changeBriefNoScreenshotReason({
+          eventType: item.eventType,
+          metadata: item.metadata ?? null,
+          proofStatus: classification.status,
+          provisional:
+            classification.status === "scan_spotted" ||
+            Boolean(item.metadata?.needsReview),
+        });
   const reviewUrl =
     digestItemDeepLink(item, originFromDigestUrl(fullDigestUrl)) ?? fullDigestUrl;
   const heading = options.omitWatchlistPrefix ? title : `${watchlistName}: ${title}`;
@@ -1157,11 +1265,22 @@ function renderTopMoveText(
     `${index}. ${heading}`,
     `   Evidence status: ${stamp.label}`,
     `   What changed: ${truncate(summary, 220)}`,
+    ...(!showsLandingEvidence && briefMark
+      ? [`   Changed: "${briefMark.from}" → "${briefMark.to}"`]
+      : []),
     ...(landingEvidenceLines.length > 0
       ? landingEvidenceLines
       : creativeNote
         ? [`   ${creativeNote}`]
         : []),
+    ...(briefNoScreenshotReason ? [`   ${briefNoScreenshotReason}`] : []),
+    ...(!showsLandingEvidence && briefCaptures
+      ? [
+          `   Before: ${formatChangeBriefTime(briefCaptures.beforeCapturedAt, timeZone)} · Now: ${formatChangeBriefTime(briefCaptures.nowCapturedAt, timeZone)}`,
+        ]
+      : []),
+    `   ${changeBriefCriticalityLine(readChangeBriefCriticality(briefFactInput))}`,
+    `   What this usually means: ${changeBriefMeaningLine(briefFactInput)}`,
     ...metricLines.map((line) => `   ${line}`),
     `   Priority: ${priority}`,
     `   Source status: ${classification.label}`,
@@ -1199,6 +1318,61 @@ function originFromDigestUrl(fullDigestUrl: string): string {
   } catch {
     return "https://0509.io";
   }
+}
+
+/**
+ * Issue #2175 do-step 3: the one-click forward line. The URL is the live
+ * share view of this digest (existing share-link machinery, plan-gated by the
+ * delivery layer). Absent URL renders nothing — byte-identical emails for
+ * plans without share links.
+ */
+function renderForwardLineHtml(forwardUrl: string | null | undefined) {
+  const url = forwardUrl?.trim();
+  if (!url) {
+    return "";
+  }
+  return `<p style="margin: 0 0 20px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT};">
+        Forward this brief to a teammate or client: <a href="${escapeHtml(url)}" style="color: ${EMAIL_CASE_GREEN_INK}; font-weight: 700; text-decoration: underline;">open the share view →</a>
+      </p>`;
+}
+
+function renderForwardLineText(forwardUrl: string | null | undefined): string[] {
+  const url = forwardUrl?.trim();
+  if (!url) {
+    return [];
+  }
+  return [`Forward this brief to a teammate or client: ${url}`];
+}
+
+/**
+ * Issue #2175 do-step 4 / #2147 line format: "Elsewhere this week: {brand}
+ * changed {field} on {date}." — one real public-cohort move with a link to
+ * the public timeline record that proves it. Never a watched-competitor fact.
+ */
+function renderPublicMoveHtml(
+  move: DigestPublicMove | null,
+  timeZone: string | null | undefined,
+) {
+  if (!move) {
+    return "";
+  }
+  const date = formatDate(move.changedAt, timeZone);
+  return `<div style="${EMAIL_CASE_CARD_STYLE}">
+        <p style="${EMAIL_CASE_EYEBROW_STYLE}">Elsewhere this week</p>
+        <p style="margin: 0 0 6px; color: ${EMAIL_CASE_INK};"><strong>${escapeHtml(move.brandName)}</strong> changed ${escapeHtml(move.fieldLabel)} on ${escapeHtml(date)}.</p>
+        <p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em;"><a href="${escapeHtml(move.url)}" style="color: ${EMAIL_CASE_GREEN_INK}; font-weight: 700; text-decoration: underline;">See the public record →</a></p>
+      </div>`;
+}
+
+function renderPublicMoveText(
+  move: DigestPublicMove | null,
+  timeZone: string | null | undefined,
+): string | null {
+  if (!move) {
+    return null;
+  }
+  const date = formatDate(move.changedAt, timeZone);
+  return `Elsewhere this week: ${move.brandName} changed ${move.fieldLabel} on ${date}. Public record: ${move.url}`;
 }
 
 function renderUpgradeNoteHtml(
@@ -1566,22 +1740,9 @@ function formatDateTime(value: string, timeZone: string | null | undefined) {
   }).format(date);
 }
 
-function uniqueLabels(values: string[]) {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
-}
-
 function truncate(value: string, limit: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length > limit ? `${normalized.slice(0, limit - 1)}...` : normalized;
-}
-
-function sanitizeSubjectComponent(value: string) {
-  const normalized = value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
-  return truncate(normalized, 48);
-}
-
-function sanitizeEmailSubject(value: string) {
-  return truncate(value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim(), 140);
 }
 
 function readString(value: unknown) {
