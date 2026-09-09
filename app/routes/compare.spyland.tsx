@@ -4,6 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { LiveBrandProof } from "~/components/live-brand-proof";
 import {
   Cite,
   CompareCitationsFooter,
@@ -11,6 +12,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import { canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import spylandCitations from "~/data/compare/spyland-citations.json";
 
@@ -204,6 +206,8 @@ export default function CompareSpylandRoute() {
           honestly.
         </p>
       </section>
+
+      <LiveBrandProof domain={LIVE_BRAND_PROOF_DOMAIN} brandName="Nike" />
 
       <CompareCitationsFooter citations={citations} />
 

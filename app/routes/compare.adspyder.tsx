@@ -4,6 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { Breadcrumbs } from "~/components/breadcrumbs";
+import { LiveBrandProof } from "~/components/live-brand-proof";
 import {
   Cite,
   CompareCitationsFooter,
@@ -19,6 +20,7 @@ import {
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
+import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import adspyderCitations from "~/data/compare/adspyder-citations.json";
 
@@ -226,6 +228,8 @@ export default function CompareAdspyderRoute() {
           Questions? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
         </p>
       </section>
+
+      <LiveBrandProof domain={LIVE_BRAND_PROOF_DOMAIN} brandName="Nike" />
 
       <CompareCitationsFooter citations={citations} />
 
