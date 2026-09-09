@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +13,7 @@ import {
   readSignupSourceCookie,
   SIGNUP_SOURCE_COOKIE,
   signupSourceCookieHeader,
+  signupSourceFromRequest,
 } from "~/lib/signup-source";
 
 describe("allowlisted signup_source", () => {
@@ -31,12 +35,38 @@ describe("allowlisted signup_source", () => {
     expect(allowlistedSignupSource("magicbrief-migration&x=<script>")).toBeNull();
     expect(allowlistedSignupSource("<script>alert(1)</script>")).toBeNull();
     expect(allowlistedSignupSource("/auth/signup?source=magicbrief-migration")).toBeNull();
-    expect(allowlistedSignupSource("not-a-marker")).toBeNull();
     expect(allowlistedSignupSource("pricing-free&x=1")).toBeNull();
     expect(allowlistedSignupSource(" PRICING-FREE ")).toBeNull();
     expect(allowlistedSignupSource("")).toBeNull();
     expect(allowlistedSignupSource(null)).toBeNull();
     expect(allowlistedSignupSource(" MAGICBRIEF-MIGRATION ")).toBeNull();
+  });
+
+  it("accepts lowercase slugs and ref:<eTLD+1> markers (issue #2108)", () => {
+    // Slugs: /^[a-z0-9][a-z0-9-]{0,39}$/ — "not-a-marker" is now a valid slug.
+    expect(allowlistedSignupSource("not-a-marker")).toBe("not-a-marker");
+    expect(allowlistedSignupSource("summer-2026-launch")).toBe("summer-2026-launch");
+    expect(allowlistedSignupSource("a")).toBe("a");
+    expect(allowlistedSignupSource(`s${"x".repeat(39)}`)).toBe(`s${"x".repeat(39)}`);
+    // Referer markers: /^ref:[a-z0-9.-]{1,40}$/.
+    expect(allowlistedSignupSource("ref:example.com")).toBe("ref:example.com");
+    expect(allowlistedSignupSource("ref:example.co.uk")).toBe("ref:example.co.uk");
+    expect(allowlistedSignupSource(`ref:${"d".repeat(40)}`)).toBe(`ref:${"d".repeat(40)}`);
+  });
+
+  it("rejects free text, query strings, full URLs, and out-of-shape values", () => {
+    expect(allowlistedSignupSource("My Campaign")).toBeNull();
+    expect(allowlistedSignupSource("a?b")).toBeNull();
+    expect(allowlistedSignupSource("https://example.com/page")).toBeNull();
+    expect(allowlistedSignupSource("ref:example.com?x=1")).toBeNull();
+    expect(allowlistedSignupSource("ref:EXAMPLE.com")).toBeNull();
+    expect(allowlistedSignupSource("ref:")).toBeNull();
+    expect(allowlistedSignupSource("Summer-2026-Launch")).toBeNull();
+    expect(allowlistedSignupSource("-leading-hyphen")).toBeNull();
+    expect(allowlistedSignupSource("slug_with_underscore")).toBeNull();
+    // 41-char slug and 45-char ref marker both exceed the shape bounds.
+    expect(allowlistedSignupSource(`s${"x".repeat(40)}`)).toBeNull();
+    expect(allowlistedSignupSource(`ref:${"d".repeat(41)}`)).toBeNull();
   });
 
   it("sets and reads only an allowlisted cookie value", () => {
@@ -62,6 +92,127 @@ describe("allowlisted signup_source", () => {
         }),
       ),
     ).toBeNull();
+  });
+
+  it("round-trips slug and ref: cookie values unchanged (issue #2108)", () => {
+    for (const source of ["summer-2026-launch", "ref:example.com"]) {
+      const header = signupSourceCookieHeader(new Request("https://0509.io/auth/signup"), source);
+      expect(header).toContain(`${SIGNUP_SOURCE_COOKIE}=${encodeURIComponent(source)}`);
+      const request = new Request("https://0509.io/api/auth/magic-link/verify", {
+        headers: {
+          cookie: header.split(";")[0],
+        },
+      });
+      expect(readSignupSourceCookie(request)).toBe(source);
+    }
+  });
+});
+
+describe("signupSourceFromRequest referer fallback (issue #2108)", () => {
+  it("derives ref:<eTLD+1> from the Referer header when no source= matches", () => {
+    const request = new Request("https://0509.io/auth/signup", {
+      headers: { referer: "https://example.com/page" },
+    });
+    expect(signupSourceFromRequest(request)).toBe("ref:example.com");
+  });
+
+  it("keeps only the coarse domain: subdomain, path, and query string are dropped", () => {
+    const request = new Request("https://0509.io/auth/signup", {
+      headers: { referer: "https://blog.example.co.uk/some/post?utm_source=newsletter" },
+    });
+    expect(signupSourceFromRequest(request)).toBe("ref:example.co.uk");
+  });
+
+  it("prefers an explicit source= over the Referer", () => {
+    const request = new Request("https://0509.io/auth/signup?source=pricing-free", {
+      headers: { referer: "https://example.com/page" },
+    });
+    expect(signupSourceFromRequest(request)).toBe("pricing-free");
+    expect(signupSourceFromRequest(request, "summer-2026-launch")).toBe("pricing-free");
+    const formOnly = new Request("https://0509.io/auth/signup", {
+      headers: { referer: "https://example.com/page" },
+    });
+    expect(signupSourceFromRequest(formOnly, "summer-2026-launch")).toBe("summer-2026-launch");
+  });
+
+  it("returns null for a missing, malformed, or non-registrable Referer", () => {
+    expect(signupSourceFromRequest(new Request("https://0509.io/auth/signup"))).toBeNull();
+    expect(
+      signupSourceFromRequest(
+        new Request("https://0509.io/auth/signup", {
+          headers: { referer: "not a url" },
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      signupSourceFromRequest(
+        new Request("https://0509.io/auth/signup", {
+          headers: { referer: "https://localhost:3000/page" },
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
+  // Fixtures where the code rule and the rebuilt CHECK constraint must agree.
+  // The DB rule is deliberately the wider net (any 1-44 char [a-z0-9:.-]
+  // value); every code-accepted value must satisfy it, and these fixtures
+  // pin the cases where accept and reject line up exactly.
+  const ACCEPTED_BY_BOTH = [
+    "ref:example.com",
+    "pricing-free",
+    "magicbrief-migration",
+    "locale-de-sneaker-resale",
+    "summer-2026-launch",
+    "a",
+  ];
+  const REJECTED_BY_BOTH = [
+    "My Campaign",
+    "a?b",
+    "ref:EXAMPLE.com",
+    "https://example.com/page",
+    "ref:example.com?x=1",
+    "<script>",
+    "",
+    "x".repeat(45),
+  ];
+
+  it("the code rule accepts and rejects the fixture list as specified", () => {
+    for (const fixture of ACCEPTED_BY_BOTH) {
+      expect(allowlistedSignupSource(fixture), `code accepts ${JSON.stringify(fixture)}`).toBe(
+        fixture,
+      );
+    }
+    for (const fixture of REJECTED_BY_BOTH) {
+      expect(allowlistedSignupSource(fixture), `code rejects ${JSON.stringify(fixture)}`).toBeNull();
+    }
+  });
+
+  it("the migration SQL carries the same rule: six literals plus the open shape", () => {
+    const sql = readFileSync(
+      path.join(process.cwd(), "migrations", "0087_signup_source_open_allowlist.sql"),
+      "utf8",
+    );
+    for (const literal of [
+      "magicbrief-migration",
+      "locale-en-sneaker-resale",
+      "locale-de-sneaker-resale",
+      "locale-ja-sneaker-resale",
+      "locale-pt-br-sneaker-resale",
+      "pricing-free",
+    ]) {
+      expect(sql).toContain(`'${literal}'`);
+    }
+    expect(sql).toContain("length(signup_source) BETWEEN 1 AND 44");
+    expect(sql).toContain("signup_source NOT GLOB '*[^a-z0-9:.-]*'");
+    // Every code-accepted fixture is inside the DB rule's bounds, so a value
+    // the code emits can never be rejected by the CHECK constraint.
+    for (const fixture of ACCEPTED_BY_BOTH) {
+      expect(fixture.length).toBeGreaterThanOrEqual(1);
+      expect(fixture.length).toBeLessThanOrEqual(44);
+      expect(fixture).toMatch(/^[a-z0-9:.-]+$/);
+    }
   });
 });
 
