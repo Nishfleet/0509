@@ -208,7 +208,9 @@ export default function OfferTimelineRoute() {
             {...jsonLdScriptProps(
               webPageJsonLd({
                 name: `${data.brandName} offer timeline | Five to Nine`,
-                description: `Dated offer states for ${data.domain}.`,
+                description: data.collecting
+                  ? `Collecting offer states for ${data.domain} — no offer states recorded yet.`
+                  : `Dated offer states for ${data.domain}.`,
                 pathname: data.canonicalPath,
                 aboutName: data.brandName,
               }),
@@ -236,24 +238,26 @@ export default function OfferTimelineRoute() {
            * HTML. Emitted only on indexable timelines — a noindex shell
            * never carries it.
            */}
-          <script
-            {...jsonLdScriptProps(
-              offerTimelineDatasetJsonLd({
-                brandName: data.brandName,
-                domain: data.domain,
-                description: `Dated offer states for ${data.domain}: headline, CTA, and price, with page text and a screenshot when we stored one.`,
-                pathname: data.canonicalPath,
-                datePublished:
-                  data.entries.length > 0
-                    ? data.entries[0]?.capturedAt ?? null
-                    : null,
-                dateModified:
-                  data.entries.length > 0
-                    ? data.entries[data.entries.length - 1]?.capturedAt ?? null
-                    : null,
-              }),
-            )}
-          />
+          {data.entries.length > 0 ? (
+            <script
+              {...jsonLdScriptProps(
+                offerTimelineDatasetJsonLd({
+                  brandName: data.brandName,
+                  domain: data.domain,
+                  description: `Dated offer states for ${data.domain}: headline, CTA, and price, with page text and a screenshot when we stored one.`,
+                  pathname: data.canonicalPath,
+                  datePublished:
+                    data.entries.length > 0
+                      ? data.entries[0]?.capturedAt ?? null
+                      : null,
+                  dateModified:
+                    data.entries.length > 0
+                      ? data.entries[data.entries.length - 1]?.capturedAt ?? null
+                      : null,
+                }),
+              )}
+            />
+          ) : null}
         </>
       ) : null}
       <MarketingNav />
@@ -268,8 +272,9 @@ export default function OfferTimelineRoute() {
             {pageTitle}
           </h1>
           <p className="f9-ads-subline">
-            A dated ledger of what this competitor's landing page said: headline, CTA, and
-            price, with page text and a screenshot when we stored one.
+            {data.collecting
+              ? "We are collecting this competitor's landing page now — no dated offer states recorded yet; the dated ledger lands here as monitoring captures land."
+              : "A dated ledger of what this competitor's landing page said: headline, CTA, and price, with page text and a screenshot when we stored one."}
           </p>
 
           <form className="f9-timeline-asof" method="get" action={data.canonicalPath}>
