@@ -369,7 +369,7 @@ export async function handleSetupChecklistAction(
     const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
     const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
     const watchlist = watchlistResult.watchlist;
-    try {
+    const queueActivationScan = async () => {
       if (signupFirstBriefEnabled) {
         const { queueFirstWatchlistScanForSignupFirstBrief } = await import(
           "~/lib/monitoring.server"
@@ -386,14 +386,28 @@ export async function handleSetupChecklistAction(
       } else {
         await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, watchlist);
       }
+    };
+    try {
+      await queueActivationScan();
     } catch {
-      return {
-        ok: false,
-        intent,
-        error: "first_scan_dispatch_delayed",
-        message:
-          "Competitor saved, but the activation scan hit a delay. Try again to retry the same safe scan.",
-      };
+      // Issue #2138: retry the same safe scan once inline before showing
+      // "Try again". The retry goes through the same queue path, so the
+      // existing in-flight guard in prepareFirstWatchlistScanRun and the
+      // execution-key idempotency in ensureOrchestratedWatchlistRun still
+      // apply — one watchlist never gets two concurrent scans, and a retry
+      // after a partially queued first attempt re-dispatches that same run
+      // instead of creating a second one.
+      try {
+        await queueActivationScan();
+      } catch {
+        return {
+          ok: false,
+          intent,
+          error: "first_scan_dispatch_delayed",
+          message:
+            "Competitor saved, but the activation scan hit a delay. Try again to retry the same safe scan.",
+        };
+      }
     }
 
     await saveOptionalBrandWebsite();
