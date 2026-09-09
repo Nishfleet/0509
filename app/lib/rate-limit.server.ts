@@ -13,6 +13,21 @@ function isE2ETestMode(env: AppEnv): boolean {
   return env.E2E_TEST_MODE?.trim() === "1";
 }
 
+// Verified search crawlers (Cloudflare verified-bot categories: Googlebot,
+// Bingbot) must be able to recrawl the whole 87-URL sitemap in one session
+// without tripping the anonymous brand-page budget (issue #2062). Cloudflare
+// sets the `cf-verified-bot` header to "true" ONLY for bots it has verified
+// against the operators' published IP ranges, so trusting it is safe — a
+// scraper spoofing a Googlebot user-agent still gets the anonymous budget. The
+// exemption is scoped to the public indexable brand-page route (the
+// /ads/:domain and /timeline/:domain surfaces) and deliberately leaves every
+// auth, write, and API scope untouched.
+const VERIFIED_BOT_EXEMPT_SCOPES = new Set(["public-brand-page"]);
+
+function isVerifiedSearchCrawler(request: Request): boolean {
+  return request.headers.get("cf-verified-bot")?.trim().toLowerCase() === "true";
+}
+
 type RateLimitPolicy = {
   scope: string;
   limit: number;
@@ -380,6 +395,9 @@ async function enforceRateLimitPolicy(
   ctx?: ExecutionContext,
 ) {
   if (isE2ETestMode(env)) {
+    return null;
+  }
+  if (isVerifiedSearchCrawler(request) && VERIFIED_BOT_EXEMPT_SCOPES.has(policy.scope)) {
     return null;
   }
   if (!env.DB) {
