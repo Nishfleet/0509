@@ -1433,3 +1433,105 @@ describe("SITEMAP_PATHS", () => {
     expect(nykaa).toBeUndefined(); // dynamic, never hardcoded static
   });
 });
+
+describe("every dynamic sitemap URL carries an honest lastmod (issue #2031)", () => {
+  // A verified-linked ad whose landing evidence resolves to the given domain,
+  // so a fresh.com / stale.com cache row qualifies for the sitemap (the
+  // populated-vs-thin gate needs verified link evidence to the registrable
+  // domain, mirroring the loader).
+  function domainAd(domain: string) {
+    return {
+      metaAdId: `meta-${domain}-1`,
+      source: "meta_library_browser",
+      landingPageUrl: `https://${domain}/shop`,
+      domainMatch: {
+        level: "registrable_domain",
+        reason: `Landing page matches ${domain}`,
+        matchedDomain: domain,
+      },
+      firstSeenAt: isoAgo(30 * DAY_MS),
+      lastSeenAt: null,
+      active: true,
+      variantCount: 1,
+    };
+  }
+
+  // Parse the rendered urlset into {loc, lastmod} pairs. Static funnel paths
+  // (/, /search, /compare/*, ...) honestly omit lastmod — they have no per-page
+  // content freshness field, and inventing one would be a false freshness
+  // claim (issue #2031: "only real data timestamps; a stale page must not
+  // claim freshness"). The dynamic /ads/:domain and /timeline/:domain entries
+  // are the URLs that carry real freshness data, so the assertion below locks
+  // those: every one of them must ship a W3C-format lastmod.
+  function sitemapUrls(xml: string): Array<{ loc: string; lastmod?: string }> {
+    return xml.split("<url>").slice(1).map((block) => ({
+      loc: block.match(/<loc>([^<]+)<\/loc>/)?.[1] ?? "",
+      lastmod: block.match(/<lastmod>([^<]+)<\/lastmod>/)?.[1],
+    }));
+  }
+
+  it("renders a W3C lastmod on every /ads and /timeline URL, and a known-stale domain's lastmod is older than a fresh one's", () => {
+    const now = new Date("2026-09-08T12:00:00.000Z");
+    // Fresh capture: 6 hours old, carries real verified-linked ads for its own
+    // domain. Stale capture: 5 days old (still inside the 7-day indexability
+    // window, so it stays listed) but clearly older than the fresh one.
+    const fresh = cacheRow({
+      cache_key: "search-v2:domain:fresh.com:exact:meta_library_browser:all:page-1",
+      payload: { ...basePayload, displayDomain: "fresh.com", ads: [domainAd("fresh.com")] },
+      fetched_at: "2026-09-08T06:00:00.000Z",
+    });
+    const stale = cacheRow({
+      cache_key: "search-v2:domain:stale.com:exact:meta_library_browser:all:page-1",
+      payload: { ...basePayload, displayDomain: "stale.com", ads: [domainAd("stale.com")] },
+      fetched_at: "2026-09-03T06:00:00.000Z",
+    });
+
+    const brandEntries = indexableBrandPageEntriesFromRows([fresh, stale], now, {
+      provider: "meta_library_browser",
+      useDomainV2: true,
+    });
+    const timelineEntries = indexableTimelineEntriesFromRows([
+      snapshotRow({ id: "snap-stale-001", canonical_url: "https://stale.com/landing", captured_at: "2026-09-03T06:00:00.000Z" }),
+      snapshotRow({ id: "snap-fresh-001", canonical_url: "https://fresh.com/landing", captured_at: "2026-09-08T06:00:00.000Z" }),
+    ]);
+
+    expect(brandEntries.map((e) => e.path).sort()).toEqual(["/ads/fresh.com", "/ads/stale.com"]);
+    expect(timelineEntries.map((e) => e.path).sort()).toEqual(["/timeline/fresh.com", "/timeline/stale.com"]);
+
+    const xml = buildSitemapXml(brandEntries, timelineEntries);
+    const dynamicUrls = sitemapUrls(xml).filter(
+      (u) => u.loc.includes("/ads/") || u.loc.includes("/timeline/"),
+    );
+
+    // Every dynamic URL must carry a W3C (YYYY-MM-DD) lastmod — the honest
+    // freshness signal sourced from fetched_at / captured_at, never build time.
+    expect(dynamicUrls.length).toBe(4);
+    for (const u of dynamicUrls) {
+      expect(u.lastmod).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+
+    const byLoc = new Map(dynamicUrls.map((u) => [u.loc, u.lastmod]));
+    // A known-stale domain's lastmod must be older than a fresh one's, for both
+    // the /ads and /timeline surfaces (lexical compare is valid for YYYY-MM-DD).
+    expect(Date.parse(byLoc.get("https://0509.io/ads/stale.com")!)).toBeLessThan(
+      Date.parse(byLoc.get("https://0509.io/ads/fresh.com")!),
+    );
+    expect(Date.parse(byLoc.get("https://0509.io/timeline/stale.com")!)).toBeLessThan(
+      Date.parse(byLoc.get("https://0509.io/timeline/fresh.com")!),
+    );
+  });
+
+  it("never fabricates a lastmod for static funnel paths that have no real freshness field (issue #2031 honesty clause)", () => {
+    // Static pages (/, /search, /compare/*, ...) have no per-page content
+    // timestamp. The issue forbids build-time or invented dates, so they must
+    // stay lastmod-less rather than claim a freshness they cannot back.
+    const xml = buildSitemapXml([]);
+    const staticUrls = sitemapUrls(xml).filter(
+      (u) => !u.loc.includes("/ads/") && !u.loc.includes("/timeline/"),
+    );
+    expect(staticUrls.length).toBeGreaterThan(0);
+    for (const u of staticUrls) {
+      expect(u.lastmod).toBeUndefined();
+    }
+  });
+});
