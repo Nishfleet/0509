@@ -87,7 +87,7 @@ describe("digest-rerank — brief split", () => {
       "offer-1",
       "cta-1",
     ]);
-    expect(rerank.adChurnSummary).toEqual({ newCount: 2, retiredCount: 1, total: 3 });
+    expect(rerank.adChurnSummary).toEqual({ newCount: 2, retiredCount: 1, total: 3, maxNewVariantCount: null });
     expect(rerank.otherItems).toHaveLength(0);
   });
 
@@ -130,30 +130,42 @@ describe("digest-rerank — brief split", () => {
     const rerank = rerankDigestBrief([]);
     expect(rerank.headlineItems).toEqual([]);
     expect(rerank.otherItems).toEqual([]);
-    expect(rerank.adChurnSummary).toEqual({ newCount: 0, retiredCount: 0, total: 0 });
+    expect(rerank.adChurnSummary).toEqual({ newCount: 0, retiredCount: 0, total: 0, maxNewVariantCount: null });
   });
 });
 
 describe("digest-rerank — churn footnote line", () => {
   it("formats new and retired counts into the counted line", () => {
     expect(
-      adChurnFootnoteLine({ newCount: 3, retiredCount: 2, total: 5 }),
+      adChurnFootnoteLine({ newCount: 3, retiredCount: 2, total: 5, maxNewVariantCount: null }),
     ).toBe("3 new creatives, 2 retired — open the wall to see them.");
   });
 
   it("uses the singular creative when exactly one new ad", () => {
     expect(
-      adChurnFootnoteLine({ newCount: 1, retiredCount: 0, total: 1 }),
+      adChurnFootnoteLine({ newCount: 1, retiredCount: 0, total: 1, maxNewVariantCount: null }),
     ).toBe("1 new creative — open the wall to see them.");
   });
 
   it("omits the new-creatives clause when only retirements happened", () => {
     expect(
-      adChurnFootnoteLine({ newCount: 0, retiredCount: 4, total: 4 }),
+      adChurnFootnoteLine({ newCount: 0, retiredCount: 4, total: 4, maxNewVariantCount: null }),
     ).toBe("4 retired — open the wall to see them.");
   });
 
   it("returns null when there is no churn so callers render nothing", () => {
-    expect(adChurnFootnoteLine({ newCount: 0, retiredCount: 0, total: 0 })).toBeNull();
+    expect(adChurnFootnoteLine({ newCount: 0, retiredCount: 0, total: 0, maxNewVariantCount: null })).toBeNull();
+  });
+
+  it("names the ×N versions arm on the new-ad line when a new ad tests variants", () => {
+    expect(
+      adChurnFootnoteLine({ newCount: 1, retiredCount: 0, total: 1, maxNewVariantCount: 4 }),
+    ).toBe("1 new creative, as 4 versions — open the wall to see them.");
+  });
+
+  it("omits the versions arm when no new ad carries a variant split", () => {
+    expect(
+      adChurnFootnoteLine({ newCount: 2, retiredCount: 0, total: 2, maxNewVariantCount: null }),
+    ).toBe("2 new creatives — open the wall to see them.");
   });
 });

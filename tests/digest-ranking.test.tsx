@@ -143,7 +143,7 @@ describe("BET 1 digest re-ranking (issue 1483)", () => {
     expect(rerank.headlineItems.every((item) => isLandingPageHeadlineEventType(item.eventType))).toBe(true);
 
     // Accept 2: churn collapses into counts, never into headline items.
-    expect(rerank.adChurnSummary).toEqual({ newCount: 4, retiredCount: 2, total: 6 });
+    expect(rerank.adChurnSummary).toEqual({ newCount: 4, retiredCount: 2, total: 6, maxNewVariantCount: null });
     expect(rerank.otherItems).toEqual([]);
 
     // Headline ordering follows the why-this-matters score: offer leads form.
