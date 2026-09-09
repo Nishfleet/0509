@@ -87,7 +87,14 @@ function eventRow(overrides: Record<string, unknown> = {}) {
     // account identifiers — they must NEVER reach the public digest.
     title: "Offer changed on Nish's secret watch",
     summary: "Stored for owner user-12345's watchlist.",
-    metadata_json: JSON.stringify({ from: "$68", to: "$52" }),
+    // The real-world metadata carries proofTargetIdentity, built as
+    // [watchlistId, adId, canonicalPageIdentity].join(":") — it embeds the
+    // watchlist id and must never reach the public digest.
+    metadata_json: JSON.stringify({
+      from: "$68",
+      to: "$52",
+      proofTargetIdentity: "wl-1:ad-1:nykaa.com",
+    }),
     confirmed_at: "2026-09-08T10:00:00.000Z",
     suppressed_at: null,
     invalidated_at: null,
@@ -174,6 +181,7 @@ describe("loadSampleBrief (issue #2136)", () => {
       "run-1",
       "evt-1",
       "watchlist",
+      "proofTargetIdentity",
     ]) {
       expect(serialized).not.toContain(forbidden);
     }
