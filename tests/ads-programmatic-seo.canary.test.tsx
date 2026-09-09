@@ -156,6 +156,7 @@ function adsPageData(): BrandPageLoaderData {
     canonicalPath: "/ads/nike.com",
     timelineIndexable: false,
     captureFailuresSummary: null,
+    recentWatchChanges: [],
   };
 }
 

@@ -70,6 +70,8 @@ import { BrowseTrackedCompetitors } from "~/components/ads-internal-links";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
+import type { AdsDomainRecentChange } from "~/lib/ads-domain-recent-changes.server";
+import { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { rerankDigestBrief } from "~/lib/digest-rerank";
 import { CAPTURE_RULES_PUBLIC_PATH, NO_PHANTOM_CHANGES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
@@ -216,6 +218,16 @@ export interface BrandPageLoaderData {
    * (the section hides in that case).
    */
   captureFailuresSummary: CaptureFailuresSummary | null;
+  /**
+   * Issue #2112 — "changed in the last 7 days" proof. When any watchlist
+   * tracks this advertiser's domain, its last-7d watch_event rows ship as
+   * this safe projection: event type + change mark + capture date ONLY — no
+   * user data, no watchlist names, no owner identifiers (enforced by
+   * `loadAdsDomainRecentChanges`, which never puts them in the loader data).
+   * Empty when no watchlist tracks the domain or nothing changed — the
+   * section hides in that case.
+   */
+  recentWatchChanges: AdsDomainRecentChange[];
 }
 
 export async function loader({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
@@ -381,6 +393,24 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   const captureFailures = await loadDomainCaptureFailures(env, { domain: brand.domain });
   const captureFailuresSummary = summarizeDomainCaptureFailures(captureFailures);
 
+  // Issue #2112 — "changed in the last 7 days" proof. When any watchlist
+  // tracks this advertiser's domain, load its last-7d watch_event rows and
+  // ship only the public projection (event type, change mark, capture date).
+  // Bounded D1 read; a hiccup degrades to [] (the section hides) rather than
+  // 500ing the page or triggering any paid operation.
+  let recentWatchChanges: AdsDomainRecentChange[] = [];
+  try {
+    const { loadAdsDomainRecentChanges } = await import(
+      "~/lib/ads-domain-recent-changes.server"
+    );
+    recentWatchChanges = await loadAdsDomainRecentChanges(env, brand.domain);
+  } catch (error) {
+    console.warn("Brand page recent watch-changes read failed; hiding the section.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    recentWatchChanges = [];
+  }
+
   const now = new Date();
   const freshness = snapshot
     ? resolveBrandPageFreshness(snapshot.fetchedAt, now)
@@ -512,6 +542,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     relatedBrands,
     canonicalPath: `/ads/${brand.domain}`,
     captureFailuresSummary,
+    recentWatchChanges,
   };
 }
 
@@ -849,6 +880,57 @@ export default function BrandAdsRoute() {
 
       <MarketingFooter />
     </main>
+  );
+}
+
+/**
+ * Issue #2112 — public "Changed in the last 7 days" proof strip. Renders the
+ * loader's safe projection per event: the type label, the caught before→after
+ * change mark when one is stored (the BL-030 struck-old/green-new mark), and
+ * the capture date. Nothing else about the event — no title, summary,
+ * watchlist name, or owner identifier — is ever in the loader data. Hidden
+ * when no watchlist tracks the domain or nothing changed (never an empty
+ * card).
+ */
+function BrandRecentWatchChanges({ changes }: { changes: AdsDomainRecentChange[] }) {
+  if (changes.length === 0) {
+    return null;
+  }
+  return (
+    <section className="f9-ads-sec" aria-labelledby="brand-recent-changes-title">
+      <div className="f9-container">
+        <div className="f9-ads-sec-head">
+          <div className="f9-ads-sec-head-left">
+            <span className="f9-ads-sec-eyebrow">Captured by watches</span>
+            <h2 id="brand-recent-changes-title">Changed in the last 7 days</h2>
+          </div>
+          <span className="f9-ads-sec-meta">
+            {`${changes.length} ${changes.length === 1 ? "change" : "changes"} captured`}
+          </span>
+        </div>
+        <ul className="f9-quiet-list" data-testid="ads-recent-watch-changes">
+          {changes.map((change, index) => (
+            <li
+              key={`${change.eventType}:${change.capturedAt}:${index}`}
+              className="f9-quiet-list-item"
+            >
+              <span className="f9-quiet-list-copy">
+                {formatWatchEventTypeLabel(change.eventType)}
+                {change.changeMark ? (
+                  <>
+                    {" — "}
+                    <s>{change.changeMark.from}</s>
+                    <span aria-hidden="true"> → </span>
+                    <ins>{change.changeMark.to}</ins>
+                  </>
+                ) : null}
+                {` · captured ${formatSkipDate(change.capturedAt)}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
@@ -1258,6 +1340,13 @@ function BrandAdsResults({
           </section>
         );
       })()}
+
+      {/* 4b. CHANGED IN THE LAST 7 DAYS — issue #2112. Captured proof from
+          the watch floor: when any watchlist tracks this domain, its last-7d
+          events render as event type + change mark + capture date ONLY — no
+          user data, no watchlist names, no owner identifiers (the loader's
+          projection is the enforcement point). Hidden when empty. */}
+      <BrandRecentWatchChanges changes={data.recentWatchChanges} />
 
       <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} timelineIndexable={data.timelineIndexable} />
       <BrandCaptureFailures summary={data.captureFailuresSummary} domain={data.domain} signupPath={signupPath} />
