@@ -28,6 +28,22 @@ export const WEBSITE_PAGE_EVENT_TYPES = [
 	"website_page_changed",
 ] as const;
 
+/**
+ * Customer importance for emitted website_page_* events. The single source of
+ * truth for the evaluator path (watch-event-evaluator.server.ts
+ * BASE_IMPORTANCE_BY_EVENT) so the base values can never drift. These clear
+ * the balanced instant-alert gate (75) so a real page change reaches the
+ * customer, while staying below the quiet-mode gate (90) so a quiet workspace
+ * is not spammed by page churn.
+ */
+export const WEBSITE_PAGE_EVENT_IMPORTANCE: Partial<
+	Record<WatchEventType, number>
+> = {
+	website_page_added: 80,
+	website_page_removed: 80,
+	website_page_changed: 82,
+};
+
 const HEADLINE_TYPE_SET = new Set<string>(LANDING_PAGE_HEADLINE_EVENT_TYPES);
 const AD_CHURN_SET = new Set<string>(AD_CHURN_EVENT_TYPES);
 const WEBSITE_PAGE_SET = new Set<string>(WEBSITE_PAGE_EVENT_TYPES);
