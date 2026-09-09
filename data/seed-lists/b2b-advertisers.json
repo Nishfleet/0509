@@ -1,0 +1,511 @@
+{
+  "cluster": "b2b-advertisers",
+  "asOf": "2026-09-08",
+  "sourceNote": "B2B SaaS + cloud brands with documented Meta ad coverage (issue #1988). Curated from public Meta Ad Library advertiser presence; the publisher's empty-guard (verified+likely >= 1) still gates every page. Extends the existing cohorts on the same nightly rail — no new pipeline.",
+  "domains": [
+    {
+      "domain": "hubspot.com",
+      "brand": "HubSpot"
+    },
+    {
+      "domain": "salesforce.com",
+      "brand": "Salesforce"
+    },
+    {
+      "domain": "marketo.com",
+      "brand": "Marketo"
+    },
+    {
+      "domain": "mailchimp.com",
+      "brand": "Mailchimp"
+    },
+    {
+      "domain": "zapier.com",
+      "brand": "Zapier"
+    },
+    {
+      "domain": "monday.com",
+      "brand": "monday.com"
+    },
+    {
+      "domain": "asana.com",
+      "brand": "Asana"
+    },
+    {
+      "domain": "clickup.com",
+      "brand": "ClickUp"
+    },
+    {
+      "domain": "notion.so",
+      "brand": "Notion"
+    },
+    {
+      "domain": "atlassian.com",
+      "brand": "Atlassian"
+    },
+    {
+      "domain": "slack.com",
+      "brand": "Slack"
+    },
+    {
+      "domain": "zoom.us",
+      "brand": "Zoom"
+    },
+    {
+      "domain": "webex.com",
+      "brand": "Webex"
+    },
+    {
+      "domain": "gotomeeting.com",
+      "brand": "GoTo Meeting"
+    },
+    {
+      "domain": "calendly.com",
+      "brand": "Calendly"
+    },
+    {
+      "domain": "docsend.com",
+      "brand": "DocSend"
+    },
+    {
+      "domain": "gong.io",
+      "brand": "Gong"
+    },
+    {
+      "domain": "outreach.io",
+      "brand": "Outreach"
+    },
+    {
+      "domain": "salesloft.com",
+      "brand": "Salesloft"
+    },
+    {
+      "domain": "zendesk.com",
+      "brand": "Zendesk"
+    },
+    {
+      "domain": "freshworks.com",
+      "brand": "Freshworks"
+    },
+    {
+      "domain": "intercom.com",
+      "brand": "Intercom"
+    },
+    {
+      "domain": "drift.com",
+      "brand": "Drift"
+    },
+    {
+      "domain": "qualified.com",
+      "brand": "Qualified"
+    },
+    {
+      "domain": "chili-piper.com",
+      "brand": "Chili Piper"
+    },
+    {
+      "domain": "aws.amazon.com",
+      "brand": "AWS"
+    },
+    {
+      "domain": "cloud.google.com",
+      "brand": "Google Cloud"
+    },
+    {
+      "domain": "azure.microsoft.com",
+      "brand": "Microsoft Azure"
+    },
+    {
+      "domain": "digitalocean.com",
+      "brand": "DigitalOcean"
+    },
+    {
+      "domain": "heroku.com",
+      "brand": "Heroku"
+    },
+    {
+      "domain": "vercel.com",
+      "brand": "Vercel"
+    },
+    {
+      "domain": "netlify.com",
+      "brand": "Netlify"
+    },
+    {
+      "domain": "cloudflare.com",
+      "brand": "Cloudflare"
+    },
+    {
+      "domain": "fastly.com",
+      "brand": "Fastly"
+    },
+    {
+      "domain": "mongodb.com",
+      "brand": "MongoDB"
+    },
+    {
+      "domain": "elastic.co",
+      "brand": "Elastic"
+    },
+    {
+      "domain": "confluent.io",
+      "brand": "Confluent"
+    },
+    {
+      "domain": "databricks.com",
+      "brand": "Databricks"
+    },
+    {
+      "domain": "snowflake.com",
+      "brand": "Snowflake"
+    },
+    {
+      "domain": "tableau.com",
+      "brand": "Tableau"
+    },
+    {
+      "domain": "looker.com",
+      "brand": "Looker"
+    },
+    {
+      "domain": "domo.com",
+      "brand": "Domo"
+    },
+    {
+      "domain": "stripe.com",
+      "brand": "Stripe"
+    },
+    {
+      "domain": "paypal.com",
+      "brand": "PayPal"
+    },
+    {
+      "domain": "square.com",
+      "brand": "Square"
+    },
+    {
+      "domain": "quickbooks.intuit.com",
+      "brand": "QuickBooks"
+    },
+    {
+      "domain": "xero.com",
+      "brand": "Xero"
+    },
+    {
+      "domain": "freshbooks.com",
+      "brand": "FreshBooks"
+    },
+    {
+      "domain": "waveapps.com",
+      "brand": "Wave"
+    },
+    {
+      "domain": "netsuite.com",
+      "brand": "NetSuite"
+    },
+    {
+      "domain": "sage.com",
+      "brand": "Sage"
+    },
+    {
+      "domain": "sap.com",
+      "brand": "SAP"
+    },
+    {
+      "domain": "oracle.com",
+      "brand": "Oracle"
+    },
+    {
+      "domain": "greenhouse.io",
+      "brand": "Greenhouse"
+    },
+    {
+      "domain": "lever.co",
+      "brand": "Lever"
+    },
+    {
+      "domain": "workable.com",
+      "brand": "Workable"
+    },
+    {
+      "domain": "bamboohr.com",
+      "brand": "BambooHR"
+    },
+    {
+      "domain": "gusto.com",
+      "brand": "Gusto"
+    },
+    {
+      "domain": "rippling.com",
+      "brand": "Rippling"
+    },
+    {
+      "domain": "deel.com",
+      "brand": "Deel"
+    },
+    {
+      "domain": "remote.com",
+      "brand": "Remote"
+    },
+    {
+      "domain": "oysterhr.com",
+      "brand": "Oyster"
+    },
+    {
+      "domain": "multiplier.com",
+      "brand": "Multiplier"
+    },
+    {
+      "domain": "figma.com",
+      "brand": "Figma"
+    },
+    {
+      "domain": "canva.com",
+      "brand": "Canva"
+    },
+    {
+      "domain": "adobe.com",
+      "brand": "Adobe"
+    },
+    {
+      "domain": "sketch.com",
+      "brand": "Sketch"
+    },
+    {
+      "domain": "framer.com",
+      "brand": "Framer"
+    },
+    {
+      "domain": "webflow.com",
+      "brand": "Webflow"
+    },
+    {
+      "domain": "invisionapp.com",
+      "brand": "InVision"
+    },
+    {
+      "domain": "semrush.com",
+      "brand": "Semrush"
+    },
+    {
+      "domain": "ahrefs.com",
+      "brand": "Ahrefs"
+    },
+    {
+      "domain": "moz.com",
+      "brand": "Moz"
+    },
+    {
+      "domain": "activecampaign.com",
+      "brand": "ActiveCampaign"
+    },
+    {
+      "domain": "klaviyo.com",
+      "brand": "Klaviyo"
+    },
+    {
+      "domain": "sendgrid.com",
+      "brand": "SendGrid"
+    },
+    {
+      "domain": "constantcontact.com",
+      "brand": "Constant Contact"
+    },
+    {
+      "domain": "convertkit.com",
+      "brand": "ConvertKit"
+    },
+    {
+      "domain": "drip.com",
+      "brand": "Drip"
+    },
+    {
+      "domain": "omnisend.com",
+      "brand": "Omnisend"
+    },
+    {
+      "domain": "yotpo.com",
+      "brand": "Yotpo"
+    },
+    {
+      "domain": "reviews.io",
+      "brand": "REVIEWS.io"
+    },
+    {
+      "domain": "trustpilot.com",
+      "brand": "Trustpilot"
+    },
+    {
+      "domain": "hotjar.com",
+      "brand": "Hotjar"
+    },
+    {
+      "domain": "fullstory.com",
+      "brand": "FullStory"
+    },
+    {
+      "domain": "logrocket.com",
+      "brand": "LogRocket"
+    },
+    {
+      "domain": "amplitude.com",
+      "brand": "Amplitude"
+    },
+    {
+      "domain": "mixpanel.com",
+      "brand": "Mixpanel"
+    },
+    {
+      "domain": "segment.com",
+      "brand": "Segment"
+    },
+    {
+      "domain": "mparticle.com",
+      "brand": "mParticle"
+    },
+    {
+      "domain": "rudderstack.com",
+      "brand": "RudderStack"
+    },
+    {
+      "domain": "snowplowanalytics.com",
+      "brand": "Snowplow"
+    },
+    {
+      "domain": "optimizely.com",
+      "brand": "Optimizely"
+    },
+    {
+      "domain": "vwo.com",
+      "brand": "VWO"
+    },
+    {
+      "domain": "launchdarkly.com",
+      "brand": "LaunchDarkly"
+    },
+    {
+      "domain": "posthog.com",
+      "brand": "PostHog"
+    },
+    {
+      "domain": "datadog.com",
+      "brand": "Datadog"
+    },
+    {
+      "domain": "newrelic.com",
+      "brand": "New Relic"
+    },
+    {
+      "domain": "splunk.com",
+      "brand": "Splunk"
+    },
+    {
+      "domain": "sumologic.com",
+      "brand": "Sumo Logic"
+    },
+    {
+      "domain": "logz.io",
+      "brand": "Logz.io"
+    },
+    {
+      "domain": "grafana.com",
+      "brand": "Grafana"
+    },
+    {
+      "domain": "pagerduty.com",
+      "brand": "PagerDuty"
+    },
+    {
+      "domain": "opsgenie.com",
+      "brand": "Opsgenie"
+    },
+    {
+      "domain": "statuspage.io",
+      "brand": "Statuspage"
+    },
+    {
+      "domain": "incident.io",
+      "brand": "incident.io"
+    },
+    {
+      "domain": "firehydrant.com",
+      "brand": "FireHydrant"
+    },
+    {
+      "domain": "rootly.com",
+      "brand": "Rootly"
+    },
+    {
+      "domain": "sentry.io",
+      "brand": "Sentry"
+    },
+    {
+      "domain": "rollbar.com",
+      "brand": "Rollbar"
+    },
+    {
+      "domain": "bugsnag.com",
+      "brand": "Bugsnag"
+    },
+    {
+      "domain": "1password.com",
+      "brand": "1Password"
+    },
+    {
+      "domain": "lastpass.com",
+      "brand": "LastPass"
+    },
+    {
+      "domain": "dashlane.com",
+      "brand": "Dashlane"
+    },
+    {
+      "domain": "okta.com",
+      "brand": "Okta"
+    },
+    {
+      "domain": "auth0.com",
+      "brand": "Auth0"
+    },
+    {
+      "domain": "onelogin.com",
+      "brand": "OneLogin"
+    },
+    {
+      "domain": "jumpcloud.com",
+      "brand": "JumpCloud"
+    },
+    {
+      "domain": "duo.com",
+      "brand": "Duo"
+    },
+    {
+      "domain": "twilio.com",
+      "brand": "Twilio"
+    },
+    {
+      "domain": "vonage.com",
+      "brand": "Vonage"
+    },
+    {
+      "domain": "sinch.com",
+      "brand": "Sinch"
+    },
+    {
+      "domain": "messagebird.com",
+      "brand": "MessageBird"
+    },
+    {
+      "domain": "plivo.com",
+      "brand": "Plivo"
+    },
+    {
+      "domain": "bandwidth.com",
+      "brand": "Bandwidth"
+    },
+    {
+      "domain": "zoho.com",
+      "brand": "Zoho"
+    }
+  ]
+}

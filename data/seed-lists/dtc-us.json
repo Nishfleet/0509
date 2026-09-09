@@ -1,0 +1,527 @@
+{
+  "cluster": "dtc-us",
+  "asOf": "2026-09-08",
+  "sourceNote": "US DTC + consumer brands with documented Meta ad coverage (issue #1988). Curated from public Meta Ad Library advertiser presence; the publisher's empty-guard (verified+likely >= 1) still gates every page, so a brand with no live coverage ships nothing. Extends the existing demo + sneaker-resale cohorts on the same nightly rail — no new pipeline.",
+  "domains": [
+    {
+      "domain": "sephora.com",
+      "brand": "Sephora"
+    },
+    {
+      "domain": "ulta.com",
+      "brand": "Ulta Beauty"
+    },
+    {
+      "domain": "glossier.com",
+      "brand": "Glossier"
+    },
+    {
+      "domain": "milkmakeup.com",
+      "brand": "Milk Makeup"
+    },
+    {
+      "domain": "drunkelephant.com",
+      "brand": "Drunk Elephant"
+    },
+    {
+      "domain": "tatcha.com",
+      "brand": "Tatcha"
+    },
+    {
+      "domain": "beautycounter.com",
+      "brand": "Beautycounter"
+    },
+    {
+      "domain": "saiehello.com",
+      "brand": "Saie"
+    },
+    {
+      "domain": "kosas.com",
+      "brand": "Kosas"
+    },
+    {
+      "domain": "iliabeauty.com",
+      "brand": "ILIA"
+    },
+    {
+      "domain": "rarebeauty.com",
+      "brand": "Rare Beauty"
+    },
+    {
+      "domain": "charlottetilbury.com",
+      "brand": "Charlotte Tilbury"
+    },
+    {
+      "domain": "fentybeauty.com",
+      "brand": "Fenty Beauty"
+    },
+    {
+      "domain": "nyxcosmetics.com",
+      "brand": "NYX Professional Makeup"
+    },
+    {
+      "domain": "maybelline.com",
+      "brand": "Maybelline"
+    },
+    {
+      "domain": "lorealparis.com",
+      "brand": "L'Oreal Paris"
+    },
+    {
+      "domain": "garnierusa.com",
+      "brand": "Garnier"
+    },
+    {
+      "domain": "neutrogena.com",
+      "brand": "Neutrogena"
+    },
+    {
+      "domain": "cerave.com",
+      "brand": "CeraVe"
+    },
+    {
+      "domain": "cetaphil.com",
+      "brand": "Cetaphil"
+    },
+    {
+      "domain": "theordinary.com",
+      "brand": "The Ordinary"
+    },
+    {
+      "domain": "olay.com",
+      "brand": "Olay"
+    },
+    {
+      "domain": "crest.com",
+      "brand": "Crest"
+    },
+    {
+      "domain": "oralb.com",
+      "brand": "Oral-B"
+    },
+    {
+      "domain": "colgate.com",
+      "brand": "Colgate"
+    },
+    {
+      "domain": "gillette.com",
+      "brand": "Gillette"
+    },
+    {
+      "domain": "dollarshaveclub.com",
+      "brand": "Dollar Shave Club"
+    },
+    {
+      "domain": "harrys.com",
+      "brand": "Harry's"
+    },
+    {
+      "domain": "billie.com",
+      "brand": "Billie"
+    },
+    {
+      "domain": "nordstrom.com",
+      "brand": "Nordstrom"
+    },
+    {
+      "domain": "macys.com",
+      "brand": "Macy's"
+    },
+    {
+      "domain": "gap.com",
+      "brand": "Gap"
+    },
+    {
+      "domain": "oldnavy.com",
+      "brand": "Old Navy"
+    },
+    {
+      "domain": "bananarepublic.com",
+      "brand": "Banana Republic"
+    },
+    {
+      "domain": "jcrew.com",
+      "brand": "J.Crew"
+    },
+    {
+      "domain": "madewell.com",
+      "brand": "Madewell"
+    },
+    {
+      "domain": "anthropologie.com",
+      "brand": "Anthropologie"
+    },
+    {
+      "domain": "freepeople.com",
+      "brand": "Free People"
+    },
+    {
+      "domain": "urbanoutfitters.com",
+      "brand": "Urban Outfitters"
+    },
+    {
+      "domain": "levis.com",
+      "brand": "Levi's"
+    },
+    {
+      "domain": "wrangler.com",
+      "brand": "Wrangler"
+    },
+    {
+      "domain": "carhartt.com",
+      "brand": "Carhartt"
+    },
+    {
+      "domain": "patagonia.com",
+      "brand": "Patagonia"
+    },
+    {
+      "domain": "thenorthface.com",
+      "brand": "The North Face"
+    },
+    {
+      "domain": "columbia.com",
+      "brand": "Columbia Sportswear"
+    },
+    {
+      "domain": "lulus.com",
+      "brand": "Lulus"
+    },
+    {
+      "domain": "revolve.com",
+      "brand": "Revolve"
+    },
+    {
+      "domain": "fashionnova.com",
+      "brand": "Fashion Nova"
+    },
+    {
+      "domain": "everlane.com",
+      "brand": "Everlane"
+    },
+    {
+      "domain": "outdoorvoices.com",
+      "brand": "Outdoor Voices"
+    },
+    {
+      "domain": "gymshark.com",
+      "brand": "Gymshark"
+    },
+    {
+      "domain": "aloyoga.com",
+      "brand": "Alo Yoga"
+    },
+    {
+      "domain": "vuoriclothing.com",
+      "brand": "Vuori"
+    },
+    {
+      "domain": "fabletics.com",
+      "brand": "Fabletics"
+    },
+    {
+      "domain": "bombas.com",
+      "brand": "Bombas"
+    },
+    {
+      "domain": "allbirds.com",
+      "brand": "Allbirds"
+    },
+    {
+      "domain": "rothys.com",
+      "brand": "Rothy's"
+    },
+    {
+      "domain": "meundies.com",
+      "brand": "MeUndies"
+    },
+    {
+      "domain": "tomboyx.com",
+      "brand": "TomboyX"
+    },
+    {
+      "domain": "parade.com",
+      "brand": "Parade"
+    },
+    {
+      "domain": "thirdlove.com",
+      "brand": "ThirdLove"
+    },
+    {
+      "domain": "savagefen.com",
+      "brand": "Savage X Fenty"
+    },
+    {
+      "domain": "adoreme.com",
+      "brand": "Adore Me"
+    },
+    {
+      "domain": "trueandco.com",
+      "brand": "True & Co"
+    },
+    {
+      "domain": "wayfair.com",
+      "brand": "Wayfair"
+    },
+    {
+      "domain": "westelm.com",
+      "brand": "West Elm"
+    },
+    {
+      "domain": "crateandbarrel.com",
+      "brand": "Crate and Barrel"
+    },
+    {
+      "domain": "cb2.com",
+      "brand": "CB2"
+    },
+    {
+      "domain": "potterybarn.com",
+      "brand": "Pottery Barn"
+    },
+    {
+      "domain": "williams-sonoma.com",
+      "brand": "Williams Sonoma"
+    },
+    {
+      "domain": "ikea.com",
+      "brand": "IKEA"
+    },
+    {
+      "domain": "casper.com",
+      "brand": "Casper"
+    },
+    {
+      "domain": "purple.com",
+      "brand": "Purple"
+    },
+    {
+      "domain": "tuftandneedle.com",
+      "brand": "Tuft & Needle"
+    },
+    {
+      "domain": "brooklinen.com",
+      "brand": "Brooklinen"
+    },
+    {
+      "domain": "parachutehome.com",
+      "brand": "Parachute"
+    },
+    {
+      "domain": "bollandbranch.com",
+      "brand": "Boll & Branch"
+    },
+    {
+      "domain": "hellofresh.com",
+      "brand": "HelloFresh"
+    },
+    {
+      "domain": "blueapron.com",
+      "brand": "Blue Apron"
+    },
+    {
+      "domain": "homechef.com",
+      "brand": "Home Chef"
+    },
+    {
+      "domain": "factor75.com",
+      "brand": "Factor"
+    },
+    {
+      "domain": "magicspoon.com",
+      "brand": "Magic Spoon"
+    },
+    {
+      "domain": "rxbar.com",
+      "brand": "RXBAR"
+    },
+    {
+      "domain": "naturebox.com",
+      "brand": "NatureBox"
+    },
+    {
+      "domain": "thrivemarket.com",
+      "brand": "Thrive Market"
+    },
+    {
+      "domain": "butcherbox.com",
+      "brand": "ButcherBox"
+    },
+    {
+      "domain": "omahasteaks.com",
+      "brand": "Omaha Steaks"
+    },
+    {
+      "domain": "wine.com",
+      "brand": "Wine.com"
+    },
+    {
+      "domain": "peloton.com",
+      "brand": "Peloton"
+    },
+    {
+      "domain": "tonal.com",
+      "brand": "Tonal"
+    },
+    {
+      "domain": "hydrow.com",
+      "brand": "Hydrow"
+    },
+    {
+      "domain": "nordictrack.com",
+      "brand": "NordicTrack"
+    },
+    {
+      "domain": "bowflex.com",
+      "brand": "Bowflex"
+    },
+    {
+      "domain": "whoop.com",
+      "brand": "WHOOP"
+    },
+    {
+      "domain": "ouraring.com",
+      "brand": "Oura"
+    },
+    {
+      "domain": "fitbit.com",
+      "brand": "Fitbit"
+    },
+    {
+      "domain": "garmin.com",
+      "brand": "Garmin"
+    },
+    {
+      "domain": "chewy.com",
+      "brand": "Chewy"
+    },
+    {
+      "domain": "barkbox.com",
+      "brand": "BarkBox"
+    },
+    {
+      "domain": "petco.com",
+      "brand": "Petco"
+    },
+    {
+      "domain": "petsmart.com",
+      "brand": "PetSmart"
+    },
+    {
+      "domain": "rover.com",
+      "brand": "Rover"
+    },
+    {
+      "domain": "stitchfix.com",
+      "brand": "Stitch Fix"
+    },
+    {
+      "domain": "renttherunway.com",
+      "brand": "Rent the Runway"
+    },
+    {
+      "domain": "ipsy.com",
+      "brand": "Ipsy"
+    },
+    {
+      "domain": "fabfitfun.com",
+      "brand": "FabFitFun"
+    },
+    {
+      "domain": "anker.com",
+      "brand": "Anker"
+    },
+    {
+      "domain": "bose.com",
+      "brand": "Bose"
+    },
+    {
+      "domain": "sonos.com",
+      "brand": "Sonos"
+    },
+    {
+      "domain": "dyson.com",
+      "brand": "Dyson"
+    },
+    {
+      "domain": "sharkninja.com",
+      "brand": "SharkNinja"
+    },
+    {
+      "domain": "instantpot.com",
+      "brand": "Instant Pot"
+    },
+    {
+      "domain": "ember.com",
+      "brand": "Ember"
+    },
+    {
+      "domain": "rayconglobal.com",
+      "brand": "Raycon"
+    },
+    {
+      "domain": "beatsbydre.com",
+      "brand": "Beats by Dre"
+    },
+    {
+      "domain": "gopro.com",
+      "brand": "GoPro"
+    },
+    {
+      "domain": "instacart.com",
+      "brand": "Instacart"
+    },
+    {
+      "domain": "doordash.com",
+      "brand": "DoorDash"
+    },
+    {
+      "domain": "grubhub.com",
+      "brand": "Grubhub"
+    },
+    {
+      "domain": "uber.com",
+      "brand": "Uber"
+    },
+    {
+      "domain": "lyft.com",
+      "brand": "Lyft"
+    },
+    {
+      "domain": "airbnb.com",
+      "brand": "Airbnb"
+    },
+    {
+      "domain": "vrbo.com",
+      "brand": "Vrbo"
+    },
+    {
+      "domain": "booking.com",
+      "brand": "Booking.com"
+    },
+    {
+      "domain": "expedia.com",
+      "brand": "Expedia"
+    },
+    {
+      "domain": "hotels.com",
+      "brand": "Hotels.com"
+    },
+    {
+      "domain": "kayak.com",
+      "brand": "KAYAK"
+    },
+    {
+      "domain": "hopper.com",
+      "brand": "Hopper"
+    },
+    {
+      "domain": "etsy.com",
+      "brand": "Etsy"
+    },
+    {
+      "domain": "ebay.com",
+      "brand": "eBay"
+    }
+  ]
+}

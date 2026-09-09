@@ -184,11 +184,13 @@ describe("issue #1442 — indexability is decoupled from the 14-day Aggression w
   });
 
   it("renders a 0-verified-ads (thin) page noindex — the anti-thin-content guard survives", async () => {
+    // lululemon.com is not a seeded brand, so #1306's retire-redirect must
+    // not fire — the thin 0-verified wall renders noindex (the #1442 path).
     const env = installBrandPageMocks(
       cacheEntry(payloadFor([unverifiedTextMatchAd()])),
     );
 
-    const result = await runLoader("nykaa.com", env);
+    const result = await runLoader("lululemon.com", env);
 
     expect(result.verifiedLinkCount).toBe(0);
     expect(result.aggression).toBeNull();

@@ -37,6 +37,10 @@
  * backfill) so it keeps the release-soak observation contract untouched.
  */
 
+import b2bAdvertisersSeedList from "../../data/seed-lists/b2b-advertisers.json";
+import dtcEuSeedList from "../../data/seed-lists/dtc-eu.json";
+import dtcInSeedList from "../../data/seed-lists/dtc-in.json";
+import dtcUsSeedList from "../../data/seed-lists/dtc-us.json";
 import sneakerResaleSeedList from "../../data/seed-lists/sneaker-resale.json";
 import { hydrateAdsWithPersistedCreatives } from "~/lib/ad-persistence.server";
 import {
@@ -68,13 +72,30 @@ export interface SeedList {
   domains: SeedListEntry[];
 }
 
-/** The registry: every bundled data/seed-lists/<cluster>.json list. */
+/**
+ * The registry: every bundled data/seed-lists/<cluster>.json list. Issue
+ * #1988 extends the programmatic /ads/:domain cohort from the demonstrable
+ * sneaker-resale cluster (26) to the curated verified-brand cohort (US/EU/IN
+ * DTC + B2B advertisers, as `asOf` 2026-09-08) by registering the four scale
+ * lists here. The nightly publisher iterates every registered cluster the
+ * same way the sneaker-resale list was iterated, so a grown seed set is the
+ * only change — no new pipeline.
+ */
 export const SEED_LISTS: Readonly<Record<string, SeedList>> = Object.freeze({
   "sneaker-resale": sneakerResaleSeedList as SeedList,
+  "dtc-us": dtcUsSeedList as SeedList,
+  "dtc-in": dtcInSeedList as SeedList,
+  "dtc-eu": dtcEuSeedList as SeedList,
+  "b2b-advertisers": b2bAdvertisersSeedList as SeedList,
 });
 
-/** Default per-run domain ceiling; override with ADS_DOMAIN_PUBLISHER_CAP. */
-export const ADS_DOMAIN_PUBLISHER_CAP_DEFAULT = 60;
+/**
+ * Default per-run domain ceiling; override with ADS_DOMAIN_PUBLISHER_CAP.
+ * Issue #1988 scales the cohort to >=300 domains, so the ceiling must be able
+ * to attempt the full registered cohort in a single night — not stall at the
+ * old 60. The cap is still a hard per-run bound on live provider captures.
+ */
+export const ADS_DOMAIN_PUBLISHER_CAP_DEFAULT = 600;
 
 /**
  * The publish floor: at least one verified OR likely ad. A domain whose only
@@ -199,6 +220,17 @@ export interface AdsDomainPublisherRunSummary {
   outcomes: AdsDomainPublisherDomainOutcome[];
 }
 
+/**
+ * The per-run candidate set: a flat list of (listName, domain, brand) entries
+ * drawn from every active seed list (or a single list when `options.list` is
+ * set). Ordering follows ES2015 key order — first registered cluster first.
+ */
+export interface AdsDomainPublisherCandidate {
+  list: string;
+  domain: string;
+  brand?: string;
+}
+
 function emitPublisherEvent(
   event: Record<string, unknown>,
 ) {
@@ -229,20 +261,22 @@ export async function runAdsDomainPublisher(
     : Object.keys(SEED_LISTS);
   const firstList = activeLists[0] ?? null;
 
+  const emptySummary = (list: string, gate: AdsDomainPublisherRunSummary["gate"]): AdsDomainPublisherRunSummary => ({
+    list,
+    gate,
+    attempted: 0,
+    published: 0,
+    skipped: 0,
+    failed: 0,
+    invalid: 0,
+    outcomes: [],
+  });
+
   if (!firstList || !resolveSeedList(firstList)) {
-    return {
-      list: options.list?.trim() ?? "(none)",
-      gate: "bet2_active",
-      attempted: 0,
-      published: 0,
-      skipped: 0,
-      failed: 0,
-      invalid: 0,
-      outcomes: [],
-    };
+    return emptySummary(options.list?.trim() ?? "(none)", "bet2_active");
   }
 
-  // BET 2 gate: three-tier search-v2 must be the active rollout, or the run
+  // BET the 2 gate: three-tier search-v2 must be the active rollout, or the run
   // aborts before a single provider call. Never publish untiered pages.
   if (!shouldApplySearchV2(env)) {
     emitPublisherEvent({
@@ -251,16 +285,7 @@ export async function runAdsDomainPublisher(
       gate: "bet2_inactive",
       note: "SEARCH_ROLLOUT_MODE is not v2; three-tier search is not active. Skipped.",
     });
-    return {
-      list: firstList,
-      gate: "bet2_inactive",
-      attempted: 0,
-      published: 0,
-      skipped: 0,
-      failed: 0,
-      invalid: 0,
-      outcomes: [],
-    };
+    return emptySummary(firstList, "bet2_inactive");
   }
 
   const provider = resolveCommercialDiscoveryProvider(env);
@@ -272,16 +297,7 @@ export async function runAdsDomainPublisher(
       provider,
       note: "No commercial discovery provider / D1; a publish would have nothing real to render.",
     });
-    return {
-      list: firstList,
-      gate: "no_provider",
-      attempted: 0,
-      published: 0,
-      skipped: 0,
-      failed: 0,
-      invalid: 0,
-      outcomes: [],
-    };
+    return emptySummary(firstList, "no_provider");
   }
 
   const cap = Number.isFinite(options.cap)
@@ -299,14 +315,19 @@ export async function runAdsDomainPublisher(
     outcomes: [],
   };
 
-  for (const entry of firstListDomains(firstList)) {
+  // Issue #1988: iterate EVERY active seed list, not just the first. Each
+  // candidate carries its owning cluster so the per-domain observability and
+  // the failure attribution stay list-accurate. The cap is applied across the
+  // whole run (a hard bound on live provider captures), so a grown cohort is
+  // attempted in a single night's rail without unbounded spend.
+  for (const candidate of activeListCandidates(activeLists)) {
     if (summary.attempted >= cap) {
       break;
     }
     summary.attempted += 1;
 
     try {
-      const outcome = await publishSeedListDomain(env, entry.domain, ctx, provider, firstList);
+      const outcome = await publishSeedListDomain(env, candidate.domain, ctx, provider, candidate.list);
       summary.outcomes.push(outcome);
       if (outcome.verdict === "publish") {
         summary.published += 1;
@@ -320,14 +341,14 @@ export async function runAdsDomainPublisher(
     } catch (error) {
       summary.failed += 1;
       summary.outcomes.push({
-        domain: entry.domain,
+        domain: candidate.domain,
         verdict: "failed",
         reason: error instanceof Error ? error.message : "Unknown publisher error.",
       });
       emitPublisherEvent({
         metric: "ads_domain_failed",
-        list: firstList,
-        domain: entry.domain,
+        list: candidate.list,
+        domain: candidate.domain,
         errorName: error instanceof Error ? error.name : typeof error,
         message: error instanceof Error ? error.message : String(error),
       });
@@ -348,25 +369,37 @@ export async function runAdsDomainPublisher(
   return summary;
 }
 
-function firstListDomains(
-  listName: string,
-): SeedListEntry[] {
-  const list = resolveSeedList(listName);
-  if (!list) {
-    return [];
+/**
+ * Build the flat candidate set for the given active list names, in registry
+ * order. A list that fails validation is skipped with an observability event
+ * (never silently dropped); a list that is unknown is skipped. Returns the
+ * union of every valid list's domains.
+ */
+export function activeListCandidates(
+  listNames: readonly string[],
+): AdsDomainPublisherCandidate[] {
+  const candidates: AdsDomainPublisherCandidate[] = [];
+  for (const listName of listNames) {
+    const list = resolveSeedList(listName);
+    if (!list) {
+      continue;
+    }
+    const problems = validateSeedList(list);
+    if (problems.length > 0) {
+      emitPublisherEvent({
+        metric: "ads_domain_publisher_run",
+        list: listName,
+        gate: "bet2_active",
+        note: "Seed list failed validation; no domains attempted.",
+        problems,
+      });
+      continue;
+    }
+    for (const entry of list.domains) {
+      candidates.push({ list: listName, domain: entry.domain, brand: entry.brand });
+    }
   }
-  const problems = validateSeedList(list);
-  if (problems.length > 0) {
-    emitPublisherEvent({
-      metric: "ads_domain_publisher_run",
-      list: listName,
-      gate: "bet2_active",
-      note: "Seed list failed validation; no domains attempted.",
-      problems,
-    });
-    return [];
-  }
-  return list.domains;
+  return candidates;
 }
 
 /**

@@ -108,12 +108,38 @@ describe("SEED_LISTS registry", () => {
     expect(SEED_LISTS["sneaker-resale"]).toBeDefined();
   });
 
+  it("registers every issue #1988 scale list", () => {
+    for (const name of ["dtc-us", "dtc-in", "dtc-eu", "b2b-advertisers"]) {
+      expect(SEED_LISTS[name], `${name} must be registered`).toBeDefined();
+    }
+  });
+
   it("sneaker-resale list validates clean and carries enough entries to clear the 15-domain publish gate", () => {
     const list = SEED_LISTS["sneaker-resale"];
     expect(validateSeedList(list)).toEqual([]);
     // The issue's verify gate is ≥15 domains WOULD publish; the seed list must
     // at least carry that many candidates or the gate is structurally dead.
     expect(list.domains.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it("every registered list validates clean (a malformed list would abort the nightly run)", () => {
+    for (const [name, list] of Object.entries(SEED_LISTS)) {
+      expect(validateSeedList(list), `${name} must validate clean`).toEqual([]);
+    }
+  });
+
+  it("aggregate registered cohort is >= 300 unique domains (issue #1988 metric floor)", () => {
+    const seen = new Set<string>();
+    for (const list of Object.values(SEED_LISTS)) {
+      for (const entry of list.domains) {
+        const key = (entry.domain ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^\./, "");
+        seen.add(key.replace(/\.$/, ""));
+      }
+    }
+    // The issue closes only when the sitemap lists >=300 /ads/:domain pages.
+    // The seed cohort is the upper bound of what the publisher CAN publish;
+    // if it cannot even field 300 candidates, the metric is structurally dead.
+    expect(seen.size).toBeGreaterThanOrEqual(300);
   });
 
   it("rejects unknown list names", () => {
@@ -139,7 +165,18 @@ describe("isSeededBrandDomain (issue #1306 retire-scope guard)", () => {
     expect(isSeededBrandDomain(domain)).toBe(true);
   });
 
-  it.each(["nykaa.com", "notion.so", "oura.com", "", "  ", "example.com"])(
+  it.each([
+    "sephora.com",
+    "ulta.com",
+    "glossier.com",
+    "nykaa.com",
+    "notion.so",
+    "hubspot.com",
+  ])("recognizes %s as a seeded brand across the issue #1988 scale lists", (domain) => {
+    expect(isSeededBrandDomain(domain)).toBe(true);
+  });
+
+  it.each(["oura.com", "unseededexample.com", "ouree.com", "", "  ", "example.com"])(
     "does not recognize %s as a seeded brand (keeps #1442 render-noindex)",
     (domain) => {
       expect(isSeededBrandDomain(domain)).toBe(false);

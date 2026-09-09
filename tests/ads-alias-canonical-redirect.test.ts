@@ -266,14 +266,16 @@ describe("brand-page alias resolution (issue #1446)", () => {
 
   it("does not treat an unrelated plain domain as a canonical alias", async () => {
     const mocks = installMocks({
-      // nykaa.com is not an alias; its own page should render, not redirect.
-      byDomain: (domain) => domain === "nykaa.com",
+      // lululemon.com is not an alias (nor a seeded brand, so #1306's
+      // retire-redirect does not fire on its thin page) — it should render,
+      // not redirect.
+      byDomain: (domain) => domain === "lululemon.com",
     });
 
-    const { redirect, data } = await loaderResponse("nykaa.com", mocks.env);
+    const { redirect, data } = await loaderResponse("lululemon.com", mocks.env);
 
     expect(redirect).toBeNull();
-    expect(data!.domain).toBe("nykaa.com");
+    expect(data!.domain).toBe("lululemon.com");
   });
 });
 

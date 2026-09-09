@@ -700,10 +700,12 @@ describe("/ads/:domain indexing flag", () => {
 
   it("noindexes a fresh capture with 0 verified-linked ads (thin page: ad wall without the score)", async () => {
     // 24 unverified text-mention matches: the provider returned them for
-    // nykaa.com, but none carries a landing-page or domainMatch verdict
+    // lululemon.com, but none carries a landing-page or domainMatch verdict
     // linking it to the domain. The wall renders, but the Ad Aggression Score
     // (the page's differentiator) cannot — so the page self-noindexes rather
     // than ship as indexable thin content.
+    // lululemon.com is not a seeded brand, so #1306's retire-redirect must
+    // not fire: the thin 0-verified wall renders noindex (the #1442 path).
     const mocks = installBrandPageMocks({
       entry: cacheEntry({
         payload: {
@@ -725,7 +727,7 @@ describe("/ads/:domain indexing flag", () => {
       }),
     });
 
-    const result = await runLoader("nykaa.com", mocks.env);
+    const result = await runLoader("lululemon.com", mocks.env);
 
     expect(result.hasCachedAds).toBe(true);
     expect(result.ads).toHaveLength(1);
