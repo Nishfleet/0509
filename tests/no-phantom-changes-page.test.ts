@@ -77,15 +77,20 @@ describe("no-phantom-changes page lock (#2026)", () => {
     const trust = readFileSync("app/routes/trust.tsx", "utf8");
     const pricing = readFileSync("app/routes/pricing.tsx", "utf8");
 
+    // /ads links inline via the shared constant; /trust links inline. Issue
+    // #2049 moved the /pricing note into the shared TrustProofNote component
+    // (which links NO_PHANTOM_CHANGES_PUBLIC_PATH), so /pricing links through
+    // that component — recognizing the refactor keeps the guarantee strong.
     for (const [name, source] of [
       ["/ads", ads],
       ["/trust", trust],
       ["/pricing", pricing],
     ] as const) {
-      // /ads links via the shared constant; /trust and /pricing link inline.
       const linked =
         source.includes('"/no-phantom-changes"') ||
-        source.includes("NO_PHANTOM_CHANGES_PUBLIC_PATH");
+        source.includes("NO_PHANTOM_CHANGES_PUBLIC_PATH") ||
+        // /pricing renders the shared proof-trust element (issue #2049).
+        source.includes("TrustProofNote");
       expect(linked, `${name} must link /no-phantom-changes`).toBe(true);
     }
   });

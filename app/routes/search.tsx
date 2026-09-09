@@ -33,6 +33,7 @@ import { SwitchFromStrip } from "~/components/switch-from-links";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SwitchCtaCard } from "~/components/switch-cta-card";
 import { SubmitButton } from "~/components/submit-button";
+import { TrustProofNote } from "~/components/trust-proof-note";
 import {
   DetailBlock,
   DetailFacts,
@@ -2878,6 +2879,11 @@ export default function SearchRoute() {
                     </Link>
                   )}
                 </div>
+                {/* Issue #2049: at the moment a visitor is asked for an email,
+                    surface the published proof guarantee — the honest one-line
+                    promise plus links to /no-phantom-changes and /capture-rules
+                    — so the wall carries the reason the wall is worth it. */}
+                <TrustProofNote />
               </div>
             ) : canTrackCurrentCompetitor && hasResults ? (
               <div className="f9-wk-retain">
