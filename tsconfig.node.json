@@ -76,6 +76,7 @@
     "scripts/measure-search-ttfb.mjs",
     "scripts/search-tier-canary.mjs",
     "scripts/canary-sneaker-resale-recall.mjs",
+    "scripts/check-d1-fullsite-runs.mjs",
     "tests/**/*",
     "extension/lib/**/*.mjs",
     "app/**/*",

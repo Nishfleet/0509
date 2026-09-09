@@ -97,7 +97,7 @@
     // Broad rollout is emptying FULLSITE_WATCH_CANARY_HOSTS. Rollback is
     // flipping this flag off.
     "FULLSITE_WATCH_ENABLED": "true",
-    "FULLSITE_WATCH_CANARY_HOSTS": "nike.com www.nike.com"
+    "FULLSITE_WATCH_CANARY_HOSTS": ""
   },
   // Secrets configured outside this file via `wrangler secret put`:
   // - CANARY_BYPASS_TOKEN
