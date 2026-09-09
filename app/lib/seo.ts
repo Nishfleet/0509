@@ -1,9 +1,15 @@
 import {
+<<<<<<< HEAD
   BUYER_SURFACE_CHILD_PATHS,
   BUYER_SURFACE_LOCALE_IDS,
   BUYER_SURFACE_PATHS,
   isBuyerSurfaceChildSplat,
   SNEAKER_RESALE_MARKETS,
+=======
+  BUYER_SURFACE_LOCALE_IDS,
+  SNEAKER_RESALE_MARKETS,
+  type BuyerSurfaceLocaleId,
+>>>>>>> origin/main
 } from "~/lib/locale-markets";
 import {
   PUBLISHED_BUNDLE_PRICES_EUR,
@@ -959,11 +965,25 @@ export const SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] = SITEMAP_PATHS.map
 );
 
 /**
+<<<<<<< HEAD
  * Buyer-surface subpaths (locale `splats`) that carry a locale hreflang
  * cluster in the sitemap (issue #2030). Derived from the same EN path lists
  * the routes and the sitemap already share, so a new buyer surface lights up
  * with hreflang everywhere at once. Excludes the bare index (whose canonical
  * is `/`) and `/sitemap.xml` (an XML feed, no hreflang).
+=======
+ * Root sitemap static entries: the EN funnel set MINUS every buyer-surface
+ * locale-prefixed path (issue #1561). Each `/<locale>/...` path lives only in
+ * its own `/<locale>/sitemap.xml` (see `staticSitemapEntriesForLocale` in
+ * app/lib/sitemap.server.ts), so a URL is never listed twice across the root
+ * and locale sitemaps — which would fragment crawl budget and split PageRank
+ * across byte-identical duplicates. `/ja/sneaker-resale` and
+ * `/pt-br/sneaker-resale` are covered by their served `/ja/sitemap.xml` /
+ * `/pt-br/sitemap.xml`; `/de/sneaker-resale` by `/de/sitemap.xml`. Since
+ * issue #2017 (Option A) robots.txt advertises those locale sitemaps so the
+ * URLs are reachable from a crawler entry point. The bare
+ * `/{locale}` index is (and stays) absent — its canonical points at `/`.
+>>>>>>> origin/main
  */
 const BUYER_SURFACE_SITEMAP_SPLATS: readonly string[] = [
   ...(BUYER_SURFACE_PATHS as readonly string[])
@@ -1139,6 +1159,41 @@ export const AI_TRAINING_CRAWLERS = [
 
 // The AI-training deny list lives in the Cloudflare managed-robots zone config;
 // it is intentionally NOT duplicated in this served robots.txt (issue #1459).
+/**
+ * Locales whose served `/<locale>/sitemap.xml` actually carries indexable
+ * translated entries (issue #2017, Option A per the orchestrator decision on
+ * #1561). robots.txt advertises ONLY these — fr/es emit an empty sitemap
+ * (issue #1570: byte-identical English locale pages are not advertised), and
+ * pointing crawlers at an empty sitemap wastes a discovery hop. Derived from
+ * SITEMAP_STATIC_ENTRIES so a future translated locale cluster is advertised
+ * automatically when its paths join the sitemap set.
+ */
+export const LOCALE_SITEMAP_LOCALES: readonly BuyerSurfaceLocaleId[] =
+  BUYER_SURFACE_LOCALE_IDS.filter((locale) =>
+    SITEMAP_STATIC_ENTRIES.some((entry) => entry.path.startsWith(`/${locale}/`)),
+  );
+
+/**
+ * Every sitemap URL robots.txt advertises: the root sitemap plus one
+ * non-empty locale sitemap per translated-entries locale (issue #2017).
+ * The locale sitemaps are the ONLY path by which `/de/sneaker-resale`,
+ * `/ja/sneaker-resale`, and `/pt-br/sneaker-resale` become discoverable —
+ * #1561 keeps locale-prefixed URLs out of the root sitemap, so without these
+ * `Sitemap:` lines those acquisition pages have no sitemap path at all.
+ * Exposed for the llms.txt↔reachable-sitemap sync canary
+ * (tests/seo/llms-sitemap-reachable-sync.test.ts).
+ */
+export const ADVERTISED_SITEMAP_URLS: readonly string[] = [
+  canonicalUrl("/sitemap.xml"),
+  ...LOCALE_SITEMAP_LOCALES.map((locale) =>
+    canonicalUrl(`/${locale}/sitemap.xml`),
+  ),
+];
+
+const LOCALE_SITEMAP_LINES = LOCALE_SITEMAP_LOCALES.map(
+  (locale) => `Sitemap: ${canonicalUrl(`/${locale}/sitemap.xml`)}`,
+).join("\n");
+
 const ROBOTS_TXT = `# AI answer/reference engines are allowed by the wildcard group below.
 # AI training/fine-tuning crawlers are denied at the zone by Cloudflare managed robots (ai-train=no).
 
@@ -1151,6 +1206,7 @@ Disallow: /api/
 # /share/ stays crawlable so crawlers can see its noindex header.
 Allow: /
 Sitemap: ${canonicalUrl("/sitemap.xml")}
+${LOCALE_SITEMAP_LINES}
 `;
 
 const SOCIAL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
