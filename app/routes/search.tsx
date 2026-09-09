@@ -34,6 +34,7 @@ import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SwitchCtaCard } from "~/components/switch-cta-card";
 import { SubmitButton } from "~/components/submit-button";
 import { TrustProofNote } from "~/components/trust-proof-note";
+import { SearchCompetitorPreviewSection } from "~/components/watchlists/suggested-competitors-section";
 import {
   DetailBlock,
   DetailFacts,
@@ -143,6 +144,8 @@ import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import { resolveSearchBrandPageDomain } from "~/lib/ads-internal-links";
 import { switchPageForDomain } from "~/lib/switch-pages";
 import { localeSearchPathname } from "~/lib/locale-markets";
+import type { AppEnv } from "~/lib/env.server";
+import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-suggested-loader.server";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
 
@@ -256,6 +259,60 @@ export const headers: HeadersFunction = ({ errorHeaders, loaderHeaders }) => {
   return documentHeaders;
 };
 
+// Issue #2113 — "who advertises against you" on logged-out domain searches.
+// The preview runs the EXISTING suggested-competitors discovery phase
+// (`seedAutoCompetitors`, auto-competitor-watch Phase 1) server-side: its
+// probe reads are cache-only (never a new discovery provider, never a live
+// Meta/Browser call for the probes), it runs inside the existing public
+// search rate limit (no relaxation), and zero candidates come back as zero
+// rows — never a fabricated suggestion. The panel caps at the top 5.
+const SEARCH_COMPETITOR_PREVIEW_LIMIT = 5;
+
+async function loadSearchCompetitorPreview(
+  env: AppEnv,
+  input: { query: string; country: string },
+): Promise<SuggestedCompetitorsPanelData | null> {
+  const { parseSearchInputFromWebsiteField } = await import("~/lib/search-query");
+  const intent = parseSearchInputFromWebsiteField(input.query);
+  if (intent.intent !== "domain" || !intent.registrableDomain) {
+    return null;
+  }
+  try {
+    const { seedAutoCompetitors } = await import("~/lib/auto-competitor-seed.server");
+    const candidates = await seedAutoCompetitors(env, {
+      domain: intent.registrableDomain,
+      country: input.country,
+      // A logged-out visitor has no watchlists to dedupe against; this
+      // sentinel user id matches no rows, so every candidate survives.
+      userId: "anonymous-search-preview",
+    });
+    return {
+      domain: intent.registrableDomain,
+      rows: candidates.slice(0, SEARCH_COMPETITOR_PREVIEW_LIMIT).map((candidate) => ({
+        candidateId: [
+          candidate.advertiser.trim().toLowerCase(),
+          (candidate.registrableDomain ?? "").trim().toLowerCase(),
+          (candidate.advertiserPageId ?? "").trim(),
+        ].join("|"),
+        advertiser: candidate.advertiser,
+        pageId: candidate.advertiserPageId,
+        landingPageUrl: candidate.registrableDomain
+          ? `https://${candidate.registrableDomain}`
+          : null,
+        targetCountry: candidate.countries[0] ?? null,
+        overlapScore: candidate.overlapScore,
+        provenance: candidate.provenance,
+        type: "candidate" as const,
+      })),
+    };
+  } catch {
+    // A discovery failure must never take the public search page down —
+    // degrade to "no preview", the same posture the watchlists panel loader
+    // takes for its own downstream failures.
+    return null;
+  }
+}
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
@@ -354,6 +411,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       switchPage: null,
       relevanceApplied: false,
       watchedWatchlist: null,
+      competitorPreview: null,
       ...navFlags,
     };
   }
@@ -385,6 +443,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       switchPage: null,
       relevanceApplied: false,
       watchedWatchlist: null,
+      competitorPreview: null,
       ...navFlags,
     };
   }
@@ -577,6 +636,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           switchPage: null,
           relevanceApplied: false,
           watchedWatchlist: null,
+          competitorPreview: null,
           ...navFlags,
         };
       }
@@ -606,6 +666,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       switchPage: null,
       relevanceApplied: false,
       watchedWatchlist: null,
+      competitorPreview: null,
       ...navFlags,
     };
   }
@@ -812,6 +873,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ? switchPageForDomain(brandPageCandidate)
     : null;
 
+  // Issue #2113: a logged-out domain search ends in the "who advertises
+  // against you" preview — the existing suggested-competitors discovery
+  // phase, run server-side after the search itself (a warm search has just
+  // refreshed the domain's cache entry the phase reads). Signed-in visitors
+  // already have the watchlists panel; non-domain queries and discovery
+  // failures come back null and the section omits itself.
+  const competitorPreview = session
+    ? null
+    : await loadSearchCompetitorPreview(env, {
+        query: competitorWebsite.raw || parsed.filters.query,
+        country: parsed.filters.country,
+      });
+
   const searchPayload = {
     mode: parsed.mode,
     filters: filtersForForms,
@@ -837,6 +911,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     relevanceApplied: searchExecution.relevanceApplied,
     inputError: null,
     watchedWatchlist,
+    competitorPreview,
     ...navFlags,
   };
   // Issue #1972 phase 1: when an anonymous visitor's very first search
@@ -2877,6 +2952,20 @@ export default function SearchRoute() {
               </DetailPane>
             ) : null}
           </div>
+
+          {/* Issue #2113 — "who advertises against you": a logged-out domain
+              search ends in the top-5 suggested competitors plus a signup CTA
+              to watch them. The loader ran the existing suggested-competitors
+              discovery phase (cache-only probes, no new provider, no
+              fabrication on empty); the section omits itself for signed-in
+              sessions, non-domain queries, and zero-candidate discoveries.
+              It sits directly above the retention band so the page's last
+              word is the watch-these-competitors signup moment; its CTAs stay
+              at rank2/rank3 so the band keeps the viewport's single fill. */}
+          <SearchCompetitorPreviewSection
+            preview={data.competitorPreview ?? null}
+            country={data.filters.country}
+          />
 
           {/* THE RETENTION BAND — round 2's resolution of §9.1.
               -----------------------------------------------------------------

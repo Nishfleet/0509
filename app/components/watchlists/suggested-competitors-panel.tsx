@@ -1,4 +1,4 @@
-import { Form } from "react-router";
+import { Form, Link } from "react-router";
 
 import { SubmitButton } from "~/components/submit-button";
 import type { SuggestedCompetitorRow } from "~/lib/auto-competitor-suggested-loader.server";
@@ -150,4 +150,105 @@ export function shouldRenderSuggestedCompetitorsPanel(
   panel: { rows: readonly SuggestedCompetitorRow[] } | null | undefined,
 ): panel is { rows: readonly SuggestedCompetitorRow[] } {
   return Boolean(panel);
+}
+
+/**
+ * Logged-out /search preview (issue #2113): "who advertises against you".
+ *
+ * The search route runs the EXISTING suggested-competitors discovery phase
+ * server-side for a logged-out domain query and hands the top rows here.
+ * This is a read-only teaser of the signed-in panel above: same row
+ * contract (candidate-only, provenance, overlap), but the accept form is
+ * replaced by signup links — a visitor cannot accept a suggestion before
+ * they have an account, so every CTA routes through /auth/signup carrying
+ * the competitor's domain into the post-signup setup checklist.
+ *
+ * Honesty invariants inherited from the signed-in panel:
+ *
+ * 1. Every row keeps the "Suggested · unverified" marker — a preview row
+ *    is never presented as a confirmed competitor (eval 3.4).
+ * 2. An empty row set renders NOTHING (the section wrapper omits the
+ *    panel) — discovery returning nothing must never become a fabricated
+ *    suggestion.
+ * 3. CTA ranks stay at rank2/rank3 — the page's single ink fill belongs
+ *    to the retention band below (BL-031 one-fill-per-viewport law).
+ */
+export function SuggestedCompetitorPreviewPanel(props: {
+  domain: string;
+  rows: readonly SuggestedCompetitorRow[];
+  /** Signup path carrying the searched domain into post-signup setup. */
+  signupPath: string;
+  /** Per-row signup path carrying THAT competitor's domain. */
+  signupPathForRow: (row: SuggestedCompetitorRow) => string;
+}) {
+  if (props.rows.length === 0) {
+    return null;
+  }
+  return (
+    <section
+      aria-label="Who advertises against you"
+      className="f9-evidence-cell f9-evidence-suggested-cell"
+      data-test="competitor-preview-panel"
+    >
+      <header className="f9-evidence-cell-head">
+        <p className="f9-wk-kick">Who advertises against you</p>
+        <p className="f9-evidence-micro">
+          {`Advertisers with active Meta ads on the same searches as ${props.domain} — suggested and unverified until you watch them.`}
+        </p>
+      </header>
+
+      <ul className="f9-evidence-suggested-list" data-test="competitor-preview-list">
+        {props.rows.map((row) => (
+          <li
+            key={row.candidateId}
+            className="f9-evidence-suggested-row"
+            data-test="competitor-preview-row"
+            data-candidate-type={row.type}
+          >
+            <div className="f9-evidence-suggested-meta">
+              <p className="f9-evidence-suggested-name">
+                <span
+                  className="f9-evidence-suggested-marker"
+                  data-test="competitor-preview-marker"
+                >
+                  Suggested · unverified
+                </span>
+                <span className="f9-evidence-suggested-brand">{row.advertiser}</span>
+              </p>
+              <p
+                className="f9-evidence-micro f9-evidence-suggested-provenance"
+                data-test="competitor-preview-provenance"
+              >
+                {row.provenance}
+              </p>
+              <p
+                className="f9-evidence-micro f9-evidence-suggested-score"
+                data-overlap-score={row.overlapScore}
+              >
+                Overlap {formatOverlapScore(row.overlapScore)}
+                {row.targetCountry ? ` · ${row.targetCountry}` : ""}
+              </p>
+            </div>
+            <Link
+              className="f9-evidence-cta f9-evidence-cta--rank3"
+              data-test="competitor-preview-row-cta"
+              to={props.signupPathForRow(row)}
+            >
+              {`Watch ${row.advertiser}`}
+            </Link>
+          </li>
+        ))}
+      </ul>
+
+      <div className="f9-evidence-action-row">
+        <Link
+          className="f9-evidence-cta f9-evidence-cta--rank2"
+          data-test="competitor-preview-cta"
+          to={props.signupPath}
+        >
+          {`Create a free account to watch these ${props.rows.length} competitors`}
+        </Link>
+      </div>
+    </section>
+  );
 }
