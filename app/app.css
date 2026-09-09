@@ -17010,12 +17010,21 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   .ld-proof-hook .ld-proof-attrib { margin-top: 6px; }
   .ld-proof-trail,
   .ld-proof-strip-foot { display: none; }
+  .ld-proof-strip-head .ld-proof-time { display: none; }
   .ld-hero-copy { overflow-x: clip; }
   .ld-deck-copy { font-size: 0.88rem; line-height: 1.35; margin-top: 8px; }
   .ld-hero-copy .ld-command { margin-top: 0; }
   .ld-case { margin-bottom: 6px; font-size: 0.7rem; }
   .f9-home .ld-hero .ld-case { margin-bottom: 6px; }
   .f9-home .ld-hero .ld-hero-callouts { margin-bottom: 0; }
+  .f9-home .ld-hero .ld-hero-callouts {
+    flex-wrap: nowrap;
+    gap: 6px;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    contain: inline-size;
+  }
 
   /* Beat the 760px column stack so the pill stays one row and the secondary
      line ("Paste a competitor site…") yields vertical room to the command. */
@@ -17056,6 +17065,38 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   .ld-hero-copy .ld-honest {
     margin-top: 10px;
     padding: 8px 0 12px;
+  }
+}
+
+/* Short-portrait first-viewport budget (375x667 / 360x632 / issue 2090):
+   the 600px-width pack still leaves the command ~190px under an iPhone SE
+   fold once a live Nykaa-length proof strip is present. Shrink the wall
+   and the strip body; keep the proof strip, the deck, and the primary nav. */
+@media (max-width: 600px) and (max-height: 760px) {
+  .ld-ticker { padding: 2px 0; }
+  .ld-nav { padding: 8px 16px; }
+  .ld-hero-grid .ld-wall { font-size: 1.35rem; }
+  .ld-proof-strip { margin-top: 4px; }
+  .ld-proof-strip-head {
+    padding: 4px 8px;
+    font-size: 0.58rem;
+    gap: 6px;
+  }
+  .ld-proof-strip-head .ld-proof-time { display: none; }
+  .ld-proof-hook {
+    padding: 6px 8px;
+    font-size: 0.82rem;
+  }
+  .ld-proof-hook .ld-proof-attrib { display: none; }
+  .ld-deck-copy { font-size: 0.8rem; line-height: 1.28; margin-top: 4px; }
+  .f9-home .ld-hero .ld-case { margin-bottom: 2px; }
+  .f9-home .ld-command input {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .f9-home .ld-command button {
+    min-height: 44px;
+    padding: 8px 12px;
   }
 }
 
