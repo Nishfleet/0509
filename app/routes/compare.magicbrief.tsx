@@ -5,6 +5,7 @@ import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { LiveBrandProof } from "~/components/live-brand-proof";
 import {
   Cite,
   CompareCitationsFooter,
@@ -20,6 +21,7 @@ import {
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
+import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import magicbriefCitations from "~/data/compare/magicbrief-citations.json";
 
@@ -280,6 +282,8 @@ export default function CompareMagicBriefRoute() {
           way.
         </p>
       </section>
+
+      <LiveBrandProof domain={LIVE_BRAND_PROOF_DOMAIN} brandName="Nike" />
 
       <CompareCitationsFooter citations={citations} />
 
