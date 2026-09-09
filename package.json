@@ -44,6 +44,7 @@
     "gate-c:soak:restore": "node scripts/release-evidence-archive.mjs restore",
     "check:public-home": "node scripts/check-public-home-current.mjs",
     "check:google-oauth-branding": "node scripts/check-google-oauth-branding.mjs",
+    "check:proof-surface": "node scripts/check-proof-surface.mjs",
     "check:d1:workspace-memberships": "node scripts/check-workspace-member-invariants.mjs",
     "check:d1:partial-refunds": "node scripts/check-partial-refund-invariants.mjs",
     "check:d1:snapshot-age": "scripts/check-d1-snapshot-age.sh",
