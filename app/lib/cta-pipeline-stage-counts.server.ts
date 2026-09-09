@@ -87,6 +87,67 @@ export function ctaPipelineStageCountsFromCounters(
 }
 
 /**
+ * Issue #2157: the bail-out reason code for the FIRST stage a check dropped
+ * out of, so the top-5 bail-out reasons by frequency are queryable from D1
+ * (unblocks #1538 Gate 1 without a Logpush sink). Returns null when the check
+ * reached the end and emitted an event (it did not bail).
+ *
+ * The reason vocabulary is the one the pipeline counters already carry — the
+ * same codes the `lp_run_audit` lines emit as `outcome: "bailed:<reason>"`.
+ * One bail reason per check (at the first bail point); a check that was
+ * rescued by the render fallback did NOT bail at fetch, so it falls through to
+ * the next stage that actually dropped it.
+ *
+ * Pure and side-effect-free so it is trivially unit-testable alongside
+ * `ctaPipelineStageCountsFromCounters`.
+ */
+export function ctaPipelineBailReasonFromCounters(
+  counters: LandingPagePipelineCounters,
+): { stage: CtaPipelineStage; reason: string } | null {
+  // A check that emitted an event reached the end of the funnel — no bail.
+  if (counters.diff.confirmedEventTypes.length > 0) return null;
+
+  const fetchSucceeded =
+    counters.fetch.outcome === "succeeded" ||
+    counters.fetch.outcome === "replayed";
+  // The proof-capture funnel records a "failed" fetch with a "succeeded" render
+  // when the plain-http leg bailed and the browser-render fallback rescued it.
+  // That check did NOT bail at fetch — it continued through the funnel — so
+  // only count a fetch bail when render did not rescue.
+  const renderRescued =
+    counters.fetch.outcome === "failed" &&
+    counters.render.outcome === "succeeded";
+  if (!fetchSucceeded && !renderRescued) {
+    return {
+      stage: "page_fetch_succeeded",
+      reason: counters.fetch.reasonCode ?? "fetch_failed",
+    };
+  }
+
+  if (counters.validity.outcome === "failed") {
+    return {
+      stage: "validity_passed",
+      reason: counters.validity.reasonCode ?? "validity_failed",
+    };
+  }
+
+  if (counters.extract.ctaFunnelStage === "bailed") {
+    return {
+      stage: "dom_extracted",
+      reason: counters.extract.ctaFunnelReasonCode ?? "extract_bailed",
+    };
+  }
+
+  // The check reached the diff stage but no event was emitted. The per-field
+  // bail reasons (diff.fieldBails) explain why; they are usually uniform (all
+  // four fields share one reason), so the first unique reason is the bail
+  // reason. An empty fieldBails map is a defensive fallback.
+  const fieldBailReasons = Object.values(counters.diff.fieldBails);
+  const reason = fieldBailReasons[0] ?? "no_event_emitted";
+  return { stage: "event_emitted", reason };
+}
+
+/**
  * Persist one check's stage counts into `cta_pipeline_stage_counts`, keyed by
  * UTC day. Each stage that was reached increments its (day, stage) row by 1.
  * Stages not reached are not written (a missing row reads as zero). Never
@@ -126,6 +187,21 @@ export async function recordCtaPipelineStageCounts(
          ON CONFLICT(day, stage) DO UPDATE SET count = count + excluded.count`,
       )
         .bind(day, stage, count)
+        .run();
+      wrote += 1;
+    }
+    // Issue #2157: persist the bail-out reason code for the first stage this
+    // check dropped out of, so the top-5 bail-out reasons by frequency are
+    // queryable from D1 (unblocks #1538 Gate 1 without a Logpush sink). A
+    // check that emitted an event returns null here and writes nothing.
+    const bail = ctaPipelineBailReasonFromCounters(counters);
+    if (bail) {
+      await env.DB.prepare(
+        `INSERT INTO cta_pipeline_bail_reason_counts (day, stage, reason, count)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(day, stage, reason) DO UPDATE SET count = count + excluded.count`,
+      )
+        .bind(day, bail.stage, bail.reason, 1)
         .run();
       wrote += 1;
     }
