@@ -138,10 +138,22 @@ export function ctaPipelineBailReasonFromCounters(
     };
   }
 
+  // The diff stage is the proof-capture funnel's last gate. The volume paths
+  // (selection_enrichment, backfill, canary) share this recorder but NEVER run
+  // the diff stage (#2077) — a successful volume capture has `diff.status`
+  // null and no events, which is NOT a bail (the capture reached the end of
+  // the stages that run on that path). Counting it as an `event_emitted` bail
+  // would drown the real top-5 in `no_event_emitted` rows from every successful
+  // volume capture. So only record an event_emitted bail when the diff stage
+  // actually ran (status set and not skipped_no_snapshot).
+  const diffRan =
+    counters.diff.status !== null &&
+    counters.diff.status !== "skipped_no_snapshot";
+  if (!diffRan) return null;
+
   // The check reached the diff stage but no event was emitted. The per-field
   // bail reasons (diff.fieldBails) explain why; they are usually uniform (all
-  // four fields share one reason), so the first unique reason is the bail
-  // reason. An empty fieldBails map is a defensive fallback.
+  // four fields share one reason), so the first reason is the bail reason.
   const fieldBailReasons = Object.values(counters.diff.fieldBails);
   const reason = fieldBailReasons[0] ?? "no_event_emitted";
   return { stage: "event_emitted", reason };
