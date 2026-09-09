@@ -101,6 +101,14 @@ export default function PrivacyRoute() {
             </p>
           </LegalBlock>
 
+          <LegalBlock title="Funnel measurement">
+            <p>
+              We may record anonymous event names only: homepage view, search preview, and signup start.
+              This measurement does not use cookies, IP addresses, or email. If a request carries Global
+              Privacy Control, we record nothing. Events live in operational logs only.
+            </p>
+          </LegalBlock>
+
           <LegalBlock title="Security and compliance claims">
             <p>
               We do not claim SOC 2, HIPAA, GDPR compliance, zero retention, no training, or similar guarantees until
