@@ -833,15 +833,21 @@ export const SITEMAP_PATHS = [
   "/pt-br/sneaker-resale",
   // Issue #1570: the locale-prefixed buyer-surface cluster (`/de/pricing`,
   // `/ja/help`, `/de/compare/magicbrief`, `/de/search`, `/de/ads/nike.com`,
-  // ...) was REMOVED from the sitemap. Those pages serve byte-identical
-  // English copy with `lang="en"` and `canonical` -> the EN twin, so
-  // listing them as dozens of distinct `<loc>` entries told Google they
-  // were dozens of indexable surfaces — a duplicate-content doorway
-  // pattern that burned crawl budget and split PageRank. They stay
-  // reachable (200, canonical->EN) but are no longer advertised as
-  // indexable. The genuinely translated sneaker-resale cluster
-  // (`/de/sneaker-resale` etc., listed above) stays in the sitemap because
-  // its content differs per locale.
+  // ...) was REMOVED from the sitemap as bare `<loc>` entries. Those pages
+  // serve byte-identical English copy with `lang="en"` and `canonical` ->
+  // the EN twin, so listing them as dozens of distinct indexable surfaces
+  // was a duplicate-content doorway pattern that burned crawl budget and
+  // split PageRank. They stay reachable (200, canonical->EN). Issue #2030
+  // re-advertises the STATIC buyer-surface cluster in the root feed — but
+  // grouped with reciprocal hreflang alternates so Google maps each cluster
+  // as one page instead of doorway duplicates — via
+  // `ROOT_SITEMAP_STATIC_ENTRIES` below, NOT via this EN path list. Dynamic
+  // locale brand pages (`/de/ads/:domain`, ...) stay out entirely: their
+  // noindex state flips per brand, and the indexability gates in
+  // app/lib/sitemap.server.ts list only the EN canonical, never a twin that
+  // may serve noindex. The genuinely translated sneaker-resale cluster
+  // (`/de/sneaker-resale` etc., listed above) stays scoped to its own
+  // `/<locale>/sitemap.xml` feed (issue #1561 non-overlap rule).
   // Canonical Ad Aggression Score methodology page (issue #2022). Path history:
   // /methodology/ad-aggression-score (#960) -> /ad-aggression (#1263) ->
   // /methodology (#2022). The older paths 301-redirect here so any indexed

@@ -558,11 +558,13 @@ export async function publicLocaleSitemapFile(
  * Full production sitemap body: static funnel entries first (with changefreq
  * and priority), then the dynamic indexable brand-page entries (with lastmod
  * from their cache fetched_at), then the dynamic indexable /timeline/:domain
- * entries (with lastmod from their newest snapshot capture). The root feed
- * deliberately EXCLUDES every buyer-surface locale-prefixed path (those live
- * only in their own `/<locale>/sitemap.xml` — see
- * `ROOT_SITEMAP_STATIC_ENTRIES` in app/lib/seo.ts) so no URL is listed twice
- * across the root and locale sitemaps (issue #1561).
+ * entries (with lastmod from their newest snapshot capture). Since issue
+ * #2030 the root feed INCLUDES the buyer-surface locale subpaths, each
+ * grouped with its reciprocal hreflang alternate set (see
+ * `ROOT_SITEMAP_STATIC_ENTRIES` in app/lib/seo.ts). Non-overlap with the
+ * `/<locale>/sitemap.xml` feeds still holds (issue #1561): a locale feed
+ * carries only the translated `/<locale>/sneaker-resale` cluster, which the
+ * root feed never lists, and no buyer-surface locale URL appears in both.
  */
 export function buildSitemapXml(
   brandEntries: readonly SitemapEntry[],
