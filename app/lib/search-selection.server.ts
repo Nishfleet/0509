@@ -2,6 +2,7 @@ import { withStructuredAnalysis } from "~/lib/analysis.server";
 import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { shouldAttemptCreativeTextCapture } from "~/lib/creative-capture-policy";
 import { captureCreativeText } from "~/lib/creative-text.server";
+import { startLandingPagePipelineVolumeInstrumentation } from "~/lib/cta-pipeline-stage-counts.server";
 import {
   hydrateAdsWithPersistedCreatives,
   listAdsByIds,
@@ -211,22 +212,58 @@ async function enrichAndPersistSelectedAd(
         }))
       : Promise.resolve({ value: null, capturedAt: null });
   let landingPageCaptureFailure: LandingPageCaptureFailureDetail | null = null;
-  const [snapshot, creativeCapture] = await Promise.all([
-    selectedAdBase.landingPageUrl && !selectedAdBase.landingPage
-      ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl, {
-          persistArtifacts: persistSelected,
-          routeContext: "selection_enrichment",
-          planTier,
-          ...(allowRenderedFallback ? {} : { allowRenderedFallback: false }),
-          onFailure: (detail) => {
-            landingPageCaptureFailure = detail;
-          },
-        })
-      : Promise.resolve(selectedAdBase.landingPage ?? null),
-    creativeCapturePromise,
-  ]);
-  if (snapshot) {
-    landingPageCaptureFailure = null;
+  // Issue #2077: instrument the volume landing-page capture path so
+  // cta_pipeline_stage_counts fills for routeContext=selection_enrichment.
+  // Only created when a capture actually runs (a landing page url is present
+  // and no snapshot is cached yet); a cached selection records nothing.
+  const landingPageUrl = selectedAdBase.landingPageUrl?.trim()
+    ? selectedAdBase.landingPageUrl
+    : null;
+  const willCaptureLandingPage =
+    landingPageUrl !== null && !selectedAdBase.landingPage;
+  const pipelineInstrumentation = willCaptureLandingPage
+    ? startLandingPagePipelineVolumeInstrumentation({
+        watchlistId: "selection_enrichment",
+        scanId: selectedAdBase.metaAdId,
+        adId: selectedAdBase.metaAdId,
+      })
+    : null;
+  let landingCaptureFailureReasonCode: string | null = null;
+  let snapshot: Awaited<ReturnType<typeof captureLandingPageSnapshot>> = null;
+  let creativeCapture: { value: Awaited<ReturnType<typeof captureCreativeText>>; capturedAt: string | null } = {
+    value: null,
+    capturedAt: null,
+  };
+  try {
+    [snapshot, creativeCapture] = await Promise.all([
+      willCaptureLandingPage && landingPageUrl
+        ? captureLandingPageSnapshot(env, landingPageUrl, {
+            persistArtifacts: persistSelected,
+            routeContext: "selection_enrichment",
+            planTier,
+            ...(allowRenderedFallback ? {} : { allowRenderedFallback: false }),
+            onFailure: (detail) => {
+              landingPageCaptureFailure = detail;
+              landingCaptureFailureReasonCode = detail.reasonCode;
+            },
+            instrumentation: pipelineInstrumentation?.instrumentation ?? null,
+          })
+        : Promise.resolve(selectedAdBase.landingPage ?? null),
+      creativeCapturePromise,
+    ]);
+    if (snapshot) {
+      landingPageCaptureFailure = null;
+    }
+    if (pipelineInstrumentation) {
+      pipelineInstrumentation.recordCaptureOutcome(
+        snapshot,
+        landingCaptureFailureReasonCode,
+      );
+    }
+  } finally {
+    if (pipelineInstrumentation) {
+      await pipelineInstrumentation.finish(env);
+    }
   }
   const creativeText = creativeCapture.value;
   const creativeCapturedAt = creativeCapture.capturedAt;
