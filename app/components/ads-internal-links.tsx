@@ -4,8 +4,15 @@ import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 
 export function BrowseTrackedCompetitors({
   links,
+  heading = "Browse tracked competitors",
 }: {
   links: readonly IndexableAdsLink[] | undefined;
+  /**
+   * Section title. The /ads/:domain brand pages render this cluster as
+   * "More tracked brands" (issue #2048); the /competitor-monitoring funnel
+   * keeps its original heading via the default.
+   */
+  heading?: string;
 }) {
   if (!links || links.length === 0) {
     return null;
@@ -15,7 +22,7 @@ export function BrowseTrackedCompetitors({
     <section className="ld-quiet" id="tracked-competitors">
       <div className="ld-section-head">
         <span className="ld-kicker">Public brand pages</span>
-        <h2>Browse tracked competitors</h2>
+        <h2>{heading}</h2>
         <p>
           Fresh, indexable Meta ad pages for competitors we currently have on record. These are
           the same brand pages the sitemap lists.

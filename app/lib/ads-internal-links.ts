@@ -97,19 +97,34 @@ export function pickFeaturedAdsInternalLink(
 }
 
 /**
- * Pick the "Related brands" set for an /ads/:domain page (issue #1417): the
- * other indexable /ads pages that page cross-links to, so no brand page in
- * the sitemap is an orphan. The current domain is always excluded — a page
- * must never link to itself. The selection is deterministic (stable across
- * renders and crawls, so the internal-link set does not churn), capped at
- * `count` (the issue's brief is 3–5, default 4). When fewer than `count`
- * other brands exist, it returns all of them; only a single-brand sitemap
- * yields an empty set, in which case the caller hides the section.
+ * How many sibling /ads/:domain cross-links a brand page renders in its
+ * "More tracked brands" cluster (issue #2048). The live /ads pages linked
+ * only ~4 siblings each (the #1417 brief), which left the 50+-page
+ * programmatic cohort crawl-shallow — Google discovered the surface page by
+ * page instead of traversing a connected brand graph. 12 keeps the accepted
+ * >=10-sibling floor with headroom against single-set indexability churn
+ * while the deterministic alphabetical slice stays stable across renders.
+ */
+export const RELATED_BRAND_LINK_COUNT = 12;
+
+/**
+ * Pick the "More tracked brands" set for an /ads/:domain page (issues
+ * #1417, #2048): the other indexable /ads pages that page cross-links to, so
+ * no brand page in the sitemap is an orphan and the cohort forms a connected
+ * crawlable cluster (>=10 siblings per page, issue #2048). The current
+ * domain is always excluded — a page must never link to itself. The
+ * selection is deterministic (stable across renders and crawls, so the
+ * internal-link set does not churn), capped at `count` (default
+ * RELATED_BRAND_LINK_COUNT). When fewer than `count` other brands exist, it
+ * returns all of them; only a single-brand sitemap yields an empty set, in
+ * which case the caller hides the section. Every returned link comes from
+ * the caller's sitemap-indexability-filtered set, so no dead (cache-miss
+ * /search-redirect) page is ever linked.
  */
 export function pickRelatedBrandLinks(
   links: readonly IndexableAdsLink[],
   currentDomain: string,
-  count = 4,
+  count = RELATED_BRAND_LINK_COUNT,
 ): IndexableAdsLink[] {
   const others = links
     .filter((link) => link.domain !== currentDomain)
