@@ -25,9 +25,10 @@ export interface SearchV2Context {
    * of a keyword query, so the brand's own ads surface instead of keyword
    * junk. Null when no curated id exists (the common case). The matcher still
    * verifies each ad lands on the brand's domain — a curated page id never
-   * fabricates a verified row (issue #1982).
+   * fabricates a verified row (issue #1982). Optional so legacy fixtures that
+   * predate the field still type-check; production always sets it via `?? null`.
    */
-  advertiserPageId: string | null;
+  advertiserPageId?: string | null;
 }
 
 export interface SearchV2Result extends SearchResponse {

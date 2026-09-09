@@ -22,9 +22,10 @@ export interface WebsiteIdentity {
    * query, so the brand's own ads surface instead of keyword junk. The
    * matcher still verifies each ad lands on the brand's domain — a curated
    * page id never fabricates a verified row, it only asks the provider the
-   * right question (issue #1982).
+   * right question (issue #1982). Optional so legacy fixtures that predate
+   * the field still type-check; production always sets it via `?? null`.
    */
-  advertiserPageId: string | null;
+  advertiserPageId?: string | null;
   resolvedAt: string;
 }
 
