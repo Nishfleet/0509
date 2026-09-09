@@ -59,7 +59,10 @@ import type {
   WebsitePageObservationSignals,
   WebsiteSiteScanPageRecord,
 } from "~/lib/types";
-import { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
+import {
+  formatWatchEventTypeLabel,
+  websitePageChangedFieldLabel,
+} from "~/lib/watch-event-display";
 
 // ==== Constants ====
 
@@ -1122,10 +1125,22 @@ function watchEventTypeForFact(fact: WebsitePageChange): WatchEventType | null {
 
 function summaryForFact(fact: WebsitePageChange): string {
   if (fact.kind === "field-changed") {
-    return `${fact.field} changed on ${fact.canonicalUrl}`;
+    return `${websitePageChangedFieldLabel(fact.field)} changed on ${fact.canonicalUrl}`;
   }
   return fact.canonicalUrl;
 }
+
+/**
+ * Customer importance for emitted website_page_* events. These clear the
+ * balanced instant-alert gate (75) so a real page change reaches the customer
+ * through the existing instant-alert path, while staying below the quiet-mode
+ * gate (90) so a quiet workspace is not spammed by page churn.
+ */
+const WEBSITE_PAGE_EVENT_IMPORTANCE: Partial<Record<WatchEventType, number>> = {
+  website_page_added: 80,
+  website_page_removed: 80,
+  website_page_changed: 82,
+};
 
 export interface EmitWebsitePageChangeEventsInput {
   watchlistId: string;
@@ -1188,6 +1203,7 @@ export async function emitWebsitePageChangeEvents(
       baselineFromRunId: prior.scan.watchlistRunId,
       title: formatWatchEventTypeLabel(eventType),
       summary: summaryForFact(fact),
+      importanceScore: WEBSITE_PAGE_EVENT_IMPORTANCE[eventType] ?? 0,
       metadata: {
         from: fact.before ?? "",
         to: fact.after ?? "",
