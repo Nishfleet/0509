@@ -55,15 +55,17 @@ export function adsSocialCardUrl(domain: string, brandName: string, score: numbe
     params.set("s", String(score));
   }
   // canonicalUrl strips query strings (it splits on `?`), so build the
-  // canonical path first and append the query params afterwards.
-  return `${canonicalUrl(`/social-card/ads/${domain}.svg`)}?${params.toString()}`;
+  // canonical path first and append the query params afterwards. The card is
+  // served as PNG (issue #2089), so the path uses `.png`.
+  return `${canonicalUrl(`/social-card/ads/${domain}.png`)}?${params.toString()}`;
 }
 
 export function timelineSocialCardUrl(domain: string, brandName: string): string {
   const params = new URLSearchParams({ n: brandName });
   // canonicalUrl strips query strings, so build the canonical path first and
   // append the brand query param afterwards (same recipe as the ads card).
-  return `${canonicalUrl(`/social-card/timeline/${domain}.svg`)}?${params.toString()}`;
+  // The card is served as PNG (issue #2089), so the path uses `.png`.
+  return `${canonicalUrl(`/social-card/timeline/${domain}.png`)}?${params.toString()}`;
 }
 
 export interface SearchShareMeta {
@@ -223,7 +225,10 @@ export function publicSeoMeta(input: {
   const overrideAlt = input.ogImageAlt;
   const imageUrl = overrideImage ?? SOCIAL_IMAGE_URL;
   const imageAlt = overrideImage ? (overrideAlt ?? SOCIAL_IMAGE_ALT) : SOCIAL_IMAGE_ALT;
-  const imageType = overrideImage?.endsWith(".svg") ? "image/svg+xml" : "image/png";
+  const imageType =
+    overrideImage && new URL(overrideImage).pathname.endsWith(".svg")
+      ? "image/svg+xml"
+      : "image/png";
 
   return [
     { title: input.title },
