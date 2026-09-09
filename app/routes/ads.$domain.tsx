@@ -878,6 +878,13 @@ export default function BrandAdsRoute() {
         <BrandAdsShell data={data} liveSearchPath={liveSearchPath} signupPath={signupPath} />
       )}
 
+      {/* Weekly-brief cross-link (issue #2143): every public brand page feeds
+          the stored-moves brief, so the page footer points at it. */}
+      <p className="f9-wk-dim f9-ads-wall-foot">
+        {"Stored moves across every tracked brand land in the weekly brief. "}
+        <Link to="/briefs/weekly">See this week&apos;s offer moves</Link>
+      </p>
+
       <MarketingFooter />
     </main>
   );

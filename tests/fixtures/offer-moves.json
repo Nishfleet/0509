@@ -1,0 +1,68 @@
+[
+  {
+    "brand": "Nykaa",
+    "domain": "nykaa.com",
+    "field": "Offer / price",
+    "beforeText": "₹999",
+    "afterText": "₹799",
+    "sourceUrl": "https://nykaa.com/glow-serum",
+    "capturedAt": "2026-09-08T04:30:00.000Z",
+    "adsPath": "/ads/nykaa.com",
+    "timelinePath": "/timeline/nykaa.com"
+  },
+  {
+    "brand": "Meesho",
+    "domain": "meesho.com",
+    "field": "New ads",
+    "beforeText": null,
+    "afterText": "3 new ads",
+    "sourceUrl": "https://meesho.com",
+    "capturedAt": "2026-09-07T11:00:00.000Z",
+    "adsPath": "/ads/meesho.com",
+    "timelinePath": "/timeline/meesho.com"
+  },
+  {
+    "brand": "boAt",
+    "domain": "boat-lifestyle.com",
+    "field": "Headline",
+    "beforeText": "Big Billion Days",
+    "afterText": "Festive Sale — 50% off",
+    "sourceUrl": "https://www.boat-lifestyle.com",
+    "capturedAt": "2026-09-06T09:15:00.000Z",
+    "adsPath": "/ads/boat-lifestyle.com",
+    "timelinePath": "/timeline/boat-lifestyle.com"
+  },
+  {
+    "brand": "Mamaearth",
+    "domain": "mamaearth.in",
+    "field": "Offer / price",
+    "beforeText": "₹499",
+    "afterText": "₹549",
+    "sourceUrl": "https://mamaearth.in/product/face-wash",
+    "capturedAt": "2026-09-05T16:45:00.000Z",
+    "adsPath": "/ads/mamaearth.in",
+    "timelinePath": "/timeline/mamaearth.in"
+  },
+  {
+    "brand": "Zomato",
+    "domain": "zomato.com",
+    "field": "CTA",
+    "beforeText": "Order now",
+    "afterText": "Get free delivery",
+    "sourceUrl": "https://zomato.com",
+    "capturedAt": "2026-09-04T08:00:00.000Z",
+    "adsPath": "/ads/zomato.com",
+    "timelinePath": "/timeline/zomato.com"
+  },
+  {
+    "brand": "Nykaa",
+    "domain": "nykaa.com",
+    "field": "Offer / price",
+    "beforeText": "₹1,299",
+    "afterText": "₹999",
+    "sourceUrl": "https://nykaa.com/lipstick",
+    "capturedAt": "2026-09-03T13:20:00.000Z",
+    "adsPath": "/ads/nykaa.com",
+    "timelinePath": "/timeline/nykaa.com"
+  }
+]
