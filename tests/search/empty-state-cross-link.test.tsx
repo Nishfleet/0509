@@ -180,9 +180,15 @@ describe("search empty-state cross-link to /capture-rules (issue 1568)", () => {
 		expect(markup).toContain("Nike");
 		expect(markup).not.toContain("not evidence that the competitor is inactive");
 
-		// The empty-state cross-links must NOT appear on the non-empty card.
-		expect(markup).not.toContain('href="/capture-rules"');
+		// The empty-state cross-links (issue 1568) must NOT appear on the
+		// non-empty card — the result list drives the buyer.
 		expect(markup).not.toContain("Read what we refuse to alert on");
 		expect(markup).not.toContain("How the score works");
+
+		// The only /capture-rules anchor on the non-empty card is the trust-proof
+		// note at the signup gate (issue 2049), identified by its own copy — not
+		// the empty-state cross-link.
+		expect(markup).toContain("Read the capture-validity guarantee");
+		expect(markup).not.toContain("Read what we refuse to alert on");
 	});
 });
