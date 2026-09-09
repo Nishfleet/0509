@@ -4,6 +4,7 @@ Epic: #1367 — "watch the competitor's ENTIRE website — every change, anywher
 Nish intent (verbatim): "watch competitors entire website (any changes anywhere for eg. product pages, policy, etc etc. everything on their website tracked)"
 Process (Nish): scout-and-plan → evals before specs → spec-gate → scoped queue items referencing this epic.
 Date: 2026-08-28.
+Production state verified against `origin/main` on 2026-09-09.
 
 This document is the **scout-and-plan** deliverable for the epic. It inventories
 what already exists, names the precise gaps against Nish's intent, defines the
@@ -92,11 +93,10 @@ verified live in the checkout at `6d28cb8c`.
    their own cadence and display — so a careers page change is labeled "about"
    and a policy change is labeled "other", which undersells both.
 
-4. **The flag is OFF in production.** `FULLSITE_WATCH_ENABLED` is not set in
-   `wrangler.jsonc`. The entire system never runs in prod. No canary, no
-   coverage label in the UI, no plan-tier page budgets
-   (`app/lib/plan-entitlements.ts` has no site-page budget field — "packet 5
-   plan metering" is explicitly deferred in the code comments).
+4. **The flag is ON in production.** Detection is wired (#1383), UI/digest
+   surfacing is merged (#1384/#2096), and production enablement is merged
+   (#1386/#2033). The canary list is still `nike.com www.nike.com` pending
+   packet 8.
 
 5. **No evals before specs.** Nish's process requires evals that measure
    meaningful-diff quality (cosmetic-suppression precision, materiality
