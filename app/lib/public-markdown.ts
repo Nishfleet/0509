@@ -70,6 +70,13 @@ const LLMS_PAGE_DETAILS = {
     description:
       "The last 7 days of offer, price, CTA, and ad moves across brands with a public page — stored captures only, each with source link and capture date.",
   },
+  // Issue #2043: the full-text AEO feed. In SITEMAP_PATHS, so it needs a
+  // title/description here or the _llmsDetailsCoverSitemap type fails.
+  "/llms-full.txt": {
+    title: "Full-text offer/proof feed",
+    description:
+      "Dated offer, proof, and change records for every tracked brand with a proof-complete capture — each state cites its screenshot, page-text, and Meta Ad Library source. Full-text companion to /llms.txt.",
+  },
   // Issue #2152: the /guides/* how-to cluster. In SITEMAP_PATHS, so it needs
   // a title/description here or the _llmsDetailsCoverSitemap type fails.
   "/guides/how-to-track-competitor-ads": {

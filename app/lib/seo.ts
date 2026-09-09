@@ -750,6 +750,13 @@ export const SITEMAP_PATHS = [
   // the page renders an honest quiet state instead of noindexing when
   // nothing moved, so it never serves a noindex page from the sitemap.
   "/briefs/weekly",
+  // Issue #2043: /llms-full.txt is the public full-text AEO feed of tracked-
+  // brand dated offer/proof/change records. Served by workers/app.ts (the
+  // route in app/routes/llms-full.txt.ts is a registration-only stub so the
+  // route-registry canary passes). Listed here so crawlers discover it from
+  // the sitemap; the feed degrades to an honest empty 200 when no brand has
+  // a proof-complete capture, so it never serves a noindex page.
+  "/llms-full.txt",
   // Issue #2152: /guides/* how-to cluster. One static entry — the guide is
   // stable long-form copy, so it never serves a noindex shell.
   "/guides/how-to-track-competitor-ads",
@@ -854,6 +861,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/search": { changefreq: "weekly", priority: "0.9" },
   "/brands": { changefreq: "weekly", priority: "0.6" },
   "/briefs/weekly": { changefreq: "weekly", priority: "0.6" },
+  "/llms-full.txt": { changefreq: "daily", priority: "0.6" },
   "/guides/how-to-track-competitor-ads": { changefreq: "monthly", priority: "0.6" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
   "/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
@@ -1061,6 +1069,10 @@ const ROBOTS_TXT = `# Grounding / AI-answer engines (Google-Extended, OAI-Search
 # stay denied at the zone by Cloudflare managed robots (ai-train=no). Policy:
 # docs/ai-crawler-policy.md. Issue #2061 / #1459: do not re-add a training
 # Disallow block here.
+#
+# Issue #2043: /llms-full.txt is the full-text AEO feed of tracked-brand dated
+# offer/proof/change records. Allowed below by Allow: / and listed in the
+# sitemap; AI answer engines may fetch it for citation.
 
 User-agent: *
 ${PUBLIC_ALLOW_RULES}
