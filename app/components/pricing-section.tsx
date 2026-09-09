@@ -17,6 +17,67 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { PublicCommercialLaunchSummary } from "~/lib/commercial-launch-gate.server";
 import type { RootLoaderData } from "~/root";
 
+/**
+ * Issue #2139 — sourced competitor entry prices for the "Price of knowing"
+ * table under the plan cards. Every field is printed on the cited source
+ * page; `tracked` and `cadence` appear only where the source prints them for
+ * that tier. docs/compare-pricing-sources.md carries the same entries with
+ * retrieval notes, and tests/compare-pages-sources.test.ts keeps the doc and
+ * this list in sync.
+ */
+export type CompetitorPriceAnchor = {
+  /** Vendor and entry tier as named on the source page. */
+  vendor: string;
+  /** Entry-tier price as printed, with currency and billing period. */
+  price: string;
+  /** Tracked-brand/page count — only when the source prints it for the tier. */
+  tracked?: string;
+  /** Check cadence — only when the source prints it for the tier. */
+  cadence?: string;
+  sourceUrl: string;
+  /** Retrieval date, YYYY-MM-DD. */
+  checked: string;
+};
+
+export const COMPETITOR_PRICE_ANCHORS: readonly CompetitorPriceAnchor[] = [
+  {
+    vendor: "Foreplay Basic",
+    price: "$59/month",
+    sourceUrl: "https://foreplay.co/pricing",
+    checked: "2026-09-09",
+  },
+  {
+    vendor: "Visualping Personal 1K",
+    price: "$14/mo",
+    tracked: "10 pages",
+    cadence: "every 15 min",
+    sourceUrl: "https://visualping.io/pricing",
+    checked: "2026-09-09",
+  },
+  {
+    vendor: "Panoramata Startup",
+    price: "€99/month (billed monthly)",
+    tracked: "up to 20 competitors",
+    cadence: "daily and weekly summaries",
+    sourceUrl: "https://panoramata.co/pricing",
+    checked: "2026-09-09",
+  },
+  {
+    vendor: "TrendTrack Starter",
+    price: "42$ per month, billed yearly",
+    tracked: "2 brands",
+    cadence: "data refreshed every 24 hours",
+    sourceUrl: "https://trendtrack.io/pricing",
+    checked: "2026-09-09",
+  },
+  {
+    vendor: "AdSpyder Spy",
+    price: "$10/month",
+    sourceUrl: "https://adspyder.io/pricing",
+    checked: "2026-09-09",
+  },
+];
+
 type LocalDisplayPrice = {
   amount?: number | null;
   currency?: string | null;
@@ -317,7 +378,7 @@ export function PricingSection({
           <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
         </div>
         <p className="ld-pricing-note">
-          Free: watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1
+          Free: watch 1 competitor — instant first scan, a proof-backed weekly Monday brief, and 1
           Collection. No card required. Paid plans add 3–6 hour checks, evidence,
           more competitors, Collections, daily briefs, and clear check caps. Save
           winning ads to collections — and see how long each ad has been running when the Ad Library
@@ -363,7 +424,7 @@ export function PricingSection({
           <small>free, forever</small>
           <div className="f9-plan-value" aria-label="Free value summary">
             <strong>
-              Watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1
+              Watch 1 competitor — instant first scan, a proof-backed weekly Monday brief, and 1
               Collection.
             </strong>
             <span>No card required.</span>
@@ -493,6 +554,56 @@ export function PricingSection({
             </article>
           );
         })}
+      </div>
+
+      <div className="f9-price-anchors ld-reveal" aria-label="Price of knowing">
+        <span className="ld-kicker">Price of knowing</span>
+        <h3>What a competitor watch costs across the market.</h3>
+        <p className="ld-pricing-note">
+          Entry prices as printed on each vendor&rsquo;s pricing page, with the source and the day
+          we checked. Only the fields the source prints are listed.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Tool</th>
+              <th scope="col">Entry price</th>
+              <th scope="col">Tracked</th>
+              <th scope="col">Cadence</th>
+              <th scope="col">Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Five to Nine Scout</th>
+              <td>$11/mo</td>
+              <td>3 competitors</td>
+              <td>every 6h</td>
+              <td>This page</td>
+            </tr>
+            <tr>
+              <th scope="row">Five to Nine Starter</th>
+              <td>$59/mo</td>
+              <td>10 competitors</td>
+              <td>every 3h</td>
+              <td>This page</td>
+            </tr>
+            {COMPETITOR_PRICE_ANCHORS.map((anchor) => (
+              <tr key={anchor.vendor}>
+                <th scope="row">{anchor.vendor}</th>
+                <td>{anchor.price}</td>
+                <td>{anchor.tracked ?? "—"}</td>
+                <td>{anchor.cadence ?? "—"}</td>
+                <td>
+                  <a href={anchor.sourceUrl} rel="noreferrer" target="_blank">
+                    Source
+                  </a>
+                  {` · checked ${anchor.checked}`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <p className="ld-pricing-note">
