@@ -961,15 +961,17 @@ const SITEMAP_XML = renderSitemapXml(ROOT_SITEMAP_STATIC_ENTRIES);
 // public path starting with "app" (e.g. /apply).
 // AI crawler policy — decision recorded in docs/ai-crawler-policy.md
 // ("answers yes, training no"): search and AI-answer/reference engines are
-// welcome (they match the wildcard group below: Googlebot + AI Overviews,
-// Bingbot, PerplexityBot, OAI-SearchBot, ChatGPT-User, Claude-By-Cloudflare,
-// ...), while AI training/fine-tuning crawlers are denied (ai-train=no).
+// welcome, while AI training/fine-tuning crawlers are denied (ai-train=no).
 // The Cloudflare edge managed robots.txt is the SOLE source for the AI-training
-// deny list; this file only carries the wildcard rules and Sitemap so the two
-// blocks are not duplicated. Do not re-add an AI-training block here.
-// Single source of truth for the AI training-crawler deny list (shared with
-// the llms.txt "AI access" section in app/lib/public-markdown.ts so the two
-// public surfaces can never drift apart). Policy: docs/ai-crawler-policy.md.
+// deny list (issue #1459). Do not re-add an AI-training Disallow block here.
+// Google-Extended is a control token for Gemini Apps / Vertex grounding AND
+// Gemini training (Google crawler docs). It is NOT in AI_TRAINING_CRAWLERS:
+// issue #2061 allows it on the public proof surface so Gemini grounding / AI
+// Overviews can use the Search index. Grounding is search/reference use, which
+// the content-signal already grants (`search=yes, use=reference`). ai-train=no
+// is not weakened: training-only bots stay denied at the zone.
+// Single source of truth for the training-crawler deny list (shared with the
+// llms.txt "AI access" section in app/lib/public-markdown.ts).
 export const AI_TRAINING_CRAWLERS = [
   "Amazonbot",
   "Applebot-Extended",
@@ -977,13 +979,21 @@ export const AI_TRAINING_CRAWLERS = [
   "CCBot",
   "ClaudeBot",
   "CloudflareBrowserRenderingCrawler",
-  "Google-Extended",
   "GPTBot",
   "meta-externalagent",
 ] as const;
 
-// The AI-training deny list lives in the Cloudflare managed-robots zone config;
-// it is intentionally NOT duplicated in this served robots.txt (issue #1459).
+// Explicit AEO allow-list (issue #2061). Named groups, not just the wildcard,
+// so the posture is intentional. Cloudflare managed robots prepends
+// `User-agent: Google-Extended / Disallow: /`; Google merges same-agent groups
+// and, on equal path length, uses the least restrictive rule, so `Allow: /`
+// here overrides that prepended Disallow.
+export const GROUNDING_ENGINES = [
+  "Google-Extended",
+  "OAI-SearchBot",
+  "PerplexityBot",
+] as const;
+
 /**
  * Locales whose served `/<locale>/sitemap.xml` actually carries indexable
  * translated entries (issue #2017, Option A per the orchestrator decision on
@@ -1019,19 +1029,38 @@ const LOCALE_SITEMAP_LINES = LOCALE_SITEMAP_LOCALES.map(
   (locale) => `Sitemap: ${canonicalUrl(`/${locale}/sitemap.xml`)}`,
 ).join("\n");
 
-const ROBOTS_TXT = `# AI answer/reference engines are allowed by the wildcard group below.
-# AI training/fine-tuning crawlers are denied at the zone by Cloudflare managed robots (ai-train=no).
-
-User-agent: *
-Allow: /api/docs
+// Shared by the wildcard group and every grounding-engine group. Private
+// /app/**, /api/**, /export/** stay disallowed; /share/ stays crawlable so
+// crawlers can see its noindex header.
+const PUBLIC_ALLOW_RULES = `Allow: /api/docs
 Disallow: /app$
 Disallow: /app/
 Disallow: /export/
 Disallow: /api/
 # /share/ stays crawlable so crawlers can see its noindex header.
-Allow: /
+Allow: /`;
+
+const GROUNDING_BLOCKS = GROUNDING_ENGINES.map(
+  (agent) => `User-agent: ${agent}
+${PUBLIC_ALLOW_RULES}`,
+).join("\n\n");
+
+const ROBOTS_TXT = `# Grounding / AI-answer engines (Google-Extended, OAI-SearchBot, PerplexityBot)
+# are allowed on the public proof surface. Grounding is search/reference use
+# (content-signal search=yes, use=reference), not training. AI training crawlers
+# stay denied at the zone by Cloudflare managed robots (ai-train=no). Policy:
+# docs/ai-crawler-policy.md. Issue #2061 / #1459: do not re-add a training
+# Disallow block here.
+
+User-agent: *
+${PUBLIC_ALLOW_RULES}
 Sitemap: ${canonicalUrl("/sitemap.xml")}
 ${LOCALE_SITEMAP_LINES}
+
+# Grounding / AI-answer engines — explicit, not just wildcard (issue #2061).
+# Google-Extended Allow: / overrides the Cloudflare managed Disallow: / because
+# Google merges same-agent groups and prefers the least restrictive equal-length rule.
+${GROUNDING_BLOCKS}
 `;
 
 const SOCIAL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">

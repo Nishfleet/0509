@@ -236,6 +236,29 @@ interface FunnelEventExtra {
   errorKind?: FunnelErrorKind;
 }
 
+/** Spec §4 field allowlist. Anything else is stripped before a record is logged. */
+const FUNNEL_DETAIL_ALLOWLIST = [
+  "event_id",
+  "workspace_id",
+  "timestamp",
+  "route",
+  "result_count_bucket",
+  "error_kind",
+  "referrer_domain",
+  "account_scope",
+] as const;
+
+function allowlistedFunnelDetails(details: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of FUNNEL_DETAIL_ALLOWLIST) {
+    const value = details[key];
+    if (value !== undefined) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
 /**
  * Account/workspace-scoped activation events. `first_brief_email_sent` can
  * fire from the async delivery path (no user request exists), so its scope is
@@ -278,7 +301,7 @@ function emitFunnelEvent(
   }
 
   logAppEvent("info", FUNNEL_OPERATIONS[kind], FUNNEL_MESSAGES[kind], {
-    details,
+    details: allowlistedFunnelDetails(details),
   });
 }
 

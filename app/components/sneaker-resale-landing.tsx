@@ -45,12 +45,34 @@ export const SNEAKER_RESALE_BRAND_PAGES: ReadonlyArray<{ name: string; domain: s
   { name: "Finish Line", domain: "finishline.com" },
 ];
 
-export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId }) {
+/**
+ * Intersect the labelled sneaker-resale hub brands with the sitemap's
+ * indexable `/timeline/:domain` set (issue #2100). Same empty-guard as
+ * `/brands` and `/ads/:domain` (#1931): a domain whose ledger is empty,
+ * demo, or 410 is omitted so this page never ships a dead timeline link.
+ */
+export function sneakerResaleIndexableTimelineDomains(
+  indexable: ReadonlySet<string>,
+): string[] {
+  return SNEAKER_RESALE_BRAND_PAGES.map((brand) => brand.domain.toLowerCase()).filter((domain) =>
+    indexable.has(domain),
+  );
+}
+
+export function SneakerResaleLanding({
+  locale,
+  timelineDomains = [],
+}: {
+  locale: SneakerResaleLocaleId;
+  /** Registrable domains whose `/timeline/:domain` is sitemap-indexable. */
+  timelineDomains?: readonly string[];
+}) {
   const copy = sneakerResaleCopy(locale);
   const market = SNEAKER_RESALE_MARKETS.find((entry) => entry.id === locale);
   if (!market) {
     throw new Error(`unknown sneaker-resale locale: ${locale}`);
   }
+  const timelineSet = new Set(timelineDomains.map((domain) => domain.toLowerCase()));
 
   return (
     <main className="f9-home">
@@ -139,6 +161,14 @@ export function SneakerResaleLanding({ locale }: { locale: SneakerResaleLocaleId
                 <strong>{brand.name}</strong>
                 <span>{brand.domain}</span>
               </Link>
+              {timelineSet.has(brand.domain.toLowerCase()) ? (
+                <Link
+                  className="ld-brand-timeline"
+                  to={`/timeline/${encodeURIComponent(brand.domain)}`}
+                >
+                  {copy.offerTimelineLabel}
+                </Link>
+              ) : null}
             </li>
           ))}
         </ul>

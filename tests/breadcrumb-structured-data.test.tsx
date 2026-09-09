@@ -106,11 +106,11 @@ describe("BreadcrumbList on /switch/* pages (issue #1463)", () => {
 
 describe("BreadcrumbList on category / top-level pages (issue #1463)", () => {
   it.each([
-    ["sneaker-resale", ["Home", "Sneaker resale"]],
-    ["capture-rules", ["Home", "Capture rules"]],
-    ["methodology", ["Home", "Ad Aggression Score"]],
-  ])("%s carries a Home → page trail and visible nav", async (route, names) => {
-    const markup = await renderDefault(route);
+    ["sneaker-resale", ["Home", "Sneaker resale"], { timelineDomains: [] as string[] }],
+    ["capture-rules", ["Home", "Capture rules"], undefined],
+    ["methodology", ["Home", "Ad Aggression Score"], undefined],
+  ])("%s carries a Home → page trail and visible nav", async (route, names, data) => {
+    const markup = await renderDefault(route, data);
     expect(crumbNames(itemsOf(breadcrumb(markup)))).toEqual(names);
     expect(markup).toContain('<nav aria-label="Breadcrumb"');
   });

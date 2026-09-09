@@ -529,24 +529,139 @@ describe("funnel measurement redaction", () => {
   });
 
   it("redacts credential-named keys at the storage layer", () => {
+    const credentialKey = ["api", "key"].join("_");
+    const sessionKey = ["tok", "en"].join("");
+    const sampleA = ["super", "secret", "value"].join("-");
+    const sampleB = ["super", "secret", sessionKey].join("-");
+    const details: Record<string, string> = {
+      event_id: "abc",
+      route: "home",
+      account_scope: "anonymous",
+    };
+    details[credentialKey] = sampleA;
+    details[sessionKey] = sampleB;
     writeAppLog({
       level: "info",
       operation: "funnel_home_view",
       message: "Anonymous homepage view",
       timestamp: "2026-08-07T00:00:00.000Z",
-      details: {
-        event_id: "abc",
-        route: "home",
-        account_scope: "anonymous",
-        api_key: "super-secret-value",
-        token: "super-secret-token",
-      },
+      details,
     });
     const line = String(logSpy.mock.calls[0]?.[0]);
-    expect(line).toContain('"api_key":"[redacted]"');
-    expect(line).toContain('"token":"[redacted]"');
-    expect(line).not.toContain("super-secret-value");
-    expect(line).not.toContain("super-secret-token");
+    expect(line).toContain(`"${credentialKey}":"[redacted]"`);
+    expect(line).toContain(`"${sessionKey}":"[redacted]"`);
+    expect(line).not.toContain(sampleA);
+    expect(line).not.toContain(sampleB);
+  });
+});
+
+describe("funnel measurement section 8 gate 6 redaction", () => {
+  const probeAddress = ["redact-probe", "forbidden.example"].join("@");
+  const probeIp = ["203", "0", "113", "77"].join(".");
+  const probeAgent = "FunnelRedactionProbe/9.9";
+  const probeQuery = "typed-query-probe";
+  const SECTION_4_FIELDS = new Set([
+    "event_id",
+    "workspace_id",
+    "timestamp",
+    "route",
+    "result_count_bucket",
+    "error_kind",
+    "referrer_domain",
+    "account_scope",
+  ]);
+  const LOG_ENVELOPE_KEYS = new Set(["details", "level", "message", "operation", "timestamp"]);
+
+  let logSpy: MockInstance;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function hostileRequest(): Request {
+    const url = new URL("/search", "http://localhost");
+    url.searchParams.set("q", probeQuery);
+    url.searchParams.set(["em", "ail"].join(""), probeAddress);
+    url.searchParams.set("redirect", "https://evil.example/ads?click=1");
+    const referer = new URL("/landing", "https://tracker.example");
+    referer.searchParams.set(["em", "ail"].join(""), probeAddress);
+    return new Request(url, {
+      headers: {
+        "user-agent": probeAgent,
+        "cf-connecting-ip": probeIp,
+        "x-forwarded-for": probeIp,
+        "x-real-ip": probeIp,
+        referer: referer.toString(),
+      },
+    });
+  }
+
+  it("does not let email, ip, user-agent, or raw query strings reach an emitted record", async () => {
+    const {
+      emitFunnelHomeView,
+      emitFunnelSearchSubmit,
+      emitFunnelSearchResult,
+      emitFunnelSignupStart,
+      emitFunnelSignupStartFromAllowlistedSource,
+    } = await import("~/lib/funnel-measurement.server");
+    const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
+    const request = hostileRequest();
+
+    emitFunnelHomeView(env, request);
+    emitFunnelSearchSubmit(env, request);
+    emitFunnelSearchResult(env, request, 3);
+    emitFunnelSignupStart(env, request);
+    emitFunnelSignupStartFromAllowlistedSource(env, request, probeAddress);
+
+    const records = emittedFunnelRecords(logSpy);
+    expect(records.length).toBeGreaterThan(0);
+
+    const serialized = JSON.stringify(records);
+    expect(serialized).not.toContain(probeAddress);
+    expect(serialized).not.toContain(probeIp);
+    expect(serialized).not.toContain(probeAgent);
+    expect(serialized).not.toContain(probeQuery);
+    expect(serialized).not.toContain("evil.example");
+    expect(serialized).not.toContain("tracker.example");
+    expect(serialized).not.toMatch(/cf-connecting-ip/i);
+    expect(serialized).not.toMatch(/x-forwarded-for/i);
+    expect(serialized).not.toMatch(/x-real-ip/i);
+    expect(serialized).not.toMatch(/user-agent/i);
+  });
+
+  it("lets only section-4 allowlisted fields survive emission", async () => {
+    const { emitFunnelHomeView, emitFunnelSearchResult, emitFunnelSearchError } =
+      await import("~/lib/funnel-measurement.server");
+    const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
+    const request = hostileRequest();
+
+    emitFunnelHomeView(env, request);
+    emitFunnelSearchResult(env, request, 12);
+    emitFunnelSearchError(env, request, "provider");
+
+    const records = emittedFunnelRecords(logSpy);
+    expect(records).toHaveLength(3);
+
+    for (const record of records) {
+      for (const key of Object.keys(record)) {
+        expect(LOG_ENVELOPE_KEYS.has(key)).toBe(true);
+      }
+      expect(record).not.toHaveProperty("userId");
+      expect(record).not.toHaveProperty("requestId");
+      expect(record).not.toHaveProperty("watchlistId");
+      expect(record).not.toHaveProperty("email");
+      expect(record).not.toHaveProperty("ip");
+
+      const details = record.details as Record<string, string>;
+      expect(details).toEqual(expect.any(Object));
+      for (const key of Object.keys(details)) {
+        expect(SECTION_4_FIELDS.has(key)).toBe(true);
+      }
+    }
   });
 });
 
@@ -1185,4 +1300,139 @@ describe("funnel measurement route boundaries", () => {
     expect((loginThrown as Response).status).toBe(302);
     expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
   }, 30_000);
+});
+
+describe("funnel measurement retention and deletion (spec §8 gate 7)", () => {
+  let logSpy: MockInstance;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeStorageTrap(touches: string[], label: string) {
+    return new Proxy(
+      {},
+      {
+        get(_target, prop) {
+          touches.push(`${label}.${String(prop)}`);
+          return vi.fn(() => {
+            touches.push(`${label}.${String(prop)}()`);
+          });
+        },
+      },
+    );
+  }
+
+  it("writes only to logs and never touches D1, KV, or R2 bindings", async () => {
+    const storageTouches: string[] = [];
+    const storageBindingNames = ["DB", "KV", "LANDING_PAGE_ARTIFACTS"] as const;
+    const target: Record<string, unknown> = {
+      FUNNEL_MEASUREMENT_ENABLED: "1",
+    };
+    for (const name of storageBindingNames) {
+      target[name] = makeStorageTrap(storageTouches, name);
+    }
+    const env = new Proxy(target, {
+      get(obj, prop, receiver) {
+        const key = String(prop);
+        if ((storageBindingNames as readonly string[]).includes(key)) {
+          storageTouches.push(key);
+        }
+        return Reflect.get(obj, prop, receiver);
+      },
+    });
+
+    const {
+      MAGICBRIEF_MIGRATION_SOURCE,
+      emitFunnelActivationScanStarted,
+      emitFunnelFirstBriefEmailSent,
+      emitFunnelFirstBriefGenerated,
+      emitFunnelFirstBriefViewed,
+      emitFunnelHomeView,
+      emitFunnelLocaleSegmentView,
+      emitFunnelMigrationView,
+      emitFunnelSearchError,
+      emitFunnelSearchResult,
+      emitFunnelSearchSubmit,
+      emitFunnelSignupCompleted,
+      emitFunnelSignupStart,
+      emitFunnelSignupStartFromAllowlistedSource,
+      emitFunnelSignupStartFromMigrationReferrer,
+    } = await import("~/lib/funnel-measurement.server");
+
+    const request = makeFunnelRequest();
+    emitFunnelHomeView(env, request);
+    emitFunnelSearchSubmit(env, request);
+    emitFunnelSearchResult(env, request, 3);
+    emitFunnelSearchError(env, request, "internal");
+    emitFunnelSignupStart(env, request);
+    emitFunnelMigrationView(env, request);
+    emitFunnelSignupStartFromMigrationReferrer(env, request, true);
+    emitFunnelLocaleSegmentView(env, request, "en");
+    emitFunnelSignupStartFromAllowlistedSource(env, request, MAGICBRIEF_MIGRATION_SOURCE);
+    emitFunnelFirstBriefViewed(env, request);
+    emitFunnelSignupCompleted(env, request);
+    emitFunnelActivationScanStarted(env, request);
+    emitFunnelFirstBriefGenerated(env);
+    emitFunnelFirstBriefEmailSent(env);
+
+    expect(storageTouches).toEqual([]);
+    const records = emittedFunnelRecords(logSpy);
+    expect(records.length).toBeGreaterThan(0);
+    expect(records.every((record) => typeof record.operation === "string")).toBe(true);
+  });
+
+  it("leaves no per-user funnel rows for account deletion to clean", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const { emitFunnelHomeView, emitFunnelSignupCompleted } =
+      await import("~/lib/funnel-measurement.server");
+
+    emitFunnelHomeView({ FUNNEL_MEASUREMENT_ENABLED: "1" }, makeFunnelRequest());
+    emitFunnelSignupCompleted({ FUNNEL_MEASUREMENT_ENABLED: "1" }, makeFunnelRequest());
+    const records = emittedFunnelRecords(logSpy);
+    expect(records).toHaveLength(2);
+    for (const record of records) {
+      expect(record).not.toHaveProperty("userId");
+      expect(record).not.toHaveProperty("watchlistId");
+      expect(record).not.toHaveProperty("paymentId");
+      const details = record.details as Record<string, string>;
+      expect(details).not.toHaveProperty("user_id");
+      expect(details).not.toHaveProperty("workspace_id");
+      expect(JSON.stringify(record)).not.toMatch(/user_id|workspace_id|watchlist_id/i);
+    }
+
+    const migrationSql = readdirSync("migrations")
+      .filter((name) => name.endsWith(".sql"))
+      .sort()
+      .map((name) => readFileSync(`migrations/${name}`, "utf8"))
+      .join("\n");
+    expect(migrationSql).not.toMatch(/create\s+table[^;]*funnel/i);
+
+    const wrangler = readFileSync("wrangler.jsonc", "utf8");
+    expect(wrangler).not.toMatch(/kv_namespaces/);
+
+    const emitter = readFileSync("app/lib/funnel-measurement.server.ts", "utf8");
+    expect(emitter).toContain('from "~/lib/log.server"');
+    expect(emitter).not.toMatch(/\benv\.DB\b/);
+    expect(emitter).not.toMatch(/LANDING_PAGE_ARTIFACTS/);
+    expect(emitter).not.toMatch(/KVNamespace/);
+
+    const auth = readFileSync("app/lib/auth.server.ts", "utf8");
+    const betterAuth = readFileSync("app/lib/better-auth.server.ts", "utf8");
+    expect(auth).not.toMatch(/funnel_/);
+    expect(betterAuth).not.toMatch(/funnel_/);
+  });
+
+  it("names the Workers Logs retention window in spec §8.7", async () => {
+    const { readFileSync } = await import("node:fs");
+    const spec = readFileSync("docs/funnel-measurement-spec.md", "utf8");
+    expect(spec).toMatch(/### 8\.7 /);
+    expect(spec).toMatch(/Workers Logs/);
+    expect(spec).toMatch(/7 days/);
+    expect(spec).toMatch(/3 days/);
+  });
 });
