@@ -1,15 +1,18 @@
 import { digestMetadataForEvent } from "~/lib/change-intelligence";
 import type { AppEnv } from "~/lib/env.server";
 import {
+  EXISTING_HISTORY_SCAN_STATUS,
   FIRST_BRIEF_KIND,
   buildFirstBriefDigestItems,
+  evidenceUrlFromAd,
   firstBriefPeriod,
   hasEvidenceLinkedItem,
   isFirstBriefDigest,
+  watchlistDomainForExistingHistory,
   type FirstBriefAd,
   type FirstBriefEvent,
 } from "~/lib/first-brief";
-import type { WatchEventRecord, WatchlistRecord } from "~/lib/types";
+import type { AdRecord, WatchEventRecord, WatchlistRecord } from "~/lib/types";
 
 type DeliveryProfile = {
   email?: string | null;
@@ -311,6 +314,10 @@ async function deliverFirstBrief(
  * Catch-up path for the in-session first brief. Used by the dashboard and
  * the first-scan workflow after the activation scan has persisted, because
  * the scan runner itself is not the right place to add this side effect.
+ *
+ * Issue #2054: if the live scan has not finished, file from cached ads
+ * already on file for this competitor (public /ads history) so the signup
+ * session is not stuck on a Monday-email empty state.
  */
 export async function ensureFirstBriefForWorkspace(
   env: AppEnv,
@@ -322,7 +329,83 @@ export async function ensureFirstBriefForWorkspace(
     const scanned = watchlists.find(
       (watchlist) => watchlist.isActive && Boolean(watchlist.lastScannedAt),
     );
-    if (!scanned) {
+    const active = watchlists.find((watchlist) => watchlist.isActive);
+    if (scanned) {
+      const [runs, profile] = await Promise.all([
+        db.getRecentSuccessfulRuns(env, scanned.id, 1),
+        db.getUserDeliveryProfile(env, userId),
+      ]);
+      const run = runs[0];
+      if (run) {
+        const [events, observations] = await Promise.all([
+          db.listWatchEventsForRun(env, scanned.id, run.id),
+          db.listObservationsForRun(env, run.id),
+        ]);
+        const fromScan = await maybeFileAndDeliverFirstBrief(env, {
+          watchlist: scanned,
+          events,
+          adsSeen: observations.length,
+          observations: observations.map((observation) => ({
+            ad_id: observation.ad_id,
+            landing_page_url: observation.landing_page_url ?? null,
+          })),
+          userDeliveryProfile: profile,
+        });
+        if (fromScan.filed || fromScan.reason === "already_filed") {
+          return fromScan;
+        }
+        const fromHistory = await maybeFileFirstBriefFromExistingHistory(env, scanned);
+        if (fromHistory.filed || fromHistory.reason === "already_filed") {
+          return fromHistory;
+        }
+        return fromScan;
+      }
+    }
+    if (active) {
+      return await maybeFileFirstBriefFromExistingHistory(env, active);
+    }
+    return {
+      filed: false,
+      delivered: false,
+      digestRunId: null,
+      reason: "no_evidence",
+    };
+  } catch (error) {
+    await reportFailure(env, error);
+    return {
+      filed: false,
+      delivered: false,
+      digestRunId: null,
+      reason: "create_failed",
+    };
+  }
+}
+
+/**
+ * File the first brief from ads already in the public brand-page cache for
+ * this competitor. Creates a skipped (not succeeded) seed run so the live
+ * activation scan still owns the real baseline. Failures never fail signup.
+ */
+export async function maybeFileFirstBriefFromExistingHistory(
+  env: AppEnv,
+  watchlist: WatchlistRecord,
+): Promise<FirstBriefFileResult> {
+  try {
+    const existing = await findExistingFirstBrief(env, watchlist.userId);
+    if (existing && hasEvidenceLinkedItem(existing.items)) {
+      const db = await data();
+      const profile = await db.getUserDeliveryProfile(env, watchlist.userId);
+      return await maybeFileAndDeliverFirstBrief(env, {
+        watchlist,
+        events: [],
+        adsSeen: 0,
+        observations: [],
+        userDeliveryProfile: profile,
+      });
+    }
+
+    const domain = watchlistDomainForExistingHistory(watchlist);
+    if (!domain) {
       return {
         filed: false,
         delivered: false,
@@ -330,12 +413,19 @@ export async function ensureFirstBriefForWorkspace(
         reason: "no_evidence",
       };
     }
-    const [runs, profile] = await Promise.all([
-      db.getRecentSuccessfulRuns(env, scanned.id, 1),
-      db.getUserDeliveryProfile(env, userId),
-    ]);
-    const run = runs[0];
-    if (!run) {
+
+    const { loadBrandPageCacheSnapshot, brandOwnedAdIdSet, adHasVerifiedDomainLink } =
+      await import("~/lib/brand-page.server");
+    const { ALL_COUNTRIES_VALUE } = await import("~/lib/countries");
+    const snapshot = await loadBrandPageCacheSnapshot(env, {
+      domain,
+      visitorCountry: watchlist.targetCountry?.trim() || ALL_COUNTRIES_VALUE,
+    });
+    const evidenceAds = pickEvidenceAdsFromHistory(snapshot?.ads ?? [], domain, {
+      brandOwnedAdIdSet,
+      adHasVerifiedDomainLink,
+    });
+    if (evidenceAds.length === 0) {
       return {
         filed: false,
         delivered: false,
@@ -343,14 +433,80 @@ export async function ensureFirstBriefForWorkspace(
         reason: "no_evidence",
       };
     }
+
+    const db = await data();
+    const profile = await db.getUserDeliveryProfile(env, watchlist.userId);
+    const now = new Date().toISOString();
+    const runId = await db.createWatchlistRun(env, watchlist.id, "manual", null, 3, {
+      scanStatus: EXISTING_HISTORY_SCAN_STATUS,
+      adsSeen: evidenceAds.length,
+    });
+    try {
+      for (const ad of evidenceAds) {
+        await db.upsertAd(env, ad);
+        await db.createAdObservation(env, {
+          adId: ad.metaAdId,
+          watchlistRunId: runId,
+          landingPageSnapshotId: null,
+          landingPageUrl: ad.landingPageUrl,
+          seenAt: snapshot?.fetchedAt ?? now,
+          isActive: ad.active,
+          metadata: { source: EXISTING_HISTORY_SCAN_STATUS },
+        });
+      }
+      const firstAd = evidenceAds[0];
+      if (!firstAd) {
+        return {
+          filed: false,
+          delivered: false,
+          digestRunId: null,
+          reason: "no_evidence",
+        };
+      }
+      const sourceUrl = evidenceUrlFromAd({
+        metaAdId: firstAd.metaAdId,
+        landingPageUrl: firstAd.landingPageUrl,
+        adSnapshotUrl: firstAd.adSnapshotUrl,
+      });
+      const count = evidenceAds.length;
+      await db.createWatchEvent(env, {
+        watchlistId: watchlist.id,
+        runId,
+        eventType: "ad_new",
+        adId: firstAd.metaAdId,
+        baselineFromRunId: null,
+        title: `Baseline captured: ${count} active ad${count === 1 ? "" : "s"}`,
+        summary: `We recorded ${count} active ad${count === 1 ? "" : "s"} for ${watchlist.name} as your starting point. From the next scan onward, you'll only hear about real changes.`,
+        metadata: {
+          kind: "baseline",
+          adsSeen: count,
+          sourceUrl,
+          adId: firstAd.metaAdId,
+          capturedAt: snapshot?.fetchedAt ?? now,
+          source: EXISTING_HISTORY_SCAN_STATUS,
+        },
+        status: "confirmed",
+        confirmedAt: now,
+      });
+    } finally {
+      await db.finishWatchlistRun(env, runId, {
+        status: "skipped",
+        pagesScanned: 0,
+        summary: {
+          scanStatus: EXISTING_HISTORY_SCAN_STATUS,
+          adsSeen: evidenceAds.length,
+        },
+      });
+    }
+
     const [events, observations] = await Promise.all([
-      db.listWatchEventsForRun(env, scanned.id, run.id),
-      db.listObservationsForRun(env, run.id),
+      db.listWatchEventsForRun(env, watchlist.id, runId),
+      db.listObservationsForRun(env, runId),
     ]);
     return await maybeFileAndDeliverFirstBrief(env, {
-      watchlist: scanned,
+      watchlist,
       events,
-      adsSeen: observations.length,
+      adsSeen: evidenceAds.length,
       observations: observations.map((observation) => ({
         ad_id: observation.ad_id,
         landing_page_url: observation.landing_page_url ?? null,
@@ -366,6 +522,28 @@ export async function ensureFirstBriefForWorkspace(
       reason: "create_failed",
     };
   }
+}
+
+function pickEvidenceAdsFromHistory(
+  ads: readonly AdRecord[],
+  domain: string,
+  helpers: {
+    brandOwnedAdIdSet: (ads: AdRecord[], brandDomain: string) => Set<string>;
+    adHasVerifiedDomainLink: (ad: AdRecord, brandDomain: string) => boolean;
+  },
+): AdRecord[] {
+  const owned = helpers.brandOwnedAdIdSet([...ads], domain);
+  const withEvidence = ads.filter((ad) => {
+    const url = evidenceUrlFromAd({
+      metaAdId: ad.metaAdId,
+      landingPageUrl: ad.landingPageUrl,
+      adSnapshotUrl: ad.adSnapshotUrl,
+    });
+    if (!url) return false;
+    if (owned.size > 0) return owned.has(ad.metaAdId);
+    return helpers.adHasVerifiedDomainLink(ad, domain);
+  });
+  return withEvidence.slice(0, 5);
 }
 
 export async function ensureFirstBriefForWatchlist(
