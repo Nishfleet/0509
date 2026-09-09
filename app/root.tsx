@@ -49,6 +49,7 @@ export interface RootLoaderData {
   pricingPlans: PricingPlan[];
   usageBundles: UsageBundle[];
   countryCode: string | null;
+  googleSiteVerification: string | undefined;
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -66,10 +67,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     pricingPlans: pricingPlans(),
     usageBundles: usageBundles(),
     countryCode: countryCode ?? null,
+    googleSiteVerification:
+      typeof env.GOOGLE_SITE_VERIFICATION === "string" &&
+      env.GOOGLE_SITE_VERIFICATION.trim() !== ""
+        ? env.GOOGLE_SITE_VERIFICATION.trim()
+        : undefined,
   } satisfies RootLoaderData;
 }
 
-export const meta = () => [{ title: "Five to Nine" }];
+export const meta = (args: { data?: RootLoaderData }) => {
+  const tags: Array<{ title: string } | { name: string; content: string }> = [
+    { title: "Five to Nine" },
+  ];
+  const verification = args.data?.googleSiteVerification?.trim();
+  if (verification) {
+    tags.push({ name: "google-site-verification", content: verification });
+  }
+  return tags;
+};
 
 // PERF: one combined css2 request covering exactly the weights app.css uses —
 // Inter 400/500/600/700, Bricolage Grotesque 600/700/800 (800 is the "Caught

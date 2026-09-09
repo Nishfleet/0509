@@ -20,6 +20,11 @@ beforeEach(() => {
       ...actual,
       useLoaderData: () => currentData,
       useRouteLoaderData: () => undefined,
+      // Pinned to /methodology so the methodology-route cross-link resolution
+      // test can render the real route (issue #2052 draws the /ads page's
+      // methodology href to a 200-serving route). The /ads route never calls
+      // useLocation, so this default is inert for every other test here.
+      useLocation: () => ({ pathname: "/methodology" }),
       Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
@@ -279,9 +284,10 @@ describe("/ads/:domain — Case File render", () => {
     // 6 total − 5 shown = +1 more.
     expect(markup).toContain("+1");
     expect(markup).toContain("more ads on record");
-    // Primary CTA carries the domain into the Overview setup card.
+    // Primary CTA carries the domain into the Overview setup card
+    // (issue #2051: the CTA also deep-links with ?competitor=<domain>).
     expect(markup).toContain(
-      "/auth/signup?redirectTo=%2Fapp%3Fwebsite%3Dnike.com%23setup-checklist",
+      "/auth/signup?competitor=nike.com&amp;redirectTo=%2Fapp%3Fwebsite%3Dnike.com%23setup-checklist",
     );
   });
 
@@ -1123,6 +1129,29 @@ describe("/ads/:domain — methodology footer cross-link (issues #1552, #2022)",
       expect(markup).toContain(anchor);
       expect(markup.indexOf(anchor)).toBeGreaterThan(markup.indexOf("All 6 ads, on the wall"));
     }
+  });
+
+  it("resolves the methodology cross-link to a live 200 route, never a 404 dead end (mock-free, issue #2052)", async () => {
+    // Render the real /ads/:domain route and pull the methodology href it emits.
+    const adsMarkup = await render(
+      populated({ domain: "nike.com", canonicalPath: "/ads/nike.com" }),
+    );
+    const match = adsMarkup.match(/href="(\/methodology)"/);
+    expect(match, "the /ads page must emit a methodology cross-link").not.toBeNull();
+    const methodologyHref = match![1];
+
+    // The href must be the canonical path, not a legacy nested path
+    // (/methodology/ad-aggression-score) that served only a 301->404 chain.
+    expect(methodologyHref).toBe(AD_AGGRESSION_METHODOLOGY_PATH);
+    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/methodology");
+
+    // Mock-free route check: render the real methodology route the href points
+    // at and assert it serves a 200-equivalent body (non-empty, no throw), so a
+    // future rename that leaves /ads pointing at a 404 fails the suite.
+    const { default: MethodologyRoute } = await import("~/routes/methodology");
+    const methodologyMarkup = renderToStaticMarkup(createElement(MethodologyRoute));
+    expect(methodologyMarkup.length).toBeGreaterThan(0);
+    expect(methodologyMarkup).toContain("Ad Aggression Score");
   });
 
   it("hides the methodology footer on an unverified wall with no verified-linked ad (no score exists to explain)", async () => {

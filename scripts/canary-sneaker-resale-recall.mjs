@@ -67,6 +67,31 @@ export const KNOWN_IDENTITY_GAPS = Object.freeze(new Map([
   ["goat.com", "Nishfleet/0509#1950"],
   ["on.com", "Nishfleet/0509#1950"],
   ["reebok.com", "Nishfleet/0509#1950"],
+  // Live-evidenced 2026-09-09 ~04:45 IST (senior auditor): zappos ads EXIST and
+  // are VERIFIED — /search?q=zappos.com returns 13 rows, all 13 verified, 11
+  // linking www.zappos.com — but the website=zappos.com (apex) probe connects 0
+  // (settled "No verified ads found for zappos.com", NOT warming — the #2037
+  // warming carve-out does not apply), /ads/zappos.com 301s to /search?q=, and
+  // the sitemap dropped it after 2026-09-06's indexable capture. Same apex↔www
+  // identity-resolution class as goat/on/reebok: the fix is a curated
+  // IDENTITY_OVERRIDES entry (ridge.com precedent, #2014), tracked in the issue.
+  // Auto-drops the moment the pipeline fix lands and the probe returns rows.
+  ["zappos.com", "Nishfleet/0509#2059"],
+  // Live-evidenced 2026-09-09 ~05:45 IST (senior auditor): footlocker ads EXIST
+  // and are VERIFIED — /search?q=footlocker.com returns 19 rows (16 verified /
+  // 3 likely), landings linking www.footlocker.com plus regional hosts
+  // (www.footlocker.com.sa) — but the website=footlocker.com (apex) probe the
+  // canary and the ads-domain-publisher both use returns a SETTLED empty page
+  // ("No verified ads found", isWarming=false — the #2037 warming carve-out
+  // does not apply), /ads/footlocker.com 301s to /search?q=, and the sitemap
+  // dropped it from the indexable capture set. Same apex↔www
+  // identity-resolution class as goat/on/reebok (#1950) and zappos (#2059):
+  // the fix is a curated IDENTITY_OVERRIDES entry (ridge.com precedent,
+  // #2014), tracked in Nishfleet/0509#2068. Interim treatment mirrors the
+  // zappos carve-out (#2060) so a known, tracked gap does not re-summon an
+  // auditor on every run. Auto-drops the moment the pipeline fix lands and
+  // the probe returns rows.
+  ["footlocker.com", "Nishfleet/0509#2068"],
 ]));
 
 // A cold domain can return a warming page (0 rows) on the first hit. The

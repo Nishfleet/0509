@@ -159,12 +159,12 @@
     {
       "claimId": "AUDIT-LANDING-PAGE-CHANGE-HISTORY",
       "registryClaim": "PLAN-FEATURE-CATALOG",
-      "text": "Landing-page change history as scheduled watches complete.",
+      "text": "Landing-page change history on tracked brands with a baseline.",
       "surface": "pricing Starter/Agency feature list",
-      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts → pricing feature string is forward-looking (no 'with screenshots' promise); tests/monitoring-landing-page-snapshot.test.ts → 'persists a fresh capture as a versioned landing_page_snapshot row with all fields'. Live D1 (2026-08-27): SELECT COUNT(*) FROM landing_page_snapshot = 0.",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts → pricing feature string is scoped to brands with a baseline (no 'with screenshots' promise, no 'as scheduled watches complete'); tests/customer-claim-surface-registry.test.ts → advertised feature bullets resolve to a verified registry row; tests/monitoring-landing-page-snapshot.test.ts → persist path. Live 2026-09-08: /timeline/:domain is reachable for 7 of 52 tracked brands (issue #2021 grows coverage).",
       "currentResult": "pass",
-      "resultDetail": "Live production D1 on 2026-08-27 still has 0 landing_page_snapshot rows. The Starter/Agency feature list no longer promises a populated screenshot history; it says the trail fills as scheduled watches complete, which matches an empty table plus a working persist path.",
-      "betOrCopyChange": "copy changed 2026-08-27 — feature label is forward-looking until landing_page_snapshot has ≥1 row from a real scheduled watch",
+      "resultDetail": "The public offer-history surface is reachable for 7 of 52 tracked brands (2026-09-08). Starter/Agency copy no longer implies every paid watch fills a history; it says history exists on tracked brands with a baseline. Growing that baseline is issue #2021, not this honesty gate.",
+      "betOrCopyChange": "copy changed 2026-09-09 — scoped to tracked brands with a baseline (issue #2055) after acquisition-traffic warning that 'as scheduled watches complete' still oversold 7/52 coverage",
       "nishReserved": false
     },
     {
@@ -243,11 +243,22 @@
       "resultDetail": "2026-08-30 live snap: home said 12 of 12 while /ads/nykaa.com wall read 24 (3 brand-owned, 6 verified links, 18 unverified matches) — same brand, same day, two totals. Fix (issue 1468): buildPublicProofBrief counts the full usable snapshot and every home proof-brief surface resolves visitor country through the shared /ads ladder into loadBrandPageCacheSnapshot, so both totals come from one cache row.",
       "betOrCopyChange": "bet 10 (claim/reality reconciliation): code and copy change — the capped 12-ad subset count is gone; the home print and the brand page wall count the same snapshot",
       "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-PRICING-FEATURE-BULLETS",
+      "registryClaim": "PLAN-FEATURE-CATALOG",
+      "text": "Every paid-plan feature bullet advertised on /pricing and the homepage pricing cards is recorded on a verified registry row.",
+      "surface": "pricing plan feature lists, homepage pricing section",
+      "liveQueryOrTest": "tests/customer-claim-surface-registry.test.ts → 'resolves every advertised pricing feature string to a verified registry row (issue #2055)'",
+      "currentResult": "pass",
+      "resultDetail": "A mechanical test walks pricingPlans().features and requires each string to appear on a registry rows[] entry marked verified (sentence or advertisedCopy). Adding a new feature bullet without a verified registry entry fails CI.",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — issue #2055 detector so public feature copy cannot outrun the registry",
+      "nishReserved": false
     }
   ],
   "summary": {
-    "totalClaims": 21,
-    "pass": 20,
+    "totalClaims": 22,
+    "pass": 21,
     "failCopyChangeNeeded": 0,
     "nishReserved": 1,
     "passCodeDataPending": 0,

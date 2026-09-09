@@ -1,7 +1,10 @@
+import { normalizeCompetitorWebsiteInput } from "~/lib/competitor-website";
 import type { DigestRecord, WatchEventType } from "~/lib/types";
 
 export const FIRST_BRIEF_KIND = "first_brief";
 export const FIRST_BRIEF_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+/** Skipped run marker so a cache-history seed is not treated as a live baseline. */
+export const EXISTING_HISTORY_SCAN_STATUS = "existing_history";
 
 const EVIDENCE_URL_KEYS = [
   "sourceUrl",
@@ -206,9 +209,25 @@ export function shouldEnsureFirstBrief(input: {
   if (existing && hasEvidenceLinkedItem(existing.items)) {
     return false;
   }
-  return input.watchlists.some(
-    (watchlist) => watchlist.isActive && Boolean(watchlist.lastScannedAt),
-  );
+  // Issue #2054: file from cached ads for this domain before the live
+  // activation scan finishes, so a signup that tracked a known competitor
+  // (Track CTA, public /ads page) sees the brief in the same session.
+  return input.watchlists.some((watchlist) => watchlist.isActive);
+}
+
+/** Registrable host for a competitor watchlist, or null when it is not a website. */
+export function watchlistDomainForExistingHistory(watchlist: {
+  targetId?: string | null;
+  targetLabel?: string | null;
+}): string | null {
+  for (const raw of [watchlist.targetId, watchlist.targetLabel]) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const website = normalizeCompetitorWebsiteInput(raw);
+    if (website.host && !website.error) {
+      return website.host;
+    }
+  }
+  return null;
 }
 
 /**

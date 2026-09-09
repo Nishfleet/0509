@@ -136,7 +136,7 @@ describe("adsPageServiceJsonLd", () => {
 
     expect(block["@context"]).toBe("https://schema.org");
     expect(block["@type"]).toBe("Service");
-    expect(block.name).toBe("Watch nike.com");
+    expect(block.name).toBe("Track nike.com");
     expect(block.url).toBe("https://0509.io/ads/nike.com");
     expect(block.provider).toEqual({
       "@type": "Organization",
@@ -190,7 +190,7 @@ describe("/ads/:domain JSON-LD", () => {
 
     const service = services[0] ?? {};
     expect(service["@context"]).toBe("https://schema.org");
-    expect(service.name).toBe("Watch nike.com");
+    expect(service.name).toBe("Track nike.com");
     expect(service.url).toBe("https://0509.io/ads/nike.com");
     expect(service.provider).toEqual({
       "@type": "Organization",

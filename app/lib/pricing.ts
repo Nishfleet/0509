@@ -139,7 +139,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   if (plan === "starter" || plan === "agency") {
     features.push("Email Notifications");
     features.push("Exports");
-    features.push("Landing-page change history as scheduled watches complete");
+    features.push("Landing-page change history on tracked brands with a baseline");
   }
   if (plan === "agency") {
     features.push("Team workspace");

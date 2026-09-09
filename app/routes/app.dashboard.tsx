@@ -398,7 +398,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceDeliveryTimezone: workspaceDeliveryConfig?.timezone ?? null,
     hasPaymentIssue,
     sectionWarnings,
-    setupPrefillWebsite: requestUrl.searchParams.get("website")?.trim() ?? "",
+    // Issue #2051: `competitor` is an accepted alias for the prefill param
+    // (the /ads/:domain Track CTA deep-links with ?competitor=<domain>),
+    // normalized onto the same ?website= wiring the setup checklist reads.
+    setupPrefillWebsite:
+      requestUrl.searchParams.get("website")?.trim() ||
+      requestUrl.searchParams.get("competitor")?.trim() ||
+      "",
     setupPrefillCountry: requestUrl.searchParams.get("country")?.trim() ?? "",
     setupCreatedCount: readSetupCreatedCount(requestUrl),
     firstScanStates,
