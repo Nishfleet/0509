@@ -170,6 +170,24 @@ export default {
       ]);
       return markdownResponse(request, buildLlmsText(brandEntries, timelineEntries));
     }
+
+    // /llms-full.txt full-text grounding corpus (issue #2043): the dated
+    // offer/proof record feed answer engines cite. Read-only from the same
+    // D1 evidence the /timeline/:domain surface reads — same proof gates,
+    // same bounded read envelope; degrades to an honest empty feed when D1
+    // is absent, never a 500 and never a fabricated state. Same serving
+    // path (and content-signal headers) as /llms.txt, before the rate-limit
+    // gate so crawlers are treated like the other public SEO files.
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      url.pathname === "/llms-full.txt"
+    ) {
+      const { buildLlmsFullText, loadLlmsFullBrandTimelines } = await import(
+        "../app/lib/llms-full.server"
+      );
+      const brandTimelines = await loadLlmsFullBrandTimelines(env);
+      return markdownResponse(request, buildLlmsFullText(brandTimelines));
+    }
     if (
       (request.method === "GET" || request.method === "HEAD") &&
       wantsPublicMarkdown(request) &&
