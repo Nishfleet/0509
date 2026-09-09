@@ -183,3 +183,34 @@ describe("brandTimelinesFromRows", () => {
     expect(sections).toEqual([]);
   });
 });
+
+describe("serveLlmsFullFeed", () => {
+  it("returns an honest empty markdown feed when D1 is absent, never a 500", async () => {
+    const { serveLlmsFullFeed, LLMS_FULL_CONTENT_SIGNAL } = await import(
+      "~/lib/llms-full.server"
+    );
+    const response = await serveLlmsFullFeed(
+      {},
+      new Request("https://0509.io/llms-full.txt"),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+    expect(response.headers.get("content-signal")).toBe(LLMS_FULL_CONTENT_SIGNAL);
+    const text = await response.text();
+    expect(text).toContain("No brand records stored yet");
+    expect(text).not.toMatch(/^## /m);
+  });
+});
+
+describe("/llms-full.txt resource route", () => {
+  it("serves the feed from the registered loader when Cloudflare context is absent", async () => {
+    const { loader } = await import("~/routes/llms-full[.]txt");
+    const response = await loader({
+      context: {},
+      request: new Request("https://0509.io/llms-full.txt"),
+      params: {},
+    } as never);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("No brand records stored yet");
+  });
+});

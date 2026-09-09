@@ -1328,6 +1328,15 @@ describe("SITEMAP_PATHS", () => {
     }
   });
 
+  it("registers /llms-full.txt as an exact resource route, not the :locale catch-all (issue #2043)", () => {
+    const patterns = collectRoutePatterns(routes as unknown as PlainRoute[]);
+    const exact = patterns.filter((pattern) => pattern.test("llms-full.txt"));
+    expect(
+      exact.some((pattern) => pattern.source === "^llms-full\\.txt$"),
+      "/llms-full.txt must be a named route so the :locale catch-all cannot 404 it",
+    ).toBe(true);
+  });
+
   it("keeps restored money pages in the sitemap and signup out", () => {
     // /compare/foreplay and /compare/visualping were restored as money pages
     // (#944/#945) and are now canonicalized duplicates of their more specific

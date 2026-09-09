@@ -204,6 +204,32 @@ function renderLlmsFullEntry(entry: OfferLedgerEntry): string | null {
   return `- ${parts.join(" — ")}\n${evidence}`;
 }
 
+/** Markdown headers the public feed serves. Shared by the worker intercept
+ * and the React Router resource route so the two cannot drift. */
+export const LLMS_FULL_CONTENT_TYPE = "text/markdown; charset=utf-8";
+export const LLMS_FULL_CONTENT_SIGNAL =
+  "search=yes, ai-input=yes, ai-train=no, use=reference";
+
+export function llmsFullMarkdownResponse(request: Request, body: string): Response {
+  return new Response(request.method === "HEAD" ? null : body, {
+    headers: {
+      "content-type": LLMS_FULL_CONTENT_TYPE,
+      vary: "Accept",
+      "content-signal": LLMS_FULL_CONTENT_SIGNAL,
+    },
+  });
+}
+
+/** Load the dated corpus and return the public markdown Response. Read-only:
+ * never scrapes, never 500s on a missing snapshot table. */
+export async function serveLlmsFullFeed(
+  env: AppEnv,
+  request: Request,
+): Promise<Response> {
+  const brandTimelines = await loadLlmsFullBrandTimelines(env);
+  return llmsFullMarkdownResponse(request, buildLlmsFullText(brandTimelines));
+}
+
 /**
  * Render the full-text feed. Pure: pass the sections loadLlmsFullBrandTimelines
  * returns. Honesty gates re-applied here so the renderer alone can never

@@ -1031,6 +1031,7 @@ const ROBOTS_TXT = `# AI answer/reference engines are allowed by the wildcard gr
 
 User-agent: *
 Allow: /api/docs
+Allow: /llms-full.txt
 Disallow: /app$
 Disallow: /app/
 Disallow: /export/
@@ -1039,9 +1040,7 @@ Disallow: /api/
 Allow: /
 Sitemap: ${canonicalUrl("/sitemap.xml")}
 ${LOCALE_SITEMAP_LINES}
-# Full-text offer/proof corpus for AI answer engines (issue #2043); the
-# wildcard group above already allows it — this line is explicit discovery
-# wiring for crawlers and operators reading the file.
+# Full-text offer/proof corpus for AI answer engines (issue #2043).
 # Full text: ${canonicalUrl("/llms-full.txt")}
 `;
 

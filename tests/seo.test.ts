@@ -26,6 +26,8 @@ describe("public SEO files", () => {
     // the sitemap — auth/action surfaces carry noindex and stay out so Google
     // does not index the signup entry (see NOINDEX_ACTION_SURFACES in seo.ts).
     expect(sitemap?.body).toContain("<loc>https://0509.io/search</loc>");
+    // Issue #2043: the full-text AEO corpus must be discoverable from the sitemap.
+    expect(sitemap?.body).toContain("<loc>https://0509.io/llms-full.txt</loc>");
     expect(sitemap?.body).not.toContain("<loc>https://0509.io/auth/signup</loc>");
     // Restored after the #944/#945 404s cleared (#963): /pricing must stay in
     // the published sitemap with the compare pages, never behind a later drop.
@@ -124,6 +126,10 @@ describe("public SEO files", () => {
 		// The wildcard group still allows the public crawl and carries the
 		// Sitemap directive.
 		expect(robots?.body).toContain("Allow: /\nSitemap:");
+		// Issue #2043: explicit Allow for the full-text corpus so crawlers
+		// reading the file discover /llms-full.txt without guessing.
+		expect(robots?.body).toContain("Allow: /llms-full.txt");
+		expect(robots?.body).toContain("https://0509.io/llms-full.txt");
 	});
 
   it("keeps security.txt canonical and contact addresses on the io domain", () => {

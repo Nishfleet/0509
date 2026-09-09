@@ -142,8 +142,9 @@ describe("/llms-full.txt feed against real D1", () => {
     const llmsText = buildLlmsText();
     expect(llmsText).toContain("https://0509.io/llms-full.txt");
 
-    // robots.txt: explicit discovery wiring (wildcard group already allows it).
+    // robots.txt: explicit Allow plus the full-text URL comment.
     const robots = publicSeoFileForPathname("/robots.txt");
-    expect(robots?.body).toContain("llms-full.txt");
+    expect(robots?.body).toContain("Allow: /llms-full.txt");
+    expect(robots?.body).toContain("https://0509.io/llms-full.txt");
   });
 });

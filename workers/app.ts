@@ -177,16 +177,15 @@ export default {
     // same bounded read envelope; degrades to an honest empty feed when D1
     // is absent, never a 500 and never a fabricated state. Same serving
     // path (and content-signal headers) as /llms.txt, before the rate-limit
-    // gate so crawlers are treated like the other public SEO files.
+    // gate so crawlers are treated like the other public SEO files. The
+    // React Router resource route is the registered fallback; this intercept
+    // and that loader share serveLlmsFullFeed so they cannot drift.
     if (
       (request.method === "GET" || request.method === "HEAD") &&
       url.pathname === "/llms-full.txt"
     ) {
-      const { buildLlmsFullText, loadLlmsFullBrandTimelines } = await import(
-        "../app/lib/llms-full.server"
-      );
-      const brandTimelines = await loadLlmsFullBrandTimelines(env);
-      return markdownResponse(request, buildLlmsFullText(brandTimelines));
+      const { serveLlmsFullFeed } = await import("../app/lib/llms-full.server");
+      return withSecurityHeaders(await serveLlmsFullFeed(env, request), request);
     }
     if (
       (request.method === "GET" || request.method === "HEAD") &&

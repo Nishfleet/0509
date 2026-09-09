@@ -6,6 +6,11 @@ import {
 
 export default [
   index("routes/marketing.tsx"),
+  // Issue #2043: public full-text AI grounding corpus. Worker intercept in
+  // workers/app.ts serves this path first; the route exists so SITEMAP_PATHS
+  // listing `/llms-full.txt` resolves to a registered non-splat route (not
+  // the `:locale` catch-all, which 404s for unknown locales).
+  route("llms-full.txt", "routes/llms-full[.]txt.ts"),
   route("search", "routes/search.tsx"),
   route("help", "routes/help.tsx"),
   route("docs", "routes/docs.tsx"),
