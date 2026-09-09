@@ -149,6 +149,7 @@ Authorization: Bearer f9_live_...`}</code>
       <PublicDocBlock id="key-docs" title="Key docs">
         <div className="f9-doc-link-grid">
           <Link to="/help">Help</Link>
+          <Link to="/guides/how-to-track-competitor-ads">Guide: how to track competitor ads</Link>
           <Link to="/api/docs">API docs</Link>
           <Link to="/mcp/setup">MCP setup</Link>
           <Link to="/status">Status</Link>
