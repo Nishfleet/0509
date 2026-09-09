@@ -25,12 +25,6 @@
  * the forward path the issue ships now, and the verify contract is that each
  * programmatic surface stamps a `og:image` URL distinct from the generic
  * `og-image.png`.
- *
- * Raster twins (issue #2083): the /switch/:slug and /compare/:slug pages
- * advertise committed PNG cards under `public/social-card/switch/<slug>.png`
- * and `public/social-card/compare/<slug>.png` (Facebook/X/LinkedIn refuse SVG
- * og:images). This SVG renderer stays on `/social-card/switch/<slug>.svg` and
- * `/social-card/compare/<slug>.svg` for cached links.
  */
 
 const SITE_NAME = "Five to Nine";
@@ -84,10 +78,7 @@ function renderCard(input: { headline: string; subline: string }): string {
 `;
 }
 
-/** Competitor product display name for each `/compare/:tool` slug.
- *  The /compare/:slug pages advertise the committed PNG twin under
- *  public/social-card/compare/<slug>.png (issue #2083). This SVG renderer
- *  stays on /social-card/compare/<slug>.svg for cached links. */
+/** Competitor product display name for each `/compare/:tool` slug. */
 const COMPARE_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   panoramata: "Panoramata",
   magicbrief: "MagicBrief",
@@ -102,10 +93,7 @@ const COMPARE_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   "visualping-ad-library": "Visualping Ad Library",
 };
 
-/** Competitor product display name for each `/switch/:tool` slug.
- *  The /switch/:slug pages advertise the committed PNG twin under
- *  public/social-card/switch/<slug>.png (issue #2083). This SVG renderer
- *  stays on /social-card/switch/<slug>.svg for cached links. */
+/** Competitor product display name for each `/switch/:tool` slug. */
 const SWITCH_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   magicbrief: "MagicBrief",
   panoramata: "Panoramata",
