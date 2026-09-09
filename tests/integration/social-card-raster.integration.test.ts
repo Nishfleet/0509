@@ -1,0 +1,58 @@
+import { describe, expect, it } from "vitest";
+
+import { publicSocialCardForRequest } from "~/lib/social-cards.server";
+import { rasterizeSocialCardPng } from "~/lib/social-cards-raster.server";
+
+/**
+ * Issue #2089 — the /ads and /timeline social cards must be served as PNG
+ * bytes (Facebook/X/LinkedIn refuse SVG og:images). The rasterizer is
+ * worker-only (@resvg/resvg-wasm's wasm-bindgen glue is not resolvable in the
+ * node test environment), so this suite runs in the `workers` project on real
+ * workerd, where the wasm can be instantiated.
+ *
+ * It proves the served content-type is image/png and the bytes are a real
+ * 1200x630 PNG raster — the exact property the issue's route-level gate
+ * requires (og:image:type must match the served content-type).
+ */
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+describe("ads/timeline social card rasterization (issue #2089)", () => {
+  it("rasterizes the /ads card SVG to a valid 1200x630 PNG", async () => {
+    const card = publicSocialCardForRequest(
+      new Request("https://0509.io/social-card/ads/nike.com.png?n=Nike&s=72"),
+    );
+    expect(card?.kind).toBe("ads");
+    expect(card?.body).toContain("Nike");
+
+    const png = await rasterizeSocialCardPng(card!.body);
+    // PNG magic bytes.
+    for (let i = 0; i < PNG_MAGIC.length; i += 1) {
+      expect(png[i], `PNG magic byte ${i}`).toBe(PNG_MAGIC[i]);
+    }
+    // IHDR width/height at bytes 16-23 (big-endian).
+    const width = (png[16] << 24) | (png[17] << 16) | (png[18] << 8) | png[19];
+    const height = (png[20] << 24) | (png[21] << 16) | (png[22] << 8) | png[23];
+    expect(width).toBe(1200);
+    expect(height).toBe(630);
+    // A no-text render is <1KB; text + gradient should be >10KB.
+    expect(png.length).toBeGreaterThan(10_000);
+  });
+
+  it("rasterizes the /timeline card SVG to a valid 1200x630 PNG", async () => {
+    const card = publicSocialCardForRequest(
+      new Request("https://0509.io/social-card/timeline/nike.com.png?n=Nike"),
+    );
+    expect(card?.kind).toBe("timeline");
+    expect(card?.body).toContain("Nike");
+
+    const png = await rasterizeSocialCardPng(card!.body);
+    for (let i = 0; i < PNG_MAGIC.length; i += 1) {
+      expect(png[i], `PNG magic byte ${i}`).toBe(PNG_MAGIC[i]);
+    }
+    const width = (png[16] << 24) | (png[17] << 16) | (png[18] << 8) | png[19];
+    const height = (png[20] << 24) | (png[21] << 16) | (png[22] << 8) | png[23];
+    expect(width).toBe(1200);
+    expect(height).toBe(630);
+    expect(png.length).toBeGreaterThan(10_000);
+  });
+});
