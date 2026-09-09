@@ -20,6 +20,8 @@ const ACCEPTED_BY_BOTH = [
   "magicbrief-migration",
   "locale-de-sneaker-resale",
   "summer-2026-launch",
+  "search_warming_exhausted",
+  "guide_track_ads",
   "a",
 ];
 const REJECTED_BY_BOTH = [
@@ -232,8 +234,9 @@ describe("signup_source against real D1", () => {
       .first<{ name: string }>();
     expect(index?.name).toBe("idx_user_email_nocase");
 
-    // The rebuild renames user -> user_old -> drops it; child tables must
-    // still reference `user`, not the dropped rename target.
+    // The rebuild creates user_new, copies, drops user, then renames
+    // user_new into place — child tables must still reference `user`, never
+    // a dropped rename target.
     const sessionTable = await db()
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'session'")
       .first<{ sql: string }>();

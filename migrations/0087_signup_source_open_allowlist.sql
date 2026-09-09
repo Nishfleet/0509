@@ -1,10 +1,12 @@
 -- Generalize signup attribution (issue #2108): signup_source moves from six
 -- hardcoded literals to an open, shape-checked allowlist — NULL, the existing
 -- literals (now including 'pricing-free', which the code allowlist already
--- accepted but the 0080 CHECK rejected), lowercase slugs, and `ref:<eTLD+1>`
--- referer markers. The open rule mirrors the code rule in
--- app/lib/signup-source.ts: 1-44 chars, only [a-z0-9:.-] — no whitespace, no
--- uppercase, no query strings, no full URLs. SQLite cannot ALTER a CHECK in
+-- accepted but the 0080 CHECK rejected), the two underscore-bearing live
+-- markers 'search_warming_exhausted' and 'guide_track_ads' (which the code
+-- exact-match branch accepts but the open shape's [a-z0-9:.-] class would
+-- reject), lowercase slugs, and `ref:<eTLD+1>` referer markers. The open
+-- rule mirrors the code rule in app/lib/signup-source.ts: 1-44 chars, only
+-- [a-z0-9:.-] — no whitespace, no uppercase, no query strings, no full URLs. SQLite cannot ALTER a CHECK in
 -- place, so both tables are rebuilt: create the replacement, copy, drop the
 -- old table, rename, recreate indexes. `user` is referenced by many child
 -- tables (session, account, passkey, watchlist, ...), so the rename-first
@@ -38,7 +40,9 @@ CREATE TABLE user_new (
       'locale-de-sneaker-resale',
       'locale-ja-sneaker-resale',
       'locale-pt-br-sneaker-resale',
-      'pricing-free'
+      'pricing-free',
+      'search_warming_exhausted',
+      'guide_track_ads'
     )
     OR (
       length(signup_source) BETWEEN 1 AND 44
@@ -92,7 +96,9 @@ CREATE TABLE signup_source_pending_new (
       'locale-de-sneaker-resale',
       'locale-ja-sneaker-resale',
       'locale-pt-br-sneaker-resale',
-      'pricing-free'
+      'pricing-free',
+      'search_warming_exhausted',
+      'guide_track_ads'
     )
     OR (
       length(signup_source) BETWEEN 1 AND 44
