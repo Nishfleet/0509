@@ -192,14 +192,14 @@ describe("rerankBrandChangeFeed — public /ads surface reuses the digest helper
     expect(
       rerank.headlineItems.some((item) => item.eventType === "ad_new"),
     ).toBe(false);
-    expect(rerank.adChurnSummary).toEqual({ newCount: 3, retiredCount: 0, total: 3 });
+    expect(rerank.adChurnSummary).toEqual({ newCount: 3, retiredCount: 0, total: 3, maxNewVariantCount: null });
     expect(rerank.otherItems).toEqual([]);
   });
 
   it("returns zero adChurn when no change events are present (the section hides)", () => {
     const rerank = rerankBrandChangeFeed([]);
     expect(rerank.headlineItems).toEqual([]);
-    expect(rerank.adChurnSummary).toEqual({ newCount: 0, retiredCount: 0, total: 0 });
+    expect(rerank.adChurnSummary).toEqual({ newCount: 0, retiredCount: 0, total: 0, maxNewVariantCount: null });
     expect(rerank.otherItems).toEqual([]);
   });
 });
