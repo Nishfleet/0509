@@ -59,7 +59,11 @@ import type {
   WebsitePageObservationSignals,
   WebsiteSiteScanPageRecord,
 } from "~/lib/types";
-import { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
+import {
+  formatWatchEventTypeLabel,
+  websitePageChangedFieldLabel,
+} from "~/lib/watch-event-display";
+import { WEBSITE_PAGE_EVENT_IMPORTANCE } from "~/lib/digest-rerank";
 
 // ==== Constants ====
 
@@ -1122,10 +1126,11 @@ function watchEventTypeForFact(fact: WebsitePageChange): WatchEventType | null {
 
 function summaryForFact(fact: WebsitePageChange): string {
   if (fact.kind === "field-changed") {
-    return `${fact.field} changed on ${fact.canonicalUrl}`;
+    return `${websitePageChangedFieldLabel(fact.field)} changed on ${fact.canonicalUrl}`;
   }
   return fact.canonicalUrl;
 }
+
 
 export interface EmitWebsitePageChangeEventsInput {
   watchlistId: string;
@@ -1188,6 +1193,7 @@ export async function emitWebsitePageChangeEvents(
       baselineFromRunId: prior.scan.watchlistRunId,
       title: formatWatchEventTypeLabel(eventType),
       summary: summaryForFact(fact),
+      importanceScore: WEBSITE_PAGE_EVENT_IMPORTANCE[eventType] ?? 0,
       metadata: {
         from: fact.before ?? "",
         to: fact.after ?? "",

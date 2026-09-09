@@ -6,6 +6,7 @@ import type {
   WatchEventType,
 } from "~/lib/types";
 import { stripChurnTokens } from "~/lib/normalize";
+import { WEBSITE_PAGE_EVENT_IMPORTANCE } from "~/lib/digest-rerank";
 import {
   SCREENSHOT_CORROBORATION_REQUIRED_EVENT_TYPES,
 } from "~/lib/capture-validity-public-rules";
@@ -41,11 +42,14 @@ const BASE_IMPORTANCE_BY_EVENT: Record<WatchEventType, number> = {
   landing_page_offer_changed: 80,
   landing_page_cta_changed: 72,
   landing_page_form_changed: 70,
-  // Competitor-site page events cannot be produced until the crawler packet
-  // ships; zero keeps them inert for delivery until real semantics land.
-  website_page_added: 0,
-  website_page_removed: 0,
-  website_page_changed: 0,
+  // Competitor-site page events are emitted directly (emitWebsitePageChangeEvents)
+  // with their own importance; these base values source the SAME shared
+  // constants so the evaluator path and the direct emission path can never
+  // drift (issue #1384): they clear the balanced instant gate (75) without
+  // spamming a quiet workspace (gate 90).
+  website_page_added: WEBSITE_PAGE_EVENT_IMPORTANCE.website_page_added ?? 0,
+  website_page_removed: WEBSITE_PAGE_EVENT_IMPORTANCE.website_page_removed ?? 0,
+  website_page_changed: WEBSITE_PAGE_EVENT_IMPORTANCE.website_page_changed ?? 0,
 };
 
 export type ComparableProofFields = {
