@@ -711,6 +711,10 @@ export function brandPageFaqEntries(data: BrandPageLoaderData): ReadonlyArray<Fa
       answer: `An ad is labeled as linking to ${domain} only when it carries verified link evidence — the ad's landing page or advertiser domain actually matches ${domain}. Ads the provider returned that merely match the search text, without a verified link, are still shown on the wall but are described as "matching the search", never as linking to or running for ${brandName}. The Ad Aggression Score and the "what changed" feed are built only from the verified-link subset, so attribution never rests on an unproven connection.`,
     },
     {
+      question: `How long do ${brandName}'s ads usually run?`,
+      answer: `Ads that stay live for 30+ days are the market's usual winner signal — a creative that keeps running is one that keeps working. Each ad card shows how long that ad has been running, measured from its first-seen date up to the capture shown on this page (the "Last checked" stamp), so the count reflects the data we collected, not the moment you view the page.`,
+    },
+    {
       question: `Can I get an email when ${brandName}'s ads or offer change?`,
       answer: `Yes. The "Track ${domain} — free" button on this page starts a free account, and the first scan runs the moment you land. After that, every ad, offer, CTA, and form change hits your inbox with a screenshot when the capture includes one, the page text, and the source link. Quiet periods still send a heartbeat so silence always means we looked.`,
     },
@@ -1411,6 +1415,7 @@ function BrandAdsResults({
             signupPath={signupPath}
             totalCount={totalCount}
             partnerCampaignAdIds={data.partnerCampaignAdIds}
+            capturedAt={data.lastCheckedAt}
           />
 
           {/* AD-AGGRESSION METHODOLOGY FOOTER — "/methodology" cross-link
