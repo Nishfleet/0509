@@ -35,8 +35,15 @@ Run on production D1 read-only; do not export PII to docs.
 ## Funnel measurement status
 
 Specification: see [docs/funnel-measurement-spec.md](./funnel-measurement-spec.md).
-**Collection is NOT live.** A default-off implementation exists so the increment can be
-reviewed and tested without producing a single record:
+**Collection is live since 2026-09-09.** The spec §8 rollout gates cleared that day —
+privacy-page copy (#2105), redaction test (#2103), retention/delete test (#2104), and
+Nish's gates 1-2 approval recorded on issue #2106 — and `wrangler.jsonc` sets
+`FUNNEL_MEASUREMENT_ENABLED: "1"`.
+
+**Approved retention period: 90 days** (Nish, 2026-09-09, issue #2106). Funnel events
+exist only as structured JSON lines in Workers Logs, whose platform window is 7 days
+on this Workers Paid account (spec §8.7) — inside the approved bound; no funnel event
+is kept longer.
 
 > **[NISH] CONTRADICTION RESOLVED (2026-09-04, issue #1278):** the production config
 > once set `FUNNEL_MEASUREMENT_ENABLED: "1"` while this section said collection was
@@ -53,7 +60,7 @@ reviewed and tested without producing a single record:
   the environment variable `FUNNEL_MEASUREMENT_ENABLED` is exactly
   `1`/`true`/`yes`/`on` (case-insensitive). Absent, empty, or any other value leaves
   measurement disabled — an absent variable can never turn it on. Production sets the
-  variable to `"0"`, so collection stays off until the §8 gates below are cleared.
+  variable to `"1"` (gates cleared 2026-09-09, issue #2106), so collection is on.
 - **GPC.** Requests carrying the Global Privacy Control signal (`Sec-GPC: 1`, per the
   W3C GPC spec) record nothing, even when the gate is on.
 - **Boundaries.** Homepage view: `app/routes/marketing.tsx` loader. Search preview
@@ -75,14 +82,16 @@ reviewed and tested without producing a single record:
   paid conversion remain read-only aggregate queries over existing D1 records (`user`,
   `watchlist`, `proof_capture`, `user_plan`); they are never emitted as anonymous
   events or logged.
-- **Still required before enablement** (spec §8 gates): privacy/legal review, owner
-  approval including the final retention period, policy-surface copy on the public
-  privacy/terms pages, and a post-enable canary. **Enablement deferred; flag currently off in production.** Re-enablement is tracked in issue #1590 and
-  `docs/funnel-measurement-decision-2026-08.md`. Do not claim live numbers until
-  those pass.
+- **Post-enable canary** (spec §8 gate 8): after each deploy that ships the enabled
+  flag, run `node scripts/funnel-canary-check.mjs` — it fetches `/` with and without
+  `Sec-GPC: 1` and asserts both return 200 (the product must work identically for
+  opted-out visitors, spec §5). Rollback plan on a red canary: flip
+  `FUNNEL_MEASUREMENT_ENABLED` back to `"0"` in `wrangler.jsonc` and redeploy.
 
-The funnel remains manual (inferred from auth tables) with no automated collection in
-production.
+Anonymous funnel events collect through the structured-logs path above; the
+account-scoped measures (signup completion, first watchlist, first proof, paid
+conversion) remain read-only aggregate queries over existing D1 records — never
+emitted as events.
 
 ## Canary metrics (private)
 

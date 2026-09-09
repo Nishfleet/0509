@@ -781,12 +781,12 @@
       "claimId": "AUDIT-FUNNEL-MEASUREMENT",
       "page": "production config + docs",
       "selector": "wrangler.jsonc FUNNEL_MEASUREMENT_ENABLED, docs/ga-metrics.md 'Funnel measurement status'",
-      "sentence": "Funnel collection is documented as NOT live (docs/ga-metrics.md §'Funnel measurement status'), and production config agrees: FUNNEL_MEASUREMENT_ENABLED is 0 since issue #1278 — re-enablement pending, see followUp.",
+      "sentence": "Funnel collection is live since 2026-09-09 (docs/ga-metrics.md §'Funnel measurement status'), and production config agrees: FUNNEL_MEASUREMENT_ENABLED is 1 since issue #2106 — spec §8 gates cleared, 90-day retention approved.",
       "claimed": true,
       "verified": true,
-      "verify": "grep -qF '\"FUNNEL_MEASUREMENT_ENABLED\": \"0\"' wrangler.jsonc && grep -qF 'Enablement deferred; flag currently off in production' docs/ga-metrics.md && grep -qF 'funnelMeasurementEnabled' app/lib/funnel-measurement.server.ts",
+      "verify": "grep -qF '\"FUNNEL_MEASUREMENT_ENABLED\": \"1\"' wrangler.jsonc && grep -qF 'Collection is live since 2026-09-09' docs/ga-metrics.md && grep -qF 'funnelMeasurementEnabled' app/lib/funnel-measurement.server.ts",
       "test": "tests/funnel-measurement.test.ts",
-      "followUp": "https://github.com/Nishfleet/0509/issues/1590"
+      "followUp": null
     }
   ],
   "rowsMetadata": {
