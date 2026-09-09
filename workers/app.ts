@@ -35,7 +35,15 @@ import {
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
 import { publicSeoFileForPathname } from "../app/lib/seo";
-import { loadIndexableBrandPageEntries, loadIndexableTimelineEntries, publicLocaleSitemapFile, publicSitemapFile, timelineSitemapEntries } from "../app/lib/sitemap.server";
+import {
+  loadIndexableBrandPageEntries,
+  loadIndexableTimelineEntries,
+  publicLocaleSitemapFile,
+  publicSitemapFile,
+  SITEMAP_TIMELINE_READ_LIMIT,
+  timelineSitemapEntries,
+} from "../app/lib/sitemap.server";
+import { buildLlmsFullText, loadLlmsFullBrandBlocks } from "../app/lib/llms-full.server";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import {
   observeScheduledTask,
@@ -175,6 +183,22 @@ export default {
           timelineSitemapEntries(brandEntries, captureBackedTimelineEntries),
         ),
       );
+    }
+    // /llms-full.txt (issue #2043): public full-text feed of tracked-brand
+    // dated offer/proof/change records. Reads the same bounded D1 window the
+    // sitemap uses (SITEMAP_TIMELINE_READ_LIMIT rows, captured_at ASC) and
+    // reuses the /timeline/:domain ledger logic (rowToSnapshot +
+    // buildOfferLedger) so the proof, ad-destination, and run-collapse gates
+    // are identical. Degrades to an honest empty feed when D1 is absent or the
+    // table is missing — never a 500, never fabricated rows. Served before
+    // the rate-limit gate because it is a public, zero-cost, cacheable read
+    // (same posture as /llms.txt and /sitemap.xml above).
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      url.pathname === "/llms-full.txt"
+    ) {
+      const blocks = await loadLlmsFullBrandBlocks(env, SITEMAP_TIMELINE_READ_LIMIT);
+      return markdownResponse(request, buildLlmsFullText(blocks));
     }
     if (
       (request.method === "GET" || request.method === "HEAD") &&
