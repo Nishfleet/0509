@@ -308,6 +308,7 @@ describe("/ads/:domain meta stamps a branded og:image", () => {
     relatedBrands: [],
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
+    recentWatchChanges: [],
   };
 
   it("stamps a branded ads card URL with the brand name + score", async () => {

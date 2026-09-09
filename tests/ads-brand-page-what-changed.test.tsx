@@ -134,6 +134,7 @@ function populatedWithChangeEvents(
     relatedBrands: [],
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
+    recentWatchChanges: [],
   };
 }
 

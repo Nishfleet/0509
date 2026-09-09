@@ -115,6 +115,7 @@ function cachedIndexable(overrides: Partial<BrandPageLoaderData> = {}): BrandPag
     offerTimelineEntries: [],
     timelineIndexable: true,
     captureFailuresSummary: null,
+    recentWatchChanges: [],
     ...overrides,
   };
 }
