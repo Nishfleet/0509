@@ -70,6 +70,13 @@ const LLMS_PAGE_DETAILS = {
     description:
       "The last 7 days of offer, price, CTA, and ad moves across brands with a public page — stored captures only, each with source link and capture date.",
   },
+  // Issue #2136: the sample Monday brief. In SITEMAP_PATHS, so it needs a
+  // title/description here or the _llmsDetailsCoverSitemap type fails.
+  "/sample-brief": {
+    title: "A real Monday brief",
+    description:
+      "A real stored Monday brief for the newest public brand — the last 30 days of offer, price, CTA, and ad moves, stored captures only, with a free signup CTA.",
+  },
   // Issue #2043: the full-text AEO feed. In SITEMAP_PATHS, so it needs a
   // title/description here or the _llmsDetailsCoverSitemap type fails.
   "/llms-full.txt": {
