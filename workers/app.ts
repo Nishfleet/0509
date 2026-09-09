@@ -89,7 +89,14 @@ function markdownResponse(request: Request, body: string): Response {
   );
 }
 
-function publicFileResponse(request: Request, file: NonNullable<ReturnType<typeof publicSeoFileForPathname>>): Response {
+function publicFileResponse(
+  request: Request,
+  file: {
+    body: string | Uint8Array;
+    contentType: string;
+    cacheControl: string;
+  },
+): Response {
   return withSecurityHeaders(
     new Response(request.method === "HEAD" ? null : file.body, {
       headers: {
@@ -157,12 +164,31 @@ export default {
     // so each surface stamps a branded og:image instead of the generic
     // og-image.png. Stateless and public — same serving path as the static
     // social card above, before the rate-limit gate.
+    //
+    // The /ads and /timeline cards are rasterized to PNG (issue #2089) so
+    // social scrapers render them; compare/switch/cluster stay SVG (issue
+    // #2083's scope). The rasterizer lives in a worker-only module because its
+    // wasm-bindgen glue is not resolvable in the node test environment.
     if (request.method === "GET" || request.method === "HEAD") {
       const { publicSocialCardForRequest } = await import(
         "../app/lib/social-cards.server"
       );
       const socialCard = publicSocialCardForRequest(request);
       if (socialCard) {
+        if (socialCard.kind === "ads" || socialCard.kind === "timeline") {
+          const { rasterizeSocialCardPngCached } = await import(
+            "../app/lib/social-cards-raster.server"
+          );
+          const png = await rasterizeSocialCardPngCached(
+            request.url,
+            socialCard.body,
+          );
+          return publicFileResponse(request, {
+            body: png,
+            contentType: "image/png",
+            cacheControl: socialCard.cacheControl,
+          });
+        }
         return publicFileResponse(request, socialCard);
       }
     }

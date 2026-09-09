@@ -17,7 +17,7 @@ describe("searchShareMeta", () => {
     expect(out).not.toBeNull();
     // Same encoded card the /ads/nykaa.com surface shares, not og-image.png.
     expect(out!.ogImageUrl).toBe(
-      "https://0509.io/social-card/ads/nykaa.com.svg?n=Nykaa",
+      "https://0509.io/social-card/ads/nykaa.com.png?n=Nykaa",
     );
     expect(out!.title).toContain("Nykaa Meta ads");
     expect(out!.description).toContain("Nykaa");
@@ -33,7 +33,7 @@ describe("searchShareMeta", () => {
     });
 
     expect(out!.ogImageUrl).toContain("s=72");
-    expect(out!.ogImageUrl).toContain("https://0509.io/social-card/ads/nykaa.com.svg");
+    expect(out!.ogImageUrl).toContain("https://0509.io/social-card/ads/nykaa.com.png");
   });
 
   it("keeps the generic card when no single competitor is resolved (empty website / keyword)", () => {

@@ -85,14 +85,14 @@ describe("publicSeoMeta og:image override", () => {
 describe("social card URL builders", () => {
   it("adsSocialCardUrl encodes the brand name and score", () => {
     const url = adsSocialCardUrl("nike.com", "Nike", 72);
-    expect(url).toContain("/social-card/ads/nike.com.svg?");
+    expect(url).toContain("/social-card/ads/nike.com.png?");
     expect(url).toContain("n=Nike");
     expect(url).toContain("s=72");
   });
 
   it("adsSocialCardUrl omits the score when null (deferred < 14-day floor)", () => {
     const url = adsSocialCardUrl("nike.com", "Nike", null);
-    expect(url).toContain("/social-card/ads/nike.com.svg?");
+    expect(url).toContain("/social-card/ads/nike.com.png?");
     expect(url).toContain("n=Nike");
     expect(url).not.toContain("s=");
   });
@@ -111,7 +111,7 @@ describe("social card URL builders", () => {
 
   it("timelineSocialCardUrl encodes the brand name on the timeline card path", () => {
     const url = timelineSocialCardUrl("nike.com", "Nike");
-    expect(url).toContain("/social-card/timeline/nike.com.svg?");
+    expect(url).toContain("/social-card/timeline/nike.com.png?");
     expect(url).toContain("n=Nike");
     expect(url).toMatch(/^https:\/\/0509\.io\/social-card\/timeline\//);
   });
@@ -123,7 +123,15 @@ describe("parseSocialCardPathname", () => {
       kind: "ads",
       slug: "nike.com",
     });
+    expect(parseSocialCardPathname("/social-card/ads/nike.com.png")).toEqual({
+      kind: "ads",
+      slug: "nike.com",
+    });
     expect(parseSocialCardPathname("/social-card/timeline/nike.com.svg")).toEqual({
+      kind: "timeline",
+      slug: "nike.com",
+    });
+    expect(parseSocialCardPathname("/social-card/timeline/nike.com.png")).toEqual({
       kind: "timeline",
       slug: "nike.com",
     });
@@ -151,35 +159,37 @@ describe("parseSocialCardPathname", () => {
 describe("publicSocialCardForRequest", () => {
   it("renders an ads card stamping the brand name and score", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/ads/nike.com.svg?n=Nike&s=72"),
+      new Request("https://0509.io/social-card/ads/nike.com.png?n=Nike&s=72"),
     );
     expect(res?.contentType).toBe("image/svg+xml; charset=utf-8");
     expect(res?.body).toContain("Nike");
     expect(res?.body).toContain("Ad Aggression Score 72");
     expect(res?.body).toContain("Five to Nine");
+    expect(res?.kind).toBe("ads");
   });
 
   it("renders a timeline card stamping the brand and offer-timeline copy", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/timeline/nike.com.svg?n=Nike"),
+      new Request("https://0509.io/social-card/timeline/nike.com.png?n=Nike"),
     );
     expect(res?.contentType).toBe("image/svg+xml; charset=utf-8");
     expect(res?.body).toContain("Nike");
     expect(res?.body).toContain("offer timeline");
     expect(res?.body).toContain("Five to Nine");
     expect(res?.cacheControl).toBe("public, max-age=3600");
+    expect(res?.kind).toBe("timeline");
   });
 
   it("renders a timeline card from the domain slug when n is omitted", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/timeline/nike.com.svg"),
+      new Request("https://0509.io/social-card/timeline/nike.com.png"),
     );
     expect(res?.body).toContain("nike.com");
   });
 
   it("renders an ads card without a score when s is omitted", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/ads/nike.com.svg?n=Nike"),
+      new Request("https://0509.io/social-card/ads/nike.com.png?n=Nike"),
     );
     expect(res?.body).toContain("Nike");
     expect(res?.body).not.toContain("Ad Aggression Score 72");
@@ -219,7 +229,7 @@ describe("publicSocialCardForRequest", () => {
 
   it("XML-escapes brand text so it cannot break the SVG", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/ads/x.svg?n=A%26B%3Cscript%3E"),
+      new Request("https://0509.io/social-card/ads/x.png?n=A%26B%3Cscript%3E"),
     );
     expect(res?.body).toContain("A&amp;B&lt;script&gt;");
     expect(res?.body).not.toContain("<script>");
@@ -318,7 +328,7 @@ describe("/ads/:domain meta stamps a branded og:image", () => {
     const meta = routeModule.meta({ loaderData: baseData });
     const img = ogImage(meta);
     expect(img).not.toBe(GENERIC_OG_IMAGE);
-    expect(img).toMatch(/^https:\/\/0509\.io\/social-card\/ads\/nike\.com\.svg\?/);
+    expect(img).toMatch(/^https:\/\/0509\.io\/social-card\/ads\/nike\.com\.png\?/);
     expect(img).toContain("n=Nike");
     expect(img).toContain("s=72");
     expect(ogImageAlt(meta)).toContain("Nike");
@@ -360,7 +370,7 @@ describe("/timeline/:domain meta stamps a branded og:image (issue #2029)", () =>
     const title = meta.find((e) => e.title !== undefined)?.title as string;
     expect(title).toContain("Nike");
     expect(ogImage(meta)).not.toBe(GENERIC_OG_IMAGE);
-    expect(ogImage(meta)).toMatch(/^https:\/\/0509\.io\/social-card\/timeline\/nike\.com\.svg\?/);
+    expect(ogImage(meta)).toMatch(/^https:\/\/0509\.io\/social-card\/timeline\/nike\.com\.png\?/);
     expect(ogImage(meta)).toContain("n=Nike");
     expect(ogImageAlt(meta)).toContain("Nike");
     expect(ogImageAlt(meta)).toContain("offer timeline");
