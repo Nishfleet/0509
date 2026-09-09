@@ -275,4 +275,44 @@ describe("delivery policy", () => {
       expect(decision.digestEligible).toBe(true);
     }
   });
+
+  it("fires an instant alert for a confirmed website_page event above the mode gate (issue #1384)", () => {
+    for (const eventType of [
+      "website_page_added",
+      "website_page_removed",
+      "website_page_changed",
+    ] as const) {
+      const decision = evaluateDeliveryPolicy({
+        lane: "customer",
+        event: watchEvent({
+          eventType,
+          status: "confirmed",
+          importanceScore: 82,
+        }),
+        workspaceConfig,
+        watchlistConfig: null,
+        now: "2026-04-18T12:00:00.000Z",
+      });
+
+      expect(decision.instantEligible).toBe(true);
+      expect(decision.digestEligible).toBe(true);
+    }
+  });
+
+  it("keeps a website_page event below the mode gate out of the instant path", () => {
+    const decision = evaluateDeliveryPolicy({
+      lane: "customer",
+      event: watchEvent({
+        eventType: "website_page_changed",
+        status: "confirmed",
+        importanceScore: 40,
+      }),
+      workspaceConfig,
+      watchlistConfig: null,
+      now: "2026-04-18T12:00:00.000Z",
+    });
+
+    expect(decision.instantEligible).toBe(false);
+    expect(decision.digestEligible).toBe(true);
+  });
 });

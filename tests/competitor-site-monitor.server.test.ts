@@ -1103,13 +1103,18 @@ describe("emitWebsitePageChangeEvents", () => {
     });
 
     const changed = events.find((event) => event.eventType === "website_page_changed");
-    expect(changed?.summary).toContain("cta changed on https://competitor.example/");
+    expect(changed?.summary).toContain("Call to action changed on https://competitor.example/");
     expect(changed?.metadata).toMatchObject({
       from: "Buy now",
       to: "Get started",
       field: "cta",
     });
     expect(changed?.baselineFromRunId).toBe("run-1");
+    // website_page_* events carry a customer importance that clears the
+    // balanced instant-alert gate (issue #1384).
+    expect(added?.importanceScore).toBe(80);
+    expect(removed?.importanceScore).toBe(80);
+    expect(changed?.importanceScore).toBe(82);
 
     expect(events.some((event) => String(event.metadata.field) === "title")).toBe(false);
     expect(events.some((event) => String(event.metadata.field) === "meta")).toBe(false);
