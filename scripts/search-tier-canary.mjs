@@ -44,7 +44,19 @@ export const SEARCH_TIER_CANARY_USER_AGENT = "0509-search-tier-canary/1.0";
 // Remove the entry the moment the named issue lands and the domain flips to
 // verified/likely; leaving a stale entry here would silently mask a real
 // future regression on that domain.
-export const KNOWN_ALIAS_GAPS = Object.freeze(new Map([["oura", "Nishfleet/0509#1427"]]));
+export const KNOWN_ALIAS_GAPS = Object.freeze(
+  new Map([
+    ["oura", "Nishfleet/0509#1427"],
+    // ridge (issue #2075): the #2012 curated-alias fix landed on the
+    // website=ridge.com domain-intent path, but the bare q=ridge keyword
+    // search is the TEXT-intent path, which never resolves a brand website,
+    // so the ridgewallet.com/.eu aliases are never consulted and the one
+    // real Ridge ad (landing on ridgewallet.eu) renders Unmatched. Same
+    // shape as the oura gap; remove when #2075 lands and q=ridge flips to
+    // verified/likely.
+    ["ridge", "Nishfleet/0509#2075"],
+  ]),
+);
 
 // A cold domain can return a warming page (0 rows) on the first hit. The six
 // brands are well-known with cached results, so a single retry after a short
