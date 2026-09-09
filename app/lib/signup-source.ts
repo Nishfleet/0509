@@ -36,9 +36,17 @@ export const SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE = "search_warming_exhausted"
  */
 export const GUIDE_TRACK_ADS_SIGNUP_SOURCE = "guide_track_ads";
 
+/**
+ * /for-agencies CTA marker (issue #2144): the agency landing page's signup
+ * link carries `source=for_agencies` so Agency-plan funnel measurement can
+ * attribute checkout starts to that page.
+ */
+export const FOR_AGENCIES_SIGNUP_SOURCE = "for_agencies";
+
 export const ALLOWED_SIGNUP_SOURCES = [
   MAGICBRIEF_MIGRATION_SOURCE,
   PRICING_FREE_SIGNUP_SOURCE,
+  FOR_AGENCIES_SIGNUP_SOURCE,
   ...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
   SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE,
   GUIDE_TRACK_ADS_SIGNUP_SOURCE,
