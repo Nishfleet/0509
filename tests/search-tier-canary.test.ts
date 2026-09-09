@@ -96,9 +96,14 @@ describe("search.tier.canary", () => {
 
   it("KNOWN_ALIAS_GAPS names oura and points at the owning issue", () => {
     expect(KNOWN_ALIAS_GAPS.get("oura")).toBe("Nishfleet/0509#1427");
-    // A known gap must still be one of the six probed domains, so the carve-out
+    // A known gap must still be one of the probed domains, so the carve-out
     // never widens the probe set.
     expect(SIX_DOMAINS).toContain("oura");
+  });
+
+  it("KNOWN_ALIAS_GAPS names ridge and points at the owning issue (#2075)", () => {
+    expect(KNOWN_ALIAS_GAPS.get("ridge")).toBe("Nishfleet/0509#2075");
+    expect(SIX_DOMAINS).toContain("ridge");
   });
 
   it("evaluateSixDomainTiers warns (does not fail) on a known alias gap with blanket-unmatched rows", () => {
@@ -180,6 +185,30 @@ describe("search.tier.canary", () => {
     };
     const { verdict } = await runCanary({ baseUrl: "https://0509.io", fetchImpl });
     expect(verdict.pass).toBe(true);
+  });
+
+  it("runCanary passes with a warned known gap when ridge blanket-unmatches and the other six verify (live shape, #2075)", async () => {
+    const fetchImpl = async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const q = url.searchParams.get("q") ?? "";
+      if (q === "ridge") {
+        // Live shape: 5 rows, all Unmatched — the #2075 keyword-surface alias
+        // gap (the #2012 curated aliases apply only to the website= path).
+        return mockFetchResponse(
+          htmlForRows(
+            Array.from({ length: 5 }, () => ({
+              tier: "unmatched",
+              summary: "Ridge wallet ad",
+            })),
+          ),
+        );
+      }
+      return mockFetchResponse(htmlForRows([{ tier: "verified", summary: `${q} ad` }]));
+    };
+    const { verdict } = await runCanary({ baseUrl: "https://0509.io", fetchImpl });
+    expect(verdict.pass).toBe(true);
+    expect(verdict.failures).toEqual([]);
+    expect(verdict.knownGaps.map((g) => g.probe.keyword)).toEqual(["ridge"]);
   });
 
   it("runCanary passes with a warned known gap when oura blanket-unmatches and the other five verify (live shape)", async () => {
