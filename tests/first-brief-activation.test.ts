@@ -477,3 +477,179 @@ describe("first-brief activation flow (issue #1862)", () => {
     });
   });
 });
+
+/**
+ * Issue #2138 — the "activation scan hit a delay" path in the setup-checklist
+ * create-watchlist action retries the same safe scan once inline before
+ * showing "Try again". A first scan that fails once still delivers the first
+ * brief without a click; only a retry that also fails surfaces the message.
+ */
+describe("activation scan inline retry (issue #2138)", () => {
+  const RETRY_ENV = { SIGNUP_FIRST_BRIEF_ENABLED: "1" };
+
+  afterEach(() => {
+    vi.doUnmock("~/lib/auth.server");
+    vi.doUnmock("~/lib/context.server");
+    vi.doUnmock("~/lib/email-verification.server");
+    vi.doUnmock("~/lib/monitoring.server");
+    vi.doUnmock("~/lib/plan.server");
+  });
+
+  async function expectRedirect(callback: () => Promise<unknown>, location: string) {
+    try {
+      await callback();
+    } catch (error) {
+      expect(error).toBeInstanceOf(Response);
+      expect((error as Response).status).toBe(302);
+      expect((error as Response).headers.get("Location")).toBe(location);
+      return;
+    }
+    throw new Error(`Expected redirect to ${location}`);
+  }
+
+  function mockCreateWatchlistPath(queueFirstBrief: MockInstance) {
+    const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session: {
+          user: { id: "user-1", email: OWNER_ADDRESS, name: "Owner", onboardedAt: null },
+          session: { id: "session-1", userId: "user-1", expiresAt: "2026-09-09T00:00:00.000Z" },
+        },
+        workspaceUserId: "user-1",
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => RETRY_ENV) }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlistWithinLimit: vi.fn().mockResolvedValue({
+        status: "created",
+        watchlist: watchlist(),
+        current: 1,
+        limit: 3,
+      }),
+      upsertWorkspaceBranding: vi.fn().mockResolvedValue({
+        brandName: null,
+        brandWebsite: null,
+      }),
+    }));
+    vi.doMock("~/lib/email-verification.server", () => ({
+      requireVerifiedEmailForRetention: vi.fn().mockResolvedValue({ ok: true }),
+      emailUnverifiedActionResult: () => ({
+        ok: false,
+        error: "email_unverified",
+        message: "Verify your email",
+      }),
+    }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      queueFirstWatchlistScan: vi.fn(),
+      queueFirstWatchlistScanForSignupFirstBrief: queueFirstBrief,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true, current: 0, limit: 3 }),
+    }));
+    return { completeUserOnboarding };
+  }
+
+  function createWatchlistRequest() {
+    const formData = new FormData();
+    formData.set("intent", "create-watchlist");
+    formData.set("website", "https://glowkart.com");
+    return new Request("http://localhost/app/onboard", {
+      method: "POST",
+      body: formData,
+    });
+  }
+
+  it("retries the activation scan once inline and still reaches the first brief when the retry succeeds", async () => {
+    const queueFirstBrief = vi.fn()
+      .mockRejectedValueOnce(new Error("dispatch failed"))
+      .mockResolvedValueOnce(true);
+    const { completeUserOnboarding } = mockCreateWatchlistPath(queueFirstBrief);
+
+    const { handleSetupChecklistAction: action } = await import(
+      "~/lib/setup-checklist-action.server"
+    );
+
+    // The retried scan succeeded, so the action lands on the same waiting
+    // state as a first-attempt success: the first-brief page.
+    await expectRedirect(
+      () =>
+        action({
+          context: { cloudflare: { env: RETRY_ENV } },
+          request: createWatchlistRequest(),
+        } as never),
+      "/app/onboard?step=first-brief",
+    );
+
+    // Exactly one inline retry — the scan was attempted twice, never more.
+    expect(queueFirstBrief).toHaveBeenCalledTimes(2);
+    expect(completeUserOnboarding).toHaveBeenCalledWith(RETRY_ENV, "user-1");
+  });
+
+  it("returns the delayed message only after the inline retry also fails", async () => {
+    const queueFirstBrief = vi.fn().mockRejectedValue(new Error("dispatch failed"));
+    const { completeUserOnboarding } = mockCreateWatchlistPath(queueFirstBrief);
+
+    const { handleSetupChecklistAction: action } = await import(
+      "~/lib/setup-checklist-action.server"
+    );
+
+    const result = await action({
+      context: { cloudflare: { env: RETRY_ENV } },
+      request: createWatchlistRequest(),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      intent: "create-watchlist",
+      error: "first_scan_dispatch_delayed",
+      message:
+        "Competitor saved, but the activation scan hit a delay. Try again to retry the same safe scan.",
+    });
+    // One retry and no more (must-not: retry more than once).
+    expect(queueFirstBrief).toHaveBeenCalledTimes(2);
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("never runs two activation scans for one watchlist concurrently", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const queueFirstBrief = vi.fn().mockImplementation(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        if (queueFirstBrief.mock.calls.length === 1) {
+          throw new Error("dispatch failed");
+        }
+        return true;
+      } finally {
+        inFlight -= 1;
+      }
+    });
+    mockCreateWatchlistPath(queueFirstBrief);
+
+    const { handleSetupChecklistAction: action } = await import(
+      "~/lib/setup-checklist-action.server"
+    );
+
+    await expectRedirect(
+      () =>
+        action({
+          context: { cloudflare: { env: RETRY_ENV } },
+          request: createWatchlistRequest(),
+        } as never),
+      "/app/onboard?step=first-brief",
+    );
+
+    expect(queueFirstBrief).toHaveBeenCalledTimes(2);
+    // The retry started only after the first attempt fully settled.
+    expect(maxInFlight).toBe(1);
+    // Both attempts are the same guarded queue call for the same watchlist,
+    // so the existing in-flight check in prepareFirstWatchlistScanRun keeps
+    // serializing them against any other scan of that watchlist.
+    expect(queueFirstBrief.mock.calls[1]?.[2]).toBe(queueFirstBrief.mock.calls[0]?.[2]);
+  });
+});
