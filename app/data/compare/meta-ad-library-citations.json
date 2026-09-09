@@ -15,6 +15,20 @@
       "label": "Meta Ad Library help",
       "checked": "2026-08-28",
       "claim": "Meta's own help documentation describes the Ad Library as the public surface for ads running across its platforms."
+    },
+    {
+      "id": "adlibrary-limitations",
+      "href": "https://adlibrary.com/posts/limitations-of-meta-ad-library-2026",
+      "label": "AdLibrary: Limitations of Meta Ad Library 2026 (May 17, 2026)",
+      "checked": "2026-09-09",
+      "claim": "AdLibrary's limitations audit (published May 17, 2026) documents that the Meta Ad Library has no follow mechanism, no saved searches, no alerts and no export, and that commercial ads drop out of the searchable library once they go inactive."
+    },
+    {
+      "id": "apify-meta-ad-library-scraper",
+      "href": "https://apify.com/jy-labs/meta-ad-library-multi-search-scraper",
+      "label": "Apify actor: jy-labs/meta-ad-library-multi-search-scraper",
+      "checked": "2026-09-09",
+      "claim": "The actor is priced at $10 per 1,000 results and its onlyNewAds scheduling returns only ads a search has not returned before — new-ad detection. It delivers no landing-page diff, offer timeline, screenshot proof, or worth-action verdict."
     }
   ]
 }
