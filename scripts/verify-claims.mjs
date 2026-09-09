@@ -14,7 +14,7 @@
  *       - a row with claimed != verified MUST carry an open follow-up issue
  *         URL (followUp), so a claim gap is never closed silently;
  *       - wrangler.jsonc FUNNEL_MEASUREMENT_ENABLED and docs/ga-metrics.md
- *         agree on the funnel flag's state (off pending §8 gates, #1278);
+ *         agree on the funnel flag's state (on since 2026-09-09, #2106);
  *       - docs/ga-positioning.md header carries no LIVE/NOT LIVE release
  *         verdict and points at the scorecard + CLAUDE.md;
  *       - the in-repo design-unification ledger references point at this repo.
@@ -108,7 +108,8 @@ for (const row of rows) {
 }
 
 // ---------------------------------------------------------------------------
-// 3a. Funnel flag agreement (Reconciliation A): config and docs say off.
+// 3a. Funnel flag agreement (Reconciliation A): config and docs say on
+// (spec §8 gates cleared 2026-09-09, issue #2106).
 // ---------------------------------------------------------------------------
 const wrangler = existsSync(resolve(REPO_ROOT, "wrangler.jsonc"))
   ? readFileSync(resolve(REPO_ROOT, "wrangler.jsonc"), "utf8")
@@ -116,17 +117,17 @@ const wrangler = existsSync(resolve(REPO_ROOT, "wrangler.jsonc"))
 const gaMetrics = existsSync(resolve(REPO_ROOT, "docs/ga-metrics.md"))
   ? readFileSync(resolve(REPO_ROOT, "docs/ga-metrics.md"), "utf8")
   : "";
-const flagIsOff = /"FUNNEL_MEASUREMENT_ENABLED"\s*:\s*"0"/.test(wrangler);
-const docsSayDeferred = gaMetrics.includes("Enablement deferred; flag currently off in production");
-if (!flagIsOff || !docsSayDeferred) {
+const flagIsOn = /"FUNNEL_MEASUREMENT_ENABLED"\s*:\s*"1"/.test(wrangler);
+const docsSayLive = gaMetrics.includes("Collection is live since 2026-09-09");
+if (!flagIsOn || !docsSayLive) {
   fail(
     "funnel-flag agreement",
-    `expected FUNNEL_MEASUREMENT_ENABLED "0" in wrangler.jsonc (got ${flagIsOff ? "0" : "not 0"}) ` +
-      `and 'Enablement deferred; flag currently off in production' in docs/ga-metrics.md ` +
-      `(got ${docsSayDeferred ? "present" : "absent"})`,
+    `expected FUNNEL_MEASUREMENT_ENABLED "1" in wrangler.jsonc (got ${flagIsOn ? "1" : "not 1"}) ` +
+      `and 'Collection is live since 2026-09-09' in docs/ga-metrics.md ` +
+      `(got ${docsSayLive ? "present" : "absent"})`,
   );
 }
-console.log(`PASS verify:claims funnel-flag agreement (config off + docs deferred)`);
+console.log(`PASS verify:claims funnel-flag agreement (config on + docs live)`);
 
 // ---------------------------------------------------------------------------
 // 3b. ga-positioning.md header: no release verdict, points at live truth.

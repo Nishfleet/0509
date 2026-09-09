@@ -111,10 +111,12 @@ describe("funnel measurement gate", () => {
       .join("\n");
     const parsed = JSON.parse(withoutComments) as { vars?: Record<string, unknown> };
     const vars = parsed.vars ?? {};
-    // BET 10 (#1278) flip-to-off: production config keeps funnel measurement
-    // disabled until the spec §8 rollout gates clear (re-enable: issue #1590).
-    // The gate turns on only for exact 1/true/yes/on, so "0" means off.
-    expect(vars.FUNNEL_MEASUREMENT_ENABLED).toBe("0");
+    // Issue #2106 (2026-09-09): the spec §8 rollout gates cleared — redaction
+    // test (#2103), retention/delete test (#2104), privacy-page copy (#2105),
+    // and Nish's gates 1-2 approval with a 90-day retention period — so the
+    // committed production config enables funnel measurement. The gate turns
+    // on only for exact 1/true/yes/on, so "1" means on.
+    expect(vars.FUNNEL_MEASUREMENT_ENABLED).toBe("1");
   });
 });
 
