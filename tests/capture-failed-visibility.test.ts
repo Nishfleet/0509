@@ -5,10 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createMemoryRouter, RouterProvider } from "react-router";
 
 import { RecentChecksSection, type LatestRunCaptureAttempt } from "~/components/watchlists/recent-checks-section";
-import {
-  formatCaptureAttemptReasonLabel,
-  type CaptureAttemptReasonCode,
-} from "~/lib/capture-attempt-reason-code";
+import type { CaptureAttemptReasonCode } from "~/lib/capture-attempt-reason-code";
 import type { WatchlistRunRecord } from "~/lib/types";
 
 /**
@@ -61,11 +58,21 @@ function attempt(overrides: Partial<LatestRunCaptureAttempt>): LatestRunCaptureA
  * anti-bot challenge, and a consent-wall phantom — each mapped to a real
  * public reason code the gate emits.
  */
-const SUPPRESSION_REASONS: Array<{ reasonCode: CaptureAttemptReasonCode }> = [
-  { reasonCode: "partial_load" },
-  { reasonCode: "error_page" },
-  { reasonCode: "cloudflare_challenge" },
-  { reasonCode: "cookie_banner" },
+/**
+ * The suppression categories issue #2050 names — partial load, error page,
+ * anti-bot challenge, and a consent-wall phantom — each mapped to a real
+ * public reason code the gate emits. The expected label is hardcoded here
+ * (NOT derived from `formatCaptureAttemptReasonLabel`) so the assertion is
+ * independent of the code under review and cannot pass tautologically.
+ */
+const SUPPRESSION_REASONS: Array<{
+  reasonCode: CaptureAttemptReasonCode;
+  label: string;
+}> = [
+  { reasonCode: "partial_load", label: "Page only partially loaded" },
+  { reasonCode: "error_page", label: "Page loaded as an error" },
+  { reasonCode: "cloudflare_challenge", label: "Anti-bot challenge wall" },
+  { reasonCode: "cookie_banner", label: "Cookie consent wall" },
 ];
 
 /**
@@ -103,14 +110,24 @@ describe("capture_failed visibility in run history (#2050)", () => {
   });
 
   it("renders every suppression reason category the issue names", () => {
-    for (const { reasonCode } of SUPPRESSION_REASONS) {
-      const label = formatCaptureAttemptReasonLabel(reasonCode);
+    for (const { reasonCode, label } of SUPPRESSION_REASONS) {
       const markup = renderSection([
         attempt({ id: `attempt-${reasonCode}`, status: "capture_failed", reasonCode }),
       ]);
       expect(markup, reasonCode).toContain(label);
       expect(markup, reasonCode).toContain("No alert sent.");
     }
+  });
+
+  it("renders an unclassifiable capture_failed rather than silently dropping it", () => {
+    const markup = renderSection([
+      attempt({ id: "attempt-unknown", status: "capture_failed", reasonCode: null }),
+    ]);
+
+    // A failed capture with no classifiable reason still surfaces, with the
+    // honest generic line — never omitted.
+    expect(markup).toContain("Check did not produce an alert");
+    expect(markup).toContain("No alert sent.");
   });
 
   it("renders the attempt timestamp alongside each failed row", () => {
@@ -150,8 +167,8 @@ describe("capture_failed visibility in run history (#2050)", () => {
       ),
     );
 
-    for (const { reasonCode } of SUPPRESSION_REASONS) {
-      expect(markup).toContain(formatCaptureAttemptReasonLabel(reasonCode));
+    for (const { label } of SUPPRESSION_REASONS) {
+      expect(markup).toContain(label);
     }
     expect(markup.match(/No alert sent\./g)?.length).toBe(SUPPRESSION_REASONS.length);
   });
