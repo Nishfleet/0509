@@ -63,6 +63,12 @@ function installMocks(options: MockOptions = {}) {
     loadOfferTimeline,
     isOfferTimelineShareEnabled: (appEnv: { PUBLIC_OFFER_TIMELINE_SHARE?: string }) =>
       appEnv.PUBLIC_OFFER_TIMELINE_SHARE?.trim() !== "0",
+    // The archive data layer (issue #2173) imports these too; stub them so
+    // the mock covers the module surface its consumers use.
+    listDomainSnapshotCaptureTimes: vi.fn().mockResolvedValue([]),
+    domainUrlPredicates: () => "1=1",
+    domainUrlBindings: () => [],
+    rowToSnapshot: (row: unknown) => row,
   }));
 
   return { env, loadOfferTimeline, enforcePublicBrandPageRateLimit };

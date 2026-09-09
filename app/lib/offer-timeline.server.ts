@@ -50,6 +50,22 @@ export interface OfferTimelineLoad {
   asOfState: OfferLedgerEntry | null;
 }
 
+/**
+ * The twelve domain-URL predicates (4 exact hosts + 8 LIKE shapes) every
+ * per-domain snapshot/ad read shares. Parameter order matches
+ * `domainUrlBindings`. Exported so the archive reads (issue #2173) match a
+ * domain exactly the way the public timeline does — one definition, no drift.
+ */
+export function domainUrlPredicates(column: string): string {
+  return [
+    `${column} = ?`,
+    `${column} = ?`,
+    `${column} = ?`,
+    `${column} = ?`,
+    ...Array.from({ length: 8 }, () => `${column} LIKE ? ESCAPE '\\'`),
+  ].join("\n          OR ");
+}
+
 export async function loadOfferTimeline(
   env: AppEnv,
   input: { domain: string; asOf: string | null },
@@ -80,18 +96,7 @@ export async function loadOfferTimeline(
           ) AS is_ad_destination
         FROM landing_page_snapshot s
         WHERE
-          s.canonical_url = ?
-          OR s.canonical_url = ?
-          OR s.canonical_url = ?
-          OR s.canonical_url = ?
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
+          ${domainUrlPredicates("s.canonical_url")}
         ORDER BY s.captured_at ASC, s.id ASC
         LIMIT ?
       `,
@@ -206,18 +211,7 @@ export async function loadSuppressedOfferTimelineRows(
           ) AS is_ad_destination
         FROM landing_page_snapshot s
         WHERE
-          s.canonical_url = ?
-          OR s.canonical_url = ?
-          OR s.canonical_url = ?
-          OR s.canonical_url = ?
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
-          OR s.canonical_url LIKE ? ESCAPE '\\'
+          ${domainUrlPredicates("s.canonical_url")}
         ORDER BY s.captured_at ASC, s.id ASC
         LIMIT ?
       `,
@@ -404,7 +398,47 @@ export function summarizeDomainCaptureFailures(
   };
 }
 
-function domainUrlBindings(domain: string): string[] {
+/**
+ * Raw `captured_at` timestamps of every stored snapshot belonging to a
+ * domain — including rows the public proof gate suppresses. A capture still
+ * happened when its proof is incomplete, so gap detection (issue #2173
+ * honesty rule) reads the unfiltered capture times. Bounded D1 read only.
+ */
+export async function listDomainSnapshotCaptureTimes(
+  env: AppEnv,
+  input: { domain: string; limit?: number },
+): Promise<string[]> {
+  if (!env.DB) {
+    return [];
+  }
+  const limit = Math.min(Math.max(input.limit ?? 500, 1), 500);
+  let rows: Array<{ canonical_url: string; captured_at: string }> = [];
+  try {
+    rows = await queryAll<{ canonical_url: string; captured_at: string }>(
+      env,
+      `
+        SELECT s.canonical_url, s.captured_at
+        FROM landing_page_snapshot s
+        WHERE
+          ${domainUrlPredicates("s.canonical_url")}
+        ORDER BY s.captured_at ASC, s.id ASC
+        LIMIT ?
+      `,
+      ...domainUrlBindings(input.domain),
+      limit,
+    );
+  } catch (error) {
+    if (isMissingSnapshotTable(error)) {
+      return [];
+    }
+    throw error;
+  }
+  return rows
+    .filter((row) => canonicalUrlBelongsToDomain(row.canonical_url, input.domain))
+    .map((row) => row.captured_at);
+}
+
+export function domainUrlBindings(domain: string): string[] {
   const host = domain.toLowerCase();
   const www = `www.${host}`;
   const wildcard = `%.${escapeLike(host)}`;
@@ -430,7 +464,12 @@ function escapeLike(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
-function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
+/**
+ * Row → snapshot input mapper. Exported for the signed-in archive read
+ * (issue #2173), which builds the same ledger from a watchlist's own
+ * run-linked snapshots without the public proof gate.
+ */
+export function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
   const metadata = parseJson<Record<string, unknown>>(row.metadata_json, {});
   const screenshotKey = readScreenshotKey(metadata);
   const pageTextKey = readPageTextKey(row.artifact_key, metadata);

@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 
 import {
+  archiveExportResponse,
   collectionExportResponse,
   digestExportResponse,
   exportFormatForRequest,
@@ -54,6 +55,19 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 
     const events = await listWatchEvents(env, watchlist.id, 200);
     return watchlistExportResponse(watchlist, events, format);
+  }
+
+  // The proof archive (issue #2173): CSV + JSON of the full dated record for
+  // the account's watched domain, from the same engine as the Archive tab.
+  if (resourceType === "archive") {
+    const watchlist = await getWatchlist(env, resourceId, workspaceUserId);
+    if (!watchlist) {
+      throw new Response("Not found", { status: 404 });
+    }
+
+    const { loadWatchlistArchive } = await import("~/lib/archive.server");
+    const archive = await loadWatchlistArchive(env, { watchlist });
+    return archiveExportResponse(archive, format === "json" ? "json" : "csv");
   }
 
   if (resourceType === "digest") {

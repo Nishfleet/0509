@@ -163,6 +163,51 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
     };
   }
 
+  // Issue #2173: a frozen snapshot of the proof archive, shared through the
+  // existing share-link machinery (bearer token, 90-day default TTL, revoke
+  // via /app/shares). The payload is frozen at share time — later captures
+  // never alter what the recipient sees.
+  if (intent === "share-archive") {
+    const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+    const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
+    if (!shareGate.ok) {
+      return {
+        ok: false,
+        error: "plan_gated" as const,
+        feature: "share_links" as const,
+        plan: shareGate.plan,
+        message: "Share links are included on Starter and Agency plans.",
+      };
+    }
+    const { createShareLink, getWatchlist } = await import("~/lib/data.server");
+    const watchlistId = String(formData.get("watchlistId") ?? "");
+    const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
+    if (!watchlist) {
+      return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
+    }
+    const { loadWatchlistArchive } = await import("~/lib/archive.server");
+    const { buildArchiveSnapshotPayload } = await import("~/lib/archive-snapshot");
+    const archive = await loadWatchlistArchive(env, { watchlist });
+    const share = await createShareLink(
+      env,
+      { ...session, user: { ...session.user, id: workspaceUserId } },
+      {
+        resourceType: "watchlist",
+        resourceId: watchlist.id,
+        isSnapshot: true,
+        snapshotPayload: buildArchiveSnapshotPayload(archive, {
+          watchlistName: watchlist.name,
+          targetLabel: watchlist.targetLabel,
+        }),
+      },
+    );
+
+    return {
+      ok: true,
+      message: `${new URL(`/share/${share.token}`, request.url).toString()}`,
+    };
+  }
+
   if (intent === "update-watchlist") {
     const { getWatchlist, updateWatchlist } = await import("~/lib/data.server");
     const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);

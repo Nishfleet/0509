@@ -41,6 +41,12 @@ function installLoaderMocks() {
   vi.doMock("~/lib/offer-timeline.server", () => ({
     loadOfferTimeline: vi.fn().mockResolvedValue({ entries: [], asOfState: null }),
     isOfferTimelineShareEnabled: () => true,
+    // The archive data layer (issue #2173) imports these too; stub them so
+    // the mock covers the module surface its consumers use.
+    listDomainSnapshotCaptureTimes: vi.fn().mockResolvedValue([]),
+    domainUrlPredicates: () => "1=1",
+    domainUrlBindings: () => [],
+    rowToSnapshot: (row: unknown) => row,
   }));
 }
 
