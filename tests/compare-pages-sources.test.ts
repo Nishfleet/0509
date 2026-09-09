@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -103,4 +104,20 @@ describe("compare pages first-party source attribution (issue #1863)", () => {
       expect(declaredHrefs, `data-source-url (${url}) must be one of the page's declared sources`).toContain(url);
     });
   }
+});
+
+describe("pricing competitor price anchors (issue #2139)", () => {
+  it("every vendor row has a matching entry in the sources doc with a URL and a date", async () => {
+    const { COMPETITOR_PRICE_ANCHORS } = await import("~/components/pricing-section");
+    const doc = readFileSync("docs/compare-pricing-sources.md", "utf8");
+
+    expect(COMPETITOR_PRICE_ANCHORS.length).toBeGreaterThan(0);
+    for (const anchor of COMPETITOR_PRICE_ANCHORS) {
+      expect(anchor.sourceUrl.startsWith("https://"), `${anchor.vendor} source URL`).toBe(true);
+      expect(anchor.checked, `${anchor.vendor} checked date`).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+      expect(doc, `${anchor.vendor} named in sources doc`).toContain(anchor.vendor);
+      expect(doc, `${anchor.vendor} source URL in sources doc`).toContain(anchor.sourceUrl);
+      expect(doc, `${anchor.vendor} checked date in sources doc`).toContain(anchor.checked);
+    }
+  });
 });
