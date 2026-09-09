@@ -10,7 +10,10 @@ import {
   buildSitemapXml,
 } from "~/lib/sitemap.server";
 import { buildLlmsText } from "~/lib/public-markdown";
-import { BUYER_SURFACE_LOCALE_IDS } from "~/lib/locale-markets";
+import {
+  BUYER_SURFACE_LOCALE_IDS,
+  type BuyerSurfaceLocaleId,
+} from "~/lib/locale-markets";
 
 /**
  * llms.txt ↔ reachable-sitemap sync canary (issue #2017, Option A per the
@@ -67,7 +70,9 @@ describe("robots.txt advertises the non-empty locale sitemaps (issue #2017)", ()
   it("lists a Sitemap line for the root plus every translated-locale sitemap", () => {
     const robots =
       publicSeoFileForPathname("/robots.txt")?.body ??
-      fail("robots.txt must be served");
+      (() => {
+        throw new Error("robots.txt must be served");
+      })();
     for (const url of ADVERTISED_SITEMAP_URLS) {
       expect(robots, `robots.txt must advertise ${url}`).toContain(
         `Sitemap: ${url}`,
@@ -126,7 +131,8 @@ describe("llms.txt ↔ reachable sitemap sync (issue #2017 canary)", () => {
       1,
     );
     // Each locale sneaker-resale URL lives in its own locale sitemap only.
-    for (const locale of ["de", "ja", "pt-br"]) {
+    const translated: readonly BuyerSurfaceLocaleId[] = ["de", "ja", "pt-br"];
+    for (const locale of translated) {
       const locs = locsFromXml(buildLocaleSitemapXml(locale));
       expect(locs).toContain(`${SITE}/${locale}/sneaker-resale`);
     }
