@@ -555,6 +555,116 @@ describe("funnel measurement redaction", () => {
   });
 });
 
+describe("funnel measurement section 8 gate 6 redaction", () => {
+  const probeAddress = ["redact-probe", "forbidden.example"].join("@");
+  const probeIp = ["203", "0", "113", "77"].join(".");
+  const probeAgent = "FunnelRedactionProbe/9.9";
+  const probeQuery = "typed-query-probe";
+  const SECTION_4_FIELDS = new Set([
+    "event_id",
+    "workspace_id",
+    "timestamp",
+    "route",
+    "result_count_bucket",
+    "error_kind",
+    "referrer_domain",
+    "account_scope",
+  ]);
+  const LOG_ENVELOPE_KEYS = new Set(["details", "level", "message", "operation", "timestamp"]);
+
+  let logSpy: MockInstance;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function hostileRequest(): Request {
+    const url = new URL("/search", "http://localhost");
+    url.searchParams.set("q", probeQuery);
+    url.searchParams.set(["em", "ail"].join(""), probeAddress);
+    url.searchParams.set("redirect", "https://evil.example/ads?click=1");
+    const referer = new URL("/landing", "https://tracker.example");
+    referer.searchParams.set(["em", "ail"].join(""), probeAddress);
+    return new Request(url, {
+      headers: {
+        "user-agent": probeAgent,
+        "cf-connecting-ip": probeIp,
+        "x-forwarded-for": probeIp,
+        "x-real-ip": probeIp,
+        referer: referer.toString(),
+      },
+    });
+  }
+
+  it("does not let email, ip, user-agent, or raw query strings reach an emitted record", async () => {
+    const {
+      emitFunnelHomeView,
+      emitFunnelSearchSubmit,
+      emitFunnelSearchResult,
+      emitFunnelSignupStart,
+      emitFunnelSignupStartFromAllowlistedSource,
+    } = await import("~/lib/funnel-measurement.server");
+    const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
+    const request = hostileRequest();
+
+    emitFunnelHomeView(env, request);
+    emitFunnelSearchSubmit(env, request);
+    emitFunnelSearchResult(env, request, 3);
+    emitFunnelSignupStart(env, request);
+    emitFunnelSignupStartFromAllowlistedSource(env, request, probeAddress);
+
+    const records = emittedFunnelRecords(logSpy);
+    expect(records.length).toBeGreaterThan(0);
+
+    const serialized = JSON.stringify(records);
+    expect(serialized).not.toContain(probeAddress);
+    expect(serialized).not.toContain(probeIp);
+    expect(serialized).not.toContain(probeAgent);
+    expect(serialized).not.toContain(probeQuery);
+    expect(serialized).not.toContain("evil.example");
+    expect(serialized).not.toContain("tracker.example");
+    expect(serialized).not.toMatch(/cf-connecting-ip/i);
+    expect(serialized).not.toMatch(/x-forwarded-for/i);
+    expect(serialized).not.toMatch(/x-real-ip/i);
+    expect(serialized).not.toMatch(/user-agent/i);
+  });
+
+  it("lets only section-4 allowlisted fields survive emission", async () => {
+    const { emitFunnelHomeView, emitFunnelSearchResult, emitFunnelSearchError } =
+      await import("~/lib/funnel-measurement.server");
+    const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
+    const request = hostileRequest();
+
+    emitFunnelHomeView(env, request);
+    emitFunnelSearchResult(env, request, 12);
+    emitFunnelSearchError(env, request, "provider");
+
+    const records = emittedFunnelRecords(logSpy);
+    expect(records).toHaveLength(3);
+
+    for (const record of records) {
+      for (const key of Object.keys(record)) {
+        expect(LOG_ENVELOPE_KEYS.has(key)).toBe(true);
+      }
+      expect(record).not.toHaveProperty("userId");
+      expect(record).not.toHaveProperty("requestId");
+      expect(record).not.toHaveProperty("watchlistId");
+      expect(record).not.toHaveProperty("email");
+      expect(record).not.toHaveProperty("ip");
+
+      const details = record.details as Record<string, string>;
+      expect(details).toEqual(expect.any(Object));
+      for (const key of Object.keys(details)) {
+        expect(SECTION_4_FIELDS.has(key)).toBe(true);
+      }
+    }
+  });
+});
+
 describe("funnel measurement route boundaries", () => {
   let logSpy: MockInstance;
 
