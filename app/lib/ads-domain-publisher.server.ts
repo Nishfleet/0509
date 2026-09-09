@@ -396,12 +396,14 @@ async function publishSeedListDomain(
   const filters = normalizeSearchFilters({ country: "all" });
   const query = buildSearchV2SavedQuery(v2Context.queryIntent, "exact", filters, {
     identityAliases: v2Context.identityAliases,
+    pageId: v2Context.advertiserPageId,
   });
   const cacheKeyOverride = buildSearchV2CacheKey({
     provider,
     intent: v2Context.queryIntent,
     scope: "exact",
     country: "all",
+    pageId: v2Context.advertiserPageId,
   });
   const rawResult = await searchAdsViaSourceResolver(env, query, null, {
     purpose: "public_search",
