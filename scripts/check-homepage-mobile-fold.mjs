@@ -30,14 +30,15 @@ for (const viewport of VIEWPORTS) {
   await page.waitForTimeout(800);
 
   // The fold failure used to be a 10-line data-driven Nykaa wall in the H1.
-  // #1173 moved that proof into a strip under a buyer-naming H1. Local D1
-  // often has no proof brief, so the empty strip is too short to prove the
-  // budget. Replay a live-sized strip when that happens.
+  // #1173 moved that proof into a strip under the H1; #2170 made the H1 the
+  // free live-search promise. Local D1 often has no proof brief, so the
+  // empty strip is too short to prove the budget. Replay a live-sized strip
+  // when that happens.
   const liveWall = await page.evaluate(() => {
     const h1 = document.querySelector(".ld-wall");
     if (!h1) return "missing-h1";
     const text = (h1.textContent ?? "").replace(/\s+/g, " ").trim();
-    if (!/growth teams/i.test(text)) return "unexpected-h1";
+    if (!/see the meta ads/i.test(text)) return "unexpected-h1";
     const strip = document.querySelector(".ld-proof-strip");
     if (strip && /saved the proof/i.test(strip.textContent ?? "")) return "live-strip";
     const injected = document.createElement("aside");

@@ -114,21 +114,21 @@ describe("BET 9 chosen hero direction (#1173)", () => {
     expect(chosen).toContain("#1173");
   });
 
-  it("keeps a buyer-naming H1 even when live Nykaa proof is present", async () => {
+  it("leads with the free live-search promise even when live Nykaa proof is present (#2170)", async () => {
     mockReactRouter(proofBrief);
     const markup = await renderMarketing();
     const h1 = heroH1(markup);
 
-    expect(h1).toContain("Growth teams");
-    expect(h1).toContain("who track competitors");
-    expect(h1).toContain("the call");
-    expect(h1).toMatch(/<i class="ld-flag">proof<\/i>/);
+    expect(h1).toContain("See the Meta ads");
+    expect(h1).toContain("any competitor is");
+    expect(h1).toContain("right now.");
+    expect(h1).toContain("Free, no account.");
+    expect(h1).toMatch(/<i class="ld-flag">live<\/i>/);
     expect(h1).not.toContain("Unlock the secret to radiant");
     expect(h1).not.toContain("nykaa.com");
-    expect(h1).not.toContain("Meta ads");
   });
 
-  it("uses the same buyer-naming H1 when there is no live proof", async () => {
+  it("uses the same live-search H1 when there is no live proof", async () => {
     mockReactRouter(proofBrief);
     const withProof = await renderMarketing();
 
@@ -164,7 +164,7 @@ describe("BET 9 chosen hero direction (#1173)", () => {
     const markup = await renderMarketing();
     const strip = proofStrip(markup);
 
-    expect(heroH1(markup)).toContain("Growth teams");
+    expect(heroH1(markup)).toContain("See the Meta ads");
     expect(strip).toContain("No live proof yet");
     expect(strip).not.toContain("Unlock the secret");
     expect(strip).not.toContain("illustrative");
