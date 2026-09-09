@@ -1,3 +1,5 @@
+import type { DemoBrandPageDomain } from "~/lib/demo-brand-pages";
+import { FREE_PREVIEW_SEARCH_DOMAIN } from "~/lib/demo-brand-pages";
 import type { FaqJsonLdEntry } from "~/lib/seo";
 
 export type SwitchSlug = "magicbrief" | "panoramata" | "visualping";
@@ -27,6 +29,15 @@ export interface SwitchPage {
   title: string;
   description: string;
   ctaBrand: string;
+  /**
+   * Domain the free-preview CTA searches (issue 2123). A tracked demo brand
+   * whose production /search returns verified ads — never this page's own
+   * vendor domain, which renders "0 ads found". Copy may still name the
+   * vendor; the search query must be the demo competitor. Omitted only where
+   * the CTA is deliberately left unchanged: MagicBrief is being wiped in
+   * issue 2127 and keeps its existing CTA until that lands.
+   */
+  previewSearchDomain?: DemoBrandPageDomain;
   kicker: string;
   headline: string;
   deck: string;
@@ -186,6 +197,7 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
     description:
       "A verified reviewer says Panoramata's price feels high for a solo marketer. Paste a domain for the same ads and pages job. Try the free preview.",
     ctaBrand: "panoramata.co",
+    previewSearchDomain: FREE_PREVIEW_SEARCH_DOMAIN,
     kicker: "Switch from Panoramata",
     headline: "Same ads and pages job. Paste a domain.",
     deck: "A verified GetApp reviewer says Panoramata's price feels a bit high for a solo marketer. Five to Nine does the same public Meta ads and landing-page job from a pasted domain.",
@@ -270,6 +282,7 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
     description:
       "Visualping's own blog says 83% of detected changes are not important. Paste a domain for the same ad and landing-page job. Try the free preview.",
     ctaBrand: "visualping.io",
+    previewSearchDomain: FREE_PREVIEW_SEARCH_DOMAIN,
     kicker: "Switch from Visualping",
     headline: "Skip the Ad Library URL hunt and the condition prompt.",
     deck: "Visualping's own blog says the AI classifies 83% of detected changes as not important. Its Meta Ad Library playbook still asks you to find the library URL and write a condition prompt. Five to Nine takes a domain.",
