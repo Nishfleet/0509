@@ -51,6 +51,21 @@ const DELIVERY_MANAGEMENT_INTENTS = new Set([
   "toggle-delivery-target",
 ]);
 
+const WATCHLIST_NOT_FOUND_MESSAGE =
+  "We couldn't find that watchlist. Refresh the page and try again.";
+
+/**
+ * Paused is not missing. Management actions on a paused competitor used to
+ * fall into the "couldn't find that watchlist" branch — a false claim that
+ * sent the user to refresh a page that would never fix it (77 of 88 prod
+ * watchlists are paused, so this was the common case, not an edge). Name the
+ * paused state and the way out instead. Whether paused competitors should be
+ * editable at all is a product decision; the block stays, the lie goes.
+ */
+function pausedWatchlistMessage(action: string) {
+  return `This competitor is paused — its saved history is intact. Resume watching to ${action}.`;
+}
+
 export async function handleWatchlistsAction(args: ActionFunctionArgs) {
   const { context, request } = args;
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -84,8 +99,11 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
     const watchlistId = String(formData.get("watchlistId") ?? "");
     const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
 
-    if (!watchlist || !watchlist.isActive) {
-      return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
+    if (!watchlist) {
+      return { ok: false, message: WATCHLIST_NOT_FOUND_MESSAGE };
+    }
+    if (!watchlist.isActive) {
+      return { ok: false, error: "watchlist_paused", message: pausedWatchlistMessage("run a fresh check") };
     }
 
     // Manual refresh triggers a usage-billed live scan; without this gate a
@@ -170,7 +188,10 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
     const targetLabel = readOptionalString(formData.get("targetLabel"));
 
     if (!watchlist) {
-      return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
+      return { ok: false, message: WATCHLIST_NOT_FOUND_MESSAGE };
+    }
+    if (!watchlist.isActive) {
+      return { ok: false, error: "watchlist_paused", message: pausedWatchlistMessage("change its setup") };
     }
 
     if (!name || (watchlist.targetType !== "saved_query" && !targetLabel)) {
@@ -280,7 +301,10 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
     const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
 
     if (!watchlist) {
-      return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
+      return { ok: false, message: WATCHLIST_NOT_FOUND_MESSAGE };
+    }
+    if (!watchlist.isActive) {
+      return { ok: false, error: "watchlist_paused", message: pausedWatchlistMessage("change its delivery settings") };
     }
 
     const whatsappDeliveryEditable = isWhatsAppDeliveryCustomerFacing() && isWhatsAppProviderConfigured(env);
@@ -354,7 +378,10 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
     const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
 
     if (!watchlist) {
-      return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
+      return { ok: false, message: WATCHLIST_NOT_FOUND_MESSAGE };
+    }
+    if (!watchlist.isActive) {
+      return { ok: false, error: "watchlist_paused", message: pausedWatchlistMessage("add a delivery target") };
     }
 
     const requestedChannel = String(formData.get("channel") ?? "");
@@ -627,8 +654,13 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
     const watchlist = target.watchlistId
       ? await getWatchlist(env, target.watchlistId, workspaceUserId)
       : null;
-    if (!isDefaultTarget && !watchlist?.isActive) {
-      return { ok: false, message: "We couldn't find that delivery target. Refresh the page and try again." };
+    if (!isDefaultTarget) {
+      if (!watchlist) {
+        return { ok: false, message: "We couldn't find that delivery target. Refresh the page and try again." };
+      }
+      if (!watchlist.isActive) {
+        return { ok: false, error: "watchlist_paused", message: pausedWatchlistMessage("change its delivery targets") };
+      }
     }
 
     const requestedChannel = target.channel;
@@ -938,6 +970,12 @@ async function handleBulkAcceptSuggestedCompetitorsAction(
   });
 }
 
+/**
+ * Ownership check only — returns the watchlist in ANY state (active or
+ * paused). Callers decide how to treat a paused watchlist; collapsing paused
+ * into null here is what produced the false "couldn't find that watchlist"
+ * errors on every management action against a paused competitor.
+ */
 async function getOwnedWatchlist(
   env: AppEnv,
   userId: string,
@@ -945,8 +983,7 @@ async function getOwnedWatchlist(
   getWatchlist: (env: AppEnv, watchlistId: string, userId?: string) => Promise<any>,
 ): Promise<any> {
   const watchlistId = String(formData.get("watchlistId") ?? "");
-  const watchlist = await getWatchlist(env, watchlistId, userId);
-  return watchlist?.isActive ? watchlist : null;
+  return (await getWatchlist(env, watchlistId, userId)) ?? null;
 }
 
 function parseQuietHours(formData: FormData) {

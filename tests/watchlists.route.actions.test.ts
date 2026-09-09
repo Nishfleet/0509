@@ -431,10 +431,153 @@ describe("watchlists route actions", () => {
     } as never);
 
     expect(result).toEqual({
-      message: "We couldn't find that watchlist. Refresh the page and try again.",
+      error: "watchlist_paused",
+      message:
+        "This competitor is paused — its saved history is intact. Resume watching to run a fresh check.",
       ok: false,
     });
     expect(runWatchlistManual).not.toHaveBeenCalled();
+  });
+
+  describe("paused watchlist management actions", () => {
+    const pausedWatchlist = { ...watchlist, isActive: false };
+
+    function mockOwnerSession() {
+      vi.doMock("~/lib/auth.server", () => ({
+        requireSession: vi.fn().mockResolvedValue(session),
+        requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+          session,
+          workspaceUserId: session.user.id,
+          isMember: false,
+          ownerName: null,
+        })),
+      }));
+    }
+
+    function postIntent(formData: FormData) {
+      return {
+        context: createContext(),
+        request: new Request("http://localhost/app/watchlists", {
+          method: "POST",
+          body: formData,
+        }),
+      } as never;
+    }
+
+    it("names the paused state when editing a paused watchlist's setup", async () => {
+      const updateWatchlist = vi.fn();
+      mockOwnerSession();
+      vi.doMock("~/lib/data.server", () => ({
+        getWatchlist: vi.fn().mockResolvedValue(pausedWatchlist),
+        updateWatchlist,
+      }));
+
+      const { action } = await import("~/routes/app.watchlists");
+      const formData = new FormData();
+      formData.set("intent", "update-watchlist");
+      formData.set("watchlistId", "watch-1");
+      formData.set("name", "Mamaearth launch watch");
+      formData.set("targetLabel", "Mamaearth");
+
+      const result = await action(postIntent(formData));
+
+      expect(result).toEqual({
+        error: "watchlist_paused",
+        message:
+          "This competitor is paused — its saved history is intact. Resume watching to change its setup.",
+        ok: false,
+      });
+      expect(updateWatchlist).not.toHaveBeenCalled();
+    });
+
+    it("names the paused state when saving delivery settings for a paused watchlist", async () => {
+      const upsertWatchlistDeliveryConfig = vi.fn();
+      mockOwnerSession();
+      vi.doMock("~/lib/data.server", () => ({
+        getWatchlist: vi.fn().mockResolvedValue(pausedWatchlist),
+        getWatchlistDeliveryConfig: vi.fn(),
+        getWorkspaceDeliveryConfig: vi.fn(),
+        upsertWatchlistDeliveryConfig,
+      }));
+      // doMock registrations outlive vi.resetModules() in this file, so the
+      // factory must stay benign for later tests that import the real module.
+      vi.doMock("~/lib/plan-feature-gate.server", () => ({
+        requireDeliveryConfigSave: vi.fn().mockResolvedValue({ ok: true, plan: "starter" }),
+        planFeatureDeniedActionResult: vi.fn(),
+      }));
+
+      const { action } = await import("~/routes/app.watchlists");
+      const formData = new FormData();
+      formData.set("intent", "save-delivery-config");
+      formData.set("watchlistId", "watch-1");
+      formData.set("emailEnabled", "on");
+
+      const result = await action(postIntent(formData));
+
+      expect(result).toEqual({
+        error: "watchlist_paused",
+        message:
+          "This competitor is paused — its saved history is intact. Resume watching to change its delivery settings.",
+        ok: false,
+      });
+      expect(upsertWatchlistDeliveryConfig).not.toHaveBeenCalled();
+    });
+
+    it("names the paused state when adding a delivery target to a paused watchlist", async () => {
+      const upsertDeliveryTarget = vi.fn();
+      mockOwnerSession();
+      vi.doMock("~/lib/data.server", () => ({
+        getWatchlist: vi.fn().mockResolvedValue(pausedWatchlist),
+        upsertDeliveryTarget,
+      }));
+      // See above: keep the leaked factory benign for later tests.
+      vi.doMock("~/lib/plan-feature-gate.server", () => ({
+        requireDeliveryConfigSave: vi.fn().mockResolvedValue({ ok: true, plan: "starter" }),
+        planFeatureDeniedActionResult: vi.fn(),
+      }));
+
+      const { action } = await import("~/routes/app.watchlists");
+      const formData = new FormData();
+      formData.set("intent", "add-delivery-target");
+      formData.set("watchlistId", "watch-1");
+      formData.set("channel", "email");
+      formData.set("targetValue", "owner@example.com");
+
+      const result = await action(postIntent(formData));
+
+      expect(result).toEqual({
+        error: "watchlist_paused",
+        message:
+          "This competitor is paused — its saved history is intact. Resume watching to add a delivery target.",
+        ok: false,
+      });
+      expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+    });
+
+    it("names the paused state when toggling a delivery target on a paused watchlist", async () => {
+      const upsertDeliveryTarget = vi.fn();
+      mockOwnerSession();
+      vi.doMock("~/lib/data.server", () => ({
+        getWatchlist: vi.fn().mockResolvedValue(pausedWatchlist),
+        getDeliveryTargetById: vi.fn().mockResolvedValue(deliveryTargets[0]),
+        upsertDeliveryTarget,
+      }));
+
+      const { action } = await import("~/routes/app.watchlists");
+      const formData = new FormData();
+      formData.set("intent", "toggle-delivery-target");
+      formData.set("targetId", deliveryTargets[0].id);
+
+      const result = await action(postIntent(formData));
+
+      expect(result).toEqual({
+        error: "watchlist_paused",
+        message:
+          "This competitor is paused — its saved history is intact. Resume watching to change its delivery targets.",
+        ok: false,
+      });
+      expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+    });
   });
 
   it("saves watchlist delivery settings with parsed quiet hours and timezone", async () => {
