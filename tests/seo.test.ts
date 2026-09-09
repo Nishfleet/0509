@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { publicSeoFileForPathname } from "~/lib/seo";
+import {
+	AI_TRAINING_CRAWLERS,
+	publicSeoFileForPathname,
+} from "~/lib/seo";
 
 import { pricingOffersJsonLd } from "~/lib/seo";
 
@@ -85,41 +88,31 @@ describe("public SEO files", () => {
 		expect(robots?.body).not.toContain("Disallow: /share");
 	});
 
-	it("does not duplicate the AI-training deny block in repo robots.txt; edge is the sole source (issue #1459)", () => {
+	it("serves an explicit AEO/AI policy matrix in repo robots.txt (issue #2061)", () => {
 		const robots = publicSeoFileForPathname("/robots.txt");
 
-		// The Cloudflare managed-robots zone feature is the source of truth for
-		// the AI-training deny list. The repo file only holds the wildcard allow
-		// rules and the Sitemap so the served file does not repeat the block.
-		for (const agent of [
-			"Amazonbot",
-			"Applebot-Extended",
-			"Bytespider",
-			"CCBot",
-			"ClaudeBot",
-			"CloudflareBrowserRenderingCrawler",
-			"Google-Extended",
-			"GPTBot",
-			"meta-externalagent",
-		]) {
-			expect(robots?.body, `${agent} should not be in repo robots.txt`).not.toContain(
+		// Grounding / AI-answer engines are now EXPLICITLY allowed on public
+		// paths (issue #2061) — Google-Extended included — while they are never
+		// given a training Deny. ai-train=no is not weakened.
+		for (const agent of ["Google-Extended", "OAI-SearchBot", "PerplexityBot"]) {
+			expect(robots?.body, `${agent} should be present as a grounding engine`).toContain(
+				`User-agent: ${agent}\nAllow:`,
+			);
+			expect(robots?.body, `${agent} should never be training-denied`).not.toContain(
 				`User-agent: ${agent}\nDisallow: /`,
 			);
 		}
 
-		// AI answer/reference engines are NOT named in any deny group; they
-		// fall through to the wildcard allow group.
-		for (const agent of [
-			"PerplexityBot",
-			"OAI-SearchBot",
-			"ChatGPT-User",
-			"Claude-By-Cloudflare",
-			"Googlebot",
-		]) {
-			expect(robots?.body, `${agent} should not be denied`).not.toContain(
-				`User-agent: ${agent}`,
+		// Training-only crawlers stay denied in the served robots.txt
+		// (ai-train=no) — one Deny per agent, shared with llms.txt.
+		for (const agent of AI_TRAINING_CRAWLERS) {
+			expect(robots?.body, `${agent} should be training-denied`).toContain(
+				`User-agent: ${agent}\nDisallow: /`,
 			);
 		}
+
+		// Google-Extended stays OUT of the training-deny set entirely.
+		expect(AI_TRAINING_CRAWLERS).not.toContain("Google-Extended");
 
 		// The wildcard group still allows the public crawl and carries the
 		// Sitemap directive.

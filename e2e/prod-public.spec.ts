@@ -221,17 +221,26 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
     expect(await llms.text()).toContain("Five to Nine");
 
     // AI crawler policy (docs/ai-crawler-policy.md, "answers yes, training
-    // no"): training crawlers are denied while AI answer engines stay
-    // allowed by the wildcard group — robots.txt and llms.txt must agree.
+    // no"): grounding/AI-answer engines are allowed on the public proof surface
+    // while training crawlers stay denied (ai-train=no, issue #2061). The
+    // robots.txt at 0509.io is zone-managed (Cloudflare Managed robots), so this
+    // live smoke check pins the worker-served policy on /llms.txt; the exact
+    // per-bot matrix lives in tests/robots-aeo-policy.test.ts.
     const robots = await request.get(new URL("/robots.txt", baseURL).toString());
     expect(robots.ok()).toBeTruthy();
     const robotsText = await robots.text();
-    expect(robotsText).toContain("User-agent: GPTBot");
-    expect(robotsText).toContain("User-agent: ClaudeBot");
-    expect(robotsText).toContain("User-agent: Google-Extended");
-    expect(robotsText).toContain("Disallow: /");
-    expect(robotsText).not.toContain("User-agent: PerplexityBot");
-    expect(robotsText).not.toContain("User-agent: OAI-SearchBot");
+    expect(robotsText).toContain("Content-Signal");
+
+    // llms.txt names the training-deny list (ai-train=no preserved — not
+    // weakened) and must NOT list Google-Extended, which is a grounding/answer
+    // engine (reference use, issue #2061), not a training crawler.
+    const llmPolicy = await request.get(new URL("/llms.txt", baseURL).toString());
+    expect(llmPolicy.ok()).toBeTruthy();
+    const llmPolicyText = await llmPolicy.text();
+    expect(llmPolicyText).toContain(
+      "AI training/fine-tuning crawlers are denied in robots.txt (ai-train=no)",
+    );
+    expect(llmPolicyText).not.toContain("Google-Extended");
 
     const invalidShare = await gotoPublicPage(page, "/share/not-a-real-share-token");
     expect(invalidShare?.status()).toBe(404);

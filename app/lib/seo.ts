@@ -966,25 +966,62 @@ export const AI_TRAINING_CRAWLERS = [
   "CCBot",
   "ClaudeBot",
   "CloudflareBrowserRenderingCrawler",
-  "Google-Extended",
   "GPTBot",
   "meta-externalagent",
 ] as const;
 
-// The AI-training deny list lives in the Cloudflare managed-robots zone config;
-// it is intentionally NOT duplicated in this served robots.txt (issue #1459).
-const ROBOTS_TXT = `# AI answer/reference engines are allowed by the wildcard group below.
-# AI training/fine-tuning crawlers are denied at the zone by Cloudflare managed robots (ai-train=no).
+// Grounding / AI-answer engines are named here so the AEO posture is explicit
+// (issue #2061), not just the wildcard fallthrough: they may read the public
+// proof surface (/, /search, /ads/**, /timeline/**, /compare/**, /switch/**,
+// /methodology, /brands, /llms.txt, /llms-full.txt) while /app/** and /api/**
+// stay out. "grounding" = search/reference use, which the public content-signal
+// already grants (`search=yes, use=reference`); it is NOT training. Google-
+// Extended is deliberately NOT in AI_TRAINING_CRAWLERS because here it is an
+// answer/reference engine, not a training crawler.
+export const GROUNDING_ENGINES = [
+  "Google-Extended",
+  "OAI-SearchBot",
+  "PerplexityBot",
+] as const;
 
-User-agent: *
-Allow: /api/docs
+// The public-proof allow set shared by the wildcard group and every grounding
+// engine group. Private /app/**, /api/**, /export/** stay disallowed for all.
+const PUBLIC_ALLOW_RULES = `Allow: /api/docs
 Disallow: /app$
 Disallow: /app/
 Disallow: /export/
 Disallow: /api/
 # /share/ stays crawlable so crawlers can see its noindex header.
-Allow: /
+Allow: /`;
+
+const GROUNDING_BLOCKS = GROUNDING_ENGINES.map(
+  (agent) => `User-agent: ${agent}
+${PUBLIC_ALLOW_RULES}`,
+).join("\n\n");
+
+// Shared with llms.txt via AI_TRAINING_CRAWLERS so robots.txt and llms.txt
+// always name the same denied training crawlers (docs/ai-crawler-policy.md).
+const TRAINING_DENY_BLOCK = AI_TRAINING_CRAWLERS.map(
+  (agent) => `User-agent: ${agent}
+Disallow: /`,
+).join("\n\n");
+
+const ROBOTS_TXT = `# Grounding / AI-answer engines (Google-Extended, OAI-SearchBot, PerplexityBot)
+# are allowed on the public proof surface; AI training/fine-tuning crawlers are
+# denied. Policy: docs/ai-crawler-policy.md. The public content-signal is
+# \`search=yes, ai-train=no, use=reference\`: grounding is reference use and is
+# granted; training is not (ai-train=no is NOT weakened).
+
+User-agent: *
+${PUBLIC_ALLOW_RULES}
 Sitemap: ${canonicalUrl("/sitemap.xml")}
+
+# Grounding / AI-answer engines — explicit, not just wildcard (issue #2061).
+${GROUNDING_BLOCKS}
+
+# AI training/fine-tuning crawlers — denied (ai-train=no). Shared with llms.txt
+# via AI_TRAINING_CRAWLERS so the two public surfaces name the same set.
+${TRAINING_DENY_BLOCK}
 `;
 
 const SOCIAL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
