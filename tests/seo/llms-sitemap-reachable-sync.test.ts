@@ -52,14 +52,27 @@ const isLocaleAdsVariant = (url: string) =>
     url.startsWith(`${SITE}/${locale}/ads/`),
   );
 
+/**
+ * The canonical /timeline/:domain set the llms.txt↔sitemap sync canary feeds
+ * to BOTH feeds (issue #2080). Includes calendly.com and adspyder.io — the two
+ * timelines llms.txt advertised but the sitemap shipped without at observation
+ * (2026-09-09) — plus nike.com as a control. Both `buildLlmsText` and
+ * `buildSitemapXml` take this same list, so the canary fails the moment either
+ * feed drops a timeline URL the other keeps.
+ */
+const TIMELINE_ENTRIES = [
+  { path: "/timeline/calendly.com", lastmod: "2026-09-09" },
+  { path: "/timeline/adspyder.io", lastmod: "2026-09-09" },
+  { path: "/timeline/nike.com", lastmod: "2026-09-09" },
+];
+
 /** Root sitemap including the dynamic brand/timeline entries the live route appends. */
 function reachableSitemapLocs() {
   const brandEntries = [
     { path: "/ads/nike.com", adCount: 12, fetchedAt: new Date().toISOString() },
   ];
-  const timelineEntries = [{ path: "/timeline/nike.com" }];
   return new Set([
-    ...locsFromXml(buildSitemapXml(brandEntries, timelineEntries)),
+    ...locsFromXml(buildSitemapXml(brandEntries, TIMELINE_ENTRIES)),
     ...LOCALE_SITEMAP_LOCALES.flatMap((locale) =>
       locsFromXml(buildLocaleSitemapXml(locale)),
     ),
@@ -102,13 +115,28 @@ describe("llms.txt ↔ reachable sitemap sync (issue #2017 canary)", () => {
   it("every llms.txt URL is reachable from an advertised sitemap", () => {
     const reachable = reachableSitemapLocs();
     const llmsUrls = urlsFromLlmsText(
-      buildLlmsText([{ path: "/ads/nike.com", adCount: 12 }]),
+      buildLlmsText([{ path: "/ads/nike.com", adCount: 12 }], TIMELINE_ENTRIES),
     ).filter((url) => !isLocaleAdsVariant(url));
     expect(llmsUrls.length).toBeGreaterThan(0);
     for (const url of llmsUrls) {
       expect(
         reachable.has(url),
         `llms.txt lists ${url} but no advertised sitemap does`,
+      ).toBe(true);
+    }
+  });
+
+  it("every llms.txt timeline URL is present in the root sitemap (issue #2080)", () => {
+    const llmsTimelineUrls = urlsFromLlmsText(
+      buildLlmsText([], TIMELINE_ENTRIES),
+    ).filter((url) => url.includes("/timeline/"));
+    const sitemapLocs = locsFromXml(buildSitemapXml([], TIMELINE_ENTRIES));
+    // The canary must actually exercise the timeline block, not pass vacuous.
+    expect(llmsTimelineUrls.length).toBeGreaterThan(0);
+    for (const url of llmsTimelineUrls) {
+      expect(
+        sitemapLocs.includes(url),
+        `llms.txt advertises timeline ${url} but the sitemap does not list it`,
       ).toBe(true);
     }
   });
