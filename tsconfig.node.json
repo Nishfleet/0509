@@ -38,6 +38,7 @@
     "scripts/canary-locale-prefix-routes.lib.mjs",
     "scripts/canary-token-sync-lib.mjs",
     "scripts/canary-proof-screenshot-rate.mjs",
+    "scripts/canary-proof-screenshot-reasons.mjs",
     "scripts/canary-proof-budget-skip-surface.mjs",
     "scripts/canary-cta-detector.mjs",
     "scripts/canary-search-h1.mjs",

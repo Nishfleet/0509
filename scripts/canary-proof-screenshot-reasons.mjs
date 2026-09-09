@@ -201,7 +201,7 @@ export function validateReasons({ reasons, windowHours }) {
 
 /**
  * @param {{reasons: Array<{reason: string, n: number}>, windowHours: number, checkedAt: string, local: boolean}} input
- * @returns {{ok: boolean, verdict: "pass" | "fail" | "skip", local: boolean, windowHours: number, database: string, checkedAt: string, reasons: Array<{reason: string, n: number}>, top3: Array<{reason: string, n: number}>, silent: Array<{reason: string, n: number}>, failures: string[], skips: string[]}}
+ * @returns {{ok: boolean, verdict: "pass" | "fail" | "skip", local: boolean, windowHours: number, database: string, checkedAt: string, total: number, reasons: Array<{reason: string, n: number}>, top3: Array<{reason: string, n: number}>, silent: Array<{reason: string, n: number}>, failures: string[], skips: string[]}}
  */
 export function summarize(input) {
   const { reasons, windowHours, checkedAt, local } = input;
