@@ -1471,11 +1471,15 @@ function BrandAdsResults({
           pages. This section cross-links this page to a deterministic set of
           OTHER indexable brand pages (the current domain is always excluded)
           plus the /brands hub, so every sitemap /ads page carries at least
-          one internal link to another /ads page. Hidden when there are no
-          OTHER indexable brand pages (single-brand sitemap or a cache hiccup)
-          OR when this page itself has zero verified-linked ads — the same
-          combined conditional the BreadcrumbList honors (issue #1454): a
-          populated page (verifiedLinkCount > 0) may carry both blocks, and a
+          one internal link to another /ads page. Since issue #2048 the
+          cluster is >=10 siblings (RELATED_BRAND_LINK_COUNT) so the
+          programmatic /ads cohort is a connected crawlable graph — rendered
+          via <BrowseTrackedCompetitors> as the "More tracked brands" cluster.
+          Hidden when there are no OTHER indexable brand pages (single-brand
+          sitemap or a cache hiccup) OR when this page itself has zero
+          verified-linked ads — the same combined conditional the
+          BreadcrumbList honors (issue #1454): a populated page
+          (verifiedLinkCount > 0) may carry both blocks, and a
           verifiedLinkCount = 0 page must carry NEITHER. It never invents a
           brand. */}
       {data.verifiedLinkCount > 0 && data.relatedBrands.length > 0 ? (
