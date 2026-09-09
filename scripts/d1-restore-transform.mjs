@@ -596,15 +596,20 @@ export function transformD1RestoreSql(sql, options = {}) {
   for (const [table, keys] of Object.entries(options.primaryKeys ?? {})) {
     primaryKeys.set(table.toLowerCase(), (Array.isArray(keys) ? keys : [keys]).map((key) => key.toLowerCase()));
   }
+  // Order first, then split. Split UPDATE chunks are not INSERTs, so a
+  // trailing reorder would leave them in the original slot while moving the
+  // INSERT they belong to. They would run against a missing row and
+  // silently truncate. Splitting is per-statement and order-independent.
+  const orderedInputs = orderRestoreStatements(statements.map((item) => item.text));
   const output = [];
   let transformed = 0;
-  for (const item of statements) {
-    const insert = parseInsert(item.text);
+  for (const text of orderedInputs) {
+    const insert = parseInsert(text);
     if (!insert) {
-      if (byteLength(statementWithTerminator(item.text)) > maxBytes) {
+      if (byteLength(statementWithTerminator(text)) > maxBytes) {
         throw new Error("An oversized SQL statement has no supported plain string literal to split.");
       }
-      output.push(item.text);
+      output.push(text);
       continue;
     }
     let oversized = insert.values.flatMap((value, index) => {
@@ -612,7 +617,7 @@ export function transformD1RestoreSql(sql, options = {}) {
       if (!isPlainString(raw) || byteLength(raw) <= maxBytes) return [];
       return [{ value, index, content: decodeStringLiteral(raw) }];
     });
-    const statementTooLarge = byteLength(statementWithTerminator(item.text)) > maxBytes;
+    const statementTooLarge = byteLength(statementWithTerminator(text)) > maxBytes;
     if (!oversized.length && statementTooLarge) {
       const knownKeys = primaryKeys.get(insert.table);
       const keyIndexes = new Set(
@@ -632,7 +637,7 @@ export function transformD1RestoreSql(sql, options = {}) {
       if (!oversized.length) throw new Error(`Cannot split oversized INSERT for ${insert.table}: no supported literal candidate.`);
     }
     if (!oversized.length) {
-      output.push(item.text);
+      output.push(text);
       continue;
     }
     if (insert.conflict) throw new Error(`Cannot split INSERT OR ${insert.conflict.toUpperCase()} safely during restore.`);
@@ -644,7 +649,7 @@ export function transformD1RestoreSql(sql, options = {}) {
     const parts = oversized.map((part) => ({ ...part, points: codePoints(part.content) }));
     const makeInitial = (counts) => {
       const replacements = parts.map((part, partIndex) => ({ span: part.value, prefix: part.points.slice(0, counts[partIndex]).join("") }));
-      return statementWithTerminator(buildInitial(insert, item.text, replacements));
+      return statementWithTerminator(buildInitial(insert, text, replacements));
     };
     const counts = choosePrefix(parts, makeInitial, maxBytes);
     const initial = makeInitial(counts);
@@ -661,13 +666,12 @@ export function transformD1RestoreSql(sql, options = {}) {
     }
     transformed += 1;
   }
-  const ordered = orderRestoreStatements(output);
   return {
-    sql: ordered.join(""),
-    statements: ordered,
+    sql: output.join(""),
+    statements: output,
     transformed,
     maxBytes,
-    statementBytes: ordered.map(byteLength),
+    statementBytes: output.map(byteLength),
   };
 }
 
