@@ -227,6 +227,7 @@ describe("selection-enrichment plan-tier propagation", () => {
         routeContext: "selection_enrichment",
         planTier: "starter",
         onFailure: expect.any(Function),
+        instrumentation: expect.anything(),
       },
     );
   });
@@ -285,6 +286,7 @@ describe("anonymous selection landing capture", () => {
         planTier: null,
         allowRenderedFallback: false,
         onFailure: expect.any(Function),
+        instrumentation: expect.anything(),
       },
     );
     expect(upsertAd).not.toHaveBeenCalled();
