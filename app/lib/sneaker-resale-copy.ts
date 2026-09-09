@@ -19,6 +19,10 @@ export interface SneakerResaleCopy {
   brandsKicker: string;
   brandsTitle: string;
   brandsDeck: string;
+  // Label on the /timeline/:domain cross-link next to a hub brand's /ads
+  // wall (issue #2100). Only rendered when that domain's offer ledger is
+  // sitemap-indexable, so empty history never ships a dead pointer.
+  offerTimelineLabel: string;
   swingKicker: string;
   swingTitle: string;
   swingDeck: string;
@@ -95,6 +99,7 @@ const EN: SneakerResaleCopy = {
   brandsTitle: "Real sneaker-resale advertisers, real ad pages.",
   brandsDeck:
     "These brands are running Meta ads right now. Each link opens the live ad page we built from real captures — the same proof a watchlist tracks.",
+  offerTimelineLabel: "Offer timeline",
   swingKicker: "Who's moving right now",
   swingTitle: "The below-retail swing.",
   swingDeck:
@@ -217,6 +222,7 @@ const DE: SneakerResaleCopy = {
   brandsTitle: "Echte Sneaker-Resale-Werbetreibende, echte Anzeigenseiten.",
   brandsDeck:
     "Diese Marken schalten gerade Meta-Anzeigen. Jeder Link öffnet die Live-Anzeigenseite, die wir aus echten Erfassungen erstellt haben — derselbe Beleg, den eine Watchlist verfolgt.",
+  offerTimelineLabel: "Angebotsverlauf",
   swingKicker: "Wer sich jetzt bewegt",
   swingTitle: "Der Swing unter den Verkaufspreis.",
   swingDeck:
@@ -339,6 +345,7 @@ const JA: SneakerResaleCopy = {
   brandsTitle: "実在するスニーカーリセール広告主、実物の広告ページ。",
   brandsDeck:
     "これらのブランドは現在Meta広告を出しています。各リンクは実キャプチャから作成した広告ページを開きます。ウォッチリストが追跡するのと同じ証拠です。",
+  offerTimelineLabel: "オファー履歴",
   swingKicker: "今動いているのは",
   swingTitle: "定価割れの潮目が動いている。",
   swingDeck:
@@ -461,6 +468,7 @@ const PT_BR: SneakerResaleCopy = {
   brandsTitle: "Anunciantes reais de revenda de tênis, páginas de anúncio reais.",
   brandsDeck:
     "Essas marcas estão rodando anúncios no Meta agora. Cada link abre a página de anúncio ao vivo que montamos com capturas reais — a mesma prova que uma watchlist acompanha.",
+  offerTimelineLabel: "Histórico de ofertas",
   swingKicker: "Quem está se movendo agora",
   swingTitle: "A virada do below-retail.",
   swingDeck:
