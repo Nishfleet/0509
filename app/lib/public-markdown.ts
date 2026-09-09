@@ -70,6 +70,13 @@ const LLMS_PAGE_DETAILS = {
     description:
       "The last 7 days of offer, price, CTA, and ad moves across brands with a public page — stored captures only, each with source link and capture date.",
   },
+  // Issue #2152: the /guides/* how-to cluster. In SITEMAP_PATHS, so it needs
+  // a title/description here or the _llmsDetailsCoverSitemap type fails.
+  "/guides/how-to-track-competitor-ads": {
+    title: "How to track competitor ads",
+    description:
+      "The free manual Ad Library workflow, the n8n/Apify DIY route with real prices, where both break, and the free weekly watch that automates it.",
+  },
   "/compare": {
     title: "Compare Five to Nine vs the alternatives",
     description:

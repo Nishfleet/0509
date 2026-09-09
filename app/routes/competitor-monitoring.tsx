@@ -670,8 +670,11 @@ export default function CompetitorMonitoringCategoryRoute() {
         </h2>
         <p className="ld-pricing-note">
           Paste a competitor website into the <Link to={searchPath}>search preview</Link> — no
-          account needed. Questions about coverage on your competitors? Email{" "}
-          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll answer honestly.
+          account needed. Doing it by hand today? Read the guide:{" "}
+          <Link to="/guides/how-to-track-competitor-ads">how to track competitor ads</Link> — the
+          free manual workflow, the n8n/Apify DIY route, and where both break. Questions about
+          coverage on your competitors? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
+          we&rsquo;ll answer honestly.
         </p>
       </section>
 

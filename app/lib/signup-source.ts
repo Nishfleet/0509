@@ -29,11 +29,19 @@ export const LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES = [
  */
 export const SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE = "search_warming_exhausted";
 
+/**
+ * The exact marker the /guides/how-to-track-competitor-ads guide carries on
+ * its /search preview CTA (issue 2152): the guide is an organic-search entry
+ * point, so a signup that starts from its preview is attributed to the guide.
+ */
+export const GUIDE_TRACK_ADS_SIGNUP_SOURCE = "guide_track_ads";
+
 export const ALLOWED_SIGNUP_SOURCES = [
   MAGICBRIEF_MIGRATION_SOURCE,
   PRICING_FREE_SIGNUP_SOURCE,
   ...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
   SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE,
+  GUIDE_TRACK_ADS_SIGNUP_SOURCE,
 ] as const;
 
 export type AllowedSignupSource = (typeof ALLOWED_SIGNUP_SOURCES)[number];
