@@ -10,7 +10,6 @@ describe("global-first default examples", () => {
 		"app/routes/search.tsx",
 		"app/routes/app.collections.tsx",
 		"app/components/marketing-nav.tsx",
-		"app/routes/compare.magicbrief.tsx",
 		"app/routes/compare.meta-ad-library.tsx",
 		"app/routes/compare.visualping.tsx",
 		"app/routes/compare.visualping-ad-libraries.tsx",

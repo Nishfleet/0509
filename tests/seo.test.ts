@@ -34,7 +34,6 @@ describe("public SEO files", () => {
     // Restored after the #944/#945 404s cleared (#963): /pricing must stay in
     // the published sitemap with the compare pages, never behind a later drop.
     expect(sitemap?.body).toContain("<loc>https://0509.io/pricing</loc>");
-    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/magicbrief</loc>");
     expect(sitemap?.body).toContain(
       "<loc>https://0509.io/compare/meta-ad-library</loc>",
     );
@@ -54,7 +53,6 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/panoramata</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/adspyder</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/adspy</loc>");
-    expect(sitemap?.body).toContain("<loc>https://0509.io/switch/magicbrief</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/panoramata</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/visualping</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/sneaker-resale</loc>");

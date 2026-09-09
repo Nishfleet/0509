@@ -194,8 +194,6 @@ Same rules as the SaaSHub/BetaList preparations, sourced from `MEMORY.md`,
   `app/routes/marketing.tsx`: "Know when competitors change the offer.")
 - `https://0509.io/auth/signup` — working email magic-link signup.
 - `https://0509.io/search` — public search preview, no account needed.
-- `https://0509.io/compare/magicbrief` — MagicBrief migration guide
-  (relevant if ad-stack ever compares against MagicBrief).
 
 ## Submission process (verified from ad-stack.ai pages, 2026-08-11)
 

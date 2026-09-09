@@ -33,7 +33,6 @@ const COMPARE_PAGES = [
   { slug: "foreplay", module: "~/routes/compare.foreplay" },
   { slug: "foreplay-spyder", module: "~/routes/compare.foreplay-spyder" },
   { slug: "meta-ad-library", module: "~/routes/compare.meta-ad-library" },
-  { slug: "magicbrief", module: "~/routes/compare.magicbrief" },
   { slug: "pulzifi", module: "~/routes/compare.pulzifi" },
   { slug: "spyland", module: "~/routes/compare.spyland" },
 ] as const;

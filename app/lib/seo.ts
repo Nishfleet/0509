@@ -802,7 +802,6 @@ export const SITEMAP_PATHS = [
   // stable long-form copy, so it never serves a noindex shell.
   "/guides/how-to-track-competitor-ads",
   "/compare",
-  "/compare/magicbrief",
   "/compare/meta-ad-library",
   // /compare/visualping, /compare/foreplay, and /compare/visualping-ad-library
   // are DROPPED from the sitemap (issues #1481, #1548): each is a duplicate
@@ -819,8 +818,7 @@ export const SITEMAP_PATHS = [
   // buildSitemapXml → ROOT_SITEMAP_STATIC_ENTRIES, which is this list minus
   // locale prefixes. lastmod is deliberately omitted: these pages have no
   // per-page content timestamp, and inventing one fails the #2031 honesty
-  // clause. Keep all three in this list; the #2081 canary fails if any drop.
-  "/switch/magicbrief",
+  // clause. Keep both in this list; the #2081 canary fails if any drop.
   "/switch/panoramata",
   "/switch/visualping",
   "/competitor-monitoring",
@@ -832,7 +830,7 @@ export const SITEMAP_PATHS = [
   "/ja/sneaker-resale",
   "/pt-br/sneaker-resale",
   // Issue #1570: the locale-prefixed buyer-surface cluster (`/de/pricing`,
-  // `/ja/help`, `/de/compare/magicbrief`, `/de/search`, `/de/ads/nike.com`,
+  // `/ja/help`, `/de/compare/panoramata`, `/de/search`, `/de/ads/nike.com`,
   // ...) was REMOVED from the sitemap. Those pages serve byte-identical
   // English copy with `lang="en"` and `canonical` -> the EN twin, so
   // listing them as dozens of distinct `<loc>` entries told Google they
@@ -926,7 +924,6 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/methodology": { changefreq: "monthly", priority: "0.6" },
   "/pricing": { changefreq: "weekly", priority: "0.8" },
   "/compare": { changefreq: "weekly", priority: "0.8" },
-  "/compare/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/compare/meta-ad-library": { changefreq: "weekly", priority: "0.7" },
   "/compare/visualping-ad-libraries": { changefreq: "weekly", priority: "0.7" },
   "/compare/spyland": { changefreq: "weekly", priority: "0.7" },
@@ -935,7 +932,6 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/compare/panoramata": { changefreq: "weekly", priority: "0.7" },
   "/compare/adspyder": { changefreq: "weekly", priority: "0.7" },
   "/compare/adspy": { changefreq: "weekly", priority: "0.7" },
-  "/switch/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/switch/panoramata": { changefreq: "weekly", priority: "0.7" },
   "/switch/visualping": { changefreq: "weekly", priority: "0.7" },
   "/changelog": { changefreq: "weekly", priority: "0.6" },

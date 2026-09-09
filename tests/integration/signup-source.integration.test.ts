@@ -18,7 +18,6 @@ const ACCEPTED_BY_BOTH = [
   "ref:example.com",
   "pricing-free",
   "for_agencies",
-  "magicbrief-migration",
   "locale-de-sneaker-resale",
   "summer-2026-launch",
   "search_warming_exhausted",
@@ -53,7 +52,7 @@ describe("signup_source against real D1", () => {
     expect(await readUserSignupSource(appEnv, userId)).toBeNull();
   });
 
-  it("writes MagicBrief and locale markers through remember+apply and reads them back", async () => {
+  it("writes two locale markers through remember+apply and reads them back", async () => {
     const magicUser = await seedUser(uid("src_mb"));
     const localeUser = await seedUser(uid("src_de"));
     const magicEmail = `${magicUser}@example.test`;
@@ -70,9 +69,9 @@ describe("signup_source against real D1", () => {
     expect(
       await rememberAllowlistedSignupSource(appEnv, {
         email: magicEmail,
-        source: "magicbrief-migration",
+        source: "locale-ja-sneaker-resale",
       }),
-    ).toBe("magicbrief-migration");
+    ).toBe("locale-ja-sneaker-resale");
     expect(
       await rememberAllowlistedSignupSource(appEnv, {
         email: localeEmail,
@@ -82,12 +81,12 @@ describe("signup_source against real D1", () => {
 
     expect(
       await applySignupSourceToNewUser(appEnv, { user: { id: magicUser, email: magicEmail } }),
-    ).toBe("magicbrief-migration");
+    ).toBe("locale-ja-sneaker-resale");
     expect(
       await applySignupSourceToNewUser(appEnv, { user: { id: localeUser, email: localeEmail } }),
     ).toBe("locale-de-sneaker-resale");
 
-    expect(await readUserSignupSource(appEnv, magicUser)).toBe("magicbrief-migration");
+    expect(await readUserSignupSource(appEnv, magicUser)).toBe("locale-ja-sneaker-resale");
     expect(await readUserSignupSource(appEnv, localeUser)).toBe("locale-de-sneaker-resale");
 
     const pending = await db()
@@ -105,7 +104,7 @@ describe("signup_source against real D1", () => {
     expect(
       await rememberAllowlistedSignupSource(appEnv, {
         email,
-        source: "magicbrief-migration&x=<script>alert(1)</script>",
+        source: "locale-ja-sneaker-resale&x=<script>alert(1)</script>",
       }),
     ).toBeNull();
     expect(await applySignupSourceToNewUser(appEnv, { user: { id: userId, email } })).toBeNull();
@@ -136,7 +135,7 @@ describe("signup_source against real D1", () => {
 
     await rememberAllowlistedSignupSource(appEnv, {
       email,
-      source: "magicbrief-migration",
+      source: "locale-ja-sneaker-resale",
     });
     await applySignupSourceToNewUser(appEnv, { user: { id: userId, email } });
 

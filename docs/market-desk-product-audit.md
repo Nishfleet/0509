@@ -24,7 +24,7 @@ Five to Nine already has the raw machinery for a competitor operations desk: Dod
 | Notifications | Delivery is understandable and safe | Email is verified; Slack/Teams webhook delivery is live Starter+; WhatsApp dormant; delivery attempts tracked | Some setup states still feel operational | Keep copy customer-facing: Notifications, Digest, Report |
 | Billing | Self-serve trust clarity | Billing portal/canary/support fallbacks exist | Portal setting truth remains config-dependent | Keep support fallback where provider setting is not proven |
 | Developer access | Agents help keep desk ready | API/MCP and customer actions exist | Customer promise is buried in technical copy | Frame as Developer access and approved actions |
-| Support | No email-only dead ends for common actions | Support cases and account deletion request exist | Import migration still needs self-serve path | Build generic import; document unsupported MagicBrief fields |
+| Support | No email-only dead ends for common actions | Support cases and account deletion request exist | Import migration still needs self-serve path | Build generic import; document unsupported vendor fields |
 
 ## Time To Value
 
@@ -46,7 +46,7 @@ Current first paid value can be quick for one competitor, but high-intent users 
 
 ## Manual Or Support Dependencies
 
-- Full MagicBrief data migration cannot be claimed without a real export sample and field support.
+- Full vendor data migration cannot be claimed without a real export sample and field support.
 - Presence local canary needs owner-provided `PRESENCE_INTERNAL_WORKSPACE_ID`.
 - Dodo dashboard portal toggles should remain described via current config/fallback truth.
 - Slack, WhatsApp, X, Reddit, and LinkedIn should remain disabled or held in customer-facing setup until separately proven.

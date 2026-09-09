@@ -82,7 +82,7 @@ describe("homepage mobile first viewport (#971)", () => {
 });
 
 describe("homepage desktop first viewport (#1212)", () => {
-  it("sits the MagicBrief callout on one row with the free-preview pill", () => {
+  it("keeps the hero callout row flex-wrapped beside the free-preview pill", () => {
     const row = ruleBody(".f9-home .ld-hero .ld-hero-callouts");
     expect(row).toMatch(/display:\s*flex/);
     expect(row).toMatch(/flex-wrap:\s*wrap/);

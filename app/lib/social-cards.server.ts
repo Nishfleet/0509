@@ -81,7 +81,6 @@ function renderCard(input: { headline: string; subline: string }): string {
 /** Competitor product display name for each `/compare/:tool` slug. */
 const COMPARE_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   panoramata: "Panoramata",
-  magicbrief: "MagicBrief",
   "foreplay-spyder": "Foreplay Spyder",
   "visualping-ad-libraries": "Visualping",
   "meta-ad-library": "Meta Ad Library",
@@ -96,7 +95,6 @@ const COMPARE_PRODUCT_NAMES: Readonly<Record<string, string>> = {
 
 /** Competitor product display name for each `/switch/:tool` slug. */
 const SWITCH_PRODUCT_NAMES: Readonly<Record<string, string>> = {
-  magicbrief: "MagicBrief",
   panoramata: "Panoramata",
   visualping: "Visualping",
 };

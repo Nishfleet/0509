@@ -9,9 +9,7 @@ const FUNNEL_OPERATIONS = [
   "funnel_search_preview_submit",
   "funnel_search_preview_result",
   "funnel_search_preview_error",
-  "funnel_migration_view",
   "funnel_signup_start",
-  "funnel_signup_start_magicbrief",
   "funnel_pricing_free_card_clicked",
   "funnel_signup_completed",
   "funnel_first_brief_generated",
@@ -458,65 +456,6 @@ describe("funnel measurement emission", () => {
     // The raw marker value never appears anywhere in a record.
     expect(JSON.stringify(records)).not.toContain(PRICING_FREE_SIGNUP_SOURCE);
   });
-
-  it("emits a migration-page view with the coarse route label only", async () => {
-    const { emitFunnelMigrationView } = await import("~/lib/funnel-measurement.server");
-    emitFunnelMigrationView(
-      { FUNNEL_MEASUREMENT_ENABLED: "1" },
-      makeFunnelRequest("http://localhost/compare/magicbrief?utm=anything"),
-    );
-    const [record] = emittedFunnelRecords(logSpy) as [
-      { operation: string; details: Record<string, string>; message: string },
-    ];
-    expect(record.operation).toBe("funnel_migration_view");
-    expect(record.details.route).toBe("magicbrief_migration");
-    expect(Object.keys(record.details).sort()).toEqual(
-      ["account_scope", "event_id", "route"].sort(),
-    );
-    // The full URL (query string included) never reaches the record.
-    expect(JSON.stringify(record)).not.toContain("utm");
-  });
-
-  it("suppresses migration events for the gate and for GPC like every other event", async () => {
-    const { emitFunnelMigrationView, emitFunnelSignupStartFromMigrationReferrer } =
-      await import("~/lib/funnel-measurement.server");
-
-    emitFunnelMigrationView({}, makeFunnelRequest("http://localhost/compare/magicbrief"));
-    emitFunnelSignupStartFromMigrationReferrer({}, makeFunnelRequest(), true);
-    expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
-
-    const gpc = new Request("http://localhost/compare/magicbrief", {
-      headers: { "sec-gpc": "1" },
-    });
-    emitFunnelMigrationView({ FUNNEL_MEASUREMENT_ENABLED: "1" }, gpc);
-    emitFunnelSignupStartFromMigrationReferrer({ FUNNEL_MEASUREMENT_ENABLED: "1" }, gpc, true);
-    expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
-  });
-
-  it("selects the magicbrief signup kind from the typed boolean and never records the marker value", async () => {
-    const { emitFunnelSignupStartFromMigrationReferrer, MAGICBRIEF_MIGRATION_SOURCE } =
-      await import("~/lib/funnel-measurement.server");
-    const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
-
-    // A hostile URL whose query is caller-controlled end to end.
-    const hostileUrl = `http://localhost/auth/signup?source=${MAGICBRIEF_MIGRATION_SOURCE}&x=%3Cscript%3Ealert(1)%3C/script%3E`;
-    emitFunnelSignupStartFromMigrationReferrer(env, makeFunnelRequest(hostileUrl), true);
-    emitFunnelSignupStartFromMigrationReferrer(env, makeFunnelRequest(hostileUrl), false);
-
-    const records = emittedFunnelRecords(logSpy);
-    expect(records).toHaveLength(2);
-    const operations = records.map((record) => (record as { operation: string }).operation);
-    expect(operations).toEqual(["funnel_signup_start_magicbrief", "funnel_signup_start"]);
-
-    for (const record of records) {
-      const details = (record as { details: Record<string, string> }).details;
-      expect(Object.keys(details).sort()).toEqual(["account_scope", "event_id", "route"].sort());
-      expect(details.route).toBe("signup");
-    }
-    // Neither the marker value nor any other raw query content appears anywhere.
-    expect(JSON.stringify(records)).not.toContain(MAGICBRIEF_MIGRATION_SOURCE);
-    expect(JSON.stringify(records)).not.toContain("script");
-  });
 });
 
 describe("funnel measurement redaction", () => {
@@ -691,35 +630,6 @@ describe("funnel measurement route boundaries", () => {
     vi.restoreAllMocks();
     vi.resetModules();
   });
-
-  it("emits funnel_migration_view from the migration-page loader and returns identical data when disabled", async () => {
-    let env: Record<string, string> = { FUNNEL_MEASUREMENT_ENABLED: "1" };
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => env),
-    }));
-
-    const { loader } = await import("~/routes/compare.magicbrief");
-
-    const enabledData = await loader({
-      context: createContext(env),
-      request: makeFunnelRequest("http://localhost/compare/magicbrief"),
-    } as never);
-    const enabledRecords = emittedFunnelRecords(logSpy);
-    expect(enabledRecords).toHaveLength(1);
-    expect((enabledRecords[0] as { operation: string }).operation).toBe("funnel_migration_view");
-    expect((enabledRecords[0] as { details: Record<string, string> }).details.route).toBe(
-      "magicbrief_migration",
-    );
-
-    logSpy.mockClear();
-    env = {};
-    const disabledData = await loader({
-      context: createContext(env),
-      request: makeFunnelRequest("http://localhost/compare/magicbrief"),
-    } as never);
-    expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
-    expect(disabledData).toEqual(enabledData);
-  }, 30_000);
 
   it("emits funnel_home_view from the homepage loader and returns identical data when disabled", async () => {
     let env: Record<string, string> = { FUNNEL_MEASUREMENT_ENABLED: "1" };
@@ -1187,46 +1097,6 @@ describe("funnel measurement route boundaries", () => {
     expect((records[0] as { details: Record<string, string> }).details.route).toBe("signup");
   }, 30_000);
 
-  it("emits the magicbrief signup kind when the migration marker rides the action URL", async () => {
-    const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
-    const sendBetterAuthMagicLink = vi.fn().mockResolvedValue(undefined);
-
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => env),
-    }));
-    vi.doMock("~/lib/better-auth.server", () => ({
-      isBetterAuthConfigured: vi.fn().mockReturnValue(true),
-      isSameOriginAuthFormPost: vi.fn().mockReturnValue(true),
-      sendBetterAuthMagicLink,
-    }));
-
-    const { action } = await import("~/routes/auth.signup");
-    // The migration page's form posts back to the same URL it linked from.
-    let thrown: unknown;
-    try {
-      await action({
-        context: createContext(env),
-        request: makeFunnelPost(
-          "http://localhost/auth/signup?source=magicbrief-migration",
-          {
-            email: "owner@example.com",
-            name: "Owner",
-            redirectTo: "/app#setup-checklist",
-          },
-        ),
-      } as never);
-    } catch (error) {
-      thrown = error;
-    }
-    expect((thrown as Response).status).toBe(302);
-    expect(sendBetterAuthMagicLink).toHaveBeenCalledTimes(1);
-
-    const records = emittedFunnelRecords(logSpy);
-    expect(records).toHaveLength(1);
-    expect((records[0] as { operation: string }).operation).toBe("funnel_signup_start_magicbrief");
-    expect((records[0] as { details: Record<string, string> }).details.route).toBe("signup");
-  }, 30_000);
-
   it("emits no funnel_signup_start for invalid signup input", async () => {
     const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
     vi.doMock("~/lib/context.server", () => ({
@@ -1350,21 +1220,19 @@ describe("funnel measurement retention and deletion (spec §8 gate 7)", () => {
     });
 
     const {
-      MAGICBRIEF_MIGRATION_SOURCE,
+      PRICING_FREE_SIGNUP_SOURCE,
       emitFunnelActivationScanStarted,
       emitFunnelFirstBriefEmailSent,
       emitFunnelFirstBriefGenerated,
       emitFunnelFirstBriefViewed,
       emitFunnelHomeView,
       emitFunnelLocaleSegmentView,
-      emitFunnelMigrationView,
       emitFunnelSearchError,
       emitFunnelSearchResult,
       emitFunnelSearchSubmit,
       emitFunnelSignupCompleted,
       emitFunnelSignupStart,
       emitFunnelSignupStartFromAllowlistedSource,
-      emitFunnelSignupStartFromMigrationReferrer,
     } = await import("~/lib/funnel-measurement.server");
 
     const request = makeFunnelRequest();
@@ -1373,10 +1241,8 @@ describe("funnel measurement retention and deletion (spec §8 gate 7)", () => {
     emitFunnelSearchResult(env, request, 3);
     emitFunnelSearchError(env, request, "internal");
     emitFunnelSignupStart(env, request);
-    emitFunnelMigrationView(env, request);
-    emitFunnelSignupStartFromMigrationReferrer(env, request, true);
     emitFunnelLocaleSegmentView(env, request, "en");
-    emitFunnelSignupStartFromAllowlistedSource(env, request, MAGICBRIEF_MIGRATION_SOURCE);
+    emitFunnelSignupStartFromAllowlistedSource(env, request, PRICING_FREE_SIGNUP_SOURCE);
     emitFunnelFirstBriefViewed(env, request);
     emitFunnelSignupCompleted(env, request);
     emitFunnelActivationScanStarted(env, request);

@@ -186,7 +186,7 @@ Audit the `action` prop on every `DashboardPageHeader` and REMOVE cross-nav shor
 
 **Current state on the branch (three header variants):**
 - Landing `app/routes/marketing.tsx` (line 492 anchor `<header className="ld-nav">`): links `Search preview` / `Sample brief` (`#demo`) / `Pricing` (`#pricing`) | `Sign in` / `{primaryLabel}`.
-- Compare pages `app/routes/compare.magicbrief.tsx` (line 57) and `app/routes/compare.meta-ad-library.tsx` (line 79): inline-duplicated `<header className="ld-nav">` with `Search preview` / `Pricing` | `Sign in` / `Create account`.
+- Compare pages (`app/routes/compare.meta-ad-library.tsx` line 79 and the since-removed vendor compare route): inline-duplicated `<header className="ld-nav">` with `Search preview` / `Pricing` | `Sign in` / `Create account`.
 - Legal/help/docs/changelog/trust/status via `PublicDocHeader` (`app/components/public-doc-shell.tsx` line 38): `Help` / `Docs` / `Status` / `Start`.
 
 **Change — one shared header nav component:**
@@ -198,7 +198,7 @@ Audit the `action` prop on every `DashboardPageHeader` and REMOVE cross-nav shor
    - Account links: `Sign in` → `/auth/login` · `Open app` → `/app` (single label everywhere — retire the "Create account" vs "Open app" split; "Open app" routes signed-out users through the auth gate anyway).
    - Reuse the existing `ld-nav` / `ld-nav-links` / `ld-nav-actions` / `ld-nav-pill` classes byte-for-byte (zero new CSS).
 2. Replace the inline `<header className="ld-nav">…</header>` block in `marketing.tsx` (lines 492–511) with `<MarketingNav />`. On landing, `Sample brief`/`Pricing` may keep bare `#demo`/`#pricing` — but simplest is to let `MarketingNav` always use `/#…`; verify the landing in-page anchor still scrolls (React Router hash nav to same page is fine).
-3. Replace the inline headers in both compare routes (`compare.magicbrief.tsx` lines 57–72, `compare.meta-ad-library.tsx` lines 79–94) with `<MarketingNav />`.
+3. Replace the inline headers in both compare routes (`compare.meta-ad-library.tsx` lines 79–94 and the since-removed vendor compare route) with `<MarketingNav />`.
 4. `PublicDocHeader` (legal/help/docs/changelog/trust/status): replace its nav link set (lines 45–50 anchor `<nav className="f9-search-nav-links" …>` with `Help`/`Docs`/`Status`/`Start`) with the same link set as `MarketingNav` so a visitor on `/terms` can reach Pricing, Help, and Docs. Keep the `f9-legal-nav` chrome/classes (the bone doc header styling + `tests/public-doc-header.test.ts` CSS contract must stay green) — only the link list changes. If matching the exact `MarketingNav` markup inside the legal shell is impractical, at minimum add `Pricing` (`/#pricing`), `Search preview` (`/search`), and `Sign in`/`Open app` to the doc header so no section is unreachable.
 
 **Stabilize the wordmark tagline (SF-2):** pick ONE string and use it in every public `BrandWordmark meta=…`:
@@ -211,12 +211,12 @@ Audit the `action` prop on every `DashboardPageHeader` and REMOVE cross-nav shor
 **Guardrails:** no route renames; keep all existing CSS class names; both compare pages keep `<MarketingFooter />` (already present). Internal links must stay React-Router `<Link>` (there is a `tests/internal-navigation.test.ts` that fails on raw `<a>` to internal paths). Dark/light: public is light-only by design — verify no regression. Mobile: `ld-nav` already collapses; adding two links must not overflow — verify at 375px (the nav wraps; acceptable, but check no horizontal scroll).
 
 **Acceptance (behavioral + visual):**
-- Identical nav link set on `/`, `/help`, `/docs`, `/changelog`, `/trust`, `/terms`, `/privacy`, `/status`, `/compare/meta-ad-library`, `/compare/magicbrief`.
+- Identical nav link set on `/`, `/help`, `/docs`, `/changelog`, `/trust`, `/terms`, `/privacy`, `/status`, `/compare/meta-ad-library`.
 - From any public page, Pricing, Help, Docs, and legal are reachable in ≤2 clicks.
 - Every public `BrandWordmark` shows the same tagline string.
 - No raw `<a href="/…">` internal anchors introduced.
 
-**Tests:** extend `tests/public-doc-header.test.ts`, `tests/public-doc-routes.test.ts`, `tests/internal-navigation.test.ts`, `tests/compare-magicbrief.route.test.ts`, `tests/compare-meta-ad-library.route.test.ts`, `tests/marketing-rebuild.test.ts`, and `tests/funnel-seo.test.ts` as needed. Add one test asserting the shared nav link set appears on a landing render, a compare render, and a legal render.
+**Tests:** extend `tests/public-doc-header.test.ts`, `tests/public-doc-routes.test.ts`, `tests/internal-navigation.test.ts`, `tests/compare-meta-ad-library.route.test.ts`, `tests/marketing-rebuild.test.ts`, and `tests/funnel-seo.test.ts` as needed. Add one test asserting the shared nav link set appears on a landing render, a compare render, and a legal render.
 
 ---
 
@@ -246,7 +246,7 @@ Current mismatch: billing greens "Current plan" (state — correct) but renders 
 ### A4.3 — De-India the default examples (global-first)
 - `app/routes/search.tsx` line 1268 anchor: `placeholder="https://nykaa.com"` → geo-neutral placeholder `placeholder="https://competitor.com"` (or, if the loader already resolves the visitor's `cf-ipcountry`, a geo-aware sample — but the simple neutral placeholder is acceptable and matches the dashboard's `https://competitor.com`).
 - `app/routes/app.collections.tsx` line 343 anchor: `<input name="name" placeholder="Nykaa competitors" required />` → `placeholder="Competitor set A"` (neutral).
-- `app/routes/compare.meta-ad-library.tsx` line 84 + `app/routes/compare.magicbrief.tsx` line 62 anchors: `<Link to="/search?website=https%3A%2F%2Fnykaa.com">Search preview</Link>` → neutral `https%3A%2F%2Fexample.com` OR drop the prefilled `?website=` so the preview opens empty. Prefer dropping the query so no brand is implied. (After A2 these links live inside `MarketingNav`; apply the neutral value there.)
+- `app/routes/compare.meta-ad-library.tsx` line 84 (and the since-removed vendor compare route) anchors: `<Link to="/search?website=https%3A%2F%2Fnykaa.com">Search preview</Link>` → neutral `https%3A%2F%2Fexample.com` OR drop the prefilled `?website=` so the preview opens empty. Prefer dropping the query so no brand is implied. (After A2 these links live inside `MarketingNav`; apply the neutral value there.)
 
 **Guardrails:** no route changes; keep `en-IN` number formatting where it is a *locale format helper* (e.g. `toLocaleString("en-IN")` in billing line 1291 is a display-format call, not an India default — leave it; global-first is about defaults/examples, not number grouping). Badge restyle must pass light + dark.
 
@@ -291,7 +291,7 @@ interface LockedFeatureProps {
      reason="Open client-ready reports and share the evidence with your team"
      planNeeded="Agency plan"
      upgradeTo="/app/billing?source=reports#plans"
-     seeExampleTo="/compare/magicbrief"      // optional; or omit
+     seeExampleTo="/compare/panoramata"      // optional; or omit
    />
    ```
 

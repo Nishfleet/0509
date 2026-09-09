@@ -204,7 +204,6 @@ describe("BET 10 claim-by-claim audit table", () => {
     expect(surfaces).toMatch(/homepage/iu);
     expect(surfaces).toMatch(/pricing/iu);
     expect(surfaces).toMatch(/competitor-monitoring/iu);
-    expect(surfaces).toMatch(/compare\/magicbrief|migration/iu);
     // The two data-outruns-copy claims from the issue evidence must be present.
     expect(audit.claims.some((c) => c.claimId === "AUDIT-SAVES-SCREENSHOTS")).toBe(true);
     expect(audit.claims.some((c) => c.claimId === "AUDIT-LANDING-PAGE-CHANGE-HISTORY")).toBe(true);
@@ -224,7 +223,6 @@ describe("BET 10 claim-by-claim audit table", () => {
     const surfaces = [
       "app/routes/marketing.tsx",
       "app/routes/competitor-monitoring.tsx",
-      "app/routes/compare.magicbrief.tsx",
       "app/routes/compare.meta-ad-library.tsx",
       "app/components/pricing-section.tsx",
       "app/routes/timeline.$domain.tsx",

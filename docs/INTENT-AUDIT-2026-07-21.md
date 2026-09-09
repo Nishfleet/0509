@@ -71,7 +71,7 @@ teaching empty states, coherent voice).
 |---|---|---|---|
 | `/` (landing) | 9 | Mid-page sections pin a narrow card to the left third, leaving a 60%+ empty horizontal band (how-it-works, check packs, FAQ) that reads unfinished | The "$159 ~~$129~~ LAST NIGHT" evidence hero + capture ticker — genuinely distinctive, lands hard |
 | `/compare/meta-ad-library` | 8 | Yet another nav variant ("Create account" vs landing's "Open app") | Honest 3-column "what manual checking costs you" grid |
-| `/compare/magicbrief` | 8 | Same nav fragmentation | "Bring your saved work. Gain the receipts." migration framing |
+| `/compare/<vendor>` (page since removed) | 8 | Same nav fragmentation | "Bring your saved work. Gain the receipts." migration framing |
 | `/help` | 7 | Wall of text, no search/cards/TOC | Green mono section eyebrows; honest support paths |
 | `/docs` | 7 | Near-identical to `/help`; no docs sidebar/search/code styling | Clear proof-label explanations |
 | `/changelog` | 7 | Last entry 2026-06-15 — >1 month stale despite heavy shipping since | Honest "we keep unverified work out" framing |

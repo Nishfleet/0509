@@ -57,8 +57,6 @@ The account/workspace measures in §3.2 are **derived metrics, not emitted event
 | `funnel_search_preview_result` | Public search preview returns results | Measure search success | `event_id`, `timestamp`, `route`, `result_count_bucket` | Query text, result content, result URLs, ad creative text |
 | `funnel_search_preview_error` | Public search preview fails | Measure search failure rate | `event_id`, `timestamp`, `route`, `error_kind` | Error message body, stack trace, provider response bodies |
 | `funnel_signup_start` | Visitor begins signup (email magic link or OAuth) | Measure signup initiation | `event_id`, `timestamp`, `route` | Email, name, OAuth provider tokens |
-| `funnel_migration_view` | The MagicBrief migration page (`/compare/magicbrief`) renders for a visitor | Count wind-down-intent reach for the migration blitz (`docs/magicbrief-blitz-capture.md`) | `event_id`, `timestamp`, `route` | All §4 forbidden fields |
-| `funnel_signup_start_magicbrief` | Signup begins from a request whose URL carries the exact migration marker (`source=magicbrief-migration`), recognized server-side by exact string comparison against the allowlisted constant; the marker value itself is never stored | Measure wind-down capture at signup initiation | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
 | `funnel_locale_segment_view_en` / `_de` / `_ja` / `_pt_br` | A sneaker-resale locale landing page renders | Count organic reach per locale page (issue 1154) | `event_id`, `timestamp`, `route` | Pathname, language headers, IP/geo, the raw URL |
 | `funnel_signup_start_locale_en` / `_de` / `_ja` / `_pt_br` | Signup begins from a request whose URL carries the exact locale marker (`source=locale-<id>-sneaker-resale`), recognized server-side against allowlisted constants; the marker value itself is never stored | Measure locale-page capture at signup initiation | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
 | `funnel_pricing_free_card_clicked` | Signup begins from a request whose URL carries the exact pricing Free card marker (`source=pricing-free`), recognized server-side against the allowlisted constant; the marker value itself is never stored | Measure whether surfacing the Free plan as a card on `/pricing` lifts free-tier click-through (issue 1499) | `event_id`, `timestamp`, `route` | Email, name, the raw `source` query value, referrer URL |
@@ -67,13 +65,8 @@ The account/workspace measures in §3.2 are **derived metrics, not emitted event
 | `funnel_first_brief_email_sent` | The "Your first brief" email is dispatched (digest path with `firstBrief: true`), in-session or from the async scan-completion path | Measure the within-the-hour email promise | `event_id`, `timestamp`, `route` | Email addresses, watchlist names, ad URLs, digest content, `workspace_id` |
 
 All v1 emitted events are request-scoped: they carry no identifier that
-can join one request to another or connect them to an account (see §4). The two
-MagicBrief blitz events follow every v1 rule unchanged: same field shape, same
-default-off gate, same GPC suppression, no new identifiers. The attribution is a
-coarse event-kind selection resolved on the server (the marker selects
-`funnel_signup_start_magicbrief` instead of `funnel_signup_start`) — it never adds a
-caller-controlled value to any record field, so anonymous events remain non-joinable.
-`funnel_pricing_free_card_clicked` follows the same marker contract: the raw
+can join one request to another or connect them to an account (see §4).
+`funnel_pricing_free_card_clicked` follows the marker contract: the raw
 `source=pricing-free` query value is compared to the allowlisted constant server-side
 and never stored; like every signup-start variant it fires at signup submission with
 `route=signup` and `account_scope=anonymous`.
@@ -123,7 +116,7 @@ is forbidden.
 | `event_id` | Opaque server-generated event identifier | Generated server-side per event; unique; not derived from user input |
 | `workspace_id` | Opaque server-generated workspace identifier | Only on account/workspace-scoped derived measures; never on anonymous events |
 | `timestamp` | ISO-8601 UTC time of event | Server clock, never client-supplied |
-| `route` | Coarse route label from an allowlist (`home`, `search_preview`, `magicbrief_migration`, `sneaker_resale`, `signup`, `activation`) | Never a full URL |
+| `route` | Coarse route label from an allowlist (`home`, `search_preview`, `sneaker_resale`, `signup`, `activation`) | Never a full URL |
 | `result_count_bucket` | Coarse bucket of search-preview result count (`0`, `1-10`, `11-50`, `51+`) | Never exact counts |
 | `error_kind` | Coarse error class from an allowlist | Never error text or stack traces |
 | `referrer_domain` | Coarse eTLD+1 of the referring site | Optional; never a full referrer URL |
@@ -213,8 +206,7 @@ No new storage exists and none is authorized by this document. The plan for a fu
 implementation uses only existing surfaces:
 
 1. **Structured JSON logs (existing).** Anonymous funnel events (`funnel_home_view`,
-   `funnel_search_preview_*`, `funnel_migration_view`, `funnel_signup_start`,
-   `funnel_signup_start_magicbrief`) are written as structured JSON log
+   `funnel_search_preview_*`, `funnel_signup_start`) are written as structured JSON log
    records via the existing `app/lib/log.server.ts` mechanism (`operation: funnel_*`),
    which scrubs values under credential-named keys (`secret`, `password`, `token`,
    `signature`, `cookie`, `authorization`, `api_key`, etc.). That scrubbing is narrow
@@ -236,11 +228,6 @@ implementation uses only existing surfaces:
 - Daily count of `funnel_home_view` and of `funnel_search_preview_submit` events, and
   their ratio per day (time-bucket population rates; v1 does not measure same-visitor
   progression).
-- Weekly counts of `funnel_migration_view` events — the week-over-week wind-down
-  traffic measure for the MagicBrief blitz — and, in the same period, the count of
-  `funnel_signup_start_magicbrief` next to total `funnel_signup_start` (the
-  migration-attributed share of signup starts). These are independent request-scoped
-  populations; no same-visitor join is performed or implied.
 - Daily count of `funnel_search_preview_result` events with `result_count_bucket` ≥ 1
   and of `funnel_search_preview_error` events, and their ratio per day.
 - Daily counts of anonymous `funnel_signup_start` events and of derived signup

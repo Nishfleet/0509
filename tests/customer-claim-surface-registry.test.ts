@@ -147,7 +147,6 @@ const CLAIM_CHECKS: Record<string, ClaimCheck> = {
   "PRESENCE-SOURCE-COVERAGE": sourcePatternCheck(/website|manual.?only|planned|unsupported/iu, (_entry, context) =>
     context.presenceSources.includes("website") &&
     context.presenceSources.includes("context_dev")),
-  "COMPARE-MIGRATION-AFTERNOON": removedTextCheck(/in an afternoon|afternoon with founder-assisted migration/iu),
   "SEO-CANONICAL-INDEXING": sourcePatternCheck(/canonical|robots|sitemap/iu),
   "EMAIL-DELIVERABILITY": sourcePatternCheck(/email|delivery/iu),
   "OP-HEALTH-UPTIME": sourcePatternCheck(/health|five minutes|5 minutes/iu),
@@ -200,7 +199,7 @@ const expectedClaimIds = [
   "DELIVERY-CHANNEL-GATES", "TEAM-AGENCY-SHARING", "CLIENT-ROOM-AGENCY",
   "API-LIVE-CATALOG", "API-MCP-ACCOUNT-SCOPE", "ACCOUNT-DELETION-SUPPORT",
   "BILLING-PORTAL-PLAN-CHANGE", "CHECK-PACK-SEMANTICS", "PRESENCE-SOURCE-COVERAGE",
-  "COMPARE-MIGRATION-AFTERNOON", "SEO-CANONICAL-INDEXING", "EMAIL-DELIVERABILITY",
+  "SEO-CANONICAL-INDEXING", "EMAIL-DELIVERABILITY",
   "OP-HEALTH-UPTIME", "OP-BACKUP-RESTORE", "OP-MONITORING-CAPACITY",
   "COMPAT-MOBILE-A11Y", "GA-AGENCY-STATUS",
 ] as const;
@@ -257,8 +256,10 @@ function registryContractSha256() {
 // 2026-08-12 merge: re-pinned after the Slack/Teams webhook-delivery decision
 // reopened DELIVERY-CHANNEL-GATES (claim text/assessment updated to the live
 // Slack+Teams/WhatsApp-dormant truth; no proof fabricated).
+// 2026-09-09: re-pinned after the vendor compare-page wipe (issue #2127)
+// removed the COMPARE-MIGRATION-AFTERNOON claim with its deleted source route.
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "ffb062105899cd89ba5610aa4a3c825026770e16dda91685d143dedc061f8151";
+  "87bf75b1fe5c090d8745373d670a4a6ec55629f682d6040f31533d28f0ac7fa7";
 
 type Catalogs = {
   agentActions: string[];
@@ -331,7 +332,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/app/shares", "/app/source-access", "/app/support", "/app/team",
     "/app/watchlists", "/compare", "/help", "/pricing", "/search",
   ],
-  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology", "/pricing", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy"],
+  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology", "/pricing", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
   // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
   // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
@@ -373,10 +374,10 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // homepage/docs plan facts it restates (free weekly watch, Meta-only scope).
   sitemapPaths: [
     "/", "/search", "/brands", "/briefs/weekly", "/sample-brief", "/llms-full.txt", "/guides/how-to-track-competitor-ads",
-    "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
+    "/compare", "/compare/meta-ad-library",
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
-    "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/switch/magicbrief",
+    "/compare/panoramata", "/compare/adspyder", "/compare/adspy",
     "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",
     // Issue #2144: agency audience page (roster math + sourced Agency-vs-
     // Foreplay line), EN-only, no locale cluster.

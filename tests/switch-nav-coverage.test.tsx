@@ -14,11 +14,11 @@ const commercialLaunch = {
 };
 
 /**
- * Issue #1466 — the three switch pages (/switch/magicbrief,
- * /switch/panoramata, /switch/visualping) must be reachable from the public
+ * Issue #1466 — the switch pages (/switch/panoramata, /switch/visualping)
+ * must be reachable from the public
  * nav on the four high-traffic surfaces: /, /search, /competitor-monitoring,
  * /pricing. Each route's server-rendered markup (excluding the footer) must
- * carry a "from MagicBrief" link inside a <nav> region so a buyer who lands
+ * carry a "from Panoramata" link inside a <nav> region so a buyer who lands
  * from Google reaches the switch page in one click without a footer scroll.
  */
 
@@ -259,43 +259,43 @@ describe("switch-page nav coverage (issue #1466)", () => {
     }
   });
 
-  it("renders a 'from MagicBrief' link in a primary nav region on /", async () => {
+  it("renders a 'from Panoramata' link in a primary nav region on /", async () => {
     const markup = beforeFooter(await renderMarketing());
     const blocks = navBlocks(markup);
     const hasSwitch = blocks.some(
-      (block) => block.includes('href="/switch/magicbrief"') && block.includes("from MagicBrief"),
+      (block) => block.includes('href="/switch/panoramata"') && block.includes("from Panoramata"),
     );
-    expect(hasSwitch, "/ must surface /switch/magicbrief in a <nav> region before the footer").toBe(true);
+    expect(hasSwitch, "/ must surface /switch/panoramata in a <nav> region before the footer").toBe(true);
   });
 
-  it("renders a 'from MagicBrief' link in a primary nav region on /competitor-monitoring", async () => {
+  it("renders a 'from Panoramata' link in a primary nav region on /competitor-monitoring", async () => {
     const markup = beforeFooter(await renderCompetitorMonitoring());
     const blocks = navBlocks(markup);
     const hasSwitch = blocks.some(
-      (block) => block.includes('href="/switch/magicbrief"') && block.includes("from MagicBrief"),
+      (block) => block.includes('href="/switch/panoramata"') && block.includes("from Panoramata"),
     );
     expect(
       hasSwitch,
-      "/competitor-monitoring must surface /switch/magicbrief in a <nav> region before the footer",
+      "/competitor-monitoring must surface /switch/panoramata in a <nav> region before the footer",
     ).toBe(true);
   });
 
-  it("renders a 'from MagicBrief' link in a primary nav region on /pricing", async () => {
+  it("renders a 'from Panoramata' link in a primary nav region on /pricing", async () => {
     const markup = beforeFooter(await renderPricing());
     const blocks = navBlocks(markup);
     const hasSwitch = blocks.some(
-      (block) => block.includes('href="/switch/magicbrief"') && block.includes("from MagicBrief"),
+      (block) => block.includes('href="/switch/panoramata"') && block.includes("from Panoramata"),
     );
-    expect(hasSwitch, "/pricing must surface /switch/magicbrief in a <nav> region before the footer").toBe(true);
+    expect(hasSwitch, "/pricing must surface /switch/panoramata in a <nav> region before the footer").toBe(true);
   });
 
-  it("renders a 'from MagicBrief' link in a nav region on /search", async () => {
+  it("renders a 'from Panoramata' link in a nav region on /search", async () => {
     const markup = beforeFooter(await renderSearch());
     const blocks = navBlocks(markup);
     const hasSwitch = blocks.some(
-      (block) => block.includes('href="/switch/magicbrief"') && block.includes("from MagicBrief"),
+      (block) => block.includes('href="/switch/panoramata"') && block.includes("from Panoramata"),
     );
-    expect(hasSwitch, "/search must surface /switch/magicbrief in a <nav> region before the footer").toBe(true);
+    expect(hasSwitch, "/search must surface /switch/panoramata in a <nav> region before the footer").toBe(true);
   });
 
   it("the /search and /competitor-monitoring inline strip surfaces all three switch pages", async () => {
@@ -319,7 +319,7 @@ describe("switch-page nav coverage (issue #1466)", () => {
       const preFooter = beforeFooter(markup);
       // The switch links are plain <a> tags with href="/switch/...", not
       // button/onclick constructs that need JS to navigate.
-      const switchAnchor = preFooter.match(/<a[^>]*href="\/switch\/magicbrief"[^>]*>/);
+      const switchAnchor = preFooter.match(/<a[^>]*href="\/switch\/panoramata"[^>]*>/);
       expect(switchAnchor, "switch link must be a plain <a href> anchor").not.toBeNull();
       expect(switchAnchor?.[0]).not.toMatch(/onclick=|role="button"/);
     }

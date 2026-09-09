@@ -79,7 +79,7 @@ describe("compare meta-ad-library route", () => {
     expect(markup).not.toContain('value="facebook.com"');
     // Shared marketing footer with the compare group and brand line.
     expect(markup).toContain("Named for 05:09");
-    expect(markup).toContain('href="/compare/magicbrief"');
+    expect(markup).toContain('href="/compare/panoramata"');
     // No invented numbers, testimonials, or non-GA channel claims.
     expect(markup).not.toMatch(/\b\d+% of\b/);
     expect(markup).not.toContain("Slack delivery");

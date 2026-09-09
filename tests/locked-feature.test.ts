@@ -66,14 +66,14 @@ describe("LockedFeature", () => {
 			reason: "Keep everything together for agency delivery",
 			planNeeded: "Agency plan",
 			upgradeTo: "/app/billing?source=clients#plans",
-			seeExampleTo: "/compare/magicbrief",
+			seeExampleTo: "/compare/panoramata",
 			headingLevel: "h2",
 		});
 
 		expect(markup).toContain("<h2");
 		expect(markup).not.toContain("<h1");
 		expect(markup).toContain("f9-evidence-cta--rank2");
-		expect(markup).toContain('href="/compare/magicbrief"');
+		expect(markup).toContain('href="/compare/panoramata"');
 		expect(markup).toContain("See an example");
 	});
 

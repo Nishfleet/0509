@@ -43,7 +43,6 @@ describe("public markdown", () => {
     // ticket, deliberately out of scope).
     expect(isPublicMarkdownPage("/methodology")).toBe(true);
     expect(isPublicMarkdownPage("/pricing")).toBe(true);
-    expect(isPublicMarkdownPage("/compare/magicbrief")).toBe(true);
     expect(isPublicMarkdownPage("/compare/meta-ad-library")).toBe(true);
     expect(isPublicMarkdownPage("/compare/visualping-ad-libraries")).toBe(true);
     expect(isPublicMarkdownPage("/compare/spyland")).toBe(true);
@@ -90,7 +89,6 @@ describe("public markdown", () => {
 
     // Each /compare/* page gets a body assembled from its source citations.
     const comparePaths = [
-      "/compare/magicbrief",
       "/compare/meta-ad-library",
       "/compare/visualping-ad-libraries",
       "/compare/spyland",

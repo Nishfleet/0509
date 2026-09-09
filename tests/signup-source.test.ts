@@ -5,7 +5,7 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MAGICBRIEF_MIGRATION_SOURCE, PRICING_FREE_SIGNUP_SOURCE } from "~/lib/funnel-measurement.server";
+import { PRICING_FREE_SIGNUP_SOURCE } from "~/lib/funnel-measurement.server";
 import {
   ALLOWED_SIGNUP_SOURCES,
   allowlistedSignupSource,
@@ -17,9 +17,7 @@ import {
 } from "~/lib/signup-source";
 
 describe("allowlisted signup_source", () => {
-  it("keeps the MagicBrief, pricing-free, and locale sneaker-resale markers, and nothing else", () => {
-    expect(ALLOWED_SIGNUP_SOURCES).toContain(MAGICBRIEF_MIGRATION_SOURCE);
-    expect(allowlistedSignupSource(MAGICBRIEF_MIGRATION_SOURCE)).toBe(MAGICBRIEF_MIGRATION_SOURCE);
+  it("keeps the pricing-free and locale sneaker-resale markers, and nothing else", () => {
     expect(ALLOWED_SIGNUP_SOURCES).toContain(PRICING_FREE_SIGNUP_SOURCE);
     expect(allowlistedSignupSource(PRICING_FREE_SIGNUP_SOURCE)).toBe(PRICING_FREE_SIGNUP_SOURCE);
     expect(allowlistedSignupSource("locale-de-sneaker-resale")).toBe("locale-de-sneaker-resale");
@@ -32,14 +30,13 @@ describe("allowlisted signup_source", () => {
   });
 
   it("drops the raw query string, unknown markers, and hostile values", () => {
-    expect(allowlistedSignupSource("magicbrief-migration&x=<script>")).toBeNull();
+    expect(allowlistedSignupSource("pricing-free&x=<script>")).toBeNull();
     expect(allowlistedSignupSource("<script>alert(1)</script>")).toBeNull();
-    expect(allowlistedSignupSource("/auth/signup?source=magicbrief-migration")).toBeNull();
+    expect(allowlistedSignupSource("/auth/signup?source=pricing-free")).toBeNull();
     expect(allowlistedSignupSource("pricing-free&x=1")).toBeNull();
     expect(allowlistedSignupSource(" PRICING-FREE ")).toBeNull();
     expect(allowlistedSignupSource("")).toBeNull();
     expect(allowlistedSignupSource(null)).toBeNull();
-    expect(allowlistedSignupSource(" MAGICBRIEF-MIGRATION ")).toBeNull();
   });
 
   it("accepts lowercase slugs and ref:<eTLD+1> markers (issue #2108)", () => {
@@ -180,7 +177,6 @@ describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
     "ref:example.com",
     "pricing-free",
     "for_agencies",
-    "magicbrief-migration",
     "locale-de-sneaker-resale",
     "summer-2026-launch",
     "search_warming_exhausted",
@@ -215,7 +211,6 @@ describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
       "utf8",
     );
     for (const literal of [
-      "magicbrief-migration",
       "locale-en-sneaker-resale",
       "locale-de-sneaker-resale",
       "locale-ja-sneaker-resale",
@@ -251,7 +246,7 @@ describe("signup action dual-write", () => {
     vi.resetModules();
   });
 
-  it("sets the allowlisted cookie after a MagicBrief signup start and never puts the raw query on the user path", async () => {
+  it("sets the allowlisted cookie after a pricing-free signup start and never puts the raw query on the user path", async () => {
     const statements: string[] = [];
     const env = {
       FUNNEL_MEASUREMENT_ENABLED: "1",
@@ -281,7 +276,7 @@ describe("signup action dual-write", () => {
 
     const { action } = await import("~/routes/auth.signup");
     const request = new Request(
-      "http://localhost/auth/signup?source=magicbrief-migration&x=%3Cscript%3E",
+      "http://localhost/auth/signup?source=pricing-free&x=%3Cscript%3E",
       {
         method: "POST",
         headers: {
@@ -306,10 +301,10 @@ describe("signup action dual-write", () => {
     const response = thrown as Response;
     expect(response.status).toBe(302);
     const location = response.headers.get("Location") ?? "";
-    expect(location).toContain("source=magicbrief-migration");
+    expect(location).toContain("source=pricing-free");
     expect(location).not.toContain("script");
     expect(response.headers.get("Set-Cookie") ?? "").toContain(
-      `${SIGNUP_SOURCE_COOKIE}=magicbrief-migration`,
+      `${SIGNUP_SOURCE_COOKIE}=pricing-free`,
     );
     expect(statements.some((sql) => sql.includes("signup_source_pending"))).toBe(true);
     expect(JSON.stringify(statements)).not.toContain("script");
@@ -370,7 +365,6 @@ describe("compare/switch/locale route signup CTA attribution (issue #2109)", () 
     "compare.adspyder",
     "compare.foreplay-spyder",
     "compare.foreplay",
-    "compare.magicbrief",
     "compare.meta-ad-library",
     "compare.panoramata",
     "compare.pulzifi",
@@ -378,7 +372,6 @@ describe("compare/switch/locale route signup CTA attribution (issue #2109)", () 
     "compare.visualping-ad-libraries",
     "compare.visualping",
     // switch routes
-    "switch.magicbrief",
     "switch.panoramata",
     "switch.visualping",
     // locale compare/switch re-exports
@@ -386,14 +379,12 @@ describe("compare/switch/locale route signup CTA attribution (issue #2109)", () 
     "$locale.compare.adspyder",
     "$locale.compare.foreplay-spyder",
     "$locale.compare.foreplay",
-    "$locale.compare.magicbrief",
     "$locale.compare.meta-ad-library",
     "$locale.compare.panoramata",
     "$locale.compare.pulzifi",
     "$locale.compare.spyland",
     "$locale.compare.visualping-ad-libraries",
     "$locale.compare.visualping",
-    "$locale.switch.magicbrief",
     "$locale.switch.panoramata",
     "$locale.switch.visualping",
     // locale routes that render a page-specific signup CTA

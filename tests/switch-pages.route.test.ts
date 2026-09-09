@@ -57,8 +57,8 @@ describe("BET 8 switch pages", () => {
   const routeIds = switchRouteIds();
 
   it("ships exactly the three named switch routes", () => {
-    expect(routeIds).toEqual(["switch.magicbrief", "switch.panoramata", "switch.visualping"]);
-    expect([...SWITCH_SLUGS].sort()).toEqual(["magicbrief", "panoramata", "visualping"]);
+    expect(routeIds).toEqual(["switch.panoramata", "switch.visualping"]);
+    expect([...SWITCH_SLUGS].sort()).toEqual(["panoramata", "visualping"]);
   });
 
   it("lists every switch path in the public sitemap set", () => {
@@ -100,13 +100,11 @@ describe("BET 8 switch pages", () => {
     expect(markup).toContain("What does not transfer.");
     expect(markup).toContain('href="/search?q=');
     // Issue 2123: the CTA searches the tracked demo competitor, not the
-    // vendor domain (magicbrief.com / visualping.io render "0 ads found").
-    // MagicBrief keeps its vendor-domain CTA until issue 2127 wipes it.
+    // vendor domain (visualping.io renders "0 ads found").
     const previewQuery = page.previewSearchDomain ?? page.ctaBrand;
     expect(markup).toContain(`href="/search?q=${previewQuery}"`);
     expect((markup.match(/href="\/search\?q=/g) ?? []).length).toBe(1);
     expect(markup).toMatch(/no demo form/i);
-    expect(markup).not.toContain("source=magicbrief-migration");
     expect(markup).not.toContain("Start migration");
     expect(markup).not.toMatch(/calendly|book a demo/i);
 
@@ -176,17 +174,6 @@ describe("BET 8 switch pages", () => {
     expect(markup).not.toContain("$250");
   });
 
-  it("anchors MagicBrief on the shutdown and the Canva successor", async () => {
-    const { default: Route } = await import("~/routes/switch.magicbrief");
-    const markup = renderToStaticMarkup(createElement(Route));
-
-    expect(markup).toContain("MagicBrief closed. Here is what actually moves.");
-    expect(markup).toContain("https://magicbrief.com/faqs");
-    expect(markup).toContain("Canva Grow");
-    expect(markup).toContain("Canva Business");
-    expect(markup).not.toContain("$250");
-  });
-
   it("does not promise a screenshot on every new watch (#1182)", async () => {
     // Live D1 on 2026-08-27: 0 of 34 succeeded proof_capture rows in 48h
     // carried a screenshot key. Switch copy must match that coverage, same
@@ -206,20 +193,13 @@ describe("BET 8 switch pages", () => {
       );
     }
 
-    expect(SWITCH_PAGES.magicbrief.doesNotTransfer.map((row) => row.detail).join("\n")).toMatch(
-      /screenshot when the capture includes one/i,
-    );
     expect(SWITCH_PAGES.panoramata.transfers.map((row) => row.detail).join("\n")).toMatch(
       /screenshot when the capture includes one/i,
     );
 
-    const { default: MagicBriefRoute } = await import("~/routes/switch.magicbrief");
     const { default: PanoramataRoute } = await import("~/routes/switch.panoramata");
-    const magicbrief = visibleText(renderToStaticMarkup(createElement(MagicBriefRoute)));
     const panoramata = visibleText(renderToStaticMarkup(createElement(PanoramataRoute)));
-    expect(magicbrief).toContain("screenshot when the capture includes one");
     expect(panoramata).toContain("screenshot when the capture includes one");
-    expect(magicbrief).not.toContain("save fresh screenshots");
     expect(panoramata).not.toContain("when the page actually renders");
   });
 

@@ -1,8 +1,8 @@
 /**
  * /search ↔ /switch/* cross-link contract (issue 1554).
  *
- * When a searched brand domain resolves to a known switch target (MagicBrief,
- * Panoramata, Visualping), the /search results render a "Switching from X?"
+ * When a searched brand domain resolves to a known switch target (Panoramata,
+ * Visualping), the /search results render a "Switching from X?"
  * card above the fold linking to the honest /switch/* destination, and the
  * /competitor-monitoring hub lists every switch page so the first-value moment
  * hands off to discovery instead of only outreach.
@@ -100,10 +100,9 @@ afterEach(() => {
 });
 
 describe("switchPageForDomain domain mapping", () => {
-  it("maps the three switch-target domains to their /switch/* pages", () => {
+  it("maps the two switch-target domains to their /switch/* pages", () => {
     expect(switchPageForDomain("visualping.io")?.pathname).toBe("/switch/visualping");
     expect(switchPageForDomain("www.visualping.io")?.pathname).toBe("/switch/visualping");
-    expect(switchPageForDomain("magicbrief.com")?.pathname).toBe("/switch/magicbrief");
     expect(switchPageForDomain("panoramata.co")?.pathname).toBe("/switch/panoramata");
   });
 

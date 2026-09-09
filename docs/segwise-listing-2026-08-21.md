@@ -139,7 +139,7 @@ Fresh pass recorded 2026-08-23 (evidence:
   (`https://segwise.ai/blog`), Privacy Policy
   (`https://segwise.ai/privacy-policy`).
 - Product URLs still HTTP 200: `https://0509.io`, `https://0509.io/search`,
-  `https://0509.io/auth/signup`, `https://0509.io/compare/magicbrief`.
+  `https://0509.io/auth/signup`.
 - Pitch facts still match current repo copy: "screenshot evidence and
   change alerts" (hero, `app/routes/marketing.tsx`) and the every-3–6-hours
   cadence lines in the same file; `SUPPORT_EMAIL = "support@0509.io"` at
@@ -237,7 +237,6 @@ sourced from `MEMORY.md`, `README.md`, and the live homepage copy
 - `https://0509.io/search` — public no-account search preview (the URL the
   pitch points at).
 - `https://0509.io/auth/signup` — working email magic-link signup.
-- `https://0509.io/compare/magicbrief` — MagicBrief migration guide.
 - Venue: `https://segwise.ai/blog/best-ad-spy-competitor-tools` (article,
   HTTP 200, 2026-08-21), author page
   `https://segwise.ai/blog/author/angad-singh` (200), blog
@@ -300,7 +299,7 @@ targets the current version of the article:
 - **Five to Nine still absent:** `grep -ci 'five to nine\|0509'` = 0 on the
   live article (2026-09-09).
 - **Product URLs still live:** `https://0509.io`, `https://0509.io/search`,
-  `https://0509.io/auth/signup`, `https://0509.io/compare/magicbrief` all
+  `https://0509.io/auth/signup` all
   HTTP 200 on 2026-09-09.
 - **Pitch facts still match current repo copy:** "screenshot evidence and
   change alerts" and the every-3–6-hours cadence lines in

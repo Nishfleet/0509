@@ -9,14 +9,11 @@ type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
 /** Vendor-owned domains render "0 ads found" — they must never be the CTA target. */
-const BANNED_CTA_DOMAINS = ["magicbrief.com", "visualping.io"];
+const BANNED_CTA_DOMAINS = ["visualping.io"];
 
-// MagicBrief is deliberately out of scope: Nish (2026-09-09, issue 2123) —
-// MagicBrief is being wiped in issue 2127; do not fix the MagicBrief CTA.
 const IN_SCOPE_SWITCH_SLUGS = ["panoramata", "visualping"] as const;
 
-// Sitemap-canonical compare pages named by issue 2123, minus the out-of-scope
-// MagicBrief canonical (/compare/magicbrief, same 2127 wipe).
+// Sitemap-canonical compare pages named by issue 2123.
 const IN_SCOPE_COMPARE_SLUGS = [
   "visualping-ad-libraries",
   "foreplay-spyder",
