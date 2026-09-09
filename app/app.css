@@ -4911,6 +4911,26 @@ one signal-green accent.
   }
 }
 
+/* /sample-brief (issue #2136): the public Monday-brief page frames the real
+   digest document (inline-styled email HTML) as a case-file card. */
+.f9-sample-brief-document {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 32px);
+  border: 1.5px solid var(--ld-ink);
+  background: var(--ld-bone);
+  box-shadow: 6px 6px 0 rgba(23, 22, 17, 0.14);
+}
+
+.f9-sample-brief-cta {
+  margin-top: 28px;
+  text-align: center;
+}
+
+.f9-sample-brief-brand {
+  text-align: center;
+}
+
 /* Hero radar — "we work while you sleep" as an instrument (2026-06-12) */
 
 .ld-hero-grid {

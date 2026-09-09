@@ -368,8 +368,12 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // compare/switch child routes (issue #1563), and the programmatic
   // /ads/:domain pages (issue #1562) — all serve English copy.
   // The genuinely translated sneaker-resale cluster stays in the sitemap.
+  // 2026-09-09: /sample-brief joined the sitemap (issue #2136) — one real
+  // stored Monday brief for a public brand domain, rendered from stored rows
+  // only (quiet-brief variant when nothing filed in 30 days); no customer
+  // workspace name, email, or watchlist id leaves the page.
   sitemapPaths: [
-    "/", "/search", "/brands", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
+    "/", "/search", "/brands", "/sample-brief", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
     "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief",

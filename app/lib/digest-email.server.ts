@@ -325,6 +325,53 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   };
 }
 
+/**
+ * Public /sample-brief digest (issue #2136): the same Monday-brief renderer
+ * customer inboxes get, assembled for a public marketing page from stored
+ * watch_event rows for one indexable brand domain. The route loader passes
+ * only public-safe fields — no recipient name, no email, no watchlist or
+ * event ids — so the rendered HTML can never carry customer identity: the
+ * accountable-reviewer line renders the generic "Workspace owner" fallback,
+ * and per-item review links resolve to the public brand page because
+ * `digestItemDeepLink` has no ids to deep-link to. The all-quiet variant is
+ * the same renderer's quiet brief with the domain's real stored run counts.
+ */
+export interface SampleBriefDigestInput {
+  /** Public brand display name — never a customer watchlist or workspace name. */
+  brandName: string;
+  periodStart: string;
+  periodEnd: string;
+  items: DigestTrustItem[];
+  /** Stored-run heartbeat for the all-quiet variant; null only with items. */
+  heartbeat?: DigestEmailHeartbeat | null;
+  /** Public "full brief" target — the brand's /ads/:domain page. */
+  fullDigestUrl: string;
+  /** Signup CTA URL; stands in for the app-only notification-settings link. */
+  signupUrl: string;
+  supportEmail: string;
+  supportMailto: string;
+  timeZone?: string | null;
+}
+
+export function buildSampleBriefDigest(input: SampleBriefDigestInput): DigestEmailModel {
+  return buildDigestEmail({
+    // No recipient identity on a public page: the accountable-reviewer line
+    // falls back to the generic "Workspace owner" label, never a real name.
+    name: "",
+    periodStart: input.periodStart,
+    periodEnd: input.periodEnd,
+    items: input.items,
+    heartbeat: input.heartbeat ?? null,
+    cadence: "weekly",
+    timeZone: input.timeZone ?? null,
+    fullDigestUrl: input.fullDigestUrl,
+    manageFrequencyUrl: input.signupUrl,
+    supportEmail: input.supportEmail,
+    supportMailto: input.supportMailto,
+    unsubscribeUrl: null,
+  });
+}
+
 /** Customer email when a paid digest period had active watchlists but zero successful scans. */
 export function buildScanTroubleEmail(input: {
   watchlistNames: string[];

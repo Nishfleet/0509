@@ -68,6 +68,7 @@ export default [
   route("ops", "routes/ops.tsx"),
   route("ads/:domain", "routes/ads.$domain.tsx"),
   route("brands", "routes/brands.tsx"),
+  route("sample-brief", "routes/sample-brief.tsx"),
   route("timeline/:domain", "routes/timeline.$domain.tsx"),
   // Canonical Ad Aggression Score methodology page. Path history: issue #960
   // shipped /methodology/ad-aggression-score; #1263 promoted it to

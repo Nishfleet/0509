@@ -62,6 +62,13 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Indexable public brand pages showing the real Meta ads that run for, or link to, each tracked domain, grouped by category.",
   },
+  // Issue #2136: /sample-brief is in SITEMAP_PATHS, so it needs a
+  // title/description here or buildLlmsText emits `[undefined]` lines.
+  "/sample-brief": {
+    title: "A real Monday brief",
+    description:
+      "One real stored competitor brief for a public brand, rendered from filed change events with capture dates and source links intact — the same brief customers get by email every Monday.",
+  },
   "/compare": {
     title: "Compare Five to Nine vs the alternatives",
     description:

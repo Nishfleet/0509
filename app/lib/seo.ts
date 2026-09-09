@@ -745,6 +745,10 @@ export const SITEMAP_PATHS = [
   // path to the full indexable brand surface (and Google an internal-link
   // graph instead of sitemap-only orphan pages).
   "/brands",
+  // Issue #2136: /sample-brief renders one real stored Monday brief for a
+  // public brand domain (quiet-brief variant when nothing filed in 30 days) —
+  // the proof-of-product page the signup CTA deep-links from.
+  "/sample-brief",
   "/compare",
   "/compare/magicbrief",
   "/compare/meta-ad-library",
@@ -845,6 +849,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/": { changefreq: "daily", priority: "1.0" },
   "/search": { changefreq: "weekly", priority: "0.9" },
   "/brands": { changefreq: "weekly", priority: "0.6" },
+  "/sample-brief": { changefreq: "weekly", priority: "0.6" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
   "/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
   "/de/sneaker-resale": { changefreq: "weekly", priority: "0.8" },

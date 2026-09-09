@@ -29,11 +29,20 @@ export const LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES = [
  */
 export const SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE = "search_warming_exhausted";
 
+/**
+ * The exact signup-URL marker the public /sample-brief page's "Get this every
+ * Monday, free" CTA appends (issue #2136): the page renders one real stored
+ * Monday brief for a public brand domain, and the CTA deep-links into signup
+ * with that competitor prefilled.
+ */
+export const SAMPLE_BRIEF_SIGNUP_SOURCE = "sample_brief";
+
 export const ALLOWED_SIGNUP_SOURCES = [
   MAGICBRIEF_MIGRATION_SOURCE,
   PRICING_FREE_SIGNUP_SOURCE,
   ...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
   SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE,
+  SAMPLE_BRIEF_SIGNUP_SOURCE,
 ] as const;
 
 export type AllowedSignupSource = (typeof ALLOWED_SIGNUP_SOURCES)[number];
