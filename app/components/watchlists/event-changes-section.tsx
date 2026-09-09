@@ -9,7 +9,10 @@ import {
 } from "~/components/evidence/diff-plate";
 import { QuietLine, QuietLineList, type QuietLineItem } from "~/components/evidence/quiet-line";
 import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
+import { readChangeMark } from "~/lib/change-mark";
+import { isWebsitePageEventType } from "~/lib/digest-rerank";
 import { proofScreenshotSrc } from "~/lib/proof-screenshot";
+import { websitePageChangedFieldLabel } from "~/lib/watch-event-display";
 import type { PublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import {
   formatConfidenceBandLabel,
@@ -79,6 +82,16 @@ export function diffFieldLabel(event: WatchEventRecord): string {
       return "NEW AD";
     case "ad_inactive":
       return "AD STATUS";
+    case "website_page_added":
+      return "PAGE ADDED";
+    case "website_page_removed":
+      return "PAGE REMOVED";
+    case "website_page_changed":
+      // The changed field, in customer words — never the raw metadata.field
+      // token (visibleText / offerPrice / cta).
+      return websitePageChangedFieldLabel(
+        readMetadataString(event.metadata, "field"),
+      ).toUpperCase();
     default:
       return formatWatchEventTypeLabel(event.eventType).toUpperCase();
   }
@@ -514,6 +527,14 @@ export function EventChangesSection(props: {
               [isHighlighted ? "is-highlighted" : null, isNewestMarked ? "is-newest" : null]
                 .filter(Boolean)
                 .join(" ") || undefined;
+            // Full-Site Watch page events are scan-backed, not proof-capture
+            // backed, so they render as change records (never a verified diff
+            // plate). When the stored before/after values form a short readable
+            // token, surface it via the shared change-mark reader — reused
+            // as-is, exactly as the issue requires.
+            const websitePageMark = isWebsitePageEventType(event.eventType)
+              ? readChangeMark(event)
+              : null;
             const plate = canRenderEventDiffPlate({ event, proofCapture, before, now }) ? (
               <DiffPlate
                 actions={actions}
@@ -543,6 +564,13 @@ export function EventChangesSection(props: {
                 <div className="f9-evidence-diff-body">
                   <h3 className="f9-evidence-diff-headline">{event.title}</h3>
                   <p className="f9-evidence-diff-why">{why}</p>
+                  {websitePageMark ? (
+                    <p className="f9-evidence-diff-mark">
+                      <s>{websitePageMark.from}</s>
+                      <span aria-hidden="true"> → </span>
+                      <ins>{websitePageMark.to}</ins>
+                    </p>
+                  ) : null}
                   <p className="f9-evidence-diff-delivery">{delivery}</p>
                   <QuietLine
                     copy={resolveEventChangeQuietCopy({
