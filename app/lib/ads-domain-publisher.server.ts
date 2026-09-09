@@ -37,6 +37,7 @@
  * backfill) so it keeps the release-soak observation contract untouched.
  */
 
+import festiveIndia2026SeedList from "../../data/seed-lists/festive-india-2026.json";
 import sneakerResaleSeedList from "../../data/seed-lists/sneaker-resale.json";
 import { hydrateAdsWithPersistedCreatives } from "~/lib/ad-persistence.server";
 import {
@@ -68,8 +69,15 @@ export interface SeedList {
   domains: SeedListEntry[];
 }
 
-/** The registry: every bundled data/seed-lists/<cluster>.json list. */
+/**
+ * The registry: every bundled data/seed-lists/<cluster>.json list. The
+ * nightly publisher run processes the first registered list (see
+ * runAdsDomainPublisher), so the active cohort leads: festive-india-2026
+ * (issue #2140) runs inside the existing warmup cron under
+ * ADS_DOMAIN_PUBLISHER_CAP_DEFAULT (30 domains ≤ the 60 cap).
+ */
 export const SEED_LISTS: Readonly<Record<string, SeedList>> = Object.freeze({
+  "festive-india-2026": festiveIndia2026SeedList as SeedList,
   "sneaker-resale": sneakerResaleSeedList as SeedList,
 });
 

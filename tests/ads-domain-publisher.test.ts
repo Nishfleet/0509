@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ADS_DOMAIN_PUBLISHER_CAP_DEFAULT,
   classifySeedListVerdict,
   isSeededBrandDomain,
   PUBLISHER_SEED_LIST_MAX_DOMAINS,
@@ -118,6 +119,39 @@ describe("SEED_LISTS registry", () => {
 
   it("rejects unknown list names", () => {
     expect(resolveSeedList("not-a-list")).toBeNull();
+  });
+});
+
+describe("festive-india-2026 seed list (issue #2140)", () => {
+  it("registers the festive-india-2026 list", () => {
+    expect(SEED_LISTS["festive-india-2026"]).toBeDefined();
+    expect(resolveSeedList("festive-india-2026")).not.toBeNull();
+  });
+
+  it("validates clean and carries exactly 30 domains, each with a brand display name", () => {
+    const list = SEED_LISTS["festive-india-2026"];
+    expect(validateSeedList(list)).toEqual([]);
+    expect(list.domains).toHaveLength(30);
+    for (const entry of list.domains) {
+      expect(entry.brand?.trim()).toBeTruthy();
+    }
+  });
+
+  it("fits under the publisher cap so the whole cohort runs in one nightly pass", () => {
+    const list = SEED_LISTS["festive-india-2026"];
+    expect(list.domains.length).toBeLessThanOrEqual(ADS_DOMAIN_PUBLISHER_CAP_DEFAULT);
+  });
+
+  it("marks its domains as seeded brand domains", () => {
+    expect(isSeededBrandDomain("sugarcosmetics.com")).toBe(true);
+    expect(isSeededBrandDomain("boat-lifestyle.com")).toBe(true);
+    expect(isSeededBrandDomain("COUNTRYDELIGHT.IN")).toBe(true);
+  });
+
+  it("publish floor keeps only domains with at least one verified ad", () => {
+    expect(classifySeedListVerdict(1, 0)).toBe("publish");
+    expect(classifySeedListVerdict(0, 1)).toBe("publish");
+    expect(classifySeedListVerdict(0, 0)).toBe("skip");
   });
 });
 
