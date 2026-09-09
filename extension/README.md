@@ -49,6 +49,8 @@ extension/
   icons/icon-*.png       rendered icons (16/32/48/128), committed
   scripts/render-icons.mjs  regenerates the PNGs — zero-dependency
                             procedural renderer (node:zlib only)
+  store/listing.md       paste-ready Chrome Web Store fields
+  store/*.png            1280×800 listing screenshots (not in the zip)
 ```
 
 `extension/` is deliberately outside the app build: it is not referenced by
@@ -67,19 +69,23 @@ node extension/scripts/render-icons.mjs
 
 ## Store submission checklist (owner)
 
+Paste-ready fields and screenshots live in [`store/listing.md`](store/listing.md).
 Submission happens via the [Chrome Web Store Developer Dashboard]
-(https://chrome.google.com/webstore/devconsole) — one-time $5 developer fee
-if the account isn't registered yet.
+(https://chrome.google.com/webstore/devconsole). Remaining owner steps are
+only the developer account, the one-time $5 fee, and submit. Do not create the account, pay, or submit from an agent session.
 
-1. **Zip the package:** zip the *contents* of `extension/` (manifest at zip
-   root). Exclude `README.md`, `scripts/`, and `icons/icon.svg` if you want a
-   minimal package (they're harmless to include; Chrome ignores them).
-2. **Listing assets to prepare:**
-   - Store icon 128×128 PNG — use `icons/icon-128.png`.
-   - At least one screenshot, 1280×800 (or 640×400): popup open on a
-     well-known brand's site; a second one showing the fallback form is nice.
-   - Optional small promo tile 440×280 (bone ground, wordmark + clock mark).
-3. **Listing copy (honest draft, edit freely):**
+- [ ] **Zip the package at submit time:** zip the *contents* of `extension/`
+  (manifest at zip root). Exclude `README.md`, `scripts/`, `icons/icon.svg`,
+  and `store/` (listing screenshots are dashboard uploads, not package files).
+- [x] **Listing assets:**
+  - Store icon 128×128 PNG — `icons/icon-128.png`.
+  - Screenshot 1280×800: popup open on nike.com after Load unpacked —
+    `store/screenshot-popup-on-brand.png`.
+  - Second screenshot 1280×800: fallback form on a new tab —
+    `store/screenshot-popup-fallback.png`.
+  - Optional small promo tile 440×280 skipped (dashboard does not require it
+    to prepare the bundle).
+- [x] **Listing copy** (canonical paste in `store/listing.md`):
 
    > Five to Nine shows you any brand's Meta ads while you're on their
    > website. Click the icon and you get one-click paths into Five to Nine
@@ -95,27 +101,33 @@ if the account isn't registered yet.
    > and watchlists run on 0509.io; searches work without an account, while
    > watchlists require one. Privacy policy: https://0509.io/privacy
 
-4. **Privacy tab in the dashboard:** use these answers so the dashboard,
-   listing, policy, and behavior agree:
-   - **Single purpose:** "Show the current website's Meta ads and provide
-     user-chosen paths into Five to Nine search and watchlist flows."
-   - **Data usage:** declare **Web browsing activity**. The extension accesses
-     the current tab's URL only when the user opens it, handles the URL locally,
-     and extracts its domain. The domain is sent to 0509.io only after the user
-     chooses an action. A manually entered domain is handled the same way.
-   - **Storage, logging, and sharing:** the extension does not persist the URL
-     or domain. Five to Nine and service providers needed to operate the chosen
-     action process the destination request, which may appear in operational
-     logs. The data is not sold or used for advertising, profiling, or
-     creditworthiness.
-   - **Permission justification:** "activeTab reads the active tab's URL after
-     the user opens the extension so it can extract the website domain. It does
-     not read page content or broader browsing history."
-   - **Limited Use:** certify that Chrome API data is used only for the
-     extension's disclosed single purpose and complies with the Chrome Web
-     Store User Data Policy, including the Limited Use requirements.
-   - **Privacy policy URL:** `https://0509.io/privacy`.
-5. **Verify the `/ads/{domain}` route is live in production** (it ships from
-   the public-brand-pages track) before submitting, so the primary button
-   never 404s for reviewers.
-6. Category: Productivity (or Developer Tools). Language: English.
+- [x] **Privacy tab answers** (canonical paste in `store/listing.md`):
+  - **Single purpose:** "Show the current website's Meta ads and provide
+    user-chosen paths into Five to Nine search and watchlist flows."
+  - **Data usage:** declare **Web browsing activity**. The extension accesses
+    the current tab's URL only when the user opens it, handles the URL locally,
+    and extracts its domain. The domain is sent to 0509.io only after the user
+    chooses an action. A manually entered domain is handled the same way.
+  - **Storage, logging, and sharing:** the extension does not persist the URL
+    or domain. Five to Nine and service providers needed to operate the chosen
+    action process the destination request, which may appear in operational
+    logs. The data is not sold or used for advertising, profiling, or
+    creditworthiness.
+  - **Permission justification:** "activeTab reads the active tab's URL after
+    the user opens the extension so it can extract the website domain. It does
+    not read page content or broader browsing history."
+  - **Limited Use:** certify that Chrome API data is used only for the
+    extension's disclosed single purpose and complies with the Chrome Web
+    Store User Data Policy, including the Limited Use requirements.
+  - **Privacy policy URL:** `https://0509.io/privacy`.
+- [x] **`/ads/{domain}` is live in production** (`https://0509.io/ads/nike.com`
+  returned HTTP 200 on 2026-09-09), so the primary button will not 404 for
+  reviewers.
+- [x] **Category and language:** Productivity. English.
+
+Remaining owner steps (money; do not do these from an agent session):
+
+- [ ] Register the Chrome Web Store developer account.
+- [ ] Pay the one-time $5 developer fee.
+- [ ] Submit: upload the zip, paste `store/listing.md`, upload the two
+  screenshots, fill the Privacy tab, then publish.
