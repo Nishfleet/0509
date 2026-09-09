@@ -1,80 +1,42 @@
-## What
+## What changed
 
-net-positive-because: the diff is the shipped capture-validity gate (helpers, wiring, render/MCP surfacing) plus its regression test — net-positive test+feature lines that are the smallest durable fix and its prevention mechanism, not speculative scaffolding.
+- **New public route `/sample-brief`** (`app/routes/sample-brief.tsx`, registered in `app/routes.ts`): picks the newest sitemap-indexable brand domain from `loadIndexableAdsInternalLinks` (the sitemap's own indexability signal, so demo/stale/noindex domains can never be picked) that has at least one stored `watch_event` in the last 30 days, and builds its digest HTML through the existing `buildDigestEmail` renderer from stored rows only. When no indexable domain has a filed change, the honest all-quiet brief variant renders for the newest indexable domain; when no brand is indexable at all, the page renders an explicit empty state (still 200).
+- **Privacy (must-nots) held**: the digest items carry no event/watchlist ids (so the digest builder's per-item deep links resolve to the public `/ads/:domain` page, never a customer workspace row), the accountable-reviewer line renders the generic "Workspace owner" fallback, and the title is derived from the event type (system vocabulary) with a generic safe summary — the stored title/summary (which can embed the owner's watchlist name, user id, or email) is never used verbatim. No workspace name, email, watchlist id, or non-indexable domain leaves the page. Bounded D1 reads only — no live scraping.
+- **CTA**: "Get this every Monday, free" → `/auth/signup?competitor={domain}&source=sample_brief`; `sample_brief` added to the signup-source allowlist (`app/lib/signup-source.ts`).
+- **SEO**: `/sample-brief` added to `SITEMAP_PATHS` in `app/lib/seo.ts` (weekly, 0.6) with the matching llms.txt entry in `app/lib/public-markdown.ts` (compile-time parity check) and the fail-closed sitemap catalog pin in `tests/customer-claim-surface-registry.test.ts`.
+- **Test**: `tests/sample-brief.route.test.ts` — renders a brief for a fixture domain, proves no workspace name/email/watchlist id leaks, covers the quiet and empty (200) variants, and pins the route/sitemap/signup-source contract.
 
-Closes #1996. `/timeline/:domain` was publishing geo-variance + cookie-banner capture artifacts as real offer transitions — e.g. the live Nike SG (`/sg/`, 7 Sept: "Shop Now", "$149") vs Nike FR (`/fr/`, 8 Sept: French consent CTA, price "—") pair rendered as a false "Nike changed their CTA and dropped their price" transition on the public indexed flagship surface. This PR lands a capture-validity gate so such pairs become an explicit suppressed state with a reason, never an offer transition, plus a regression gate that fails on the old code.
+## Termination
 
-**Logic — `app/lib/offer-timeline.ts`**
+`npx vitest run tests/sample-brief.route.test.ts && grep -q '"sample-brief"' app/routes.ts && grep -q '/sample-brief' app/lib/seo.ts`
 
-- `geoLocaleSegment(url)` — returns the first path segment when it is a `SUPPORTED_COUNTRIES` ISO code (`/sg/` -> `"sg"`, `/fr/` -> `"fr"`), else null.
-- `isCookieBannerOrConsent(text)` — true when the text matches a curated consent/ads-personalization string list (French `"publicités personnalisées"`, `"gérer mes cookies"`, `"manage cookies"`, `"accept all cookies"`, `"privacy settings"`, etc.), case-insensitive substring. Tailored to consent phrases so a "Personalised winter sale" headline or a "Shop Now" CTA still diffs normally.
-- `captureValidityReason(previous, current)` — returns `"geo locale change"` when both canonical URLs carry a known locale segment and they differ; `"cookie banner / consent string"` when the current CTA/headline is a consent string; else null (genuine change diffs normally).
-- `buildOfferLedger` — between run-collapse and diff, computes the validity reason; when non-null, the entry is emitted with `transition: null` and `suppressedReason` set (no phantom change, no fake price `$149 -> —` disappearance). `OfferLedgerEntry` gains optional `suppressedReason`.
+Last lines:
 
-**Phase 6 (follow-on): skip-suppressed diff baseline** — the diff/gate baseline is the last NON-suppressed emitted entry (`lastNonSuppressedEntry`), never the raw last one, so a later same-region capture can never diff against a suppressed placeholder (e.g. a "—" price or consent CTA) and fabricate a "price restored from —" transition. Suppressed states remain emitted as their own labeled dated states; only the baseline skips them.
+```
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
 
-**Render + MCP — `app/components/offer-timeline-ledger.tsx`, `app/lib/offer-timeline-agent-tools.ts`**
+TERMINATION-OK
+```
 
-- Ledger renders `Capture suppressed: <reason>` when `transition` is null and `suppressedReason` is non-null (instead of the misleading "First offer on record.").
-- `OfferHistoryEntryPayload` gains `suppressedReason` and sets `changes: null` for suppressed states, so MCP consumers report the reason instead of fabricated field changes.
-
-**Tests**
-
-- `tests/offer-timeline-geo-variance-phantom.test.ts` — NEW regression gate (fleet-ops#366): (a) real sg+fr Nike pair emits NO offer transition (suppressed with `geo locale change`); (b) genuine same-geo `$149 -> $129` price edit still emits exactly one transition; (c) cookie-banner CTA swap on the SAME geo suppresses with the consent reason; (d) phase 6: sg -> fr(suppressed, "—") -> fr(real "$149") never emits a "price restored from —" transition.
-- `tests/offer-timeline.render.test.tsx` — suppressed entry renders as "Capture suppressed", not "First offer" and not a transition; proof hrefs kept.
-- `tests/offer-timeline-agent-tools.test.ts` — MCP payload surfaces suppressed reason with changes null.
-- `tests/offer-timeline.test.ts`, `tests/offer-timeline.server.test.ts` — green after the shape change (field populated automatically by `buildOfferLedger`).
-
-No D1 migration (pure read-side ledger/diff logic + a test). No DROP COLUMN / DROP TABLE / column rename / NOT NULL.
+Also green: `npm run typecheck` and the affected sitemap/signup-source/public-markdown/customer-claim tests (123 passed).
 
 ## Verification
 
-Real runs, on this branch, after rebase onto origin/main:
+- `npx vitest run --configLoader runner --project node tests/sample-brief.route.test.ts` → 8 passed.
+- `npm run typecheck` → clean.
+- `npx vitest run --configLoader runner --project node tests/customer-claim-surface-registry.test.ts tests/public-markdown.test.ts tests/signup-source.test.ts tests/sitemap.server.test.ts` → 123 passed.
+- Full node suite: 648/649 files passed (1 unrelated flaky timeout in `tests/local-release-server.test.ts`, passes in isolation).
 
-```
-$ npx vitest run --project node tests/offer-timeline-geo-variance-phantom.test.ts
- Test Files  1 passed (1)
-      Tests  4 passed (4)
+run-proof: `npx vitest run --configLoader runner --project node tests/sample-brief.route.test.ts` (8 passed) + `npm run typecheck` (clean) + termination grep checks (routes.ts + seo.ts both OK).
 
-$ npx vitest run --project node tests/offer-timeline.test.ts tests/offer-timeline.render.test.tsx tests/offer-timeline-agent-tools.test.ts tests/offer-timeline.server.test.ts
- Test Files  4 passed (4)
-      Tests  42 passed (42)
+net-positive-because: new public growth page (/sample-brief) with its route, server module, sitemap/llms.txt/signup-source wiring, and a 344-line test file — the diff is product surface, not control-plane machinery.
 
-$ npx vitest run --configLoader runner --project node
- Test Files  618 passed (618)
-      Tests  7368 passed (7368)
+## Review (cursor/cursor-grok-4.6-high)
 
-$ npx vitest run --project workers
- Test Files  39 passed (39)
-      Tests  198 passed (198)
+- **Act on**: extracted only a known-safe metadata allowlist into the digest items (the raw stored metadata can embed `proofTargetIdentity`, which carries the watchlist id) — the whole record is never spread. Hoisted the advertiser-watchlist read out of the per-domain loop so a crawl never issues a full-table scan per candidate. Added `proofTargetIdentity` to the test fixture and assert it never reaches the digest.
+- **Consider**: derived the digest `fullDigestUrl`/`manageFrequencyUrl` from `appBaseUrl(env)` instead of hardcoding `https://0509.io`, so preview/staging links stay on the right origin.
+- **Noted**: the sample brief is honestly thinner than a real customer brief (no change-intelligence summary) — acceptable, no fabrication.
+- **Dismissed**: none.
 
-$ NODE_OPTIONS="--max-old-space-size=8192" npx tsc -b
-(exit 0; default-heap OOM on this large monorepo is resolved with the larger heap)
-```
-
-`run-proof:` the target regression suite `tests/offer-timeline-geo-variance-phantom.test.ts` ran on this branch post-rebase and went 4/4 green; four related offer-timeline suites (42 tests) green; full node project (618 files, 7368 tests) and workers project (39 files, 198 tests) re-ran green; `tsc -b` exits 0 with the larger heap. The regression test FAILS on current main (the pre-gate pair diffs to a phantom Headline/CTA/Price change) and PASSES with the gate — it is the `bin/prove-one-run-check` receipt run.
-
-## Reviewer round (product repo, one round — seat cursor/cursor-grok-4.6-high)
-
-Ran via step 8 before arming (`bin/fleet-review-arm-check` exit 0 → senior seat usable). Reviewer ran `npx vitest run --project node` on the five offer-timeline suites (46/46 green) and assessed the diff vs the issue acceptance.
-
-Adjudicated against `~/.pi/agent/skills/review-adjudication/SKILL.md`:
-
-- **Act on**: none — reviewer reported zero critical and zero warning findings.
-- **Consider** (`"accept all"`/`"reject all"` are bare 2-word substrings with no cookie/consent context, a small genuine-CTA false-positive risk): NOTED, recorded, not re-delegated. The rest of the consent list is phrase-level and generic offer verbs ("Shop Now") are deliberately absent; the two bare phrases carry a minor risk that is within the issue's conservative prefer-never-fabricate scope. Documented in `.fleet/plan.md` as an accepted over-breadth tradeoff.
-- **Consider** (geo-switch suppression permanently deafens the timeline to real new-region changes until the baseline is deliberately re-anchored): NOTED, recorded, not re-delegated. This is the phase-6 codified intended behavior (see `.fleet/plan.md` phase 6); re-anchoring the baseline on region adoption is the deeper fix the issue explicitly calls out of scope. `.fleet/plan.md` risk table records the decision.
-- **Noted** (`geoLocaleSegment` treats any ISO-2 first path segment as a locale, e.g. `/in/`): harmless given the segment must match a real `SUPPORTED_COUNTRIES` code; not covered by tests.
-- **Dismissed-with-reason** (conditional-`suppressedReason`/plain-paragraph render): back-compat call sites must keep compiling; proof hrefs are preserved and the suppressed state is explicit with a reason — exactly acceptance bullet 1.
-- **Acceptance check** — all four bullets PASS.
-
-The two Consider items are deliberate over-breadth tradeoffs of a conservative never-fabricate design, recorded here and in `.fleet/plan.md` as required, and are not re-delegated (manager mode: Consider/Noted are recorded, not acted-on).
-
-## Acceptance
-
-All issue bullets pass post-fix:
-1. Capture-validity gate suppresses geo-locale-differing pairs + consent-CTA pairs as `capture_failed`-style suppressed states with a reason — never a transition.
-2. Price `$149 -> —` disappearance suppressed when the only cause is the geo switch.
-3. Regression test feeds the real sg+fr pair and asserts NO offer transition; a genuine same-geo price edit still emits exactly one transition.
-4. Test fails on current main, passes with the gate.
-
-`Closes #1996`
+Closes #2136
