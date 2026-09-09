@@ -430,7 +430,14 @@ function escapeLike(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
-function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
+/**
+ * Map a raw `landing_page_snapshot` row to the pure ledger input shape. The
+ * canonical row→snapshot mapper used by `loadOfferTimeline`; exported so the
+ * /llms-full.txt full-text feed (issue #2043) can reuse the exact same
+ * artifact-key extraction and proof mapping the /timeline/:domain loader
+ * uses, instead of re-deriving it and risking drift.
+ */
+export function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
   const metadata = parseJson<Record<string, unknown>>(row.metadata_json, {});
   const screenshotKey = readScreenshotKey(metadata);
   const pageTextKey = readPageTextKey(row.artifact_key, metadata);
