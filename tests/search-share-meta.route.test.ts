@@ -27,7 +27,7 @@ describe("/search route meta", () => {
     const ogAlt = head.find((e) => e.property === "og:image:alt");
 
     expect(ogImage?.content).toBe(
-      "https://0509.io/social-card/ads/nykaa.com.svg?n=Nykaa",
+      "https://0509.io/social-card/ads/nykaa.com.png?n=Nykaa",
     );
     expect(ogTitle?.content).toContain("Nykaa Meta ads");
     expect(ogDescription?.content).toContain("Nykaa");
