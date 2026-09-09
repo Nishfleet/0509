@@ -99,7 +99,11 @@ describe("BET 8 switch pages", () => {
     expect(markup).toContain("What transfers.");
     expect(markup).toContain("What does not transfer.");
     expect(markup).toContain('href="/search?q=');
-    expect(markup).toContain(`href="/search?q=${page.ctaBrand}"`);
+    // Issue 2123: the CTA searches the tracked demo competitor, not the
+    // vendor domain (magicbrief.com / visualping.io render "0 ads found").
+    // MagicBrief keeps its vendor-domain CTA until issue 2127 wipes it.
+    const previewQuery = page.previewSearchDomain ?? page.ctaBrand;
+    expect(markup).toContain(`href="/search?q=${previewQuery}"`);
     expect((markup.match(/href="\/search\?q=/g) ?? []).length).toBe(1);
     expect(markup).toMatch(/no demo form/i);
     expect(markup).not.toContain("source=magicbrief-migration");

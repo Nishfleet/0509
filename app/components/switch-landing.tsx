@@ -160,7 +160,10 @@ function SwitchClose({ page }: { page: SwitchPage }) {
           No demo form, no email gate. Try the public search preview and see what is publicly
           available before you decide anything.
         </p>
-        <Link className="ld-cta-button" to={`/search?q=${encodeURIComponent(page.ctaBrand)}`}>
+        <Link
+          className="ld-cta-button"
+          to={`/search?q=${encodeURIComponent(page.previewSearchDomain ?? page.ctaBrand)}`}
+        >
           Try the free preview <span aria-hidden="true">→</span>
         </Link>
       </section>

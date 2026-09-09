@@ -19,6 +19,7 @@ import {
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
+import { FREE_PREVIEW_SEARCH_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import foreplaySpyderCitations from "~/data/compare/foreplay-spyder-citations.json";
 
@@ -155,6 +156,7 @@ export default function CompareForeplaySpyderRoute() {
           <input
             aria-label="Competitor website"
             name="website"
+            defaultValue={FREE_PREVIEW_SEARCH_DOMAIN}
             placeholder="paste-a-competitor-website.com…"
             type="text"
             inputMode="url"
@@ -221,7 +223,8 @@ export default function CompareForeplaySpyderRoute() {
           Start with the free preview <span aria-hidden="true">→</span>
         </h2>
         <p className="ld-pricing-note">
-          Paste a competitor website into the <Link to="/search">search preview</Link> — no account
+          Paste a competitor website into the{" "}
+          <Link to={`/search?website=${FREE_PREVIEW_SEARCH_DOMAIN}`}>search preview</Link> — no account
           needed. Also see <Link to="/compare/panoramata">Five to Nine vs Panoramata</Link>.
           Questions? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
         </p>
