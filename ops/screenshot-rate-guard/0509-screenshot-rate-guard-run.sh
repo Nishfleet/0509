@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Scheduled runner for the proof screenshot-rate regression guard
-# (issues #1327, #1747, #1876).
+# (issues #1327, #1747, #1876, #2082).
 #
 # Runs on the fleet VPS under a systemd timer (0509-screenshot-rate-guard.timer)
 # outside GitHub Actions, following the 0509-liveness pattern. Unlike the
@@ -18,6 +18,14 @@
 #                 (issue #1876 acceptance 4: a canary that asserts the 48h
 #                 screenshot rate >= 90% on a paid-tier watchlist cohort).
 #
+# A third check (issue #2082) runs the screenshot-reasons canary, which reads
+# the recorded screenshot-failure / skip reasons off proof_capture and reports
+# the top reasons with counts. It fails (exit 1) when a capture produced no
+# screenshot AND carries no recorded reason — a silent degradation the #2082
+# acceptance forbids — so the dominant reason (e.g. the structural
+# launch-canary stripping) is surfaced rather than the aggregate rate silently
+# degrading.
+#
 # On a failed verdict (rate < threshold with a sufficient sample) a cohort's
 # canary exits 1 AND auto-files a GitHub issue carrying the rate, the sample
 # size, and the capture-path code link, using the ambient `gh` auth /
@@ -31,14 +39,15 @@
 # is populated by a deploy and paid-tier captures flow; the SKIP is reported
 # every run so the empty window cannot silently mask a regression.
 #
-# Exit code: the WORST of the two cohorts — exit 2 if either canary could not
-# run, exit 1 if either verdict failed, else exit 0.
+# Exit code: the WORST of the checks — exit 2 if a canary could not run,
+# exit 1 if any verdict failed, else exit 0.
 
 set -euo pipefail
 
 readonly CHECKOUT="${SCREENSHOT_GUARD_CHECKOUT:-/home/nish/workspaces/products/0509}"
 readonly CF_TOKEN_FILE="${SCREENSHOT_GUARD_TOKEN_FILE:-/home/nish/.config/cloudflare/deploy-ci.env}"
 readonly CANARY="${CHECKOUT}/scripts/canary-proof-screenshot-rate.mjs"
+readonly REASONS_CANARY="${CHECKOUT}/scripts/canary-proof-screenshot-reasons.mjs"
 
 fail() {
   printf 'screenshot-rate-guard: %s\n' "$*" >&2
@@ -46,6 +55,7 @@ fail() {
 }
 
 [[ -f "${CHECKOUT}/scripts/canary-proof-screenshot-rate.mjs" ]] || fail "canary not found at ${CANARY}"
+[[ -f "${CHECKOUT}/scripts/canary-proof-screenshot-reasons.mjs" ]] || fail "reasons canary not found at ${REASONS_CANARY}"
 [[ -f "${CF_TOKEN_FILE}" ]] || fail "sanctioned CF token file missing: ${CF_TOKEN_FILE}"
 
 # Source the sanctioned Cloudflare token so `wrangler d1 execute --remote` can
@@ -72,7 +82,7 @@ run_cohort() {
   return "${code}"
 }
 
-# Worst-of-two: 2 (could-not-run) beats 1 (regression) beats 0 (pass/skip).
+# Worst-of-N: 2 (could-not-run) beats 1 (regression) beats 0 (pass/skip).
 # Each `run_cohort ... || code=$?` captures the canary exit code without
 # aborting under `set -e`; a 0 exit leaves the code at its init value.
 worst=0
@@ -81,6 +91,19 @@ paid_code=0
 run_cohort "paid-tier" --cohort paid-tier --threshold 90 --file-issue || paid_code=$?
 if [[ "${paid_code}" -gt "${worst}" ]]; then
   worst="${paid_code}"
+fi
+
+# Issue #2082: surface the dominant screenshot-failure/skip reasons so a low
+# screenshot-carrying rate is never silent. Runs every tick on the same 48h
+# window as the rate cohorts.
+printf '\n=== screenshot-rate-guard: reasons cohort ===\n'
+set +e
+node scripts/canary-proof-screenshot-reasons.mjs
+reasons_code=$?
+set -e
+printf '=== reasons cohort exit: %d ===\n' "${reasons_code}"
+if [[ "${reasons_code}" -gt "${worst}" ]]; then
+  worst="${reasons_code}"
 fi
 
 exit "${worst}"
