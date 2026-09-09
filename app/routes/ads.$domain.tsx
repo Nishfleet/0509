@@ -647,7 +647,7 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
  * Freshness/Persistence), the visible "Last checked …" stamp and the
  * scheduled-scan cadence (Scout every 6h, Starter/Agency every 3h), the
  * verified-link vs matching-only distinction the page already labels, and
- * the "Watch {domain}" CTA. The brand name and domain are interpolated from
+ * the "Track {domain}" CTA. The brand name and domain are interpolated from
  * the loader so each /ads/:domain page ships its own brand-specific FAQ.
  *
  * Returns null when the page has no cached ads or no verified-link evidence
@@ -678,7 +678,7 @@ export function brandPageFaqEntries(data: BrandPageLoaderData): ReadonlyArray<Fa
     },
     {
       question: `Can I get an email when ${brandName}'s ads or offer change?`,
-      answer: `Yes. The "Watch ${domain} — free" button on this page starts a free account, and the first scan runs the moment you land. After that, every ad, offer, CTA, and form change hits your inbox with a screenshot when the capture includes one, the page text, and the source link. Quiet periods still send a heartbeat so silence always means we looked.`,
+      answer: `Yes. The "Track ${domain} — free" button on this page starts a free account, and the first scan runs the moment you land. After that, every ad, offer, CTA, and form change hits your inbox with a screenshot when the capture includes one, the page text, and the source link. Quiet periods still send a heartbeat so silence always means we looked.`,
     },
   ];
 }
@@ -748,6 +748,12 @@ export default function BrandAdsRoute() {
   const liveSearchPath = `/search?website=${encodeURIComponent(data.domain)}`;
   const postSignupPath = `/app?website=${encodeURIComponent(data.domain)}#setup-checklist`;
   const signupPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
+  // Issue #2051 — the primary acquisition CTA deep-links into signup with the
+  // viewed competitor prefilled (`?competitor=<domain>`), so the SEO landing
+  // page carries the brand the visitor just read about straight into
+  // onboarding. `redirectTo` keeps the existing `website=` prefill wiring so
+  // the first thing the new user tracks is the brand on this page.
+  const trackSignupPath = `/auth/signup?competitor=${encodeURIComponent(data.domain)}&redirectTo=${encodeURIComponent(postSignupPath)}`;
   const allBrandOwned =
     data.ads.length > 0 && data.brandOwnedAdCount === data.ads.length;
 
@@ -763,7 +769,7 @@ export default function BrandAdsRoute() {
        * best and a freshness lie at worst. Every field mirrors the visible
        * page: the meta title/description, the canonical URL, the on-screen
        * "Last checked" stamp (dateModified), the brand the page is about,
-       * the Watch {domain} offer with Five to Nine as the provider, the
+       * the Track {domain} offer with Five to Nine as the provider, the
        * breadcrumb trail rendered as the visible nav (issue #1418), and the
        * brand-specific FAQ rendered from the same array further down the
        * page.
@@ -828,7 +834,12 @@ export default function BrandAdsRoute() {
       <MarketingNav />
 
       {data.hasCachedAds ? (
-        <BrandAdsResults data={data} liveSearchPath={liveSearchPath} signupPath={signupPath} />
+        <BrandAdsResults
+          data={data}
+          liveSearchPath={liveSearchPath}
+          signupPath={signupPath}
+          trackSignupPath={trackSignupPath}
+        />
       ) : (
         <BrandAdsShell data={data} liveSearchPath={liveSearchPath} signupPath={signupPath} />
       )}
@@ -1090,17 +1101,19 @@ function BrandAdsResults({
   data,
   liveSearchPath,
   signupPath,
+  trackSignupPath,
 }: {
   data: BrandPageLoaderData;
   liveSearchPath: string;
   signupPath: string;
+  trackSignupPath: string;
 }) {
   const teaser = data.teaser;
   // The wall always shows every cached creative; attribution analytics above
   // it speak only about the verified-linked subset (see the loader).
   const totalCount = data.ads.length;
   const adWord = totalCount === 1 ? "ad" : "ads";
-  const watchLabel = `Watch ${data.domain}`;
+  const watchLabel = `Track ${data.domain}`;
   const allBrandOwned = totalCount > 0 && data.brandOwnedAdCount === totalCount;
   // Wall title: when the wall mixes verified-link and search-only creatives,
   // report BOTH counts so the header is honest in the same breath the cards
@@ -1174,7 +1187,7 @@ function BrandAdsResults({
           <div className="f9-ads-watch-strip">
             <div className="f9-ads-watch-copy">
               <h2>
-                {"Watch "}
+                {"Track "}
                 <span className="f9-ads-watch-g">{data.domain}</span>
                 {" — free"}
               </h2>
@@ -1183,7 +1196,14 @@ function BrandAdsResults({
                 CTA and form change hits your inbox with a screenshot when the capture includes one, the page text, and the link.
               </p>
             </div>
-            <Link className="f9-ads-watch-btn" to={signupPath}>
+            {/* Issue #2051: the primary CTA carries the viewed brand into
+                signup via ?competitor=<domain> (the onboarding prefill rides
+                in redirectTo as ?website=<domain>). */}
+            <Link
+              className="f9-ads-watch-btn"
+              data-testid="ads-track-cta"
+              to={trackSignupPath}
+            >
               {`${watchLabel} →`}
             </Link>
           </div>
@@ -1292,7 +1312,7 @@ function BrandAdsResults({
           so the visible copy can never drift from the structured data. Every
           answer is grounded in content the page already shows (the Ad
           Aggression Score card, the "Last checked" stamp, the verified-link
-          labels, the Watch CTA). Hidden on noindex pages and the cache-miss
+          labels, the Track CTA). Hidden on noindex pages and the cache-miss
           shell, which 301-redirects and never reaches this component. */}
       {(() => {
         const faq = data.noindex ? null : brandPageFaqEntries(data);
@@ -1345,7 +1365,10 @@ function BrandAdsResults({
             <span className="f9-ads-hl">Be the first to know.</span>
           </h2>
           <div className="f9-ads-closer-cta">
-            <Link className="f9-ads-watch-btn" to={signupPath}>
+            {/* Issue #2051: the closer carries the same competitor prefill
+                href as the hero CTA — identical labels must behave
+                identically (judge finding, PR #2063). */}
+            <Link className="f9-ads-watch-btn" to={trackSignupPath}>
               {`${watchLabel} →`}
             </Link>
             <Link className="f9-ads-ghost" to={liveSearchPath}>

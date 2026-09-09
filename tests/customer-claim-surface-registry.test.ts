@@ -22,6 +22,7 @@ import {
   PLAN_FEATURES,
 } from "~/lib/plan-entitlements";
 import { PRESENCE_SOURCE_IDS } from "~/lib/presence-types";
+import { pricingPlans } from "~/lib/pricing";
 import { PUBLIC_MARKDOWN_PATHS } from "~/lib/public-markdown";
 import { SITEMAP_PATHS, NOINDEX_ACTION_SURFACES } from "~/lib/seo";
 
@@ -31,6 +32,13 @@ type RegistryEntry = {
   source: string[];
   status?: string;
   [key: string]: unknown;
+};
+
+type RegistryAuditRow = {
+  claimId: string;
+  sentence: string;
+  verified: boolean;
+  advertisedCopy?: string[];
 };
 
 type ClaimContext = {
@@ -56,6 +64,7 @@ const registry = JSON.parse(
   coverage: Array<{ surface: string; status: string }>;
   claims: RegistryEntry[];
   explicitExclusions: RegistryEntry[];
+  rows: RegistryAuditRow[];
 };
 
 const repoRoot = resolve(".");
@@ -576,12 +585,11 @@ describe("G11 claim-surface registry", () => {
   });
 
   it("does not sell a populated landing-page history unless the timeline route is live", () => {
-    // BET 10 / issue #1265: the unqualified sentence "Landing-page change
-    // history with screenshots" promises a history a visitor cannot open while
-    // /timeline/:domain is not a real public route. This lock is the detector:
-    // the unqualified sentence is tolerated ONLY while a timeline route is
-    // registered in the route table (the surface that would make it true —
-    // #974 / #1240). Regression of either side fails the run.
+    // BET 10 / issue #1265 + #2055: the unqualified sentence "Landing-page
+    // change history with screenshots" oversells a surface that is reachable
+    // for only a baseline subset of tracked brands (#2021). The scoped label
+    // is the detector: Starter/Agency may advertise history only on tracked
+    // brands that already have a baseline.
     const pricingSource = readRegistrySource("app/lib/pricing.ts");
     const routesSource = readRegistrySource("app/routes.ts");
     const unqualified = "Landing-page change history with screenshots";
@@ -589,9 +597,40 @@ describe("G11 claim-surface registry", () => {
     const claimsUnqualifiedHistory = pricingSource.includes(unqualified);
     // If pricing carries the unqualified promise, the timeline route must exist.
     expect(claimsUnqualifiedHistory && !hasTimelineRoute).toBe(false);
-    // The honest, forward-looking label is what Starter/Agency present today.
-    expect(pricingSource).toContain(
+    expect(pricingSource).not.toContain(
       "Landing-page change history as scheduled watches complete",
     );
+    expect(pricingSource).toContain(
+      "Landing-page change history on tracked brands with a baseline",
+    );
+  });
+
+  it("resolves every advertised pricing feature string to a verified registry row (issue #2055)", () => {
+    const rows = registry.rows;
+    expect(Array.isArray(rows) && rows.length > 0).toBe(true);
+
+    const verifiedCopy = new Set<string>();
+    for (const row of rows) {
+      if (row.verified !== true) continue;
+      if (typeof row.sentence === "string" && row.sentence.trim()) {
+        verifiedCopy.add(row.sentence);
+      }
+      for (const copy of row.advertisedCopy ?? []) {
+        if (typeof copy === "string" && copy.trim()) verifiedCopy.add(copy);
+      }
+    }
+
+    const advertised = [...new Set(pricingPlans().flatMap((plan) => plan.features))];
+    expect(advertised.length).toBeGreaterThan(0);
+
+    for (const feature of advertised) {
+      const resolved = verifiedCopy.has(feature) || [...verifiedCopy].some((text) => text.includes(feature));
+      expect(resolved, `unverified advertised feature: ${JSON.stringify(feature)}`).toBe(true);
+    }
+
+    const bulletRow = rows.find((row) => row.claimId === "AUDIT-PRICING-FEATURE-BULLETS");
+    expect(bulletRow, "AUDIT-PRICING-FEATURE-BULLETS registry row").toBeTruthy();
+    expect(bulletRow!.verified).toBe(true);
+    expect(new Set(bulletRow!.advertisedCopy ?? [])).toEqual(new Set(advertised));
   });
 });

@@ -139,11 +139,12 @@ describe("canary.sneaker-resale-recall", () => {
   });
 
   it("evaluateSneakerResaleRecall surfaces (does not fail) known identity-gap brands", () => {
-    // goat.com / on.com / reebok.com are classified as identity-resolution
-    // gaps (major advertisers whose ads the pipeline does not yet connect to
-    // their domain). The canary reports them with their tracking issue rather
-    // than hard-failing the guard, mirroring search-tier-canary's alias-gap
-    // handling.
+    // goat.com / on.com / reebok.com (issue #1950), zappos.com (issue
+    // #2059) and footlocker.com (issue #2068) are classified as
+    // identity-resolution gaps (major advertisers whose ads the pipeline does
+    // not yet connect to their domain). The canary reports them with their
+    // tracking issue rather than hard-failing the guard, mirroring
+    // search-tier-canary's alias-gap handling.
     const results = loadSneakerResaleDomains().map((entry) => ({
       domain: entry.domain,
       brand: entry.brand,
@@ -159,13 +160,74 @@ describe("canary.sneaker-resale-recall", () => {
     expect(verdict.pass).toBe(true);
     expect(verdict.failures).toEqual([]);
     expect(verdict.identityGaps.map((g) => g.probe.domain).sort()).toEqual([
+      "footlocker.com",
       "goat.com",
       "on.com",
       "reebok.com",
+      "zappos.com",
     ]);
     for (const { probe, issue } of verdict.identityGaps) {
       expect(KNOWN_IDENTITY_GAPS.get(probe.domain)).toBe(issue);
     }
+  });
+
+  it("evaluateSneakerResaleRecall surfaces zappos.com as an identity gap on its exact live settled shape", () => {
+    // Live evidence 2026-09-09 ~04:45 IST (issue #2059): 13 VERIFIED ads exist
+    // under /search?q=zappos.com (11 linking www.zappos.com), but the
+    // website=zappos.com apex probe returns a SETTLED empty page — headline
+    // "No verified ads found for zappos.com", isWarming false — so the #2037
+    // warming carve-out does not apply. The gap is surfaced (not failed) with
+    // its tracking issue and auto-drops when the IDENTITY_OVERRIDES fix lands.
+    const results = loadSneakerResaleDomains().map((entry) => ({
+      domain: entry.domain,
+      brand: entry.brand,
+      status: 200,
+      rowCount: entry.domain === "zappos.com" ? 0 : 2,
+      tierCounts:
+        entry.domain === "zappos.com"
+          ? { verified: 0, likely: 0, unmatched: 0 }
+          : { verified: 2, likely: 0, unmatched: 0 },
+      headline:
+        entry.domain === "zappos.com"
+          ? "No verified ads found for zappos.com"
+          : "2 verified ads linked to the brand",
+      isWarming: false,
+    }));
+    const verdict = evaluateSneakerResaleRecall(results);
+    expect(verdict.failures.map((p) => p.domain)).toEqual([]);
+    const zapposGap = verdict.identityGaps.find((g) => g.probe.domain === "zappos.com");
+    expect(zapposGap).toBeDefined();
+    expect(zapposGap?.issue).toBe("Nishfleet/0509#2059");
+  });
+
+  it("evaluateSneakerResaleRecall surfaces footlocker.com as an identity gap on its exact live settled shape", () => {
+    // Live evidence 2026-09-09 ~05:45 IST (issue #2068): 16 VERIFIED ads exist
+    // under /search?q=footlocker.com (landings linking www.footlocker.com plus
+    // regional hosts), but the website=footlocker.com apex probe returns a
+    // SETTLED empty page — headline "No verified ads found", isWarming false —
+    // so the #2037 warming carve-out does not apply. The gap is surfaced (not
+    // failed) with its tracking issue and auto-drops when the
+    // IDENTITY_OVERRIDES fix lands.
+    const results = loadSneakerResaleDomains().map((entry) => ({
+      domain: entry.domain,
+      brand: entry.brand,
+      status: 200,
+      rowCount: entry.domain === "footlocker.com" ? 0 : 2,
+      tierCounts:
+        entry.domain === "footlocker.com"
+          ? { verified: 0, likely: 0, unmatched: 0 }
+          : { verified: 2, likely: 0, unmatched: 0 },
+      headline:
+        entry.domain === "footlocker.com"
+          ? "No verified ads found for footlocker.com"
+          : "2 verified ads linked to the brand",
+      isWarming: false,
+    }));
+    const verdict = evaluateSneakerResaleRecall(results);
+    expect(verdict.failures.map((p) => p.domain)).toEqual([]);
+    const footlockerGap = verdict.identityGaps.find((g) => g.probe.domain === "footlocker.com");
+    expect(footlockerGap).toBeDefined();
+    expect(footlockerGap?.issue).toBe("Nishfleet/0509#2068");
   });
 
   it("runCanary fails when an unknown domain dead-ends", async () => {
@@ -230,8 +292,13 @@ describe("canary.sneaker-resale-recall", () => {
   });
 
   it("evaluateSneakerResaleRecall still fails a settled non-warming 0-row dead-end alongside a warming domain", () => {
+    // finishline.com stands in for a coverage-bearing brand with NO known-gap
+    // classification — a settled non-warming 0-row page must still fail loud.
+    // (footlocker.com was this fixture until it live-evidenced as a known
+    // identity gap, issue #2068 — a settled dead-end there is now surfaced,
+    // not failed; see the footlocker exact-live-shape test above.)
     const results = loadSneakerResaleDomains().map((entry) =>
-      entry.domain === "footlocker.com"
+      entry.domain === "finishline.com"
         ? {
             domain: entry.domain,
             brand: entry.brand,
@@ -263,7 +330,7 @@ describe("canary.sneaker-resale-recall", () => {
     );
     const verdict = evaluateSneakerResaleRecall(results);
     expect(verdict.pass).toBe(false);
-    expect(verdict.failures.map((p) => p.domain)).toEqual(["footlocker.com"]);
+    expect(verdict.failures.map((p) => p.domain)).toEqual(["finishline.com"]);
     expect(verdict.warming.map((p) => p.domain)).toEqual(["puma.com"]);
   });
 

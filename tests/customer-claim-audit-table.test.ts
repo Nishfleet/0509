@@ -173,8 +173,9 @@ describe("BET 10 claim-by-claim audit table", () => {
     const history = audit.claims.find((c) => c.claimId === "AUDIT-LANDING-PAGE-CHANGE-HISTORY");
     expect(history).toBeTruthy();
     expect(history!.currentResult).toBe("pass");
-    expect(history!.text).toMatch(/as scheduled watches complete/iu);
+    expect(history!.text).toMatch(/on tracked brands with a baseline/iu);
     expect(history!.text).not.toMatch(/with screenshots/iu);
+    expect(history!.text).not.toMatch(/as scheduled watches complete/iu);
 
     // Sample 7: AUDIT-FUNNEL-MEASUREMENT — the Nish-reserved claim.
     const funnel = audit.claims.find((c) => c.claimId === "AUDIT-FUNNEL-MEASUREMENT");
@@ -207,6 +208,7 @@ describe("BET 10 claim-by-claim audit table", () => {
     // The two data-outruns-copy claims from the issue evidence must be present.
     expect(audit.claims.some((c) => c.claimId === "AUDIT-SAVES-SCREENSHOTS")).toBe(true);
     expect(audit.claims.some((c) => c.claimId === "AUDIT-LANDING-PAGE-CHANGE-HISTORY")).toBe(true);
+    expect(audit.claims.some((c) => c.claimId === "AUDIT-PRICING-FEATURE-BULLETS")).toBe(true);
   });
 
   it("every non-Nish-reserved claim currently passes", () => {
@@ -250,8 +252,9 @@ describe("BET 10 claim-by-claim audit table", () => {
 
     const starter = pricingPlans().find((plan) => plan.slug === "starter");
     expect(starter).toBeTruthy();
-    expect(starter!.features).toContain("Landing-page change history as scheduled watches complete");
+    expect(starter!.features).toContain("Landing-page change history on tracked brands with a baseline");
     expect(starter!.features).not.toContain("Landing-page change history with screenshots");
+    expect(starter!.features).not.toContain("Landing-page change history as scheduled watches complete");
   });
 
   it("ga-positioning header carries no release verdict and points at the scorecard", () => {

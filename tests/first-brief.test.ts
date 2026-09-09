@@ -13,6 +13,7 @@ import {
   marketDeskItemsFromFirstBrief,
   resolveEvidenceUrl,
   shouldEnsureFirstBrief,
+  watchlistDomainForExistingHistory,
 } from "~/lib/first-brief";
 
 const event = {
@@ -125,7 +126,7 @@ describe("first brief helpers", () => {
     );
   });
 
-  it("only catch-up files after a scan finishes and no evidence brief exists", () => {
+  it("catch-up files when an active watchlist has no evidence brief yet", () => {
     expect(
       shouldEnsureFirstBrief({
         watchlists: [{ isActive: true, lastScannedAt: "2026-08-26T10:00:00.000Z" }],
@@ -137,7 +138,7 @@ describe("first brief helpers", () => {
         watchlists: [{ isActive: true, lastScannedAt: null }],
         digests: [],
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldEnsureFirstBrief({
         watchlists: [{ isActive: false, lastScannedAt: "2026-08-26T10:00:00.000Z" }],
@@ -168,5 +169,25 @@ describe("first brief helpers", () => {
         ],
       }),
     ).toBe(false);
+  });
+
+  it("reads the competitor host from a website watchlist target", () => {
+    expect(
+      watchlistDomainForExistingHistory({
+        targetId: "https://www.nike.com/in",
+        targetLabel: "Nike",
+      }),
+    ).toBe("nike.com");
+    expect(
+      watchlistDomainForExistingHistory({
+        targetId: "saved-query-1",
+        targetLabel: "running shoes",
+      }),
+    ).toBeNull();
+    expect(
+      watchlistDomainForExistingHistory({
+        targetLabel: "Pending Labs",
+      }),
+    ).toBeNull();
   });
 });

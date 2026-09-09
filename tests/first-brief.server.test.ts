@@ -12,6 +12,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/delivery.server");
   vi.doUnmock("~/lib/cron-failure-alert.server");
+  vi.doUnmock("~/lib/brand-page.server");
 });
 
 function watchlist(overrides: Partial<WatchlistRecord> = {}): WatchlistRecord {
@@ -293,5 +294,109 @@ describe("ensureFirstBriefForWorkspace", () => {
     expect(result.reason).toBe("filed");
     expect(result.delivered).toBe(true);
     expect(listWatchEventsForRun).toHaveBeenCalledWith(expect.anything(), "watch-1", "run-1");
+  });
+
+  it("files from cached ads when the live activation scan has not finished", async () => {
+    const createWatchlistRun = vi.fn().mockResolvedValue("history-run-1");
+    const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
+    const upsertAd = vi.fn().mockResolvedValue(undefined);
+    const createAdObservation = vi.fn().mockResolvedValue("obs-1");
+    const createWatchEvent = vi.fn().mockResolvedValue("event-history-1");
+    const createDigestRun = vi.fn().mockResolvedValue({
+      digestRunId: "digest-1",
+      created: true,
+    });
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+      attempts: 1,
+      details: [{ status: "sent" }],
+    });
+    const cachedAd = {
+      metaAdId: "ad-1",
+      advertiser: "Nike",
+      body: "body",
+      previewHeadline: "Just Do It",
+      previewSubhead: "",
+      hook: "hook",
+      offer: "30% off",
+      cta: "Shop now",
+      format: "image",
+      languageLabel: "en",
+      destinationType: "website",
+      landingPageUrl: LANDING,
+      adSnapshotUrl: SNAPSHOT,
+      countries: [],
+      platforms: [],
+      firstSeenAt: "2026-09-01T00:00:00.000Z",
+      lastSeenAt: "2026-09-08T00:00:00.000Z",
+      active: true,
+      researchSummary: "",
+      source: "meta",
+      analysisFields: [],
+      domainMatch: { level: "verified_advertiser_domain", reason: "own", matchedDomain: "glowkart.example" },
+    };
+
+    vi.doMock("~/lib/brand-page.server", () => ({
+      loadBrandPageCacheSnapshot: vi.fn().mockResolvedValue({
+        ads: [cachedAd],
+        fetchedAt: "2026-09-08T00:00:00.000Z",
+        country: "all",
+        ageMs: 60_000,
+        freshForIndexing: true,
+        freshForLiveClaim: false,
+      }),
+      brandOwnedAdIdSet: vi.fn().mockReturnValue(new Set(["ad-1"])),
+      adHasVerifiedDomainLink: vi.fn().mockReturnValue(true),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listWatchlists: vi.fn().mockResolvedValue([
+        watchlist({ lastScannedAt: null, targetId: "https://glowkart.example" }),
+      ]),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue(verifiedOwner()),
+      createWatchlistRun,
+      finishWatchlistRun,
+      upsertAd,
+      createAdObservation,
+      createWatchEvent,
+      listWatchEventsForRun: vi.fn().mockResolvedValue([
+        event({
+          id: "event-history-1",
+          runId: "history-run-1",
+          metadata: { kind: "baseline", adsSeen: 1, sourceUrl: SNAPSHOT, adId: "ad-1" },
+        }),
+      ]),
+      listObservationsForRun: vi.fn().mockResolvedValue([
+        { ad_id: "ad-1", landing_page_url: LANDING },
+      ]),
+      createDigestRun,
+      getDigest: vi.fn().mockResolvedValue(filedDigest()),
+      listDigests: vi.fn().mockResolvedValue([]),
+      listAdsByIds: vi.fn().mockResolvedValue([
+        { metaAdId: "ad-1", landingPageUrl: LANDING, adSnapshotUrl: SNAPSHOT },
+      ]),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest,
+    }));
+    vi.doMock("~/lib/cron-failure-alert.server", () => ({
+      reportScheduledTaskFailure: vi.fn(),
+    }));
+
+    const { ensureFirstBriefForWorkspace } = await import(
+      "~/lib/first-brief.server"
+    );
+    const result = await ensureFirstBriefForWorkspace({} as never, "user-1");
+
+    expect(result.reason).toBe("filed");
+    expect(result.delivered).toBe(true);
+    expect(createWatchlistRun).toHaveBeenCalled();
+    expect(finishWatchlistRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "history-run-1",
+      expect.objectContaining({ status: "skipped" }),
+    );
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ firstBrief: true }),
+    );
   });
 });

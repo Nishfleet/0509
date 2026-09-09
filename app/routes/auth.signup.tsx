@@ -30,7 +30,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
-  const redirectTo = safeRedirectPath(url.searchParams.get("redirectTo"), "/app#setup-checklist");
+  let redirectTo = safeRedirectPath(url.searchParams.get("redirectTo"), "/app#setup-checklist");
+
+  // Issue #2051 — the /ads/:domain "Track <domain>" CTA (and any other entry
+  // point) may deep-link into signup with the viewed competitor prefilled as
+  // bare `?competitor=<domain>`. When no explicit redirectTo is given, honor
+  // the prefill by sending the new user straight into the setup checklist
+  // with the brand as the first thing they track (the dashboard's existing
+  // `?website=` prefill param).
+  const competitor = url.searchParams.get("competitor")?.trim();
+  if (competitor && !url.searchParams.get("redirectTo")) {
+    redirectTo = `/app?website=${encodeURIComponent(competitor)}#setup-checklist`;
+  }
 
   if (session) {
     throw redirect(redirectTo);
