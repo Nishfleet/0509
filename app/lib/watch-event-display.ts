@@ -30,3 +30,25 @@ export function formatWatchEventTypeLabel(eventType: string): string {
 
 	return humanized.charAt(0).toUpperCase() + humanized.slice(1);
 }
+
+/**
+ * Customer-facing label for the field that changed on a website page
+ * (`website_page_changed`). The stored metadata.field token (visibleText /
+ * offerPrice / cta) is pipeline language and must never render on a customer
+ * surface — this is the single vocabulary for it, shared by the watchlist diff
+ * field label, the emission summary, and the digest/alert copy.
+ */
+const WEBSITE_PAGE_CHANGED_FIELD_LABELS: Record<string, string> = {
+	visibleText: "Visible text",
+	offerPrice: "Offer / price",
+	cta: "Call to action",
+};
+
+export function websitePageChangedFieldLabel(
+	field: string | null | undefined,
+): string {
+	if (field && WEBSITE_PAGE_CHANGED_FIELD_LABELS[field]) {
+		return WEBSITE_PAGE_CHANGED_FIELD_LABELS[field];
+	}
+	return "Page content";
+}

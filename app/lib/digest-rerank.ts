@@ -15,8 +15,22 @@ export const LANDING_PAGE_HEADLINE_EVENT_TYPES = [
 
 export const AD_CHURN_EVENT_TYPES = ["ad_new", "ad_inactive"] as const;
 
+/**
+ * Full-Site Watch website page events. These are decision candidates (they
+ * rank in the digest's `other` stream and, once importance-gated, can fire an
+ * instant alert) but they are NOT landing-page headline types and NOT ad
+ * churn — they carry no why-this-matters type weight, so their score is the
+ * raw importance component.
+ */
+export const WEBSITE_PAGE_EVENT_TYPES = [
+	"website_page_added",
+	"website_page_removed",
+	"website_page_changed",
+] as const;
+
 const HEADLINE_TYPE_SET = new Set<string>(LANDING_PAGE_HEADLINE_EVENT_TYPES);
 const AD_CHURN_SET = new Set<string>(AD_CHURN_EVENT_TYPES);
+const WEBSITE_PAGE_SET = new Set<string>(WEBSITE_PAGE_EVENT_TYPES);
 
 // Offer/price > CTA > destination > headline > form. Within a type, the
 // existing priorityScore (importance) breaks ties so a proof-backed high-
@@ -94,6 +108,13 @@ export function isAdChurnEventType(eventType?: string): eventType is WatchEventT
 
 export function isLandingPageHeadlineEventType(eventType?: string): eventType is WatchEventType {
   return !!eventType && HEADLINE_TYPE_SET.has(eventType);
+}
+
+/** True for the three website_page_* event types. */
+export function isWebsitePageEventType(
+  eventType?: string,
+): eventType is WatchEventType {
+  return !!eventType && WEBSITE_PAGE_SET.has(eventType);
 }
 
 function stableKey(item: DigestRerankItem, index: number): string {

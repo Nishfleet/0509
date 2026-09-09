@@ -233,9 +233,10 @@ describe("BET 1 digest re-ranking (issue 1483)", () => {
     });
     expect(formBelow.instantEligible).toBe(false);
 
-    // Not an instant-alert class: website_page_* never fires one, even at max
-    // importance in the most aggressive mode.
-    const siteChange = evaluateDeliveryPolicy({
+    // website_page_* events ARE an instant-alert class (issue #1384): a
+    // confirmed page change above the mode gate fires an alert, like a landing
+    // change. Below the gate it stays quiet.
+    const siteChangeAbove = evaluateDeliveryPolicy({
       lane: "customer",
       event: watchEvent({
         eventType: "website_page_changed",
@@ -249,7 +250,20 @@ describe("BET 1 digest re-ranking (issue 1483)", () => {
       watchlistConfig: null,
       now: "2026-07-13T12:00:00.000Z",
     });
-    expect(siteChange.instantEligible).toBe(false);
+    expect(siteChangeAbove.instantEligible).toBe(true);
+
+    const siteChangeBelow = evaluateDeliveryPolicy({
+      lane: "customer",
+      event: watchEvent({
+        eventType: "website_page_changed",
+        status: "confirmed",
+        importanceScore: 40,
+      }),
+      workspaceConfig,
+      watchlistConfig: null,
+      now: "2026-07-13T12:00:00.000Z",
+    });
+    expect(siteChangeBelow.instantEligible).toBe(false);
   });
 
   it("gates instant alerts on the same why-this-matters score that ranks the brief", () => {
@@ -262,12 +276,13 @@ describe("BET 1 digest re-ranking (issue 1483)", () => {
     expect(score >= landingPageTypeWeight(eventType) + 75).toBe(true);
     expect(score >= landingPageTypeWeight(eventType) + 90).toBe(false);
 
-    // Non-landing event types carry no weight: the score is the raw
-    // importance — the exclusion is the deliver rule's allowlist, which
-    // treats every non-landing type as Infinity-threshold (never instant).
+    // Non-headline event types carry no weight: the score is the raw
+    // importance. website_page_* is its own instant-alert class (issue #1384)
+    // with the bare gate; ad churn is still excluded (Infinity threshold).
     expect(isLandingPageHeadlineEventType("website_page_changed")).toBe(false);
     expect(isAdChurnEventType("ad_new")).toBe(true);
     expect(whyThisMattersScoreForRecord({ eventType: "ad_new", importanceScore: 100 })).toBe(100);
+    expect(whyThisMattersScoreForRecord({ eventType: "website_page_changed", importanceScore: 82 })).toBe(82);
   });
 
   it("still fires the all-quiet heartbeat when zero landing_page_* events occur in the window", () => {

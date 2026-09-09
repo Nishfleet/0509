@@ -435,6 +435,7 @@ type DigestPeriodEventClass =
   | "cta"
   | "campaign"
   | "destination"
+  | "website"
   | "cosmetic"
   | "unclassified";
 
@@ -442,6 +443,11 @@ const PRICE_EVENT_TYPES = new Set(["landing_page_offer_changed"]);
 const CTA_EVENT_TYPES = new Set(["landing_page_cta_changed"]);
 const CAMPAIGN_EVENT_TYPES = new Set(["ad_new", "ad_inactive"]);
 const DESTINATION_EVENT_TYPES = new Set(["landing_page_url_changed"]);
+const WEBSITE_PAGE_EVENT_TYPES = new Set([
+  "website_page_added",
+  "website_page_removed",
+  "website_page_changed",
+]);
 const COSMETIC_EVENT_TYPES = new Set([
   "landing_page_headline_changed",
   "landing_page_form_changed",
@@ -470,6 +476,10 @@ function classifyDigestPeriodEvent(item: DigestPeriodTruthItem): DigestPeriodEve
     return "campaign";
   }
   if (COSMETIC_EVENT_TYPES.has(item.eventType ?? "")) return "cosmetic";
+  // Full-Site Watch page events are their own material class (issue #1384): a
+  // page added, removed, or materially changed is a real competitor move, not
+  // an unclassified leftover.
+  if (WEBSITE_PAGE_EVENT_TYPES.has(item.eventType ?? "")) return "website";
   return "unclassified";
 }
 
@@ -517,6 +527,10 @@ function materialityClausesFromItems(
   const destinationCount = counts.get("destination") ?? 0;
   if (destinationCount > 0) {
     materialClauses.push(`destinations changed (${destinationCount})`);
+  }
+  const websiteCount = counts.get("website") ?? 0;
+  if (websiteCount > 0) {
+    materialClauses.push(`tracked pages changed (${websiteCount})`);
   }
 
   return materialClauses;
@@ -773,6 +787,12 @@ function recommendAction(eventType: WatchEventType, priorityScore: number | null
       return `${urgency}check whether the competitor is pushing purchase, lead capture, WhatsApp, or app install harder.`;
     case "landing_page_form_changed":
       return `${urgency}review whether the competitor added or removed a lead-capture step.`;
+    case "website_page_added":
+      return `${urgency}open the new page and check whether it adds a pricing, offer, or funnel angle to track.`;
+    case "website_page_removed":
+      return `${urgency}check whether the competitor removed a page — pricing, offers, or funnel steps may have moved.`;
+    case "website_page_changed":
+      return `${urgency}compare the changed page content against your own positioning before your next decision.`;
     default:
       return `${urgency}review the source evidence before acting.`;
   }

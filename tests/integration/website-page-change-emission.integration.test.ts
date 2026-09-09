@@ -220,6 +220,11 @@ describe("website_page_* emission against real D1", () => {
     expect(changed?.metadata.to).toBe("Get started");
     expect(changed?.metadata.field).toBe("cta");
     expect(changed?.baselineFromRunId).toBe(priorRun);
+    // website_page_* events carry a customer importance that clears the
+    // balanced instant-alert gate (issue #1384).
+    expect(added?.importanceScore).toBe(80);
+    expect(removed?.importanceScore).toBe(80);
+    expect(changed?.importanceScore).toBe(82);
 
     expect(events.some((event) => event.metadata.field === "title")).toBe(false);
     expect(events.some((event) => event.metadata.field === "meta")).toBe(false);
