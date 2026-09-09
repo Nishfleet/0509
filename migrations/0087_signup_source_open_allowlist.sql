@@ -1,7 +1,7 @@
 -- Generalize signup attribution (issue #2108): signup_source moves from six
 -- hardcoded literals to an open, shape-checked allowlist — NULL, the existing
--- literals (now including 'pricing-free', which the code allowlist already
--- accepted but the 0080 CHECK rejected), the two underscore-bearing live
+-- literals (now including 'pricing-free' and 'for_agencies', which the code
+-- allowlist already accepted but the 0080 CHECK rejected), the two underscore-bearing live
 -- markers 'search_warming_exhausted' and 'guide_track_ads' (which the code
 -- exact-match branch accepts but the open shape's [a-z0-9:.-] class would
 -- reject), lowercase slugs, and `ref:<eTLD+1>` referer markers. The open
@@ -41,6 +41,7 @@ CREATE TABLE user_new (
       'locale-ja-sneaker-resale',
       'locale-pt-br-sneaker-resale',
       'pricing-free',
+      'for_agencies',
       'search_warming_exhausted',
       'guide_track_ads'
     )
@@ -97,6 +98,7 @@ CREATE TABLE signup_source_pending_new (
       'locale-ja-sneaker-resale',
       'locale-pt-br-sneaker-resale',
       'pricing-free',
+      'for_agencies',
       'search_warming_exhausted',
       'guide_track_ads'
     )

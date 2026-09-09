@@ -179,6 +179,7 @@ describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
   const ACCEPTED_BY_BOTH = [
     "ref:example.com",
     "pricing-free",
+    "for_agencies",
     "magicbrief-migration",
     "locale-de-sneaker-resale",
     "summer-2026-launch",
@@ -220,6 +221,7 @@ describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
       "locale-ja-sneaker-resale",
       "locale-pt-br-sneaker-resale",
       "pricing-free",
+      "for_agencies",
       "search_warming_exhausted",
       "guide_track_ads",
     ]) {
@@ -232,7 +234,7 @@ describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
     // underscore-bearing live markers are accepted via the literal list (the
     // `toContain` loop above), not the open shape, so they are exempt from the
     // [a-z0-9:.-] char-class check.
-    const LITERAL_ONLY = new Set(["search_warming_exhausted", "guide_track_ads"]);
+    const LITERAL_ONLY = new Set(["search_warming_exhausted", "guide_track_ads", "for_agencies"]);
     for (const fixture of ACCEPTED_BY_BOTH) {
       expect(fixture.length).toBeGreaterThanOrEqual(1);
       expect(fixture.length).toBeLessThanOrEqual(44);

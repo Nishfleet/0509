@@ -17,6 +17,7 @@ import { appEnv, db, ISO_T0, seedUser, uid } from "./fixtures";
 const ACCEPTED_BY_BOTH = [
   "ref:example.com",
   "pricing-free",
+  "for_agencies",
   "magicbrief-migration",
   "locale-de-sneaker-resale",
   "summer-2026-launch",
