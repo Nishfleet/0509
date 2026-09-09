@@ -105,6 +105,10 @@ export default [
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
   route("competitor-monitoring", "routes/competitor-monitoring.tsx"),
+  // Issue #2152: /guides/* how-to cluster — the honest manual/DIY/automated
+  // guide for the "how to track competitor ads" query class, ending in the
+  // no-account /search preview (source=guide_track_ads).
+  route("guides/how-to-track-competitor-ads", "routes/guides.how-to-track-competitor-ads.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
   // Locale-prefixed buyer-surface cluster (issue #1501): /de, /de/pricing,

@@ -368,8 +368,12 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // compare/switch child routes (issue #1563), and the programmatic
   // /ads/:domain pages (issue #1562) — all serve English copy.
   // The genuinely translated sneaker-resale cluster stays in the sitemap.
+  // 2026-09-09: /guides/how-to-track-competitor-ads joined the sitemap (issue
+  // #2152) — static long-form guide, no new claim text beyond the live
+  // homepage/docs plan facts it restates (free weekly watch, Meta-only scope).
   sitemapPaths: [
-    "/", "/search", "/brands", "/briefs/weekly", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
+    "/", "/search", "/brands", "/briefs/weekly", "/guides/how-to-track-competitor-ads",
+    "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
     "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief",
