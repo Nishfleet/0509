@@ -102,6 +102,7 @@ export default [
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
   route("competitor-monitoring", "routes/competitor-monitoring.tsx"),
+  route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
   // Locale-prefixed buyer-surface cluster (issue #1501): /de, /de/pricing,

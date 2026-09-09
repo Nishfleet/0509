@@ -374,6 +374,9 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/compare/pulzifi", "/compare/foreplay-spyder",
     "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief",
     "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",
+    // Issue #2144: agency audience page (roster math + sourced Agency-vs-
+    // Foreplay line), EN-only, no locale cluster.
+    "/for-agencies",
     "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale",
     "/pt-br/sneaker-resale",
     "/capture-rules", "/no-phantom-changes", "/methodology", "/pricing", "/help", "/docs", "/api/docs",

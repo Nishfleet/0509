@@ -131,6 +131,11 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Product overview: scans, digests, alerts, and proof captures.",
   },
+  "/for-agencies": {
+    title: "Competitor monitoring for agencies",
+    description:
+      "Agency roster page: the per-client Monday-check math, one brief per client, watermarked share links on Starter, agency branding on shared reports, and a sourced Agency-vs-Foreplay price line.",
+  },
   "/sneaker-resale": {
     title: "Sneaker resale competitor ads",
     description:
