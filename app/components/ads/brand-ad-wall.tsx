@@ -1,11 +1,10 @@
 import { Link } from "react-router";
 
 import { AdCreative } from "~/components/ads/ad-creative";
+import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import {
   adLongevityDays,
   formatAdCaptureSinceLabel,
-  formatAdLongevityLabel,
-  STRONG_LONGEVITY_DAYS,
 } from "~/lib/ad-display";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import type { AdRecord } from "~/lib/types";
@@ -35,6 +34,7 @@ export function BrandAdWall({
   signupPath,
   partnerCampaignAdIds = [],
   now = new Date(),
+  capturedAt = null,
 }: {
   ads: AdRecord[];
   totalCount: number;
@@ -49,6 +49,14 @@ export function BrandAdWall({
    */
   partnerCampaignAdIds?: string[];
   now?: Date;
+  /**
+   * ISO timestamp of the underlying Ad Library capture (the capture's
+   * fetched_at). When present, the "Running N days" count is measured up to
+   * this capture time rather than the moment the page is viewed, so the badge
+   * reflects how long the ad had been running when the data was collected
+   * (issue #2142).
+   */
+  capturedAt?: string | null;
 }) {
   const ordered = [...ads].sort((a, b) => {
     // Verified-link cards lead the wall (accept #2: "the verified set
@@ -62,11 +70,12 @@ export function BrandAdWall({
   const visible = ordered.slice(0, WALL_VISIBLE_ADS);
   const remaining = Math.max(0, totalCount - visible.length);
   const partnerSet = new Set(partnerCampaignAdIds);
+  const capturedAtDate = capturedAt ? new Date(capturedAt) : null;
 
   return (
     <div className="f9-ads-wall">
       {visible.map((ad) => (
-        <BrandAdCard ad={ad} key={ad.metaAdId} now={now} isPartner={partnerSet.has(ad.metaAdId)} />
+        <BrandAdCard ad={ad} key={ad.metaAdId} now={now} capturedAt={capturedAtDate} isPartner={partnerSet.has(ad.metaAdId)} />
       ))}
       {remaining > 0 ? (
         <article className="f9-ads-card f9-ads-card-more">
@@ -83,10 +92,7 @@ export function BrandAdWall({
   );
 }
 
-function BrandAdCard({ ad, now, isPartner }: { ad: AdRecord; now: Date; isPartner: boolean }) {
-  const longevityDays = adLongevityDays(ad, now);
-  const longevityLabel = formatAdLongevityLabel(ad, now);
-  const strong = longevityDays !== null && longevityDays >= STRONG_LONGEVITY_DAYS;
+function BrandAdCard({ ad, now, capturedAt, isPartner }: { ad: AdRecord; now: Date; capturedAt: Date | null; isPartner: boolean }) {
   const isNew = isNewlySeen(ad, now);
   const savedLabel = isNew ? "New" : "Screenshot saved";
   // The per-ad capture date: when this creative was first observed. A
@@ -123,11 +129,7 @@ function BrandAdCard({ ad, now, isPartner }: { ad: AdRecord; now: Date; isPartne
           {captureSinceLabel ? (
             <span className="f9-ads-pill">{captureSinceLabel}</span>
           ) : null}
-          {longevityLabel && ad.activeStatusObserved !== false ? (
-            <span className={`f9-ads-pill${strong ? " f9-ads-pill-strong" : ""}`}>
-              {longevityLabel}
-            </span>
-          ) : null}
+          <AdLongevityPill ad={ad} now={capturedAt ?? now} />
           {ad.variantCount && ad.variantCount > 1 ? (
             <span className="f9-ads-pill">{`×${ad.variantCount} variants`}</span>
           ) : null}
