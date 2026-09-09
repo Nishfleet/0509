@@ -241,6 +241,23 @@ describe("/timeline/:domain render", () => {
     expect(markup).not.toContain('"@type":"Dataset"');
   });
 
+  it("renders an honest collecting page — no Dataset JSON-LD, no dated-ledger overclaim (issue #2021)", async () => {
+    const markup = await render(
+      data({ entries: [], collecting: true, noindex: false }),
+    );
+    // Indexable (WebPage present) but no citable Dataset: nothing is stored
+    // yet, so there is no dataset to cite — the #964 Dataset would overclaim.
+    expect(markup).toContain("application/ld+json");
+    expect(markup).not.toContain('"@type":"Dataset"');
+    // No "Dated offer states" hero/JSON-LD overclaim on a zero-state page.
+    expect(markup).not.toContain("Dated offer states for nykaa.com");
+    expect(markup).not.toContain("dated ledger of what this competitor's landing page said");
+    // Honest collecting copy + a real link to the ads brand page remains.
+    expect(markup).toContain("Collecting \u2014 no offer states recorded yet");
+    expect(markup).toContain("We are collecting this competitor&#x27;s landing page now");
+    expect(markup).toContain("Meta ads for nykaa.com");
+  });
+
   it("renders the as-of offer and the share URL without requiring a login", async () => {
     const markup = await render(
       data({
