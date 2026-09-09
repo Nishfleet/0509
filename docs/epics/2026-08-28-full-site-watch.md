@@ -1,6 +1,7 @@
 # EPIC decomposition: watch the competitor's ENTIRE website — every change, anywhere
 
 Epic: Nishfleet/0509#1367
+Production state verified against `origin/main` on 2026-09-09.
 Product direction (Nish, 2026-08-28, verbatim): "watch competitors entire website
 (any changes anywhere for eg. product pages, policy, etc. etc. everything on
 their website tracked)". Beyond ads: product pages, pricing, policies,
@@ -48,11 +49,10 @@ That wiring is the heart of this epic (Q2).
    `careers` → `about` and legal paths (`/privacy`, `/terms`, `/legal`, `/gdpr`,
    …) → `other`. Watched, but not as distinct surfaces with their own cadence
    and display (Q4).
-4. **The flag is OFF in production.** `FULLSITE_WATCH_ENABLED` is not set in
-   `wrangler.jsonc`; the entire system never runs in prod. No canary, no
-   coverage label in the UI, no plan-tier page budgets
-   (`app/lib/plan-entitlements.ts` has no site-page budget field — "packet 5
-   plan metering" is explicitly deferred in the code comments) (Q5).
+4. **The flag is ON in production.** Detection is wired (#1383), UI/digest
+   surfacing is merged (#1384/#2096), and production enablement is merged
+   (#1386/#2033). The canary list is still `nike.com www.nike.com` pending
+   packet 8 (Q5).
 5. **No evals before specs.** Nish's process requires evals that measure
    meaningful-diff quality before the spec is locked. No such eval harness
    exists yet (Q1).
