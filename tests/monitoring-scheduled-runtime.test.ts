@@ -363,7 +363,7 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       env,
       expect.objectContaining({
         mode: "advertiser",
-        filters: expect.objectContaining({ query: "allbirds" }),
+        filters: expect.objectContaining({ query: "allbirds.com" }),
       }),
       null,
       expect.objectContaining({

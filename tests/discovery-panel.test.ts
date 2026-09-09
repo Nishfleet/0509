@@ -101,7 +101,7 @@ describe("warmDiscoveryEvalPanel", () => {
       { DB: {} },
       expect.objectContaining({
         mode: "advertiser",
-        filters: expect.objectContaining({ query: "allbirds", country: "all" }),
+        filters: expect.objectContaining({ query: "allbirds.com", country: "all" }),
       }),
       null,
       expect.objectContaining({

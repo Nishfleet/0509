@@ -434,7 +434,11 @@ describe("curated page-id scoping (issue #1982)", () => {
       identityAliases: ["GOAT"],
       pageId: "746493592053334",
     });
-    expect(query.filters.query).toBe("GOAT");
+    // Issue #1999: the provider query is the registrable domain, not the
+    // site-name alias. The curated page id still scopes the scrape to the
+    // brand's exact Meta page (view_all_page_id); the query term is secondary
+    // to that scoping.
+    expect(query.filters.query).toBe("goat.com");
     expect(query.filters.pageId).toBe("746493592053334");
   });
 
