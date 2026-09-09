@@ -11,6 +11,7 @@ import type {
 } from "~/lib/types";
 import {
   isLandingPageHeadlineEventType,
+  isWebsitePageEventType,
   landingPageTypeWeight,
   whyThisMattersScoreForRecord,
 } from "~/lib/digest-rerank";
@@ -182,15 +183,20 @@ function resolveAllowedChannels(config: EffectiveDeliveryConfig): DeliveryChanne
  * dwarf the 0-100 gates, `score >= threshold` on the full score is exactly
  * `importanceScore >= gate` for landing_page_* events — the gate keeps its
  * established magnitudes while the comparison uses the same weighted score
- * that orders the brief. Non-landing event types return Infinity: whatever
- * their score, they are never instant-eligible.
+ * that orders the brief. website_page_* events carry no type weight, so their
+ * threshold is the bare gate and their score is the raw importance — the same
+ * `importanceScore >= gate` magnitude rule. Every other event type returns
+ * Infinity: whatever their score, they are never instant-eligible.
  */
 function whyThisMattersInstantThreshold(
   eventType: WatchEventType,
   sensitivityMode: NormalizedSensitivityMode,
   overrideGate?: number,
 ) {
-  if (!isLandingPageHeadlineEventType(eventType)) {
+  if (
+    !isLandingPageHeadlineEventType(eventType) &&
+    !isWebsitePageEventType(eventType)
+  ) {
     return Number.POSITIVE_INFINITY;
   }
   return (
@@ -207,9 +213,10 @@ function clearsInstantRule(
   // BET 1 (issue 1483): instant alerts are a landing-page privilege only. A
   // bare ad_new / ad_inactive ping can never interrupt the customer — it only
   // ever reaches the counted digest footnote, whatever its score or the
-  // sensitivity mode — and website_page_* events are not an instant-alert
-  // class either. The why-this-matters score gates magnitude: below the
-  // per-mode threshold even a landing change stays quiet.
+  // sensitivity mode. website_page_* events ARE an instant-alert class (issue
+  // #1384): a real page added/removed/changed clears the same importance gate
+  // as a landing change. The why-this-matters score gates magnitude: below
+  // the per-mode threshold even a landing or page change stays quiet.
   const score = whyThisMattersScoreForRecord(event);
   const threshold = whyThisMattersInstantThreshold(
     event.eventType,
