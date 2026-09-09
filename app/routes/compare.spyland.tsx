@@ -14,8 +14,9 @@ import { canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta,
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import spylandCitations from "~/data/compare/spyland-citations.json";
 
-// Source verification (issue #1288): https://spyland.ing/ returns HTTP 200 and
-// names the product with real pricing and a free plan — verified live 2026-09-05.
+// Source verification (issue #1288, #2069): primary-source-verified —
+// https://spyland.ing/ returns HTTP 200 and names the product with a free plan
+// and paid tiers from $19/mo — verified live 2026-09-09.
 const citations = spylandCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
