@@ -152,6 +152,23 @@ describe("signupSourceFromRequest referer fallback (issue #2108)", () => {
       ),
     ).toBeNull();
   });
+
+  it("skips the site's own domain so a self-referer never clobbers external attribution", () => {
+    expect(
+      signupSourceFromRequest(
+        new Request("https://0509.io/auth/signup", {
+          headers: { referer: "https://0509.io/auth/signup" },
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      signupSourceFromRequest(
+        new Request("https://0509.in/auth/signup", {
+          headers: { referer: "https://app.0509.in/" },
+        }),
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
@@ -165,6 +182,8 @@ describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
     "magicbrief-migration",
     "locale-de-sneaker-resale",
     "summer-2026-launch",
+    "search_warming_exhausted",
+    "guide_track_ads",
     "a",
   ];
   const REJECTED_BY_BOTH = [
@@ -201,17 +220,25 @@ describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
       "locale-ja-sneaker-resale",
       "locale-pt-br-sneaker-resale",
       "pricing-free",
+      "search_warming_exhausted",
+      "guide_track_ads",
     ]) {
       expect(sql).toContain(`'${literal}'`);
     }
     expect(sql).toContain("length(signup_source) BETWEEN 1 AND 44");
     expect(sql).toContain("signup_source NOT GLOB '*[^a-z0-9:.-]*'");
     // Every code-accepted fixture is inside the DB rule's bounds, so a value
-    // the code emits can never be rejected by the CHECK constraint.
+    // the code emits can never be rejected by the CHECK constraint. The two
+    // underscore-bearing live markers are accepted via the literal list (the
+    // `toContain` loop above), not the open shape, so they are exempt from the
+    // [a-z0-9:.-] char-class check.
+    const LITERAL_ONLY = new Set(["search_warming_exhausted", "guide_track_ads"]);
     for (const fixture of ACCEPTED_BY_BOTH) {
       expect(fixture.length).toBeGreaterThanOrEqual(1);
       expect(fixture.length).toBeLessThanOrEqual(44);
-      expect(fixture).toMatch(/^[a-z0-9:.-]+$/);
+      if (!LITERAL_ONLY.has(fixture)) {
+        expect(fixture).toMatch(/^[a-z0-9:.-]+$/);
+      }
     }
   });
 });
