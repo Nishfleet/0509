@@ -48,42 +48,37 @@ const filters = {
 };
 
 describe("search v2 cache isolation", () => {
-  it("discovers domain candidates with the brand term in both proof scopes", () => {
+  it("discovers domain candidates with the registrable domain in both proof scopes", () => {
     const intent = parseSearchInputFromWebsiteField("https://www.nykaa.com");
 
-    expect(buildSearchV2SavedQuery(intent, "exact", filters).filters.query).toBe("nykaa");
-    expect(buildSearchV2SavedQuery(intent, "broader", filters).filters.query).toBe("nykaa");
+    expect(buildSearchV2SavedQuery(intent, "exact", filters).filters.query).toBe("nykaa.com");
+    expect(buildSearchV2SavedQuery(intent, "broader", filters).filters.query).toBe("nykaa.com");
   });
 
-  it("prefers the resolved site name over the bare domain label for sneaker-resale brands (issue #1950)", () => {
-    // The whole point of identity resolution is that a bare registrable stem
-    // ("goat", "on", "reebok") is a poor Meta Ad Library query: "goat" surfaces
-    // keyword junk and "on" is ambiguous. Once identity supplies the site name,
-    // the provider term must be the site name so the brand's own ads surface and
-    // its /ads page can publish.
+  it("queries Meta with the registrable domain, not the site-name alias (issue #1999)", () => {
+    // Live 2026-09-09: website=on.com / website=reebok.com asked Meta for the
+    // curated site names "On" / "Reebok" (identityAliases[0]) and returned 0
+    // verified/likely rows. The same brands on q=on.com / q=reebok.com returned
+    // 30 and 2 verified rows. Site names stay matching aliases; they must not
+    // drive the provider query, including when the live og:site_name is a shop
+    // label that Meta returns 0 ads for ("On Shop").
     const goat = parseSearchInputFromWebsiteField("https://goat.com");
     const on = parseSearchInputFromWebsiteField("https://on.com");
     const reebok = parseSearchInputFromWebsiteField("https://reebok.com");
 
-    // The overrides supply the site name that live identity cannot read.
-    // goat.com's curated site name is "GOAT"; on.com has NO curated site name,
-    // so in production its alias is the live og:site_name/title value "On" (the
-    // on.com override only adds the on-running.com domain alias), and reebok.com
-    // resolves its own og:site_name "Reebok" once the oversized-page tolerance
-    // lets identity read the homepage.
     const goatQuery = buildSearchV2SavedQuery(goat, "exact", filters, {
       identityAliases: ["GOAT"],
     });
     const onQuery = buildSearchV2SavedQuery(on, "exact", filters, {
-      identityAliases: ["On"],
+      identityAliases: ["On Shop", "On"],
     });
     const reebokQuery = buildSearchV2SavedQuery(reebok, "exact", filters, {
       identityAliases: ["Reebok"],
     });
 
-    expect(goatQuery.filters.query).toBe("GOAT");
-    expect(onQuery.filters.query).toBe("On");
-    expect(reebokQuery.filters.query).toBe("Reebok");
+    expect(goatQuery.filters.query).toBe("goat.com");
+    expect(onQuery.filters.query).toBe("on.com");
+    expect(reebokQuery.filters.query).toBe("reebok.com");
   });
 
   it("uses distinct keys for domain exact vs broader scope", () => {
@@ -439,7 +434,11 @@ describe("curated page-id scoping (issue #1982)", () => {
       identityAliases: ["GOAT"],
       pageId: "746493592053334",
     });
-    expect(query.filters.query).toBe("GOAT");
+    // Issue #1999: the provider query is the registrable domain, not the
+    // site-name alias. The curated page id still scopes the scrape to the
+    // brand's exact Meta page (view_all_page_id); the query term is secondary
+    // to that scoping.
+    expect(query.filters.query).toBe("goat.com");
     expect(query.filters.pageId).toBe("746493592053334");
   });
 

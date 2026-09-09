@@ -54,10 +54,11 @@ const IDENTITY_OVERRIDES: Record<
   // GOAT's marketplace CDN returns 403 to scripted fetches regardless of the
   // user-agent (even a full browser UA), so live identity resolution cannot
   // read its homepage. The sneaker-resale seed list names the brand "GOAT";
-  // without that term the provider query degenerates to the bare label "goat"
-  // and surfaces keyword junk (mouth-tape, marketplace ads) instead of GOAT's
-  // own ads. The curated name also wins over a live one if the CDN ever
-  // unblocks, by design (see applyIdentityOverride pin).
+  // the curated siteName is the matching alias the post-fetch classifier uses
+  // to connect GOAT's ads to a searched goat.com. The provider query itself
+  // is the registrable domain goat.com (issue #1999), not this alias. The
+  // curated name also wins over a live one if the CDN ever unblocks, by design
+  // (see applyIdentityOverride pin).
   //
   // The curated Meta Page id (facebook.com/goatapp) scopes the provider search
   // to GOAT's own page so its ~69 ads landing on goat.com surface instead of
@@ -73,11 +74,12 @@ const IDENTITY_OVERRIDES: Record<
   // stem-extension floor, so this alias is the load-bearing link.
   //
   // on.com's live og:site_name is "On Shop" (not "On"), so trusting the live
-  // fetch leaves the provider query on "On Shop" — a term Meta Ad Library
-  // returns 0 ads for (the brand's page is "On"/"On Running"). The curated
-  // site name pins the query to the brand term the same way goat.com's does,
-  // so the pipeline asks Meta the right question even when the live homepage
-  // is bot-blocked or its og:site_name is a shop label.
+  // fetch leaves the matching alias on "On Shop" — a shop label, not the
+  // advertiser page. The curated site name pins the matching alias to "On"
+  // the same way goat.com's does. The provider query itself is the registrable
+  // domain on.com (issue #1999), not this alias — live 2026-09-09 evidence
+  // showed website=on.com asked Meta for "On Shop" and returned 0 verified
+  // rows while q=on.com returned 30.
   //
   // The curated Meta Page id (facebook.com/On) scopes the provider search to
   // On's own page so its ~5,500 ads landing on on.com surface instead of the
@@ -90,10 +92,10 @@ const IDENTITY_OVERRIDES: Record<
   },
   // Reebok is a major global Meta advertiser, but its Shopify-hosted homepage
   // is bot-blocked for the scripted production crawler (like goat.com), so
-  // live identity resolution cannot read a site name and the provider query
-  // degenerates to the bare stem "reebok", which Meta Ad Library returns 0
-  // rows for. The curated site name keeps the provider question askable and
-  // also wins over a live one if the block lifts, by design (see
+  // live identity resolution cannot read a site name. The curated site name
+  // is the matching alias the post-fetch classifier uses; the provider query
+  // is the registrable domain reebok.com (issue #1999). The curated name also
+  // wins over a live one if the block lifts, by design (see
   // applyIdentityOverride pin).
   "reebok.com": { siteName: "Reebok" },
   // Ridge (issue #2012). ridge.com is the buyer-typed domain, but Ridge's ads
@@ -106,9 +108,9 @@ const IDENTITY_OVERRIDES: Record<
   // publish layer already resolves ridge.com -> ridgewallet.com (issue #1446
   // canonical aliases), so coverage exists — the search surface just could not
   // connect it, dead-ending a §1.8 money-path brand. The curated aliases feed
-  // the same audited-alias path on.com uses. The curated site name pins the
-  // provider query to the brand term "Ridge" (the Meta advertiser page name)
-  // even if the live homepage fetch fails or yields a shop-style label.
+  // the same audited-alias path on.com uses. The curated site name is the
+  // matching alias the post-fetch classifier uses; the provider query is the
+  // registrable domain ridge.com (issue #1999), not this alias.
   "ridge.com": { siteName: "Ridge", domainAliases: ["ridgewallet.com", "ridgewallet.eu"] },
   // Zappos (issue #2059). zappos.com is the buyer-typed domain, but Zappos's
   // 13 verified Meta ads all land on the www host (www.zappos.com). The live
@@ -117,8 +119,9 @@ const IDENTITY_OVERRIDES: Record<
   // provider query degenerates — a bare website=zappos.com search settles on
   // "No verified ads found for zappos.com" while q=zappos.com returns 13
   // verified rows, and /ads/zappos.com refuses to publish. Same audited-alias
-  // rail as on.com/ridge.com; the curated site name pins the provider query
-  // to the brand term "Zappos".
+  // rail as on.com/ridge.com; the curated site name is the matching alias the
+  // post-fetch classifier uses; the provider query is the registrable domain
+  // zappos.com (issue #1999), not this alias.
   "zappos.com": { siteName: "Zappos", domainAliases: ["www.zappos.com"] },
 };
 
@@ -158,9 +161,11 @@ export async function resolveWebsiteIdentity(domainUrl: string): Promise<Website
  * When the live fetch succeeded but missed a known alias (on.com), the
  * override is added to `domainAliases`. When the live fetch failed entirely —
  * a bot-blocked CDN (goat.com) or any other unreachable homepage — a curated
- * site name still lets the pipeline ask the provider the right question.
- * Curated facts never fabricate a verified row; the brand must genuinely run
- * Meta ads landing on its own domain for the matcher to classify one.
+ * site name still gives the post-fetch classifier the right matching alias.
+ * The Meta provider query is the registrable domain (issue #1999), not the
+ * site name. Curated facts never fabricate a verified row; the brand must
+ * genuinely run Meta ads landing on its own domain for the matcher to
+ * classify one.
  */
 function applyIdentityOverride(
   live: WebsiteIdentity | null,
@@ -175,9 +180,10 @@ function applyIdentityOverride(
   const mergedDomainAliases = [...new Set([...domainAliases, ...(override.domainAliases ?? [])])];
 
   const overrideSiteName = override.siteName ?? null;
-  // The curated name PINNS the provider query: on.com's live og:site_name is
-  // "On Shop" — a shop label Meta Ad Library returns 0 ads for — so a live
-  // site name must not displace the curated brand term (issue #1993).
+  // The curated name wins as the matching alias: on.com's live og:site_name
+  // is "On Shop" — a shop label, not the advertiser page. A live site name
+  // must not displace the curated brand term (issue #1993). The Meta query
+  // itself is the registrable domain (issue #1999), not this alias.
   const siteName = overrideSiteName ?? live?.siteName ?? null;
   if (!live && !siteName && mergedDomainAliases.length === 0) {
     return null;
