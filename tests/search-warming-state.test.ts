@@ -1,6 +1,12 @@
-import { createElement, type ReactNode } from "react";
+// @vitest-environment happy-dom
+
+import { act, createElement, type ReactNode } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
+	true;
 
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
@@ -147,12 +153,47 @@ async function renderPartialWarmingSearch() {
 	return renderToStaticMarkup(createElement(SearchRoute));
 }
 
+async function mountWarmingSearch() {
+	vi.doMock("react-router", async () => {
+		const actual = await vi.importActual<typeof import("react-router")>("react-router");
+		const React = await import("react");
+
+		return {
+			...actual,
+			Form: ({ children, ...props }: MockFormProps) => React.createElement("form", props, children),
+			Link: ({ children, to, ...props }: MockLinkProps) =>
+				React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+			useActionData: vi.fn().mockReturnValue(undefined),
+			useLoaderData: vi.fn().mockReturnValue(warmingLoaderData),
+			useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: originalSearch, hash: "" }),
+			useNavigate: vi.fn().mockReturnValue(vi.fn()),
+			useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+			useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
+			useRouteLoaderData: vi.fn().mockReturnValue({ session: null }),
+		};
+	});
+
+	vi.doMock("~/components/dashboard-shell", () => ({
+		DashboardShell: ({ children }: { children: ReactNode }) => createElement("main", null, children),
+	}));
+
+	const { default: SearchRoute } = await import("~/routes/search");
+	const container = document.createElement("div");
+	document.body.appendChild(container);
+	const root = createRoot(container);
+	await act(async () => {
+		root.render(createElement(SearchRoute));
+	});
+	return { container, root };
+}
+
 beforeEach(() => {
 	vi.resetModules();
 });
 
 afterEach(() => {
 	vi.restoreAllMocks();
+	vi.useRealTimers();
 	vi.resetModules();
 });
 
@@ -203,5 +244,71 @@ describe("public search warming recovery", () => {
 		// The empty-state spinner ("Checking the Ad Library now") is NOT shown
 		// — the visitor sees real rows, not a spinner.
 		expect(markup).not.toContain("Checking the Ad Library now");
+	});
+
+	it("renders the signup capture naming the brand with the attribution marker once the warming poll exhausts (issue #2134)", async () => {
+		vi.useFakeTimers();
+		let root: Root | null = null;
+		let container: HTMLDivElement | null = null;
+		try {
+			const mounted = await mountWarmingSearch();
+			root = mounted.root;
+			container = mounted.container;
+
+			// The budget starts live: no capture before the poll exhausts.
+			expect(container.textContent).not.toContain("Still capturing");
+
+			// Advance in poll-sized steps so each tick's re-render can schedule
+			// the next timer (a single 60s advance fires only the first tick).
+			const { SEARCH_WARMING_POLL_LIMIT } = await import("~/routes/search");
+			for (let step = 0; step < SEARCH_WARMING_POLL_LIMIT; step += 1) {
+				await act(async () => {
+					vi.advanceTimersByTime(5_000);
+				});
+			}
+
+			// The exhausted state names the brand and promises the first brief by
+			// email. (Copy lives in a <p>; the mocked Link drops text children
+			// under createRoot, so link assertions go through the href.)
+			expect(container.textContent).toContain("Still capturing nykaa.com.");
+			expect(container.textContent).toContain(
+				"Create the free account and the first brief lands in your inbox when it finishes.",
+			);
+
+			// The link is the existing create-account CTA href — competitor
+			// prefill preserved — plus the allowlisted attribution marker.
+			const signupAnchor = container.querySelector(
+				'a[href*="source=search_warming_exhausted"]',
+			);
+			expect(signupAnchor).not.toBeNull();
+			const signupHref = signupAnchor?.getAttribute("href") ?? "";
+			expect(signupHref).toContain("/auth/signup?redirectTo=");
+			expect(signupHref).toContain("website%3Dhttps%253A%252F%252Fnykaa.com");
+
+			// The block sits above the retry link.
+			const html = container.innerHTML;
+			const signupIdx = html.indexOf("source=search_warming_exhausted");
+			const retryIdx = html.indexOf(
+				`/search${originalSearch}`.replaceAll("&", "&amp;"),
+			);
+			expect(signupIdx).toBeGreaterThan(-1);
+			expect(retryIdx).toBeGreaterThan(-1);
+			expect(signupIdx).toBeLessThan(retryIdx);
+		} finally {
+			if (root) {
+				await act(async () => root?.unmount());
+			}
+			container?.remove();
+		}
+	});
+
+	it("does not render the signup capture while the warming budget is still live", async () => {
+		const markup = await renderWarmingSearch();
+		expect(markup).not.toContain("Still capturing");
+		expect(markup).not.toContain("search_warming_exhausted");
+
+		const partialMarkup = await renderPartialWarmingSearch();
+		expect(partialMarkup).not.toContain("Still capturing");
+		expect(partialMarkup).not.toContain("search_warming_exhausted");
 	});
 });
