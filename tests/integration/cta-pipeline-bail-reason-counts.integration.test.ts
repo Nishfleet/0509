@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ctaPipelineBailReasonFromCounters,
   recordCtaPipelineStageCounts,
+  startLandingPagePipelineVolumeInstrumentation,
 } from "~/lib/cta-pipeline-stage-counts.server";
 import {
   createLandingPagePipelineCounters,
@@ -13,6 +14,7 @@ import {
   recordValidityStage,
   type LandingPagePipelineCounters,
 } from "~/lib/landing-page-pipeline-instrumentation.server";
+import type { LandingPageSnapshotData } from "~/lib/types";
 import { appEnv, db } from "./fixtures";
 
 /**
@@ -343,6 +345,104 @@ describe("cta_pipeline_bail_reason_counts (issue #2157)", () => {
       );
       expect(errorSpy).toHaveBeenCalled();
     } finally {
+      errorSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("volume-path success (startLandingPagePipelineVolumeInstrumentation) writes NO bail row — diff never ran", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-17T00:00:00.000Z") });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const instr = startLandingPagePipelineVolumeInstrumentation({
+        watchlistId: "selection_enrichment",
+        scanId: "vol-bail-success",
+        adId: "ad-vol-ok",
+      });
+      const snapshot: LandingPageSnapshotData = {
+        rawUrl: "https://example.com/offer",
+        canonicalUrl: "https://example.com/offer",
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Buy now",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+        captureMethod: "landing_page_fetch",
+        capturedAt: "2026-09-17T01:00:00.000Z",
+        metadata: { ctaFunnelStage: "reached" },
+      };
+      instr.recordCaptureOutcome(snapshot, null);
+      await instr.finish(appEnv);
+
+      const rows = await bailRowsForDay("2026-09-17");
+      // The volume path never runs the diff stage, so a successful capture is
+      // NOT a bail — no row must be written (else it drowns the real top-5).
+      expect(rows).toEqual([]);
+    } finally {
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("volume-path fetch bail (startLandingPagePipelineVolumeInstrumentation) writes the fetch bail reason", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-18T00:00:00.000Z") });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const instr = startLandingPagePipelineVolumeInstrumentation({
+        watchlistId: "selection_enrichment",
+        scanId: "vol-bail-fetch",
+        adId: "ad-vol-fail",
+      });
+      instr.recordCaptureOutcome(null, "landing_fetch_failed");
+      await instr.finish(appEnv);
+
+      const rows = await bailRowsForDay("2026-09-18");
+      expect(rows).toEqual([
+        { stage: "page_fetch_succeeded", reason: "landing_fetch_failed", count: 1 },
+      ]);
+    } finally {
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("volume-path extract bail writes the extract bail reason", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-19T00:00:00.000Z") });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const instr = startLandingPagePipelineVolumeInstrumentation({
+        watchlistId: "selection_enrichment",
+        scanId: "vol-bail-extract",
+        adId: "ad-vol-extract",
+      });
+      const snapshot: LandingPageSnapshotData = {
+        rawUrl: "https://example.com/offer",
+        canonicalUrl: "https://example.com/offer",
+        rawHeadline: "Landing page",
+        normalizedHeadline: "landing page",
+        normalizedHeadlineHash: "hash-b",
+        ctaText: null,
+        priceText: null,
+        formPresent: false,
+        captureMethod: "landing_page_fetch",
+        capturedAt: "2026-09-19T01:00:00.000Z",
+        metadata: { ctaFunnelStage: "bailed", ctaFunnelReasonCode: "no_cta_candidates" },
+      };
+      instr.recordCaptureOutcome(snapshot, null);
+      await instr.finish(appEnv);
+
+      const rows = await bailRowsForDay("2026-09-19");
+      expect(rows).toEqual([
+        { stage: "dom_extracted", reason: "no_cta_candidates", count: 1 },
+      ]);
+    } finally {
+      logSpy.mockRestore();
       errorSpy.mockRestore();
       vi.useRealTimers();
     }
