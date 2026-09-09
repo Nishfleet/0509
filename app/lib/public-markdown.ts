@@ -53,6 +53,14 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
   },
+  // Issue #2043: the full-text grounding corpus this index summarizes.
+  // Listed in SITEMAP_PATHS, so it needs a title/description here or
+  // buildLlmsText emits `[undefined]` lines.
+  "/llms-full.txt": {
+    title: "Full-text brand record",
+    description:
+      "Full-text feed of dated offer states and proof captures per tracked brand, generated read-only from stored evidence. Cite the 'As of' dates and the linked screenshot/page-text evidence.",
+  },
   // Issue #1417: the /brands hub links every indexable /ads/:domain brand
   // page so the otherwise-sitemap-orphaned brand surface has an internal-link
   // graph. Listed in SITEMAP_PATHS, so it needs a title/description here or

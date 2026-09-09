@@ -740,6 +740,12 @@ export function jsonLdScriptProps(data: unknown) {
 export const SITEMAP_PATHS = [
   "/",
   "/search",
+  // Issue #2043: the /llms-full.txt full-text AI grounding corpus. A feed,
+  // not a page — listed in the sitemap (and llms.txt's Pages section via the
+  // same constant) so answer engines discover the dated offer/proof record
+  // surface. Root sitemap only: like the EN funnel paths it is not
+  // locale-prefixed, so locale sitemaps are unchanged.
+  "/llms-full.txt",
   // Issue #1417: /brands is the hub that links the otherwise-orphaned /ads/*
   // pages to each other — adding it to the sitemap gives crawlers a direct
   // path to the full indexable brand surface (and Google an internal-link
@@ -839,6 +845,7 @@ export interface SitemapEntry {
 const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
   "/": { changefreq: "daily", priority: "1.0" },
   "/search": { changefreq: "weekly", priority: "0.9" },
+  "/llms-full.txt": { changefreq: "daily", priority: "0.4" },
   "/brands": { changefreq: "weekly", priority: "0.6" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
   "/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
@@ -1027,6 +1034,10 @@ Disallow: /api/
 Allow: /
 Sitemap: ${canonicalUrl("/sitemap.xml")}
 ${LOCALE_SITEMAP_LINES}
+# Full-text offer/proof corpus for AI answer engines (issue #2043); the
+# wildcard group above already allows it — this line is explicit discovery
+# wiring for crawlers and operators reading the file.
+# Full text: ${canonicalUrl("/llms-full.txt")}
 `;
 
 const SOCIAL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">

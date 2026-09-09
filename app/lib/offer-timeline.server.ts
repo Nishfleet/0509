@@ -430,7 +430,13 @@ function escapeLike(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
-function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
+/**
+ * Exported for the /llms-full.txt full-text feed (issue #2043): the feed
+ * reads the same snapshot rows and must map them through the SAME metadata
+ * parsing (screenshot/html artifact keys, evidence note) as this loader —
+ * never a parallel parser that could drift from the proof gates.
+ */
+export function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
   const metadata = parseJson<Record<string, unknown>>(row.metadata_json, {});
   const screenshotKey = readScreenshotKey(metadata);
   const pageTextKey = readPageTextKey(row.artifact_key, metadata);
