@@ -108,4 +108,15 @@ describe("/brands hub — links every indexable /ads/:domain page (issue #1417)"
     // 410/empty timeline).
     expect(markup).not.toContain('href="/timeline/adidas.com"');
   });
+
+  it("links each curated category section heading to its /brands/:category page (issue #2067)", async () => {
+    const markup = await render(grouped());
+    // Each curated category section heading links to its indexable category page.
+    expect(markup).toContain('href="/brands/sport-footwear"');
+    expect(markup).toContain('href="/brands/e-commerce"');
+    expect(markup).toContain('href="/brands/saas-software"');
+    // The "More brands" bucket is NOT a curated category — its heading stays
+    // plain text, never a link to a category page.
+    expect(markup).not.toContain('href="/brands/more-brands"');
+  });
 });

@@ -68,6 +68,11 @@ export default [
   route("ops", "routes/ops.tsx"),
   route("ads/:domain", "routes/ads.$domain.tsx"),
   route("brands", "routes/brands.tsx"),
+  // Issue #2067: indexable per-category landing pages split off the /brands
+  // hub's in-page sections onto their own URLs so a category-intent query has
+  // a dedicated indexable page. Reuses the same brand-records read the hub
+  // uses; an unknown slug or an empty curated category 404s.
+  route("brands/:category", "routes/brands.$category.tsx"),
   route("timeline/:domain", "routes/timeline.$domain.tsx"),
   // Canonical Ad Aggression Score methodology page. Path history: issue #960
   // shipped /methodology/ad-aggression-score; #1263 promoted it to
