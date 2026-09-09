@@ -185,12 +185,13 @@ async function probeDomain({ domain, baseUrl, pacedFetch }) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const listName = String(args.get("list") ?? "").trim();
+  const all = args.get("all") !== undefined && String(args.get("all")) !== "false";
   const dryRun = args.get("dry-run") !== false;
   const baseUrl = String(args.get("base-url") ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
   const minPublish = Number(args.get("min-publish") ?? DEFAULT_MIN_PUBLISH);
 
-  if (!listName) {
-    console.error("usage: node scripts/ads-domain-publisher.mjs --list=<name> --dry-run [--min-publish=N] [--base-url=URL]");
+  if (!listName && !all) {
+    console.error("usage: node scripts/ads-domain-publisher.mjs --list=<name> --dry-run [--min-publish=N] [--base-url=URL]  (or --all for every registered seed list)");
     process.exit(1);
   }
   if (!dryRun) {
@@ -201,27 +202,49 @@ async function main() {
     process.exit(1);
   }
 
-  const { listName: name, list } = loadSeedList(listName);
+  // Issue #1988: --all builds the union of every registered seed list in the
+  // same registry order the nightly publisher iterates (SEED_LISTS key order),
+  // so the dry-run predicts the whole scaled cohort, not a single list.
+  const listNames = all ? registeredSeedListNames() : [listName];
+
   const pacedFetch = createPacedFetch();
+  let totalPublished = 0;
+  let totalDomains = 0;
 
-  console.log(`seed:publisher dry-run — list=${name} domains=${list.domains.length} base=${baseUrl}`);
-  console.log(`publish floor: verified + likely >= 1 per domain; gate: >= ${minPublish} publishable\n`);
+  for (const name of listNames) {
+    const { listName: label, list } = loadSeedList(name);
+    console.log(`seed:publisher dry-run — list=${label} domains=${list.domains.length} base=${baseUrl}`);
+    console.log(`publish floor: verified + likely >= 1 per domain; gate: >= ${minPublish} publishable\n`);
 
-  const outcomes = [];
-  for (const entry of list.domains) {
-    const outcome = await probeDomain({ domain: entry.domain, baseUrl, pacedFetch });
-    outcomes.push(outcome);
-    const mark = outcome.verdict === "publish" ? "PUBLISH" : outcome.verdict === "skip" ? "SKIP" : "FAILED";
-    console.log(`  ${mark.padEnd(7)} ${outcome.domain.padEnd(18)} ${outcome.reason}`);
+    const outcomes = [];
+    for (const entry of list.domains) {
+      const outcome = await probeDomain({ domain: entry.domain, baseUrl, pacedFetch });
+      outcomes.push(outcome);
+      const mark = outcome.verdict === "publish" ? "PUBLISH" : outcome.verdict === "skip" ? "SKIP" : "FAILED";
+      console.log(`  ${mark.padEnd(7)} ${outcome.domain.padEnd(18)} ${outcome.reason}`);
+    }
+
+    totalPublished += outcomes.filter((o) => o.verdict === "publish").length;
+    totalDomains += outcomes.length;
+    const skipped = outcomes.filter((o) => o.verdict === "skip").length;
+    const failed = outcomes.filter((o) => o.verdict === "failed").length;
+    console.log(`  → ${totalPublished} publishable so far / ${totalDomains} domains\n`);
   }
 
-  const published = outcomes.filter((o) => o.verdict === "publish").length;
-  const skipped = outcomes.filter((o) => o.verdict === "skip").length;
-  const failed = outcomes.filter((o) => o.verdict === "failed").length;
-  console.log(`\nsummary: ${published} publishable / ${outcomes.length} domains ${published >= minPublish ? "(PASS)" : "(BELOW GATE)"}`);
-  console.log(`  publish=${published} skip=${skipped} failed=${failed} gate=${minPublish}`);
+  console.log(`\noverall summary: ${totalPublished} publishable / ${totalDomains} domains ${totalPublished >= minPublish ? "(PASS)" : "(BELOW GATE)"}`);
+  console.log(`  gate=${minPublish}`);
 
-  process.exit(published >= minPublish ? 0 : 1);
+  process.exit(totalPublished >= minPublish ? 0 : 1);
+}
+
+function registeredSeedListNames() {
+  return [
+    "sneaker-resale",
+    "dtc-us",
+    "dtc-in",
+    "dtc-eu",
+    "b2b-advertisers",
+  ];
 }
 
 main().catch((error) => {

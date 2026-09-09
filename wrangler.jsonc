@@ -85,7 +85,10 @@
     // two 0509.io defaults are restated because a configured list replaces them.
     "BROWSERLESS_PROOF_ALLOWLIST_ORIGINS": "https://0509.io https://www.0509.io https://www.nike.com https://nike.com https://www.nykaa.com https://nykaa.com https://www.allbirds.com https://allbirds.com https://www.lenskart.com https://lenskart.com https://www.mamaearth.com https://mamaearth.com",
     "SEARCH_ROLLOUT_MODE": "v2",
-    "ADS_DOMAIN_PUBLISHER_CAP": "60",
+    // Issue #1988: scale the /ads/:domain cohort to >=300 pages. The nightly
+    // publisher now iterates every registered seed list, so the per-run cap
+    // must cover the full ~510-domain cohort or the run stalls at the old 60.
+    "ADS_DOMAIN_PUBLISHER_CAP": "600",
     "PRESENCE_WEBSITE_ROLLOUT": "generally_available",
     "PRESENCE_DIGEST_ROLLOUT": "disabled",
     "PRESENCE_X_ROLLOUT": "disabled",
