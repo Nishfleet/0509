@@ -3146,9 +3146,18 @@ one signal-green accent.
 
 .ld-brand-links li {
   border-right: 2px solid var(--ld-ink);
+  display: flex;
+  flex-direction: column;
 }
 
 .ld-brand-links li:last-child { border-right: 0; }
+
+.ld-brand-links a.ld-brand-timeline {
+  padding-top: 0;
+  padding-bottom: 14px;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
 
 .ld-brand-links a {
   display: flex;
