@@ -46,6 +46,7 @@
     "check:d1:workspace-memberships": "node scripts/check-workspace-member-invariants.mjs",
     "check:d1:partial-refunds": "node scripts/check-partial-refund-invariants.mjs",
     "check:d1:snapshot-age": "scripts/check-d1-snapshot-age.sh",
+    "check:d1:no-test-plans": "node scripts/d1-purge-test-plans.mjs --check",
     "signal:market": "node scripts/market-signal-snapshot.mjs",
     "signal:market:workdir-check": "bash scripts/check-market-signal-workdir.sh",
     "signal:market:validate": "node scripts/validate-market-signal-report.mjs",
