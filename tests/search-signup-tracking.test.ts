@@ -5,6 +5,11 @@ import {
   registrableDomainFromLandingPage,
   resolveSignupDomainFromAds,
 } from "~/lib/competitor-website";
+import {
+  ALLOWED_SIGNUP_SOURCES,
+  allowlistedSignupSource,
+  SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE,
+} from "~/lib/signup-source";
 
 interface LiteAd {
   landingPageUrl: string | null;
@@ -164,6 +169,31 @@ describe("buildSignupTrackingPath", () => {
     });
     expect(path).toBe(
       "/auth/signup?redirectTo=%2Fapp%23setup-checklist",
+    );
+  });
+});
+
+describe("search_warming_exhausted signup marker (issue #2134)", () => {
+  it("is an exact allowlisted signup source", () => {
+    expect(ALLOWED_SIGNUP_SOURCES).toContain(
+      SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE,
+    );
+    expect(allowlistedSignupSource(SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE)).toBe(
+      "search_warming_exhausted",
+    );
+    expect(allowlistedSignupSource("search_warming_exhausted&x=1")).toBeNull();
+  });
+
+  it("appends the marker to the tracking path without losing the competitor prefill", () => {
+    const path = buildSignupTrackingPath({
+      competitorWebsiteRaw: "nykaa.com",
+      ads: ads({ landingPageUrl: "https://www.nykaa.com/air-max" }),
+      country: "all",
+    });
+    const href = `${path}&source=${SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE}`;
+    expect(href).toBe(
+      "/auth/signup?redirectTo=%2Fapp%3Fwebsite%3Dnykaa.com%23setup-checklist" +
+        "&source=search_warming_exhausted",
     );
   });
 });
