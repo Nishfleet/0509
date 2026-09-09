@@ -200,6 +200,15 @@ function renderSocialCard(parsed: ParsedSocialCardPath, request: Request): strin
     });
   }
 
+  if (parsed.kind === "brands") {
+    const label = BRANDS_CATEGORY_LABELS[parsed.slug];
+    if (!label) return null;
+    return renderCard({
+      headline: clampLine(`${label} competitor ads`, 46),
+      subline: "Track the category's Meta ad walls, with proof.",
+    });
+  }
+
   const cluster = CLUSTER_HEADLINES[parsed.slug];
   if (!cluster) return null;
   return renderCard(cluster);

@@ -29,7 +29,7 @@ import {
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
-import { groupBrandRecordsByCategory } from "~/lib/brand-categories";
+import { groupBrandRecordsByCategory, categoryLabelForSlug, categorySlugForLabel } from "~/lib/brand-categories";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 
 /** A brand-page link plus whether its `/timeline/:domain` is indexable. */
@@ -131,27 +131,43 @@ export default function BrandsHubRoute() {
           </p>
         ) : (
           <div className="ld-brands-groups">
-            {data.groups.map((group) => (
-              <section key={group.category} className="ld-brand-group" aria-labelledby={`brand-group-${group.category}`}>
-                <h2 id={`brand-group-${group.category}`}>{group.category}</h2>
-                <ul className="ld-brand-list">
-                  {group.items.map((link) => (
-                    <li key={link.domain}>
-                      <Link to={link.path}>{link.name}</Link>
-                      <span>&nbsp;·&nbsp;{link.domain}</span>
-                      {link.timelineIndexable && (
-                        <>
-                          <span>&nbsp;·&nbsp;</span>
-                          <Link to={`/timeline/${encodeURIComponent(link.domain)}`}>
-                            Offer timeline
-                          </Link>
-                        </>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+            {data.groups.map((group) => {
+              // Issue #2067 — each curated group's heading links to its own
+              // /brands/:category landing page so the hub internally connects
+              // to every category surface (and crawlers can follow the graph
+              // from the hub to each category to the /ads/:domain pages). The
+              // hub-only "More brands" bucket has no page, so its heading
+              // stays a plain string — never a link to /brands/more-brands.
+              const categorySlug = categorySlugForLabel(group.category);
+              const hasCategoryPage = categoryLabelForSlug(categorySlug) === group.category;
+              return (
+                <section key={group.category} className="ld-brand-group" aria-labelledby={`brand-group-${group.category}`}>
+                  <h2 id={`brand-group-${group.category}`}>
+                    {hasCategoryPage ? (
+                      <Link to={`/brands/${categorySlug}`}>{group.category}</Link>
+                    ) : (
+                      group.category
+                    )}
+                  </h2>
+                  <ul className="ld-brand-list">
+                    {group.items.map((link) => (
+                      <li key={link.domain}>
+                        <Link to={link.path}>{link.name}</Link>
+                        <span>&nbsp;·&nbsp;{link.domain}</span>
+                        {link.timelineIndexable && (
+                          <>
+                            <span>&nbsp;·&nbsp;</span>
+                            <Link to={`/timeline/${encodeURIComponent(link.domain)}`}>
+                              Offer timeline
+                            </Link>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
           </div>
         )}
       </section>

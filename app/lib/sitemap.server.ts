@@ -96,11 +96,17 @@
 
 import {
   adHasVerifiedDomainLink,
+  computeBrandPageAggressionScore,
   deriveBrandPageLookupForCountry,
   isBrandPageAliasDomain,
   normalizeBrandPageDomain,
   BRAND_PAGE_FRESH_FOR_INDEXING_MS,
 } from "~/lib/brand-page.server";
+import {
+  brandCategoryForDomain,
+  categoryLabelForSlug,
+  curatedCategorySlugs,
+} from "~/lib/brand-categories";
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import { queryAll } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -433,9 +439,16 @@ export function indexableBrandPageEntriesFromRows(
     seen.add(domain);
     const fetchedDate = row.fetched_at.slice(0, 10);
     const payload = parseSitemapCachePayload(row.payload_json);
-    const adCount = payload ? nonDemoAdsFromPayload(payload).length : 0;
+    const ads = payload ? nonDemoAdsFromPayload(payload) : [];
+    const adCount = ads.length;
     // isIndexableBrandPageRow already proved fetched_at parses and age >= 0.
     const ageMs = now.getTime() - Date.parse(row.fetched_at);
+    // Ad Aggression Score for this brand page, computed with the SAME
+    // `computeBrandPageAggressionScore` the /ads/:domain loader uses so the
+    // category page's score matches the page's own. Number when the observed
+    // window clears the 14-day floor; null when deferred (issue #2067).
+    const score =
+      computeBrandPageAggressionScore(ads as AdRecord[], now)?.score ?? null;
     entries.push({
       path: `/ads/${domain}`,
       lastmod: fetchedDate,
@@ -443,6 +456,7 @@ export function indexableBrandPageEntriesFromRows(
       priority: brandPageEntryPriority(ageMs, verifiedAdCount),
       adCount,
       fetchedAt: row.fetched_at,
+      score,
     });
     if (entries.length >= SITEMAP_BRAND_PATH_LIMIT) {
       break;
@@ -571,15 +585,76 @@ export function buildSitemapXml(
   return renderSitemapXml([
     ...ROOT_SITEMAP_STATIC_ENTRIES,
     ...brandEntries,
+    ...categoryEntriesFromBrandEntries(brandEntries),
     ...timelineEntries,
   ]);
+}
+
+/**
+ * Derive the /brands/:category sitemap entries from the indexable brand-page
+ * entries (issue #2067). Purely derived, never its own D1 read: each curated
+ * category with at least one brand gets ONE /brands/<slug> entry, so the
+ * category landing pages are crawlable alongside the /ads/:domain pages they
+ * list. Rules:
+ * - The category set is the curated `curatedCategorySlugs()` set walked in its
+ *   deterministic sorted order — a registry edit is the only change a new
+ *   category ever needs. The hub-only "More brands" bucket is never a curated
+ *   slug, so it can never enter here (it has no page by construction).
+ * - A category whose brand set is empty is OMITTED — never sitemap/hat a zero
+ *   page (the route itself 404s empty curated groups, so a no-brand category
+ *   entry would point crawlers at a 404).
+ * - `lastmod` = the max `lastmod` (ISO date) among the brands in that category
+ *   — the freshest capture date of the newest-listed brand, an honest
+ *   freshness signal. Entries whose brands carry no lastmod get none.
+ * - `changefreq: "weekly"` and `priority: "0.6"` (the same band the /brands
+ *   hub and default brand pages sit at).
+ * Kept pure and exported so the omit-empty / lastmod-max / OTHER-exclusion
+ * rules are unit-testable without a database.
+ */
+export function categoryEntriesFromBrandEntries(
+  brandEntries: readonly SitemapEntry[],
+): SitemapEntry[] {
+  const entries: SitemapEntry[] = [];
+  for (const slug of curatedCategorySlugs()) {
+    const label = categoryLabelForSlug(slug);
+    if (!label) {
+      continue;
+    }
+    // A brand entry belongs to a category when brandCategoryForDomain (the same
+    // grouping the /brands hub and the category route use) resolves to the
+    // label. Domains the registry does not classify land in the hub-only
+    // "More brands" bucket, which is never a curated label — excluded here.
+    const brands = brandEntries.filter((entry) => {
+      const domain = entry.path.slice("/ads/".length);
+      if (!domain || domain.includes("/") || domain.includes("?")) {
+        return false;
+      }
+      return brandCategoryForDomain(domain) === label;
+    });
+    if (brands.length === 0) {
+      continue;
+    }
+    const lastmod = brands.reduce<string | undefined>((max, entry) => {
+      if (!entry.lastmod) {
+        return max;
+      }
+      // ISO dates (YYYY-MM-DD) compare lexically.
+      return max === undefined || entry.lastmod > max ? entry.lastmod : max;
+    }, undefined);
+    entries.push({
+      path: `/brands/${slug}`,
+      ...(lastmod ? { lastmod } : {}),
+      changefreq: "weekly",
+      priority: "0.6",
+    });
+  }
+  return entries;
 }
 
 /**
  * Timeline sitemap entries (the Offer Timeline) — rules 7–11 of the module
  * docblock. Pure reduce lives here; the D1 read is `loadIndexableTimelineEntries`.
  */
-
 /** Subset of landing_page_snapshot columns the sitemap timeline read needs. */
 export interface TimelineSitemapRow {
   id: string;

@@ -129,6 +129,18 @@ export function clusterSocialCardUrl(slug: "sneaker-resale" | "competitor-monito
 }
 
 /**
+ * Per-category social card URL for the /brands/:category pages (issue #2067).
+ * The card SVG is generated under `/social-card/brands/<slug>.svg` by
+ * `app/lib/social-cards.server.ts` and derives its headline from the category
+ * slug alone (stateless, like the compare/switch cards). The route stamps its
+ * `og:image` with this URL so a shared category page carries a branded card
+ * instead of the site-wide generic `og-image.png`.
+ */
+export function brandsCategorySocialCardUrl(categorySlug: string): string {
+  return canonicalUrl(`/social-card/brands/${categorySlug}.svg`);
+}
+
+/**
  * Canonical consolidation for the duplicate /compare/* pairs (issue #1481).
  *
  * Every entry maps a loser URL to the winner it must canonicalize to. The
@@ -862,6 +874,16 @@ export interface SitemapEntry {
   adCount?: number;
   /** ISO timestamp of the underlying cache fetch; used by llms.txt. */
   fetchedAt?: string;
+  /**
+   * The Ad Aggression Score (0-100) for a /ads/:domain entry, computed in
+   * `app/lib/sitemap.server.ts` from the row's cached ads with the same
+   * `computeBrandPageAggressionScore` the page's loader uses. Number when the
+   * observed window clears the 14-day floor; null when deferred (too recent,
+   * or no first-seen date) — consumed by the /brands/:category pages so a
+   * category list can show an honest score or a "pending" line (issue #2067).
+   * Not a field static `/brands`-style entries set.
+   */
+  score?: number | null;
 }
 
 /**
