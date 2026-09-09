@@ -35,7 +35,7 @@ import {
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
 import { publicSeoFileForPathname } from "../app/lib/seo";
-import { loadIndexableBrandPageEntries, loadIndexableTimelineEntries, publicLocaleSitemapFile, publicSitemapFile } from "../app/lib/sitemap.server";
+import { loadIndexableBrandPageEntries, loadIndexableTimelineEntries, publicLocaleSitemapFile, publicSitemapFile, timelineSitemapEntries } from "../app/lib/sitemap.server";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import {
   observeScheduledTask,
@@ -164,11 +164,17 @@ export default {
       // never list a noindex shell. Timeline loader degrades to [] when D1 or
       // the snapshot table is missing, so the no-D1 / demo path stays byte-
       // identical to the static funnel (issue #1929).
-      const [brandEntries, timelineEntries] = await Promise.all([
+      const [brandEntries, captureBackedTimelineEntries] = await Promise.all([
         loadIndexableBrandPageEntries(env),
         loadIndexableTimelineEntries(env),
       ]);
-      return markdownResponse(request, buildLlmsText(brandEntries, timelineEntries));
+      return markdownResponse(
+        request,
+        buildLlmsText(
+          brandEntries,
+          timelineSitemapEntries(brandEntries, captureBackedTimelineEntries),
+        ),
+      );
     }
     if (
       (request.method === "GET" || request.method === "HEAD") &&

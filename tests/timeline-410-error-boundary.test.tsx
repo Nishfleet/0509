@@ -38,10 +38,16 @@ function installLoaderMocks() {
   vi.doMock("~/lib/rate-limit.server", () => ({
     enforcePublicBrandPageRateLimit: vi.fn().mockResolvedValue(null),
   }));
-  vi.doMock("~/lib/offer-timeline.server", () => ({
-    loadOfferTimeline: vi.fn().mockResolvedValue({ entries: [], asOfState: null }),
-    isOfferTimelineShareEnabled: () => true,
-  }));
+  vi.doMock("~/lib/offer-timeline.server", async (importOriginal) => {
+    const actual = await importOriginal<
+      typeof import("~/lib/offer-timeline.server")
+    >();
+    return {
+      ...actual,
+      loadOfferTimeline: vi.fn().mockResolvedValue({ entries: [], asOfState: null }),
+      isOfferTimelineShareEnabled: () => true,
+    };
+  });
 }
 
 /**

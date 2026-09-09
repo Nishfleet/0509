@@ -447,4 +447,31 @@ describe("public markdown", () => {
     expect(brandOnly).not.toContain("https://0509.io/timeline/calendly.com");
     expect(brandAndTimeline).toContain("https://0509.io/timeline/calendly.com");
   });
+
+  it("describes a collecting /timeline entry honestly — no dated-ledger overclaim (issue #2021)", () => {
+    // Collecting entries have no lastmod because nothing is captured yet.
+    // llms.txt must still list the URL (sitemap parity) but must not claim
+    // a dated offer state exists.
+    const collecting = llmsPageForTimelinePath("/timeline/gymshark.com");
+    expect(collecting).not.toBeNull();
+    expect(collecting!.description).toContain("collecting");
+    expect(collecting!.description).toContain("no offer states recorded yet");
+    expect(collecting!.description).not.toContain("at least one dated offer state");
+    expect(collecting!.description).not.toContain("last captured");
+
+    const rendered = buildLlmsText(
+      [{ path: "/ads/gymshark.com" }],
+      [{ path: "/timeline/gymshark.com" }],
+    );
+    expect(rendered).toContain("https://0509.io/timeline/gymshark.com");
+    expect(rendered).toContain("no offer states recorded yet");
+    expect(rendered).not.toMatch(
+      /gymshark\.com[^\n]*at least one dated offer state/,
+    );
+
+    // Capture-backed entries keep the dated-ledger wording.
+    const backed = llmsPageForTimelinePath("/timeline/calendly.com", "2026-09-01");
+    expect(backed!.description).toContain("at least one dated offer state");
+    expect(backed!.description).toContain("last captured on 2026-09-01");
+  });
 });

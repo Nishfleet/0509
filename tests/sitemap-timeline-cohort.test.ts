@@ -24,6 +24,7 @@ const queryOne = vi.hoisted(() => vi.fn());
 const execute = vi.hoisted(() => vi.fn());
 const ensureDb = vi.hoisted(() => vi.fn());
 const loadIndexableTimelineEntries = vi.hoisted(() => vi.fn());
+const loadIndexableBrandPageEntries = vi.hoisted(() => vi.fn());
 
 vi.mock("~/lib/data/d1.server", () => ({
   queryIn,
@@ -36,6 +37,7 @@ vi.mock("~/lib/data/d1.server", () => ({
 // Mock at the adapter boundary.
 vi.mock("~/lib/sitemap.server", () => ({
   loadIndexableTimelineEntries,
+  loadIndexableBrandPageEntries,
 }));
 
 /** Fresh module load of the read-only adapter after vi.resetModules(). */
@@ -51,6 +53,7 @@ afterEach(() => {
   execute.mockReset();
   ensureDb.mockReset();
   loadIndexableTimelineEntries.mockReset();
+  loadIndexableBrandPageEntries.mockReset();
 });
 
 function makeTier(overrides: Partial<SitemapTimelineTier>): SitemapTimelineTier {
@@ -580,13 +583,19 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
 });
 
 describe("loadSitemapTimelineCandidateDomains (read-only D1 adapter)", () => {
-  it("maps sitemap timeline entries to deduped, ordered domains", async () => {
+  it("maps capture-backed timeline entries plus the tracked /ads cohort to deduped, ordered domains", async () => {
     loadIndexableTimelineEntries.mockResolvedValue([
       { path: "/timeline/calendly.com", lastmod: "2026-09-01" },
       { path: "/timeline/adspyder.io", lastmod: "2026-09-01" },
       { path: "/timeline/www.Calendly.com", lastmod: "2026-09-01" },
-      { path: "/ads/nike.com", lastmod: "2026-09-01" },
       { path: "/timeline/foo/bar", lastmod: "2026-09-01" },
+    ]);
+    loadIndexableBrandPageEntries.mockResolvedValue([
+      { path: "/ads/nike.com" },
+      { path: "/ads/gymshark.com" },
+      { path: "/ads/hubspot.com/about" },
+      { path: "/ads/calendly.com" },
+      { path: "/compare/adspyder" },
     ]);
 
     const { loadSitemapTimelineCandidateDomains } = await adapter();
@@ -596,7 +605,16 @@ describe("loadSitemapTimelineCandidateDomains (read-only D1 adapter)", () => {
 
     expect(loadIndexableTimelineEntries).toHaveBeenCalledTimes(1);
     expect(loadIndexableTimelineEntries).toHaveBeenCalledWith(env);
-    expect(domains).toEqual(["calendly.com", "adspyder.io"]);
+    expect(loadIndexableBrandPageEntries).toHaveBeenCalledTimes(1);
+    expect(loadIndexableBrandPageEntries).toHaveBeenCalledWith(env);
+    // Capture-backed first, then the /ads cohort (deduped, canonicalized);
+    // multi-segment /ads paths and non-/ads paths never guess a domain.
+    expect(domains).toEqual([
+      "calendly.com",
+      "adspyder.io",
+      "nike.com",
+      "gymshark.com",
+    ]);
   });
 
   it("returns [] (no sitemap read) when env.DB is missing", async () => {
@@ -607,6 +625,7 @@ describe("loadSitemapTimelineCandidateDomains (read-only D1 adapter)", () => {
 
     expect(domains).toEqual([]);
     expect(loadIndexableTimelineEntries).not.toHaveBeenCalled();
+    expect(loadIndexableBrandPageEntries).not.toHaveBeenCalled();
   });
 });
 

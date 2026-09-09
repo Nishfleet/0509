@@ -39,6 +39,10 @@ interface MockOptions {
   asOfState?: OfferLedgerEntry | null;
   rateLimitResponse?: Response | null;
   loadError?: Error;
+  /** /ads cohort sitemap paths the collecting/retire decision reads (#2021). */
+  sitemapBrandPaths?: string[];
+  /** Capture-backed /timeline sitemap paths the collecting/retire decision reads. */
+  sitemapTimelinePaths?: string[];
 }
 
 function installMocks(options: MockOptions = {}) {
@@ -59,11 +63,33 @@ function installMocks(options: MockOptions = {}) {
   vi.doMock("~/lib/rate-limit.server", () => ({
     enforcePublicBrandPageRateLimit,
   }));
-  vi.doMock("~/lib/offer-timeline.server", () => ({
-    loadOfferTimeline,
-    isOfferTimelineShareEnabled: (appEnv: { PUBLIC_OFFER_TIMELINE_SHARE?: string }) =>
-      appEnv.PUBLIC_OFFER_TIMELINE_SHARE?.trim() !== "0",
-  }));
+  vi.doMock("~/lib/offer-timeline.server", async (importOriginal) => {
+    const actual = await importOriginal<
+      typeof import("~/lib/offer-timeline.server")
+    >();
+    return {
+      ...actual,
+      loadOfferTimeline,
+      isOfferTimelineShareEnabled: (appEnv: { PUBLIC_OFFER_TIMELINE_SHARE?: string }) =>
+        appEnv.PUBLIC_OFFER_TIMELINE_SHARE?.trim() !== "0",
+    };
+  });
+  // Issue #2021: the collecting/retire decision reads the sitemap's timeline
+  // set. Mock at the adapter boundary; unmocked tests degrade to unlisted.
+  const brandPaths = options.sitemapBrandPaths ?? [];
+  const timelinePaths = options.sitemapTimelinePaths ?? [];
+  vi.doMock("~/lib/sitemap.server", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("~/lib/sitemap.server")>();
+    return {
+      ...actual,
+      loadIndexableBrandPageEntries: vi
+        .fn()
+        .mockResolvedValue(brandPaths.map((path) => ({ path }))),
+      loadIndexableTimelineEntries: vi
+        .fn()
+        .mockResolvedValue(timelinePaths.map((path) => ({ path }))),
+    };
+  });
 
   return { env, loadOfferTimeline, enforcePublicBrandPageRateLimit };
 }
@@ -85,6 +111,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/rate-limit.server");
   vi.doUnmock("~/lib/offer-timeline.server");
+  vi.doUnmock("~/lib/sitemap.server");
   vi.restoreAllMocks();
   vi.resetModules();
 });
@@ -195,8 +222,8 @@ describe("/timeline/:domain loader", () => {
     expect(result.noindex).toBe(true);
   });
 
-  it("returns 410 Gone when the D1 read succeeds but no snapshots exist (retire path, #1309)", async () => {
-    const mocks = installMocks({ entries: [] });
+  it("returns 410 Gone when the D1 read succeeds but the domain is not a tracked brand (retire path, #1309 + #2021)", async () => {
+    const mocks = installMocks({ entries: [], sitemapBrandPaths: ["/ads/other-brand.com"] });
 
     await expect(
       runLoader(
@@ -205,6 +232,41 @@ describe("/timeline/:domain loader", () => {
         mocks.env,
       ),
     ).rejects.toMatchObject({ status: 410 });
+  });
+
+  it("renders an indexable collecting 200 for a tracked /ads cohort brand with no captures yet (#2021)", async () => {
+    const mocks = installMocks({
+      entries: [],
+      sitemapBrandPaths: ["/ads/gymshark.com"],
+    });
+
+    const result = await runLoader(
+      "gymshark.com",
+      "https://0509.io/timeline/gymshark.com",
+      mocks.env,
+    );
+
+    expect(result.collecting).toBe(true);
+    expect(result.noindex).toBe(false);
+    expect(result.entries).toEqual([]);
+  });
+
+  it("renders the collecting state indexable when only the capture-backed timeline set lists the domain", async () => {
+    const mocks = installMocks({
+      entries: [],
+      sitemapTimelinePaths: ["/timeline/calendly.com"],
+    });
+
+    const result = await runLoader(
+      "calendly.com",
+      "https://0509.io/timeline/calendly.com",
+      mocks.env,
+    );
+
+    // D1 read succeeded but returned zero rows while the sitemap lists the
+    // domain — collecting 200, indexable, never 410.
+    expect(result.collecting).toBe(true);
+    expect(result.noindex).toBe(false);
   });
 });
 

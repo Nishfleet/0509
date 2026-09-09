@@ -42,6 +42,13 @@ export interface OfferTimelineLoaderData {
   asOfState: OfferLedgerEntry | null;
   entries: OfferLedgerEntry[];
   noindex: boolean;
+  /**
+   * True when the ledger is empty but this domain is a tracked, sitemap-listed
+   * brand (issue #2021): the page renders an honest "collecting" 200 instead
+   * of the retire 410, so the moat surface stays discoverable for the whole
+   * tracked /ads cohort while captures accumulate.
+   */
+  collecting: boolean;
 }
 
 export async function loader({
@@ -89,17 +96,40 @@ export async function loader({
   }
 
   // Retire path (issue #1309): a timeline with no stored snapshots is a
-  // soft-404 "not stored yet" shell — the moat page that 83% of sitemap
-  // brands used to 200 with brand chrome. When the D1 read SUCCEEDED and
-  // returned zero rows (the table exists, the domain simply has no
-  // captures), return 410 Gone so the shell never 200s. A transient D1
-  // read FAILURE is different — the timeline might have entries once D1
-  // recovers, so that degrades to the noindex shell below, never a 410.
+  // soft-404 "not stored yet" shell. Issue #2021 narrows the 410: a domain
+  // the sitemap itself lists as a tracked brand (capture-backed OR collecting
+  // entry) renders an honest "collecting — no offer states recorded yet" 200
+  // so the moat stays discoverable for the whole /ads cohort. Only an
+  // UNLISTED domain with an empty ledger keeps the 410 Gone (never 200 with
+  // brand chrome for a domain we do not track). A transient D1 read FAILURE
+  // is still different — the timeline might have entries once D1 recovers, so
+  // that degrades to the noindex shell below, never a 410.
+  let collecting = false;
   if (!loadFailed && loaded.entries.length === 0) {
-    throw Response.json(
-      { domain: brand.domain, brandName: brand.displayName },
-      { status: 410, statusText: "Gone" },
+    const { loadIndexableBrandPageEntries, loadIndexableTimelineEntries, timelineSitemapEntries } = await import(
+      "~/lib/sitemap.server"
     );
+    let listed = false;
+    try {
+      const [brandEntries, timelineEntries] = await Promise.all([
+        loadIndexableBrandPageEntries(env),
+        loadIndexableTimelineEntries(env),
+      ]);
+      listed = timelineSitemapEntries(brandEntries, timelineEntries).some(
+        (entry) => entry.path === `/timeline/${brand.domain}`,
+      );
+    } catch {
+      // Sitemap read hiccup: degrade to the retire 410, never a 500.
+      listed = false;
+    }
+    if (listed) {
+      collecting = true;
+    } else {
+      throw Response.json(
+        { domain: brand.domain, brandName: brand.displayName },
+        { status: 410, statusText: "Gone" },
+      );
+    }
   }
 
   const canonicalPath = `/timeline/${brand.domain}`;
@@ -107,7 +137,7 @@ export async function loader({
   const shareUrl = asOf
     ? `${canonicalUrl(canonicalPath)}?asOf=${asOf}`
     : canonicalUrl(canonicalPath);
-  const noindex = loaded.entries.length === 0;
+  const noindex = loaded.entries.length === 0 && !collecting;
 
   return {
     domain: brand.domain,
@@ -120,6 +150,7 @@ export async function loader({
     asOfState: loaded.asOfState,
     entries: loaded.entries,
     noindex,
+    collecting,
   };
 }
 
@@ -135,7 +166,9 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   const description =
     loaderData.entries.length > 0
       ? `Dated offer states for ${loaderData.domain}: headline, CTA, and price, with page text and a screenshot when we stored one.`
-      : `No stored offer timeline for ${loaderData.domain} yet.`;
+      : loaderData.collecting
+        ? `Collecting offer states for ${loaderData.domain} — no offer states recorded yet; the dated ledger lands here as monitoring captures land.`
+        : `No stored offer timeline for ${loaderData.domain} yet.`;
 
   // Per-domain social card (issue #2029): share/preview of a timeline names
   // the brand instead of the site-wide generic og-image.png, reusing the same
@@ -163,7 +196,9 @@ export default function OfferTimelineRoute() {
   const pageTitle =
     data.entries.length > 0
       ? `Every offer ${data.brandName} has run since we started watching.`
-      : `We have not stored an offer timeline for ${data.domain} yet.`;
+      : data.collecting
+        ? `We are collecting offer states for ${data.domain}.`
+        : `We have not stored an offer timeline for ${data.domain} yet.`;
 
   return (
     <main className="f9-home f9-ads-page f9-timeline-page">
@@ -173,7 +208,9 @@ export default function OfferTimelineRoute() {
             {...jsonLdScriptProps(
               webPageJsonLd({
                 name: `${data.brandName} offer timeline | Five to Nine`,
-                description: `Dated offer states for ${data.domain}.`,
+                description: data.collecting
+                  ? `Collecting offer states for ${data.domain} — no offer states recorded yet.`
+                  : `Dated offer states for ${data.domain}.`,
                 pathname: data.canonicalPath,
                 aboutName: data.brandName,
               }),
@@ -201,24 +238,26 @@ export default function OfferTimelineRoute() {
            * HTML. Emitted only on indexable timelines — a noindex shell
            * never carries it.
            */}
-          <script
-            {...jsonLdScriptProps(
-              offerTimelineDatasetJsonLd({
-                brandName: data.brandName,
-                domain: data.domain,
-                description: `Dated offer states for ${data.domain}: headline, CTA, and price, with page text and a screenshot when we stored one.`,
-                pathname: data.canonicalPath,
-                datePublished:
-                  data.entries.length > 0
-                    ? data.entries[0]?.capturedAt ?? null
-                    : null,
-                dateModified:
-                  data.entries.length > 0
-                    ? data.entries[data.entries.length - 1]?.capturedAt ?? null
-                    : null,
-              }),
-            )}
-          />
+          {data.entries.length > 0 ? (
+            <script
+              {...jsonLdScriptProps(
+                offerTimelineDatasetJsonLd({
+                  brandName: data.brandName,
+                  domain: data.domain,
+                  description: `Dated offer states for ${data.domain}: headline, CTA, and price, with page text and a screenshot when we stored one.`,
+                  pathname: data.canonicalPath,
+                  datePublished:
+                    data.entries.length > 0
+                      ? data.entries[0]?.capturedAt ?? null
+                      : null,
+                  dateModified:
+                    data.entries.length > 0
+                      ? data.entries[data.entries.length - 1]?.capturedAt ?? null
+                      : null,
+                }),
+              )}
+            />
+          ) : null}
         </>
       ) : null}
       <MarketingNav />
@@ -233,8 +272,9 @@ export default function OfferTimelineRoute() {
             {pageTitle}
           </h1>
           <p className="f9-ads-subline">
-            A dated ledger of what this competitor's landing page said: headline, CTA, and
-            price, with page text and a screenshot when we stored one.
+            {data.collecting
+              ? "We are collecting this competitor's landing page now — no dated offer states recorded yet; the dated ledger lands here as monitoring captures land."
+              : "A dated ledger of what this competitor's landing page said: headline, CTA, and price, with page text and a screenshot when we stored one."}
           </p>
 
           <form className="f9-timeline-asof" method="get" action={data.canonicalPath}>
@@ -308,8 +348,9 @@ export default function OfferTimelineRoute() {
             <OfferTimelineLedger entries={data.entries} />
           ) : (
             <p className="f9-timeline-empty">
-              No stored snapshots yet. Once monitoring captures this landing page, the
-              dated ledger lands here.
+              {data.collecting
+                ? "Collecting — no offer states recorded yet. Once monitoring captures this landing page, the dated ledger lands here."
+                : "No stored snapshots yet. Once monitoring captures this landing page, the dated ledger lands here."}
             </p>
           )}
         </div>

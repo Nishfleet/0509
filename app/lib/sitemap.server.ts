@@ -620,16 +620,19 @@ export function timelineDomainFromSnapshotRow(row: TimelineSitemapRow): string |
 /**
  * Pure core: reduce snapshot rows to deduped, bounded /timeline/:domain
  * sitemap entries that the timeline route would render indexable. Mirrors
- * `loadOfferTimeline`'s own noindex predicate (entries.length > 0 — the
- * loader's 410-on-empty rule). The input is assumed to be ordered
+ * `loadOfferTimeline`'s own noindex predicate for capture-backed pages
+ * (entries.length > 0). Collecting entries for the tracked /ads cohort are
+ * added later by `timelineSitemapEntries` (issue #2021); this function still
+ * lists only proof-complete ledgers. The input is assumed to be ordered
  * `captured_at ASC, id ASC` (matching the loader's SQL); for each derived
  * registrable domain the function keeps only the first TIMELINE_SNAPSHOT_LIMIT
  * rows (= the loader's own per-domain window), then applies the proof gate
  * (`snapshotRowHasCompleteProof`) AND the ad-destination gate
- * (`!row.is_ad_destination`). A domain qualifies when at least one row in
- * that window survives both gates — the same set `loadOfferTimeline` would
- * render — so the sitemap can never list a /timeline/:domain that the route
- * 410s for an empty ledger. No freshness window — unlike brand pages, the
+ * (`!row.is_ad_destination`). A domain qualifies as capture-backed when at
+ * least one row in that window survives both gates — the same set
+ * `loadOfferTimeline` would render as a dated ledger. Collecting entries
+ * for tracked /ads brands with empty ledgers are added later by
+ * `timelineSitemapEntries` (issue #2021). No freshness window — unlike brand pages, the
  * timeline ledger renders indexable regardless of capture age. Each entry's
  * `lastmod` is the newest passing row's captured_at within the window
  * ("newest" = last in the ASC-ordered window). Capped at
@@ -776,7 +779,58 @@ export async function loadIndexableTimelineEntries(
   }
 }
 
-/** Degrade to the static sitemap when a fresh D1 has no snapshot table. */
+/**
+ * Collecting /timeline/:domain entries (issue #2021): every tracked, indexable
+ * /ads/:domain brand whose offer-history surface is not yet backed by a
+ * capture-qualified ledger still gets an indexable /timeline/:domain sitemap
+ * entry. The route renders those as an honest "collecting — no offer states
+ * recorded yet" 200 (never a bare 410), so the sitemap can list them without
+ * pointing crawlers at a Gone URL and the moat surface stays discoverable for
+ * the whole tracked cohort. No `lastmod` — nothing is captured yet, so there
+ * is no honest lastmod to claim (SitemapEntry.lastmod is optional). Pure.
+ */
+export function collectingTimelineEntries(
+  brandEntries: readonly SitemapEntry[],
+  timelineEntries: readonly SitemapEntry[],
+): SitemapEntry[] {
+  const listed = new Set(timelineEntries.map((entry) => entry.path));
+  const collecting: SitemapEntry[] = [];
+  for (const brand of brandEntries) {
+    if (!brand.path.startsWith("/ads/")) {
+      continue;
+    }
+    const domain = brand.path.slice("/ads/".length);
+    if (!domain || domain.includes("/") || domain.includes("?")) {
+      continue;
+    }
+    const path = `/timeline/${domain}`;
+    if (listed.has(path)) {
+      continue;
+    }
+    collecting.push({ path, changefreq: "weekly", priority: "0.3" });
+  }
+  return collecting;
+}
+
+/**
+ * The full /timeline/:domain sitemap set: capture-backed entries first (they
+ * carry an honest lastmod), then collecting entries for the rest of the
+ * tracked /ads cohort, capped together at SITEMAP_TIMELINE_PATH_LIMIT.
+ */
+export function timelineSitemapEntries(
+  brandEntries: readonly SitemapEntry[],
+  timelineEntries: readonly SitemapEntry[],
+): SitemapEntry[] {
+  const collecting = collectingTimelineEntries(brandEntries, timelineEntries);
+  const merged = [...timelineEntries, ...collecting];
+  if (merged.length > SITEMAP_TIMELINE_PATH_LIMIT) {
+    merged.length = SITEMAP_TIMELINE_PATH_LIMIT;
+  }
+  return merged;
+}
+
+/**
+ * Degrade to the static sitemap when a fresh D1 has no snapshot table. */
 function isMissingTimelineTableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return (
@@ -796,7 +850,7 @@ export async function publicSitemapFile(env: AppEnv): Promise<{
     loadIndexableTimelineEntries(env),
   ]);
   return {
-    body: buildSitemapXml(brandEntries, timelineEntries),
+    body: buildSitemapXml(brandEntries, timelineSitemapEntries(brandEntries, timelineEntries)),
     contentType: "application/xml; charset=utf-8",
     cacheControl: "public, max-age=3600",
   };
