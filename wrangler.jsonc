@@ -93,7 +93,10 @@
     "PRESENCE_X_ROLLOUT": "disabled",
     "PRESENCE_REDDIT_ROLLOUT": "disabled",
     "PRESENCE_LINKEDIN_ROLLOUT": "disabled",
-    "FUNNEL_MEASUREMENT_ENABLED": "0",
+    // Spec §8 gates cleared 2026-09-09 (issues #2103/#2104/#2105 + Nish's gates
+    // 1-2 approval on issue #2106; retention 90 days). Post-deploy canary:
+    // node scripts/funnel-canary-check.mjs. Rollback: flip back to "0".
+    "FUNNEL_MEASUREMENT_ENABLED": "1",
     "SIGNUP_FIRST_BRIEF_ENABLED": "1",
     // Issue #1386 (EPIC #1367 Q5): Full-Site Watch on a nike.com canary first.
     // Broad rollout is emptying FULLSITE_WATCH_CANARY_HOSTS. Rollback is
