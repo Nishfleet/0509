@@ -194,12 +194,15 @@ export interface BrandPageLoaderData {
    * #1417). The sitemap's /ads pages were orphans — they linked to /compare,
    * /switch, /search, /pricing and /competitor-monitoring but never to each
    * other, so Google discovered them only via the sitemap with no internal
-   * link equity flowing between brand pages. This deterministic set of up to
-   * four OTHER indexable brand pages (the current domain always excluded,
-   * see pickRelatedBrandLinks) restores the cross-links. Empty on a cache
-   * hiccup or a single-brand sitemap — the section hides in that case. The
-   * `BrowseTrackedCompetitors` component renders these, always backed by a
-   * link to the /brands hub so every brand page also reaches the full list.
+   * link equity flowing between brand pages. This deterministic cluster of
+   * OTHER indexable brand pages (the current domain always excluded, see
+   * pickRelatedBrandLinks) restores the cross-links; since issue #2048 the
+   * cluster is >=10 siblings (RELATED_BRAND_LINK_COUNT) so the programmatic
+   * cohort is a connected crawlable graph, not isolated pages. Empty on a
+   * cache hiccup or a single-brand sitemap — the section hides in that case.
+   * The `BrowseTrackedCompetitors` component renders these (as the "More
+   * tracked brands" cluster), always backed by a link to the /brands hub so
+   * every brand page also reaches the full list.
    */
   relatedBrands: IndexableAdsLink[];
   noindex: boolean;
@@ -1334,7 +1337,7 @@ function BrandAdsResults({
           verifiedLinkCount = 0 page must carry NEITHER. It never invents a
           brand. */}
       {data.verifiedLinkCount > 0 && data.relatedBrands.length > 0 ? (
-        <BrowseTrackedCompetitors links={data.relatedBrands} />
+        <BrowseTrackedCompetitors links={data.relatedBrands} heading="More tracked brands" />
       ) : null}
 
       {/* 7. CLOSER */}

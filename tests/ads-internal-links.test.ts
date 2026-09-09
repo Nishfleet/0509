@@ -6,6 +6,7 @@ import {
   displayNameFromDomain,
   indexableAdsLinkFromPath,
   pickFeaturedAdsInternalLink,
+  pickRelatedBrandLinks,
   resolveSearchBrandPageDomain,
   type IndexableAdsLink,
 } from "~/lib/ads-internal-links";
@@ -66,6 +67,48 @@ afterEach(() => {
   vi.doUnmock("~/lib/public-proof.server");
   vi.doUnmock("~/lib/sitemap.server");
   vi.resetModules();
+});
+
+/**
+ * Issue #2048: every /ads/:domain page must render a "More tracked brands"
+ * cluster of >=10 sibling /ads links drawn from the SAME indexable cohort the
+ * sitemap uses — a connected crawlable brand graph, not isolated pages. The
+ * loader (loadIndexableAdsInternalLinks) feeds pickRelatedBrandLinks from
+ * the sitemap indexability filter, so the cluster can never contain a
+ * cache-miss page that 301s to /search.
+ */
+describe("/ads/:domain 'More tracked brands' cluster (issue #2048)", () => {
+  const cohort: IndexableAdsLink[] = Array.from({ length: 20 }, (_v, i) => {
+    const domain = i === 0 ? "nike.com" : `brand${String(i).padStart(2, "0")}.com`;
+    return { domain, path: `/ads/${domain}`, name: domain };
+  });
+
+  it("hands every sampled /ads page at least 10 unique sibling cross-links", () => {
+    for (const page of cohort.slice(0, 10)) {
+      const cluster = pickRelatedBrandLinks(cohort, page.domain);
+      const uniquePaths = new Set(cluster.map((link) => link.path));
+      expect(uniquePaths.size).toBeGreaterThanOrEqual(10);
+      // Every sibling link is a bare /ads/:domain path from the indexable
+      // cohort — never an invented domain and never a /search handoff.
+      for (const path of uniquePaths) {
+        expect(path.startsWith("/ads/")).toBe(true);
+        expect(cohort.some((link) => link.path === path)).toBe(true);
+        expect(path).not.toBe("/search");
+      }
+      // A page never links to itself.
+      expect(cluster.some((link) => link.domain === page.domain)).toBe(false);
+    }
+  });
+
+  it("stays in sync with the sitemap-driven cohort — no hand-maintained subset", () => {
+    // The cluster is a pure function of the caller's indexable set: shrink
+    // the cohort and the cluster shrinks with it (all remaining others), so
+    // there is no second data source to drift out of sync.
+    const smallCohort = cohort.slice(0, 8);
+    const cluster = pickRelatedBrandLinks(smallCohort, "nike.com");
+    expect(cluster).toHaveLength(7);
+    expect(cluster.every((link) => smallCohort.some((c) => c.path === link.path))).toBe(true);
+  });
 });
 
 describe("indexable ads link helpers", () => {

@@ -1134,13 +1134,22 @@ describe("/ads/:domain — methodology footer cross-link (issues #1552, #2022)",
   });
 });
 
-describe("/ads/:domain — related-brand cross-links (issue #1417)", () => {
+describe("/ads/:domain — related-brand cross-links (issues #1417, #2048)", () => {
   const other = [
     { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
     { domain: "asos.com", path: "/ads/asos.com", name: "ASOS" },
     { domain: "hm.com", path: "/ads/hm.com", name: "H&M" },
     { domain: "nykaa.com", path: "/ads/nykaa.com", name: "Nykaa" },
   ] as const;
+  // Issue #2048: the rendered cluster must be a real crawl-depth graph —
+  // at least 10 sibling /ads links on every published brand page.
+  const bigCohort: { domain: string; path: string; name: string }[] = Array.from(
+    { length: 14 },
+    (_v, i) => {
+      const domain = `brand${String(i).padStart(2, "0")}.com`;
+      return { domain, path: `/ads/${domain}`, name: `Brand ${i}` };
+    },
+  );
 
   it("cross-links every populated page to OTHER /ads pages and never to itself", async () => {
     for (const domain of ["nike.com", "adidas.com", "asos.com", "hm.com"] as const) {
@@ -1162,6 +1171,35 @@ describe("/ads/:domain — related-brand cross-links (issue #1417)", () => {
     }
   });
 
+  it("renders the >=10-sibling 'More tracked brands' cluster with no /search cross-link (issue #2048)", async () => {
+    const markup = await render(
+      populated({ relatedBrands: bigCohort }),
+    );
+
+    // Scope the cluster assertions to the "More tracked brands" section —
+    // other page chrome (e.g. the breadcrumb's /search parent link) is not
+    // part of this contract.
+    const sectionStart = markup.indexOf('id="tracked-competitors"');
+    expect(sectionStart).toBeGreaterThan(-1);
+    const cluster = markup.slice(sectionStart, markup.indexOf("</section>", sectionStart));
+
+    const uniqueAdHrefs = new Set(cluster.match(/href="\/ads\/[^"]+"/g) ?? []);
+    expect(uniqueAdHrefs.size).toBeGreaterThanOrEqual(10);
+    // The section carries the issue's cluster title.
+    expect(cluster).toContain("More tracked brands");
+    // No cross-link may be a cache-miss /search handoff — every href stays
+    // on the /ads/:domain surface.
+    expect(cluster).not.toContain('href="/search"');
+    // Every rendered cross-link is a member of the indexable cohort the
+    // loader passed in — no invented or dead destination.
+    for (const href of uniqueAdHrefs) {
+      const path = href.slice('href="'.length, -1);
+      expect(bigCohort.some((link) => link.path === path)).toBe(true);
+    }
+    // The current page never links to itself.
+    expect(cluster).not.toContain('href="/ads/nike.com"');
+  });
+
   it("hides the related-brand section when no OTHER indexable brand pages exist, and never links /brands without real links", async () => {
     const markup = await render(populated({ relatedBrands: [] }));
     expect(markup).not.toContain("Browse tracked competitors");
@@ -1176,7 +1214,9 @@ describe("/ads/:domain — related-brand cross-links (issue #1417)", () => {
  */
 describe("pickRelatedBrandLinks — no /ads page is an orphan", () => {
   it("excludes the current domain and returns a deterministic capped set of OTHER brands", async () => {
-    const { pickRelatedBrandLinks } = await import("~/lib/ads-internal-links");
+    const { pickRelatedBrandLinks, RELATED_BRAND_LINK_COUNT } = await import(
+      "~/lib/ads-internal-links"
+    );
     const links = [
       { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
       { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
@@ -1187,12 +1227,25 @@ describe("pickRelatedBrandLinks — no /ads page is an orphan", () => {
     ];
 
     const set = pickRelatedBrandLinks(links, "nike.com");
-    // Default cap of 4.
-    expect(set).toHaveLength(4);
+    // Issue #2048: the default cap is RELATED_BRAND_LINK_COUNT (>=10), so a
+    // small sitemap hands back every OTHER brand it has.
+    expect(set).toHaveLength(5);
+    expect(RELATED_BRAND_LINK_COUNT).toBeGreaterThanOrEqual(10);
     // Never the page itself.
     expect(set.some((link) => link.domain === "nike.com")).toBe(false);
     // Deterministic across calls (stable internal-link set, no crawl churn).
     expect(pickRelatedBrandLinks(links, "nike.com")).toEqual(set);
+
+    // A cohort larger than the cap is sliced to exactly the cap — the >=10
+    // sibling floor only holds while the indexable cohort is that deep.
+    const bigCohort = Array.from({ length: 15 }, (_v, i) => ({
+      domain: `brand${String(i).padStart(2, "0")}.com`,
+      path: `/ads/brand${String(i).padStart(2, "0")}.com`,
+      name: `Brand ${i}`,
+    }));
+    const capped = pickRelatedBrandLinks(bigCohort, "nike.com");
+    expect(capped).toHaveLength(RELATED_BRAND_LINK_COUNT);
+    expect(capped.every((link) => link.domain !== "nike.com")).toBe(true);
 
     // Every other brand in a small sitemap still gets cross-links when count
     // exceeds the remaining set size.
@@ -1224,8 +1277,10 @@ describe("ads.cross.link.breadcrumb.canary — combined conditional rule (issue 
     // BreadcrumbList JSON-LD present on a populated indexable page.
     expect(markup).toContain('"@type":"BreadcrumbList"');
 
-    // Sibling cross-link block present: ≥2 links to OTHER /ads pages.
-    expect(markup).toContain("Browse tracked competitors");
+    // Sibling cross-link block present: ≥2 links to OTHER /ads pages. The
+    // section renders as the "More tracked brands" cluster since issue
+    // #2048 (≥10 siblings on real pages; this fixture passes a small set).
+    expect(markup).toContain("More tracked brands");
     const adsHrefCount = (markup.match(/href="\/ads\//g) ?? []).length;
     expect(adsHrefCount).toBeGreaterThanOrEqual(2);
     expect(markup).toContain('href="/ads/adidas.com"');
@@ -1251,6 +1306,7 @@ describe("ads.cross.link.breadcrumb.canary — combined conditional rule (issue 
     );
 
     expect(markup).not.toContain('"@type":"BreadcrumbList"');
+    expect(markup).not.toContain("More tracked brands");
     expect(markup).not.toContain("Browse tracked competitors");
     expect(markup.match(/href="\/ads\//g) ?? []).toHaveLength(0);
   });
