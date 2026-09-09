@@ -89,10 +89,26 @@ export async function recordCtaPipelineStageCounts(
   counters: LandingPagePipelineCounters,
   now: Date = new Date(),
 ): Promise<void> {
-  if (!env.DB) return;
   const day = now.toISOString().slice(0, 10);
   const counts = ctaPipelineStageCountsFromCounters(counters);
+  if (!env.DB) {
+    // Issue #1960: a missing D1 binding used to be a silent no-op, so an
+    // empty `cta_pipeline_stage_counts` table was indistinguishable from a
+    // writer that was never reached. Surface it as a structured diagnostic so
+    // an operator (or the fleet) can tell "no rows because nothing ran" apart
+    // from "no rows because the writer is broken on this Worker."
+    console.error(
+      JSON.stringify({
+        event: "cta_pipeline_stage_counts_writer",
+        day,
+        ok: false,
+        reason: "no_d1_binding",
+      }),
+    );
+    return;
+  }
   try {
+    let wrote = 0;
     for (const stage of CTA_PIPELINE_STAGES) {
       const count = counts[stage];
       if (count <= 0) continue;
@@ -103,8 +119,36 @@ export async function recordCtaPipelineStageCounts(
       )
         .bind(day, stage, count)
         .run();
+      wrote += 1;
     }
-  } catch {
-    // Best-effort telemetry. A D1 failure here must never fail the scan.
+    if (wrote > 0) {
+      // Issue #1960: one structured line per written check (same cadence as
+      // the `landing_page_pipeline_check` flush in the same finally block), so
+      // the funnel write is itself observable and not a silent success.
+      console.log(
+        JSON.stringify({
+          event: "cta_pipeline_stage_counts_writer",
+          day,
+          ok: true,
+          wrote,
+        }),
+      );
+    }
+  } catch (error) {
+    // Issue #1960: a D1 write failure was previously swallowed, so an empty
+    // table was indistinguishable from a writer that was never reached. Log the
+    // underlying error, but never throw — a telemetry failure must not break a
+    // scan. The drop-through is intentional: an empty table plus these error
+    // lines points at a broken writer, while an empty table with no lines points
+    // at a writer that is never invoked on the running code path.
+    console.error(
+      JSON.stringify({
+        event: "cta_pipeline_stage_counts_writer",
+        day,
+        ok: false,
+        reason: "d1_write_failed",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
   }
 }
