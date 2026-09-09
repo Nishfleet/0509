@@ -1,80 +1,31 @@
-## What
+## Summary
+Root loader reads an optional `GOOGLE_SITE_VERIFICATION` env var; the root `meta()` renders `<meta name="google-site-verification" content="...">` **only when set** (trimmed; empty/whitespace ignored). Unset = no tag, zero behavior change. No value is committed — it arrives via `wrangler secret put GOOGLE_SITE_VERIFICATION` / `.dev.vars`.
 
-net-positive-because: the diff is the shipped capture-validity gate (helpers, wiring, render/MCP surfacing) plus its regression test — net-positive test+feature lines that are the smallest durable fix and its prevention mechanism, not speculative scaffolding.
-
-Closes #1996. `/timeline/:domain` was publishing geo-variance + cookie-banner capture artifacts as real offer transitions — e.g. the live Nike SG (`/sg/`, 7 Sept: "Shop Now", "$149") vs Nike FR (`/fr/`, 8 Sept: French consent CTA, price "—") pair rendered as a false "Nike changed their CTA and dropped their price" transition on the public indexed flagship surface. This PR lands a capture-validity gate so such pairs become an explicit suppressed state with a reason, never an offer transition, plus a regression gate that fails on the old code.
-
-**Logic — `app/lib/offer-timeline.ts`**
-
-- `geoLocaleSegment(url)` — returns the first path segment when it is a `SUPPORTED_COUNTRIES` ISO code (`/sg/` -> `"sg"`, `/fr/` -> `"fr"`), else null.
-- `isCookieBannerOrConsent(text)` — true when the text matches a curated consent/ads-personalization string list (French `"publicités personnalisées"`, `"gérer mes cookies"`, `"manage cookies"`, `"accept all cookies"`, `"privacy settings"`, etc.), case-insensitive substring. Tailored to consent phrases so a "Personalised winter sale" headline or a "Shop Now" CTA still diffs normally.
-- `captureValidityReason(previous, current)` — returns `"geo locale change"` when both canonical URLs carry a known locale segment and they differ; `"cookie banner / consent string"` when the current CTA/headline is a consent string; else null (genuine change diffs normally).
-- `buildOfferLedger` — between run-collapse and diff, computes the validity reason; when non-null, the entry is emitted with `transition: null` and `suppressedReason` set (no phantom change, no fake price `$149 -> —` disappearance). `OfferLedgerEntry` gains optional `suppressedReason`.
-
-**Phase 6 (follow-on): skip-suppressed diff baseline** — the diff/gate baseline is the last NON-suppressed emitted entry (`lastNonSuppressedEntry`), never the raw last one, so a later same-region capture can never diff against a suppressed placeholder (e.g. a "—" price or consent CTA) and fabricate a "price restored from —" transition. Suppressed states remain emitted as their own labeled dated states; only the baseline skips them.
-
-**Render + MCP — `app/components/offer-timeline-ledger.tsx`, `app/lib/offer-timeline-agent-tools.ts`**
-
-- Ledger renders `Capture suppressed: <reason>` when `transition` is null and `suppressedReason` is non-null (instead of the misleading "First offer on record.").
-- `OfferHistoryEntryPayload` gains `suppressedReason` and sets `changes: null` for suppressed states, so MCP consumers report the reason instead of fabricated field changes.
-
-**Tests**
-
-- `tests/offer-timeline-geo-variance-phantom.test.ts` — NEW regression gate (fleet-ops#366): (a) real sg+fr Nike pair emits NO offer transition (suppressed with `geo locale change`); (b) genuine same-geo `$149 -> $129` price edit still emits exactly one transition; (c) cookie-banner CTA swap on the SAME geo suppresses with the consent reason; (d) phase 6: sg -> fr(suppressed, "—") -> fr(real "$149") never emits a "price restored from —" transition.
-- `tests/offer-timeline.render.test.tsx` — suppressed entry renders as "Capture suppressed", not "First offer" and not a transition; proof hrefs kept.
-- `tests/offer-timeline-agent-tools.test.ts` — MCP payload surfaces suppressed reason with changes null.
-- `tests/offer-timeline.test.ts`, `tests/offer-timeline.server.test.ts` — green after the shape change (field populated automatically by `buildOfferLedger`).
-
-No D1 migration (pure read-side ledger/diff logic + a test). No DROP COLUMN / DROP TABLE / column rename / NOT NULL.
+Docs note (`docs/seo-site-verification.md`) records where the value comes from: Search Console property creation is the owner's account step; this PR ships the plumbing. Unblocks BET 5 GSC gates (indexed pages, non-branded impressions).
 
 ## Verification
+- `npx vitest run tests/seo-site-verification.test.ts --configLoader runner` → 4 passed (env set → tag present with value; unset → absent; whitespace → absent; title preserved alongside).
+- Full node project suite: `npx vitest run --project node` → 627 files / 7461 tests passed.
+- `npm run typecheck` (`cf-typegen && react-router typegen && tsc -b`) → clean. This run caught and fixed a real TS2353: the root `meta()` tags array was inferred as `{ title: string }[]`, so pushing the `{ name, content }` verification tag failed typecheck (commit `cfada093` annotates the array as a union — no runtime change). CI had failed on this exact error; it is now green locally.
+- Live curl check after the secret is set in production: `curl -sS https://0509.io/ | grep -c google-site-verification` → expected 1; before it is set, count is 0 and that is correct.
 
-Real runs, on this branch, after rebase onto origin/main:
+run-proof: tests/seo-site-verification.test.ts (4/4 green, executed this run); `npx vitest run --project node` 627/7461 green; `tsc -b` clean. No route-loader behavior change when env unset.
 
-```
-$ npx vitest run --project node tests/offer-timeline-geo-variance-phantom.test.ts
- Test Files  1 passed (1)
-      Tests  4 passed (4)
+research: existing app pattern followed — head tags already flow through root `meta()`; no new bin/, no new dependency.
 
-$ npx vitest run --project node tests/offer-timeline.test.ts tests/offer-timeline.render.test.tsx tests/offer-timeline-agent-tools.test.ts tests/offer-timeline.server.test.ts
- Test Files  4 passed (4)
-      Tests  42 passed (42)
+help-first: N/A (no new CLI file).
 
-$ npx vitest run --configLoader runner --project node
- Test Files  618 passed (618)
-      Tests  7368 passed (7368)
+organ-heartbeat: docs/seo-site-verification.md not-an-organ: product docs note, not a recurring report channel.
 
-$ npx vitest run --project workers
- Test Files  39 passed (39)
-      Tests  198 passed (198)
+net-positive-because: additive env-gated feature (root loader + meta + docs + tests); no machinery removed.
 
-$ NODE_OPTIONS="--max-old-space-size=8192" npx tsc -b
-(exit 0; default-heap OOM on this large monorepo is resolved with the larger heap)
-```
+loose-ends: owner must create the Search Console property and `wrangler secret put GOOGLE_SITE_VERIFICATION`, then deploy — production curl check is gated on that owner step.
 
-`run-proof:` the target regression suite `tests/offer-timeline-geo-variance-phantom.test.ts` ran on this branch post-rebase and went 4/4 green; four related offer-timeline suites (42 tests) green; full node project (618 files, 7368 tests) and workers project (39 files, 198 tests) re-ran green; `tsc -b` exits 0 with the larger heap. The regression test FAILS on current main (the pre-gate pair diffs to a phantom Headline/CTA/Price change) and PASSES with the gate — it is the `bin/prove-one-run-check` receipt run.
+Closes #2028
 
-## Reviewer round (product repo, one round — seat cursor/cursor-grok-4.6-high)
-
-Ran via step 8 before arming (`bin/fleet-review-arm-check` exit 0 → senior seat usable). Reviewer ran `npx vitest run --project node` on the five offer-timeline suites (46/46 green) and assessed the diff vs the issue acceptance.
-
-Adjudicated against `~/.pi/agent/skills/review-adjudication/SKILL.md`:
-
-- **Act on**: none — reviewer reported zero critical and zero warning findings.
-- **Consider** (`"accept all"`/`"reject all"` are bare 2-word substrings with no cookie/consent context, a small genuine-CTA false-positive risk): NOTED, recorded, not re-delegated. The rest of the consent list is phrase-level and generic offer verbs ("Shop Now") are deliberately absent; the two bare phrases carry a minor risk that is within the issue's conservative prefer-never-fabricate scope. Documented in `.fleet/plan.md` as an accepted over-breadth tradeoff.
-- **Consider** (geo-switch suppression permanently deafens the timeline to real new-region changes until the baseline is deliberately re-anchored): NOTED, recorded, not re-delegated. This is the phase-6 codified intended behavior (see `.fleet/plan.md` phase 6); re-anchoring the baseline on region adoption is the deeper fix the issue explicitly calls out of scope. `.fleet/plan.md` risk table records the decision.
-- **Noted** (`geoLocaleSegment` treats any ISO-2 first path segment as a locale, e.g. `/in/`): harmless given the segment must match a real `SUPPORTED_COUNTRIES` code; not covered by tests.
-- **Dismissed-with-reason** (conditional-`suppressedReason`/plain-paragraph render): back-compat call sites must keep compiling; proof hrefs are preserved and the suppressed state is explicit with a reason — exactly acceptance bullet 1.
-- **Acceptance check** — all four bullets PASS.
-
-The two Consider items are deliberate over-breadth tradeoffs of a conservative never-fabricate design, recorded here and in `.fleet/plan.md` as required, and are not re-delegated (manager mode: Consider/Noted are recorded, not acted-on).
-
-## Acceptance
-
-All issue bullets pass post-fix:
-1. Capture-validity gate suppresses geo-locale-differing pairs + consent-CTA pairs as `capture_failed`-style suppressed states with a reason — never a transition.
-2. Price `$149 -> —` disappearance suppressed when the only cause is the geo switch.
-3. Regression test feeds the real sg+fr pair and asserts NO offer transition; a genuine same-geo price edit still emits exactly one transition.
-4. Test fails on current main, passes with the gate.
-
-`Closes #1996`
+## Review round (one, pre-arm)
+Reviewer seat: meta/muse-spark-1.2-contributor (senior ladder exhausted; capable-seat fallback).
+- Act on: none.
+- Consider: tests exercise `meta()` with hand-built `RootLoaderData`, not the env→data loader mapping. The mapping is a 4-line pass-through (`typeof === "string"` && trim guard); the render contract (set → tag, unset/whitespace → no tag) is asserted. Recorded, not re-delegated.
+- Noted: tag renders site-wide via root layout (in-scope; acceptance names root route); token flows into dehydrated RootLoaderData (public by design — must be readable by Google in HTML).
+- Dismissed-with-reason: redundant `?.trim()` in `meta()` (loader already normalizes; defensive); hardcoded test fixtures are fabricated tokens, not a real Search Console value, so no-value-committed holds.
