@@ -10,6 +10,8 @@ interface AuthFormProps {
   error?: string | null;
   /** WP-39: magic-link already sent — show recovery (resend / change email). */
   linkSent?: boolean;
+  /** A resend just succeeded — the sent state says "Sent again". */
+  linkResent?: boolean;
   oauthProviders?: AuthOAuthProvider[];
   passkeysEnabled?: boolean;
   /** Allowlisted signup marker only — never the raw query string. */
@@ -23,6 +25,24 @@ const OAUTH_PROVIDER_LABELS: Record<AuthOAuthProvider, string> = {
   microsoft: "Continue with Microsoft",
 };
 
+interface InboxLink {
+  href: string;
+  label: string;
+}
+
+const INBOX_LINKS_BY_DOMAIN: Record<string, InboxLink> = {
+  "gmail.com": { href: "https://mail.google.com/", label: "Open Gmail" },
+  "googlemail.com": { href: "https://mail.google.com/", label: "Open Gmail" },
+  "outlook.com": { href: "https://outlook.live.com/mail/", label: "Open Outlook" },
+  "hotmail.com": { href: "https://outlook.live.com/mail/", label: "Open Outlook" },
+  "live.com": { href: "https://outlook.live.com/mail/", label: "Open Outlook" },
+};
+
+function inboxLinkForEmail(email: string): InboxLink | null {
+  const domain = email.split("@")[1]?.trim().toLowerCase() ?? "";
+  return INBOX_LINKS_BY_DOMAIN[domain] ?? null;
+}
+
 export function AuthForm({
   mode,
   redirectTo,
@@ -31,6 +51,7 @@ export function AuthForm({
   message,
   error,
   linkSent = false,
+  linkResent = false,
   oauthProviders = [],
   passkeysEnabled = false,
   signupSource,
@@ -46,6 +67,7 @@ export function AuthForm({
   const showSecondaryAuth = availableOAuthProviders.length > 0 || showPasskeyLogin;
   const sentEmail = (initialEmail ?? "").trim();
   const showSentRecovery = linkSent && Boolean(sentEmail);
+  const sentInboxLink = isSignup ? inboxLinkForEmail(sentEmail) : null;
   const switchHref = isSignup
     ? `/auth/login?redirectTo=${encodeURIComponent(redirectTo)}`
     : `/auth/signup?redirectTo=${encodeURIComponent(redirectTo)}`;
@@ -76,7 +98,8 @@ export function AuthForm({
       {showSentRecovery ? (
         <div className="f9-auth-form" aria-live="polite">
           <p className="f9-wk-notice is-success" role="status">
-            Link sent to <strong>{sentEmail}</strong>
+            {linkResent ? "Sent again to " : "Link sent to "}
+            <strong>{sentEmail}</strong>
           </p>
           {isSignup ? (
             <p className="f9-auth-switch f9-wk-mt1">
@@ -84,9 +107,21 @@ export function AuthForm({
               resending.
             </p>
           ) : null}
+          {isSignup ? (
+            <p className="f9-auth-switch f9-wk-mt1">
+              {sentInboxLink ? (
+                <a href={sentInboxLink.href} rel="noopener" target="_blank">
+                  {sentInboxLink.label}
+                </a>
+              ) : (
+                "Open your inbox"
+              )}
+            </p>
+          ) : null}
           {error ? <p aria-live="assertive" className="f9-wk-notice is-error" role="alert">{error}</p> : null}
           <Form method="post">
             <input name="mode" type="hidden" value={mode} />
+            <input name="resend" type="hidden" value="1" />
             <input name="redirectTo" type="hidden" value={redirectTo} />
             <input name="email" type="hidden" value={sentEmail} />
             {isSignup && signupSource ? (
