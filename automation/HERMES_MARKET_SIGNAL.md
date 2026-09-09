@@ -1,6 +1,6 @@
 # Hermes 0509 morning market-signal contract
 
-Run on `netcup-rs2000` from `/home/nish/workspaces/products/0509`.
+Run on `netcup-rs2000` from the dedicated worktree `/home/nish/workspaces/agent-state/0509-daily-market-signal-worktree`.
 
 ## Goal
 
