@@ -305,6 +305,7 @@ describe("public funnel loaders reuse the sitemap indexability filter", () => {
       commercialLaunch,
       proofBrief: null,
       indexableAdsLinks: [nykaa, glossier],
+      changeMark: null,
     });
   });
 
