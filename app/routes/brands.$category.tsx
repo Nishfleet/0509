@@ -26,7 +26,7 @@
  */
 
 import { Link, useLoaderData } from "react-router";
-import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
@@ -38,7 +38,6 @@ import {
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 import {
   brandsSocialCardUrl,
-  canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
   breadcrumbListJsonLd,
@@ -135,14 +134,6 @@ function categoryDescription(category: string): string {
   return `Browse every tracked ${category} brand on Five to Nine — indexable public pages showing the real Meta ads that run for each, with Ad Aggression Score and a change feed.`;
 }
 
-export const links: LinksFunction = ({ params }) => {
-  const slug = (params.category ?? "").trim().toLowerCase();
-  if (!brandCategoryFromSlug(slug)) {
-    return [];
-  }
-  return canonicalLinks(`/brands/${slug}`);
-};
-
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   if (!loaderData) {
     return [{ title: "Brand category | Five to Nine" }];
@@ -192,13 +183,11 @@ export default function BrandCategoryRoute() {
     <main className="f9-home f9-brands-page f9-brands-category-page">
       <script
         {...jsonLdScriptProps(
-          breadcrumbListJsonLd({
-            items: [
-              { name: "Home", pathname: "/" },
-              { name: "Brands", pathname: "/brands" },
-              { name: data.category, pathname: categoryPath },
-            ],
-          }),
+          breadcrumbListJsonLd([
+            { name: "Home", pathname: "/" },
+            { name: "Brands", pathname: "/brands" },
+            { name: data.category, pathname: categoryPath },
+          ]),
         )}
       />
       <script {...jsonLdScriptProps(categoryItemListJsonLd(data.items, categoryPath))} />

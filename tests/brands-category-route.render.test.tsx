@@ -39,8 +39,8 @@ async function render(data: typeof currentData): Promise<string> {
 }
 
 const sportItems = [
-  { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
-  { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
+  { domain: "nike.com", path: "/ads/nike.com", name: "Nike", timelineIndexable: true },
+  { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas", timelineIndexable: false },
 ];
 
 const sportData = {
