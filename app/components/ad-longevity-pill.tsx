@@ -9,12 +9,20 @@ import type { AdRecord } from "~/lib/types";
  */
 export function AdLongevityPill({
   ad,
+  now,
 }: {
   ad: Pick<AdRecord, "firstSeenAt" | "lastSeenAt" | "activeStatusObserved">;
+  /**
+   * The reference "now" the running-days count is measured against. Defaults
+   * to the current wall-clock time; brand-page ad walls pass the capture's
+   * fetched_at so "Running N days" is measured up to when the capture was
+   * taken, not the moment the page is viewed (issue #2142).
+   */
+  now?: Date;
 }) {
   if (ad.activeStatusObserved === false) return null;
-  const days = adLongevityDays(ad);
-  const label = formatAdLongevityLabel(ad);
+  const days = adLongevityDays(ad, now);
+  const label = formatAdLongevityLabel(ad, now);
   if (days === null || label === null) return null;
 
   return (
