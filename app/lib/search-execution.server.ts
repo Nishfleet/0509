@@ -100,6 +100,7 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
       if (!v2Context) return null;
       const v2Query = buildSearchV2SavedQuery(v2Context.queryIntent, options.scope, options.parsed.filters, {
         identityAliases: v2Context.identityAliases,
+        pageId: v2Context.advertiserPageId,
       });
       const v2CacheKey = buildSearchV2CacheKey({
         provider,
@@ -107,6 +108,7 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
         scope: options.scope,
         country: v2Query.filters.country || "all",
         cursor: options.cursor,
+        pageId: v2Context.advertiserPageId,
       });
       const v2RawResult = await searchAdsViaSourceResolver(options.env, v2Query, options.cursor, {
         ...resolverOptions,
@@ -165,6 +167,7 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
   const query = applyDomainV2 && v2Context
     ? buildSearchV2SavedQuery(v2Context.queryIntent, options.scope, options.parsed.filters, {
         identityAliases: v2Context.identityAliases,
+        pageId: v2Context.advertiserPageId,
       })
     : legacyQuery;
 
@@ -176,6 +179,7 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
           scope: options.scope,
           country: query.filters.country || "all",
           cursor: options.cursor,
+          pageId: v2Context.advertiserPageId,
         })
       : null;
 
@@ -413,8 +417,9 @@ export type SearchCacheProbeOptions = Omit<ExecuteSearchOptions, "forceLive">;
 // the execution path would use (v2 domain override or legacy fingerprint) and
 // does a single cache existence check. The search loader uses it so selecting
 // an ad from already-rendered results does not burn the search rate limit.
-// Skipped identity resolution is safe here: the v2 cache key only depends on
-// the parsed query intent, never on resolved aliases.
+// Resolves the v2 context (identity) so the cache key matches the execution
+// path, which now includes the curated page id for page-scoped brands
+// (issue #1982). Identity is cached (6h TTL) so the probe stays lightweight.
 export async function hasWarmSearchCacheEntry(options: SearchCacheProbeOptions): Promise<boolean> {
   try {
     const isShadow = shouldRunSearchV2Shadow(options.env);
@@ -427,9 +432,15 @@ export async function hasWarmSearchCacheEntry(options: SearchCacheProbeOptions):
       queryIntent && queryIntent.intent === "domain" && queryIntent.registrableDomain,
     );
 
+    const v2Context = useDomainV2 && options.competitorWebsite.raw
+      ? await buildSearchV2Context(options.competitorWebsite.raw, options.scope)
+      : null;
     const v2Query =
-      useDomainV2 && queryIntent
-        ? buildSearchV2SavedQuery(queryIntent, options.scope, options.parsed.filters)
+      useDomainV2 && v2Context
+        ? buildSearchV2SavedQuery(v2Context.queryIntent, options.scope, options.parsed.filters, {
+            identityAliases: v2Context.identityAliases,
+            pageId: v2Context.advertiserPageId,
+          })
         : normalizeSavedQuery(options.parsed.mode, options.parsed.filters);
     const legacyQuery = normalizeSavedQuery(options.parsed.mode, options.parsed.filters);
 
@@ -441,15 +452,16 @@ export async function hasWarmSearchCacheEntry(options: SearchCacheProbeOptions):
     }
 
     const cacheKeyOverride =
-      useDomainV2 && queryIntent
+      useDomainV2 && v2Context
         ? buildSearchV2CacheKey({
             provider: resolveCommercialDiscoveryProvider(options.env, {
               customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
             }),
-            intent: queryIntent,
+            intent: v2Context.queryIntent,
             scope: options.scope,
             country: v2Query.filters.country || "all",
             cursor: options.cursor,
+            pageId: v2Context.advertiserPageId,
           })
         : null;
 

@@ -16,6 +16,16 @@ export interface WebsiteIdentity {
    * is the load-bearing case. Brand names stay in `aliases`; these are hosts.
    */
   domainAliases: string[];
+  /**
+   * The brand's numeric Meta Page id, when curated. Scopes the provider
+   * search to that exact page (`view_all_page_id`) instead of a keyword
+   * query, so the brand's own ads surface instead of keyword junk. The
+   * matcher still verifies each ad lands on the brand's domain — a curated
+   * page id never fabricates a verified row, it only asks the provider the
+   * right question (issue #1982). Optional so legacy fixtures that predate
+   * the field still type-check; production always sets it via `?? null`.
+   */
+  advertiserPageId?: string | null;
   resolvedAt: string;
 }
 
@@ -39,7 +49,7 @@ const IDENTITY_FETCH_TIMEOUT_MS = 10_000;
  */
 const IDENTITY_OVERRIDES: Record<
   string,
-  { siteName?: string; domainAliases?: string[] }
+  { siteName?: string; domainAliases?: string[]; advertiserPageId?: string }
 > = {
   // GOAT's marketplace CDN returns 403 to scripted fetches regardless of the
   // user-agent (even a full browser UA), so live identity resolution cannot
@@ -48,7 +58,13 @@ const IDENTITY_OVERRIDES: Record<
   // and surfaces keyword junk (mouth-tape, marketplace ads) instead of GOAT's
   // own ads. The curated name also wins over a live one if the CDN ever
   // unblocks, by design (see applyIdentityOverride pin).
-  "goat.com": { siteName: "GOAT" },
+  //
+  // The curated Meta Page id (facebook.com/goatapp) scopes the provider search
+  // to GOAT's own page so its ~69 ads landing on goat.com surface instead of
+  // the ~39k keyword-junk rows a bare "GOAT" keyword query returns (issue
+  // #1982). The matcher still verifies each ad lands on goat.com — a curated
+  // page id never fabricates a verified row.
+  "goat.com": { siteName: "GOAT", advertiserPageId: "746493592053334" },
   // On runs its ads across both on.com and its long-standing on-running.com
   // host (on-running.com now redirects into www.on.com). The live redirect
   // chain for on.com never touches on-running.com, so the alias is not
@@ -62,7 +78,16 @@ const IDENTITY_OVERRIDES: Record<
   // site name pins the query to the brand term the same way goat.com's does,
   // so the pipeline asks Meta the right question even when the live homepage
   // is bot-blocked or its og:site_name is a shop label.
-  "on.com": { siteName: "On", domainAliases: ["on-running.com"] },
+  //
+  // The curated Meta Page id (facebook.com/On) scopes the provider search to
+  // On's own page so its ~5,500 ads landing on on.com surface instead of the
+  // generic keyword junk a bare "On" query returns (issue #1982). The matcher
+  // still verifies each ad lands on on.com/on-running.com.
+  "on.com": {
+    siteName: "On",
+    domainAliases: ["on-running.com"],
+    advertiserPageId: "238939146624",
+  },
   // Reebok is a major global Meta advertiser, but its Shopify-hosted homepage
   // is bot-blocked for the scripted production crawler (like goat.com), so
   // live identity resolution cannot read a site name and the provider query
@@ -172,12 +197,24 @@ function applyIdentityOverride(
     siteName,
     aliases: siteName ? [...new Set([...baseAliases, siteName])] : [...baseAliases],
     domainAliases: mergedDomainAliases,
+    advertiserPageId: override.advertiserPageId ?? null,
     resolvedAt: live?.resolvedAt ?? new Date().toISOString(),
   };
 }
 
 export function clearWebsiteIdentityCacheForTests() {
   identityCache.clear();
+}
+
+/**
+ * Sync lookup of a curated Meta Page id for a registrable domain, without
+ * a network fetch. Used by the /ads/:domain loader and sitemap to re-derive
+ * the same page-scoped cache key the publisher wrote, so the page renders
+ * and the sitemap lists it (issue #1982). Returns null when no curated id
+ * exists (the common case).
+ */
+export function getCuratedAdvertiserPageId(registrableDomain: string): string | null {
+  return IDENTITY_OVERRIDES[registrableDomain]?.advertiserPageId ?? null;
 }
 
 async function fetchWebsiteIdentity(safeUrl: URL, registrableDomain: string): Promise<WebsiteIdentity | null> {
@@ -260,6 +297,7 @@ async function fetchWebsiteIdentity(safeUrl: URL, registrableDomain: string): Pr
       siteName,
       aliases: [...aliases].filter(Boolean),
       domainAliases: [...domainAliases],
+      advertiserPageId: null,
       resolvedAt: new Date().toISOString(),
     };
   }

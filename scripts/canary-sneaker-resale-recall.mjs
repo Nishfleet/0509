@@ -64,8 +64,6 @@ export const KNOWN_NO_COVERAGE = Object.freeze(new Set(["sneakerping.com"]));
 // automatically (the probe returns verified/likely) and the guard hard-fails if
 // it ever regresses again.
 export const KNOWN_IDENTITY_GAPS = Object.freeze(new Map([
-  ["goat.com", "Nishfleet/0509#1950"],
-  ["on.com", "Nishfleet/0509#1950"],
   ["reebok.com", "Nishfleet/0509#1950"],
   // Live-evidenced 2026-09-09 ~04:45 IST (senior auditor): zappos ads EXIST and
   // are VERIFIED — /search?q=zappos.com returns 13 rows, all 13 verified, 11
