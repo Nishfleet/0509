@@ -19,6 +19,7 @@ import {
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
+import { FREE_PREVIEW_SEARCH_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import visualpingAdLibraryCitations from "~/data/compare/visualping-ad-library-citations.json";
 
@@ -156,6 +157,7 @@ export default function CompareVisualpingAdLibraryRoute() {
           <input
             aria-label="Competitor website"
             name="website"
+            defaultValue={FREE_PREVIEW_SEARCH_DOMAIN}
             placeholder="paste-a-competitor-website.com…"
             type="text"
             inputMode="url"
@@ -222,7 +224,8 @@ export default function CompareVisualpingAdLibraryRoute() {
           Start with the free preview <span aria-hidden="true">→</span>
         </h2>
         <p className="ld-pricing-note">
-          Paste a competitor website into the <Link to="/search">search preview</Link> — no account
+          Paste a competitor website into the{" "}
+          <Link to={`/search?website=${FREE_PREVIEW_SEARCH_DOMAIN}`}>search preview</Link> — no account
           needed. Also see{" "}
           <Link to="/compare/meta-ad-library">checking the Meta Ad Library by hand</Link>. Questions?
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll answer honestly, including
