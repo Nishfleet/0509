@@ -900,6 +900,22 @@ describe("collectingTimelineEntries / timelineSitemapEntries (issue #2021)", () 
     ]);
     expect(merged[3].lastmod).toBeUndefined();
   });
+
+  it("puts collecting /timeline locs in the sitemap XML with no lastmod", () => {
+    const xml = buildSitemapXml(
+      [brand("gymshark.com"), brand("calendly.com")],
+      timelineSitemapEntries(
+        [brand("gymshark.com"), brand("calendly.com")],
+        [{ path: "/timeline/calendly.com", lastmod: "2026-09-01" }],
+      ),
+    );
+    expect(xml).toContain("<loc>https://0509.io/timeline/gymshark.com</loc>");
+    expect(xml).toContain("<loc>https://0509.io/timeline/calendly.com</loc>");
+    expect(xml).toContain("<lastmod>2026-09-01</lastmod>");
+    expect(xml).not.toMatch(
+      /<loc>https:\/\/0509\.io\/timeline\/gymshark\.com<\/loc><lastmod>/,
+    );
+  });
 });
 
 describe("indexableTimelineEntriesFromRows", () => {

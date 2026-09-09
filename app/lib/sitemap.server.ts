@@ -620,16 +620,19 @@ export function timelineDomainFromSnapshotRow(row: TimelineSitemapRow): string |
 /**
  * Pure core: reduce snapshot rows to deduped, bounded /timeline/:domain
  * sitemap entries that the timeline route would render indexable. Mirrors
- * `loadOfferTimeline`'s own noindex predicate (entries.length > 0 — the
- * loader's 410-on-empty rule). The input is assumed to be ordered
+ * `loadOfferTimeline`'s own noindex predicate for capture-backed pages
+ * (entries.length > 0). Collecting entries for the tracked /ads cohort are
+ * added later by `timelineSitemapEntries` (issue #2021); this function still
+ * lists only proof-complete ledgers. The input is assumed to be ordered
  * `captured_at ASC, id ASC` (matching the loader's SQL); for each derived
  * registrable domain the function keeps only the first TIMELINE_SNAPSHOT_LIMIT
  * rows (= the loader's own per-domain window), then applies the proof gate
  * (`snapshotRowHasCompleteProof`) AND the ad-destination gate
- * (`!row.is_ad_destination`). A domain qualifies when at least one row in
- * that window survives both gates — the same set `loadOfferTimeline` would
- * render — so the sitemap can never list a /timeline/:domain that the route
- * 410s for an empty ledger. No freshness window — unlike brand pages, the
+ * (`!row.is_ad_destination`). A domain qualifies as capture-backed when at
+ * least one row in that window survives both gates — the same set
+ * `loadOfferTimeline` would render as a dated ledger. Collecting entries
+ * for tracked /ads brands with empty ledgers are added later by
+ * `timelineSitemapEntries` (issue #2021). No freshness window — unlike brand pages, the
  * timeline ledger renders indexable regardless of capture age. Each entry's
  * `lastmod` is the newest passing row's captured_at within the window
  * ("newest" = last in the ASC-ordered window). Capped at
