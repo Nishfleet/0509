@@ -98,11 +98,10 @@
     // node scripts/funnel-canary-check.mjs. Rollback: flip back to "0".
     "FUNNEL_MEASUREMENT_ENABLED": "1",
     "SIGNUP_FIRST_BRIEF_ENABLED": "1",
-    // Issue #1386 (EPIC #1367 Q5): Full-Site Watch on a nike.com canary first.
-    // Broad rollout is emptying FULLSITE_WATCH_CANARY_HOSTS. Rollback is
-    // flipping this flag off.
+    // Issue #2110: Full-Site Watch broad rollout. Empty canary list = every
+    // host (parseFullSiteWatchCanaryHosts). Rollback is flipping this flag off.
     "FULLSITE_WATCH_ENABLED": "true",
-    "FULLSITE_WATCH_CANARY_HOSTS": "nike.com www.nike.com"
+    "FULLSITE_WATCH_CANARY_HOSTS": ""
   },
   // Secrets configured outside this file via `wrangler secret put`:
   // - CANARY_BYPASS_TOKEN

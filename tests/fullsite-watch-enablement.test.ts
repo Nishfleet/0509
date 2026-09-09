@@ -6,9 +6,10 @@ import { getSitePageBudget } from "~/lib/plan-entitlements";
 
 /**
  * Committed-configuration guard for Full-Site Watch production enablement
- * (issue #1386). History this exists to prevent: the scan path, coverage
- * label, and plan budgets shipped while FULLSITE_WATCH_ENABLED stayed
- * absent from wrangler.jsonc, so nothing ran in production.
+ * (issue #1386, rollout emptied in #2110). History this exists to prevent:
+ * the scan path, coverage label, and plan budgets shipped while
+ * FULLSITE_WATCH_ENABLED stayed absent from wrangler.jsonc, so nothing ran
+ * in production.
  */
 function readWranglerVars(path: string): Record<string, unknown> {
   const raw = readFileSync(path, "utf8");
@@ -27,13 +28,14 @@ function readWranglerVars(path: string): Record<string, unknown> {
 }
 
 describe("Full-Site Watch production enablement", () => {
-  it("turns the flag on in wrangler.jsonc behind a nike.com canary host list", () => {
+  it("turns the flag on in wrangler.jsonc with an empty canary host list (broad rollout)", () => {
     const vars = readWranglerVars("wrangler.jsonc");
 
     expect(vars.FULLSITE_WATCH_ENABLED).toBe("true");
+    // Empty list = every host (parseFullSiteWatchCanaryHosts). Issue #2110.
     const hosts = String(vars.FULLSITE_WATCH_CANARY_HOSTS ?? "");
-    expect(hosts).toMatch(/nike\.com/);
-    expect(hosts.trim().length).toBeGreaterThan(0);
+    expect(hosts).toBe("");
+    expect(hosts.trim().length).toBe(0);
   });
 
   it("does not claim whole-site coverage in the committed canary posture", () => {

@@ -25,6 +25,15 @@ describe("Meta discovery canary workflow", () => {
           with?: Record<string, unknown>;
         }>;
       };
+      "fullsite-runs"?: {
+        environment?: string;
+        "timeout-minutes"?: number;
+        steps?: Array<{
+          name?: string;
+          run?: string;
+          env?: Record<string, string>;
+        }>;
+      };
     };
   };
 
@@ -119,5 +128,19 @@ describe("Meta discovery canary workflow", () => {
     // reached after the python block completes without raising.
     expect(readinessRun).toMatch(/raise SystemExit\(/);
     expect(readinessRun).toMatch(/code != .?"200"?|not overall_ok|not meta_ok/);
+  });
+
+  it("runs the fullsite-runs D1 liveness canary against production, not as a deploy gate", () => {
+    const job = parsed.jobs["fullsite-runs"];
+    expect(job?.environment).toBe("production");
+    expect(job?.["timeout-minutes"]).toBe(10);
+    const refuse = job?.steps?.find((step) => step.name === "Refuse empty Cloudflare secrets");
+    expect(refuse?.env?.CLOUDFLARE_ACCOUNT_ID).toBe("${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
+    expect(refuse?.env?.CLOUDFLARE_API_TOKEN).toBe("${{ secrets.CLOUDFLARE_API_TOKEN }}");
+    expect(refuse?.run).toContain("a canary that cannot check must fail, not skip as success");
+    const check = job?.steps?.find((step) => step.name === "Check website_site_scan has rows");
+    expect(check?.run).toBe("npm run canary:fullsite-runs");
+    expect(check?.env?.CLOUDFLARE_ACCOUNT_ID).toBe("${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
+    expect(check?.env?.CLOUDFLARE_API_TOKEN).toBe("${{ secrets.CLOUDFLARE_API_TOKEN }}");
   });
 });
