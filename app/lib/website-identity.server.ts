@@ -95,6 +95,20 @@ const IDENTITY_OVERRIDES: Record<
   // rail as on.com/ridge.com; the curated site name pins the provider query
   // to the brand term "Zappos".
   "zappos.com": { siteName: "Zappos", domainAliases: ["www.zappos.com"] },
+  // Foot Locker (issue #1999). footlocker.com is the buyer-typed apex domain,
+  // but Foot Locker's verified Meta ads land on the www host
+  // (www.footlocker.com) plus regional hosts (www.footlocker.com.sa), and the
+  // live apex homepage fetch does not surface those hosts in its redirect
+  // chain, so the alias is not discoverable and a bare website=footlocker.com
+  // search dead-ends while q=footlocker.com returns 16+ verified rows. Same
+  // apex↔www audited-alias rail as zappos.com (#2059) / on.com / ridge.com;
+  // the curated site name pins the provider query to the brand term "Foot
+  // Locker" so the pipeline asks Meta the right question even when the live
+  // homepage is bot-blocked or yields a shop-style label.
+  "footlocker.com": {
+    siteName: "Foot Locker",
+    domainAliases: ["www.footlocker.com", "www.footlocker.com.sa"],
+  },
 };
 
 const identityCache = new Map<string, { expiresAt: number; identity: WebsiteIdentity | null }>();
