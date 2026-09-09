@@ -279,9 +279,10 @@ describe("/ads/:domain — Case File render", () => {
     // 6 total − 5 shown = +1 more.
     expect(markup).toContain("+1");
     expect(markup).toContain("more ads on record");
-    // Primary CTA carries the domain into the Overview setup card.
+    // Primary CTA carries the domain into the Overview setup card
+    // (issue #2051: the CTA also deep-links with ?competitor=<domain>).
     expect(markup).toContain(
-      "/auth/signup?redirectTo=%2Fapp%3Fwebsite%3Dnike.com%23setup-checklist",
+      "/auth/signup?competitor=nike.com&amp;redirectTo=%2Fapp%3Fwebsite%3Dnike.com%23setup-checklist",
     );
   });
 

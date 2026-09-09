@@ -607,10 +607,11 @@ export function pricingOffersJsonLd(): ReadonlyArray<Record<string, unknown>> {
 
 /**
  * schema.org Service for an indexable /ads/:domain brand page. Describes the
- * per-competitor ad-monitoring offer the page already shows: Watch {domain},
- * the brand the page is about, the canonical URL, and Five to Nine as the
- * provider. Description must be the same string as the visible meta
- * description (brandPageDescription) — never a second invented claim.
+ * per-competitor ad-monitoring offer the page already shows: Track {domain}
+ * (issue #2051 — the page's primary CTA name), the brand the page is about,
+ * the canonical URL, and Five to Nine as the provider. Description must be
+ * the same string as the visible meta description (brandPageDescription) —
+ * never a second invented claim.
  *
  * Do not add price, rating, or availability fields. The page says the watch
  * is free, but prices live in Dodo and must not be hardcoded in structured
@@ -625,7 +626,7 @@ export function adsPageServiceJsonLd(input: {
   return {
     "@context": "https://schema.org",
     "@type": "Service",
-    name: `Watch ${input.domain}`,
+    name: `Track ${input.domain}`,
     description: input.description,
     url: canonicalUrl(input.pathname),
     provider: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
