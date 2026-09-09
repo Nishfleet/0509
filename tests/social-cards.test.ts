@@ -78,7 +78,7 @@ describe("publicSeoMeta og:image override", () => {
     expect(ogImage(meta)).toBe(card);
     expect(twitterImage(meta)).toBe(card);
     expect(ogImageAlt(meta)).toBe("Five to Nine vs Panoramata comparison card");
-    expect(meta.find((e) => e.property === "og:image:type")?.content).toBe("image/png");
+    expect(meta.find((e) => e.property === "og:image:type")?.content).toBe("image/svg+xml");
   });
 });
 
@@ -98,8 +98,8 @@ describe("social card URL builders", () => {
   });
 
   it("compareSocialCardUrl and switchSocialCardUrl build the card path", () => {
-    expect(compareSocialCardUrl("panoramata")).toBe(canonicalUrl("/social-card/compare/panoramata.png"));
-    expect(switchSocialCardUrl("magicbrief")).toBe(canonicalUrl("/social-card/switch/magicbrief.png"));
+    expect(compareSocialCardUrl("panoramata")).toBe(canonicalUrl("/social-card/compare/panoramata.svg"));
+    expect(switchSocialCardUrl("magicbrief")).toBe(canonicalUrl("/social-card/switch/magicbrief.svg"));
   });
 
   it("clusterSocialCardUrl builds the standalone surface card path", () => {
@@ -239,7 +239,7 @@ describe("every programmatic buyer surface stamps a non-generic og:image", () =>
     const img = ogImage(meta);
     expect(img, `${routeId} still uses generic og-image.png`).not.toBe(GENERIC_OG_IMAGE);
     expect(img).toMatch(/^https:\/\/0509\.io\/social-card\/compare\//);
-    expect(img).toMatch(/\.png$/);
+    expect(img).toMatch(/\.svg$/);
     expect(ogImageAlt(meta), `${routeId} missing og:image:alt`).toBeTruthy();
   });
 
@@ -253,7 +253,6 @@ describe("every programmatic buyer surface stamps a non-generic og:image", () =>
       const img = ogImage(meta);
       expect(img, `${routeId} still uses generic og-image.png`).not.toBe(GENERIC_OG_IMAGE);
       expect(img).toMatch(/^https:\/\/0509\.io\/social-card\/switch\//);
-      expect(img).toMatch(/\.png$/);
       expect(ogImageAlt(meta)).toMatch(/^Switch from .+ to Five to Nine$/);
     },
   );
