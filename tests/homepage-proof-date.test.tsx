@@ -135,8 +135,8 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     const markup = await renderMarketing();
 
     // Proof strip swaps to "on record" copy and drops the capture date.
-    // The H1 is the chosen Safe buyer-job wall and never carries a date (#1173).
-    expect(heroH1(markup)).toContain("Growth teams");
+    // The H1 is the free live-search promise wall (#2170) and never carries a date.
+    expect(heroH1(markup)).toContain("See the Meta ads");
     expect(heroH1(markup)).not.toContain("is a hook on record across 12 Meta ads");
     expect(heroH1(markup)).not.toContain("Sep 4");
     expect(proofStrip(markup)).toContain("is a hook on record across 12 Meta ads");
@@ -160,7 +160,7 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     const markup = await renderMarketing();
 
     const h1 = heroH1(markup);
-    expect(h1).toContain("Growth teams");
+    expect(h1).toContain("See the Meta ads");
     expect(h1).not.toContain("Aug 22");
     const time = stripTimeText(markup);
     expect(time).toContain("Aug 22");
@@ -173,9 +173,9 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     const markup = await renderMarketing();
 
     const h1 = heroH1(markup);
-    // The H1 is the buyer-job wall, so "Sep 4" cannot appear in any form.
+    // The H1 is the live-search promise wall, so "Sep 4" cannot appear in any form.
     expect(h1).not.toMatch(/Sep 4/);
-    expect(h1).toContain("Growth teams");
+    expect(h1).toContain("See the Meta ads");
     expect(proofStrip(markup)).not.toMatch(/Sep 4/);
   });
 });

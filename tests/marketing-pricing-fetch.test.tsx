@@ -282,6 +282,35 @@ describe("marketing pricing preview fetch timing", () => {
     expect(mounted.container.textContent).toContain("$99");
   });
 
+  it("renders the Price of knowing table with sourced competitor anchors", async () => {
+    await mockMarketingDependencies({
+      session: null,
+      pricingPlans: pricingPlans(),
+      usageBundles: usageBundles(),
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    installFakeIntersectionObserver();
+    const { COMPETITOR_PRICE_ANCHORS } = await import("~/components/pricing-section");
+
+    mounted = await mountMarketing();
+    const text = mounted.container.textContent ?? "";
+    expect(text).toContain("Price of knowing");
+    // Five to Nine anchors sit beside the sourced competitor entry prices.
+    expect(text).toContain("Five to Nine Scout");
+    expect(text).toContain("$11/mo");
+    expect(text).toContain("Five to Nine Starter");
+    expect(text).toContain("$59/mo");
+    for (const anchor of COMPETITOR_PRICE_ANCHORS) {
+      expect(text).toContain(anchor.vendor);
+      expect(text).toContain(anchor.price);
+      expect(text).toContain(`checked ${anchor.checked}`);
+      expect(
+        mounted.container.querySelector(`a[href="${anchor.sourceUrl}"]`),
+        `${anchor.vendor} source link`,
+      ).not.toBeNull();
+    }
+  });
+
   it("falls back to fetching the preview after the page has long settled", async () => {
     vi.useFakeTimers();
     await mockMarketingDependencies(emptyRootData);

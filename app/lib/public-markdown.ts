@@ -62,6 +62,14 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Indexable public brand pages showing the real Meta ads that run for, or link to, each tracked domain, grouped by category.",
   },
+  // Issue #2143: the weekly brief lists the last 7 days of stored offer
+  // moves across sitemap-indexable brands. In SITEMAP_PATHS, so it needs a
+  // title/description here or the _llmsDetailsCoverSitemap type fails.
+  "/briefs/weekly": {
+    title: "Weekly competitor offer moves",
+    description:
+      "The last 7 days of offer, price, CTA, and ad moves across brands with a public page — stored captures only, each with source link and capture date.",
+  },
   // Issue #2136: /sample-brief is in SITEMAP_PATHS, so it needs a
   // title/description here or buildLlmsText emits `[undefined]` lines.
   "/sample-brief": {

@@ -119,13 +119,13 @@ describe("homepage hero proof wall — capture-age gate (#1076)", () => {
     // 2026-05-18 captured, rendered on 2026-08-26: 100 days old, past the
     // 30-day freshness window. The proof strip must not surface the old date
     // next to the "checked about 2 hours ago" freshness stamp. The H1 is the
-    // chosen Safe buyer-job wall (#1173).
+    // free live-search promise wall (#2170).
     mockReactRouter(proofBriefWithCapturedAt("2026-05-18"));
     const markup = await renderMarketing();
 
     const h1 = heroH1(markup);
     const strip = proofStrip(markup);
-    expect(h1).toContain("Growth teams");
+    expect(h1).toContain("See the Meta ads");
     expect(h1).not.toContain("is a hook on record across 12 Meta ads");
     expect(strip).toContain("is a hook on record across 12 Meta ads");
     expect(stripTimeText(markup)).toContain("On record");
@@ -144,7 +144,7 @@ describe("homepage hero proof wall — capture-age gate (#1076)", () => {
 
     const h1 = heroH1(markup);
     expect(h1).not.toMatch(/Sep 4/);
-    expect(h1).toContain("Growth teams");
+    expect(h1).toContain("See the Meta ads");
     expect(proofStrip(markup)).toContain("is a hook on record across 12 Meta ads");
     expect(proofStrip(markup)).not.toMatch(/Sep 4/);
   });
@@ -156,7 +156,7 @@ describe("homepage hero proof wall — capture-age gate (#1076)", () => {
     const markup = await renderMarketing();
 
     const h1 = heroH1(markup);
-    expect(h1).toContain("Growth teams");
+    expect(h1).toContain("See the Meta ads");
     expect(h1).not.toContain("was the hook on 12 Meta ads");
     expect(proofStrip(markup)).toContain("was the hook on 12 Meta ads");
     expect(stripTimeText(markup)).toContain("Aug 22");
@@ -170,7 +170,7 @@ describe("homepage hero proof wall — capture-age gate (#1076)", () => {
     mockReactRouter(proofBriefWithCapturedAt("2026-05-18", true));
     const markup = await renderMarketing();
 
-    expect(heroH1(markup)).toContain("Growth teams");
+    expect(heroH1(markup)).toContain("See the Meta ads");
     expect(proofStrip(markup)).toContain("is a hook on record across 12 Meta ads");
     expect(stripTimeText(markup)).toContain("On record");
   });
@@ -185,7 +185,7 @@ describe("homepage hero proof wall — capture-age gate (#1076)", () => {
     expect(markup).toContain("last checked about 2 hours ago");
     const h1 = heroH1(markup);
     expect(h1).not.toMatch(/Sep 4/);
-    expect(h1).toContain("Growth teams");
+    expect(h1).toContain("See the Meta ads");
     expect(proofStrip(markup)).not.toMatch(/Sep 4/);
   });
 });

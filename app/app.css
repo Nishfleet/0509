@@ -2817,6 +2817,7 @@ one signal-green accent.
 .ld-honest strong { color: var(--ld-ink); }
 
 .ld-how,
+.ld-change,
 .ld-proof,
 .ld-quiet,
 .ld-stats,
@@ -2828,6 +2829,7 @@ one signal-green accent.
 .ld-how { border-top: 2.5px solid var(--ld-ink); }
 
 .ld-how h2,
+.ld-change h2,
 .ld-proof h2,
 .ld-quiet h2,
 .ld-stats h2,
@@ -2935,6 +2937,75 @@ one signal-green accent.
 }
 
 .ld-proof { border-top: 1px solid var(--ld-line); }
+
+/* Caught-change proof block (#2170) — directly under the first viewport.
+   One real before/after mark from a stored watch event, or the clearly
+   labelled sample state when no stored event qualifies. The mark reuses the
+   landing's diff typography: struck old value, green-filled new value. */
+.ld-change { border-top: 2.5px solid var(--ld-ink); }
+
+.ld-change-card {
+  max-width: 880px;
+  border: 2.5px solid var(--ld-ink);
+  background: var(--ld-card);
+  padding: clamp(20px, 3vw, 36px);
+}
+
+.ld-change-context {
+  font-family: var(--ld-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  color: var(--ld-ink-soft);
+  margin: 0 0 14px;
+}
+
+.ld-change-context strong { color: var(--ld-ink); }
+
+.ld-change-sample {
+  display: inline-block;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  padding: 2px 8px;
+  margin-right: 8px;
+}
+
+.ld-change-mark {
+  font-family: var(--ld-display);
+  font-weight: 800;
+  font-size: clamp(1.5rem, 3.4vw, 2.6rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.ld-change-mark s {
+  color: var(--ld-ink-faint);
+  text-decoration-color: var(--ld-red);
+  text-decoration-thickness: 0.09em;
+}
+
+.ld-change-mark ins {
+  background: var(--ld-green);
+  color: var(--ld-ink);
+  text-decoration: none;
+  padding: 0 0.14em;
+  box-decoration-break: clone;
+}
+
+.ld-change-note {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+  margin: 14px 0 0;
+  max-width: 620px;
+}
 
 .ld-proof-actions {
   display: flex;

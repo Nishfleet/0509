@@ -19,6 +19,7 @@ import { noPricingPreview, pricingPreviewWithinBound } from "~/lib/pricing-previ
 import type { RootLoaderData } from "~/root";
 import { pickFeaturedAdsInternalLink, type IndexableAdsLink } from "~/lib/ads-internal-links";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
+import type { PublicChangeMark } from "~/lib/public-change-mark.server";
 
 export { planIntentPath, valueMathLabel, billingFaqJsonLdEntries } from "~/components/pricing-section";
 export type { LocalPricingPreview } from "~/components/pricing-section";
@@ -29,7 +30,7 @@ export type { LocalPricingPreview } from "~/components/pricing-section";
 // text and the original link — not a screenshot on every change. Meta Ad
 // Library coverage is named as a public source below and in the FAQ.
 const marketingDescription =
-  "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then files source-linked proof and change alerts before your next meeting.";
+  "See the Meta ads any competitor is running right now — free, no account. Five to Nine watches the offer behind the ads and emails proof when it changes.";
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 
@@ -82,6 +83,20 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     proofBrief = null;
   }
 
+  // The under-fold before/after mark: a real stored watch event or null (the
+  // null path renders the clearly labelled sample state, never a fabricated
+  // "real" change). One bounded database read; never a scan or a provider call.
+  let changeMark: PublicChangeMark | null = null;
+  try {
+    const { loadPublicChangeMark } = await import("~/lib/public-change-mark.server");
+    changeMark = await loadPublicChangeMark(env);
+  } catch (error) {
+    console.warn("Homepage change mark load failed; rendering the labelled sample state.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    changeMark = null;
+  }
+
   let indexableAdsLinks: IndexableAdsLink[] = [];
   try {
     const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
@@ -100,12 +115,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     // explicitly-set cache-control on cacheable HTML paths instead of
     // stamping the generic public, max-age=300 policy.
     return Response.json(
-      { pricingPreview, commercialLaunch, proofBrief, indexableAdsLinks },
+      { pricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark },
       { headers: { "Cache-Control": "private, max-age=300", Vary: "cookie" } },
     );
   }
 
-  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks };
+  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark };
 }
 
 /**
@@ -332,6 +347,7 @@ export default function MarketingRoute() {
     agencySaleOpen: false,
   };
   const proofBrief = routeData.proofBrief ?? null;
+  const changeMark = routeData.changeMark ?? null;
   const featuredAdsLink = pickFeaturedAdsInternalLink(
     routeData.indexableAdsLinks ?? [],
     "nykaa.com",
@@ -441,20 +457,20 @@ export default function MarketingRoute() {
     : false;
   const heroCheckedAgo = proofBrief?.checkedAgoLabel ?? "recently";
   const heroProofLive = proofBrief ? proofBrief.freshForLiveClaim && !heroCaptureStale : false;
-  // Chosen BET 9 direction: Safe. Buyer + job stay in the H1 even when live
-  // Nykaa proof is present. See docs/design/hero-directions/CHOSEN.md.
+  // Issue #2170: the first viewport leads with the free, no-account live
+  // Meta ad search — the acquisition asset. The wall is the same with or
+  // without live proof; the proof strip under it stays the evidence layer.
   const heroWall = (
     <h1 className="ld-wall">
-      <span className="ld-row">Growth teams</span>
-      <span className="ld-row">who track competitors</span>
+      <span className="ld-row">See the Meta ads</span>
+      <span className="ld-row">any competitor is</span>
       <span className="ld-row ld-row-indent">
-        know the{" "}
+        running{" "}
         <ins className="ld-ins">
-          offer<i className="ld-flag">proof</i>
-        </ins>{" "}
-        before
+          right now.<i className="ld-flag">live</i>
+        </ins>
       </span>
-      <span className="ld-row">the call.</span>
+      <span className="ld-row">Free, no account.</span>
     </h1>
   );
 
@@ -647,9 +663,9 @@ export default function MarketingRoute() {
             {heroProofStrip}
 
             <p className="ld-deck-copy">
-              Your growth team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
-              landing pages for price, offer, and CTA changes, saves page text and the source link — plus a screenshot when the capture includes one — and files the brief —{" "}
-              <b>before your alarm goes off.</b>
+              Then Five to Nine watches the offer behind those ads and emails you the
+              before-and-after screenshot when it changes.{" "}
+              <b>Weekly on Free, every 3 hours on Starter.</b>
             </p>
 
             <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
@@ -673,8 +689,10 @@ export default function MarketingRoute() {
             </div>
 
             <p className="ld-honest" role="note">
-              <strong>No account needed.</strong> Preview one competitor now. We label source,
-              freshness, coverage, cached results, and proof freshness separately.
+              <strong>No account needed.</strong> Preview one competitor now. Change alerts
+              attach page text and the source link — plus a screenshot when the capture
+              includes one. We label source, freshness, coverage, cached results, and proof
+              freshness separately.
             </p>
           </div>
 
@@ -701,6 +719,49 @@ export default function MarketingRoute() {
 
       </section>
 
+      <section className="ld-change" aria-label="A before-and-after change Five to Nine caught">
+        <div className="ld-section-head">
+          <span className="ld-kicker">Caught change</span>
+          <h2>The before-and-after, in one mark.</h2>
+          <p>
+            When a tracked competitor moves, the old value is struck and the new one is filed
+            next to it — with the source link in the brief.
+          </p>
+        </div>
+        {changeMark ? (
+          <div className="ld-change-card ld-reveal">
+            <p className="ld-change-context">
+              <strong>{changeMark.competitorLabel}</strong>
+              {` — ${changeMark.fieldLabel} · caught ${proofTimeLabel(changeMark.caughtAt)}`}
+            </p>
+            <p className="ld-change-mark">
+              <s>{changeMark.mark.from}</s>
+              <span aria-hidden="true"> → </span>
+              <ins>{changeMark.mark.to}</ins>
+            </p>
+            <p className="ld-change-note">
+              A real stored event from a tracked public advertiser. The brief files every
+              confirmed change like this, with its source link.
+            </p>
+          </div>
+        ) : (
+          <div className="ld-change-card ld-reveal">
+            <p className="ld-change-context">
+              <span className="ld-change-sample">Sample</span> What the mark looks like
+            </p>
+            <p className="ld-change-mark">
+              <s>10% off sitewide</s>
+              <span aria-hidden="true"> → </span>
+              <ins>20% off sitewide</ins>
+            </p>
+            <p className="ld-change-note">
+              No real before-and-after is available to show right now, so this one is labelled
+              a sample. The real mark appears here as soon as a tracked competitor moves.
+            </p>
+          </div>
+        )}
+      </section>
+
       <section className="ld-proof" id="demo">
         <div className="ld-section-head">
           <span className="ld-kicker">Proof brief</span>
@@ -714,6 +775,7 @@ export default function MarketingRoute() {
             <Link to={publicSearchTrialPath}>Try the search preview</Link>
             <Link to="/competitor-monitoring">Read the methodology</Link>
             {featuredAdsLink ? <Link to={featuredAdsLink.path}>See a live example</Link> : null}
+            <Link to="/briefs/weekly">This week&apos;s offer moves</Link>
             <Link to="/capture-rules">What we refuse to alert on</Link>
             <a href="#pricing">See plans</a>
           </div>

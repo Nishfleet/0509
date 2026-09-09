@@ -373,7 +373,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // only (quiet-brief variant when nothing filed in 30 days); no customer
   // workspace name, email, or watchlist id leaves the page.
   sitemapPaths: [
-    "/", "/search", "/brands", "/sample-brief", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
+    "/", "/search", "/brands", "/briefs/weekly", "/sample-brief", "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
     "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief",
