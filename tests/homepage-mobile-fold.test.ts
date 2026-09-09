@@ -10,17 +10,18 @@ function ruleBody(selector: string): string {
   return match?.[1] ?? "";
 }
 
-function lastMedia(maxWidthPx: number, needle: string): string {
-  const re = new RegExp(`@media \\(max-width: ${maxWidthPx}px\\) \\{`, "g");
+function lastAtRule(prelude: string, needle: string): string {
+  const escaped = prelude.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`@media ${escaped} \\{`, "g");
   let lastStart = -1;
   let match: RegExpExecArray | null;
   while ((match = re.exec(css))) {
     const start = match.index + match[0].length;
-    if (css.slice(start, start + 1200).includes(needle)) {
+    if (css.slice(start, start + 1600).includes(needle)) {
       lastStart = start;
     }
   }
-  expect(lastStart, `missing @media (max-width: ${maxWidthPx}px) block containing ${needle}`).toBeGreaterThan(-1);
+  expect(lastStart, `missing @media ${prelude} block containing ${needle}`).toBeGreaterThan(-1);
   let depth = 1;
   let end = lastStart;
   while (end < css.length && depth > 0) {
@@ -29,6 +30,10 @@ function lastMedia(maxWidthPx: number, needle: string): string {
     end += 1;
   }
   return css.slice(lastStart, end - 1);
+}
+
+function lastMedia(maxWidthPx: number, needle: string): string {
+  return lastAtRule(`(max-width: ${maxWidthPx}px)`, needle);
 }
 
 describe("homepage mobile first viewport (#971)", () => {
@@ -110,5 +115,55 @@ describe("setup checklist mobile fold (#1383 reland)", () => {
       /\.f9-evidence-setup-primary > \.f9-evidence-setup-hint \{\s*grid-column:\s*1;\s*grid-row:\s*3;/,
     );
     expect(budget).toMatch(/\.f9-evidence-setup-primary \{\s*grid-template-columns:\s*1fr;/);
+  });
+});
+
+describe("homepage short-portrait first viewport (#2090)", () => {
+  it("keeps the two hero pills on one 44px row at ≤600px so 375x812 still clears", () => {
+    const budget = lastMedia(600, ".ld-hero-grid .ld-wall");
+    // Live 375x812 with the Nykaa strip (2026-09-09): two wrapped pills are
+    // 96px and the CTA bottom is 858, 46px past the Journey-1 fold. One row
+    // of pills reclaims that without hiding the proof strip or the nav.
+    expect(budget).toMatch(/\.f9-home \.ld-hero \.ld-hero-callouts\s*\{[^}]*flex-wrap:\s*nowrap/);
+    expect(budget).toMatch(/\.ld-proof-strip-head \.ld-proof-time\s*\{[^}]*display:\s*none/);
+  });
+
+  it("compacts the wall and strip on short phones so 375x667 and 360x632 still clear", () => {
+    const cssBudget = lastAtRule(
+      "(max-width: 600px) and (max-height: 760px)",
+      ".ld-hero-grid .ld-wall",
+    );
+    // Live 375x667 (2026-09-09): form.top=767, button.bottom=858, fold=667.
+    // Width-only packing is not enough on SE-height phones. Shrink the wall
+    // and the proof-strip body; do not hide the strip, the command, or the
+    // primary nav (Journey 1 still has to see Search preview / Pricing).
+    expect(cssBudget).toMatch(/\.ld-hero-grid \.ld-wall\s*\{[^}]*font-size:\s*1\.35rem/);
+    expect(cssBudget).toMatch(/\.ld-ticker\s*\{[^}]*padding:\s*2px 0/);
+    expect(cssBudget).toMatch(/\.ld-nav\s*\{[^}]*padding:\s*8px 16px/);
+    expect(cssBudget).toMatch(/\.ld-deck-copy\s*\{[^}]*font-size:\s*0\.8rem/);
+    expect(cssBudget).toMatch(/\.f9-home \.ld-command input\s*\{[^}]*min-height:\s*44px/);
+    expect(cssBudget).toMatch(/\.f9-home \.ld-command button\s*\{[^}]*min-height:\s*44px/);
+  });
+
+  it("keeps the proof strip, the command, the deck, and the primary nav", () => {
+    const cssBudget = lastAtRule(
+      "(max-width: 600px) and (max-height: 760px)",
+      ".ld-hero-grid .ld-wall",
+    );
+    expect(cssBudget).not.toMatch(/\.ld-proof-strip\s*\{[^}]*display:\s*none/);
+    expect(cssBudget).not.toMatch(/\.ld-command\s*\{[^}]*display:\s*none/);
+    expect(cssBudget).not.toMatch(/\.ld-nav-links\s*\{[^}]*display:\s*none/);
+    expect(cssBudget).not.toMatch(/\.ld-deck-copy\s*\{[^}]*display:\s*none/);
+    expect(cssBudget).toMatch(/\.ld-proof-strip-head \.ld-proof-time\s*\{[^}]*display:\s*none/);
+    expect(cssBudget).toMatch(/\.ld-proof-hook \.ld-proof-attrib\s*\{[^}]*display:\s*none/);
+  });
+});
+
+describe("homepage fold canary (#2090 termination)", () => {
+  it("checks 375x667 as well as 390x844", () => {
+    const script = readFileSync("scripts/check-homepage-mobile-fold.mjs", "utf8");
+    expect(script).toContain("width: 390, height: 844");
+    expect(script).toContain("width: 375, height: 667");
+    expect(script).toContain("stripHidden");
   });
 });
