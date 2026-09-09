@@ -29,7 +29,15 @@
  * a scan, so `recordCtaPipelineStageCounts` never throws.
  */
 import type { AppEnv } from "~/lib/env.server";
-import type { LandingPagePipelineCounters } from "~/lib/landing-page-pipeline-instrumentation.server";
+import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
+import {
+  createLandingPagePipelineCounters,
+  flushLandingPagePipelineCounters,
+  recordExtractStage,
+  recordFetchStage,
+  type LandingPagePipelineCounters,
+} from "~/lib/landing-page-pipeline-instrumentation.server";
+import type { LandingPageSnapshotData } from "~/lib/types";
 
 export const CTA_PIPELINE_STAGES = [
   "checks_started",
@@ -151,4 +159,126 @@ export async function recordCtaPipelineStageCounts(
       }),
     );
   }
+}
+
+/**
+ * Read the CTA extraction funnel stage + bail reason the capture path stored
+ * on the snapshot metadata. Returns nulls for snapshots that predate the
+ * funnel wiring so older captures do not break the counter. Mirrors the
+ * private helper in monitoring.server.ts without importing it (avoids pulling
+ * the whole monitoring module into the volume paths).
+ */
+function readSnapshotCtaFunnel(snapshot: {
+  metadata?: Record<string, unknown>;
+}): {
+  stage: "reached" | "bailed" | null;
+  reasonCode: string | null;
+} {
+  const metadata = snapshot.metadata;
+  const rawStage = metadata?.ctaFunnelStage;
+  const stage: "reached" | "bailed" | null =
+    rawStage === "reached" || rawStage === "bailed" ? rawStage : null;
+  const rawReason = metadata?.ctaFunnelReasonCode;
+  const reasonCode =
+    typeof rawReason === "string" && rawReason.length > 0 ? rawReason : null;
+  return { stage, reasonCode };
+}
+
+/**
+ * Issue #2077: the volume landing-page capture paths (selection_enrichment,
+ * backfill, canary) did not build pipeline counters or call the recorder, so
+ * `cta_pipeline_stage_counts` stayed empty even though `landing_snapshot`
+ * volume was high (see docs/cta-pipeline-stage-counts-investigation.md).
+ *
+ * This helper wires the six-stage funnel into those paths WITHOUT fabricating
+ * the stages that do not run there. These paths run fetch + render + extract
+ * (the capture util extracts CTA / price / form signals into the snapshot).
+ * They do NOT run the capture-validity gate, the change-diff, or
+ * `landing_page_*` event emission — those are the proof-capture funnel
+ * (monitoring.server.ts), which is already wired and is NOT changed here. So
+ * this helper records only the stages that actually run:
+ *   checks_started        — always (every capture that began)
+ *   page_fetch_succeeded  — the capture produced a snapshot
+ *   dom_extracted         — the snapshot carries extracted signals
+ * validity_passed, diff_computed, and event_emitted stay at 0 on these paths;
+ * fabricating them would hide where the real funnel drops.
+ *
+ * Usage at a capture call site:
+ *   const instr = startLandingPagePipelineVolumeInstrumentation({ ... });
+ *   const snapshot = await captureLandingPageSnapshot(env, url, {
+ *     ...,
+ *     instrumentation: instr.instrumentation, // records render stage
+ *     onFailure: (detail) => { failureReasonCode = detail.reasonCode; },
+ *   });
+ *   instr.recordCaptureOutcome(snapshot, failureReasonCode);
+ *   // in a finally block:
+ *   await instr.finish(env);
+ */
+export interface LandingPagePipelineVolumeInstrumentation {
+  /** Pass as the `instrumentation` option to captureLandingPageSnapshot. */
+  instrumentation: LandingPagePipelineCounters;
+  /** Record the fetch + extract outcome once the capture has returned. */
+  recordCaptureOutcome: (
+    snapshot: LandingPageSnapshotData | null,
+    failureReasonCode: string | null,
+  ) => void;
+  /** Flush the per-check log line and persist stage counts to D1. Never throws. */
+  finish: (env: AppEnv) => Promise<void>;
+}
+
+export function startLandingPagePipelineVolumeInstrumentation(context: {
+  /**
+   * Distinct per caller so the `landing_page_pipeline_check` log line is
+   * attributable (e.g. "selection_enrichment", "demo_brand_backfill").
+   */
+  watchlistId: string;
+  /** Stable per-check identity (e.g. the ad id or a deterministic capture key). */
+  scanId: string;
+  /** Ad id when the check backs an ad observation, else null. */
+  adId: string | null;
+}): LandingPagePipelineVolumeInstrumentation {
+  const counters = createLandingPagePipelineCounters({
+    scanId: context.scanId,
+    watchlistId: context.watchlistId,
+    adId: context.adId,
+    extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+  });
+  return {
+    instrumentation: counters,
+    recordCaptureOutcome: (snapshot, failureReasonCode) => {
+      if (!snapshot) {
+        recordFetchStage(counters, "failed", failureReasonCode ?? "capture_failed");
+        return;
+      }
+      // The volume funnel's page_fetch_succeeded means "a usable snapshot
+      // was produced" — whether via plain-http or the rendered fallback.
+      // The proof-capture funnel records browser_render as a fetch failure
+      // (its plain-http leg bailed), but on the volume path the render
+      // rescue IS the success: the page was fetched. The render stage (which
+      // the capture util records via instrumentation) carries the
+      // plain-http-vs-render distinction in the structured log, so the
+      // stage count stays a clean "did we get a snapshot" signal.
+      if (snapshot.captureMethod === "browser_render") {
+        recordFetchStage(counters, "succeeded", "browser_render_rescued");
+      } else {
+        recordFetchStage(counters, "succeeded");
+      }
+      // The capture util ran extractLandingPageSignals and stored the CTA
+      // funnel stage on the snapshot metadata. Record it so dom_extracted
+      // reflects extraction that actually ran on this path.
+      const ctaFunnel = readSnapshotCtaFunnel(snapshot);
+      recordExtractStage(counters, {
+        ctaText: snapshot.ctaText ?? null,
+        priceText: snapshot.priceText ?? null,
+        formPresent: snapshot.formPresent ?? null,
+        headline: snapshot.rawHeadline ?? null,
+        ctaFunnelStage: ctaFunnel.stage ?? undefined,
+        ctaFunnelReasonCode: ctaFunnel.reasonCode ?? undefined,
+      });
+    },
+    finish: async (env) => {
+      flushLandingPagePipelineCounters(counters);
+      await recordCtaPipelineStageCounts(env, counters);
+    },
+  };
 }

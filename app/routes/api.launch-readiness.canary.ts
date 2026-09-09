@@ -317,17 +317,37 @@ export async function action({ context, request }: ActionFunctionArgs) {
     blocker: "launch_readiness_canary_incomplete",
     proofUrl,
   });
-  const snapshot =
-    requestedProofProvider === "browserless"
-      ? await (await import("~/lib/browser-run.server")).captureBrowserlessProofSnapshot(
-          env,
-          proofUrl,
-          { requireScreenshot: true },
-        )
-      : await captureLandingPageSnapshot(env, proofUrl, {
-          preferRendered: true,
-          requireScreenshot: true,
-        });
+  // Issue #2077: instrument the landing-page capture branch so
+  // cta_pipeline_stage_counts fills for the canary volume path. The
+  // browserless branch uses a different capture function and is not
+  // instrumented here.
+  let snapshot: Awaited<ReturnType<typeof captureLandingPageSnapshot>> | null = null;
+  if (requestedProofProvider === "browserless") {
+    snapshot = await (await import("~/lib/browser-run.server")).captureBrowserlessProofSnapshot(
+      env,
+      proofUrl,
+      { requireScreenshot: true },
+    );
+  } else {
+    const { startLandingPagePipelineVolumeInstrumentation } = await import(
+      "~/lib/cta-pipeline-stage-counts.server"
+    );
+    const instr = startLandingPagePipelineVolumeInstrumentation({
+      watchlistId: "launch_readiness_canary",
+      scanId: runId,
+      adId: null,
+    });
+    try {
+      snapshot = await captureLandingPageSnapshot(env, proofUrl, {
+        preferRendered: true,
+        requireScreenshot: true,
+        instrumentation: instr.instrumentation,
+      });
+      instr.recordCaptureOutcome(snapshot, null);
+    } finally {
+      await instr.finish(env);
+    }
+  }
 
   if (!snapshot || !snapshotHasScreenshotArtifact(snapshot)) {
     const blocker =
