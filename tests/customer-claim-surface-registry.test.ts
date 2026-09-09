@@ -372,7 +372,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // #2152) — static long-form guide, no new claim text beyond the live
   // homepage/docs plan facts it restates (free weekly watch, Meta-only scope).
   sitemapPaths: [
-    "/", "/search", "/brands", "/briefs/weekly", "/llms-full.txt", "/guides/how-to-track-competitor-ads",
+    "/", "/search", "/brands", "/briefs/weekly", "/sample-brief", "/llms-full.txt", "/guides/how-to-track-competitor-ads",
     "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",

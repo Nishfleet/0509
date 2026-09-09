@@ -755,6 +755,11 @@ export const SITEMAP_PATHS = [
   // the page renders an honest quiet state instead of noindexing when
   // nothing moved, so it never serves a noindex page from the sitemap.
   "/briefs/weekly",
+  // Issue #2136: /sample-brief publishes a real stored Monday brief for the
+  // newest indexable brand. One static entry: the page renders an honest
+  // quiet-brief variant when no brand has a stored event, so it never serves
+  // a noindex page from the sitemap.
+  "/sample-brief",
   // Issue #2043: /llms-full.txt is the public full-text AEO feed of tracked-
   // brand dated offer/proof/change records. Served by workers/app.ts (the
   // route in app/routes/llms-full.txt.ts is a registration-only stub so the
@@ -869,6 +874,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/search": { changefreq: "weekly", priority: "0.9" },
   "/brands": { changefreq: "weekly", priority: "0.6" },
   "/briefs/weekly": { changefreq: "weekly", priority: "0.6" },
+  "/sample-brief": { changefreq: "weekly", priority: "0.6" },
   "/llms-full.txt": { changefreq: "daily", priority: "0.6" },
   "/guides/how-to-track-competitor-ads": { changefreq: "monthly", priority: "0.6" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },

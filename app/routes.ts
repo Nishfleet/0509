@@ -71,6 +71,9 @@ export default [
   // Public weekly brief of stored offer moves across sitemap-indexable
   // brands (issue #2143). Stored rows only — never triggers live scraping.
   route("briefs/weekly", "routes/briefs.weekly.tsx"),
+  // Public sample Monday brief (issue #2136): a real stored digest for the
+  // newest indexable brand, with a signup CTA. Stored rows only.
+  route("sample-brief", "routes/sample-brief.tsx"),
   route("timeline/:domain", "routes/timeline.$domain.tsx"),
   // Public full-text AEO feed (issue #2043). The body is served by
   // workers/app.ts before the router runs; this registration exists so the
