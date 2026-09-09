@@ -117,6 +117,7 @@ function data(overrides: Partial<OfferTimelineLoaderData> = {}): OfferTimelineLo
     asOfState: null,
     entries: threeStates,
     noindex: false,
+    collecting: false,
     ...overrides,
   };
 }
