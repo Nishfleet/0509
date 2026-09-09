@@ -173,7 +173,7 @@ describe("canary-proof-screenshot-reasons (#2082)", () => {
       expect(report.ok).toBe(true);
     });
 
-    it("ok=false when a silent reason is present", () => {
+    it("ok=true when only structural reasons are present", () => {
       const report = summarize({
         reasons: [{ reason: "launch_canary_stripped", n: 61 }],
         windowHours: 48,
@@ -181,6 +181,23 @@ describe("canary-proof-screenshot-reasons (#2082)", () => {
         local: false,
       });
       expect(report.ok).toBe(true);
+    });
+
+    it("ok=false when a silent reason is present", () => {
+      const report = summarize({
+        reasons: [
+          { reason: "launch_canary_stripped", n: 61 },
+          { reason: "succeeded_no_screenshot_unclassified", n: 1 },
+        ],
+        windowHours: 48,
+        checkedAt: "2026-09-09T00:00:00.000Z",
+        local: false,
+      });
+      expect(report.ok).toBe(false);
+      expect(report.verdict).toBe("fail");
+      expect(report.silent).toEqual([
+        { reason: "succeeded_no_screenshot_unclassified", n: 1 },
+      ]);
     });
   });
 });
