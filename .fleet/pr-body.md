@@ -53,4 +53,12 @@ The migration is instead validated by the real-D1 integration tests, which apply
 
 loose-ends: 0509#2108-check-d1-migrations-synced (deploy-time check requires Cloudflare prod credentials not present on the worker VPS; migration validated by real-D1 integration tests, production sync verified at deploy).
 
+## Reviewer round (cursor/cursor-grok-4.6-high)
+
+- **Act on** — `migrations/0087` CHECK literal lists omitted `for_agencies`, which the code allowlist accepts via the exact-match branch; the open shape `[a-z0-9:.-]` rejects the underscore, so a `for_agencies` signup was silently dropped at write time (violates step 2b "code and DB never disagree"). Fixed: added `for_agencies` to both CHECK literal lists and to the `ACCEPTED_BY_BOTH` fixture lists in both test files. Verified: `tests/signup-source.test.ts` (15), `tests/integration/signup-source.integration.test.ts` (8, real D1), `tests/for-agencies.route.test.ts` (8) all green; `npm run typecheck` exit 0.
+- **Consider** — the `ACCEPTED_BY_BOTH` fixture lists are duplicated across two test files with a "keep in sync" comment but no enforcement. Noted; a shared fixture module is a follow-up, not a blocker.
+- **Consider** — `isOwnDomain` hardcodes `0509.io`/`0509.in`, duplicating `signupSourceCookieDomain`. Noted; deriving both from one source is a follow-up.
+- **Noted** — referer fallback attributes any external referer as `ref:<domain>` (intended accept behavior); the §4 event allowlist is untouched per must-not.
+- **Noted** — `PRAGMA foreign_keys` toggle in 0087; the rename-into-place order preserves child references regardless.
+
 Closes #2108
