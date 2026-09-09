@@ -314,6 +314,43 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("Since ");
   });
 
+  it("shows a 'Running N days' longevity pill on every wall card with a first-seen date, measured to the capture's fetched_at", async () => {
+    const markup = await render(populated());
+
+    // Each visible card carries the longevity family pill (Pill
+    // variant="longevity") with the whole days between the ad's firstSeenAt
+    // (2026-06-01) and the capture's fetched_at (lastCheckedAt 2026-08-09) =
+    // 69 days. Exactly 5: the 6th ad hides behind the overflow tile.
+    expect((markup.match(/Running 69 days/g) ?? []).length).toBe(5);
+    // The longevity pill uses the existing longevity family, not a bespoke
+    // class — the strong modifier fires at 30+ days.
+    expect(markup).toContain("f9-longevity-pill");
+    expect(markup).toContain("is-strong");
+  });
+
+  it("renders no longevity pill when the creative's first-seen proof is missing", async () => {
+    const ads = [ad({ metaAdId: "ad-no-date", firstSeenAt: null })];
+    const markup = await render(
+      populated({ ads, brandOwnedAdCount: 1, teaser: { ...teaser, totalCount: 1 } }),
+    );
+
+    // The card still renders — but never invents a running-days count it does
+    // not know. (The page's other "Running …" copy — the aggression band, the
+    // hero headline — is unrelated; the longevity pill family is the signal.)
+    expect(markup).toContain("Run through summer with gear that can take the heat.");
+    expect(markup).not.toContain("f9-longevity-pill");
+    expect(markup).not.toContain(/Running \d+ days/);
+  });
+
+  it("explains in the FAQ that 30+ day runners are the market's usual winner signal, with the capture-date caveat", async () => {
+    const markup = await render(populated());
+
+    expect(markup).toContain("How long do Nike's ads usually run?");
+    expect(markup).toContain("30+ days are the market's usual winner signal");
+    // The caveat ties the count to the capture, not the viewing moment.
+    expect(markup).toContain("measured from its first-seen date up to the capture shown on this page");
+  });
+
   it("hides the score card and states why when the evidence floor is not met", async () => {
     const markup = await render(populated({ aggression: null }));
 
