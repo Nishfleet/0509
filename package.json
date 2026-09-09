@@ -51,6 +51,7 @@
     "signal:market": "node scripts/market-signal-snapshot.mjs",
     "signal:market:workdir-check": "bash scripts/check-market-signal-workdir.sh",
     "signal:market:validate": "node scripts/validate-market-signal-report.mjs",
+    "metrics:weekly": "node scripts/weekly-business-metrics.mjs",
     "seed:publisher": "node scripts/ads-domain-publisher.mjs",
     "deploy": "node scripts/deploy-production.mjs",
     "dev": "react-router dev",
