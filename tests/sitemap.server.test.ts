@@ -1511,6 +1511,14 @@ describe("every dynamic sitemap URL carries an honest lastmod (issue #2031)", ()
     }
 
     const byLoc = new Map(dynamicUrls.map((u) => [u.loc, u.lastmod]));
+    // Pin the exact values too, not just the ordering: the lastmod must be the
+    // real fetched_at / captured_at date slice, so a regression that emits a
+    // different-but-still-ordered date (or build time that happens to sort)
+    // cannot slip through (reviewer round, issue #2031).
+    expect(byLoc.get("https://0509.io/ads/fresh.com")).toBe("2026-09-08");
+    expect(byLoc.get("https://0509.io/ads/stale.com")).toBe("2026-09-03");
+    expect(byLoc.get("https://0509.io/timeline/fresh.com")).toBe("2026-09-08");
+    expect(byLoc.get("https://0509.io/timeline/stale.com")).toBe("2026-09-03");
     // A known-stale domain's lastmod must be older than a fresh one's, for both
     // the /ads and /timeline surfaces (lexical compare is valid for YYYY-MM-DD).
     expect(Date.parse(byLoc.get("https://0509.io/ads/stale.com")!)).toBeLessThan(
