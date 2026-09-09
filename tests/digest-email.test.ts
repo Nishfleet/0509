@@ -615,6 +615,82 @@ describe("buildDigestEmail", () => {
     expect(withoutMetrics.text).not.toContain("Observed spend");
   });
 
+  it("names the ×N versions arm on the new-ad line when variantCount exists and omits it otherwise", () => {
+    const withVersions = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        {
+          ...digestItem("Nykaa", "New ad detected", 95, "proof_backed", "ev-nykaa-ad", "ad_new"),
+          metadata: {
+            ...digestItem("Nykaa", "New ad detected", 95, "proof_backed", "ev-nykaa-ad", "ad_new").metadata,
+            variantCount: 4,
+          },
+        },
+      ],
+    });
+
+    // The new-ad line (ad churn footnote) names the largest variant split.
+    expect(withVersions.html).toContain("1 new creative, as 4 versions — open the wall to see them.");
+    expect(withVersions.text).toContain("1 new creative, as 4 versions — open the wall to see them.");
+
+    // A count of 1 (or absent) means the advertiser is not testing variants:
+    // no versions line, and never a fabricated figure.
+    const singleVersion = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        {
+          ...digestItem("Nykaa", "New ad detected", 95, "proof_backed", "ev-nykaa-ad", "ad_new"),
+          metadata: {
+            ...digestItem("Nykaa", "New ad detected", 95, "proof_backed", "ev-nykaa-ad", "ad_new").metadata,
+            variantCount: 1,
+          },
+        },
+      ],
+    });
+
+    expect(singleVersion.html).toContain("1 new creative — open the wall to see them.");
+    expect(singleVersion.html).not.toContain("versions");
+    expect(singleVersion.text).not.toContain("versions");
+
+    const noVersion = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        digestItem("Nykaa", "New ad detected", 95, "proof_backed", "ev-nykaa-ad", "ad_new"),
+      ],
+    });
+
+    expect(noVersion.html).toContain("1 new creative — open the wall to see them.");
+    expect(noVersion.html).not.toContain("versions");
+    expect(noVersion.text).not.toContain("versions");
+  });
+
   it("folds trend rollups into weekly digests only", () => {
     const items = [
       digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
