@@ -949,13 +949,13 @@ const SITEMAP_XML = renderSitemapXml(ROOT_SITEMAP_STATIC_ENTRIES);
 // A bare "Disallow: /app" is NOT used because it would also block any future
 // public path starting with "app" (e.g. /apply).
 // AI crawler policy — decision recorded in docs/ai-crawler-policy.md
-// ("answers yes, training no"): search and AI-answer/reference engines are
-// welcome (they match the wildcard group below: Googlebot + AI Overviews,
-// Bingbot, PerplexityBot, OAI-SearchBot, ChatGPT-User, Claude-By-Cloudflare,
-// ...), while AI training/fine-tuning crawlers are denied (ai-train=no).
-// The Cloudflare edge managed robots.txt is the SOLE source for the AI-training
-// deny list; this file only carries the wildcard rules and Sitemap so the two
-// blocks are not duplicated. Do not re-add an AI-training block here.
+// ("answers yes, training no", issue #2061): grounding/AI-answer engines
+// (Google, OAI-SearchBot, PerplexityBot) are allowed explicitly on public
+// proof paths via the groups below, while AI training/fine-tuning crawlers
+// are denied (ai-train=no). The Cloudflare edge managed-zone robots remains
+// the zone-level enforcement layer for the training deny list; the repo
+// robots.txt carries the same explicit policy so the served matrix is
+// self-contained and version-controlled.
 // Single source of truth for the AI training-crawler deny list (shared with
 // the llms.txt "AI access" section in app/lib/public-markdown.ts so the two
 // public surfaces can never drift apart). Policy: docs/ai-crawler-policy.md.
