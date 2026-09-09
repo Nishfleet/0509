@@ -20,8 +20,6 @@ import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
-import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
-import { withTransientRetry } from "~/lib/transient-retry.server";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 import {
   breadcrumbJsonLd,
@@ -53,14 +51,7 @@ export interface OfferTimelineLoaderData {
   collecting: boolean;
 }
 
-/**
- * Upper bound on a single per-competitor D1 read (issue #2097). A read that
- * blows past this is a hung platform call; the timeout lets the page degrade
- * (retry, then the noindex shell / 503 gate) instead of stalling the SSR.
- */
-const TIMELINE_D1_TIMEOUT_MS = 4_000;
-
-async function timelineLoaderCore({
+export async function loader({
   context,
   params,
   request,
@@ -98,13 +89,7 @@ async function timelineLoaderCore({
     asOfState: null,
   };
   try {
-    loaded = await withTransientRetry(() =>
-      promiseWithTimeout(
-        loadOfferTimeline(env, { domain: brand.domain, asOf }),
-        TIMELINE_D1_TIMEOUT_MS,
-        "Offer timeline read timed out.",
-      ),
-    );
+    loaded = await loadOfferTimeline(env, { domain: brand.domain, asOf });
   } catch {
     loadFailed = true;
     loaded = { entries: [], asOfState: null };
@@ -167,35 +152,6 @@ async function timelineLoaderCore({
     noindex,
     collecting,
   };
-}
-
-/**
- * Body-level gate (issue #2097): the /timeline/:domain moat surface must
- * NEVER SSR the generic "Something went wrong" error-boundary body under
- * HTTP 200. The core loader guards every D1 read (timeout + retry +
- * try/catch), but a residual throw from a parse/compute path would bubble to
- * the root ErrorBoundary as a 200 "Something went wrong". This wrapper
- * converts any uncaught error into an honest 503 ("Temporarily
- * unavailable") so the page degrades with the correct HTTP status. Thrown
- * Responses (the 404 for a bad domain, the 410 retire shell, the 429 rate
- * limit) pass through unchanged — only real exceptions become 503.
- */
-export async function loader(
-  args: LoaderFunctionArgs,
-): Promise<OfferTimelineLoaderData> {
-  try {
-    return await timelineLoaderCore(args);
-  } catch (error) {
-    if (error instanceof Response) throw error;
-    console.warn(
-      "Offer timeline loader failed; degrading to 503 so the page never SSRs the generic error boundary under 200 (issue #2097).",
-      { errorName: error instanceof Error ? error.name : typeof error },
-    );
-    throw new Response("Temporarily unavailable", {
-      status: 503,
-      statusText: "Temporarily unavailable",
-    });
-  }
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
