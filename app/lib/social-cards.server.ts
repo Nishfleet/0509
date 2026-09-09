@@ -100,7 +100,10 @@ const SWITCH_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   visualping: "Visualping",
 };
 
-/** Cluster card headlines for the standalone buyer surfaces. */
+/** Cluster card headlines for the standalone buyer surfaces.
+ *  The topical pages advertise the committed PNG twin under
+ *  public/social-card/<slug>.png (issue #2101). This SVG renderer stays
+ *  on /social-card/<slug>.svg for cached links. */
 const CLUSTER_HEADLINES: Readonly<Record<string, { headline: string; subline: string }>> = {
   "sneaker-resale": {
     headline: "Sneaker resale ads",

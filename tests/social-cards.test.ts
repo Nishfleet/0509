@@ -103,9 +103,9 @@ describe("social card URL builders", () => {
   });
 
   it("clusterSocialCardUrl builds the standalone surface card path", () => {
-    expect(clusterSocialCardUrl("sneaker-resale")).toBe(canonicalUrl("/social-card/sneaker-resale.svg"));
+    expect(clusterSocialCardUrl("sneaker-resale")).toBe(canonicalUrl("/social-card/sneaker-resale.png"));
     expect(clusterSocialCardUrl("competitor-monitoring")).toBe(
-      canonicalUrl("/social-card/competitor-monitoring.svg"),
+      canonicalUrl("/social-card/competitor-monitoring.png"),
     );
   });
 

@@ -125,7 +125,12 @@ export function switchSocialCardUrl(toolSlug: string): string {
 }
 
 export function clusterSocialCardUrl(slug: "sneaker-resale" | "competitor-monitoring"): string {
-  return canonicalUrl(`/social-card/${slug}.svg`);
+  // Raster twin of the generated SVG card (issue #2101). Facebook/X/LinkedIn
+  // scrapers refuse SVG og:images, so the topical marketing pages advertise
+  // the committed PNG under public/social-card/ — the same static-PNG path
+  // as the site-wide og-image.png. The SVG renderer stays on /social-card/<slug>.svg
+  // for cached links.
+  return canonicalUrl(`/social-card/${slug}.png`);
 }
 
 /**
