@@ -1281,21 +1281,90 @@ elif [[ "$_gh_secondary_active" == "1" && $_gh_secondary_backoff -le $_gh_second
     _gh_secondary_clear
 fi
 
+# Repair rung state helpers (fleet-ops#4639). A RESERVED escape from the
+# seat deadlock: every allowlisted seat benched/walled so the seat-repair
+# issues themselves sit skipped-capacity every tick. Trigger: pick_seat
+# returns NO USABLE SEAT, or usable slots < 2, for >= 2 consecutive ticks.
+# Then intake claims critical-path fleet-ops ONLY, exempt from yield caps
+# and the light-only/audition filter, capped at 2 concurrent rung workers,
+# every use logged REPAIR-RUNG. Release as soon as pick_seat reports >= 2
+# usable slots. The worker-side ladder (lib/seat-lib.sh) is litellm judge
+# -> mergegateway audition -> cursor keystone at cap 1; never a
+# money-walled seat (money stays Nish's, fleet-ops#3284).
+PI_INTAKE_REPAIR_RUNG_AFTER="${PI_INTAKE_REPAIR_RUNG_AFTER:-2}"
+PI_INTAKE_REPAIR_RUNG_MAX_CONCURRENT="${PI_INTAKE_REPAIR_RUNG_MAX_CONCURRENT:-2}"
+repair_rung_state_file() {
+    printf '%s' "${PI_INTAKE_REPAIR_RUNG_STATE:-/home/nish/workspaces/agent-state/pi-intake/repair-rung-state}"
+}
+
+repair_rung_strikes() {
+    local f _n=0
+    f=$(repair_rung_state_file)
+    _n=$(tr -cd '0-9' <"$f" 2>/dev/null || true)
+    [[ "$_n" =~ ^[0-9]+$ ]] || _n=0
+    printf '%s' "$_n"
+}
+
+# Count one low-slot/outage tick and return the consecutive strike count.
+repair_rung_note_outage() {
+    local f _n=0
+    f=$(repair_rung_state_file)
+    _n=$(repair_rung_strikes)
+    _n=$(( _n + 1 ))
+    mkdir -p "$(dirname "$f")" 2>/dev/null || true
+    printf '%s' "$_n" >"$f" 2>/dev/null || true
+    printf '%s' "$_n"
+}
+
+repair_rung_reset() {
+    local f
+    f=$(repair_rung_state_file)
+    if [[ -f "$f" ]]; then
+        printf '0' >"$f" 2>/dev/null || true
+    fi
+    return 0
+}
+
+# Live rung workers: pi-issue@ fleet-ops units whose packet carries the
+# seat-rung marker. Counting liveness (not a hand-maintained list) means a
+# finished or failed unit stops counting and the 2-concurrent cap
+# self-heals — no second state file to leak. SYSTEMCTL is the tick's test
+# seam, so the drill can stub it.
+repair_rung_concurrent() {
+    local _live=0 _pkt _st
+    [[ -d "${ISSUE_STATE_DIR:-}" ]] || { printf '0'; return; }
+    for _pkt in "$ISSUE_STATE_DIR"/fleet-ops-*.in; do
+        [[ -f "$_pkt" ]] || continue
+        grep -q '^seat-rung:[[:space:]]*repair[[:space:]]*$' "$_pkt" 2>/dev/null || continue
+        _st=$($SYSTEMCTL --user is-active "pi-issue@$(basename "$_pkt" .in).service" 2>/dev/null || true)
+        if [[ "$_st" == "active" || "$_st" == "activating" ]]; then
+            _live=$(( _live + 1 ))
+        fi
+    done
+    printf '%s' "$_live"
+}
+
 # Seat gate (auditor 2026-08-26T18:1xZ, summon fleet-ops-378 unit-failure):
 # capacity slots are NOT proof a worker can run. With every allowlisted
 # heavy-capable seat benched/quota-exhausted, a claimed issue spawns a
 # pi-issue@ unit that dies instantly on pick_seat(heavy) -> NO USABLE SEAT
 # and auto-restarts until StartLimitBurst, then OnFailure reaps the claim
 # back to agent-ready, then the NEXT tick re-claims it — a spawn churn that
-# burned 37 units activating and summoned the auditor. The intake must probe
-# a usable heavy-capable seat BEFORE claiming; if none exists, hold all
-# claims this tick (workers pick their own seat at run time, and the queue
-# is heavy product work — a light-only fleet cannot run it). The recheck
-# timer re-fires the tick when seats recover.
-# shellcheck disable=SC2034
-if ! heavy_seat=$(pick_seat "" "" 1 2>/dev/null); then
-    echo "no usable heavy-capable seat (slots=$slots); holding claims this tick — gate: pick_seat need_capable=1"
-    exit 0
+# burned 37 units activating and summoned the auditor.
+#
+# fleet-ops#4639: the old gate exited the WHOLE tick when the heavy probe
+# failed, freezing light claims behind a heavy-only shortage. The
+# anti-churn guarantee (fleet-ops-378) only requires that HEAVY issues are
+# not claimed without a heavy seat. So: heavy probe fails -> claim LIGHT
+# issues only this tick. When usable slots < 2 for >= 2 consecutive ticks
+# the REPAIR-RUNG opens (critical-path fleet-ops only) instead of holding
+# forever — the deadlock that kept the seat-repair issues skipped-capacity.
+_light_only_claims=0
+_repair_rung_armed=0
+heavy_seat=$(pick_seat "" "" 1 2>/dev/null) || heavy_seat=""
+if [[ -z "$heavy_seat" ]]; then
+    echo "no usable heavy-capable seat (slots=$slots); light-only claims this tick — gate: pick_seat need_capable=1 (fleet-ops#4639)"
+    _light_only_claims=1
 fi
 
 # Usable seat-slot gate (fleet-ops#3732): capacity slots (RAM/config) are not
@@ -1307,17 +1376,46 @@ fi
 # Fails OPEN when the count seam is unavailable (seat-lib without count
 # mode, a stubbed pick_seat, a non-numeric reply): a broken counter must
 # never freeze intake — same rule as the product-first gate below. Only a
-# definite 0 holds claims.
+# definite 0 holds claims — unless the repair rung is armed.
 usable_light_slots=$(PICK_SEAT_COUNT_SLOTS=1 pick_seat "" "" 0 "" light 2>/dev/null || echo "")
 if [[ ! "$usable_light_slots" =~ ^[0-9]+$ ]]; then
     echo "usable seat-slot count unavailable (pick_seat count mode returned '${usable_light_slots:0:60}'); seat-slot gate fails open, keeping slots=$slots (fleet-ops#3732)"
     usable_light_slots=$slots
 fi
-if (( usable_light_slots <= 0 )); then
-    echo "no usable seat slot (slots=$slots, usable_light_slots=0); holding claims this tick — gate: no usable seat slot"
-    exit 0
+if (( usable_light_slots < 2 )); then
+    # Judge spec (fleet-ops#4639): NO USABLE SEAT *or* usable slots < 2
+    # for >= 2 consecutive ticks opens the rung. A non-fleet-ops tick
+    # never arms it (rung admits critical-path fleet-ops only).
+    _rung_strikes=$(repair_rung_note_outage)
+    if (( _rung_strikes >= PI_INTAKE_REPAIR_RUNG_AFTER )); then
+        if [[ "$REPO" != "fleet-ops" ]]; then
+            if (( usable_light_slots <= 0 )) && [[ -z "$heavy_seat" ]]; then
+                echo "REPAIR-RUNG strike ${_rung_strikes} but repo $REPO is not fleet-ops; holding claims this tick — gate: repair-rung is fleet-ops-only (fleet-ops#4639)"
+                exit 0
+            fi
+        else
+            _repair_rung_armed=1
+            echo "REPAIR-RUNG armed: ${_rung_strikes} consecutive ticks with usable slots ${usable_light_slots} < 2 — claiming critical-path fleet-ops issues only, cap ${PI_INTAKE_REPAIR_RUNG_MAX_CONCURRENT} concurrent rung workers (fleet-ops#4639)"
+        fi
+    elif (( usable_light_slots <= 0 )) && [[ -z "$heavy_seat" ]]; then
+        echo "no usable seat (heavy and light pools empty); holding claims this tick — gate: no usable seat slot (repair-rung strike ${_rung_strikes}/${PI_INTAKE_REPAIR_RUNG_AFTER}, fleet-ops#4639)"
+        exit 0
+    fi
+else
+    _rung_prev=$(repair_rung_strikes)
+    repair_rung_reset
+    if (( _rung_prev > 0 )); then
+        echo "REPAIR-RUNG released: usable slots $usable_light_slots >= 2 (was ${_rung_prev} consecutive low-slot ticks, fleet-ops#4639)"
+    fi
 fi
-if (( usable_light_slots < slots )); then
+# The rung claims do NOT come out of the light-slot pool (a critical-path
+# repair issue is usually heavy), so the light-slot clamp below is bypassed
+# while the rung is armed; the rung's own 2-concurrent cap applies instead.
+if (( _repair_rung_armed == 1 )); then
+    slots=$PI_INTAKE_REPAIR_RUNG_MAX_CONCURRENT
+elif (( usable_light_slots <= 0 )) && [[ -n "$heavy_seat" ]]; then
+    slots=1
+elif (( usable_light_slots < slots )); then
     echo "usable seat slots $usable_light_slots < capacity slots $slots; claiming at most $usable_light_slots this tick (fleet-ops#3732)"
     slots=$usable_light_slots
 fi
@@ -1420,6 +1518,8 @@ fi
 # exempt from the cap and claims even past the budget. Computed once from the
 # tick-start slots count (slots already includes the per-claim decrement
 # below, so capture the base once here).
+# Repair-rung knobs (PI_INTAKE_REPAIR_RUNG_AFTER / MAX_CONCURRENT) are
+# defined with the seat-gate helpers above so they exist before first use.
 _self_maint_cap=0
 _self_maint_claims=0
 if product_first_is_self_maintenance "$REPO" || [[ "$REPO" == "fleet-ops" ]]; then
@@ -1453,6 +1553,25 @@ for i in "${!numbers[@]}"; do
         fi
     fi
 
+    # fleet-ops#4639: repair-rung claim filter. While the rung is armed only
+    # critical-path fleet-ops issues are claimable (the whole point: let the
+    # seat-repair issues through when every seat is dead). Cheap label check
+    # before the body fetch so a skipped issue costs zero network; the rung's
+    # concurrency cap is checked on the same cheap pass.
+    if [[ "$_repair_rung_armed" == "1" ]]; then
+        if printf '%s' "${labels[$i]:-}" | jq -e --arg cp "$CRITICAL_PATH_LABEL" \
+            '[.[]?.name // empty] | index($cp) != null' >/dev/null 2>&1; then
+            _rung_live=$(repair_rung_concurrent)
+            if (( _rung_live >= PI_INTAKE_REPAIR_RUNG_MAX_CONCURRENT )); then
+                echo "issue $N ($title): skipped-repair-rung-cap ($_rung_live live rung workers >= cap $PI_INTAKE_REPAIR_RUNG_MAX_CONCURRENT, fleet-ops#4639)"
+                continue
+            fi
+        else
+            echo "issue $N ($title): skipped-repair-rung (rung claims critical-path fleet-ops only, fleet-ops#4639)"
+            continue
+        fi
+    fi
+
     # fleet-ops#4540: parked issues are never re-claimed. A protected issue
     # with a merged delivery PR and a future-date-gate `termination:` clause
     # carries the awaiting-runtime-gate label (applied by this tick's park
@@ -1480,7 +1599,11 @@ for i in "${!numbers[@]}"; do
     # surge window. Leverage work, when present, keeps strict priority (skip
     # everything non-leverage cheaply, claim the leverage issues).
     if [[ "$REPO" == "fleet-ops" && "$_band_phase" == "surge" && "$_surge_has_leverage" == "1" ]]; then
-        if ! precedence_band_is_leverage_issue "$N" 2>/dev/null; then
+        # fleet-ops#4639: the rung is exempt from the surge-leverage skip —
+        # a critical-path repair issue must claim even mid-surge.
+        if [[ "$_repair_rung_armed" == "1" ]]; then
+            :
+        elif ! precedence_band_is_leverage_issue "$N" 2>/dev/null; then
             echo "issue $N ($title): skipped-precedence-band (skip-surge-leverage)"
             continue
         fi
@@ -1801,6 +1924,18 @@ blocked-on: orchestrator" 2>/dev/null || true
         continue
     fi
 
+    # fleet-ops#4639 (orchestrator append): heavy seat missing -> LIGHT-ONLY
+    # claims this tick. Claiming a heavy issue now spawns a unit that dies at
+    # pick_seat(heavy) — exactly the churn the seat gate exists to stop. The
+    # difficulty is computed once here (the light-only filter and the packet
+    # header share it). While the repair rung is armed the light-only filter
+    # does NOT apply — the rung is the reserved exemption.
+    difficulty="$(issue_difficulty "${labels[$i]}" "$title" "$body")"
+    if [[ "$_light_only_claims" == "1" && "$_repair_rung_armed" == "0" && "$difficulty" != "light" ]]; then
+        echo "issue $N ($title): skipped-heavy-no-heavy-seat (light-only tick — no usable heavy-capable seat, fleet-ops#4639)"
+        continue
+    fi
+
     # Rent-paying band (fleet-ops#1223): until cutoff_utc, fleet-ops intake
     # claims only surge_leverage_issues; after cutoff, a new machinery claim
     # that would push live share over machinery_max_pct is skipped unless the
@@ -1810,10 +1945,16 @@ blocked-on: orchestrator" 2>/dev/null || true
     # slot opens.
     # Legit-work guard (fleet-ops#1516): pass title and body for quality classification
     # to allow empty-product surge expansion only for upgrade/repair work.
-    band_reason=$(precedence_band_allow_claim "$REPO" "$N" "${labels[$i]}" "$body" "$title") || {
-        echo "issue $N ($title): skipped-precedence-band ($band_reason)"
-        continue
-    }
+    # fleet-ops#4639: the rung is exempt from yield caps — admit without the
+    # band check and tag the reason so the floor-lane case below sees it.
+    if [[ "$_repair_rung_armed" == "1" ]]; then
+        band_reason="allow-repair-rung"
+    else
+        band_reason=$(precedence_band_allow_claim "$REPO" "$N" "${labels[$i]}" "$body" "$title") || {
+            echo "issue $N ($title): skipped-precedence-band ($band_reason)"
+            continue
+        }
+    fi
 
     # Product-first held repo (fleet-ops#2626): when the self-maintenance
     # ratio holds this repo, only the precedence-band FLOOR lanes may claim
@@ -1828,7 +1969,7 @@ blocked-on: orchestrator" 2>/dev/null || true
     # exact FleetUndersaturated stall fleet-ops#2841 diagnosed.
     if [[ "$_pfirst_held" == "1" ]]; then
         case "$band_reason" in
-            allow-band-bootstrap|allow-band-floor|allow-starvation-floor|allow-surge-floor|allow-surge-leverage|allow-multiplier|allow-band-surge-legit)
+            allow-band-bootstrap|allow-band-floor|allow-starvation-floor|allow-surge-floor|allow-surge-leverage|allow-multiplier|allow-band-surge-legit|allow-repair-rung)
                 echo "issue $N ($title): held-in-buffer floor lane ($band_reason) — one claim, queue not hard-stalled"
                 ;;
             *)
@@ -1930,9 +2071,17 @@ blocked-on: orchestrator" 2>/dev/null || true
     # so the worker runs rather than not at all (same fail-open posture as the
     # keystone marker in pi-issue-start).
     packet_path="$ISSUE_STATE_DIR/${REPO}-${N}.in"
-    difficulty="$(issue_difficulty "${labels[$i]}" "$title" "$body")"
+    # difficulty was computed at the light-only filter above (fleet-ops#4639:
+    # one issue_difficulty pass per issue; the filter and the header share it).
     {
         echo "difficulty: $difficulty"
+        # fleet-ops#4639: repair-rung claims carry the seat-rung marker so
+        # pi-issue-run arms PI_REPAIR_RUNG and pick_seat may fall back to the
+        # reserved rung ladder (litellm judge -> mergegateway audition ->
+        # cursor keystone cap 1) when every allowlisted seat is dead.
+        if [[ "$_repair_rung_armed" == "1" ]]; then
+            echo "seat-rung: repair"
+        fi
         cat "$WORKER_PROMPT"
         if d1_gate_integrity_needed "$body" \
             && [[ -f "$WORKER_BLOCKS_DIR/$D1_GATE_INTEGRITY_BLOCK" ]]; then
@@ -2082,6 +2231,11 @@ blocked-on: orchestrator" 2>/dev/null || true
     fi
 
     echo "issue $N ($title): claimed+spawned"
+    # fleet-ops#4639: REPAIR-RUNG is the rung-usage log line the termination
+    # drill greps the intake journal for (accept 1/3).
+    if [[ "$_repair_rung_armed" == "1" ]]; then
+        echo "REPAIR-RUNG: claimed critical-path issue $N on the repair rung (concurrency cap $PI_INTAKE_REPAIR_RUNG_MAX_CONCURRENT, fleet-ops#4639)"
+    fi
     _claimed_this_tick=$(( _claimed_this_tick + 1 ))
     # fleet-ops#3784: stagger cohort spawns so clone/npm/pi startup peaks do
     # not overlap (oomd slice-pressure kills at tick time). Sleep a few
