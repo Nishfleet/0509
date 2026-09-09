@@ -2,9 +2,14 @@ import type { useNavigation } from "react-router";
 
 import {
   SuggestedCompetitorsPanel,
+  SuggestedCompetitorPreviewPanel,
   type SuggestedCompetitorsAcceptFeedback,
 } from "~/components/watchlists/suggested-competitors-panel";
-import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-suggested-loader.server";
+import { buildSignupTrackingPath } from "~/lib/competitor-website";
+import type {
+  SuggestedCompetitorRow,
+  SuggestedCompetitorsPanelData,
+} from "~/lib/auto-competitor-suggested-loader.server";
 
 type NavigationResult = ReturnType<typeof useNavigation>;
 
@@ -104,4 +109,52 @@ export function resolveSuggestedPanelFeedback(
     watchlistId:
       typeof candidate.watchlistId === "string" ? candidate.watchlistId : undefined,
   };
+}
+
+/**
+ * Logged-out /search preview section (issue #2113): the search route's
+ * counterpart to `WatchlistsSuggestedCompetitorsSection`.
+ *
+ * The /search loader runs the existing suggested-competitors discovery
+ * phase server-side when a logged-out visitor searches a domain, and
+ * passes the shaped top rows in as `preview`. This wrapper:
+ *
+ * 1. Omits itself when the loader returned `null` (non-domain query, a
+ *    signed-in session, or a discovery failure) or when discovery found
+ *    zero candidates — an empty preview is never fabricated into a
+ *    suggestion.
+ * 2. Builds the signup paths: the panel CTA carries the searched domain,
+ *    each row's "Watch" link carries THAT competitor's domain, so the
+ *    post-signup setup checklist prefills exactly what the visitor picked.
+ *    A row without a resolvable domain falls back to the panel-level path
+ *    rather than inventing a website from the advertiser name.
+ */
+export function SearchCompetitorPreviewSection(props: {
+  preview: SuggestedCompetitorsPanelData | null;
+  country: string;
+}) {
+  if (!props.preview || props.preview.rows.length === 0) {
+    return null;
+  }
+  const signupPath = buildSignupTrackingPath({
+    competitorWebsiteRaw: props.preview.domain,
+    ads: [],
+    country: props.country,
+  });
+  const signupPathForRow = (row: SuggestedCompetitorRow) =>
+    row.landingPageUrl
+      ? buildSignupTrackingPath({
+          competitorWebsiteRaw: row.landingPageUrl,
+          ads: [],
+          country: props.country,
+        })
+      : signupPath;
+  return (
+    <SuggestedCompetitorPreviewPanel
+      domain={props.preview.domain}
+      rows={props.preview.rows}
+      signupPath={signupPath}
+      signupPathForRow={signupPathForRow}
+    />
+  );
 }
