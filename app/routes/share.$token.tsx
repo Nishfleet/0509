@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
+import { ArchiveLedger } from "~/components/archive-ledger";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { LocalTime } from "~/components/local-time";
 import { MARKETING_TAGLINE } from "~/components/marketing-nav";
@@ -12,6 +13,11 @@ import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import { ReportView } from "~/components/report-view";
 import { ShareBrandIdentity } from "~/components/share-brand-identity";
 import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
+import {
+  isArchiveSnapshotPayload,
+  sanitizeArchiveSnapshotPayload,
+  type ArchiveSnapshotPayload,
+} from "~/lib/archive-snapshot";
 import type { DigestShareSnapshot } from "~/lib/digest-share";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
@@ -174,6 +180,8 @@ export default function ShareRoute() {
     "payload" in data && data.resourceType === "digest" && isDigestSnapshotPayload(data.payload)
       ? data.payload
       : null;
+  const archiveSnapshot =
+    "payload" in data && isArchiveSnapshotPayload(data.payload) ? data.payload : null;
   const hasAgencyIdentity = Boolean(
     data.brandIdentity?.brandName || data.brandIdentity?.brandLogo,
   );
@@ -287,6 +295,31 @@ export default function ShareRoute() {
                 </li>
               ))}
             </ul>
+          </article>
+        ) : archiveSnapshot ? (
+          <article className="f9-wk-panel">
+            <div className="f9-panel-toolbar f9-report-toolbar">
+              <div>
+                <p className="f9-wk-kick">Shared archive snapshot</p>
+                <h1>{archiveSnapshot.targetLabel}</h1>
+              </div>
+              {pdfVariant ? null : (
+                <button
+                  className="f9-wk-btn-quiet"
+                  onClick={() => window.print()}
+                  type="button"
+                >
+                  Print archive
+                </button>
+              )}
+            </div>
+            <p className="f9-wk-dim">
+              {`Frozen ${archiveSnapshot.frozenAt.slice(0, 10)} by ${archiveSnapshot.watchlistName}. Later captures never change what this link shows.`}
+            </p>
+            <ArchiveLedger
+              archive={archiveSnapshot.archive}
+              headingId="shared-archive-ledger-title"
+            />
           </article>
         ) : "payload" in data ? (
           <article className="f9-wk-panel">
@@ -430,7 +463,7 @@ function isDigestSnapshotPayload(value: unknown): value is {
 function sanitizeSnapshotPayload(
   resourceType: ShareResourceType,
   payload: Record<string, unknown> | null,
-): DigestShareSnapshot | ReportDocument | null {
+): DigestShareSnapshot | ReportDocument | ArchiveSnapshotPayload | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
   }
@@ -441,6 +474,11 @@ function sanitizeSnapshotPayload(
 
   if (resourceType === "report") {
     return sanitizeReportSnapshotPayload(payload);
+  }
+
+  // Issue #2173: a watchlist snapshot carries the frozen proof archive.
+  if (resourceType === "watchlist") {
+    return sanitizeArchiveSnapshotPayload(payload);
   }
 
   return null;

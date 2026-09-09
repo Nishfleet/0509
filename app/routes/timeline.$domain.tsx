@@ -16,9 +16,11 @@
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 
+import { ArchiveLedger } from "~/components/archive-ledger";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
+import type { DomainArchive } from "~/lib/archive";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import { withTransientRetry } from "~/lib/transient-retry.server";
@@ -43,6 +45,8 @@ export interface OfferTimelineLoaderData {
   asOf: string | null;
   asOfState: OfferLedgerEntry | null;
   entries: OfferLedgerEntry[];
+  /** The public proof archive (issue #2173) — public-ad facts only. */
+  archive: DomainArchive;
   noindex: boolean;
   /**
    * True when the ledger is empty but this domain is a tracked, sitemap-listed
@@ -88,26 +92,33 @@ async function timelineLoaderCore({
   const { parseAsOfDate } = await import("~/lib/offer-timeline");
   const asOf = parseAsOfDate(new URL(request.url).searchParams.get("asOf"));
 
-  const { isOfferTimelineShareEnabled, loadOfferTimeline } = await import(
+  const { isOfferTimelineShareEnabled } = await import(
     "~/lib/offer-timeline.server"
   );
+  const { emptyDomainArchive } = await import("~/lib/archive");
+  const { loadPublicDomainArchive } = await import("~/lib/archive.server");
 
   let loadFailed = false;
-  let loaded: Awaited<ReturnType<typeof loadOfferTimeline>> = {
+  let loaded: Awaited<ReturnType<typeof loadPublicDomainArchive>> = {
     entries: [],
     asOfState: null,
+    archive: emptyDomainArchive(brand.domain, new Date()),
   };
   try {
     loaded = await withTransientRetry(() =>
       promiseWithTimeout(
-        loadOfferTimeline(env, { domain: brand.domain, asOf }),
+        loadPublicDomainArchive(env, { domain: brand.domain, asOf }),
         TIMELINE_D1_TIMEOUT_MS,
         "Offer timeline read timed out.",
       ),
     );
   } catch {
     loadFailed = true;
-    loaded = { entries: [], asOfState: null };
+    loaded = {
+      entries: [],
+      asOfState: null,
+      archive: emptyDomainArchive(brand.domain, new Date()),
+    };
   }
 
   // Retire path (issue #1309): a timeline with no stored snapshots is a
@@ -164,6 +175,7 @@ async function timelineLoaderCore({
     asOf,
     asOfState: loaded.asOfState,
     entries: loaded.entries,
+    archive: loaded.archive,
     noindex,
     collecting,
   };
@@ -380,6 +392,18 @@ export default function OfferTimelineRoute() {
             {" · "}
             <Link to={signupPath}>{`Watch ${data.domain}`}</Link>
           </p>
+        </div>
+      </section>
+
+      <section className="f9-timeline-section" aria-labelledby="offer-timeline-archive-title">
+        <div className="f9-container">
+          {/*
+           * The proof archive (issue #2173): every captured change with its
+           * change mark, #1387 criticality band, capture method and receipts,
+           * plus the month's deterministic rollup, per-ad tenure and the
+           * per-page offer series. Gaps in capture render as gaps.
+           */}
+          <ArchiveLedger archive={data.archive} headingId="offer-timeline-archive-title" />
         </div>
       </section>
 

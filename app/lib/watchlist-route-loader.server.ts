@@ -152,6 +152,13 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
   // WP-24: deep-link target from alert/digest emails (`?event=<id>`).
   const highlightedEventId = url.searchParams.get("event")?.trim() || null;
   const requestedWatchlistId = url.searchParams.get("watchlist")?.trim() || null;
+  // Issue #2173: the Archive tab's record loads only when the tab is open —
+  // the board and the other four panels never pay for it.
+  const { resolveWatchlistDetailTab, WATCHLIST_DETAIL_TAB_PARAM } = await import(
+    "~/lib/watchlist-detail-tabs"
+  );
+  const archiveTabActive =
+    resolveWatchlistDetailTab(url.searchParams.get(WATCHLIST_DETAIL_TAB_PARAM)) === "archive";
   // BL-006 list/detail split (brief §7): `/app/watchlists` IS the watch board.
   // A competitor's detail only loads when a band is opened (`?watchlist=<id>`),
   // so the default view no longer pays for twelve detail queries — or renders
@@ -261,6 +268,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
       verifiedAccountEmail,
       deliveryTestRequestTokens: {} as Record<string, string>,
       websiteCoverageLabel: null as string | null,
+      archive: null as import("~/lib/archive").DomainArchive | null,
     };
   }
 
@@ -351,6 +359,17 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     ? await loadLatestRunCaptureAttempts(env, latestRunForCaptureAttempts)
     : [];
   const websiteCoverageLabel = await loadWebsiteCoverageLabel(env, selectedWatchlist.id);
+  // The Archive tab (issue #2173): everything the account captured for this
+  // competitor, from the same engine the public /timeline/:domain uses. A
+  // read failure degrades to an empty archive — the tab renders its honest
+  // empty state, never a 500.
+  const archive = archiveTabActive
+    ? await import("~/lib/archive.server")
+        .then(({ loadWatchlistArchive }) =>
+          loadWatchlistArchive(env, { watchlist: selectedWatchlist }),
+        )
+        .catch(() => null)
+    : null;
   const suggestedCompetitorsPanel = await suggestedCompetitorsPanelPromise;
 
   return {
@@ -404,6 +423,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
         .filter((target) => target.channel === "email")
         .map((target) => [target.id, crypto.randomUUID()]),
     ),
+    archive,
   };
 }
 
