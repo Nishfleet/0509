@@ -782,6 +782,9 @@ export const SITEMAP_PATHS = [
   "/switch/panoramata",
   "/switch/visualping",
   "/competitor-monitoring",
+  // Issue #2144: agency audience page (roster math + sourced Agency-vs-
+  // Foreplay line). EN-only; no locale cluster.
+  "/for-agencies",
   "/sneaker-resale",
   "/de/sneaker-resale",
   "/ja/sneaker-resale",
@@ -864,6 +867,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/llms-full.txt": { changefreq: "daily", priority: "0.6" },
   "/guides/how-to-track-competitor-ads": { changefreq: "monthly", priority: "0.6" },
   "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
+  "/for-agencies": { changefreq: "weekly", priority: "0.8" },
   "/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
   "/de/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
   "/ja/sneaker-resale": { changefreq: "weekly", priority: "0.8" },

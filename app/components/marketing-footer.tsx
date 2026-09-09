@@ -30,6 +30,7 @@ export function MarketingFooter() {
         <Link to="/status">Status</Link>
         <Link to="/changelog">Changelog</Link>
         <Link to="/competitor-monitoring">Proof brief</Link>
+        <Link to="/for-agencies">For agencies</Link>
         <Link to="/capture-rules">Proof rules</Link>
         <Link to="/brands">Tracked brands</Link>
         <Link to="/trust">Trust</Link>

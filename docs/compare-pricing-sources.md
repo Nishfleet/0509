@@ -15,6 +15,22 @@ page before editing the table, and update the `checked` date when you do.
 - Source: https://foreplay.co/pricing
 - checked 2026-09-09
 
+## Foreplay Agency (issue #2144)
+
+- Entry price: Agency — $459/month (monthly billing toggle, the page's
+  default view). Also printed: $389/month on annual billing ("Save 15% +
+  Unlimited Spyder").
+- Tracked-brand count: 50 Brands (Spyder), 10 Brands (Lens), up to 10 users.
+- Cadence: not printed for the Agency tier.
+- Source: https://foreplay.co/pricing
+- Checked: 2026-09-09
+
+Used on:
+
+- `/for-agencies` (issue #2144) quotes the Agency tier exactly as printed on
+  the monthly toggle: "$459/month with 50 tracked brands on monthly billing",
+  with the source URL and this check date beside it.
+
 ## Visualping Personal 1K
 
 - Entry price: $14/mo (monthly billing). Also printed: $120/yr ($10/mo) on
