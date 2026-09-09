@@ -438,6 +438,40 @@ export function breadcrumbJsonLd(input: {
   } as const;
 }
 
+/** One enumerated link in an ItemList (issue #2067). */
+export interface ItemListJsonLdEntry {
+  name: string;
+  url: string;
+}
+
+/**
+ * schema.org ItemList for a page that enumerates a curated set of links
+ * (issue #2067 — the /brands/:category pages listing their brands). The
+ * page `url` is derived from `pathname` via `canonicalUrl` so it can never
+ * drift from the page's canonical tag; each entry's `item` URL is passed
+ * through as-is — the caller supplies already-canonical /ads/:domain URLs,
+ * and this builder never rewrites a link it was handed. Positions are
+ * 1-based in the order given, matching the visible list order.
+ */
+export function itemListJsonLd(input: {
+  name: string;
+  pathname: string;
+  items: ReadonlyArray<ItemListJsonLdEntry>;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: input.name,
+    url: canonicalUrl(input.pathname),
+    itemListElement: input.items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  } as const;
+}
+
 /**
  * schema.org Product+Offer pair for a /pricing tier or proof pack (#1503).
  *
