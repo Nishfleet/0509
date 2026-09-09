@@ -793,12 +793,12 @@ const TIMELINE_BRAND_PATH = /^\/timeline\/([^/]+)$/;
 
 /**
  * One llms.txt index line for an indexable /timeline/:domain page. Callers
- * must only pass paths the sitemap would emit (proof-gated, single-segment,
- * not locale-prefixed). Returns null for anything that is not a single-
- * segment /timeline/:domain path — locale prefixes (`/de/timeline/x`) and
- * multi-segment paths (`/timeline/x/y`) fall out naturally via the regex.
- * Mirrors llmsPageForBrandPath's shape so buildLlmsText can render it the
- * same way it renders brand pages (issue #1929).
+ * must only pass paths the sitemap would emit (capture-backed or collecting,
+ * single-segment, not locale-prefixed). Returns null for anything that is
+ * not a single-segment /timeline/:domain path. Locale prefixes
+ * (`/de/timeline/x`) and multi-segment paths (`/timeline/x/y`) fall out
+ * via the regex. lastmod present = capture-backed dated ledger; lastmod
+ * absent = collecting page (issue #2021). Mirrors llmsPageForBrandPath.
  */
 export function llmsPageForTimelinePath(
   path: string,
@@ -814,13 +814,18 @@ export function llmsPageForTimelinePath(
     return null;
   }
   const domain = match[1];
-  const datePhrase = lastmod ? `, last captured on ${lastmod.slice(0, 10)}` : "";
+  // Capture-backed entries carry lastmod from a proof-complete snapshot.
+  // Collecting entries (issue #2021) have no lastmod because nothing is
+  // captured yet: list the URL for sitemap parity, but do not claim a
+  // dated ledger exists.
+  const description = lastmod
+    ? `Offer timeline for ${domain} with at least one dated offer state from public captures, last captured on ${lastmod.slice(0, 10)}. Listed only when a complete proof capture backs at least one dated offer state.`
+    : `Offer timeline for ${domain}, collecting, no offer states recorded yet. The dated ledger lands here as monitoring captures land.`;
   return {
     path,
     url: canonicalUrl(path),
     title: `${domain} offer timeline`,
-    description:
-      `Offer timeline for ${domain} with at least one dated offer state from public captures${datePhrase}. Listed only when a complete proof capture backs at least one dated offer state.`,
+    description,
   };
 }
 
