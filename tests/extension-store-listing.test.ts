@@ -19,11 +19,17 @@ const FALLBACK_SHOT = new URL(
   import.meta.url,
 );
 
-function pngSize(buf: Buffer): { width: number; height: number } {
+function pngSize(buf: Buffer): { width: number; height: number; colorType: number } {
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   expect(buf.subarray(0, 8).equals(signature)).toBe(true);
   expect(buf.subarray(12, 16).toString("ascii")).toBe("IHDR");
-  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  return {
+    width: buf.readUInt32BE(16),
+    height: buf.readUInt32BE(20),
+    // IHDR byte 9: 2 = truecolor RGB, no alpha. CWS listing screenshots
+    // are 1280x800 RGB; an alpha channel is a dashboard reject.
+    colorType: buf.readUInt8(25),
+  };
 }
 
 describe("Chrome Web Store listing bundle", () => {
@@ -34,6 +40,12 @@ describe("Chrome Web Store listing bundle", () => {
     expect(manifest.description.length).toBeLessThanOrEqual(132);
     expect(listing).toContain("**Category:** Productivity");
     expect(listing).toContain("**Language:** English");
+    expect(listing).toContain(
+      "Five to Nine shows you any brand's Meta ads while you're on their website.",
+    );
+    expect(listing).toContain(
+      "Show the current website's Meta ads and provide user-chosen paths into Five to Nine search and watchlist flows.",
+    );
     expect(listing).toMatch(/activeTab reads the active tab's URL after the user opens the extension/);
     expect(listing).toContain("No `tabs` permission, no host permissions, no content scripts.");
     expect(listing).toContain("https://0509.io/privacy");
@@ -43,8 +55,8 @@ describe("Chrome Web Store listing bundle", () => {
   it("ships two 1280×800 load-unpacked screenshots", () => {
     const brand = pngSize(readFileSync(BRAND_SHOT));
     const fallback = pngSize(readFileSync(FALLBACK_SHOT));
-    expect(brand).toEqual({ width: 1280, height: 800 });
-    expect(fallback).toEqual({ width: 1280, height: 800 });
+    expect(brand).toEqual({ width: 1280, height: 800, colorType: 2 });
+    expect(fallback).toEqual({ width: 1280, height: 800, colorType: 2 });
     expect(listing).toContain("screenshot-popup-on-brand.png");
     expect(listing).toContain("screenshot-popup-fallback.png");
   });
