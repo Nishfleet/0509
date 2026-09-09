@@ -7557,6 +7557,48 @@ reds soften --- */
   letter-spacing: 0;
 }
 
+/* ---- LAST-7D WATCH EVENT PROOF (issue #2112) ---- */
+.f9-ads-recent {
+  border: 2.5px solid var(--ink);
+  background: var(--card);
+}
+.f9-ads-recent-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.9fr) 1fr auto;
+  gap: 1.4rem;
+  align-items: center;
+  padding: 1.15rem 1.5rem;
+  border-bottom: 1.5px solid rgba(23, 22, 17, 0.13);
+}
+.f9-ads-recent-row:last-child {
+  border-bottom: none;
+}
+.f9-ads-recent-type {
+  font-family: var(--ld-display);
+  font-weight: 700;
+}
+.f9-ads-recent-mark {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.f9-ads-recent-mark s {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+.f9-ads-recent-mark ins {
+  padding: 0 3px;
+  background: var(--green);
+  color: var(--ed-on-accent, var(--ink));
+  text-decoration: none;
+}
+.f9-ads-recent-date {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
 /* ---- AD WALL ---- */
 .f9-ads-wall {
   display: grid;

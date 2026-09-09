@@ -84,6 +84,7 @@ import { brandOwnedAdIdSet } from "~/lib/brand-page.server";
 import { isSeededBrandDomain } from "~/lib/ads-domain-publisher.server";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 import type { CaptureFailuresSummary } from "~/lib/offer-timeline.server";
+import type { BrandRecentWatchChange } from "~/lib/brand-page-recent-changes.server";
 import { formatCaptureAttemptReasonLabel } from "~/lib/capture-attempt-reason-code";
 import type { CaptureAttemptReasonCode } from "~/lib/capture-attempt-reason-code";
 import {
@@ -216,6 +217,13 @@ export interface BrandPageLoaderData {
    * (the section hides in that case).
    */
   captureFailuresSummary: CaptureFailuresSummary | null;
+  /**
+   * Last-7-day watch_event proof for watchlists that track this advertiser
+   * domain (issue #2112). Public-safe: event type, change mark, capture date
+   * only. Empty when no watchlist tracks the domain — the section hides, and
+   * a D1 hiccup degrades to [] rather than 500ing the page.
+   */
+  recentWatchChanges: BrandRecentWatchChange[];
 }
 
 export async function loader({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
@@ -482,6 +490,22 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
 
   const brandOwnedSet = brandOwnedAdIdSet(verifiedLinkedAds, brand.domain);
 
+  // Issue #2112 — last-7d watch_event proof for watchlists that track this
+  // advertiser domain. Public-safe (event type + change mark + capture date).
+  // Bounded D1 read; a hiccup hides the section rather than 500ing the page.
+  let recentWatchChanges: BrandRecentWatchChange[] = [];
+  try {
+    const { loadRecentWatchChangesForDomain } = await import(
+      "~/lib/brand-page-recent-changes.server"
+    );
+    recentWatchChanges = await loadRecentWatchChangesForDomain(env, brand.domain, now);
+  } catch (error) {
+    console.warn("Brand page recent watch changes load failed; hiding the section.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    recentWatchChanges = [];
+  }
+
   return {
     domain: brand.domain,
     brandName: brand.displayName,
@@ -512,6 +536,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     relatedBrands,
     canonicalPath: `/ads/${brand.domain}`,
     captureFailuresSummary,
+    recentWatchChanges,
   };
 }
 
@@ -849,6 +874,51 @@ export default function BrandAdsRoute() {
 
       <MarketingFooter />
     </main>
+  );
+}
+
+/**
+ * Last-7-day watch_event proof on the public `/ads/:domain` page (issue #2112).
+ * Hidden when nothing is stored. Each row is event type + change mark + capture
+ * date only — no user data, no watchlist names, no owner identifiers.
+ */
+function BrandRecentWatchChanges({
+  changes,
+}: {
+  changes: BrandRecentWatchChange[];
+}) {
+  if (changes.length === 0) return null;
+  return (
+    <section className="f9-ads-sec" aria-labelledby="brand-recent-changes-title">
+      <div className="f9-container">
+        <div className="f9-ads-sec-head">
+          <div className="f9-ads-sec-head-left">
+            <span className="f9-ads-sec-eyebrow">Captured proof</span>
+            <h2 id="brand-recent-changes-title">Changed in the last 7 days</h2>
+          </div>
+          <span className="f9-ads-sec-meta">
+            {`${changes.length} ${changes.length === 1 ? "change" : "changes"}`}
+          </span>
+        </div>
+        <div className="f9-ads-recent" data-testid="ads-recent-changes">
+          {changes.map((change, index) => (
+            <div className="f9-ads-recent-row" key={`${change.eventType}-${change.capturedAt}-${index}`}>
+              <span className="f9-ads-recent-type">{change.eventTypeLabel}</span>
+              {change.changeMark ? (
+                <span className="f9-ads-recent-mark">
+                  <s>{change.changeMark.from}</s>
+                  <span aria-hidden="true"> → </span>
+                  <ins>{change.changeMark.to}</ins>
+                </span>
+              ) : null}
+              <time className="f9-ads-recent-date" dateTime={change.capturedAt}>
+                {change.capturedOn}
+              </time>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1258,6 +1328,8 @@ function BrandAdsResults({
           </section>
         );
       })()}
+
+      <BrandRecentWatchChanges changes={data.recentWatchChanges} />
 
       <BrandOfferTimeline domain={data.domain} entries={data.offerTimelineEntries} timelineIndexable={data.timelineIndexable} />
       <BrandCaptureFailures summary={data.captureFailuresSummary} domain={data.domain} signupPath={signupPath} />

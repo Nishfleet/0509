@@ -34,7 +34,7 @@ function readMetadataString(
  * whose two halves are equal is not a change, and a 400-character landing-page
  * paragraph is not a token.
  */
-export function readChangeMark(event: WatchEventRecord): ChangeMark | null {
+export function readChangeMark(event: { metadata?: Record<string, unknown> }): ChangeMark | null {
   const from = readMetadataString(event.metadata, "from");
   const to = readMetadataString(event.metadata, "to");
   if (!from || !to) return null;
