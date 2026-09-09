@@ -259,8 +259,13 @@ export function buildSearchV2CacheKey(input: {
     ];
     // A curated page id gets its own key segment so a page-scoped search
     // bypasses any stale keyword-scoped cache entry for the same domain.
-    if (input.pageId) {
-      base.push(`page:${input.pageId}`);
+    // Normalize the same way buildSearchV2SavedQuery does so the write key
+    // (saved query's filters.pageId) and the read key stay identical for any
+    // override data — a non-numeric id is dropped by both, never mismatched
+    // (reviewer Act-on, issue #1982).
+    const normalizedPageId = normalizeNumericPageId(input.pageId);
+    if (normalizedPageId) {
+      base.push(`page:${normalizedPageId}`);
     }
     base.push((input.cursor ?? "page-1").trim());
     return base.join(":");

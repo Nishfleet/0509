@@ -719,6 +719,67 @@ describe("deriveBrandPageLookupForCountry", () => {
       }),
     );
   });
+
+  // Issue #1982: brands with a curated Meta Page id (goat.com, on.com) must
+  // re-derive the SAME page-scoped cache key the publisher writes, so the
+  // /ads/:domain loader and sitemap find the warmed rows. A key mismatch
+  // would silently drop the brand from the sitemap (reviewer Act-on).
+  it.each([
+    ["goat.com", "746493592053334"],
+    ["on.com", "238939146624"],
+  ] as const)(
+    "re-derives the page-scoped search-v2 domain key for %s (curated page id)",
+    (domain, pageId) => {
+      const derived = deriveBrandPageLookupForCountry(
+        "meta_library_browser",
+        domain,
+        "all",
+        true,
+      );
+      const intent = parseSearchInputFromWebsiteField(domain);
+
+      expect(derived.usedDomainKey).toBe(true);
+      // The derived key carries the page:<id> segment...
+      expect(derived.cacheKey).toBe(
+        `search-v2:domain:${domain}:exact:meta_library_browser:all:page:${pageId}:page-1`,
+      );
+      // ...and equals an independent buildSearchV2CacheKey with the same pageId.
+      expect(derived.cacheKey).toBe(
+        buildSearchV2CacheKey({
+          provider: "meta_library_browser",
+          intent,
+          scope: "exact",
+          country: "all",
+          cursor: null,
+          pageId,
+        }),
+      );
+    },
+  );
+
+  // A non-numeric pageId must be dropped by BOTH the cache key and the saved
+  // query, never mismatched (reviewer Act-on: buildSearchV2CacheKey now
+  // normalizes the same way buildSearchV2SavedQuery does).
+  it("drops a non-numeric curated page id from the cache key (parity with the saved query)", () => {
+    const intent = parseSearchInputFromWebsiteField("example.com");
+    const keyWithBadPageId = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent,
+      scope: "exact",
+      country: "all",
+      cursor: null,
+      pageId: "not-a-page-id",
+    });
+    const keyWithNoPageId = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent,
+      scope: "exact",
+      country: "all",
+      cursor: null,
+    });
+    expect(keyWithBadPageId).toBe(keyWithNoPageId);
+    expect(keyWithBadPageId).not.toContain("page:");
+  });
 });
 
 describe("buildSitemapXml", () => {
