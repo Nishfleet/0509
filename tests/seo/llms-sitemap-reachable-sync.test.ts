@@ -141,6 +141,24 @@ describe("llms.txt ↔ reachable sitemap sync (issue #2017 canary)", () => {
     }
   });
 
+  it("every llms.txt /switch/:slug URL is present in the root sitemap (issue #2081)", () => {
+    const llmsSwitchUrls = urlsFromLlmsText(buildLlmsText([], [])).filter((url) =>
+      /\/switch\/(magicbrief|panoramata|visualping)$/.test(url),
+    );
+    const sitemapLocs = locsFromXml(buildSitemapXml([], []));
+    expect(llmsSwitchUrls.sort()).toEqual([
+      `${SITE}/switch/magicbrief`,
+      `${SITE}/switch/panoramata`,
+      `${SITE}/switch/visualping`,
+    ]);
+    for (const url of llmsSwitchUrls) {
+      expect(
+        sitemapLocs.includes(url),
+        `llms.txt advertises switch ${url} but the sitemap does not list it`,
+      ).toBe(true);
+    }
+  });
+
   it("all four sneaker-resale URLs are sitemap-reachable; the root keeps exactly one (#1561)", () => {
     const reachable = reachableSitemapLocs();
     for (const path of [
