@@ -12,8 +12,11 @@ import { SNEAKER_RESALE_BRAND_PAGES } from "~/components/sneaker-resale-landing"
  * (#1931): a domain with no populated, indexable ledger is not linked.
  */
 
+let currentLoaderData: unknown = undefined;
+
 beforeEach(() => {
   vi.resetModules();
+  currentLoaderData = undefined;
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
@@ -24,6 +27,7 @@ beforeEach(() => {
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
         React.createElement("form", props, children),
+      useLoaderData: () => currentLoaderData,
       useRouteLoaderData: () => undefined,
     };
   });
@@ -80,7 +84,26 @@ describe("/sneaker-resale offer-timeline cross-links (issue #2100)", () => {
     expect(markup).toContain('href="/ads/adidas.com"');
     expect(markup).not.toContain('href="/timeline/adidas.com"');
     const timelineCount = (markup.match(/href="\/timeline\/[a-z0-9.-]+"/g) ?? []).length;
-    expect(timelineCount).toBeGreaterThan(0);
+    expect(timelineCount).toBe(2);
+  });
+
+  it("EN route default passes loader timelineDomains through to the landing (issue #2100 accept 3)", async () => {
+    currentLoaderData = { timelineDomains: ["nike.com"] };
+    const { default: Route } = await import("~/routes/sneaker-resale");
+    const markup = renderToStaticMarkup(createElement(Route));
+    expect(markup).toContain('href="/timeline/nike.com"');
+    expect(markup).toContain("Offer timeline");
+    expect(markup).toContain('href="/ads/adidas.com"');
+    expect(markup).not.toContain('href="/timeline/adidas.com"');
+  });
+
+  it("locale route default passes loader timelineDomains through on de/ja/pt-br", async () => {
+    currentLoaderData = { locale: "de", timelineDomains: ["nike.com"] };
+    const { default: Route } = await import("~/routes/$locale.sneaker-resale");
+    const markup = renderToStaticMarkup(createElement(Route));
+    expect(markup).toContain('href="/timeline/nike.com"');
+    expect(markup).toContain("Angebotsverlauf");
+    expect(markup).not.toContain('href="/timeline/adidas.com"');
   });
 
   it("renders zero timeline pointers when the sneaker cohort has no populated offer ledger", async () => {
@@ -119,5 +142,18 @@ describe("/sneaker-resale offer-timeline cross-links (issue #2100)", () => {
     } as never);
 
     expect(data?.timelineDomains).toEqual([]);
+  });
+
+  it("locale loader intersects the labelled sneaker cohort the same way as EN", async () => {
+    mockTimelineLoad(["nike.com", "gymshark.com"]);
+    const { loader } = await import("~/routes/$locale.sneaker-resale");
+    const data = await loader({
+      context: {},
+      request: new Request("http://localhost/de/sneaker-resale"),
+      params: { locale: "de" },
+    } as never);
+
+    expect(data.locale).toBe("de");
+    expect(data.timelineDomains).toEqual(["nike.com"]);
   });
 });
