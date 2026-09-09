@@ -394,6 +394,38 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).not.toContain("via partner");
   });
 
+  it("counts multi-version creatives on the /ads page (issue 2150, re-scoped)", async () => {
+    // Two of the six creatives run more than one version. The stat strip's
+    // "Split-testing" cell must name the count (M running as multi-version
+    // creatives) and the wall cards must label each multi-version creative.
+    const ads = Array.from({ length: 6 }, (_v, i) =>
+      ad({ metaAdId: `ad-${i}`, variantCount: i < 2 ? 4 : 1 }),
+    );
+    const markup = await render(
+      populated({
+        ads,
+        verifiedLinkedAds: ads,
+        teaser: { ...teaser, totalCount: 6, activeCount: 6 },
+      }),
+    );
+
+    // The stat cell names the count of multi-version creatives.
+    expect(markup).toContain("Split-testing");
+    expect(markup).toContain("running variants");
+    // The two multi-version wall cards each carry their own ×N variants label.
+    expect((markup.match(/×4 variants/g) ?? []).length).toBe(2);
+    // A single-version creative never renders a bare ×1 label.
+    expect(markup).not.toContain("×1 variants");
+  });
+
+  it("hides the multi-version count when no creative runs more than one version (issue 2150)", async () => {
+    const markup = await render(populated());
+    // Default fixture creatives carry no variantCount — no split-testing cell
+    // and no per-card variants label.
+    expect(markup).not.toContain("Split-testing");
+    expect(markup).not.toContain("variants");
+  });
+
   it("renders an honest collecting Offer timeline with the cross-link when no states are stored yet (issue #2021)", async () => {
     // A tracked brand (timeline in the sitemap's indexable set) with no
     // stored offer states renders the collecting state and links to its

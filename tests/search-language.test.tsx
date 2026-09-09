@@ -104,6 +104,20 @@ describe("BL-031 — the search result row", () => {
     const markup = renderRow(baseAd({ activeStatusObserved: false }));
     expect(markup).toContain("Status not detected");
   });
+
+  it("labels a multi-version creative as ×N versions and hides the label when the count is missing or 1 (issue 2150)", () => {
+    // A creative running more than one version names the count on the row.
+    const multi = renderRow(baseAd({ variantCount: 4 }));
+    expect(multi).toContain("×4 versions");
+
+    // A single-version creative (or one with no parsed count) never renders
+    // a bare "×1 versions" — the label only appears when there is a real
+    // testing signal to name.
+    const single = renderRow(baseAd({ variantCount: 1 }));
+    expect(single).not.toContain("versions");
+    const missing = renderRow(baseAd({ variantCount: null }));
+    expect(missing).not.toContain("versions");
+  });
 });
 
 describe("BL-031 — the page budgets", () => {
