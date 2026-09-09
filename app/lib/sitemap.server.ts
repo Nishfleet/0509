@@ -114,6 +114,11 @@ import { registrableDomainFromHostname } from "~/lib/search-query";
 import { renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
 import { BUYER_SURFACE_LOCALE_IDS, type BuyerSurfaceLocaleId } from "~/lib/locale-markets";
 import type { AdRecord } from "~/lib/types";
+import {
+  brandCategoryForDomain,
+  brandCategorySlug,
+  BRAND_CATEGORY_OTHER,
+} from "~/lib/brand-categories";
 
 /**
  * Hard bound on dynamic brand-page entries per sitemap render. Keeps the
@@ -452,6 +457,61 @@ export function indexableBrandPageEntriesFromRows(
 }
 
 /**
+ * Pure core: derive indexable /brands/:category sitemap entries from the
+ * already-computed indexable /ads/:domain brand entries (issue #2067). Each
+ * curated category that has at least one indexable brand page emits one
+ * sitemap entry at `/brands/<slug>`; the "More brands" bucket
+ * (BRAND_CATEGORY_OTHER) is never listed — it stays on the flat /brands hub.
+ *
+ * Reuses the SAME brand entries the sitemap already computed (no extra D1
+ * read) and the SAME classification source the /brands hub uses
+ * (`brandCategoryForDomain`). A curated category with zero indexable brands
+ * is omitted, mirroring the route's empty-category 404 guard (issue #1988)
+ * so the sitemap never lists a page that 404s.
+ *
+ * `lastmod` is the newest `fetchedAt` among the category's brands (the same
+ * freshness signal the brand entries carry), `changefreq=weekly`, and
+ * `priority=0.6` (one level below the /brands hub, same band as the hub's
+ * own static entry). Pure and exported so the rule is unit-testable without
+ * a database.
+ */
+export function indexableBrandCategoryEntriesFromBrandEntries(
+  brandEntries: readonly SitemapEntry[],
+): SitemapEntry[] {
+  const byCategory = new Map<string, string>(); // slug → newest lastmod (YYYY-MM-DD)
+  for (const entry of brandEntries) {
+    // entry.path is `/ads/<domain>` (indexableAdsLinkFromPath shape).
+    if (!entry.path.startsWith("/ads/")) {
+      continue;
+    }
+    const domain = entry.path.slice("/ads/".length);
+    if (!domain || domain.includes("/")) {
+      continue;
+    }
+    const category = brandCategoryForDomain(domain);
+    if (category === BRAND_CATEGORY_OTHER) {
+      continue;
+    }
+    const slug = brandCategorySlug(category);
+    const candidate = entry.lastmod ?? entry.fetchedAt?.slice(0, 10);
+    const existing = byCategory.get(slug);
+    if (!existing || (candidate && candidate > existing)) {
+      byCategory.set(slug, candidate ?? existing ?? "");
+    }
+  }
+  // Deterministic order: alphabetical by slug so the sitemap is stable across
+  // renders and crawls.
+  return Array.from(byCategory.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([slug, lastmod]) => ({
+      path: `/brands/${slug}`,
+      ...(lastmod ? { lastmod } : {}),
+      changefreq: "weekly",
+      priority: "0.6",
+    }));
+}
+
+/**
  * Read the bounded candidate set of indexable brand-page cache rows.
  * Cache-only: one SELECT, never a live-provider call. Any hiccup (missing
  * table on a fresh D1, unparseable rows) degrades to the static sitemap,
@@ -567,9 +627,11 @@ export async function publicLocaleSitemapFile(
 export function buildSitemapXml(
   brandEntries: readonly SitemapEntry[],
   timelineEntries: readonly SitemapEntry[] = [],
+  categoryEntries: readonly SitemapEntry[] = [],
 ): string {
   return renderSitemapXml([
     ...ROOT_SITEMAP_STATIC_ENTRIES,
+    ...categoryEntries,
     ...brandEntries,
     ...timelineEntries,
   ]);
@@ -849,8 +911,9 @@ export async function publicSitemapFile(env: AppEnv): Promise<{
     loadIndexableBrandPageEntries(env),
     loadIndexableTimelineEntries(env),
   ]);
+  const categoryEntries = indexableBrandCategoryEntriesFromBrandEntries(brandEntries);
   return {
-    body: buildSitemapXml(brandEntries, timelineSitemapEntries(brandEntries, timelineEntries)),
+    body: buildSitemapXml(brandEntries, timelineSitemapEntries(brandEntries, timelineEntries), categoryEntries),
     contentType: "application/xml; charset=utf-8",
     cacheControl: "public, max-age=3600",
   };

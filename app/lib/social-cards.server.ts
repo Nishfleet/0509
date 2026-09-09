@@ -124,7 +124,23 @@ const CLUSTER_HEADLINES: Readonly<Record<string, { headline: string; subline: st
   },
 };
 
-export type SocialCardKind = "ads" | "timeline" | "compare" | "switch" | "cluster";
+/**
+ * Per-category card headlines for the /brands/:category landing pages (issue
+ * #2067). The slug is the URL segment the route uses; the headline is the
+ * category display name. Mirrors the cluster card recipe — stateless, derived
+ * from the slug alone, no D1 read.
+ */
+const BRAND_CATEGORY_CARD_HEADLINES: Readonly<Record<string, string>> = {
+  "sport-footwear": "Sport & footwear",
+  "e-commerce": "E-commerce",
+  "beauty-personal-care": "Beauty & personal care",
+  "optical-eyewear": "Optical & eyewear",
+  "saas-software": "SaaS & software",
+  "wearables-health": "Wearables & health",
+  "wallet-accessories": "Wallet & accessories",
+};
+
+export type SocialCardKind = "ads" | "timeline" | "compare" | "switch" | "cluster" | "brands";
 
 export interface ParsedSocialCardPath {
   kind: SocialCardKind;
@@ -161,6 +177,11 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   const clusterMatch = rest.match(/^([^/]+)\.svg$/);
   if (clusterMatch && CLUSTER_HEADLINES[clusterMatch[1]]) {
     return { kind: "cluster", slug: clusterMatch[1] };
+  }
+
+  const brandsMatch = rest.match(/^brands\/([^/]+)\.svg$/);
+  if (brandsMatch && BRAND_CATEGORY_CARD_HEADLINES[brandsMatch[1]]) {
+    return { kind: "brands", slug: brandsMatch[1] };
   }
 
   return null;
@@ -209,6 +230,15 @@ function renderSocialCard(parsed: ParsedSocialCardPath, request: Request): strin
     return renderCard({
       headline: `Switch from ${product}`,
       subline: `Move to ${SITE_NAME}`,
+    });
+  }
+
+  if (parsed.kind === "brands") {
+    const headline = BRAND_CATEGORY_CARD_HEADLINES[parsed.slug];
+    if (!headline) return null;
+    return renderCard({
+      headline,
+      subline: `competitor Meta ads · ${SITE_NAME}`,
     });
   }
 

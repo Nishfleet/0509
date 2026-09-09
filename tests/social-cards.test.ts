@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { publicSocialCardForRequest, parseSocialCardPathname } from "~/lib/social-cards.server";
 import {
   adsSocialCardUrl,
+  brandsSocialCardUrl,
   canonicalUrl,
   clusterSocialCardUrl,
   compareSocialCardUrl,
@@ -109,6 +110,15 @@ describe("social card URL builders", () => {
     );
   });
 
+  it("brandsSocialCardUrl builds the per-category card path (issue #2067)", () => {
+    expect(brandsSocialCardUrl("sport-footwear")).toBe(
+      canonicalUrl("/social-card/brands/sport-footwear.svg"),
+    );
+    expect(brandsSocialCardUrl("beauty-personal-care")).toBe(
+      canonicalUrl("/social-card/brands/beauty-personal-care.svg"),
+    );
+  });
+
   it("timelineSocialCardUrl encodes the brand name on the timeline card path", () => {
     const url = timelineSocialCardUrl("nike.com", "Nike");
     expect(url).toContain("/social-card/timeline/nike.com.svg?");
@@ -139,6 +149,21 @@ describe("parseSocialCardPathname", () => {
       kind: "cluster",
       slug: "sneaker-resale",
     });
+  });
+
+  it("parses brands category card paths (issue #2067)", () => {
+    expect(parseSocialCardPathname("/social-card/brands/sport-footwear.svg")).toEqual({
+      kind: "brands",
+      slug: "sport-footwear",
+    });
+    expect(parseSocialCardPathname("/social-card/brands/beauty-personal-care.svg")).toEqual({
+      kind: "brands",
+      slug: "beauty-personal-care",
+    });
+  });
+
+  it("returns null for an unknown brands category slug", () => {
+    expect(parseSocialCardPathname("/social-card/brands/unknown.svg")).toBeNull();
   });
 
   it("returns null for non-card paths", () => {
@@ -209,6 +234,23 @@ describe("publicSocialCardForRequest", () => {
       new Request("https://0509.io/social-card/competitor-monitoring.svg"),
     );
     expect(comp?.body).toContain("Competitor monitoring");
+  });
+
+  it("renders a brands category card naming the category (issue #2067)", () => {
+    const res = publicSocialCardForRequest(
+      new Request("https://0509.io/social-card/brands/sport-footwear.svg"),
+    );
+    expect(res?.contentType).toBe("image/svg+xml; charset=utf-8");
+    expect(res?.body).toContain("Sport & footwear");
+    expect(res?.body).toContain("competitor Meta ads");
+    expect(res?.body).toContain("Five to Nine");
+    expect(res?.cacheControl).toBe("public, max-age=86400");
+  });
+
+  it("returns null for an unknown brands category slug", () => {
+    expect(
+      publicSocialCardForRequest(new Request("https://0509.io/social-card/brands/unknown.svg")),
+    ).toBeNull();
   });
 
   it("returns null for an unknown compare slug", () => {

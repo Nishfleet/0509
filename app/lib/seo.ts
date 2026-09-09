@@ -138,6 +138,17 @@ export function clusterSocialCardUrl(slug: "sneaker-resale" | "competitor-monito
 }
 
 /**
+ * Per-category social card URL for the /brands/:category landing pages
+ * (issue #2067). Mirrors the cluster card recipe: the slug is the URL segment
+ * the /brands/:category route already uses, so the card is stateless — no D1
+ * read, no per-request lookup. Served under /social-card/brands/<slug>.svg by
+ * app/lib/social-cards.server.ts.
+ */
+export function brandsSocialCardUrl(slug: string): string {
+  return canonicalUrl(`/social-card/brands/${slug}.svg`);
+}
+
+/**
  * Canonical consolidation for the duplicate /compare/* pairs (issue #1481).
  *
  * Every entry maps a loser URL to the winner it must canonicalize to. The

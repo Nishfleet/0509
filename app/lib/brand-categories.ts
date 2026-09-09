@@ -38,6 +38,53 @@ export const BRAND_CATEGORIES: Readonly<Record<string, string>> = {
 export const BRAND_CATEGORY_OTHER = "More brands";
 
 /**
+ * The curated category names — the named buckets the /brands hub groups
+ * brands into, excluding the BRAND_CATEGORY_OTHER ("More brands") fallback.
+ * Issue #2067 splits these into their own indexable /brands/:category landing
+ * pages; the "More brands" bucket stays on the flat /brands hub (worker's
+ * call per the issue, and the honest choice — it is the unclassified set, not
+ * a category a buyer would search for).
+ */
+export const CURATED_BRAND_CATEGORIES: readonly string[] = Array.from(
+  new Set(Object.values(BRAND_CATEGORIES)),
+).sort((a, b) => a.localeCompare(b));
+
+/**
+ * Slugify a category name into the URL segment for /brands/:category (issue
+ * #2067). Lowercase, ampersands and spaces collapse to single hyphens, every
+ * other character is kept as-is so the slug round-trips through
+ * `brandCategoryFromSlug` losslessly for the curated set. The curated
+ * categories contain only letters, spaces, and `&`, so the slug is stable
+ * across renders and crawls.
+ */
+export function brandCategorySlug(category: string): string {
+  return category
+    .toLowerCase()
+    .replace(/&/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/**
+ * Reverse map: slug → curated category name, or null when the slug is not one
+ * of the curated categories. The /brands/:category route 404s on anything this
+ * returns null for, so an unknown slug never renders a page.
+ */
+const CURATED_CATEGORY_BY_SLUG: Readonly<Record<string, string>> =
+  Object.fromEntries(
+    CURATED_BRAND_CATEGORIES.map((category) => [brandCategorySlug(category), category]),
+  );
+
+export function brandCategoryFromSlug(slug: string): string | null {
+  const normalized = slug.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  return CURATED_CATEGORY_BY_SLUG[normalized] ?? null;
+}
+
+/**
  * Category for a brand page domain. Normalizes the same way the brand-name
  * override map does (lowercase, www. stripped) so a cached `www.hm.com` never
  * escapes the map into the "More brands" bucket. Unknown domains degrade to
