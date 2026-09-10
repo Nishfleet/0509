@@ -1,5 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 
+import { constantTimeTokenEqual } from "~/lib/constant-time-token.server";
+
 const CLEANUP_OPERATION_HEADER = "x-0509-canary-operation";
 const CLEANUP_BODY_MAX_BYTES = 4_096;
 const CLEANUP_TRUTH =
@@ -18,13 +20,13 @@ interface CanaryOwnerRow {
   user_id: string;
 }
 
-function hasValidCanaryToken(request: Request, token: string | undefined) {
+async function hasValidCanaryToken(request: Request, token: string | undefined) {
   const configured = token?.trim();
   if (!configured) {
     return false;
   }
 
-  return request.headers.get("x-0509-canary-token") === configured;
+  return constantTimeTokenEqual(request.headers.get("x-0509-canary-token"), configured);
 }
 
 function hasCanonicalCanaryOrigin(request: Request) {
@@ -116,7 +118,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
 
-  if (!hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN)) {
+  if (!(await hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN))) {
     throw new Response("Not found", { status: 404 });
   }
 
