@@ -14,7 +14,8 @@
     "notAssessed": "fail",
     "nARequiresEvidence": true,
     "subsetProofPromotesAllSix": false,
-    "driftReopensEvidence": true
+    "driftReopensEvidence": true,
+    "compareSwitchRouteGate": "no new $locale.compare.* / $locale.switch.* routes without an attribution note (issue #2293): stop adding new compare/switch pages until one existing page shows a signup in whatever measurement Nish re-enables. A new compare/switch route may only be recorded here once its page carries a signup-attribution note tied to a live measurement."
   },
   "coverage": [
     {
