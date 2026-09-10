@@ -3540,6 +3540,7 @@ async function evaluateSelectiveProofCandidates(
 
     if (!proofDecision.shouldCapture) {
       if (proofDecision.skipReason) {
+        const skipReason = proofDecision.skipReason;
         await withRunLease(
           env,
           input.runId,
@@ -3547,19 +3548,19 @@ async function evaluateSelectiveProofCandidates(
           async () =>
             createProofCapture(env, {
               proofTargetId: proofTarget.id,
-              status: proofDecision.skipReason,
-              skipReason: proofDecision.skipReason,
+              status: skipReason,
+              skipReason,
               failureReason: "Evidence policy skipped the attempt.",
               captureMetadata:
                 recentFailureCountForTarget >= 2
                   ? { unreadableReasonCode: "landing_capture_retry_cooldown" }
                   : undefined,
               extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-              idempotencyKey: `${proofRequestKey}:skip:${proofDecision.skipReason}`,
+              idempotencyKey: `${proofRequestKey}:skip:${skipReason}`,
               planAtCapture: userPlan,
               captureDiagnostics: {
                 screenshotMissingReason:
-                  proofDecision.skipReason === "skipped_due_to_budget"
+                  skipReason === "skipped_due_to_budget"
                     ? "budget"
                     : "policy_skip",
               },
@@ -3583,6 +3584,7 @@ async function evaluateSelectiveProofCandidates(
     });
 
     if (evidenceReservation && !evidenceReservation.result.ok) {
+      const failedReservation = evidenceReservation.result;
       await withRunLease(
         env,
         input.runId,
@@ -3593,7 +3595,7 @@ async function evaluateSelectiveProofCandidates(
             status: "skipped_due_to_budget",
             skipReason: "skipped_due_to_budget",
             failureReason:
-              evidenceReservation.result.reason === "top_up_inactive_plan"
+              failedReservation.reason === "top_up_inactive_plan"
                 ? "Purchased proof captures require an active paid plan."
                 : "Proof capture allowance exhausted.",
             extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
@@ -3601,7 +3603,7 @@ async function evaluateSelectiveProofCandidates(
             planAtCapture: userPlan,
             captureDiagnostics: {
               screenshotMissingReason: "budget",
-              budgetReason: evidenceReservation.result.reason,
+              budgetReason: failedReservation.reason,
             },
           }),
       );
@@ -4221,6 +4223,7 @@ async function evaluateDirectWebsiteProofCandidate(
   });
 
   if (evidenceReservation && !evidenceReservation.result.ok) {
+    const failedReservation = evidenceReservation.result;
     await withRunLease(
       env,
       input.runId,
@@ -4231,7 +4234,7 @@ async function evaluateDirectWebsiteProofCandidate(
           status: "skipped_due_to_budget",
           skipReason: "skipped_due_to_budget",
           failureReason:
-            evidenceReservation.result.reason === "top_up_inactive_plan"
+            failedReservation.reason === "top_up_inactive_plan"
               ? "Purchased proof captures require an active paid plan."
               : "Proof capture allowance exhausted.",
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
@@ -4239,7 +4242,7 @@ async function evaluateDirectWebsiteProofCandidate(
           planAtCapture: userPlan,
           captureDiagnostics: {
             screenshotMissingReason: "budget",
-            budgetReason: evidenceReservation.result.reason,
+            budgetReason: failedReservation.reason,
           },
         }),
     );
