@@ -210,6 +210,14 @@ export default [
   route("export/:resourceType/:resourceId", "routes/export.$resourceType.$resourceId.tsx"),
   route("app", "routes/app-layout.tsx", [
     index("routes/app.dashboard.tsx"),
+    // Route diet phase 1 (#2213) — the 8-screen model. New destinations from
+    // renames (briefs / api / help) and the Competitor drill-in (/app/c/:id).
+    route("c/:id", "routes/app.c.$id.tsx"),
+    route("briefs", "routes/app.briefs.tsx"),
+    route("api", "routes/app.api.tsx"),
+    route("help", "routes/app.help.tsx"),
+    // Folded member routes stay registered (302 → new home, phase 2 #2217
+    // deletes the files): their files are now redirect stubs.
     route("collections", "routes/app.collections.tsx"),
     route("deliver", "routes/app.deliver.tsx"),
     route("settings", "routes/app.settings.tsx"),

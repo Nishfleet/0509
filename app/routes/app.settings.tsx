@@ -111,11 +111,13 @@ export default function SettingsRoute() {
             ) : null}
             {data.canUseApiAccess ? (
               <RuledRow
-                name="Developer access"
+                name="API"
                 say="Create API keys for the customer API."
                 status="API"
                 time=""
-                to="/app/developer-access"
+                // Route diet phase 1 (#2213): /app/api is the API screen;
+                // /app/developer-access now 302s here.
+                to="/app/api"
               />
             ) : null}
           </RuledList>
@@ -132,7 +134,9 @@ export default function SettingsRoute() {
             say="Open a support case — we answer from the workspace that saw the problem."
             status="Support"
             time=""
-            to="/app/support"
+            // Route diet phase 1 (#2213): /app/help is the Help screen;
+            // /app/support now 302s here.
+            to="/app/help"
           />
         </RuledList>
       </section>
