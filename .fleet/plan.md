@@ -27,10 +27,10 @@ Reviewer seat: parent seat (stock reviewer). Verdict: BLOCK, one Critical + five
 - Consider, done: literal request-body pin, 60s default timeout assertion, no-token-in-result assertion, `displayHost` doc corrected.
 - Noted: organic rows dropped for an unusable URL are not counted (kept out of the `SerpResult` contract the issue fixes); both live captures contain absolute organic URLs, so the branch is synthetic-only. Revisit only if a real capture shows a relative organic URL.
 - Noted: `.lane/reports/claim-issue-2181.md` not written (lane evidence is optional here; the PR body carries the proof).
-- [ ] phase 3: do:4 — snapshot payload = sponsored + top-10 organic; diff(prev,next) returns `SourceChange[]` for new/removed sponsored advertiser domains, own domain +-3 positions or entering/leaving the top 10, new domains entering the top 10
-- [ ] phase 3: do:2 — adapter `implemented: true`, `requiresEnv` checks the selected provider credentials; coverage flips by the seam rule (presence files untouched)
-- [ ] phase 4: do:3 — brand query = competitor display name else registrable-domain stem; adapter wires watchlist -> domain -> query -> snapshot, unavailable passes through, Meta check never blocked
-- [ ] phase 5: do:5 — `app/components/sources/google-search.tsx` renders sponsored list + organic top 10 with position deltas inside the seam's `<SourceSections/>` slot (no competitor-page edit)
+- [x] phase 3: do:4 — snapshot payload = sponsored + top-10 organic; diff(prev,next) returns `SourceChange[]` for new/removed sponsored advertiser domains, own domain +-3 positions or entering/leaving the top 10, new domains entering the top 10
+- [x] phase 3: do:2 — adapter `implemented: true`, `requiresEnv` checks the selected provider credentials; coverage flips by the seam rule (presence files untouched)
+- [x] phase 4: do:3 — brand query = competitor display name else registrable-domain stem; adapter wires watchlist -> domain -> query -> snapshot, unavailable passes through, Meta check never blocked
+- [x] phase 5: do:5 — `app/components/sources/google-search.tsx` renders sponsored list + organic top 10 with position deltas inside the seam's `<SourceSections/>` slot (no competitor-page edit)
 - [ ] phase 6: do:7b — coverage state with/without env proven; registry test guard; cadence math (8 checks/day x competitors x 30 <= 1,500) in the PR body
 - [ ] phase 6: inner loop green, sgscan, crgate, PR + reviewer round + arm
 
@@ -61,3 +61,23 @@ IMPLEMENTED and tested (77 google-search tests green) but had no reviewer round
 yet — the final reviewer pass covers them together with phase 5.
 Phase 5 delegated to a fresh worker subagent with this file + the module
 headers as the handoff.
+
+### Phase 3-5 reviewer round (commit bd65e254)
+Reviewer: stock reviewer subagent on the phases 3-5 diff (bc8157c3..HEAD) + a
+senior-seat reviewer pass on origin/main...HEAD (seat: opencode/nemotron-3-ultra-free,
+result pasted below when it lands).
+- Act on, fixed: 864-line snapshot spec tripped the 800-line file-size ratchet
+  (tests/file-size-ratchet.test.ts) — split into google-search-snapshot-build
+  (389) + google-search-snapshot-diff (531), 29 tests preserved, ratchet green.
+- Consider, done: diffChangeCount counted only 2 of 6 change categories — now
+  counts all diff entries; stale "1,500/month" comment corrected to the real
+  DECODO_LIMITS.std = 1,800.
+- Consider, deferred: no dedicated section render spec — the issue's files:
+  glob is `tests/sources/google-search*.test.ts` (a `.tsx` spec sits outside
+  it) and the worker's throwaway smoke render passed all 4 assertions.
+- Noted: in-app Section is dormant until #2188 wires `snapshots` into
+  SourceSections — seam design, not a defect. Payload keys verified against
+  the public brand page's read contract.
+- Routed out of scope: hiring `requiresEnv: () => false` inversion filed as
+  Nishfleet/0509#2709. Deploy-workflow DECODO_SCRAPER_AUTH sync step filed as
+  Nishfleet/0509#2710 (worker token has no Workflows scope).
