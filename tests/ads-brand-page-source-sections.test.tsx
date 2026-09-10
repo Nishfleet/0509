@@ -95,7 +95,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     brandName: "Nike",
     hasCachedAds: true,
     ads: [ad()],
-    verifiedLinkedAds: [ad()],
+    verifiedLinkedIds: [ad().metaAdId],
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-09-01T10:00:00.000Z",
     freshForLiveClaim: false,

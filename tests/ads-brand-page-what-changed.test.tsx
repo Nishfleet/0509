@@ -115,7 +115,7 @@ function populatedWithChangeEvents(
     brandName: "Nike",
     hasCachedAds: true,
     ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
-    verifiedLinkedAds: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
+    verifiedLinkedIds: Array.from({ length: 6 }, (_v, i) => `ad-${i}`),
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-08-09T10:00:00.000Z",
     freshForLiveClaim: false,
