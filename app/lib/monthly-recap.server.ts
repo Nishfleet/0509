@@ -72,7 +72,9 @@ export function monthBoundsUtc(monthKey: string): { start: string; end: string }
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: string }) {
+export function buildMonthlyRecapEmail(
+  input: MonthlyRecapStats & { billingUrl: string; evidenceUrl: string },
+) {
   const monthLabel = formatMonthLabel(input.monthKey);
   const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
 
@@ -113,7 +115,7 @@ export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: 
         </table>
       </div>
       <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.billingUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Review usage &amp; billing</a>
+        <a href="${escapeHtml(input.evidenceUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Review this month's evidence</a>
       </p>
       <p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">
         Counts are for this calendar month (UTC). Billing shows a rolling 30-day
@@ -134,7 +136,7 @@ export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: 
       : "No single competitor dominated this month.",
     "",
     "Every count above is computed from stored captures. No proof, no claim.",
-    `Review usage: ${input.billingUrl}`,
+    `Review this month's evidence: ${input.evidenceUrl}`,
   ].join("\n");
 
   return { subject, preheader, html, text };
@@ -295,6 +297,7 @@ export async function sendMonthlyCustomerRecaps(
   let claimLost = 0;
   let failed = 0;
   const billingUrl = `${appBaseUrl(env)}/app/billing`;
+  const evidenceUrl = `${appBaseUrl(env)}/app/reports`;
 
   for (const user of users) {
     attempted += 1;
@@ -330,6 +333,7 @@ export async function sendMonthlyCustomerRecaps(
       const result = await sendOneMonthlyRecap(env, {
         ...stats,
         billingUrl,
+        evidenceUrl,
       });
       if (result.reason === "duplicate") {
         duplicates += 1;
@@ -360,7 +364,7 @@ export async function sendMonthlyCustomerRecaps(
 
 async function sendOneMonthlyRecap(
   env: AppEnv,
-  stats: MonthlyRecapStats & { billingUrl: string },
+  stats: MonthlyRecapStats & { billingUrl: string; evidenceUrl: string },
 ) {
   // FIX-5: mirror scan-trouble gates — verified email, opt-out, List-Unsubscribe.
   const { isUserEmailVerified } = await import("~/lib/email-verification.server");

@@ -494,6 +494,8 @@ describe("buildDigestEmail", () => {
             ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed", "ev-nykaa", "website_page_changed").metadata,
             beforeCreativeImageUrl: "https://cdn.example.com/before.jpg",
             afterCreativeImageUrl: "https://cdn.example.com/after.jpg?sig=\"x\"",
+            beforeCapturedAt: "2026-06-07T04:00:00.000Z",
+            capturedAt: "2026-06-08T04:00:00.000Z",
           },
         },
         {
@@ -516,6 +518,13 @@ describe("buildDigestEmail", () => {
     expect(email.html).toContain('src="https://cdn.example.com/before.jpg"');
     expect(email.html).toContain("Before");
     expect(email.html).toContain("Now");
+    // BL-022: the before/after creative pair carries the stored capture
+    // timestamps (never email-build time), so "when was this true?" is
+    // answerable on the visual diff too.
+    expect(email.html).toContain("Before: 7 Jun 2026");
+    expect(email.html).toContain("Now: 8 Jun 2026");
+    expect(email.text).toContain("Before: 7 Jun 2026");
+    expect(email.text).toContain("Now: 8 Jun 2026");
     expect(email.html).toContain('src="https://cdn.example.com/after.jpg?sig=&quot;x&quot;"');
     expect(email.html).toContain('src="https://cdn.example.com/single.jpg"');
     expect(email.html).not.toContain("http://insecure.example.com/skip.jpg");
