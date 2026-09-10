@@ -414,3 +414,23 @@ homepage copy in `app/routes/marketing.tsx`, and AlternativeTo FAQ rules:
 
 After the owner confirms these, the manual submission itself is a ~15-minute
 form fill — every field value is in this document.
+
+## re-verified 2026-09-09
+
+Fresh pass attempted by the growth2 send-off sheet work (issue #2133).
+AlternativeTo still blocks the plain VPS IP with Cloudflare Turnstile
+(HTTP 403 to a plain fetch of `https://alternativeto.net/` and
+`https://alternativeto.net/signup` on 2026-09-09) — the same limitation the
+2026-08-21 freshness pass recorded. The facts this listing depends on were
+last independently verified on 2026-08-21 (camofox browser render): the
+`five-to-nine` slug was still 404 (name free), the seven primary targets
+were still listed, the FAQ's $5 priority review / geo policy / AI-tools
+decline list / email verification / sign-in-only submission form were
+unchanged, and the plan facts matched `app/lib/plan-entitlements.ts`.
+
+Product URLs remain live on 2026-09-09: `https://0509.io`,
+`https://0509.io/search`, `https://0509.io/auth/signup` all HTTP 200. No
+field, URL, or requirement is known to have changed; the prepared suggestion
+stays paste-ready. The submission still requires a free AlternativeTo account
+with a verified email (owner action), and the optional $5 priority review
+remains an owner money decision with the free backlog queue as default.
