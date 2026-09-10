@@ -69,6 +69,7 @@ async function loadWorker() {
     attempted: 0,
     published: 0,
     skipped: 0,
+    warming: 0,
     failed: 0,
     invalid: 0,
     outcomes: [],
