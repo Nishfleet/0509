@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
 import {
   applyWebsiteSearchFallback,
@@ -1755,6 +1756,44 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
       if (locale === "de" || locale === "ja" || locale === "pt-br") {
         expect(locs).toContain(`https://0509.io/${locale}/sneaker-resale`);
       }
+    }
+  });
+
+  it("every locale sitemap URL is a registered route (no entry for a non-200 path)", () => {
+    // Issue #2294 accept: no entry for a non-200 path. Every locale sitemap
+    // URL must correspond to a route registered under the `:locale` layout,
+    // so it serves 200 rather than 404. The guide route is the one the
+    // derivation adds that is not in BUYER_SURFACE_PATHS — it must be
+    // registered too.
+    const routesText = readFileSync("app/routes.ts", "utf8");
+    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+      for (const entry of staticSitemapEntriesForLocale(locale)) {
+        const path = entry.path.replace(`/${locale}`, "");
+        // The buyer-surface cluster is registered as a `:locale` layout child;
+        // the sneaker-resale cluster is a root-level `:locale/sneaker-resale`
+        // route. Both live in routes.ts, so check the whole file.
+        expect(
+          routesText,
+          `/${locale}${path} is in the locale sitemap but not a registered route`,
+        ).toContain(`"${path.replace(/^\//, "")}"`);
+      }
+    }
+  });
+
+  it("every buyer-surface path and compare/switch child is in SITEMAP_STATIC_ENTRIES (no silent drop)", () => {
+    // The derivation reuses the EN changefreq/priority from
+    // SITEMAP_STATIC_ENTRIES and skips any path missing from it. A path
+    // added to BUYER_SURFACE_PATHS / BUYER_SURFACE_CHILD_PATHS but not to
+    // SITEMAP_PATHS would silently vanish from the locale sitemap — this
+    // cross-check makes that drift fail loudly.
+    const staticPaths = new Set(SITEMAP_STATIC_ENTRIES.map((e) => e.path));
+    const derived = [
+      ...BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml"),
+      ...BUYER_SURFACE_CHILD_PATHS,
+      "/guides/how-to-track-competitor-ads",
+    ];
+    for (const path of derived) {
+      expect(staticPaths, `${path} missing from SITEMAP_STATIC_ENTRIES`).toContain(path);
     }
   });
 });
