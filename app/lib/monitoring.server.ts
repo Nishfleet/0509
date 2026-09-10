@@ -1691,6 +1691,17 @@ export async function runWatchlistWorkflowJob(
           error instanceof Error ? error.message : "Retryable scan failure.",
         retryAfterIso: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       });
+      // The reconciler owns retries. Returning instead of rethrowing keeps the
+      // workflow step green so the step's own 3x / 2-minute retry loop does not
+      // re-enter claim -> runWatchlist -> performBoundedScan (a full Meta Ad
+      // Library scrape) for every retryable dispatch failure before the +10min
+      // reconcileOrchestratedWatchlistRuns pass can pick the run back up.
+      return {
+        status: "retry_scheduled" as const,
+        watchlistId: params.watchlistId,
+        executionKey: params.executionKey,
+        runId: params.runId,
+      };
     }
     throw error;
   }
