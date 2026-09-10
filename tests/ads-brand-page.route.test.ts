@@ -559,9 +559,11 @@ describe("/ads/:domain loader", () => {
       // The live discovery payload carries a populated analysis blob per
       // creative; this is the field the issue's byte budget is about.
       analysisFields: Array.from({ length: 6 }, (_f, f) => ({
-        scopeType: "ad",
+        scopeType: "ad" as const,
         fieldKey: `field-${f}`,
         fieldValue: `Analyzed value ${f} for creative ${i}, never rendered on the wall.`,
+        provenanceSource: "meta_library_browser" as const,
+        extractorVersion: "test-extractor",
       })),
     }));
 
