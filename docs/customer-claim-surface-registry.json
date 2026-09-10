@@ -760,6 +760,42 @@
       "verify": "grep -qF '\"FUNNEL_MEASUREMENT_ENABLED\": \"1\"' wrangler.jsonc && grep -qF 'Collection is live since 2026-09-09' docs/ga-metrics.md && grep -qF 'funnelMeasurementEnabled' app/lib/funnel-measurement.server.ts",
       "test": "tests/funnel-measurement.test.ts",
       "followUp": null
+    },
+    {
+      "claimId": "AUDIT-LLMS-TXT-CLAIMS",
+      "page": "/llms.txt",
+      "selector": "llms.txt intro paragraph and Current product truth bullets",
+      "sentence": "Every llms.txt claim string — the intro paragraph and each Current product truth bullet, evaluated from buildLlmsText — is recorded here and verified in app/lib/public-markdown.ts (issue #2311).",
+      "claimed": true,
+      "verified": true,
+      "advertisedCopy": [
+        "Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence.",
+        "Market intelligence for revenue teams is the north-star product story.",
+        "Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval.",
+        "Public read-only search and the proof brief are buyer-evaluation paths; the proof brief renders real cached captures, with an explicit unavailable state when none exist; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states. AI answer engines can cite public search as a live read-only buyer path.",
+        "Ad monitoring reads the Meta Ad Library only. Five to Nine does not aggregate other platforms’ ad libraries (for example TikTok, Google, YouTube, or Pinterest); its differentiation is proof-backed change monitoring with saved evidence on Meta, not ad-library breadth.",
+        "Account access uses verified access paths.",
+        "Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed against production with real Dodo bindings (monthly, annual, and top-up prices validated in IN, US, and GB), so AI answer engines can cite Dodo checkout as the live billing path.",
+        "Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.",
+        "Starter is the recommended plan. Free includes one watchlist with an activation scan on add, then a weekly check and a weekly email brief backed by one included proof capture a month, plus one Collection — no card required; instant alerts, manual refresh, and exports stay paid. Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 proof captures/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 proof captures/month; Agency includes top 25 competitors every 3 hours (rest every 6 hours), daily and weekly digests, and 2,500 proof captures/month. Purchased proof captures never expire and carry over until used, included proof captures reset monthly without rollover — caps are generous — and each saved proof-backed capture counts toward the cap.",
+        "Tracking status is labeled honestly as live, recent, delayed, or sample data.",
+        "Recent results must not be described as fresh live results.",
+        "Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.",
+        "Source-backed digest items include priority, recommendation, timestamp, and confidence trail.",
+        "Customer-facing views lead with what changed, why it matters, urgency, source status, freshness, and the next action before raw data or settings.",
+        "Insight depth includes observed campaign duration only when first-seen and last-seen evidence exists; manual external evidence links can add visible non-Meta evidence and user-supplied metric context to saved collections, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.",
+        "Account export links support CSV and JSON export for signed-in users when the account path is configured; this text does not claim live export success. Watchlist and digest CSV exports include priority, recommended next action, source status, source trail, freshness, and source URL when available.",
+        "Customer API keys support setup status plus collection, watchlist, and digest exports for account-owned data.",
+        "Write-enabled customer API keys support approved workspace actions: Source health, Watchlists, Evidence and reports, Context and client rooms, Support, Delivery controls, Presence observations.",
+        "Restricted actions still require signed-in owner review: billing changes, team invites, secret-bearing integration setup, customer API key creation, rotation, and revocation, report branding configuration and logo uploads, external delivery sends, unsupported-channel ingestion, automated spend, reach, or impression benchmarks.",
+        "Signed-in support cases cover billing changes and cancellation, account access and team changes, migration and setup help, and security and deletion requests, with email fallback when a user cannot sign in.",
+        "The public status page summarizes customer-facing surfaces without exposing private account activity.",
+        "Social connectors remain disabled. Broad public write APIs beyond approved account actions are not live yet.",
+        "Public copy should avoid unsupported security, compliance, traction, or model-routing claims."
+      ],
+      "verify": "grep -qF 'turns competitor ads and visible landing-page changes into source-backed morning intelligence' app/lib/public-markdown.ts && grep -qF 'Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval' app/lib/public-markdown.ts && grep -qF 'with source-linked proof' app/lib/public-markdown.ts",
+      "test": "tests/customer-claim-surface-registry.test.ts",
+      "followUp": null
     }
   ],
   "rowsMetadata": {
