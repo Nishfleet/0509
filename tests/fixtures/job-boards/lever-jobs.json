@@ -1,0 +1,16 @@
+[
+  {
+    "id": "l1",
+    "text": "Account Executive",
+    "categories": { "location": "New York", "department": "Sales", "team": "GTM" },
+    "hostedUrl": "https://jobs.lever.co/beta/l1",
+    "createdAt": "2026-03-01T00:00:00Z"
+  },
+  {
+    "id": "l2",
+    "text": "Brand Copywriter",
+    "categories": { "location": "Remote", "department": "Marketing" },
+    "hostedUrl": "https://jobs.lever.co/beta/l2",
+    "createdAt": "2026-03-02T00:00:00Z"
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "jobs": [
+    {
+      "id": "4111111",
+      "title": "Engineering Manager",
+      "location": { "name": "Remote" },
+      "departments": [{ "name": "Engineering" }],
+      "offices": [{ "name": "San Francisco" }],
+      "absolute_url": "https://boards.greenhouse.io/acme/jobs/4111111",
+      "last_updated_at": "2026-01-02T00:00:00Z"
+    },
+    {
+      "id": "4111112",
+      "title": "Staff Designer",
+      "location": { "name": "London" },
+      "departments": [{ "name": "Design" }],
+      "offices": [{ "name": "London" }],
+      "absolute_url": "https://boards.greenhouse.io/acme/jobs/4111112",
+      "last_updated_at": "2026-01-03T00:00:00Z"
+    }
+  ]
+}
