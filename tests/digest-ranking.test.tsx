@@ -109,6 +109,7 @@ const DIGEST_INPUT_BASE = {
   cadence: "weekly" as const,
   timeZone: "Asia/Kolkata",
   fullDigestUrl: "https://0509.io/app/digests",
+  baseUrl: "https://0509.io",
   manageFrequencyUrl: "https://0509.io/app/notifications",
   supportEmail: "support@0509.io",
   supportMailto: "mailto:support@0509.io",

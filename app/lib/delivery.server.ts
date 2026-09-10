@@ -113,6 +113,11 @@ import {
 } from "~/lib/teams-webhook.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { loadPriceTierSwing, type PriceTierSwing } from "~/lib/landing-page-price-tier.server";
+import {
+  loadWeeklyPublicMoves,
+  WEEKLY_MOVES_WINDOW_MS,
+  type WeeklyPublicMove,
+} from "~/lib/weekly-public-moves.server";
 
 // Facade re-exports: product code and tests import every delivery sender
 // from this module; the billing lifecycle domain lives in its own file.
@@ -1061,6 +1066,20 @@ async function deliverDigestToEmailTarget(
   // digest-email module never queries D1 itself. A failed read renders no
   // section rather than failing the digest send.
   const priceTierSwing = await loadPriceTierSwing(env).catch(() => null);
+  // growth2 (#2147): the newest sitemap-indexable public move, loaded here
+  // (this layer has env) and passed into the renderer precomputed — the
+  // digest-email module never queries D1 itself. A failed read renders no
+  // "Elsewhere this week" line rather than failing the digest send. Loaded
+  // only when this send will actually use the quiet builder (empty items),
+  // so non-quiet briefs never pay the weekly-moves read.
+  const publicMove =
+    input.items.length === 0
+      ? await loadWeeklyPublicMoves(env, {
+          since: new Date(Date.now() - WEEKLY_MOVES_WINDOW_MS).toISOString(),
+        })
+          .then((moves) => moves[0] ?? null)
+          .catch(() => null)
+      : null;
   const email = renderDigestEmail(env, {
     digestRunId: input.digestRunId,
     name: input.userName,
@@ -1083,6 +1102,7 @@ async function deliverDigestToEmailTarget(
     nextScanLabel: input.nextScanLabel ?? null,
     firstBrief: input.firstBrief === true,
     priceTierSwing,
+    publicMove,
   });
   const subject = input.proofEmailSubject ?? email.subject;
   const payloadSnapshot = {
@@ -2814,6 +2834,7 @@ function renderDigestEmail(
     nextScanLabel?: string | null;
     firstBrief?: boolean;
     priceTierSwing?: PriceTierSwing | null;
+    publicMove?: WeeklyPublicMove | null;
   },
 ): ReturnType<typeof buildDigestEmail> {
   const baseUrl = appBaseUrl(env);
@@ -2830,6 +2851,7 @@ function renderDigestEmail(
     cadence: input.cadence,
     scanCadence: input.scanCadence ?? null,
     timeZone: input.timeZone ?? null,
+    baseUrl,
     fullDigestUrl: `${baseUrl}/app/digests?digest=${encodeURIComponent(input.digestRunId)}`,
     manageFrequencyUrl: `${baseUrl}/app/notifications`,
     supportEmail: SUPPORT_EMAIL,
@@ -2843,6 +2865,7 @@ function renderDigestEmail(
     nextScanLabel: input.nextScanLabel ?? null,
     firstBrief: input.firstBrief === true,
     priceTierSwing: input.priceTierSwing ?? null,
+    publicMove: input.publicMove ?? null,
   });
 }
 
