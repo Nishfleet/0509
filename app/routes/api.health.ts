@@ -1,21 +1,10 @@
 import type { LoaderFunctionArgs } from "react-router";
 
 import { getCloudflareContext } from "~/lib/cloudflare-context";
-import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
-
-const CANARY_TOKEN_HEADER = "x-0509-canary-token";
-
-// Release identity (worker version id, tag, timestamp, search rollout mode) is
-// free recon for timing deploy windows and knowing when monitoring is degraded.
-// Only a caller presenting the canary token may read it; anonymous monitors keep
-// the public status/app/checks body. Gate the field, keep the body public.
-function mayReadReleaseIdentity(request: Request, env: { CANARY_BYPASS_TOKEN?: string }) {
-  const configured = env.CANARY_BYPASS_TOKEN?.trim();
-  if (!configured) {
-    return false;
-  }
-  return request.headers.get(CANARY_TOKEN_HEADER) === configured;
-}
+import {
+  mayReadReleaseIdentity,
+  readReleaseIdentity,
+} from "~/lib/canary-release-identity.server";
 
 // Cheap uptime probe for Cloudflare health checks and external monitors.
 // Does NOT touch D1 — must stay a pure edge check so a DB blip doesn't
@@ -34,7 +23,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     const normalized = typeof value === "string" ? value.trim() : "";
     return /^[A-Za-z0-9._-]{1,128}$/.test(normalized) ? normalized : null;
   };
-  const releaseIdentity = mayReadReleaseIdentity(request, env)
+  const releaseIdentity = (await mayReadReleaseIdentity(request, env))
     ? readReleaseIdentity(env)
     : undefined;
 
