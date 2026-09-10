@@ -111,7 +111,7 @@ describe("ResultQuickSave", () => {
     expect(button(view)!.textContent).toBe("Saved");
   });
 
-  it("lets free users save into their included Collection like paid users", async () => {
+  it("gates free users from saving (barebones: no Collections)", async () => {
     let submitted = false;
     const view = await renderQuickSave({ plan: "free", collections }, async () => {
       submitted = true;
@@ -123,12 +123,14 @@ describe("ResultQuickSave", () => {
     });
     await act(async () => {});
 
-    expect(submitted).toBe(true);
-    expect(button(view)!.textContent).toBe("Saved");
-    expect(view.textContent).not.toContain("Upgrade to Scout");
+    // Free is barebones: no Collections (limit 0), so saving is gated even
+    // when the free workspace already has a read-only collection.
+    expect(submitted).toBe(false);
+    expect(button(view)!.textContent).toBe("Save");
+    expect(view.textContent).toContain("Collections are included in paid plans");
   });
 
-  it("shows the honest create-first note for free users without their 1 Collection instead of submitting", async () => {
+  it("shows the paid-upgrade note for free users instead of submitting", async () => {
     let submitted = false;
     const view = await renderQuickSave({ plan: "free", collections: [] }, async () => {
       submitted = true;
@@ -140,11 +142,9 @@ describe("ResultQuickSave", () => {
     });
 
     expect(submitted).toBe(false);
-    expect(view.textContent).toContain(
-      "Free includes 1 Collection — create it in the Library to save ads.",
-    );
-    const library = view.querySelector<HTMLAnchorElement>('a[href="/app/collections"]');
-    expect(library?.textContent).toBe("Open the Library");
+    expect(view.textContent).toContain("Collections are included in paid plans — upgrade to save ads.");
+    const plans = view.querySelector<HTMLAnchorElement>('a[href="/app/billing?source=search#plans"]');
+    expect(plans?.textContent).toBe("Compare plans");
   });
 
   it("renders nothing for paid users without a board yet", async () => {

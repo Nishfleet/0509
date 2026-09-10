@@ -31,10 +31,10 @@ describe("public documentation routes", () => {
 
     expect(markup).toContain("Run a trustworthy first search");
     expect(markup).toContain("No evidence is not proof that a competitor has no active ads");
-    expect(markup).toContain("Free plan scope: one competitor with an instant first scan, then a weekly scheduled check and a weekly email brief backed by one proof capture a month");
+    expect(markup).toContain("Free plan scope: one competitor with one first check and one first brief, from the Meta Ad Library only");
     expect(markup).toContain("Use Five to Nine from Claude, ChatGPT, and AI agents");
     expect(markup).toContain("https://0509.io/api/mcp");
-    expect(markup).toContain("read-only API and MCP access are available on Free and Scout");
+    expect(markup).toContain("read-only API and MCP access are available on Scout and above");
     expect(markup).toContain("Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports");
     expect(markup).toContain("Agency plan scope: client reports, share links, PDF delivery, branding, full API/MCP agent actions, and team seats");
     expect(markup).toContain("This documentation does not measure live provider availability");

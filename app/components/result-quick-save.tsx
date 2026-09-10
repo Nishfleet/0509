@@ -11,10 +11,12 @@ export interface ResultQuickSaveProps {
 /**
  * One-click save from a search result card (workflow-friction pass): users
  * with a Collection save straight to their first board via the existing
- * save-to-collection action. Free includes 1 Collection (honest 1-coll), so
- * a free user with a board saves like everyone else; a free user without a
- * board yet gets the create-first note instead of an upgrade wall. The full
- * detail flow (choose board, note, tags) stays available in the detail aside.
+ * save-to-collection action. Free is barebones (2026-09-10): no Collections
+ * (limit 0), so a free user is gated from saving entirely and shown the
+ * paid-upgrade note. Paid users with a board save like everyone else; a paid
+ * user without a board yet gets the create-first note instead of an upgrade
+ * wall. The full detail flow (choose board, note, tags) stays available in
+ * the detail aside.
  *
  * BL-014: this is the entry point into a collection, so it carries the
  * Rank-2 class pair rather than a fourth bespoke chip style (brief §5,
@@ -32,7 +34,10 @@ export function ResultQuickSave({ adId, advertiser, plan, collections }: ResultQ
   const [showGate, setShowGate] = useState(false);
   const isFree = plan === "free";
   const targetCollection = collections[0] ?? null;
-  const needsFirstCollection = isFree && !targetCollection;
+  // Free is barebones: no Collections (limit 0). A free user is gated from
+  // saving entirely and shown the paid-upgrade note. Paid users without a
+  // board yet get the create-first note instead of an upgrade wall.
+  const needsFirstCollection = isFree || (!isFree && !targetCollection);
 
   if (!plan || (!isFree && !targetCollection)) {
     return null;
@@ -65,7 +70,9 @@ export function ResultQuickSave({ adId, advertiser, plan, collections }: ResultQ
         aria-busy={pending || undefined}
         aria-label={
           needsFirstCollection
-            ? "Save ad (create your free Collection first)"
+            ? isFree
+              ? "Save ad (Collections are paid)"
+              : "Save ad (create your first Collection first)"
             : `Save ${advertiser?.trim() || "this ad"} to ${targetCollection?.name ?? "your collection"}`
         }
         className="f9-wk-lnk f9-quick-save-button"
@@ -78,8 +85,13 @@ export function ResultQuickSave({ adId, advertiser, plan, collections }: ResultQ
       </button>
       {needsFirstCollection && showGate ? (
         <span className="f9-quick-save-note" role="status">
-          Free includes 1 Collection — create it in the Library to save ads.{" "}
-          <Link to="/app/collections">Open the Library</Link>
+          {isFree ? (
+            <>Collections are included in paid plans — upgrade to save ads.{" "}
+              <Link to="/app/billing?source=search#plans">Compare plans</Link></>
+          ) : (
+            <>Create a Collection in the Library to save ads.{" "}
+              <Link to="/app/collections">Open the Library</Link></>
+          )}
         </span>
       ) : null}
       {failed && fetcher.data?.message ? (

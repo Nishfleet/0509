@@ -8,9 +8,9 @@
  * where both break: inactive ads disappear from the Ad Library, skipped weeks
  * leave permanent gaps, and neither shows a landing-page diff.
  *
- * The automated answer is positioned honestly: the free weekly watch (Free
- * plan: one competitor, instant first scan, then a weekly scheduled check and
- * weekly email brief, no card). The CTA is the public /search preview
+ * The automated answer is positioned honestly: the free first check (Free
+ * plan: one competitor, one first check files one first brief, Meta Ad
+ * Library only, no card). The CTA is the public /search preview
  * carrying the allowlisted `source=guide_track_ads` marker — no account
  * needed. Guardrails from the issue: no named competitor tools are
  * disparaged, no multi-platform coverage is claimed (Meta Ad Library only),
@@ -42,7 +42,7 @@ const PATHNAME = "/guides/how-to-track-competitor-ads";
 export const guideSearchPreviewPath = "/search?source=guide_track_ads";
 
 const pageDescription =
-  "How to track competitor ads: the free manual Ad Library workflow, the n8n or Apify DIY route with real prices, where both break, and the free weekly watch that automates it.";
+  "How to track competitor ads: the free manual Ad Library workflow, the n8n or Apify DIY route with real prices, where both break, and the free first check that automates it.";
 
 export const links: LinksFunction = () => canonicalLinks(PATHNAME);
 
@@ -115,7 +115,7 @@ export const trackAdsFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "Is tracking competitor ads free?",
     answer:
-      "Yes, the manual method is free: the Meta Ad Library is a public archive that shows any page's currently running ads, and a spreadsheet costs nothing. What it costs is your time — roughly a weekly session per competitor — and whatever weeks you forget are gone. Five to Nine's free plan automates one competitor on a weekly schedule, also with no card.",
+      "Yes, the manual method is free: the Meta Ad Library is a public archive that shows any page's currently running ads, and a spreadsheet costs nothing. What it costs is your time — roughly a weekly session per competitor — and whatever weeks you forget are gone. Five to Nine's free plan runs one first check that files one first brief, also with no card.",
   },
   {
     question: "What happens when a competitor pauses an ad?",
@@ -256,15 +256,15 @@ export default function GuideHowToTrackCompetitorAdsRoute() {
       </section>
 
       <section className="ld-how">
-        <h2>The automated answer: a free weekly watch.</h2>
+        <h2>The automated answer: one first check, free.</h2>
         <div className="ld-how-grid">
           <article>
             <span className="ld-step">01</span>
-            <h3>One competitor, watched weekly, free</h3>
+            <h3>One competitor, one first check, free</h3>
             <p>
-              Five to Nine&rsquo;s free plan watches one competitor: an instant first scan, then a
-              scheduled check every week and a weekly email brief. No card, and the manual Monday
-              visit stops being your job.
+              Five to Nine&rsquo;s free plan watches one competitor: one first check files one first
+              brief, from the Meta Ad Library only. No card, and no automatic checks — paid plans
+              add the recurring loop.
             </p>
           </article>
           <article>

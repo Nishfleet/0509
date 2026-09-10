@@ -10,9 +10,10 @@ export type ExportFormat = "csv" | "json" | "slack";
 
 /**
  * MCP tool tiering — the single source of truth for which plan feature gates
- * each MCP tool (BET 6). Read-only tools are free + Scout; write/account-
- * mutation tools are Agency. Export formats (csv/slack) ride the export
- * features (Starter+); JSON reads ride the read-only tier.
+ * each MCP tool (BET 6). Read-only tools are Scout+ (barebones free has no
+ * API/MCP); write/account-mutation tools are Agency. Export formats
+ * (csv/slack) ride the export features (Starter+); JSON reads ride the
+ * read-only tier.
  */
 export const MCP_READ_ONLY_TOOL_NAMES: ReadonlySet<string> = new Set([
   "get_workspace_readiness",
