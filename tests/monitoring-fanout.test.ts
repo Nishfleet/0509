@@ -1219,6 +1219,39 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
     expect(row.status).toBe("skipped");
     expect(row.error_code).toBe("orchestration_stale");
   });
+
+  it("terminally fails a scheduled run that hit the attempt cap instead of redispatching forever", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    seedPendingOrchestratedRun(sqlite, "run-exhausted");
+    sqlite
+      .prepare("UPDATE watchlist_run SET attempt_count = 8 WHERE id = 'run-exhausted'")
+      .run();
+    const createBatch = vi.fn(async () => []);
+
+    const result = await reconcileOrchestratedWatchlistRuns(
+      {
+        DB: db,
+        MONITORING_WORKFLOW: { create: vi.fn(), createBatch },
+        MONITORING_FANOUT_MODE: "fanout",
+        MONITORING_FANOUT_GLOBAL: "1",
+        MONITORING_SCHEDULED_BROWSER_MODE: "all",
+        MONITORING_ORCHESTRATION_MAX_AGE_MS: "1",
+      } as never,
+      { mode: "fanout", leaseMs: 1 },
+    );
+
+    expect(result.redispatched).toBe(0);
+    expect(result.cancelled).toBe(0);
+    const row = sqlite
+      .prepare(
+        "SELECT status, error_code, error_message FROM watchlist_run WHERE id = 'run-exhausted'",
+      )
+      .get() as { status: string; error_code: string | null; error_message: string | null };
+    expect(row.status).toBe("failed");
+    expect(row.error_code).toBe("unmonitorable_target");
+    expect(row.error_message).toContain("could not be monitored");
+  });
 });
 
 describe("monitoring fan-out drain simulation", () => {
