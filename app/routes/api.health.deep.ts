@@ -5,6 +5,22 @@ import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
 import type { AppEnv } from "~/lib/env.server";
 import { listScheduledObservationHealth } from "~/lib/scheduled-observation-health.server";
 
+const CANARY_TOKEN_HEADER = "x-0509-canary-token";
+
+// Worker version id + cron health is free recon for timing deploy windows and
+// knowing when monitoring is degraded. Only a caller presenting the canary token
+// may read release identity; anonymous callers omit the field. Status body stays
+// public so the liveness probe and uptime checks still pass.
+function mayReadReleaseIdentity(request: Request, env: {
+  CANARY_BYPASS_TOKEN?: string;
+}) {
+  const configured = env.CANARY_BYPASS_TOKEN?.trim();
+  if (!configured) {
+    return false;
+  }
+  return request.headers.get(CANARY_TOKEN_HEADER) === configured;
+}
+
 type DependencyStatus = "ok" | "error" | "missing";
 type ScheduledWorkStatus = "ok" | "degraded" | "missing";
 
@@ -17,7 +33,7 @@ type DeepHealthBody = {
     d1: DependencyStatus;
     scheduledWork: ScheduledWorkStatus;
   };
-  releaseIdentity: ReturnType<typeof readReleaseIdentity>;
+  releaseIdentity?: ReturnType<typeof readReleaseIdentity>;
 };
 
 async function probeD1(env: AppEnv): Promise<DependencyStatus> {
@@ -36,7 +52,7 @@ async function probeD1(env: AppEnv): Promise<DependencyStatus> {
 // Deep dependency probe for operators. Unauthenticated but rate-limited via
 // the normal /api/* api-read bucket (unlike /api/health, which stays edge-only
 // and rate-limit-exempt so uptime monitors stay green during a DB outage).
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ context, request }: LoaderFunctionArgs) {
   const cloudflare = getCloudflareContext(context);
   const env = cloudflare.env;
   const d1 = await probeD1(env);
@@ -54,6 +70,9 @@ export async function loader({ context }: LoaderFunctionArgs) {
     }
   }
   const healthy = d1 === "ok" && scheduledWork === "ok";
+  const releaseIdentity = mayReadReleaseIdentity(request, env)
+    ? readReleaseIdentity(env)
+    : undefined;
 
   const body: DeepHealthBody = {
     status: healthy ? "ok" : "degraded",
@@ -64,7 +83,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
       d1,
       scheduledWork,
     },
-    releaseIdentity: readReleaseIdentity(env),
+    ...(releaseIdentity ? { releaseIdentity } : {}),
   };
 
   return new Response(JSON.stringify(body), {

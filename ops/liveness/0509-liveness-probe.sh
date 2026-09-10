@@ -69,21 +69,12 @@ probe_shallow() {
   if ! python3 - <<'PY'
 import json
 import os
-import re
 
 payload = json.loads(os.environ["SHALLOW_PAYLOAD"])
 if payload.get("status") != "ok":
     raise SystemExit(f"health status was {payload.get('status')!r}, expected 'ok'")
 if payload.get("app") != "0509":
     raise SystemExit(f"health app was {payload.get('app')!r}, expected '0509'")
-identity = payload.get("releaseIdentity") or {}
-worker_version = identity.get("workerVersionId")
-if not isinstance(worker_version, str) or not worker_version or len(worker_version) > 128:
-    raise SystemExit("health worker version was missing or unsafe")
-if not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", worker_version):
-    raise SystemExit("health worker version contained unsafe characters")
-if identity.get("searchRolloutMode") != "v2":  # prod SEARCH_ROLLOUT_MODE=v2 (main wrangler.jsonc) since 2026-08-12T22:17Z; shadow assertion was stale
-    raise SystemExit("health search rollout mode was not v2")
 PY
   then
     error="shallow_payload_invalid"
@@ -98,8 +89,7 @@ probe_deep() {
     return 1
   }
   DEEP_HEALTH_PAYLOAD="${response}"
-  DEEP_EXPECTED_WORKER_VERSION="${worker_version}"
-  export DEEP_HEALTH_PAYLOAD DEEP_EXPECTED_WORKER_VERSION
+  export DEEP_HEALTH_PAYLOAD
   if ! python3 - <<'PY'
 import json
 import os
@@ -114,11 +104,6 @@ if checks.get("scheduledWork") != "ok":
     raise SystemExit(
         f"deep health scheduled-work check was {checks.get('scheduledWork')!r}, expected 'ok'"
     )
-identity = payload.get("releaseIdentity") or {}
-if identity.get("workerVersionId") != os.environ["DEEP_EXPECTED_WORKER_VERSION"]:
-    raise SystemExit("deep health worker version did not match shallow health")
-if identity.get("searchRolloutMode") != "v2":  # prod SEARCH_ROLLOUT_MODE=v2 (main wrangler.jsonc) since 2026-08-12T22:17Z; shadow assertion was stale
-    raise SystemExit("deep health search rollout mode was not v2")
 PY
   then
     error="deep_payload_invalid"
@@ -139,10 +124,7 @@ import json
 import sys
 sys.stdout.write((json.load(sys.stdin).get("releaseIdentity") or {}).get("workerVersionId") or "")
 ')" || worker_version=""
-  if [[ -z "${worker_version}" ]]; then
-    ok=false
-    error="${error:-shallow_version_parse_failed}"
-  elif probe_deep; then
+  if probe_deep; then
     d1_check="ok"
     scheduled_work_check="ok"
     deep_status=1

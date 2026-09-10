@@ -46,8 +46,10 @@ describe("uptime health workflow", () => {
     expect(healthStep?.run).toContain("curl --fail --show-error --silent --max-time 20 --retry 2");
     expect(healthStep?.run).toContain('payload.get("status") != "ok"');
     expect(healthStep?.run).toContain('payload.get("app") != "0509"');
-    expect(healthStep?.run).toContain('identity.get("searchRolloutMode") != "v2"');
-    expect(healthStep?.run).toContain("worker_version=");
+    // Anonymous on-demand probes omit releaseIdentity, so the shallow step
+    // asserts the public status/app contract only.
+    expect(healthStep?.run).not.toContain("releaseIdentity");
+    expect(healthStep?.run).not.toContain("worker_version=");
   });
 
   it("fails the run when the deep D1 health check is not ok", () => {
@@ -55,11 +57,13 @@ describe("uptime health workflow", () => {
       (step) => step.name === "Check production deep health endpoint (D1 and scheduled work)",
     );
     expect(deepStep?.env?.DEEP_HEALTH_URL).toBe("https://0509.io/api/health/deep");
-    expect(deepStep?.env?.EXPECTED_WORKER_VERSION).toContain("steps.shallow.outputs.worker_version");
     expect(deepStep?.run).toContain("curl --fail --show-error --silent --max-time 20 --retry 2");
     expect(deepStep?.run).toContain('checks.get("d1") != "ok"');
     expect(deepStep?.run).toContain('checks.get("scheduledWork") != "ok"');
-    expect(deepStep?.run).toContain('identity.get("workerVersionId") != os.environ["EXPECTED_WORKER_VERSION"]');
+    // The deep step tolerates a missing release identity; it cross-checks D1 +
+    // scheduled-work health only.
+    expect(deepStep?.run).not.toContain("EXPECTED_WORKER_VERSION");
+    expect(deepStep?.run).not.toContain("releaseIdentity");
   });
 
   it("executes the deep-health validator for healthy and degraded payloads", () => {
@@ -77,15 +81,14 @@ describe("uptime health workflow", () => {
         ...process.env,
         PATH: `${root}:${process.env.PATH ?? ""}`,
         DEEP_HEALTH_URL: "https://0509.io/api/health/deep",
-        EXPECTED_WORKER_VERSION: "worker-v1",
         FAKE_HEALTH_PAYLOAD: JSON.stringify(payload),
       },
       encoding: "utf8",
     });
+    // Anonymous callers get no releaseIdentity; the deep probe must still pass.
     const healthy = {
       status: "ok",
       checks: { d1: "ok", scheduledWork: "ok" },
-      releaseIdentity: { workerVersionId: "worker-v1", searchRolloutMode: "v2" },
     };
 
     try {
@@ -95,30 +98,25 @@ describe("uptime health workflow", () => {
       expect(run({ ...healthy, checks: { d1: "ok", scheduledWork: "degraded" } }).status)
         .not.toBe(0);
       expect(run({ ...healthy, status: "degraded" }).status).not.toBe(0);
-      expect(run({
-        ...healthy,
-        releaseIdentity: { workerVersionId: "other", searchRolloutMode: "v2" },
-      }).status).not.toBe(0);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it("persists exact Worker-version evidence for every health sample", () => {
+  it("does not persist worker-version evidence from anonymous probes", () => {
+    // releaseIdentity is now gated behind the canary token; anonymous on-demand
+    // probes cannot read a worker version, so there is nothing to persist. The
+    // tokened deploy canary (prod-canary.lib.mjs + gate-c-soak) owns the
+    // exact-worker identity assertion instead.
     const persistStep = parsed.jobs.health?.steps?.find(
       (step) => step.name === "Persist exact Worker-version evidence",
     );
     const uploadStep = parsed.jobs.health?.steps?.find(
       (step) => step.name === "Upload exact Worker-version evidence",
     );
-    expect(persistStep?.env?.WORKER_VERSION).toContain("steps.shallow.outputs.worker_version");
-    expect(persistStep?.run).toContain('"workerVersionId"');
-    expect(persistStep?.run).toContain('"runId"');
-    expect(uploadStep?.uses).toBe(
-      "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-    );
-    expect(uploadStep?.with?.name).toContain("uptime-worker-");
-    expect(uploadStep?.with?.["retention-days"]).toBe(2);
+    expect(persistStep).toBeUndefined();
+    expect(uploadStep).toBeUndefined();
+    expect(workflow).not.toContain("uptime-worker-evidence.json");
   });
 
   it("does not require secrets or private canary tokens", () => {

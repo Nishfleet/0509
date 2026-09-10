@@ -12,6 +12,102 @@ function createContext(env: Record<string, unknown> = {}) {
 }
 
 describe("deep health route", () => {
+  it("omits releaseIdentity for anonymous callers", async () => {
+    const first = vi.fn().mockResolvedValue({ "1": 1 });
+    const prepare = vi.fn((sql: string) => {
+      if (sql === "SELECT 1") return { first };
+      const statement = {
+        bind: vi.fn(() => statement),
+        all: vi.fn().mockResolvedValue({
+          results: [
+            "0 */3 * * *",
+            "17 */6 * * *",
+            "0 4 * * *",
+            "0 5 * * MON",
+          ].map((cron) => ({ cron, baseline_at: new Date().toISOString() })),
+        }),
+      };
+      return statement;
+    });
+    const { loader } = await import("~/routes/api.health.deep");
+    const response = await loader({
+      context: createContext({
+        DB: { prepare },
+        CF_VERSION_METADATA: {
+          id: "worker-version-123",
+          tag: "release-2026-07-19",
+          timestamp: "2026-07-19T06:00:00.000Z",
+        },
+        SEARCH_ROLLOUT_MODE: "v2",
+        CANARY_BYPASS_TOKEN: "secret-token",
+      }),
+      request: new Request("https://0509.io/api/health/deep"),
+    } as never);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("releaseIdentity");
+    expect(body).toMatchObject({
+      status: "ok",
+      app: "0509",
+      checks: { edge: "ok", d1: "ok", scheduledWork: "ok" },
+    });
+  });
+
+  it("includes releaseIdentity for a tokened caller", async () => {
+    const first = vi.fn().mockResolvedValue({ "1": 1 });
+    const prepare = vi.fn((sql: string) => {
+      if (sql === "SELECT 1") return { first };
+      const statement = {
+        bind: vi.fn(() => statement),
+        all: vi.fn().mockResolvedValue({
+          results: [
+            "0 */3 * * *",
+            "17 */6 * * *",
+            "0 4 * * *",
+            "0 5 * * MON",
+          ].map((cron) => ({ cron, baseline_at: new Date().toISOString() })),
+        }),
+      };
+      return statement;
+    });
+    const { loader } = await import("~/routes/api.health.deep");
+    const response = await loader({
+      context: createContext({
+        DB: { prepare },
+        CF_VERSION_METADATA: {
+          id: "worker-version-123",
+          tag: "release-2026-07-19",
+          timestamp: "2026-07-19T06:00:00.000Z",
+        },
+        SEARCH_ROLLOUT_MODE: "v2",
+        CANARY_BYPASS_TOKEN: "secret-token",
+      }),
+      request: new Request("https://0509.io/api/health/deep", {
+        headers: { "x-0509-canary-token": "secret-token" },
+      }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      status: string;
+      app: string;
+      checks: { edge: string; d1: string; scheduledWork: string };
+      releaseIdentity: Record<string, unknown>;
+    };
+    expect(body).toMatchObject({
+      status: "ok",
+      app: "0509",
+      checks: { edge: "ok", d1: "ok", scheduledWork: "ok" },
+      releaseIdentity: {
+        workerVersionId: "worker-version-123",
+        tag: "release-2026-07-19",
+        timestamp: "2026-07-19T06:00:00.000Z",
+        searchRolloutMode: "v2",
+      },
+    });
+  });
+
   it("returns ok with per-dependency status when D1 answers SELECT 1", async () => {
     const first = vi.fn().mockResolvedValue({ "1": 1 });
     const baseline = new Date().toISOString();
@@ -42,8 +138,11 @@ describe("deep health route", () => {
           timestamp: "2026-07-19T06:00:00.000Z",
         },
         SEARCH_ROLLOUT_MODE: "v2",
+        CANARY_BYPASS_TOKEN: "secret-token",
       }),
-      request: new Request("https://0509.io/api/health/deep"),
+      request: new Request("https://0509.io/api/health/deep", {
+        headers: { "x-0509-canary-token": "secret-token" },
+      }),
     } as never);
 
     expect(prepare).toHaveBeenCalledWith("SELECT 1");
@@ -93,8 +192,10 @@ describe("deep health route", () => {
     });
     const { loader } = await import("~/routes/api.health.deep");
     const response = await loader({
-      context: createContext({ DB: { prepare } }),
-      request: new Request("https://0509.io/api/health/deep"),
+      context: createContext({ DB: { prepare }, CANARY_BYPASS_TOKEN: "secret-token" }),
+      request: new Request("https://0509.io/api/health/deep", {
+        headers: { "x-0509-canary-token": "secret-token" },
+      }),
     } as never);
 
     expect(response.status).toBe(503);
