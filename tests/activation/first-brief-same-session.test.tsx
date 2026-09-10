@@ -93,7 +93,10 @@ function verifiedOwner() {
   return { email: OWNER_ADDRESS, name: "Owner", emailVerified: true };
 }
 
-function mockDataServer(deliverWeeklyDigest: ReturnType<typeof vi.fn>) {
+function mockDataServer(
+  deliverWeeklyDigest: ReturnType<typeof vi.fn>,
+  activationAttempt: { status: string } | null = null,
+) {
   const createDigestRun = vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true });
   // No existing digest on the first reads (loader + findExistingFirstBrief),
   // then the filed digest after ensureFirstBriefForWorkspace runs — so the
@@ -104,6 +107,15 @@ function mockDataServer(deliverWeeklyDigest: ReturnType<typeof vi.fn>) {
     .mockResolvedValueOnce([])
     .mockResolvedValue([filedDigest()]);
   const ads = [{ metaAdId: "ad-1", landingPageUrl: LANDING, adSnapshotUrl: EVIDENCE_URL }];
+  // Issue #2407: the ready state reads the `activation-result:*` attempt row
+  // before it claims the email was sent. The mock returns the row only for
+  // the exact key the sender claims under, so a drifted key reads as "not
+  // sent" and fails the assertions below.
+  const getDeliveryAttemptByIdempotencyKey = vi
+    .fn()
+    .mockImplementation(async (_env: unknown, key: string) =>
+      key === "activation-result:user-1:watch-1" ? activationAttempt : null,
+    );
   vi.doMock("~/lib/data.server", () => ({
     listWatchlists: vi.fn().mockResolvedValue([watchlist()]),
     getRecentSuccessfulRuns: vi.fn().mockResolvedValue([{ id: "run-1" }]),
@@ -114,12 +126,13 @@ function mockDataServer(deliverWeeklyDigest: ReturnType<typeof vi.fn>) {
     getDigest: vi.fn().mockResolvedValue(filedDigest()),
     listDigests,
     listAdsByIds: vi.fn().mockResolvedValue(ads),
+    getDeliveryAttemptByIdempotencyKey,
   }));
   vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
   vi.doMock("~/lib/cron-failure-alert.server", () => ({
     reportScheduledTaskFailure: vi.fn(),
   }));
-  return { createDigestRun, listDigests };
+  return { createDigestRun, listDigests, getDeliveryAttemptByIdempotencyKey };
 }
 
 function mockNoAdsFirstBrief() {
@@ -234,7 +247,10 @@ describe("same-session first brief (issue #1487)", () => {
       attempts: 1,
       details: [{ status: "sent" }],
     });
-    mockDataServer(deliverWeeklyDigest);
+    const { getDeliveryAttemptByIdempotencyKey } = mockDataServer(
+      deliverWeeklyDigest,
+      { status: "sent" },
+    );
     mockAuth();
 
     const { loader } = await import("~/routes/app.onboard");
@@ -259,6 +275,18 @@ describe("same-session first brief (issue #1487)", () => {
     const markup = renderToStaticMarkup(<SignupFirstBriefView data={data} />);
     expect(markup).toContain(EVIDENCE_URL);
     expect(markup).toContain("View the screenshot evidence");
+
+    // Issue #2407: the row exists and reached `sent`, so the surface may
+    // claim the email — and it must have read the sender's exact key.
+    expect(data.activationEmailSent).toBe(true);
+    expect(getDeliveryAttemptByIdempotencyKey).toHaveBeenCalledWith(
+      expect.anything(),
+      "activation-result:user-1:watch-1",
+    );
+    // react-dom/server escapes apostrophes, so assert on the escape-free
+    // substring of each sentence.
+    expect(markup).toContain("emailed this brief to you");
+    expect(markup).not.toContain("the email is on its way");
 
     // (b) the "Your first brief" email was dispatched in the same session,
     //     on the digest path with firstBrief: true — not the weekly cron.
@@ -328,4 +356,40 @@ describe("same-session first brief (issue #1487)", () => {
     // The filing path was attempted and failed.
     expect(createDigestRun).toHaveBeenCalledTimes(1);
   });
+
+  // Issue #2407: the sentence may only render behind a `sent` attempt row.
+  it.each([
+    ["no delivery attempt row", null],
+    ["a pending attempt", { status: "pending" }],
+    ["a failed attempt", { status: "failed" }],
+  ])(
+    "renders the honest email-pending copy with %s",
+    async (_label, activationAttempt) => {
+      const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+        attempts: 1,
+        details: [{ status: "sent" }],
+      });
+      mockDataServer(deliverWeeklyDigest, activationAttempt);
+      mockAuth();
+
+      const { loader } = await import("~/routes/app.onboard");
+      const data = (await loader({
+        context: { cloudflare: { env: { SIGNUP_FIRST_BRIEF_ENABLED: "1" } } },
+        params: {},
+        request: new Request("http://localhost/app/onboard?step=first-brief"),
+      } as never)) as Awaited<ReturnType<typeof loader>>;
+
+      if (!(typeof data === "object" && data !== null && "status" in data && data.status === "ready")) {
+        throw new Error("expected ready brief");
+      }
+      expect(data.activationEmailSent).toBe(false);
+
+      const { SignupFirstBriefView } = await import("~/components/signup-first-brief-view");
+      const markup = renderToStaticMarkup(<SignupFirstBriefView data={data} />);
+      expect(markup).toContain("the email is on its way");
+      expect(markup).not.toContain("emailed this brief to you");
+      // The brief itself still renders — only the claim is gated.
+      expect(markup).toContain(EVIDENCE_URL);
+    },
+  );
 });

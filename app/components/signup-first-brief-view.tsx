@@ -129,8 +129,16 @@ export function SignupFirstBriefView({
 
       <footer className="f9-signup-first-brief-footer">
         <p>
-          We've emailed this brief to you. Future alerts only cover real
-          changes — you'll hear from us when {brief.watchlistName} moves.
+          {/* Issue #2407: only claim the email after the
+              `activation-result:<user>:<watchlist>` delivery attempt reached
+              `sent`. The dispatch failure is swallowed in the scan path, so
+              "we've emailed this brief to you" was previously rendered even
+              when no email left the building. */}
+          {data.activationEmailSent
+            ? "We've emailed this brief to you."
+            : "Your brief is ready — the email is on its way."}{" "}
+          Future alerts only cover real changes — you'll hear from us when{" "}
+          {brief.watchlistName} moves.
         </p>
         <Link to="/app" className="f9-wk-btn">
           Go to your dashboard

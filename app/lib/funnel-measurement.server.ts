@@ -389,3 +389,51 @@ export function emitFunnelActivationScanStarted(env: AppEnv, request: Request) {
 export function emitFunnelFirstBriefEmailSent(env: AppEnv) {
   emitFunnelEvent(env, "first_brief_email_sent");
 }
+
+/**
+ * Issue #2407: did the WP-25 activation-result email actually reach status
+ * `sent`? The dispatch runs inside the scan path, where a delivery failure is
+ * deliberately swallowed so it can never roll back a successful scan
+ * (`maybeSendFreeActivationResultEmail` in `~/lib/monitoring.server`), and
+ * `claimInstantDeliveryAttempt` returns "duplicate" when an earlier attempt
+exists. A surface that says "we've emailed this brief to you" therefore has
+ * to read the durable `delivery_attempt` row instead of assuming the dispatch
+ * succeeded.
+ *
+ * The key is the one the sender claims the email under —
+ * `activation-result:<userId>:<watchlistId>` in
+ * `~/lib/delivery-account-emails.server`.
+ *
+ * Returns false for a missing row, a pending row, and a failed row: the
+ * caller renders the honest "on its way" copy instead. A read failure is
+ * logged and also returns false — the honest copy is the safe direction, and
+ * a delivery-state lookup must never 500 the brief surface.
+ */
+export async function activationResultEmailSent(
+  env: AppEnv,
+  input: { userId: string; watchlistId: string },
+): Promise<boolean> {
+  const idempotencyKey = `activation-result:${input.userId}:${input.watchlistId}`;
+  try {
+    const { getDeliveryAttemptByIdempotencyKey } = await import(
+      "~/lib/data.server"
+    );
+    const attempt = await getDeliveryAttemptByIdempotencyKey(
+      env,
+      idempotencyKey,
+    );
+    return attempt?.status === "sent";
+  } catch (error) {
+    logAppEvent(
+      "warn",
+      "activation_result_delivery_state_unreadable",
+      "Could not read the activation-result delivery attempt",
+      {
+        details: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      },
+    );
+    return false;
+  }
+}
