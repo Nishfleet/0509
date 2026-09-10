@@ -1449,9 +1449,18 @@ async function runInstantAttemptPipeline(
   const preparation = await config.prepare(env, input.deliveryTarget);
   if (!preparation.ok) {
     const localResult = preparation.result;
+    // Only WhatsApp skips requireOwnedClaim, and its prepare never fails, so
+    // an unowned claim here means the prepare contract itself changed.
+    const claimAttemptId = attemptDedupe.attemptId;
+    const claimUpdatedAt = attemptDedupe.claimUpdatedAt;
+    if (!claimAttemptId || !claimUpdatedAt) {
+      throw new Error(
+        `Instant ${config.channelLabel} ${config.preparationFailureKind} claim did not return an owned attempt.`,
+      );
+    }
     const finalized = await updateDeliveryAttemptResult(
       env,
-      attemptDedupe.attemptId,
+      claimAttemptId,
       {
         provider: localResult.provider,
         status: localResult.status,
@@ -1463,7 +1472,7 @@ async function runInstantAttemptPipeline(
         failedAt: new Date().toISOString(),
         expectedStatus: "pending",
         expectedWebhookStatus: "pending",
-        expectedUpdatedAt: attemptDedupe.claimUpdatedAt,
+        expectedUpdatedAt: claimUpdatedAt,
       },
     );
     if (finalized === false) {
