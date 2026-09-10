@@ -1,8 +1,6 @@
 export const DISCOVERY_WARMUP_CRON = "17 */6 * * *";
 export const REGULAR_MONITORING_CRON = "0 */3 * * *";
 export const DAILY_DIGEST_CRON = "0 4 * * *";
-/** @deprecated The 04:00 cron now sends daily digests only. */
-export const DAILY_MONITORING_CRON = DAILY_DIGEST_CRON;
 export const WEEKLY_DIGEST_CRON = "0 5 * * MON";
 export { SCHEDULED_OBSERVATION_GAP_CHECK_CRON } from "../app/lib/scheduled-observation-health.server";
 
