@@ -201,6 +201,109 @@ describe("serveCreativeResource", () => {
     expect(Array.from(cachedBody)).toEqual(Array.from(DEAD_CREATIVE_PLACEHOLDER_PNG));
   });
 
+  it("does NOT cache a 5xx — a wobble must not blank the creative for 30 days", async () => {
+    vi.doMock("~/lib/fetch-timeout.server", () => ({
+      fetchWithTimeout: vi.fn(async () => new Response("oops", { status: 503 })),
+      releaseFetchTimeout: vi.fn(),
+    }));
+
+    const { serveCreativeResource } = await import("~/lib/creative-edge-cache.server");
+    const { store, cache } = installCaches();
+
+    const response = await serveCreativeResource(
+      makeEnv(FB_URL),
+      new Request("https://0509.io/creative/ad_1"),
+      "ad_1",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get("cache-control")).not.toContain("immutable");
+    expect(cache.put).not.toHaveBeenCalled();
+    expect(store.size).toBe(0);
+  });
+
+  it("follows an fbcdn-internal redirect and caches the final image", async () => {
+    const fetchWithTimeout = vi.fn(async (url: string) =>
+      url.includes("redirect-me")
+        ? new Response(null, {
+            status: 302,
+            headers: { location: FB_URL },
+          })
+        : new Response(new Uint8Array([7, 7]), {
+            status: 200,
+            headers: { "content-type": "image/jpeg" },
+          }),
+    );
+    vi.doMock("~/lib/fetch-timeout.server", () => ({
+      fetchWithTimeout,
+      releaseFetchTimeout: vi.fn(),
+    }));
+
+    const { serveCreativeResource } = await import("~/lib/creative-edge-cache.server");
+    const { cache } = installCaches();
+
+    const response = await serveCreativeResource(
+      makeEnv("https://scontent.xx.fbcdn.net/v/redirect-me.jpg?oe=1"),
+      new Request("https://0509.io/creative/ad_1"),
+      "ad_1",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(2);
+    expect(cache.put).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a redirect that leaves the fbcdn host", async () => {
+    const fetchWithTimeout = vi.fn(async () =>
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://attacker.test/steal.jpg" },
+      }),
+    );
+    vi.doMock("~/lib/fetch-timeout.server", () => ({
+      fetchWithTimeout,
+      releaseFetchTimeout: vi.fn(),
+    }));
+
+    const { serveCreativeResource } = await import("~/lib/creative-edge-cache.server");
+    const { cache } = installCaches();
+
+    const response = await serveCreativeResource(
+      makeEnv(FB_URL),
+      new Request("https://0509.io/creative/ad_1"),
+      "ad_1",
+    );
+
+    // Placeholder, and crucially never cached as a permanent verdict.
+    expect(response?.status).toBe(200);
+    expect(cache.put).not.toHaveBeenCalled();
+    for (const call of fetchWithTimeout.mock.calls) {
+      expect(String(call[0])).toContain(".fbcdn.net");
+    }
+  });
+
+  it("keeps the caching headers on a HEAD reply", async () => {
+    vi.doMock("~/lib/fetch-timeout.server", () => ({
+      fetchWithTimeout: vi.fn(async () => new Response(new Uint8Array([3]), {
+        status: 200,
+        headers: { "content-type": "image/png" },
+      })),
+      releaseFetchTimeout: vi.fn(),
+    }));
+
+    const { serveCreativeResource } = await import("~/lib/creative-edge-cache.server");
+    installCaches();
+
+    const response = await serveCreativeResource(
+      makeEnv(FB_URL),
+      new Request("https://0509.io/creative/ad_1", { method: "HEAD" }),
+      "ad_1",
+    );
+
+    expect(response?.headers.get("content-type")).toBe("image/png");
+    expect(response?.headers.get("cache-control")).toContain("2592000");
+  });
+
   it("rejects non-GET/HEAD", async () => {
     const { serveCreativeResource } = await import("~/lib/creative-edge-cache.server");
     installCaches();
@@ -248,5 +351,47 @@ describe("primeCreativeEdgeCache", () => {
     await expect(
       primeCreativeEdgeCache(makeEnv(FB_URL, { hasDb: false }), "ad_1"),
     ).resolves.toBe(false);
+  });
+
+  it("does not cache a 5xx at capture time either", async () => {
+    vi.doMock("~/lib/fetch-timeout.server", () => ({
+      fetchWithTimeout: vi.fn(async () => new Response("oops", { status: 500 })),
+      releaseFetchTimeout: vi.fn(),
+    }));
+
+    const { primeCreativeEdgeCache } = await import("~/lib/creative-edge-cache.server");
+    const { store } = installCaches();
+
+    expect(await primeCreativeEdgeCache(makeEnv(FB_URL), "ad_1")).toBe(false);
+    expect(store.size).toBe(0);
+  });
+
+  it("a primed entry makes the route skip fbcdn entirely (prime -> serve handshake)", async () => {
+    const fetchWithTimeout = vi.fn(async () => new Response(new Uint8Array([6, 6, 6]), {
+      status: 200,
+      headers: { "content-type": "image/jpeg" },
+    }));
+    vi.doMock("~/lib/fetch-timeout.server", () => ({
+      fetchWithTimeout,
+      releaseFetchTimeout: vi.fn(),
+    }));
+
+    const { primeCreativeEdgeCache, serveCreativeResource } = await import(
+      "~/lib/creative-edge-cache.server"
+    );
+    installCaches();
+
+    expect(await primeCreativeEdgeCache(makeEnv(FB_URL), "ad_1")).toBe(true);
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+
+    const served = await serveCreativeResource(
+      makeEnv(FB_URL),
+      new Request("https://0509.io/creative/ad_1"),
+      "ad_1",
+    );
+
+    // The whole point of the ticket: day-30 readers cost zero fbcdn requests.
+    expect(served?.status).toBe(200);
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
   });
 });
