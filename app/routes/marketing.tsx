@@ -4,6 +4,7 @@ import type { HeadersArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } fro
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { AdCreative } from "~/components/ads/ad-creative";
 import { PricingSection, billingFaqJsonLdEntries } from "~/components/pricing-section";
 import { SubmitButton } from "~/components/submit-button";
 import {
@@ -346,17 +347,6 @@ function truncateHook(value: string, maxLength = 26) {
   return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength - 1)}…` : trimmed;
 }
 
-/** Short host for the proof-shot URL bar, e.g. "facebook.com/ads/library". */
-function proofShotHost(sourceUrl: string | null): string {
-  if (!sourceUrl) return "source page";
-  try {
-    const url = new URL(sourceUrl);
-    return `${url.hostname.replace(/^www\./, "")}${url.pathname !== "/" ? url.pathname.slice(0, 24) : ""}`;
-  } catch {
-    return "source page";
-  }
-}
-
 export default function MarketingRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const routeData = useLoaderData<typeof loader>();
@@ -578,7 +568,7 @@ export default function MarketingRoute() {
     );
 
   const heroShotCards = proofBrief ? (
-    proofBrief.proofTrail.map((item) => (
+    proofBrief.proofTrail.map((item, index) => (
       <a
         className="ld-shot"
         key={item.id}
@@ -591,12 +581,27 @@ export default function MarketingRoute() {
             ? `${item.signal} · On record`
             : `${item.signal} · ${proofTimeLabel(item.capturedAt)}`}
         </span>
-        <span className="ld-shot-bar">
-          <i />
-          <i />
-          <i />
-          <span>{proofShotHost(item.sourceUrl)}</span>
-        </span>
+        {/*
+          The real captured creative thumbnail (the same `AdCreative` the
+          `/ads/:domain` page renders), reusing the brand the featured-proof
+          loader already resolved — no new fetch. The `f9-ads-thumb`
+          aspect-ratio box reserves fixed dimensions so the image never shifts
+          layout (no CLS); the first card loads eager so the hero's largest
+          paint is not deferred, the rest stay lazy. When no creative was
+          captured for this ad, `AdCreative` renders its honest on-brand mock
+          (the real hook text) — never a fake screenshot or broken-image icon.
+        */}
+        <AdCreative
+          ad={{
+            advertiser: proofBrief.competitorName,
+            format: "image",
+            previewHeadline: item.evidence,
+            hook: item.evidence,
+            creativeImageUrl: item.creativeImageUrl,
+          }}
+          savedLabel={null}
+          loading={index === 0 ? "eager" : "lazy"}
+        />
         <span className="ld-shot-body">
           <strong>{truncateHook(item.evidence, 60)}</strong>
           <span className="ld-shot-meta">Open the same public page →</span>
