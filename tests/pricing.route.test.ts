@@ -1,10 +1,13 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pricingPlans, usageBundles } from "~/lib/pricing";
+
+const root = process.cwd();
 
 const commercialLaunch = {
   scoutSaleOpen: true,
@@ -223,6 +226,19 @@ describe("pricing section render smoke", () => {
 
     // The summary badge reads "Recommended", never "launch plan".
     expect(markup).not.toContain("launch plan");
+
+    // The accept criterion requires the string to be gone from the source
+    // files too, not just the rendered output.
+    const sourceFiles = [
+      readFileSync(join(root, "app/routes/pricing.tsx"), "utf8"),
+      readFileSync(
+        join(root, "app/components/pricing-section.tsx"),
+        "utf8",
+      ),
+    ];
+    for (const source of sourceFiles) {
+      expect(source).not.toContain("launch plan");
+    }
   });
 
   it("renders a single plain-text h1 in the route SSR output", async () => {
