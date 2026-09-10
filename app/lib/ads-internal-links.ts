@@ -83,12 +83,56 @@ export function resolveSearchBrandPageDomain(
   return null;
 }
 
+/**
+ * The fresh sneaker/sport brands to feature ahead of the historical Nykaa
+ * default on the public proof surfaces that use a featured `/ads/:domain`
+ * link (issue #2314). Every entry is a brand the global ICP — the product's
+ * core buyer — recognises, and each has a live, indexable `/ads/:domain`
+ * page built from real Meta Ad Library captures. Order is precedence: a
+ * fresh Footlocker beats a fresh New Balance, and so on down to JD Sports.
+ */
+export const FEATURED_PROOF_BRAND_PRIORITY: readonly string[] = [
+  "footlocker.com",
+  "newbalance.com",
+  "adidas.com",
+  "nike.com",
+  "jdsports.com",
+];
+
 export function pickFeaturedAdsInternalLink(
   links: readonly IndexableAdsLink[],
   preferredDomain?: string,
 ): IndexableAdsLink | null {
+  // Issue #2314: prefer the newest fresh capture from the sneaker/sport
+  // brands the global buyer knows, in `FEATURED_PROOF_BRAND_PRIORITY` order,
+  // instead of defaulting every visitor to the Indian brand Nykaa. Freshness
+  // is the caller's contract: the links fed here come from
+  // `loadIndexableBrandPageEntries`, which returns only captures within the
+  // brand-page fresh-for-indexing window (`BRAND_PAGE_FRESH_FOR_INDEXING_MS`,
+  // 7 days) — so any brand present here is a fresh capture, and an absent
+  // brand means its capture is stale or missing. No country→brand mapping is
+  // invented here: the same fixed order serves every visitor, and Nykaa is a
+  // fallback only when none of the priority brands has a fresh capture.
+  const byDomain = new Map(links.map((link) => [link.domain, link]));
+  // Honor a caller that pinned a priority sneaker brand (e.g. the homepage's
+  // country-derived nike) so a lower-priority sneaker never displaces the
+  // brand the proof brief and the rest of that surface already name — the
+  // home must not show one brand in its brief/CTA and a different one in the
+  // featured /ads link (issue #2281 home contract; regression guard #2314).
+  if (preferredDomain && FEATURED_PROOF_BRAND_PRIORITY.includes(preferredDomain)) {
+    const pinned = byDomain.get(preferredDomain);
+    if (pinned) {
+      return pinned;
+    }
+  }
+  for (const domain of FEATURED_PROOF_BRAND_PRIORITY) {
+    const candidate = byDomain.get(domain);
+    if (candidate) {
+      return candidate;
+    }
+  }
   if (preferredDomain) {
-    const preferred = links.find((link) => link.domain === preferredDomain);
+    const preferred = byDomain.get(preferredDomain);
     if (preferred) {
       return preferred;
     }
