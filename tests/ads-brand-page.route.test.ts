@@ -470,7 +470,7 @@ describe("/ads/:domain loader", () => {
     // exactly that subset for the client (which must never re-derive it from
     // the server-only evidence module).
     expect(result.verifiedLinkCount).toBe(1);
-    expect(result.verifiedLinkedAds.map((ad) => ad.metaAdId)).toEqual(["meta-nykaa-1"]);
+    expect(result.verifiedLinkedIds).toEqual(["meta-nykaa-1"]);
     expect(result.unverifiedMatchCount).toBe(1);
     expect(result.brandOwnedAdCount).toBe(1);
     // The teaser/score/change feed speak only about the verified capture
@@ -479,6 +479,60 @@ describe("/ads/:domain loader", () => {
     expect(result.teaser?.totalCount).toBe(1);
     expect(result.aggression?.adCount).toBe(1);
     expect(result.changeEvents).toHaveLength(0);
+  });
+
+  it("serializes every cached creative once — no second verified-linked copy in the hydration payload (issue #2391)", async () => {
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: [
+            { ...baseAd, metaAdId: "meta-verified-1" },
+            { ...baseAd, metaAdId: "meta-verified-2" },
+            // A text-mention match: rendered on the wall, never in the
+            // verified-linked subset.
+            {
+              ...baseAd,
+              metaAdId: "meta-text-1",
+              landingPageUrl: null,
+              domainMatch: undefined,
+            },
+          ],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+    const { verifiedLinkedAdsOf } = await import("~/routes/ads.$domain");
+
+    // The verified subset the client renders is derived from the payload's own
+    // ids — the same records the wall shows, so the two cannot drift.
+    expect(verifiedLinkedAdsOf(result).map((ad) => ad.metaAdId)).toEqual([
+      "meta-verified-1",
+      "meta-verified-2",
+    ]);
+
+    // Every creative is serialized ONCE: one `metaAdId` key per cached
+    // creative. The pre-#2391 payload carried the verified-linked records a
+    // second time as `verifiedLinkedAds`, which roughly doubled the ad bytes
+    // in the hydration stream.
+    const serialized = JSON.stringify(result);
+    expect(result).not.toHaveProperty("verifiedLinkedAds");
+    expect(serialized.split('"metaAdId"').length - 1).toBe(result.ads.length);
+
+    // Fields no renderer reads never reach the browser at all (issue #2391
+    // projection; the full dropped list is in the loader comment).
+    for (const droppedField of [
+      "analysisFields",
+      "researchSummary",
+      "adSnapshotUrl",
+      "previewSubhead",
+    ]) {
+      expect(serialized).not.toContain(`"${droppedField}"`);
+    }
   });
 
   it("reports zero brand-owned creatives when every cached ad is another advertiser's", async () => {
