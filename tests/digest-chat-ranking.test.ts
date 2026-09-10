@@ -11,8 +11,8 @@ import { describe, expect, it } from "vitest";
 import {
   renderDigestSlackText,
   renderDigestTeamsText,
-  type DigestDeliveryItem,
-} from "~/lib/delivery.server";
+} from "~/lib/digest-render.server";
+import type { DigestDeliveryItem } from "~/lib/delivery.server";
 
 function chatItem(
   watchlistName: string,
