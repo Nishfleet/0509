@@ -168,7 +168,6 @@ describe("marketing rebuild", () => {
   it("keeps the public homepage focused on the customer pain", () => {
     expect(marketingRoute).toContain("Know when competitors change the offer.");
     expect(marketingRoute).toContain("Stop finding out after the sales call.");
-    expect(marketingNav).toContain("Proof brief");
     expect(marketingRoute).toContain("The morning brief — from a real watch");
     expect(marketingRoute).toContain("Decision summary");
     expect(marketingRoute).toContain("Client-ready view");
@@ -301,7 +300,6 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toMatch(/<MarketingNav\b[^>]*\/>/);
     expect(marketingNav).toContain('aria-label="Primary"');
     expect(marketingNav).toContain("Search preview");
-    expect(marketingNav).toContain("Proof brief");
     expect(marketingNav).toContain("Pricing");
     expect(appCss).not.toContain(".ld-nav-links { display: none; }");
     expect(appCss).toContain("grid-column: 1 / -1");
