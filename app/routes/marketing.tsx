@@ -678,14 +678,6 @@ export default function MarketingRoute() {
           <div className="ld-hero-copy">
             {heroWall}
 
-            {heroProofStrip}
-
-            <p className="ld-deck-copy">
-              Then Five to Nine keeps watching the offer behind those ads. When it moves, you get the
-              before-and-after with the page text and source link — plus a screenshot when the capture
-              includes one.
-            </p>
-
             <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
               <input
                 aria-label="Competitor website"
@@ -700,6 +692,14 @@ export default function MarketingRoute() {
                 Preview available ads <span aria-hidden="true">→</span>
               </button>
             </Form>
+
+            {heroProofStrip}
+
+            <p className="ld-deck-copy">
+              Then Five to Nine keeps watching the offer behind those ads. When it moves, you get the
+              before-and-after with the page text and source link — plus a screenshot when the capture
+              includes one.
+            </p>
 
             <div className="f9-hero-proof-actions" aria-label="Proof brief before signup">
               <Link to={publicSearchTrialPath}>Try with {featuredBrandName}</Link>
