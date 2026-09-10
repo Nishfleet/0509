@@ -534,7 +534,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", { lock: "d
       // BL-015: the arc lands directly on the same designed brief used by
       // ordinary navigation. There is no second front-page hero above it.
       await page.getByRole("link", { name: "Read latest brief", exact: true }).click();
-      await expect(page).toHaveURL("/app/digests?firstrun=1");
+      await expect(page).toHaveURL("/app/briefs?firstrun=1");
       await expect(page.getByRole("heading", { level: 1, name: "Briefs", exact: true })).toBeVisible();
       await expect(page.locator(".f9-wk-brief")).toHaveCount(1);
       await expect(
