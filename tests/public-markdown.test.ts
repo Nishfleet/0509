@@ -8,6 +8,7 @@ import {
   buildLlmsText,
   llmsPageForBrandPath,
   llmsPageForTimelinePath,
+  publicMarkdownForPath,
   wantsPublicMarkdown,
 } from "~/lib/public-markdown";
 import { auditedAgentActionGroups } from "~/lib/agent-action-catalog";
@@ -34,6 +35,78 @@ describe("public markdown", () => {
     expect(isPublicMarkdownPage("/terms")).toBe(true);
     expect(isPublicMarkdownPage("/app")).toBe(false);
     expect(isPublicMarkdownPage("/api/health")).toBe(false);
+  });
+
+  it("covers the issue #2299 pages AI engines most need clean text for", () => {
+    // /methodology (the score formula), /pricing, and the /compare/* pages
+    // linked from the /compare hub. /search stays excluded (noted in the
+    // ticket, deliberately out of scope).
+    expect(isPublicMarkdownPage("/methodology")).toBe(true);
+    expect(isPublicMarkdownPage("/pricing")).toBe(true);
+    expect(isPublicMarkdownPage("/compare/magicbrief")).toBe(true);
+    expect(isPublicMarkdownPage("/compare/meta-ad-library")).toBe(true);
+    expect(isPublicMarkdownPage("/compare/visualping-ad-libraries")).toBe(true);
+    expect(isPublicMarkdownPage("/compare/spyland")).toBe(true);
+    expect(isPublicMarkdownPage("/compare/pulzifi")).toBe(true);
+    expect(isPublicMarkdownPage("/compare/foreplay-spyder")).toBe(true);
+    expect(isPublicMarkdownPage("/compare/panoramata")).toBe(true);
+    expect(isPublicMarkdownPage("/compare/adspyder")).toBe(true);
+    expect(isPublicMarkdownPage("/compare/adspy")).toBe(true);
+    // The /compare hub deliberately does not link /compare/visualping or
+    // /compare/foreplay (they canonicalize to siblings, issue #1481), so they
+    // stay out of the markdown set.
+    expect(isPublicMarkdownPage("/compare/visualping")).toBe(false);
+    expect(isPublicMarkdownPage("/compare/foreplay")).toBe(false);
+    // /search stays excluded (noted in the ticket, deliberately out of scope).
+    expect(isPublicMarkdownPage("/search")).toBe(false);
+  });
+
+  it("serves a dedicated per-page markdown body for the issue #2299 pages", () => {
+    // The original ten pages keep the single PUBLIC_MARKDOWN body.
+    expect(publicMarkdownForPath("/")).toBe(PUBLIC_MARKDOWN);
+    expect(publicMarkdownForPath("/help")).toBe(PUBLIC_MARKDOWN);
+    expect(publicMarkdownForPath("/terms")).toBe(PUBLIC_MARKDOWN);
+
+    // /methodology is assembled from the aggression-score data.
+    const methodology = publicMarkdownForPath("/methodology");
+    expect(methodology).toContain("Ad Aggression Score methodology");
+    expect(methodology).toContain("Velocity");
+    expect(methodology).toContain("Testing");
+    expect(methodology).toContain("Freshness");
+    expect(methodology).toContain("Persistence");
+    expect(methodology).toContain("Evidence floor");
+    expect(methodology).toContain("14 days of observed history");
+    expect(methodology).not.toBe(PUBLIC_MARKDOWN);
+
+    // /pricing is assembled from the published pricing and plan data.
+    const pricing = publicMarkdownForPath("/pricing");
+    expect(pricing).toContain("Pricing");
+    expect(pricing).toContain("Scout");
+    expect(pricing).toContain("Starter");
+    expect(pricing).toContain("Agency");
+    expect(pricing).toContain("proof captures/month");
+    expect(pricing).toContain("Proof capture packs");
+    expect(pricing).not.toBe(PUBLIC_MARKDOWN);
+
+    // Each /compare/* page gets a body assembled from its source citations.
+    const comparePaths = [
+      "/compare/magicbrief",
+      "/compare/meta-ad-library",
+      "/compare/visualping-ad-libraries",
+      "/compare/spyland",
+      "/compare/pulzifi",
+      "/compare/foreplay-spyder",
+      "/compare/panoramata",
+      "/compare/adspyder",
+      "/compare/adspy",
+    ];
+    for (const path of comparePaths) {
+      const body = publicMarkdownForPath(path);
+      expect(body, path).toContain("Five to Nine vs");
+      expect(body, path).toContain("## Sources");
+      expect(body, path).toMatch(/\(https?:\/\//);
+      expect(body, path).not.toBe(PUBLIC_MARKDOWN);
+    }
   });
 
   it("detects clients asking for markdown", () => {
