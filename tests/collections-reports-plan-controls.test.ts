@@ -98,27 +98,25 @@ afterEach(() => {
 });
 
 describe("collection plan controls", () => {
-  it("lets Free create its first Collection instead of gating", async () => {
+  it("gates Free from creating Collections (barebones: limit 0)", async () => {
     const markup = await renderCollections("free", []);
 
-    // Honest 1-coll: Free includes exactly one Collection, so the empty
-    // Library shows the first-run create panel, not an upgrade wall.
-    expect(markup).not.toContain("f9-library-locked");
-    expect(markup).not.toContain("Collections start on Scout");
-    expect(markup).toContain('name="intent" value="create-collection"');
-    expect(markup).toContain("Start your first collection");
-    expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
+    // Barebones free: no Collections (limit 0). The empty Library shows the
+    // upgrade gate, not a create panel.
+    expect(markup).toContain("f9-library-locked");
+    expect(markup).toContain("Collections start on Scout");
+    expect(markup).not.toContain('name="intent" value="create-collection"');
+    expect(markup).not.toContain("Start your first collection");
   });
 
-  it("keeps a downgraded Free Collection visible and honestly reports the 1-Collection limit", async () => {
+  it("keeps a downgraded Free Collection visible and read-only", async () => {
     const markup = await renderCollections("free");
 
     expect(markup).toContain("Launch proof");
     expect(markup).toContain("Collection limit reached");
-    expect(markup).toContain("You are using all 1 Collection on this plan.");
+    expect(markup).toContain("Free keeps your existing collections read-only. New collections are included in paid plans.");
     expect(markup).not.toContain("New collections start on Scout");
     expect(markup).not.toContain("Free does not include new collections");
-    expect(markup).not.toContain("using all 0 collections");
     expect(markup).not.toContain('name="intent" value="create-collection"');
     expect(markup).toContain("View upgrade options");
   });

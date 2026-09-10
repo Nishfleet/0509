@@ -17,24 +17,26 @@ import {
 } from "~/lib/plan-entitlements";
 
 describe("plan entitlements catalog", () => {
-  it("gives free one watchlist, one Collection, and one evidence check on a weekly rhythm", () => {
+  it("gives free one watchlist, no Collections, and one evidence check on a first-only rhythm", () => {
     const entitlements = getPlanEntitlements("free");
     expect(getPlanLimit("free", "watchlists")).toBe(1);
-    // Honest 1-coll: the free tier includes exactly one Collection.
-    expect(getPlanLimit("free", "collections")).toBe(1);
-    // One included evidence check per month keeps the free weekly brief
-    // genuinely proof-backed at least once a month.
+    // Barebones free: no Collections (limit 0). Existing free workspaces keep
+    // what they have read-only; new ones cannot be created.
+    expect(getPlanLimit("free", "collections")).toBe(0);
+    // One included evidence check per month keeps the first brief
+    // genuinely proof-backed.
     expect(getIncludedEvidenceAllowance("free")).toBe(1);
     expect(entitlements.scheduledScanCadence).toBe("weekly");
     expect(entitlements.digestCadence).toBe("weekly");
-    expect(planAllowsDigestCadence("free", "weekly")).toBe(true);
+    // first_only: the activation scan files the one first brief, then no
+    // recurring digest is generated.
+    expect(entitlements.briefs).toBe("first_only");
+    expect(planAllowsDigestCadence("free", "weekly")).toBe(false);
     expect(planAllowsDigestCadence("free", "daily")).toBe(false);
-    // Free carries the weekly digest + its email lane plus read-only API/MCP
-    // access (BET 6); no exports, instant alerts, Slack, or write scopes.
+    // Meta-only sources; no exports, no API/MCP, no team.
+    expect(entitlements.sources).toEqual(["meta"]);
     expect([...entitlements.features].sort()).toEqual([
-      "api_access",
       "email_delivery",
-      "mcp_read_access",
       "weekly_digest",
     ]);
     // A Friday 00:00 UTC tick is a 6h-aligned slot for paid plans but must
@@ -72,6 +74,15 @@ describe("plan entitlements catalog", () => {
       expect(entitlements.features.size).toBeGreaterThan(0);
     },
   );
+
+  it("gives paid plans recurring briefs and every source", () => {
+    for (const plan of ["scout", "starter", "agency"] as const) {
+      const entitlements = getPlanEntitlements(plan);
+      expect(entitlements.briefs).toBe("recurring");
+      expect(entitlements.sources).toBe("all");
+      expect(planAllowsDigestCadence(plan, "weekly")).toBe(true);
+    }
+  });
 
   it("gives Starter daily and weekly digests", () => {
     expect(planAllowsDigestCadence("starter", "daily")).toBe(true);

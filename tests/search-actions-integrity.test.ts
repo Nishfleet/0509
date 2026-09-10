@@ -126,16 +126,13 @@ describe("search collection integrity", () => {
     expect(addAdToCollection).not.toHaveBeenCalled();
   });
 
-  it("rejects free-plan saves until their 1 Collection exists (no 500 on a missing board)", async () => {
+  it("rejects free-plan saves entirely (collections are paid)", async () => {
     const listAdsByIds = vi.fn().mockResolvedValue([canonicalAd]);
     const addAdToCollection = vi.fn().mockResolvedValue(undefined);
     const env = installMocks(
       listAdsByIds,
       addAdToCollection,
       vi.fn().mockResolvedValue("free"),
-      // Honest 1-coll: free with no Collection yet is guided to create it
-      // (the save targets an existing board and must not 500 on a missing id).
-      vi.fn().mockResolvedValue({ allowed: true, limit: 1, current: 0 }),
     );
     const { action } = await import("~/routes/search");
     const body = new FormData();
@@ -148,46 +145,16 @@ describe("search collection integrity", () => {
       request: new Request("https://0509.io/search", { method: "POST", body }),
     } as never);
 
+    // Barebones free: no Collections (limit 0). Existing free workspaces keep
+    // their collections read-only; saving new evidence into one is paid.
     expect(result).toEqual({
       ok: false,
       error: "plan_limit_exceeded",
-      message: "Free includes 1 Collection — create it in the Library, then save this ad.",
-      upgradePath: "/app/collections",
+      message: "Collections are included in paid plans — upgrade to save this ad.",
+      upgradePath: "/app/billing?source=search#plans",
     });
     expect(addAdToCollection).not.toHaveBeenCalled();
     expect(listAdsByIds).not.toHaveBeenCalled();
-  });
-
-  it("allows free-plan saves into the included Collection once it exists", async () => {
-    const listAdsByIds = vi.fn().mockResolvedValue([canonicalAd]);
-    const addAdToCollection = vi.fn().mockResolvedValue(undefined);
-    const env = installMocks(
-      listAdsByIds,
-      addAdToCollection,
-      vi.fn().mockResolvedValue("free"),
-      // The free board exists (1 of 1 used); saving INTO it is not blocked.
-      vi.fn().mockResolvedValue({ allowed: false, limit: 1, current: 1 }),
-    );
-    const { action } = await import("~/routes/search");
-    const body = new FormData();
-    body.set("intent", "save-to-collection");
-    body.set("collectionId", "collection-1");
-    body.set("adId", canonicalAd.metaAdId);
-
-    const result = await action({
-      context: { cloudflare: { env } },
-      request: new Request("https://0509.io/search", { method: "POST", body }),
-    } as never);
-
-    expect(result).toEqual({ ok: true, message: "Saved Nykaa to your collection." });
-    expect(addAdToCollection).toHaveBeenCalledWith(
-      env,
-      "user-1",
-      "collection-1",
-      canonicalAd,
-      null,
-      [],
-    );
   });
 
   it("fails closed with a retryable error when the plan lookup itself fails", async () => {

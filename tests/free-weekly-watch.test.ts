@@ -348,7 +348,7 @@ describe("free weekly digest email", () => {
     expect(payload.html).toContain("Top moves");
     expect(payload.text).toContain("Top moves:");
     // The tasteful upgrade line, fact-checked against the Scout entitlements.
-    expect(payload.html).toContain("instant first scan");
+    expect(payload.html).toContain("one first check");
     expect(payload.html).toContain("Scout checks every 6 hours");
     expect(payload.html).toContain("/#pricing");
     expect(payload.text).toContain(freeWeeklyDigestUpgradeNote());
