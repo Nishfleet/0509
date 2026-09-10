@@ -312,7 +312,18 @@ export interface SignupFirstBriefPayload {
 export type SignupFirstBriefLoaderData =
   | { step: "first-brief"; status: "waiting"; watchlistName: string | null }
   | { step: "first-brief"; status: "no_ads"; watchlistName: string | null }
-  | { step: "first-brief"; status: "ready"; brief: SignupFirstBriefPayload };
+  | {
+      step: "first-brief";
+      status: "ready";
+      brief: SignupFirstBriefPayload;
+      /**
+       * Issue #2407: true only when the `activation-result:<userId>:<watchlistId>`
+       * `delivery_attempt` row reached status `sent`. The dispatch is swallowed
+       * inside the scan path, so the ready state must read the attempt row
+       * before it claims the email was sent.
+       */
+      activationEmailSent: boolean;
+    };
 
 /**
  * Assemble the inline first-brief payload from a filed first-brief digest and
