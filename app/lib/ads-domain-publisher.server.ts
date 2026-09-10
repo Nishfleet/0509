@@ -44,6 +44,7 @@ import {
   resolveCommercialDiscoveryProvider,
   searchAdsViaSourceResolver,
 } from "~/lib/ad-source.server";
+import { execute, queryOne } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
 import { normalizeSearchFilters } from "~/lib/normalize";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
@@ -71,10 +72,13 @@ export interface SeedList {
 
 /**
  * The registry: every bundled data/seed-lists/<cluster>.json list. The
- * nightly publisher run processes the first registered list (see
- * runAdsDomainPublisher), so the active cohort leads: festive-india-2026
- * (issue #2140) runs inside the existing warmup cron under
- * ADS_DOMAIN_PUBLISHER_CAP_DEFAULT (30 domains ≤ the 60 cap).
+ * nightly publisher run processes ALL registered lists as one flattened
+ * queue (see runAdsDomainPublisher), resuming from a persisted cursor so
+ * tail domains are not silently skipped when the run is truncated by its
+ * wall-clock deadline. festive-india-2026 (issue #2140, 30 domains) and
+ * sneaker-resale (25 domains) together sit under ADS_DOMAIN_PUBLISHER_CAP
+ * (default 60), so a full uninterrupted pass covers the whole cohort in one
+ * night; a deadline-truncated pass resumes the remainder the next night.
  */
 export const SEED_LISTS: Readonly<Record<string, SeedList>> = Object.freeze({
   "festive-india-2026": festiveIndia2026SeedList as SeedList,
@@ -83,6 +87,73 @@ export const SEED_LISTS: Readonly<Record<string, SeedList>> = Object.freeze({
 
 /** Default per-run domain ceiling; override with ADS_DOMAIN_PUBLISHER_CAP. */
 export const ADS_DOMAIN_PUBLISHER_CAP_DEFAULT = 60;
+
+/**
+ * Internal wall-clock deadline for one nightly run. Cloudflare kills scheduled
+ * invocations at the 15-minute wall limit, and the publisher rides the 04:00
+ * cron as one of four concurrent waitUntil siblings. A wall-clock kill is not a
+ * rejection, so reportScheduledTaskFailure never fires and the next night used
+ * to restart at domain #1 — tail domains silently never published. The
+ * publisher now stops starting new per-domain scrapes at this budget,
+ * checkpoints the cursor after every completed domain, and emits
+ * ads_domain_publisher_run with truncated:true so the next night resumes from
+ * there instead of restarting.
+ */
+export const ADS_DOMAIN_PUBLISHER_DEADLINE_MS = 10 * 60 * 1000;
+
+/** Singleton D1 row holding the all-lists resume cursor (id is fixed at 1). */
+const PUBLISHER_STATE_TABLE = "ads_domain_publisher_state";
+
+/** The persisted resume cursor: where the next nightly run should start. */
+export interface AdsDomainPublisherCursor {
+  list: string;
+  offset: number;
+}
+
+/**
+ * Load the all-lists resume cursor from D1. The seed row from migration 0092
+ * guarantees a value, and a genuinely missing row still reads as "start of
+ * the queue" rather than throwing. A D1 error (including a table that does
+ * not exist because 0092 has not been applied) propagates on purpose: it
+ * rejects the whole run, so it surfaces through reportScheduledTaskFailure
+ * instead of silently publishing nothing.
+ */
+export async function loadAdsDomainPublisherCursor(
+  env: AppEnv,
+): Promise<AdsDomainPublisherCursor> {
+  const row = await queryOne<{ last_list: string; last_offset: number }>(
+    env,
+    `SELECT last_list, last_offset FROM ${PUBLISHER_STATE_TABLE} WHERE id = 1 LIMIT 1`,
+  );
+  return {
+    list: row?.last_list ?? "",
+    offset: Number.isFinite(row?.last_offset) ? Math.max(0, row!.last_offset) : 0,
+  };
+}
+
+/**
+ * Persist the all-lists resume cursor. `list` is the human-readable list name
+ * at `offset` (the index into the flattened work queue where the next run
+ * starts). Upserted against the singleton row.
+ */
+export async function saveAdsDomainPublisherCursor(
+  env: AppEnv,
+  list: string,
+  offset: number,
+): Promise<void> {
+  await execute(
+    env,
+    `INSERT INTO ${PUBLISHER_STATE_TABLE} (id, last_list, last_offset, updated_at)
+     VALUES (1, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       last_list = excluded.last_list,
+       last_offset = excluded.last_offset,
+       updated_at = excluded.updated_at`,
+    list,
+    Math.max(0, Math.floor(offset)),
+    new Date().toISOString(),
+  );
+}
 
 /**
  * The publish floor: at least one verified OR likely ad. A domain whose only
@@ -205,6 +276,13 @@ export interface AdsDomainPublisherRunSummary {
   warming: number;
   failed: number;
   invalid: number;
+  /**
+   * true when the internal wall-clock deadline stopped the run before the
+   * queue was covered. The cursor is persisted at the stop point so the next
+   * nightly run resumes there instead of restarting at domain #1. false on a
+   * full pass (cap reached or queue exhausted) and on every gate abort.
+   */
+  truncated: boolean;
   outcomes: AdsDomainPublisherDomainOutcome[];
 }
 
@@ -220,27 +298,36 @@ function emitPublisherEvent(
 }
 
 /**
- * Run the publisher for one seed list. BET 2 gate first; then per domain:
- * search-v2 exact pipeline for country "all" via the real resolver (which
- * persists the public_search discovery-cache row on success — that row IS the
- * published /ads/:domain page and its sitemap entry), classify the tier
- * verdict, and emit the ads_domain_* observability events. A single-domain
- * failure is logged and counted, never thrown: one flaky provider call must
- * not stop the whole nightly run (the run summary surfaces it).
+ * Run the publisher. BET 2 gate first; then per domain: search-v2 exact
+ * pipeline for country "all" via the real resolver (which persists the
+ * public_search discovery-cache row on success — that row IS the published
+ * /ads/:domain page and its sitemap entry), classify the tier verdict, and
+ * emit the ads_domain_* observability events. A single-domain failure is
+ * logged and counted, never thrown: one flaky provider call must not stop the
+ * whole nightly run (the run summary surfaces it).
+ *
+ * Two modes:
+ *   - Targeted (options.list set): process that one list from the start, no
+ *     cursor. Used by tests and manual triggers.
+ *   - Nightly all-lists (no options.list): iterate ALL SEED_LISTS as one
+ *     flattened queue, resume from the persisted last_offset cursor, stop
+ *     starting new scrapes at the internal deadline, and persist where the
+ *     run stopped so the next night continues instead of restarting at
+ *     domain #1. Emits ads_domain_publisher_run with truncated:true when the
+ *     deadline bites before the queue is covered.
  */
 export async function runAdsDomainPublisher(
   env: AppEnv,
   ctx?: Pick<ExecutionContext, "waitUntil"> | null,
-  options: { list?: string; cap?: number } = {},
+  options: { list?: string; cap?: number; deadlineAt?: number } = {},
 ): Promise<AdsDomainPublisherRunSummary> {
-  const activeLists = options.list?.trim()
-    ? [options.list.trim()]
-    : Object.keys(SEED_LISTS);
-  const firstList = activeLists[0] ?? null;
+  const requestedList = options.list?.trim() || null;
+  const listNames = requestedList ? [requestedList] : Object.keys(SEED_LISTS);
+  const representativeList = requestedList ?? listNames[0] ?? "(none)";
 
-  if (!firstList || !resolveSeedList(firstList)) {
+  if (requestedList && !resolveSeedList(requestedList)) {
     return {
-      list: options.list?.trim() ?? "(none)",
+      list: requestedList,
       gate: "bet2_active",
       attempted: 0,
       published: 0,
@@ -248,6 +335,7 @@ export async function runAdsDomainPublisher(
       warming: 0,
       failed: 0,
       invalid: 0,
+      truncated: false,
       outcomes: [],
     };
   }
@@ -257,12 +345,12 @@ export async function runAdsDomainPublisher(
   if (!shouldApplySearchV2(env)) {
     emitPublisherEvent({
       metric: "ads_domain_publisher_run",
-      list: firstList,
+      list: representativeList,
       gate: "bet2_inactive",
       note: "SEARCH_ROLLOUT_MODE is not v2; three-tier search is not active. Skipped.",
     });
     return {
-      list: firstList,
+      list: representativeList,
       gate: "bet2_inactive",
       attempted: 0,
       published: 0,
@@ -270,6 +358,7 @@ export async function runAdsDomainPublisher(
       warming: 0,
       failed: 0,
       invalid: 0,
+      truncated: false,
       outcomes: [],
     };
   }
@@ -278,13 +367,13 @@ export async function runAdsDomainPublisher(
   if (provider === "demo" || !env.DB) {
     emitPublisherEvent({
       metric: "ads_domain_publisher_run",
-      list: firstList,
+      list: representativeList,
       gate: "no_provider",
       provider,
       note: "No commercial discovery provider / D1; a publish would have nothing real to render.",
     });
     return {
-      list: firstList,
+      list: representativeList,
       gate: "no_provider",
       attempted: 0,
       published: 0,
@@ -292,6 +381,7 @@ export async function runAdsDomainPublisher(
       warming: 0,
       failed: 0,
       invalid: 0,
+      truncated: false,
       outcomes: [],
     };
   }
@@ -300,8 +390,20 @@ export async function runAdsDomainPublisher(
     ? Math.max(1, Math.floor(options.cap ?? 0))
     : Math.max(1, Math.floor(Number(env.ADS_DOMAIN_PUBLISHER_CAP) || ADS_DOMAIN_PUBLISHER_CAP_DEFAULT));
 
+  const deadlineAt = options.deadlineAt ?? Date.now() + ADS_DOMAIN_PUBLISHER_DEADLINE_MS;
+
+  const queue = buildPublisherWorkQueue(listNames);
+
+  // Nightly all-lists run: resume from the persisted cursor. A cursor past the
+  // current queue length (lists shrank) wraps to the start.
+  let startOffset = 0;
+  if (!requestedList) {
+    const cursor = await loadAdsDomainPublisherCursor(env);
+    startOffset = cursor.offset > 0 && cursor.offset < queue.length ? cursor.offset : 0;
+  }
+
   const summary: AdsDomainPublisherRunSummary = {
-    list: firstList,
+    list: queue[startOffset]?.list ?? representativeList,
     gate: "bet2_active",
     attempted: 0,
     published: 0,
@@ -309,17 +411,31 @@ export async function runAdsDomainPublisher(
     warming: 0,
     failed: 0,
     invalid: 0,
+    truncated: false,
     outcomes: [],
   };
 
-  for (const entry of firstListDomains(firstList)) {
-    if (summary.attempted >= cap) {
+  let nextOffset = startOffset;
+  // A checkpoint write failure is reported once, then further checkpoints are
+  // skipped for this run: the publishes already attempted still stand, and a
+  // per-domain event per remaining domain would bury the signal in noise.
+  let cursorCheckpointFailed = false;
+  for (let i = startOffset; i < queue.length && summary.attempted < cap; i++) {
+    // Stop STARTING new per-domain scrapes before the wall-clock deadline so a
+    // runtime kill never silently swallows the run: the cursor was already
+    // checkpointed at nextOffset and the run emits truncated:true.
+    if (Date.now() >= deadlineAt) {
+      summary.truncated = true;
       break;
     }
     summary.attempted += 1;
+    // Where the NEXT run starts once this domain is done. Passing the end of
+    // the queue wraps to 0, so the cursor is always a valid queue index.
+    nextOffset = i + 1 >= queue.length ? 0 : i + 1;
+    const item = queue[i];
 
     try {
-      const outcome = await publishSeedListDomain(env, entry.domain, ctx, provider, firstList);
+      const outcome = await publishSeedListDomain(env, item.domain, ctx, provider, item.list);
       summary.outcomes.push(outcome);
       if (outcome.verdict === "publish") {
         summary.published += 1;
@@ -335,23 +451,48 @@ export async function runAdsDomainPublisher(
     } catch (error) {
       summary.failed += 1;
       summary.outcomes.push({
-        domain: entry.domain,
+        domain: item.domain,
         verdict: "failed",
         reason: error instanceof Error ? error.message : "Unknown publisher error.",
       });
       emitPublisherEvent({
         metric: "ads_domain_failed",
-        list: firstList,
-        domain: entry.domain,
+        list: item.list,
+        domain: item.domain,
         errorName: error instanceof Error ? error.name : typeof error,
         message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Checkpoint AFTER the domain finishes, for the nightly all-lists run
+    // only. The deadline above bounds the intended run, but an isolate can
+    // still be killed outright: without this the run would persist nothing
+    // and the next night would restart at the previous good offset, which is
+    // the tail starvation this issue exists to fix. The last commit always
+    // points AT the domain in flight, never past it, so a kill loses at most
+    // one domain's worth of progress. A zero-attempt deadline abort never
+    // reaches here, so it leaves the cursor alone and the next night retries
+    // the same spot instead of skipping it.
+    if (requestedList || cursorCheckpointFailed) {
+      continue;
+    }
+    try {
+      await saveAdsDomainPublisherCursor(env, queue[nextOffset]?.list ?? "", nextOffset);
+    } catch (error) {
+      cursorCheckpointFailed = true;
+      emitPublisherEvent({
+        metric: "ads_domain_failed",
+        list: representativeList,
+        domain: "(cursor)",
+        errorName: error instanceof Error ? error.name : typeof error,
+        message: `cursor persist failed: ${error instanceof Error ? error.message : String(error)}`,
       });
     }
   }
 
   emitPublisherEvent({
     metric: "ads_domain_publisher_run",
-    list: firstList,
+    list: summary.list,
     gate: "bet2_active",
     attempted: summary.attempted,
     published: summary.published,
@@ -359,9 +500,29 @@ export async function runAdsDomainPublisher(
     warming: summary.warming,
     failed: summary.failed,
     invalid: summary.invalid,
+    truncated: summary.truncated,
+    ...(requestedList ? {} : { nextOffset }),
   });
 
   return summary;
+}
+
+/**
+ * Flatten the given seed lists into one ordered work queue of (list, domain)
+ * items. List order follows `Object.keys(SEED_LISTS)`; domain order follows
+ * each list's `domains` array. Invalid lists are skipped (firstListDomains
+ * emits the validation-failure event). The cursor indexes into this queue.
+ */
+function buildPublisherWorkQueue(
+  listNames: readonly string[],
+): { list: string; domain: string }[] {
+  const queue: { list: string; domain: string }[] = [];
+  for (const listName of listNames) {
+    for (const entry of firstListDomains(listName)) {
+      queue.push({ list: listName, domain: entry.domain });
+    }
+  }
+  return queue;
 }
 
 function firstListDomains(
