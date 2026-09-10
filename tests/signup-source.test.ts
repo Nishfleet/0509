@@ -356,3 +356,106 @@ describe("AuthForm hidden signupSource", () => {
     expect(markup).not.toContain("utm_");
   });
 });
+
+describe("compare/switch/locale route signup CTA attribution (issue #2109)", () => {
+  // Every public SEO page's signup CTA must carry an allowlisted `source=`
+  // marker so funnel measurement can attribute the signup start to the page
+  // that drove it. The shared header "Sign up" pill (class `ld-nav-pill`) is a
+  // global nav element, not a page-specific CTA, so it is excluded here; any
+  // page-specific signup link that drops its marker fails this test before it
+  // can ship an unattributed CTA.
+  const ROUTES = [
+    // compare routes
+    "compare",
+    "compare.adspyder",
+    "compare.foreplay-spyder",
+    "compare.foreplay",
+    "compare.magicbrief",
+    "compare.meta-ad-library",
+    "compare.panoramata",
+    "compare.pulzifi",
+    "compare.spyland",
+    "compare.visualping-ad-libraries",
+    "compare.visualping",
+    // switch routes
+    "switch.magicbrief",
+    "switch.panoramata",
+    "switch.visualping",
+    // locale compare/switch re-exports
+    "$locale.compare",
+    "$locale.compare.adspyder",
+    "$locale.compare.foreplay-spyder",
+    "$locale.compare.foreplay",
+    "$locale.compare.magicbrief",
+    "$locale.compare.meta-ad-library",
+    "$locale.compare.panoramata",
+    "$locale.compare.pulzifi",
+    "$locale.compare.spyland",
+    "$locale.compare.visualping-ad-libraries",
+    "$locale.compare.visualping",
+    "$locale.switch.magicbrief",
+    "$locale.switch.panoramata",
+    "$locale.switch.visualping",
+    // locale routes that render a page-specific signup CTA
+    "$locale.sneaker-resale",
+    "$locale.pricing",
+    // locale routes that render cleanly (only the shared header pill)
+    "$locale.help",
+    "$locale.docs",
+    "$locale.status",
+    "$locale.capture-rules",
+    "$locale.changelog",
+    "$locale.trust",
+    "$locale.api.docs",
+  ] as const;
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+      return {
+        ...actual,
+        Link: ({ children, to, ...props }: { children?: ReactNode; to?: string } & Record<string, unknown>) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        Form: ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) =>
+          React.createElement("form", props, children),
+        useRouteLoaderData: () => ({ session: null, pricingPlans: [], usageBundles: [] }),
+        useLoaderData: () => ({
+          locale: "de",
+          timelineDomains: [],
+          pricingPreview: { available: false },
+        }),
+      };
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it("every compare/switch/locale route's signup links carry an allowlisted marker", async () => {
+    for (const route of ROUTES) {
+      const { default: Route } = await import(`~/routes/${route}`);
+      const markup = renderToStaticMarkup(createElement(Route));
+
+      // The shared header pill is a global nav element, not a page-specific
+      // CTA; strip it so the assertion targets the page's own signup links.
+      const pageMarkup = markup.replace(/<a[^>]*class="[^"]*ld-nav-pill[^"]*"[^>]*>[\s\S]*?<\/a>/g, "");
+      const signupHrefs = pageMarkup.match(/href="([^"]*\/auth\/signup[^"]*)"/g) ?? [];
+
+      // A route may legitimately have no page-specific signup CTA (e.g. a
+      // compare page whose only CTA is the free search preview). The rule is:
+      // every signup link that IS present must carry an allowlisted marker.
+      for (const href of signupHrefs) {
+        const url = href.slice("href=\"".length, -1);
+        const source = new URL(url, "https://0509.io").searchParams.get("source");
+        expect(
+          allowlistedSignupSource(source),
+          `/${route} signup link ${url} must carry an allowlisted source= marker`,
+        ).not.toBeNull();
+      }
+    }
+  }, 60_000);
+});
