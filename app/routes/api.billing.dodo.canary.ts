@@ -1,3 +1,4 @@
+import { hasValidCanaryToken } from "~/lib/canary-token.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { buildBillingCanaryLockId } from "~/lib/billing-canary-lock";
@@ -74,15 +75,6 @@ export function loader(_args: LoaderFunctionArgs) {
   );
 }
 
-function hasValidCanaryToken(request: Request, token: string | undefined) {
-  const configured = token?.trim();
-  if (!configured) {
-    return false;
-  }
-
-  return request.headers.get("x-0509-canary-token") === configured;
-}
-
 function hasCanonicalCanaryOrigin(request: Request) {
   try {
     const url = new URL(request.url);
@@ -104,7 +96,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
 
-  if (!hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN)) {
+  if (!hasValidCanaryToken(env, request)) {
     throw new Response("Not found", { status: 404 });
   }
 

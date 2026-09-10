@@ -145,6 +145,7 @@ import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import { resolveSearchBrandPageDomain } from "~/lib/ads-internal-links";
 import { switchPageForDomain } from "~/lib/switch-pages";
 import { localeSearchPathname } from "~/lib/locale-markets";
+import { hasValidCanaryToken } from "~/lib/canary-token.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-suggested-loader.server";
 import type { CompetitorHandoffCandidate } from "~/lib/competitor-handoff.server";
@@ -3258,16 +3259,15 @@ function SearchQueryFields({ params }: { params: URLSearchParams }) {
 }
 
 function canUseCanaryFreshLiveBypass(
-  env: { CANARY_BYPASS_TOKEN?: string },
+  env: AppEnv,
   request: Request,
   url: URL,
 ) {
-  const configuredToken = env.CANARY_BYPASS_TOKEN?.trim();
-  if (!configuredToken || url.searchParams.get("fresh") !== "live") {
+  if (url.searchParams.get("fresh") !== "live") {
     return false;
   }
 
-  return request.headers.get("x-0509-canary-token") === configuredToken;
+  return hasValidCanaryToken(env, request);
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {

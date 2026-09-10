@@ -9,7 +9,8 @@ import {
   type BillingSkuSlug,
 } from "~/lib/billing-sku-catalog";
 import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
-import { countryFromRequest, hasValidCanaryToken } from "~/lib/dodo-pricing-country.server";
+import { hasValidCanaryToken } from "~/lib/canary-token.server";
+import { countryFromRequest } from "~/lib/dodo-pricing-country.server";
 import {
   dodoPreviewProductIssue,
   normalizeDodoPlanPricePreview,

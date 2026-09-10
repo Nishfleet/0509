@@ -1,3 +1,4 @@
+import { hasValidCanaryToken } from "~/lib/canary-token.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -7,12 +8,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const versionBoundCanary = request.headers.has("x-0509-expected-worker-version");
   if (versionBoundCanary) {
-    const configured = env.CANARY_BYPASS_TOKEN?.trim();
-    const token = request.headers.get("x-0509-canary-token");
     const { verifyExpectedCanaryWorkerVersion } = await import(
       "~/lib/canary-release-identity.server"
     );
-    if (!configured || token !== configured || !verifyExpectedCanaryWorkerVersion(request, env).ok) {
+    if (!hasValidCanaryToken(env, request) || !verifyExpectedCanaryWorkerVersion(request, env).ok) {
       return Response.json(
         { available: false, reason: "worker_version_mismatch" },
         { status: 409, headers: { "Cache-Control": "no-store" } },

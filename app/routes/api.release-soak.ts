@@ -1,9 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 
-import {
-  readReleaseIdentity,
-  verifyExpectedCanaryWorkerVersion,
-} from "~/lib/canary-release-identity.server";
+import { readReleaseIdentity, verifyExpectedCanaryWorkerVersion } from "~/lib/canary-release-identity.server";
+import { hasValidCanaryToken } from "~/lib/canary-token.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
   RELEASE_SCHEDULE_CRONS,
@@ -67,11 +65,6 @@ type DigestJobSlo = {
   unresolvedDeliveryAttempts: number;
   maxCompletionMs: number;
 };
-
-function hasValidToken(request: Request, token: string | undefined) {
-  const configured = token?.trim();
-  return Boolean(configured && request.headers.get("x-0509-canary-token") === configured);
-}
 
 function hasCanonicalOrigin(request: Request) {
   try {
@@ -394,7 +387,7 @@ async function loadObservations(env: AppEnv, workerVersionId: string, startedAt:
 export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
-  if (!hasValidToken(request, env.CANARY_BYPASS_TOKEN) || !hasCanonicalOrigin(request)) {
+  if (!hasValidCanaryToken(env, request) || !hasCanonicalOrigin(request)) {
     throw new Response("Not found", { status: 404 });
   }
   if (request.method !== "POST") {

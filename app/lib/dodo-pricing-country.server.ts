@@ -1,3 +1,4 @@
+import { hasValidCanaryToken } from "~/lib/canary-token.server";
 import type { AppEnv } from "~/lib/env.server";
 
 export function countryFromRequest(
@@ -19,11 +20,6 @@ export function countryFromRequest(
   ).toUpperCase();
   const country = cloudflareCountry || headerCountry;
   return normalizeCountry(country);
-}
-
-export function hasValidCanaryToken(env: AppEnv, request: Request) {
-  const token = env.CANARY_BYPASS_TOKEN?.trim();
-  return Boolean(token && request.headers.get("x-0509-canary-token") === token);
 }
 
 function canaryCountryOverride(env: AppEnv, request: Request) {
