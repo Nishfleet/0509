@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { publicSocialCardForRequest, parseSocialCardPathname } from "~/lib/social-cards.server";
 import {
   adsSocialCardUrl,
+  brandCategorySocialCardUrl,
   canonicalUrl,
   clusterSocialCardUrl,
   compareSocialCardUrl,
@@ -111,6 +112,15 @@ describe("social card URL builders", () => {
     );
   });
 
+  it("brandCategorySocialCardUrl builds the per-category landing-page card path", () => {
+    expect(brandCategorySocialCardUrl("sport-footwear")).toBe(
+      canonicalUrl("/social-card/brand/sport-footwear.svg"),
+    );
+    expect(brandCategorySocialCardUrl("beauty-personal-care")).toBe(
+      canonicalUrl("/social-card/brand/beauty-personal-care.svg"),
+    );
+  });
+
   it("timelineSocialCardUrl encodes the brand name on the timeline card path", () => {
     const url = timelineSocialCardUrl("nike.com", "Nike");
     expect(url).toContain("/social-card/timeline/nike.com.png?");
@@ -148,6 +158,10 @@ describe("parseSocialCardPathname", () => {
     expect(parseSocialCardPathname("/social-card/sneaker-resale.svg")).toEqual({
       kind: "cluster",
       slug: "sneaker-resale",
+    });
+    expect(parseSocialCardPathname("/social-card/brand/sport-footwear.svg")).toEqual({
+      kind: "brand",
+      slug: "sport-footwear",
     });
   });
 
@@ -221,6 +235,32 @@ describe("publicSocialCardForRequest", () => {
       new Request("https://0509.io/social-card/competitor-monitoring.svg"),
     );
     expect(comp?.body).toContain("Competitor monitoring");
+  });
+
+  it("renders a brand category card with the curated label and static cache control", () => {
+    const res = publicSocialCardForRequest(
+      new Request("https://0509.io/social-card/brand/sport-footwear.svg"),
+    );
+    expect(res?.kind).toBe("brand");
+    expect(res?.contentType).toBe("image/svg+xml; charset=utf-8");
+    expect(res?.body).toContain("Sport &amp; footwear Meta ads");
+    expect(res?.body).toContain("Competitor Meta ad libraries");
+    expect(res?.body).toContain("Five to Nine");
+    // Static card (no brand query params) — same branch as the cluster cards.
+    expect(res?.cacheControl).toBe("public, max-age=86400");
+  });
+
+  it("returns null for an unknown or More-brands brand slug (no page exists)", () => {
+    expect(
+      publicSocialCardForRequest(
+        new Request("https://0509.io/social-card/brand/unknown.svg"),
+      ),
+    ).toBeNull();
+    expect(
+      publicSocialCardForRequest(
+        new Request("https://0509.io/social-card/brand/more-brands.svg"),
+      ),
+    ).toBeNull();
   });
 
   it("returns null for an unknown compare slug", () => {
