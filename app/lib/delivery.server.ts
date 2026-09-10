@@ -3616,6 +3616,10 @@ function renderEventDiffHtml(
   // side-by-side. URLs come from `proofScreenshotAbsoluteUrl` (HTTPS
   // validated by the producer), so the email `<img>` is safe to render
   // without further sanitization beyond `escapeHtml`.
+  // BL-022: the screenshot pair carries the same capture timestamps as the
+  // text rows below — sourced from the stored capture/scan record, never
+  // email-build time, so the "when was this true?" question is answerable
+  // on the visual diff too.
   const screenshotRow = screenshotPair
     ? `<tr>
           <td colspan="2" style="padding: 0 0 12px 0;">
@@ -3624,10 +3628,12 @@ function renderEventDiffHtml(
                 <td style="padding: 0 8px 0 0; vertical-align: top; width: 50%;">
                   <p style="margin: 0 0 4px; font-family: ${EMAIL_MONO_FONT}; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">Before</p>
                   <img src="${escapeHtml(screenshotPair.beforeUrl)}" alt="Before the change" width="280" style="display: block; max-width: 100%; width: 100%; border-radius: 0; border: 1px solid ${EMAIL_CASE_LINE}; background-color: ${EMAIL_CASE_CARD};">
+                  <small style="font-family: ${EMAIL_MONO_FONT}; color: ${EMAIL_CASE_INK_FAINT};">Captured ${escapeHtml(formatEventCaptureTime(captures.beforeCapturedAt))}</small>
                 </td>
                 <td style="padding: 0; vertical-align: top; width: 50%;">
                   <p style="margin: 0 0 4px; font-family: ${EMAIL_MONO_FONT}; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">Now</p>
                   <img src="${escapeHtml(screenshotPair.afterUrl)}" alt="After the change" width="280" style="display: block; max-width: 100%; width: 100%; border-radius: 0; border: 1px solid ${EMAIL_CASE_LINE}; background-color: ${EMAIL_CASE_CARD};">
+                  <small style="font-family: ${EMAIL_MONO_FONT}; color: ${EMAIL_CASE_INK_FAINT};">Captured ${escapeHtml(formatEventCaptureTime(captures.nowCapturedAt))}</small>
                 </td>
               </tr>
             </table>

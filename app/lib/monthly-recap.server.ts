@@ -72,7 +72,9 @@ export function monthBoundsUtc(monthKey: string): { start: string; end: string }
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: string }) {
+export function buildMonthlyRecapEmail(
+  input: MonthlyRecapStats & { billingUrl: string; evidenceUrl: string },
+) {
   const monthLabel = formatMonthLabel(input.monthKey);
   const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
 

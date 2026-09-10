@@ -1034,7 +1034,7 @@ function renderTopMoveHtml(
     ? intelligence.priorityBand
     : `${intelligence.priorityBand} · ${intelligence.priorityScore}/100`;
   const metricLines = readMetricBandLines(item.metadata);
-  const creativeHtml = renderCreativeThumbnailHtml(item.metadata);
+  const creativeHtml = renderCreativeThumbnailHtml(item.metadata, timeZone);
   const landingEvidenceHtml = renderLandingPageEvidenceHtml(item, timeZone);
   // WP-24: top-move links land on the watchlist event row when ids exist.
   // W2-C: derive the deep-link origin from the env-built fullDigestUrl (same
@@ -1202,7 +1202,7 @@ function renderTopMoveText(
   const creativeNote =
     landingEvidenceLines.length > 0
       ? null
-      : creativeThumbnailTextNote(item.metadata);
+      : creativeThumbnailTextNote(item.metadata, timeZone);
   const reviewUrl =
     digestItemDeepLink(item, originFromDigestUrl(fullDigestUrl)) ?? fullDigestUrl;
   const heading = options.omitWatchlistPrefix ? title : `${watchlistName}: ${title}`;
@@ -1372,7 +1372,10 @@ function renderTrendSectionText(lines: Array<{ text: string }>) {
   return ["", "Trends this period:", ...lines.map((line) => `- ${line.text}`)];
 }
 
-function renderCreativeThumbnailHtml(metadata: Record<string, unknown> | undefined) {
+function renderCreativeThumbnailHtml(
+  metadata: Record<string, unknown> | undefined,
+  timeZone: string | null | undefined,
+) {
   const beforeUrl = safeHttpsImageUrl(metadata?.beforeCreativeImageUrl);
   const afterUrl =
     safeHttpsImageUrl(metadata?.afterCreativeImageUrl) ??
@@ -1380,6 +1383,20 @@ function renderCreativeThumbnailHtml(metadata: Record<string, unknown> | undefin
   const singleUrl = safeHttpsImageUrl(metadata?.creativeImageUrl);
 
   if (beforeUrl && afterUrl) {
+    // BL-022: capture timestamps come from the existing capture/scan record
+    // (metadata.beforeCapturedAt / metadata.capturedAt), never email-build
+    // time — a send-time stamp is a false "when was this true" claim. Omit
+    // the line when the stored record is missing rather than fabricating one.
+    const beforeCapturedAt = readString(metadata?.beforeCapturedAt);
+    const capturedAt = readString(metadata?.capturedAt);
+    const beforeStamp =
+      beforeCapturedAt !== null ? formatDateTime(beforeCapturedAt, timeZone) : null;
+    const nowStamp =
+      capturedAt !== null ? formatDateTime(capturedAt, timeZone) : null;
+    const stampLine =
+      beforeStamp !== null || nowStamp !== null
+        ? `<p style="margin: 4px 0 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">Before: ${escapeHtml(beforeStamp ?? "capture time unavailable")} · Now: ${escapeHtml(nowStamp ?? "capture time unavailable")}</p>`
+        : "";
     return `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 10px; background-color: ${EMAIL_CASE_BONE};">
         <tr>
@@ -1393,6 +1410,7 @@ function renderCreativeThumbnailHtml(metadata: Record<string, unknown> | undefin
           </td>
         </tr>
       </table>
+      ${stampLine}
     `;
   }
 
@@ -1411,7 +1429,10 @@ function renderCreativeThumbnailHtml(metadata: Record<string, unknown> | undefin
   `;
 }
 
-function creativeThumbnailTextNote(metadata: Record<string, unknown> | undefined) {
+function creativeThumbnailTextNote(
+  metadata: Record<string, unknown> | undefined,
+  timeZone: string | null | undefined,
+) {
   const beforeUrl = safeHttpsImageUrl(metadata?.beforeCreativeImageUrl);
   const afterUrl =
     safeHttpsImageUrl(metadata?.afterCreativeImageUrl) ??
@@ -1419,6 +1440,16 @@ function creativeThumbnailTextNote(metadata: Record<string, unknown> | undefined
   const singleUrl = safeHttpsImageUrl(metadata?.creativeImageUrl);
 
   if (beforeUrl && afterUrl) {
+    // BL-022: text parity with the HTML pair — capture timestamps from the
+    // stored capture/scan record, never send time. Omit the line entirely
+    // when the record is missing rather than stamping "now".
+    const beforeStamp = readString(metadata?.beforeCapturedAt);
+    const nowStamp = readString(metadata?.capturedAt);
+    if (beforeStamp !== null || nowStamp !== null) {
+      const beforeLabel = beforeStamp !== null ? formatDateTime(beforeStamp, timeZone) : "capture time unavailable";
+      const nowLabel = nowStamp !== null ? formatDateTime(nowStamp, timeZone) : "capture time unavailable";
+      return `Creative: before/after thumbnails attached in the HTML email. Before: ${beforeLabel} · Now: ${nowLabel}`;
+    }
     return "Creative: before/after thumbnails attached in the HTML email.";
   }
   if (singleUrl) {
