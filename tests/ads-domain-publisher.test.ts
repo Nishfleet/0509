@@ -251,3 +251,229 @@ describe("publishSeedListDomain warming verdict (issue #2210)", () => {
     expect(summary.outcomes[0].reason).toContain("warming");
   });
 });
+
+/**
+ * Issue #2361: the nightly all-lists run iterates ALL SEED_LISTS as one
+ * flattened queue, stops starting new scrapes at a ~10-minute internal
+ * deadline, persists a last_offset cursor so the next night resumes where
+ * this one stopped, and emits ads_domain_publisher_run with truncated:true
+ * when the deadline bites. These cover the deadline/cursor logic against an
+ * in-memory D1 cursor; the real migration read/write path is covered by
+ * tests/integration/ads-domain-publisher-cursor.integration.test.ts.
+ */
+describe("runAdsDomainPublisher all-lists deadline + cursor (issue #2361)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.doUnmock("~/lib/ad-source.server");
+    vi.doUnmock("~/lib/ad-persistence.server");
+    vi.doUnmock("~/lib/search-rollout.server");
+    vi.doUnmock("~/lib/search-v2.server");
+    vi.doUnmock("~/lib/data/d1.server");
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  // The flattened all-lists queue: festive-india-2026 (30) then sneaker-resale
+  // (25) = 55 entries, in Object.keys(SEED_LISTS) order.
+  const FESTIVE_COUNT = SEED_LISTS["festive-india-2026"].domains.length;
+  const SNEAKER_FIRST_DOMAIN = SEED_LISTS["sneaker-resale"].domains[0].domain;
+
+  async function setupMocks({
+    cursorOffset = 0,
+    onCheckpoint,
+  }: { cursorOffset?: number; onCheckpoint?: () => void } = {}) {
+    let cursor = { last_list: "", last_offset: cursorOffset };
+    const queryOne = vi.fn(async (_env: unknown, sql: string) => {
+      if (/ads_domain_publisher_state/.test(sql)) {
+        return cursor;
+      }
+      return null;
+    });
+    const execute = vi.fn(async (_env: unknown, sql: string, ...bindings: unknown[]) => {
+      if (/ads_domain_publisher_state/.test(sql) && /ON CONFLICT/i.test(sql)) {
+        cursor = { last_list: String(bindings[0]), last_offset: Number(bindings[1]) };
+        onCheckpoint?.();
+      }
+      return {};
+    });
+
+    vi.doMock("~/lib/data/d1.server", () => ({
+      queryOne,
+      execute,
+      ensureDb: vi.fn(),
+      queryAll: vi.fn(),
+      queryIn: vi.fn(),
+      chunkForBoundParams: vi.fn(),
+      D1_MAX_BOUND_PARAMS: 100,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue({
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+      }),
+    }));
+    vi.doMock("~/lib/ad-persistence.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: unknown[]) => ads),
+    }));
+    vi.doMock("~/lib/search-rollout.server", () => ({
+      shouldApplySearchV2: vi.fn(() => true),
+    }));
+    vi.doMock("~/lib/search-v2.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/search-v2.server")>(
+        "~/lib/search-v2.server",
+      );
+      return {
+        ...actual,
+        buildSearchV2Context: vi.fn().mockResolvedValue({
+          queryIntent: { intent: "domain", raw: "example.com", normalized: "example.com" },
+          scope: "exact",
+          displayDomain: "example.com",
+          identityAliases: [],
+          domainAliases: [],
+          advertiserPageId: null,
+        }),
+        applySearchV2PostFilter: vi.fn().mockResolvedValue({
+          verifiedCount: 1,
+          likelyCount: 0,
+          unmatchedCount: 0,
+          discoveryProgress: "ready",
+          discoveryStatus: "ok",
+          discoveryEmptyReason: null,
+          discoverySummary: null,
+          provider: "meta_library_browser",
+          source: "meta_library_browser",
+          cacheStatus: "miss",
+        }),
+      };
+    });
+    return { queryOne, execute };
+  }
+
+  it("emits truncated:true and attempts nothing when the deadline is already past, leaving the cursor untouched", async () => {
+    const { execute } = await setupMocks();
+    const { runAdsDomainPublisher } = await import("~/lib/ads-domain-publisher.server");
+
+    const summary = await runAdsDomainPublisher(
+      { DB: {} } as never,
+      { waitUntil: () => {} } as never,
+      { cap: 60, deadlineAt: Date.now() - 1 },
+    );
+
+    expect(summary.truncated).toBe(true);
+    expect(summary.attempted).toBe(0);
+    // A zero-attempt deadline abort must not advance the cursor — the next
+    // night tries the same spot instead of skipping it.
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("processes up to the cap without truncation and persists the cursor at the next offset", async () => {
+    const { execute } = await setupMocks();
+    const { runAdsDomainPublisher } = await import("~/lib/ads-domain-publisher.server");
+
+    const summary = await runAdsDomainPublisher(
+      { DB: {} } as never,
+      { waitUntil: () => {} } as never,
+      { cap: 1, deadlineAt: Date.now() + 60_000 },
+    );
+
+    expect(summary.attempted).toBe(1);
+    expect(summary.truncated).toBe(false);
+    expect(summary.published).toBe(1);
+    // Cursor checkpointed at offset 1 (the second queue entry, still inside
+    // the first list) so the next night resumes there. One checkpoint per
+    // completed domain is what survives an outright isolate kill.
+    expect(execute).toHaveBeenCalledTimes(1);
+    const [_env, _sql, list, offset] = execute.mock.calls[0];
+    expect(list).toBe("festive-india-2026");
+    expect(offset).toBe(1);
+  });
+
+  it("resumes from the persisted cursor offset so tail-list domains are not starved", async () => {
+    const { execute } = await setupMocks({ cursorOffset: FESTIVE_COUNT });
+    const { runAdsDomainPublisher } = await import("~/lib/ads-domain-publisher.server");
+
+    const summary = await runAdsDomainPublisher(
+      { DB: {} } as never,
+      { waitUntil: () => {} } as never,
+      { cap: 1, deadlineAt: Date.now() + 60_000 },
+    );
+
+    // Resumed at the sneaker-resale boundary (offset 30) and processed its
+    // first domain, proving the cursor spans lists — not just the first one.
+    expect(summary.attempted).toBe(1);
+    expect(summary.outcomes[0].domain).toBe(SNEAKER_FIRST_DOMAIN);
+    expect(execute).toHaveBeenCalledTimes(1);
+    const [_env, _sql, list, offset] = execute.mock.calls[0];
+    expect(list).toBe("sneaker-resale");
+    expect(offset).toBe(FESTIVE_COUNT + 1);
+  });
+
+  it("wraps the cursor to the start after a full uninterrupted pass over every list", async () => {
+    const { execute } = await setupMocks();
+    const { runAdsDomainPublisher } = await import("~/lib/ads-domain-publisher.server");
+
+    const summary = await runAdsDomainPublisher(
+      { DB: {} } as never,
+      { waitUntil: () => {} } as never,
+      { cap: 60, deadlineAt: Date.now() + 60_000 },
+    );
+
+    const totalDomains =
+      SEED_LISTS["festive-india-2026"].domains.length +
+      SEED_LISTS["sneaker-resale"].domains.length;
+    expect(summary.attempted).toBe(totalDomains);
+    expect(summary.truncated).toBe(false);
+    // Every completed domain checkpointed, and the last one wrapped the
+    // cursor back to 0 so the rolling window restarts.
+    expect(execute).toHaveBeenCalledTimes(totalDomains);
+    const [_env, _sql, list, offset] = execute.mock.calls[totalDomains - 1];
+    expect(offset).toBe(0);
+    expect(list).toBe("festive-india-2026");
+  });
+
+  it("resumes exactly where a mid-queue deadline stopped the run", async () => {
+    // A real clock cannot be fast-forwarded through a 10-minute deadline, so
+    // drive Date.now() by hand: every completed domain costs 1ms of fake time
+    // and the budget is 2ms, so the deadline bites after two domains.
+    let fakeNow = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => fakeNow);
+
+    const { execute } = await setupMocks({
+      onCheckpoint: () => {
+        fakeNow += 1;
+      },
+    });
+    const { runAdsDomainPublisher } = await import("~/lib/ads-domain-publisher.server");
+
+    const first = await runAdsDomainPublisher(
+      { DB: {} } as never,
+      { waitUntil: () => {} } as never,
+      { cap: 60, deadlineAt: fakeNow + 2 },
+    );
+
+    expect(first.truncated).toBe(true);
+    expect(first.attempted).toBe(2);
+    // The last checkpoint is the offset the deadline stopped at — not the end
+    // of the queue, and not the start of it.
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute.mock.calls[1][3]).toBe(2);
+
+    // The next night starts at that offset, so no domain is starved and none
+    // is re-scraped.
+    const second = await runAdsDomainPublisher(
+      { DB: {} } as never,
+      { waitUntil: () => {} } as never,
+      { cap: 1, deadlineAt: fakeNow + 60_000 },
+    );
+
+    expect(second.attempted).toBe(1);
+    expect(second.outcomes[0].domain).toBe(SEED_LISTS["festive-india-2026"].domains[2].domain);
+  });
+});
