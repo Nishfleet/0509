@@ -12,6 +12,27 @@ import type { RootLoaderData } from "~/root";
  */
 export const MARKETING_TAGLINE = "Competitor change monitoring";
 
+export interface MarketingPrimaryLink {
+  label: string;
+  to: string;
+}
+
+/**
+ * THE one shared public destination list — the canonical primary nav for
+ * every public surface. MarketingNav renders it inline below, and the public
+ * /search rail consumes it via PUBLIC_SEARCH_NAV in dashboard-navigation, so
+ * landing and search can never drift (issue #2324). No Home entry: the brand
+ * wordmark/account block is Home.
+ */
+export const MARKETING_PRIMARY_LINKS: readonly MarketingPrimaryLink[] = [
+  { label: "Search preview", to: "/search" },
+  { label: "Compare", to: "/compare" },
+  { label: "Pricing", to: "/pricing" },
+  { label: "Help", to: "/help" },
+  { label: "Docs", to: "/docs" },
+  { label: "Status", to: "/status" },
+];
+
 export interface MarketingNavProps {
   /** Show the three /switch/* "from <tool>" links in the primary nav (default true). */
   showSwitchLinks?: boolean;
@@ -44,12 +65,11 @@ export function MarketingNav({ showSwitchLinks = true }: MarketingNavProps) {
       </Link>
 
       <nav className="ld-nav-links" aria-label="Primary">
-        <Link to="/search">Search preview</Link>
-        <Link to="/compare">Compare</Link>
-        <Link to="/pricing">Pricing</Link>
-        <Link to="/help">Help</Link>
-        <Link to="/docs">Docs</Link>
-        <Link to="/status">Status</Link>
+        {MARKETING_PRIMARY_LINKS.map((link) => (
+          <Link key={link.to} to={link.to}>
+            {link.label}
+          </Link>
+        ))}
         {showSwitchLinks ? (
           <>
             {/* Switch-page links in the primary nav so a buyer who lands on any
