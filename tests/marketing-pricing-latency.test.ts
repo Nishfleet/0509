@@ -133,6 +133,7 @@ describe("marketing pricing SSR", () => {
     vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
     vi.doMock("~/lib/public-proof.server", () => ({
       loadPublicProofBrief: vi.fn().mockResolvedValue(null),
+      featuredWebsiteForVisitorCountry: vi.fn(() => "nike.com"),
     }));
 
     const { loader } = await import("~/routes/marketing");
