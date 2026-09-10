@@ -1,4 +1,8 @@
-import { canUseSiteRepWidgetScript, hasSiteRepAuthCookie } from "../app/lib/siterep-widget";
+import {
+  canUseSiteRepWidgetScript,
+  hasSiteRepAuthCookie,
+  isSiteRepWidgetIsolatedPath,
+} from "../app/lib/siterep-widget";
 
 // Baseline security headers applied to every response. CSP allows Google Fonts
 // (used in app/root.tsx) and inline <script>/<style> emitted by React Router's
@@ -83,6 +87,52 @@ export const SECURITY_HEADERS: Record<string, string> = {
     "form-action 'self'",
   ].join("; "),
 };
+
+// Content-Signal (issue #2302): the same AI-use reservation robots.txt declares
+// once per crawl, and that markdownResponse already stamps on /llms.txt and the
+// markdown pages, carried by the public HTML documents it protects. robots.txt
+// is not re-read per fetched page, so an AI-grounding crawler that lands
+// directly on a page sees no reservation at all; the signal has to travel with
+// the page. Public routes only — withSecurityHeaders also covers authed
+// documents and API responses, and an AI-training reservation on logged-in
+// traffic (or on a private, workspace-scoped, or token-addressed surface) would
+// be wrong. This value must stay identical to the robots.txt posture in
+// app/lib/seo.ts (docs/ai-crawler-policy.md).
+export const CONTENT_SIGNAL = "search=yes, ai-input=yes, ai-train=no, use=reference";
+
+/**
+ * Stamps the Content-Signal reservation on a PUBLIC HTML document response and
+ * leaves every other response untouched:
+ *
+ * - GET/HEAD only, HTML responses only — API/JSON and asset responses never
+ *   carry a crawl reservation.
+ * - Anonymous requests only (no better-auth cookie).
+ * - Outside the private prefixes the Site Rep widget already treats as
+ *   isolated (/app, /auth, /api/, /export/, /team/, /share/, /unsubscribe,
+ *   /.well-known/) — the same surfaces robots.txt disallows or marks noindex.
+ * - A content-signal the app set itself wins.
+ */
+export function withPublicContentSignal(response: Response, request?: Request): Response {
+  if (!request || (request.method !== "GET" && request.method !== "HEAD")) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  if (headers.has("content-signal") || !isHtmlResponse(headers)) {
+    return response;
+  }
+  if (hasSiteRepAuthCookie(request)) {
+    return response;
+  }
+  if (isSiteRepWidgetIsolatedPath(new URL(request.url).pathname)) {
+    return response;
+  }
+  headers.set("content-signal", CONTENT_SIGNAL);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
 
 export const HTML_NO_STORE_HEADERS: Record<string, string> = {
   "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate",

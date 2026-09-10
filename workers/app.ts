@@ -66,7 +66,11 @@ import {
   resolveScheduledTask,
   WEEKLY_DIGEST_CRON,
 } from "./schedule";
-import { withSecurityHeaders } from "./security-headers";
+import {
+  CONTENT_SIGNAL,
+  withPublicContentSignal,
+  withSecurityHeaders,
+} from "./security-headers";
 export { MonitoringWorkflow } from "./monitoring-workflow";
 
 type GlobalEnvCarrier = typeof globalThis & {
@@ -86,7 +90,7 @@ function markdownResponse(request: Request, body: string): Response {
       headers: {
         "content-type": "text/markdown; charset=utf-8",
         "vary": "Accept",
-        "content-signal": "search=yes, ai-input=yes, ai-train=no, use=reference",
+        "content-signal": CONTENT_SIGNAL,
       },
     }),
     request,
@@ -291,7 +295,7 @@ export default {
       country: request.headers.get("cf-ipcountry"),
     });
     const response = await requestHandler(request, routerContext);
-    return withSecurityHeaders(response, request);
+    return withSecurityHeaders(withPublicContentSignal(response, request), request);
   },
   async scheduled(controller, env, ctx) {
     const observationContext = Object.freeze({

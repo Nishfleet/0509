@@ -8,11 +8,13 @@ import {
 import {
   CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC,
   CONNECT_SRC,
+  CONTENT_SIGNAL,
   cspAllowsReactRouterManifest,
   HTML_NO_STORE_HEADERS,
   PUBLIC_HTML_CACHE_CONTROL,
   REACT_ROUTER_MANIFEST_PATH,
   SECURITY_HEADERS,
+  withPublicContentSignal,
   withSecurityHeaders,
 } from "../workers/security-headers";
 
@@ -358,5 +360,103 @@ describe("Worker security headers", () => {
     expect(
       cspAllowsReactRouterManifest(`default-src 'self'; connect-src https://0509.io${REACT_ROUTER_MANIFEST_PATH}`),
     ).toBe(true);
+  });
+
+  describe("public HTML content-signal (issue #2302)", () => {
+    const publicPaths = [
+      "/",
+      "/help",
+      "/docs",
+      "/pricing",
+      "/trust",
+      "/methodology",
+      "/ads/nike.com",
+      "/timeline/nike.com",
+      "/compare/visualping",
+      "/switch/visualping",
+    ];
+
+    it("carries the AI-use reservation on public HTML documents", () => {
+      for (const path of publicPaths) {
+        const response = withPublicContentSignal(
+          htmlResponse(),
+          new Request(`https://0509.io${path}`),
+        );
+        expect(response.headers.get("content-signal"), path).toBe(CONTENT_SIGNAL);
+      }
+    });
+
+    it("matches the robots.txt posture value shipped in the markdown responses", () => {
+      expect(CONTENT_SIGNAL).toBe("search=yes, ai-input=yes, ai-train=no, use=reference");
+    });
+
+    it("stamps HEAD documents too", () => {
+      const response = withPublicContentSignal(
+        htmlResponse(),
+        new Request("https://0509.io/", { method: "HEAD" }),
+      );
+      expect(response.headers.get("content-signal")).toBe(CONTENT_SIGNAL);
+    });
+
+    it("never stamps an authed request, even on a public path", () => {
+      const response = withPublicContentSignal(
+        htmlResponse(),
+        new Request("https://0509.io/", {
+          headers: { cookie: "better-auth.session_token=session-123" },
+        }),
+      );
+      expect(response.headers.has("content-signal")).toBe(false);
+    });
+
+    it("never stamps the private surfaces robots.txt disallows or marks noindex", () => {
+      for (const path of [
+        "/app",
+        "/app/billing",
+        "/auth/login",
+        "/api/v1",
+        "/export/report",
+        "/team/acme",
+        "/share/unguessable-token",
+        "/unsubscribe",
+        "/.well-known/security.txt",
+      ]) {
+        const response = withPublicContentSignal(
+          htmlResponse(),
+          new Request(`https://0509.io${path}`),
+        );
+        expect(response.headers.has("content-signal"), path).toBe(false);
+      }
+    });
+
+    it("leaves non-HTML, non-GET/HEAD, and unaddressed responses alone", () => {
+      const json = withPublicContentSignal(
+        new Response("{}", { headers: { "content-type": "application/json" } }),
+        new Request("https://0509.io/api/v1"),
+      );
+      const post = withPublicContentSignal(
+        htmlResponse(),
+        new Request("https://0509.io/", { method: "POST" }),
+      );
+      const noRequest = withPublicContentSignal(htmlResponse());
+      for (const response of [json, post, noRequest]) {
+        expect(response.headers.has("content-signal")).toBe(false);
+      }
+    });
+
+    it("honors a content-signal the app already set", () => {
+      const response = withPublicContentSignal(
+        htmlResponse({ headers: { "content-signal": "search=no" } }),
+        new Request("https://0509.io/"),
+      );
+      expect(response.headers.get("content-signal")).toBe("search=no");
+    });
+
+    it("is not part of the baseline security headers, so authed documents stay clean", () => {
+      const response = withSecurityHeaders(
+        htmlResponse(),
+        new Request("https://0509.io/app"),
+      );
+      expect(response.headers.has("content-signal")).toBe(false);
+    });
   });
 });
