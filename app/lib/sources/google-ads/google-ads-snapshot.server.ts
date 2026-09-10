@@ -112,17 +112,28 @@ export function diffGoogleAdsSnapshots(
   }
 
   // Paused creatives: present in both, lastShownAt did not advance, and the
-  // last-shown timestamp is 7+ days before this snapshot's fetchedAt.
+  // last-shown timestamp is 7+ days before this snapshot's fetchedAt. Only
+  // brand-new pauses are emitted — a creative that was ALREADY stale-paused
+  // in the previous snapshot is left silent, so the alert path does not
+  // re-fire the same id on every later check (digest spam).
   const pausedCreativeIds: string[] = [];
   const nextFetchedAt = Date.parse(next.fetchedAt);
+  const prevFetchedAt = Date.parse(prev.fetchedAt);
   for (const [id, nextC] of nextCreatives) {
     const prevC = prevCreatives.get(id);
     if (!prevC) continue;
     if (nextC.lastShownAt && prevC.lastShownAt && nextC.lastShownAt === prevC.lastShownAt) {
       const lastShownMs = Date.parse(nextC.lastShownAt);
-      if (Number.isFinite(nextFetchedAt) && Number.isFinite(lastShownMs) && nextFetchedAt - lastShownMs >= PAUSED_STALE_MS) {
-        pausedCreativeIds.push(id);
-      }
+      if (!Number.isFinite(nextFetchedAt) || !Number.isFinite(lastShownMs)) continue;
+      if (nextFetchedAt - lastShownMs < PAUSED_STALE_MS) continue;
+      // Already stale-paused relative to the previous snapshot? Skip.
+      const prevLastShownMs = Date.parse(prevC.lastShownAt);
+      const alreadyPaused =
+        Number.isFinite(prevFetchedAt) &&
+        Number.isFinite(prevLastShownMs) &&
+        prevFetchedAt - prevLastShownMs >= PAUSED_STALE_MS;
+      if (alreadyPaused) continue;
+      pausedCreativeIds.push(id);
     }
   }
   if (pausedCreativeIds.length > 0) {

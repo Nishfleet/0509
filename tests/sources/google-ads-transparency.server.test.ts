@@ -76,20 +76,42 @@ describe("google-ads-transparency fetchCreativesByDomain", () => {
     }
   });
 
-  it("maps the format enum 1->text, 2->image, 3->video", async () => {
+  it("derives format from the preview structure, not the unreliable `4` key", async () => {
+    // Fixtures show the `4` key takes 1/2/3 on image and non-image creatives
+    // alike, so it is NOT a text/image/video enum. Format must come from the
+    // preview: an `<img …>` html at preview.3.2 -> image, a content.js
+    // renderer at preview.1.4 -> text, else -> unknown (see server header).
     const nike = JSON.parse(fixture("nike.com-page1.json"));
-    const byCreativeId = new Map<string, number>();
-    for (const c of nike["1"]) byCreativeId.set(c["2"], c["4"]);
+    const imgCreatives = nike["1"].filter(
+      (c: Record<string, unknown>) => (c["3"] as Record<string, unknown> | undefined)?.["3"],
+    );
+    const contentJsCreatives = nike["1"].filter(
+      (c: Record<string, unknown>) => (c["3"] as Record<string, unknown> | undefined)?.["1"],
+    );
+    expect(imgCreatives.length).toBeGreaterThan(0);
+    expect(contentJsCreatives.length).toBeGreaterThan(0);
 
     const fetchImpl = sequenceFetch([jsonFactory(fixture("nike.com-page1.json"))]);
-    const result = (await fetchCreativesByDomain("nike.com", { fetchImpl })) as {
+    const result = (await fetchCreativesByDomain("nike.com", {
+      fetchImpl,
+      // Stop after page 1 (the fixture carries a next-page token) so the
+      // single-factory sequence never runs dry.
+      maxCreatives: nike["1"].length,
+    })) as {
       creatives: { creativeId: string; format: string }[];
     };
     for (const c of result.creatives) {
-      const enumVal = byCreativeId.get(c.creativeId);
-      const expected = enumVal === 1 ? "text" : enumVal === 2 ? "image" : enumVal === 3 ? "video" : "unknown";
-      expect(c.format, `creative ${c.creativeId} enum ${enumVal}`).toBe(expected);
+      expect(["text", "image", "video", "unknown"]).toContain(c.format);
+      const isImg = imgCreatives.some((ic: Record<string, unknown>) => ic["2"] === c.creativeId);
+      const isContentJs = contentJsCreatives.some((ic: Record<string, unknown>) => ic["2"] === c.creativeId);
+      if (isImg) {
+        expect(c.format, `creative ${c.creativeId} has an img preview`).toBe("image");
+      } else if (isContentJs) {
+        expect(c.format, `creative ${c.creativeId} has a content.js preview`).toBe("text");
+      }
     }
+    // Every image preview in the fixture maps to image.
+    expect(result.creatives.filter((c) => c.format === "image")).toHaveLength(imgCreatives.length);
   });
 
   it("extracts previewUrl from the img html and stores only the URL", async () => {
