@@ -302,4 +302,125 @@ describe("demo brand nightly backfill (issue #1449)", () => {
     expect(summary).toContain("nike.com:captured");
     expect(summary).toContain("nykaa.com:failed:screenshot_required");
   });
+
+  it("caps capture attempts at 3 per domain per UTC day (issue #2364)", async () => {
+    // The escape hatch: seed the state table directly so the per-day attempt
+    // counter for nike.com already sits at the cap. The backfill must not
+    // spend a Browser Run minute on it and reports `skipped_attempt_cap`.
+    const day = "2026-10-10";
+    await db()
+      .prepare(
+        `INSERT INTO demo_brand_proof_hole_state (
+           domain, day, attempts_today, day_succeeded,
+           consecutive_failed_days, stopped, updated_at
+         ) VALUES ('nike.com', ?, 3, 0, 0, 0, ?)
+         ON CONFLICT(domain) DO UPDATE SET
+           day = excluded.day,
+           attempts_today = 3,
+           day_succeeded = 0,
+           consecutive_failed_days = 0,
+           stopped = 0,
+           updated_at = excluded.updated_at`,
+      )
+      .bind(day, `${day}T00:00:00.000Z`)
+      .run();
+
+    const capturedDomains: string[] = [];
+    const result = await runDemoBrandBackfill(appEnv, {
+      now: new Date(`${day}T03:00:00.000Z`),
+      capture: (async (_env: unknown, url: string) => {
+        const domain = DEMO_BRAND_PAGE_DOMAINS.find((d) => url.includes(d));
+        if (domain) capturedDomains.push(domain);
+        return null;
+      }) as never,
+    });
+
+    const nike = result.domains.find((r) => r.domain === "nike.com");
+    expect(nike?.status).toBe("skipped_attempt_cap");
+    // The cap gate fires before the capture call: nike.com is never handed
+    // to the capture pipeline on this run.
+    expect(capturedDomains).not.toContain("nike.com");
+    // The other four brands still walk the normal capture path (the stub
+    // fails them, so they report capture_failed rather than a skip).
+    const others = result.domains.filter((r) => r.domain !== "nike.com");
+    expect(others).toHaveLength(DEMO_BRAND_PAGE_DOMAINS.length - 1);
+    expect(others.every((r) => r.status === "capture_failed")).toBe(true);
+  });
+
+  it("stops a demo brand after 3 consecutive failed days and alerts once (issue #2364)", async () => {
+    // Three consecutive fully-failed days (all attempts failed) must stop the
+    // domain: the run that observes the third failed day's rollover flags the
+    // stop and routes exactly one throttled operator alert; later passes skip
+    // without capturing and do not re-alert. Use mamaearth.com (unseeded in
+    // the cap test above) so the streak starts clean.
+    const failCaptureEvery = (async () => null) as never;
+
+    // Reset mamaearth's state to a healthy yesterday (one success on 10-17) so
+    // the failing-day streak starts clean at day 1 of this test; otherwise
+    // earlier tests' state would shift the stop a day early.
+    await db()
+      .prepare(
+        `INSERT INTO demo_brand_proof_hole_state (
+           domain, day, attempts_today, day_succeeded,
+           consecutive_failed_days, stopped, updated_at
+         ) VALUES ('mamaearth.com', '2026-10-17', 1, 1, 0, 0, '2026-10-17T00:00:00.000Z')
+         ON CONFLICT(domain) DO UPDATE SET
+           day = '2026-10-17',
+           attempts_today = 1,
+           day_succeeded = 1,
+           consecutive_failed_days = 0,
+           stopped = 0,
+           updated_at = '2026-10-17T00:00:00.000Z'`,
+      )
+      .run();
+
+    // Day 1..3: every attempt fails.
+    for (let d = 0; d < 3; d += 1) {
+      const thisDay = `2026-10-${String(18 + d).padStart(2, "0")}`;
+      await runDemoBrandBackfill(appEnv, {
+        now: new Date(`${thisDay}T01:00:00.000Z`),
+        capture: failCaptureEvery,
+        domains: ["mamaearth.com"],
+      });
+    }
+
+    // Day 4: the run that observes the third consecutive failed day crosses
+    // the stop threshold and fires the alert. The domain reports `stopped`
+    // and spends no browser minutes that day.
+    const day4 = "2026-10-21";
+    const stopResult = await runDemoBrandBackfill(appEnv, {
+      now: new Date(`${day4}T01:00:00.000Z`),
+      capture: failCaptureEvery,
+      domains: ["mamaearth.com"],
+    });
+    const mamaearth = stopResult.domains.find((r) => r.domain === "mamaearth.com");
+    expect(mamaearth?.status).toBe("stopped");
+
+    // The state table now marks the domain stopped with a 3-day streak, and
+    // exactly one throttled operator-alert row exists for the stop task key.
+    const state = await db()
+      .prepare(
+        `SELECT stopped, consecutive_failed_days FROM demo_brand_proof_hole_state WHERE domain = 'mamaearth.com'`,
+      )
+      .first<{ stopped: number; consecutive_failed_days: number }>();
+    expect(state?.stopped).toBe(1);
+    expect(state?.consecutive_failed_days).toBe(3);
+
+    const alertRows = await db()
+      .prepare(
+        `SELECT COUNT(*) AS n FROM cron_failure_alert_throttle WHERE task_key = 'demo_brand_proof_hole_stopped_mamaearth_com'`,
+      )
+      .first<{ n: number }>();
+    expect(Number(alertRows?.n ?? 0)).toBe(1);
+
+    // A later pass the same day skips the stopped domain entirely — no
+    // capture, no re-alert.
+    const laterResult = await runDemoBrandBackfill(appEnv, {
+      now: new Date(`${day4}T02:00:00.000Z`),
+      capture: failCaptureEvery,
+      domains: ["mamaearth.com"],
+    });
+    const mamaearthLater = laterResult.domains.find((r) => r.domain === "mamaearth.com");
+    expect(mamaearthLater?.status).toBe("skipped_stopped");
+  });
 });
