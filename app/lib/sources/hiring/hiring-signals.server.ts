@@ -162,13 +162,15 @@ export async function fetchJobs(
   };
 }
 
-/** Count jobs by department and by location (null/empty groups bucket to "(none)"). */
+/** Count jobs by department and by location (null/empty groups bucket to "(none)"
+ * for departments and "(not listed)" for locations — never a location claim
+ * such as "(remote)" that the job posting does not actually make). */
 export function computeCounts(jobs: HiringJob[]): HiringCounts {
   const byDepartment: Record<string, number> = {};
   const byLocation: Record<string, number> = {};
   for (const job of jobs) {
     const dept = clean(job.department) ?? "(none)";
-    const loc = clean(job.location) ?? "(remote)";
+    const loc = clean(job.location) ?? "(not listed)";
     byDepartment[dept] = (byDepartment[dept] ?? 0) + 1;
     byLocation[loc] = (byLocation[loc] ?? 0) + 1;
   }

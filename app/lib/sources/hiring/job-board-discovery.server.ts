@@ -142,8 +142,10 @@ export function findBoardInHtml(html: string): JobBoard | null {
 
 /**
  * Find the first careers-ish link on the page: an anchor whose text matches
- * /careers|jobs|join/i or whose href is /careers or /jobs. Resolved to an
- * absolute URL against `baseUrl`. Returns null when no anchor qualifies.
+ * /careers|jobs|join/i or whose RESOLVED pathname is /careers or /jobs
+ * (optionally with a trailing path). The href is resolved against `baseUrl`
+ * BEFORE the path check, so an absolute `<a href="https://acme.com/careers">`
+ * matches even when its text does not. Returns null when no anchor qualifies.
  * Pure and fixture-testable.
  */
 export function findCareersLink(html: string, baseUrl: string): string | null {
@@ -154,16 +156,19 @@ export function findCareersLink(html: string, baseUrl: string): string | null {
     const text = m[2];
     if (!href || href.startsWith("#") || href.startsWith("mailto:")) continue;
     const textHit = /careers|jobs|join/i.test(text);
-    const pathHit =
-      /^\/careers(?:\/|$)/i.test(href) || /^\/jobs(?:\/|$)/i.test(href);
-    if (!textHit && !pathHit) continue;
+    let resolved: URL;
     try {
-      return new URL(href, new URL(baseUrl)).href;
+      resolved = new URL(href, new URL(baseUrl));
     } catch {
       // One unparsable href (e.g. a malformed host) must not abort the scan:
       // skip this anchor and keep looking for a later careers link.
       continue;
     }
+    const pathHit =
+      /^\/careers(?:\/|$)/i.test(resolved.pathname) ||
+      /^\/jobs(?:\/|$)/i.test(resolved.pathname);
+    if (!textHit && !pathHit) continue;
+    return resolved.href;
   }
   return null;
 }
@@ -251,7 +256,9 @@ function firstHtmlSlug(html: string, re: RegExp): string | null {
   while ((m = re.exec(html)) !== null) {
     const slug = m[1];
     if (RESERVED_BOARD_SLUGS.has(slug.toLowerCase())) continue;
-    return slug;
+    // Lowercase so an HTML-discovered slug matches the domain-guess path and
+    // the provider tokens regardless of the case used in the page markup.
+    return slug.toLowerCase();
   }
   return null;
 }
@@ -265,7 +272,7 @@ function firstGreenhouseSubdomain(html: string): string | null {
     if (seen.has(slug)) continue;
     seen.add(slug);
     if (RESERVED_GREENHOUSE_SUBDOMAINS.has(slug)) continue;
-    return m[1];
+    return slug;
   }
   return null;
 }

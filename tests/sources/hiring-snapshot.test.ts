@@ -275,7 +275,7 @@ describe("diffHiring", () => {
     expect(diffHiring(prev, nextInput([]))).toEqual([]);
   });
 
-  it("groups top departments and locations, with (none)/(remote) buckets", () => {
+  it("groups top departments and locations, with (none)/(not listed) buckets", () => {
     const prev = record(
       boardPayload([
         job({ id: "p4" }),
@@ -304,10 +304,10 @@ describe("diffHiring", () => {
     ]);
     expect(md.openedTopLocations).toEqual([
       { group: "London", count: 2 },
-      { group: "(remote)", count: 1 },
+      { group: "(not listed)", count: 1 },
     ]);
     expect(md.closedTopDepartments).toEqual([{ group: "(none)", count: 5 }]);
-    expect(md.closedTopLocations).toEqual([{ group: "(remote)", count: 5 }]);
+    expect(md.closedTopLocations).toEqual([{ group: "(not listed)", count: 5 }]);
     // The summary carries both sides' counts.
     expect(changes[0].summary).toContain("3 roles opened and 5 roles closed");
   });
