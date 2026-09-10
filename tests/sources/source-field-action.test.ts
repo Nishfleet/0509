@@ -1,3 +1,4 @@
+import type { ActionFunctionArgs } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -51,12 +52,12 @@ function makeRequest(formData: FormData) {
   });
 }
 
-function makeArgs(formData: FormData) {
+function makeArgs(formData: FormData): ActionFunctionArgs {
   return {
     context: { cloudflare: { env: {} } },
     request: makeRequest(formData),
     params: { watchlistId },
-  };
+  } as unknown as ActionFunctionArgs;
 }
 
 describe("update-source-field action (seam #2218)", () => {
