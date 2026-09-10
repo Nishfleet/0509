@@ -76,7 +76,7 @@ export function defaultExec(command, args) {
  * @returns {number | null}
  */
 export function migrationPrefix(path) {
-  const base = path.split("/").pop();
+  const base = path.split("/").pop() ?? "";
   if (!base.endsWith(".sql")) return null;
   const match = PREFIX_RE.exec(base);
   return match ? Number(match[1]) : null;
@@ -175,6 +175,7 @@ export function checkMigrationNumbering(exec = defaultExec, baseRef = BASE_REF) 
   }
 
   if (offenders.length > 0) {
+    /** @param {number} n */
     const pad = (n) => String(n).padStart(4, "0");
     const required = baseTop + 1;
     const lines = offenders.map(
