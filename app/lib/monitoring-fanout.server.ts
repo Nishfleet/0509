@@ -2121,7 +2121,7 @@ export async function reconcileOrchestratedWatchlistRuns(
           SET status = 'failed',
               finished_at = COALESCE(finished_at, ?),
               error_code = 'unmonitorable_target',
-              error_message = 'This competitor could not be monitored after repeated attempts.',
+              error_message = 'This competitor could not be monitored for scanning after repeated attempts.',
               retry_after = NULL,
               processing_token = NULL,
               processing_started_at = NULL,
