@@ -3,6 +3,20 @@ import type { LoaderFunctionArgs } from "react-router";
 import { getCloudflareContext } from "~/lib/cloudflare-context";
 import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
 
+const CANARY_TOKEN_HEADER = "x-0509-canary-token";
+
+// Release identity (worker version id, tag, timestamp, search rollout mode) is
+// free recon for timing deploy windows and knowing when monitoring is degraded.
+// Only a caller presenting the canary token may read it; anonymous monitors keep
+// the public status/app/checks body. Gate the field, keep the body public.
+function mayReadReleaseIdentity(request: Request, env: { CANARY_BYPASS_TOKEN?: string }) {
+  const configured = env.CANARY_BYPASS_TOKEN?.trim();
+  if (!configured) {
+    return false;
+  }
+  return request.headers.get(CANARY_TOKEN_HEADER) === configured;
+}
+
 // Cheap uptime probe for Cloudflare health checks and external monitors.
 // Does NOT touch D1 — must stay a pure edge check so a DB blip doesn't
 // make the worker look unhealthy to the monitor.
@@ -13,21 +27,23 @@ import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
 // export. Without a component export, RR v7 returns the loader's Response
 // directly instead of wrapping it in the root HTML layout. See
 // `app/routes/api.auth.$.ts` for the same pattern.
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ context, request }: LoaderFunctionArgs) {
   const cloudflare = getCloudflareContext(context);
   const env = cloudflare.env;
   const normalizeIdentifier = (value: unknown) => {
     const normalized = typeof value === "string" ? value.trim() : "";
     return /^[A-Za-z0-9._-]{1,128}$/.test(normalized) ? normalized : null;
   };
-  const releaseIdentity = readReleaseIdentity(env);
+  const releaseIdentity = mayReadReleaseIdentity(request, env)
+    ? readReleaseIdentity(env)
+    : undefined;
 
   return new Response(
     JSON.stringify({
       status: "ok",
       app: normalizeIdentifier(env.APP_NAME) ?? "0509",
       timestamp: new Date().toISOString(),
-      releaseIdentity,
+      ...(releaseIdentity ? { releaseIdentity } : {}),
     }),
     {
       status: 200,
