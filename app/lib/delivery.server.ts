@@ -1069,12 +1069,17 @@ async function deliverDigestToEmailTarget(
   // growth2 (#2147): the newest sitemap-indexable public move, loaded here
   // (this layer has env) and passed into the renderer precomputed — the
   // digest-email module never queries D1 itself. A failed read renders no
-  // "Elsewhere this week" line rather than failing the digest send.
-  const publicMove = await loadWeeklyPublicMoves(env, {
-    since: new Date(Date.now() - WEEKLY_MOVES_WINDOW_MS).toISOString(),
-  })
-    .then((moves) => moves[0] ?? null)
-    .catch(() => null);
+  // "Elsewhere this week" line rather than failing the digest send. Loaded
+  // only when this send will actually use the quiet builder (empty items),
+  // so non-quiet briefs never pay the weekly-moves read.
+  const publicMove =
+    input.items.length === 0
+      ? await loadWeeklyPublicMoves(env, {
+          since: new Date(Date.now() - WEEKLY_MOVES_WINDOW_MS).toISOString(),
+        })
+          .then((moves) => moves[0] ?? null)
+          .catch(() => null)
+      : null;
   const email = renderDigestEmail(env, {
     digestRunId: input.digestRunId,
     name: input.userName,
@@ -2846,6 +2851,7 @@ function renderDigestEmail(
     cadence: input.cadence,
     scanCadence: input.scanCadence ?? null,
     timeZone: input.timeZone ?? null,
+    baseUrl,
     fullDigestUrl: `${baseUrl}/app/digests?digest=${encodeURIComponent(input.digestRunId)}`,
     manageFrequencyUrl: `${baseUrl}/app/notifications`,
     supportEmail: SUPPORT_EMAIL,

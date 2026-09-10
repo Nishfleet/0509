@@ -183,6 +183,7 @@ const baseDigestInput: Omit<DigestEmailInput, "items"> = {
   strategyParagraph:
     "Glowkart is the one to watch this week — doubling its weekend discount to 40% is an aggressive land-grab, and Tira's sampling CTA suggests a launch is being seeded. Nothing from Sugar beyond a routine creative refresh.",
   fullDigestUrl: "https://0509.io/app/digests/demo",
+  baseUrl: "https://0509.io",
   manageFrequencyUrl: "https://0509.io/app/notifications",
   supportEmail: "support@0509.io",
   supportMailto: "mailto:support@0509.io",

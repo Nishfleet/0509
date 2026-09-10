@@ -143,6 +143,12 @@ export interface DigestEmailInput {
    */
   scanCadence?: ScheduledScanCadence | null;
   timeZone?: string | null;
+  /**
+   * Origin (scheme + host) of the public site, e.g. `https://0509.io`.
+   * Email clients need absolute URLs, so the "Elsewhere this week" link is
+   * built from this origin + the public /ads or /timeline path.
+   */
+  baseUrl: string;
   fullDigestUrl: string;
   manageFrequencyUrl: string;
   supportEmail: string;
@@ -482,21 +488,27 @@ function buildDigestRecordFailureEmail(input: DigestEmailInput): DigestEmailMode
 function renderElsewhereThisWeek(
   move: WeeklyPublicMove,
   timeZone: string | null | undefined,
+  baseUrl: string,
 ): { html: string; text: string } {
   const brand = escapeHtml(move.brand);
   const field = escapeHtml(move.field);
   const date = escapeHtml(formatDate(move.capturedAt, timeZone));
+  // The public /ads or /timeline path, made absolute for email clients.
+  // Only a sitemap-indexable path is linked; a move with neither path is
+  // omitted entirely (the "omit when no indexable move exists" rule).
   const linkPath = move.adsPath ?? move.timelinePath;
-  const link = linkPath
-    ? `<a href="${escapeHtml(linkPath)}" style="color: ${EMAIL_CASE_INK};">${brand}</a>`
-    : brand;
+  if (!linkPath) {
+    return { html: "", text: "" };
+  }
+  const absoluteHref = `${baseUrl}${linkPath}`;
+  const link = `<a href="${escapeHtml(absoluteHref)}" style="color: ${EMAIL_CASE_INK};">${brand}</a>`;
   const html = `
     <div style="margin: 0 0 18px; padding: 14px 16px; border: 1.5px solid ${EMAIL_CASE_INK}; border-radius: 0; background-color: ${EMAIL_CASE_CARD};">
       <p style="margin: 0 0 6px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">Elsewhere this week</p>
       <p style="margin: 0; color: ${EMAIL_CASE_INK_SOFT};">${link} changed ${field} on ${date}.</p>
     </div>
   `;
-  const text = `Elsewhere this week: ${move.brand} changed ${move.field} on ${formatDate(move.capturedAt, timeZone)}${linkPath ? ` — ${linkPath}` : ""}`;
+  const text = `Elsewhere this week: ${move.brand} changed ${move.field} on ${formatDate(move.capturedAt, timeZone)} — ${absoluteHref}`;
   return { html, text };
 }
 
@@ -536,7 +548,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   // the delivery layer. Absent renders nothing — the all-quiet brief stays
   // byte-identical without it.
   const elsewhere = input.publicMove
-    ? renderElsewhereThisWeek(input.publicMove, input.timeZone)
+    ? renderElsewhereThisWeek(input.publicMove, input.timeZone, input.baseUrl)
     : null;
   // E2 (2026-08-08): the all-quiet period still names why it is quiet, who
   // reviews it, and what happens next — or the failure state when no period
