@@ -14,7 +14,7 @@ asserts ALL adapters are stubs and breaks the moment linkedin flips to
 - [x] phase 2: app/lib/sources/linkedin-ads.server.ts — real adapter (budget helper, fetch, diff, cadence weekly, implemented true, requiresEnv)
 - [x] phase 3: app/components/sources/linkedin-ads.tsx — real Section (render snapshot, null when none)
 - [x] phase 4: tests/sources/linkedin-ads*.test.ts + fixtures + registry.test.ts stub-filter update (43 source tests + 9 claim tests green; 32 in the 3 touched files)
-- [ ] phase 5: verify (vitest run touched tests green), commit, push, PR, arm auto-merge
+- [x] phase 5: verify (vitest run touched tests green), commit, push, PR — PR #2570 opened; stops for independent review (no self-merge)
 
 ## Notes
 
