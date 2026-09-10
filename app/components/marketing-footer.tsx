@@ -27,7 +27,6 @@ export function MarketingFooter() {
         <Link to="/help">Help</Link>
         <Link to="/docs">Docs</Link>
         <Link to="/api/docs">API docs</Link>
-        <Link to="/mcp/setup">MCP setup</Link>
         <Link to="/status">Status</Link>
         <Link to="/changelog">Changelog</Link>
         <Link to="/competitor-monitoring">Proof brief</Link>
@@ -52,6 +51,7 @@ export function MarketingFooter() {
         <Link to="/compare/foreplay-spyder">vs Foreplay Spyder</Link>
         <Link to="/compare/panoramata">vs Panoramata</Link>
         <Link to="/compare/adspyder">vs AdSpyder</Link>
+        <Link to="/compare/adspy">vs AdSpy</Link>
       </nav>
       <nav className="ld-footer-compare" aria-label="Switch">
         <span className="ld-footer-group-label">Switch</span>

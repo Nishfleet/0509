@@ -44,6 +44,7 @@ const COMPARE_PAGES = [
   },
   { slug: "panoramata", module: "~/routes/compare.panoramata", citations: "~/data/compare/panoramata-citations.json" },
   { slug: "adspyder", module: "~/routes/compare.adspyder", citations: "~/data/compare/adspyder-citations.json" },
+  { slug: "adspy", module: "~/routes/compare.adspy", citations: "~/data/compare/adspy-citations.json" },
   { slug: "foreplay", module: "~/routes/compare.foreplay", citations: "~/data/compare/foreplay-citations.json" },
   {
     slug: "foreplay-spyder",

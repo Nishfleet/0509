@@ -376,7 +376,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/compare", "/compare/magicbrief", "/compare/meta-ad-library",
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
-    "/compare/panoramata", "/compare/adspyder", "/switch/magicbrief",
+    "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/switch/magicbrief",
     "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",
     // Issue #2144: agency audience page (roster math + sourced Agency-vs-
     // Foreplay line), EN-only, no locale cluster.
@@ -384,7 +384,6 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale",
     "/pt-br/sneaker-resale",
     "/capture-rules", "/no-phantom-changes", "/methodology", "/pricing", "/help", "/docs", "/api/docs",
-    "/mcp/setup",
     "/status", "/changelog", "/trust", "/privacy", "/terms",
   ],
   e2eRoutePaths: [

@@ -23,6 +23,12 @@ const NEW_COMPARE_PAGES = [
     competitor: "AdSpyder",
   },
   {
+    slug: "adspy",
+    title: "Five to Nine vs AdSpy",
+    pricing: ["$149"],
+    competitor: "AdSpy",
+  },
+  {
     slug: "visualping-ad-libraries",
     title: "Five to Nine vs Visualping for ad libraries",
     pricing: ["free", "$350"],
@@ -60,6 +66,8 @@ async function loadCompareModule(slug: string) {
       return import("~/routes/compare.foreplay-spyder");
     case "adspyder":
       return import("~/routes/compare.adspyder");
+    case "adspy":
+      return import("~/routes/compare.adspy");
     case "visualping-ad-libraries":
       return import("~/routes/compare.visualping-ad-libraries");
     default:
