@@ -7,6 +7,7 @@ import {
   PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE,
 } from "~/lib/customer-route-error";
 import type { AdRecord, SearchResponse } from "~/lib/types";
+import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 // The /search loader returns a plain payload object for most branches, but the
 // anonymous fresh-search success branch (issue #1972 phase 1) returns react-router
@@ -388,6 +389,178 @@ describe("search loader", () => {
       result: hydratedResult,
       selectedAd: baseAd,
     });
+  });
+
+  it("anonymous warming re-poll does not burn the public-search budget", async () => {
+    // Regression (issue #2262): an anonymous visitor runs ONE cold search and
+    // the client polls revalidate() every 2s while the discovery cache warms.
+    // Each poll reruns the loader with no selected param, so the anonymous
+    // gate used to call enforcePublicSearchRateLimit again, inserting a
+    // rate_limit_events row per poll. The 21st request (search + 20 polls)
+    // self-429ed a single user-initiated search inside its own warming window.
+    // The anonymous gate now mirrors the signed-in warm-cache exemption: when
+    // a warming/complete cache entry exists for the same search key, the
+    // per-browser budget is not charged. This test invokes the loader 21 times
+    // with the same f9_anon_search cookie while a warming cache entry exists
+    // and asserts none of them 429: the exemption short-circuits the limiter,
+    // so the per-browser budget is never charged on a warm re-poll. (The
+    // real D1-backed limiter is exercised by the sibling cold-query test.)
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0012_rate_limit_events.sql");
+    const env = { DB: harness.db };
+    const getOptionalSession = vi.fn().mockResolvedValue(null);
+    const listCollections = vi.fn();
+    const warmingResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryProgress: "warming",
+      discoveryPartial: true,
+      discoverySummary: "Showing the first ads while we load more from the Ad Library.",
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(warmingResult);
+    const hasWarmSearchCacheEntry = vi.fn().mockResolvedValue(true);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: warmingResult,
+      selectedAd: null,
+      selectionEnrichmentPending: false,
+      landingPageCaptureFailure: null,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession,
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-execution.server", () => ({
+      executeSearchWithRelevance: vi.fn(),
+      hasWarmSearchCacheEntry,
+      attachKeywordSearchDomainMatch: vi.fn(),
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const anonCookie = "f9_anon_search=11111111-1111-4111-8111-111111111111";
+    const request = () =>
+      new Request("http://localhost/search?website=https%3A%2F%2Fnykaa.com", {
+        headers: { cookie: anonCookie, "cf-connecting-ip": "203.0.113.77" },
+      });
+
+    for (let index = 0; index < 21; index += 1) {
+      const result = await unwrapLoaderResult(loader, {
+        context: createContext(env),
+        request: request(),
+      } as never);
+      // A 429 would surface as a thrown Response; reaching here means the
+      // loader returned a payload, so the warm re-poll did not burn the budget.
+      expect(result).toBeDefined();
+    }
+
+    // The warm-cache exemption was exercised on every poll.
+    expect(hasWarmSearchCacheEntry).toHaveBeenCalled();
+    harness.close();
+  });
+
+  it("21 distinct cold queries from the same browser still 429 on the 21st", async () => {
+    // The warm-cache exemption must not weaken genuine abuse protection: a
+    // browser issuing 21 DISTINCT cold queries (no warm cache entry) still
+    // exhausts its per-browser public-search budget and 429s on the 21st.
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0012_rate_limit_events.sql");
+    const env = { DB: harness.db };
+    const getOptionalSession = vi.fn().mockResolvedValue(null);
+    const listCollections = vi.fn();
+    const coldResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(coldResult);
+    const hasWarmSearchCacheEntry = vi.fn().mockResolvedValue(false);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: coldResult,
+      selectedAd: null,
+      selectionEnrichmentPending: false,
+      landingPageCaptureFailure: null,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession,
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-execution.server", () => ({
+      executeSearchWithRelevance: vi.fn(),
+      hasWarmSearchCacheEntry,
+      attachKeywordSearchDomainMatch: vi.fn(),
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const anonCookie = "f9_anon_search=22222222-2222-4222-8222-222222222222";
+    const request = (query: string) =>
+      new Request(`http://localhost/search?website=${encodeURIComponent(query)}`, {
+        headers: { cookie: anonCookie, "cf-connecting-ip": "203.0.113.78" },
+      });
+
+    // 20 distinct cold queries pass.
+    for (let index = 0; index < 20; index += 1) {
+      const result = await unwrapLoaderResult(loader, {
+        context: createContext(env),
+        request: request(`https://brand-${index}.com`),
+      } as never);
+      expect(result).toBeDefined();
+    }
+
+    // The 21st distinct cold query from the same browser 429s.
+    await expect(
+      unwrapLoaderResult(loader, {
+        context: createContext(env),
+        request: request("https://brand-21.com"),
+      } as never),
+    ).rejects.toMatchObject({ status: 429 });
+    harness.close();
   });
 
   it("does not commit the visitor geo country into an anonymous search", async () => {
