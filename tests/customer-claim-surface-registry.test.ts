@@ -689,6 +689,9 @@ describe("G11 claim-surface registry", () => {
     expect(LLMS_TEXT).not.toContain(
       "Presence Desk tracks your brand and competitors across declared sources with proof-backed briefs",
     );
+    // The sneaker-resale Pages line must not regress to the unconditional
+    // screenshot promise either (judge edit: full sentence, verbatim).
+    expect(LLMS_TEXT).not.toContain("landing-page changes with saved screenshots");
     // The qualified truth stays: website/open-web is the active GA source.
     expect(LLMS_TEXT).toContain(
       "Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval",
