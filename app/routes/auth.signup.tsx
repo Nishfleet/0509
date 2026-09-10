@@ -48,6 +48,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
 
   const linkSent = url.searchParams.get("sent") === "1";
+  const linkResent = url.searchParams.get("resent") === "1";
   const message = linkSent
       ? "Check your email. The setup link will verify you and create the account."
       : magicbriefMigrationMessage(url.searchParams.get("source"));
@@ -60,7 +61,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     redirectTo,
     // The marketing hero's email-capture form lands here with ?email=…
     prefillEmail: url.searchParams.get("email")?.trim() || "",
+    // The sent state re-posts the same name on resend, so it round-trips
+    // through the redirect the same way the email does.
+    prefillName: url.searchParams.get("name")?.trim() || "",
     linkSent,
+    linkResent,
     ...(oauthProviders.length > 0 ? { oauthProviders } : {}),
     ...(message ? { message } : {}),
     ...(error ? { error } : {}),
@@ -99,6 +104,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
   const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app#setup-checklist");
+  const isResend = formData.get("resend") === "1";
 
   if (!name) {
     return signupActionError("name_required", { email, name, redirectTo });
@@ -154,7 +160,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const next = new URL("/auth/signup", request.url);
   next.searchParams.set("sent", "1");
   next.searchParams.set("email", email);
+  next.searchParams.set("name", name);
   next.searchParams.set("redirectTo", redirectTo);
+  if (isResend) {
+    next.searchParams.set("resent", "1");
+  }
   if (signupSource) {
     next.searchParams.set("source", signupSource);
   }
@@ -243,7 +253,8 @@ export default function SignupRoute() {
         <AuthForm
           error={actionData?.error ?? loaderData.error}
           initialEmail={actionData?.email ?? loaderData.prefillEmail}
-          initialName={actionData?.name ?? ""}
+          initialName={actionData?.name ?? loaderData.prefillName}
+          linkResent={loaderData.linkResent && !actionData?.error}
           linkSent={loaderData.linkSent && !actionData?.error}
           message={loaderData.message}
           mode="signup"
