@@ -10,7 +10,6 @@ import { DEMO_BRAND_PAGE_DOMAINS } from "~/lib/demo-brand-pages";
 // only reading claims. A comparison page that only asserts "domain paste +
 // proof" without showing one proof page is parity copy.
 const SITEMAP_CANONICAL_COMPARE_PAGES = [
-  "magicbrief",
   "meta-ad-library",
   "visualping-ad-libraries",
   "spyland",
@@ -45,8 +44,6 @@ afterEach(() => {
 
 async function loadCompareModule(slug: string) {
   switch (slug) {
-    case "magicbrief":
-      return import("~/routes/compare.magicbrief");
     case "meta-ad-library":
       return import("~/routes/compare.meta-ad-library");
     case "visualping-ad-libraries":

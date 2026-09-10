@@ -923,7 +923,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       )
     : null;
   // Issue 1554 cross-link: when the same searched brand domain is a known
-  // switch target (MagicBrief / Panoramata / Visualping), surface its /switch/*
+  // switch target (Panoramata / Visualping), surface its /switch/*
   // destination as a card above the fold so the switch page is discoverable at
   // the highest-intent moment. Matched server-side from the resolved domain
   // only — never a `<label>.com` guess from the query text.

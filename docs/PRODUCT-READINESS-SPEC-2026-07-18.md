@@ -26,7 +26,7 @@ You are implementing work packages (WP-xx) in a production SaaS. Follow these ru
 
 ### Conflict policy with in-flight Codex work
 
-As of 2026-07-18, a Codex agent has an unmerged branch (`codex/customer-readiness-inventory-closeout`) with pending edits to: `app/routes/marketing.tsx`, `app/lib/pricing.ts`, `app/routes/app.watchlists.tsx`, `app/lib/monitoring.server.ts`, `app/routes/compare.magicbrief.tsx`, plus release-proof tooling.
+As of 2026-07-18, a Codex agent has an unmerged branch (`codex/customer-readiness-inventory-closeout`) with pending edits to: `app/routes/marketing.tsx`, `app/lib/pricing.ts`, `app/routes/app.watchlists.tsx`, `app/lib/monitoring.server.ts`, plus release-proof tooling.
 
 - **This spec assumes you start AFTER that branch has merged.** Before your first package: `git fetch && git log --oneline -5 origin/main` and confirm a commit mentioning "inventory closeout" or "customer-readiness" exists, OR ask the operator. Always branch from latest `origin/main`.
 - Packages tagged **[CODEX-OVERLAP]** touch those files. For those: re-read the current file content first; the exact copy strings quoted here may have shifted. Apply the *intent* of the package to the current code.
@@ -401,7 +401,7 @@ Observations already persist `hook`/`offer` per ad but are never diffed — a co
 
 ---
 
-## PHASE D — CONVERSION FUNNEL & MARKETING [CODEX-OVERLAP on marketing.tsx, pricing.ts, compare.magicbrief.tsx]
+## PHASE D — CONVERSION FUNNEL & MARKETING [CODEX-OVERLAP on marketing.tsx, pricing.ts, the since-removed vendor compare route]
 
 Re-read current file contents before each package here; Codex may have shifted copy.
 
@@ -443,7 +443,7 @@ Server HTML always ships `"Monthly price loading"`, and the monthly-cycle small-
 
 **Files:** `app/routes/marketing.tsx`
 
-The H1 price-drop story sells to sales teams; the product (Boards, creative analysis, Agency plan, MagicBrief migration) is bought by marketers/agencies. Keep the distinctive price-cut wall; retarget the deck: "Your team would've found out from a client. Five to Nine watches competitors' Meta ads and landing pages, saves the screenshots, and files the brief — before your alarm goes off." Update the meta description to match (marketing teams and agencies, Meta ads + landing pages + screenshot evidence).
+The H1 price-drop story sells to sales teams; the product (Boards, creative analysis, Agency plan, competitor-list migration) is bought by marketers/agencies. Keep the distinctive price-cut wall; retarget the deck: "Your team would've found out from a client. Five to Nine watches competitors' Meta ads and landing pages, saves the screenshots, and files the brief — before your alarm goes off." Update the meta description to match (marketing teams and agencies, Meta ads + landing pages + screenshot evidence).
 
 **Acceptance:** first viewport names the audience and mechanism; og/twitter description matches.
 
@@ -458,7 +458,7 @@ The H1 price-drop story sells to sales teams; the product (Boards, creative anal
 5. Search page title → "Search competitor Meta ads free | Five to Nine".
 6. Email-in-URL privacy: the hero email capture GETs `?email=` into the URL — drop the email input in favor of a plain CTA link, or move the value via sessionStorage.
 7. Root ErrorBoundary offers "Go to homepage" alongside "Open app" (anonymous visitors currently get bounced to login).
-8. One more compare page using the `compare.magicbrief.tsx` structure: "Five to Nine vs checking the Meta Ad Library by hand" (zero competitor-brand risk); link compare pages from the footer; shared footer component across marketing + compare pages.
+8. One more compare page using the existing compare-page structure: "Five to Nine vs checking the Meta Ad Library by hand" (zero competitor-brand risk); link compare pages from the footer; shared footer component across marketing + compare pages.
 9. Explain the name once on `/`: "Named for 05:09 — your competitor brief is filed before the workday starts."
 10. Social proof, honest-only: a founder note section (needs operator input for name/photo — put a TODO placeholder structure in place, gated off until content exists), plus a "Built on the public Meta Ad Library" source-credibility line. Do NOT invent testimonials or numbers.
 

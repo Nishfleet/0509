@@ -65,8 +65,6 @@ Ad-spy / Meta-ads comparison set:
 - AdSpyder — `https://www.saashub.com/adspyder`
 - PowerAdSpy — `https://www.saashub.com/poweradspy`
 - AdPlexity — `https://www.saashub.com/adplexity`
-- MagicBrief — `https://www.saashub.com/magicbrief` (explicitly named in
-  Five to Nine's own homepage copy as a tool users may be migrating from)
 - BigSpy — `https://www.saashub.com/bigspy`
 
 Brand / competitor monitoring comparison set:

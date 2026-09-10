@@ -1543,7 +1543,6 @@ describe("SITEMAP_PATHS", () => {
     // the dynamic reader appends beside them.
     const compareWinners = [
       "/compare",
-      "/compare/magicbrief",
       "/compare/meta-ad-library",
       "/compare/visualping-ad-libraries",
       "/compare/spyland",
@@ -1586,7 +1585,6 @@ describe("SITEMAP_PATHS", () => {
     const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);
     const switchPages = Object.values(SWITCH_PAGES);
     expect(switchPages.map((page) => page.pathname).sort()).toEqual([
-      "/switch/magicbrief",
       "/switch/panoramata",
       "/switch/visualping",
     ]);
@@ -1613,8 +1611,9 @@ describe("SITEMAP_PATHS", () => {
   it("renders at least 10 indexable /ads/:domain + /compare/* locs in the built sitemap (issue #1878 termination)", () => {
     // Termination gate: the live sitemap must carry >= 10 <loc> under /ads/ or
     // /compare/ (the `/compare` bare path is excluded by the regex's trailing
-    // slash). 8 indexable /compare/* winners are static above; appending two
-    // representative indexable brand entries clears the floor, proving the
+    // slash). 7 indexable /compare/* winners are static above (issue #2127
+    // wiped one); appending three representative indexable brand entries
+    // clears the floor, proving the
     // dynamic reader + static winners jointly satisfy the acceptance metric.
     const xml = buildSitemapXml([
       {
@@ -1632,6 +1631,14 @@ describe("SITEMAP_PATHS", () => {
         priority: "0.6",
         adCount: 2,
         fetchedAt: "2026-08-20T10:00:00.000Z",
+      },
+      {
+        path: "/ads/mamaearth.in",
+        lastmod: "2026-08-19",
+        changefreq: "weekly",
+        priority: "0.6",
+        adCount: 4,
+        fetchedAt: "2026-08-19T10:00:00.000Z",
       },
     ]);
     const indexableLocs = [...xml.matchAll(

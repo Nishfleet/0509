@@ -12,7 +12,6 @@ import { readFileSync } from "node:fs";
 // sync with SITEMAP_PATHS and routes.ts — the canary guards all three together
 // (issue #1481). Routes still register the losers so they render 200.
 const COMPARE_PAGES = [
-  "compare/magicbrief",
   "compare/meta-ad-library",
   "compare/visualping-ad-libraries",
   "compare/spyland",

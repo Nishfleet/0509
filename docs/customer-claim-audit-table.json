@@ -149,7 +149,7 @@
       "claimId": "AUDIT-SAVES-SCREENSHOTS",
       "registryClaim": "PLAN-FEATURE-CATALOG",
       "text": "Five to Nine watches competitors' landing pages for price, offer, and CTA changes, then files source-linked proof and change alerts before your next meeting. ... saves page text and the source link — plus a screenshot when the capture includes one — and files the brief.",
-      "surface": "homepage meta description, homepage hero deck, competitor-monitoring meta description, competitor-monitoring hero deck, pricing evidence-usage copy, compare/magicbrief migration FAQ",
+      "surface": "homepage meta description, homepage hero deck, competitor-monitoring meta description, competitor-monitoring hero deck, pricing evidence-usage copy",
       "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts → honest screenshot copy (no unconditional 'saves the screenshots' / 'sends screenshot evidence'); tests/proof-screenshot.server.test.ts (key shape); tests/monitoring-landing-page-snapshot.test.ts (snapshot+artifact persistence). Live D1 (2026-08-27): 115/631 succeeded proof_capture rows carry screenshot_artifact_key (18%); 0/34 succeeded in the rolling 48h window. Copy matches that coverage.",
       "currentResult": "pass",
       "resultDetail": "Public copy no longer promises a screenshot on every confirmed change. Live production D1 on 2026-08-27 still shows 115/631 succeeded rows with a screenshot key (18%) and 0/34 in the last 48h, so the sentence now says source-linked proof always and a screenshot only when the capture includes one. Code path tests still prove screenshotArtifactKey is persisted when the renderer produces one.",
@@ -176,17 +176,6 @@
       "currentResult": "pass",
       "resultDetail": "/search is a public route with no auth guard. Anonymous request renders results with source/freshness labels. Tests confirm the preview-before-account copy.",
       "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
-      "nishReserved": false
-    },
-    {
-      "claimId": "AUDIT-MIGRATION-SELF-SERVE",
-      "registryClaim": "COMPARE-MIGRATION-AFTERNOON",
-      "text": "For competitor-list migration and change monitoring, yes: your tracked brands import as watchlists, and paid plans check them every 3–6 hours with source-linked proof. For browsing saved creative collections and boards, no — that saved work does not transfer, and Five to Nine's library is narrower and change-focused.",
-      "surface": "compare/magicbrief migration FAQ",
-      "liveQueryOrTest": "tests/marketing-magicbrief-cta.test.ts; tests/customer-claim-surface-registry.test.ts → COMPARE-MIGRATION-AFTERNOON removedTextCheck (no 'in an afternoon' promise); app/routes/compare.magicbrief.tsx (MIGRATION_SIGNUP_PATH self-serve, no time promise)",
-      "currentResult": "pass",
-      "resultDetail": "The 'in an afternoon' promise was removed (registry status removed_from_product_contract). The migration FAQ honestly scopes what transfers (watchlist brands) and what does not (creative collections/boards). No time guarantee.",
-      "betOrCopyChange": "bet 4 (the plan-gated feature catalog) — the removed afternoon promise is the copy change already made",
       "nishReserved": false
     },
     {
@@ -257,8 +246,8 @@
     }
   ],
   "summary": {
-    "totalClaims": 22,
-    "pass": 21,
+    "totalClaims": 21,
+    "pass": 20,
     "failCopyChangeNeeded": 0,
     "nishReserved": 1,
     "passCodeDataPending": 0,

@@ -56,7 +56,6 @@ const COMPARE_PAGES = [
     module: "~/routes/compare.meta-ad-library",
     citations: "~/data/compare/meta-ad-library-citations.json",
   },
-  { slug: "magicbrief", module: "~/routes/compare.magicbrief", citations: "~/data/compare/magicbrief-citations.json" },
   { slug: "pulzifi", module: "~/routes/compare.pulzifi", citations: "~/data/compare/pulzifi-citations.json" },
   { slug: "spyland", module: "~/routes/compare.spyland", citations: "~/data/compare/spyland-citations.json" },
 ] as const;

@@ -17,7 +17,7 @@ import {
 import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 
 const pageDescription =
-  "Five to Nine vs the alternatives: source-backed competitor ad and landing-page change monitoring compared to Visualping, MagicBrief, Panoramata, Foreplay, Spyland, Pulzifi, and more.";
+  "Five to Nine vs the alternatives: source-backed competitor ad and landing-page change monitoring compared to Visualping, Panoramata, Foreplay, Spyland, Pulzifi, and more.";
 
 export const links: LinksFunction = () => canonicalLinks("/compare");
 
@@ -28,9 +28,8 @@ export const meta: MetaFunction = () =>
     pathname: "/compare",
   });
 
-/** The 8 indexed /compare/* product pages the hub links. */
+/** The 7 indexed /compare/* product pages the hub links. */
 const COMPARE_PAGES = [
-  { slug: "magicbrief", label: "Five to Nine vs MagicBrief", href: "/compare/magicbrief" },
   { slug: "meta-ad-library", label: "vs checking the Meta Ad Library by hand", href: "/compare/meta-ad-library" },
   // /compare/visualping and /compare/foreplay are not linked here (issue
   // #1481): both are duplicates that canonicalize to their more specific
@@ -159,7 +158,7 @@ export default function CompareIndexRoute() {
   // the matched `:locale` param here survives the wrapper — `/compare` has
   // no `params.locale` and keeps bare EN `/compare/*` links, while
   // `/de/compare` resolves `de` and prefixes every child href so a non-EN
-  // visitor stays in the locale (`/de/compare/magicbrief`, ...).
+  // visitor stays in the locale (`/de/compare/panoramata`, ...).
   const params = useParams<{ locale?: string }>();
   const localePrefix =
     params.locale && isBuyerSurfaceLocaleId(params.locale)

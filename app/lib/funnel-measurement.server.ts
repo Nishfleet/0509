@@ -28,9 +28,7 @@ export type FunnelEventKind =
   | "search_preview_submit"
   | "search_preview_result"
   | "search_preview_error"
-  | "migration_view"
   | "signup_start"
-  | "signup_start_magicbrief"
   | "signup_start_locale_en"
   | "signup_start_locale_de"
   | "signup_start_locale_ja"
@@ -49,22 +47,13 @@ export type FunnelEventKind =
 export type FunnelRoute =
   | "home"
   | "search_preview"
-  | "magicbrief_migration"
   | "sneaker_resale"
   | "signup"
   | "activation";
 
 /**
- * The exact signup-URL marker the migration page's CTA appends. Recognition
- * happens by comparing against this constant server-side; the marker itself is
- * never stored in a record — it only selects which allowlisted event kind is
- * emitted (`signup_start_magicbrief` instead of `signup_start`).
- */
-export const MAGICBRIEF_MIGRATION_SOURCE = "magicbrief-migration";
-
-/**
  * The exact signup-URL marker the /pricing Free card CTA appends (issue
- * #1499). Same contract as the MagicBrief marker: compared server-side
+ * #1499). Recognition happens by comparing server-side
  * against this allowlisted constant, and the raw marker value is never
  * stored in a record or a funnel field. It selects the
  * `pricing_free_card_clicked` kind so scouts can measure whether surfacing
@@ -85,9 +74,7 @@ const FUNNEL_ROUTES: Record<FunnelEventKind, FunnelRoute> = {
   search_preview_submit: "search_preview",
   search_preview_result: "search_preview",
   search_preview_error: "search_preview",
-  migration_view: "magicbrief_migration",
   signup_start: "signup",
-  signup_start_magicbrief: "signup",
   signup_start_locale_en: "signup",
   signup_start_locale_de: "signup",
   signup_start_locale_ja: "signup",
@@ -109,9 +96,7 @@ const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
   search_preview_submit: "funnel_search_preview_submit",
   search_preview_result: "funnel_search_preview_result",
   search_preview_error: "funnel_search_preview_error",
-  migration_view: "funnel_migration_view",
   signup_start: "funnel_signup_start",
-  signup_start_magicbrief: "funnel_signup_start_magicbrief",
   signup_start_locale_en: "funnel_signup_start_locale_en",
   signup_start_locale_de: "funnel_signup_start_locale_de",
   signup_start_locale_ja: "funnel_signup_start_locale_ja",
@@ -133,9 +118,7 @@ const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
   search_preview_submit: "Anonymous search preview submitted",
   search_preview_result: "Anonymous search preview returned results",
   search_preview_error: "Anonymous search preview failed",
-  migration_view: "Anonymous MagicBrief migration page view",
   signup_start: "Anonymous signup started",
-  signup_start_magicbrief: "Anonymous signup started from the MagicBrief migration page",
   signup_start_locale_en: "Anonymous signup started from the English sneaker-resale page",
   signup_start_locale_de: "Anonymous signup started from the German sneaker-resale page",
   signup_start_locale_ja: "Anonymous signup started from the Japanese sneaker-resale page",
@@ -325,29 +308,6 @@ export function emitFunnelSignupStart(env: AppEnv, request: Request) {
   emitFunnelEvent(env, "signup_start", {}, request);
 }
 
-export function emitFunnelMigrationView(env: AppEnv, request: Request) {
-  emitFunnelEvent(env, "migration_view", {}, request);
-}
-
-/**
- * Signup attribution for the MagicBrief wind-down blitz. The caller resolves
- * the URL marker to a boolean; the boolean selects the allowlisted event kind.
- * The raw query value never enters this module, so it can never reach a record
- * field (same invariant as every other coarse input).
- */
-export function emitFunnelSignupStartFromMigrationReferrer(
-  env: AppEnv,
-  request: Request,
-  fromMigrationReferrer: boolean,
-) {
-  emitFunnelEvent(
-    env,
-    fromMigrationReferrer ? "signup_start_magicbrief" : "signup_start",
-    {},
-    request,
-  );
-}
-
 /**
  * Locale sneaker-resale page view. Locale is an allowlisted id, never a
  * caller-controlled string, so it can only select which event kind fires.
@@ -361,8 +321,8 @@ export function emitFunnelLocaleSegmentView(
 }
 
 /**
- * Signup attribution from an allowlisted `source=` marker (MagicBrief
- * migration or a sneaker-resale locale page). The raw query value is compared
+ * Signup attribution from an allowlisted `source=` marker (the /pricing
+ * Free card or a sneaker-resale locale page). The raw query value is compared
  * to constants and never stored.
  */
 export function emitFunnelSignupStartFromAllowlistedSource(
@@ -370,10 +330,6 @@ export function emitFunnelSignupStartFromAllowlistedSource(
   request: Request,
   source: string | null,
 ) {
-  if (source === MAGICBRIEF_MIGRATION_SOURCE) {
-    emitFunnelEvent(env, "signup_start_magicbrief", {}, request);
-    return;
-  }
   if (source === PRICING_FREE_SIGNUP_SOURCE) {
     emitFunnelEvent(env, "pricing_free_card_clicked", {}, request);
     return;

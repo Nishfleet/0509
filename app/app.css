@@ -4138,10 +4138,9 @@ one signal-green accent.
 
 .f9-home .ld-hero .f9-announcement span { color: var(--ld-ink-soft); }
 
-/* MagicBrief wind-down callout (issue 965): same pill as the free-preview
-   announcement; only the accent changes so the migration path is visible
-   next to it. #1212 wraps both pills in .ld-hero-callouts so they sit on
-   one desktop row instead of stacking the search command under the fold. */
+/* Hero callout row: #1212 wraps the announcement pills in .ld-hero-callouts
+   so they sit on one desktop row instead of stacking the search command
+   under the fold. */
 .f9-home .ld-hero .ld-hero-callouts {
   display: flex;
   flex-wrap: wrap;
@@ -4152,15 +4151,6 @@ one signal-green accent.
 
 .f9-home .ld-hero .ld-hero-callouts .f9-announcement {
   margin-bottom: 0;
-}
-
-.f9-home .ld-hero .f9-migration-callout {
-  box-shadow: inset 0 0 0 1.5px var(--ld-red);
-}
-
-.f9-home .ld-hero .f9-migration-callout strong {
-  background: var(--ld-red);
-  color: var(--ld-card);
 }
 
 .f9-home .f9-growth-pricing h1,
@@ -4953,9 +4943,9 @@ one signal-green accent.
   color: var(--ld-green-ink);
 }
 
-/* MagicBrief migration CTA — the wind-down capture block on /compare/magicbrief.
-   Inline flex with the honest not-imported boundary kept on the page; the button
-   is the only self-serve migration action. */
+/* Migration CTA block (sneaker-resale landing). Inline flex with the honest
+   not-imported boundary kept on the page; the button is the only self-serve
+   action. */
 .ld-migration-cta {
   display: flex;
   align-items: center;

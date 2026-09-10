@@ -23,7 +23,7 @@ describe("buildCompetitorImportPreview", () => {
 
   it("accepts plain competitor names as advertiser targets", () => {
     const preview = buildCompetitorImportPreview({
-      rawText: "MagicBrief\nForeplay",
+      rawText: "Adbeat\nForeplay",
       country: "US",
       planLimit: 10,
       currentCount: 0,
@@ -32,8 +32,8 @@ describe("buildCompetitorImportPreview", () => {
     expect(preview.summary.valid).toBe(2);
     expect(preview.rows[0]?.normalizedUrl).toBeNull();
     expect(preview.rows[0]?.target).toMatchObject({
-      targetId: "MagicBrief",
-      targetLabel: "MagicBrief",
+      targetId: "Adbeat",
+      targetLabel: "Adbeat",
       targetType: "advertiser",
       targetCountry: "US",
     });

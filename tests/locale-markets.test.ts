@@ -56,7 +56,7 @@ describe("sneaker-resale locale catalog", () => {
       );
       expect(sneakerResaleCopy(market.id).h1).not.toContain(market.signupSource);
     }
-    expect(isSneakerResaleSignupSource("magicbrief-migration")).toBe(false);
+    expect(isSneakerResaleSignupSource("pricing-free")).toBe(false);
     expect(isSneakerResaleSignupSource("locale-fr-sneaker-resale")).toBe(false);
     expect(isSneakerResaleLocaleId("fr")).toBe(false);
   });
@@ -152,10 +152,10 @@ describe("buyer-surface locale cluster (issue #1501)", () => {
     expect(matchBuyerSurfaceSplat("competitor-monitoring")).toBe("competitor-monitoring");
     expect(matchBuyerSurfaceSplat("capture-rules")).toBe("capture-rules");
     expect(matchBuyerSurfaceSplat("methodology")).toBe("methodology");
-    // Sub-paths that aren't a registered buyer surface (e.g. /compare/magicbrief
+    // Sub-paths that aren't a registered buyer surface (e.g. /compare/visualping
     // is its own named route, not part of the cluster) must 404 so the
     // cluster stays bounded.
-    expect(matchBuyerSurfaceSplat("compare/magicbrief")).toBeNull();
+    expect(matchBuyerSurfaceSplat("compare/visualping")).toBeNull();
     expect(matchBuyerSurfaceSplat("pricing/extra")).toBeNull();
     expect(matchBuyerSurfaceSplat("totally-unknown")).toBeNull();
   });

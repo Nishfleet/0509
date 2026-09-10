@@ -609,15 +609,6 @@ export function PricingSection({
         {EVIDENCE_USAGE_CUSTOMER_COPY}
       </p>
 
-      <p className="ld-pricing-note">
-        Coming from MagicBrief or another tool that&rsquo;s winding down? Your competitor list
-        imports as watchlists — see the{" "}
-        <Link to="/compare/magicbrief">migration guide</Link>. Collections, boards, analytics
-        history, and past evidence are not migrated by Five to Nine — you recreate them with our
-        help. Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll set up your
-        watchlists with you, person to person.
-      </p>
-
       <div className="ld-bundles" aria-label="Proof capture packs">
         <div className="ld-bundles-head">
           <span className="ld-kicker">Proof capture packs</span>

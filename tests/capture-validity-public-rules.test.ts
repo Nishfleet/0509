@@ -128,7 +128,7 @@ describe("public capture-validity rules page (#970, #1432)", () => {
     const source = readFileSync(routePath, "utf8");
     const combined = `${source}\n${markup}`;
 
-    expect(combined).not.toMatch(/visualping|magicbrief|spyland|pulzifi|foreplay|pagecrawl|panoramata/i);
+    expect(combined).not.toMatch(/visualping|spyland|pulzifi|foreplay|pagecrawl|panoramata/i);
     expect(combined).not.toMatch(/#1|best competitor|nobody advertises/i);
   });
 
