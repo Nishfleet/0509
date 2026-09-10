@@ -378,9 +378,9 @@ export function PricingSection({
           <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
         </div>
         <p className="ld-pricing-note">
-          Free: watch 1 competitor — instant first scan, a proof-backed weekly Monday brief, and 1
-          Collection. No card required. Paid plans add 3–6 hour checks, evidence,
-          more competitors, Collections, daily briefs, and clear check caps. Save
+          Free: watch 1 competitor — one first check and one first brief, Meta Ad Library only.
+          No card required. Paid plans add automatic checks, evidence, more competitors,
+          Collections, daily briefs, and clear check caps. Save
           winning ads to collections — and see how long each ad has been running when the Ad Library
           shares dates.
         </p>
@@ -424,18 +424,17 @@ export function PricingSection({
           <small>free, forever</small>
           <div className="f9-plan-value" aria-label="Free value summary">
             <strong>
-              Watch 1 competitor — instant first scan, a proof-backed weekly Monday brief, and 1
-              Collection.
+              Watch 1 competitor — one first check and one first brief, Meta Ad Library only.
             </strong>
             <span>No card required.</span>
           </div>
-          <p>Weekly proof-backed briefs from an instant first scan, with one saved Collection.</p>
+          <p>One first check files one first brief, from the Meta Ad Library only.</p>
           <ul className="f9-plan-feature-list">
-            <li>Watch 1 competitor</li>
-            <li>Instant first scan</li>
-            <li>Weekly proof-backed brief</li>
-            <li>1 Collection</li>
-            <li>No card required</li>
+            <li>1 competitor</li>
+            <li>First check + first brief</li>
+            <li>Meta Ad Library only</li>
+            <li>No automatic checks</li>
+            <li>No exports or API</li>
           </ul>
           <Link to="/auth/signup?source=pricing-free">Start free</Link>
         </article>

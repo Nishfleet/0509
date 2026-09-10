@@ -98,10 +98,11 @@ describe("/pricing tier-card grid (#1499)", () => {
     expect(freeCard.toLowerCase()).toContain("no card required");
     // The feature list mirrors the ld-pricing-note prose paragraph.
     for (const feature of [
-      "Watch 1 competitor",
-      "Instant first scan",
-      "Weekly proof-backed brief",
-      "1 Collection",
+      "1 competitor",
+      "First check + first brief",
+      "Meta Ad Library only",
+      "No automatic checks",
+      "No exports or API",
     ]) {
       expect(freeCard).toContain(feature);
     }

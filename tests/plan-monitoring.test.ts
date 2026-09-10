@@ -293,7 +293,7 @@ afterEach(() => {
 });
 
 describe("runWeeklyDigests", () => {
-  it("generates the weekly digest for free-plan users (free weekly watch)", async () => {
+  it("skips free-plan users in the recurring weekly digest (barebones: first brief only)", async () => {
     const listWatchlists = vi.fn().mockResolvedValue([
       {
         id: "watch-1",
@@ -412,19 +412,11 @@ describe("runWeeklyDigests", () => {
       { periodEnd: "2026-07-13T05:00:00.000Z" },
     );
 
-    // Free now receives the weekly digest (heartbeat when the period is
-    // quiet) — the email itself carries the upgrade line, covered in
-    // tests/free-weekly-watch.test.ts.
-    expect(result).toBe(1);
-    expect(listWatchlists).toHaveBeenCalled();
-    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        userId: "user-1",
-        cadence: "weekly",
-        heartbeat: expect.objectContaining({ runs: 2 }),
-      }),
-    );
+    // Free is barebones: the activation scan files the one first brief, then
+    // no recurring weekly digest is generated. The weekly cron skips free.
+    expect(result).toBe(0);
+    expect(listWatchlists).not.toHaveBeenCalled();
+    expect(deliverWeeklyDigest).not.toHaveBeenCalled();
     vi.doUnmock("~/lib/delivery.server");
   });
 

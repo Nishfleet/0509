@@ -27,11 +27,11 @@
     {
       "claimId": "AUDIT-CADENCE-FREE-WEEKLY",
       "registryClaim": "PLAN-CADENCE",
-      "text": "Free: watch 1 competitor — instant first scan, a weekly proof-backed brief, and 1 Collection. No card required.",
+      "text": "Free: watch 1 competitor — one first check and one first brief, Meta Ad Library only. No card required.",
       "surface": "pricing section note, homepage final CTA",
-      "liveQueryOrTest": "tests/plan-entitlements.test.ts → 'gives free one watchlist, one Collection, and one evidence check on a weekly rhythm', 'schedules free exactly once per week: only the Monday 03:00 UTC tick'",
+      "liveQueryOrTest": "tests/plan-entitlements.test.ts → 'gives free one watchlist, no Collections, and one evidence check on a first-only rhythm', 'schedules free exactly once per week: only the Monday 03:00 UTC tick'; tests/monitoring-fanout.test.ts → 'skips free workspaces after the first scan is reserved'",
       "currentResult": "pass",
-      "resultDetail": "Free entitlements: watchlists=1, collections=1, includedEvidenceChecksPerMonth=1, scheduledScanCadence='weekly', digestCadence='weekly'. Weekly scan gates to Monday 03:00 UTC only.",
+      "resultDetail": "Free entitlements: watchlists=1, collections=0, includedEvidenceChecksPerMonth=1, scheduledScanCadence='weekly', digestCadence='weekly', briefs='first_only', sources=['meta']. planAllowsDigestCadence('free') returns false so no recurring brief is filed; monitoring-fanout skips free after firstScanQuotaReserved.",
       "betOrCopyChange": "bet 1 (the monitoring cadence contract)",
       "nishReserved": false
     },

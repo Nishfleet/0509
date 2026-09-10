@@ -185,6 +185,32 @@ describe("pricing section render smoke", () => {
     expect(markup).not.toMatch(/<h1\b/);
   });
 
+  it("renders the barebones Free column with exactly the five bullets", async () => {
+    const { PricingSection } = await import("~/components/pricing-section");
+    const markup = renderToStaticMarkup(
+      createElement(PricingSection, {
+        commercialLaunch: {
+          scoutSaleOpen: true,
+          starterSaleOpen: true,
+          agencySaleOpen: false,
+        },
+        initialPricingPreview: null,
+      }),
+    );
+
+    // Free is barebones: one competitor, one first check + first brief, Meta
+    // only, no automatic checks, no exports or API.
+    expect(markup).toContain("1 competitor");
+    expect(markup).toContain("First check + first brief");
+    expect(markup).toContain("Meta Ad Library only");
+    expect(markup).toContain("No automatic checks");
+    expect(markup).toContain("No exports or API");
+    // The old free claims are gone.
+    expect(markup).not.toContain("1 Collection");
+    expect(markup).not.toContain("Weekly proof-backed brief");
+    expect(markup).not.toContain("Instant first scan");
+  });
+
   it("renders a single plain-text h1 in the route SSR output", async () => {
     const { default: PricingRoute } = await import("~/routes/pricing");
     const markup = renderToStaticMarkup(createElement(PricingRoute));
