@@ -102,6 +102,15 @@ async function mockRouter(loaderData: unknown) {
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       useRevalidator: vi.fn().mockReturnValue({ revalidate: vi.fn() }),
+      // The setup card answers its quick-create through a fetcher, so a
+      // render that reaches the onboarding state needs the stub to exist.
+      useFetcher: vi.fn().mockReturnValue({
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        data: undefined,
+        state: "idle",
+        submit: vi.fn(),
+      }),
     };
   });
 }
@@ -831,6 +840,59 @@ describe("dashboard route agent memory", () => {
       expect(markup).not.toContain("Live source ready");
     },
   );
+
+  it("greets an onboarding account as a first scan, not a returning one", async () => {
+    await mockRouter({
+      savedQueries: [],
+      collections: [],
+      watchlists: [],
+      digests: [],
+      recentEvents: [],
+      recentProofCaptures: [],
+      deliveryTargets: [],
+      metaStatus: { status: "healthy", summary: "Healthy", lastCheckedAt: null },
+      proofUsage: {
+        warningLevel: "ok",
+        used: 0,
+        limit: 0,
+        remaining: 0,
+        plan: "free",
+      },
+      overnightStats: { runs: 0, watchlistsChecked: 0, adsSeen: 0 },
+      successfulProofStats: { count: 0, latestAt: null },
+      workspaceReadiness: {
+        status: "attention",
+        readyCount: 0,
+        totalCount: 1,
+        items: [
+          {
+            id: "first_competitor",
+            label: "Add your first competitor",
+            status: "action",
+            detail: "Add a competitor to start watching the market.",
+            action: null,
+          },
+        ],
+        nextActions: [],
+        nudges: [],
+        counts: {},
+      },
+      counterMoveFollowUps: [],
+      plan: "free",
+      teamMemberCount: 0,
+      nextScanLabel: "Activation scan only",
+      hasPaymentIssue: false,
+      checkoutReturn: false,
+    });
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain(
+      "Welcome — your first scan starts from the setup card below.",
+    );
+    expect(markup).not.toContain("Welcome back.");
+    expect(markup).not.toContain("No brief has been filed yet.");
+  });
 
   it("describes payment interruption without inventing provider retry behavior", async () => {
     await mockRouter({

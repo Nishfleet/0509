@@ -792,17 +792,24 @@ export default function AppDashboardRoute() {
             : { label: marketDeskBrief.action.label, to: marketDeskBrief.action.href }
         }
         context={
-          <>
-            Welcome back.{" "}
-            {latestDigest ? (
-              <>
-                Your latest brief was filed{" "}
-                <LocalTime iso={latestDigest.createdAt} mode="date" />.
-              </>
-            ) : (
-              "No brief has been filed yet."
-            )}
-          </>
+          // Someone who signed up moments ago and landed on #setup-checklist
+          // has no past visit to be welcomed back to, and telling them no
+          // brief exists yet reads as a fault rather than a next step.
+          hasBlockingSetupGaps ? (
+            "Welcome — your first scan starts from the setup card below."
+          ) : (
+            <>
+              Welcome back.{" "}
+              {latestDigest ? (
+                <>
+                  Your latest brief was filed{" "}
+                  <LocalTime iso={latestDigest.createdAt} mode="date" />.
+                </>
+              ) : (
+                "No brief has been filed yet."
+              )}
+            </>
+          )
         }
         title="Today"
       />
