@@ -102,6 +102,15 @@ async function mockRouter(loaderData: unknown) {
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       useRevalidator: vi.fn().mockReturnValue({ revalidate: vi.fn() }),
+      // The setup card answers its quick-create through a fetcher, so a
+      // render that reaches the onboarding state needs the stub to exist.
+      useFetcher: vi.fn().mockReturnValue({
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        data: undefined,
+        state: "idle",
+        submit: vi.fn(),
+      }),
     };
   });
 }
@@ -831,6 +840,153 @@ describe("dashboard route agent memory", () => {
       expect(markup).not.toContain("Live source ready");
     },
   );
+
+  // The two states the reviewer proved the first-scan greeting must NOT
+  // swallow: a long-standing account whose first digest has not been sent
+  // yet (`first_digest` stays unready until a digest is actually sent), and a
+  // transient readiness read failure, where the setup card is replaced by a
+  // retry specimen so the copy would point at nothing.
+  const onboardingShape = (
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    savedQueries: [],
+    collections: [],
+    watchlists: [],
+    digests: [],
+    recentEvents: [],
+    recentProofCaptures: [],
+    deliveryTargets: [],
+    metaStatus: { status: "healthy", summary: "Healthy", lastCheckedAt: null },
+    proofUsage: {
+      warningLevel: "ok",
+      used: 0,
+      limit: 0,
+      remaining: 0,
+      plan: "free",
+    },
+    overnightStats: { runs: 0, watchlistsChecked: 0, adsSeen: 0 },
+    successfulProofStats: { count: 0, latestAt: null },
+    workspaceReadiness: {
+      status: "attention",
+      readyCount: 0,
+      totalCount: 1,
+      items: [
+        {
+          id: "first_competitor",
+          label: "Add your first competitor",
+          status: "action",
+          detail: "Add a competitor to start watching the market.",
+          action: null,
+        },
+      ],
+      nextActions: [],
+      nudges: [],
+      counts: {},
+    },
+    counterMoveFollowUps: [],
+    plan: "free",
+    teamMemberCount: 0,
+    nextScanLabel: "Activation scan only",
+    hasPaymentIssue: false,
+    checkoutReturn: false,
+    ...overrides,
+  });
+
+  it("greets an onboarding account as a first scan, not a returning one", async () => {
+    await mockRouter(onboardingShape());
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain(
+      "Welcome — your first scan starts from the setup card below.",
+    );
+    expect(markup).not.toContain("Welcome back.");
+    expect(markup).not.toContain("No brief has been filed yet.");
+  });
+
+  it("still welcomes back an established account whose first digest has not sent", async () => {
+    await mockRouter(
+      onboardingShape({
+        workspaceReadiness: {
+          status: "attention",
+          readyCount: 3,
+          totalCount: 4,
+          items: [
+            {
+              id: "first_competitor",
+              label: "First competitor",
+              status: "ready",
+              detail: "1 competitor saved.",
+              action: null,
+            },
+            {
+              id: "first_digest",
+              label: "First digest",
+              status: "needs_setup",
+              detail: "Digest history appears after monitored changes.",
+              action: { label: "Open digests", href: "/app/digests" },
+            },
+          ],
+          nextActions: [],
+          nudges: [],
+          counts: { competitors: 1 },
+        },
+        watchlists: [
+          {
+            id: "watch-1",
+            userId: "user-1",
+            name: "Competitor one",
+            domain: "competitor.com",
+            targetCountry: "all",
+            isActive: true,
+            lastScannedAt: "2026-06-01T00:00:00.000Z",
+            createdAt: "2026-05-15T00:00:00.000Z",
+            updatedAt: "2026-05-15T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Welcome back.");
+    expect(markup).not.toContain(
+      "Welcome — your first scan starts from the setup card below.",
+    );
+  });
+
+  it("does not promise a setup card when readiness fails to load", async () => {
+    // Drive the real loader so `readinessUnavailable` is genuinely set from
+    // the readiness section warning, rather than asserted via a hand-built
+    // payload that never reaches the failing branch.
+    mockDashboardLoaderDependencies({ failedSection: "readiness" });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(loaderData.sectionWarnings).toContainEqual({
+      section: "readiness",
+      message: "We couldn't load this section.",
+    });
+
+    vi.resetModules();
+    await mockRouter(loaderData);
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    // The setup card is replaced by a retry specimen in this state, so the
+    // first-scan copy must not promise one. Note the fail-closed fallback
+    // carries `items: []`, so this state is already excluded by the gap
+    // count; this test pins the behaviour rather than the specific guard.
+    expect(markup).toContain("Setup status is temporarily unavailable");
+    expect(markup).not.toContain(
+      "Welcome — your first scan starts from the setup card below.",
+    );
+    expect(markup).toContain("Welcome back.");
+  });
 
   it("describes payment interruption without inventing provider retry behavior", async () => {
     await mockRouter({
