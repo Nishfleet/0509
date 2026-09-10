@@ -186,7 +186,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("CTA changed on the destination page");
     expect(marketingRoute).not.toContain("Evidence on file. No screenshots, no claim.");
     expect(marketingRoute).not.toContain("evidence on file");
-    expect(marketingRoute).toContain("Recommended launch plan");
+    expect(marketingRoute).toContain("<span>Recommended</span>");
     expect(marketingRoute).toContain("Start with Starter");
     expect(marketingRoute).toContain("3-hour competitor monitoring");
     expect(marketingRoute).toContain("3 competitors checked every 6 hours");
