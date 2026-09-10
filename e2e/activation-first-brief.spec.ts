@@ -6,17 +6,17 @@ import { DatabaseSync } from "node:sqlite";
 import {
   readFirstBriefState,
   seedFreshFirstBriefEvidence,
-} from "../../scripts/bet7-activation-verification.mjs";
-import { resolveE2ePersistPath } from "../../scripts/e2e-local-fixture.mjs";
-import { resolveLocalD1DatabasePath } from "../../scripts/e2e-local-state-query.mjs";
-import { reserveLocalReleaseOrigin } from "../../scripts/local-release-server.mjs";
+} from "../scripts/bet7-activation-verification.mjs";
+import { resolveE2ePersistPath } from "../scripts/e2e-local-fixture.mjs";
+import { resolveLocalD1DatabasePath } from "../scripts/e2e-local-state-query.mjs";
+import { reserveLocalReleaseOrigin } from "../scripts/local-release-server.mjs";
 
 /**
  * Issue #1487 — BET 7 termination spec.
  *
  * The issue's termination command is:
  *   npx playwright test --config=playwright.config.ts --project=workspace \
- *     tests/e2e/activation-first-brief.spec.ts
+ *     e2e/activation-first-brief.spec.ts
  *
  * This spec is self-contained: it does NOT rely on the shared webServer block
  * (which never sets SIGNUP_FIRST_BRIEF_ENABLED — the surface under test would
