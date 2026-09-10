@@ -25,8 +25,6 @@ import {
 } from "~/lib/competitor-list-display";
 import {
   DASHBOARD_PRIMARY_NAV,
-  DASHBOARD_SETTINGS_NAV,
-  isSettingsNavPath,
 } from "~/lib/dashboard-navigation";
 import { buildOvernightSentence } from "~/lib/overnight-sentence";
 import type { WatchEventRecord, WatchlistRecord } from "~/lib/types";
