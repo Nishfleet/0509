@@ -119,14 +119,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
 
   // Pricing is deliberately NOT resolved here (issue #2389). Buyer-country
-  // Dodo prices embedded in this HTML were the only reason this public page
-  // was pinned to `cache-control: private` instead of the worker's shared
+  // Dodo prices embedded in this HTML were the reason this public page was
+  // pinned to `cache-control: private` instead of the worker's shared
   // `public, max-age=300` policy, and they cost a 2.5s SSR bound plus ~8 Dodo
   // checkout-preview calls per cold isolate. PricingSection fetches the
   // already-existing /api/pricing-preview from the client instead, so this
-  // document carries no country-varying data and rides the edge cache. The
-  // route still declares the `pricingPreview` field so its data shape stays
-  // identical to /pricing; it is always the "no preview" sentinel here.
+  // document carries no prices and rides the worker's shared policy. It is NOT
+  // country-invariant HTML — `proofBrief` and `featuredDomain` above are still
+  // chosen from the visitor's country (#2281/#1468), which a shared cache can
+  // replay across markets for the 5-minute max-age (filed as #2696). The route
+  // still declares the `pricingPreview` field so its data shape stays identical
+  // to /pricing; it is always the "no preview" sentinel here.
   return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain };
 }
 
