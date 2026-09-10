@@ -76,8 +76,18 @@ async function takedownRestoreTargetIds(
       INNER JOIN proof_target ON proof_target.id = failed.proof_target_id
       WHERE proof_target.watchlist_id = ?
         AND failed.status = 'failed'
-        AND (failed.failure_code = 'landing_error_page'
-          OR json_extract(failed.capture_metadata_json, '$.unreadableReasonCode') = 'landing_error_page')
+        AND (failed.failure_code IN (
+              'landing_error_page',
+              'landing_http_error',
+              'landing_not_found',
+              'landing_gone',
+              'landing_server_error')
+          OR json_extract(failed.capture_metadata_json, '$.unreadableReasonCode') IN (
+              'landing_error_page',
+              'landing_http_error',
+              'landing_not_found',
+              'landing_gone',
+              'landing_server_error'))
         AND failed.attempted_at >= ?
     `,
     watchlistId,
@@ -159,10 +169,16 @@ function toCaptureAttempt(
     row.skip_reason ??
     null;
 
+  // Issue #1538: the narrowed http codes (not_found / gone / server_error)
+  // describe the same down-then-restored cycle as landing_error_page — a
+  // dead URL that later serves the offer again is a restore, not an error.
   const isTakedownRestore =
     options.isTakedownRestore &&
     (internalCode === "landing_error_page" ||
-      internalCode === "landing_http_error");
+      internalCode === "landing_http_error" ||
+      internalCode === "landing_not_found" ||
+      internalCode === "landing_gone" ||
+      internalCode === "landing_server_error");
 
   return {
     id: row.id,
