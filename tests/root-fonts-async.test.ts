@@ -137,6 +137,48 @@ describe("Google Fonts stylesheet loading (dogfood da0f9f345221)", () => {
 });
 
 describe("CSP nonce threading into inline boot scripts (issue #2348)", () => {
+  it("the real root loader copies the context nonce onto the loader data", async () => {
+    // The gap this closes: every other test in this file (and the worker-level
+    // suite) either mocks useRouteLoaderData or stubs the React Router handler,
+    // so deleting `cspNonce: cloudflare.cspNonce` from the loader in app/root.tsx
+    // would leave the whole suite green while prod shipped a CSP whose
+    // script-src authorised a nonce no <script> carried. That drift is silent:
+    // the browser blocks the theme boot script and the font-swap script with no
+    // server error and nothing in the logs. This drives the REAL loader.
+    const { RouterContextProvider } = await import("react-router");
+    const { cloudflareRuntimeContext } = await import("~/lib/cloudflare-context");
+    const { loader } = await import("~/root");
+
+    const context = new RouterContextProvider();
+    context.set(cloudflareRuntimeContext, {
+      env: {},
+      ctx: {} as ExecutionContext,
+      country: "IN",
+      cspNonce: "nonce-from-cloudflare-context",
+    });
+    const data = (await loader({
+      context,
+      request: new Request("https://0509.io/"),
+      params: {},
+    } as never)) as { cspNonce?: string };
+    expect(data.cspNonce).toBe("nonce-from-cloudflare-context");
+
+    // ...and with no nonce on the context it must be absent, not "" — React
+    // renders `nonce=""` for an empty string, an invalid attribute.
+    const bare = new RouterContextProvider();
+    bare.set(cloudflareRuntimeContext, {
+      env: {},
+      ctx: {} as ExecutionContext,
+      country: "IN",
+    });
+    const bareData = (await loader({
+      context: bare,
+      request: new Request("https://0509.io/"),
+      params: {},
+    } as never)) as { cspNonce?: string };
+    expect(bareData.cspNonce).toBeUndefined();
+  });
+
   it("stamps the root loader's cspNonce onto both inline scripts in Layout", async () => {
     // Dropping 'unsafe-inline' from script-src is only safe if every inline
     // script the server emits carries the SAME nonce as the CSP header. If

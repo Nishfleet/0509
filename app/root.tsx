@@ -81,7 +81,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     // inline boot scripts and React Router's <Scripts>/<Links>/
     // <ScrollRestoration> so they run under a nonce-based script-src with no
     // 'unsafe-inline'. The same nonce is in the CSP header (withSecurityHeaders).
-    cspNonce: cloudflare.cspNonce ?? "",
+    // Deliberately passed through as-is, never coerced to "": React renders
+    // `nonce=""` for an empty string, which is an invalid attribute, while an
+    // absent value drops the attribute entirely.
+    cspNonce: cloudflare.cspNonce,
   } satisfies RootLoaderData;
 }
 
