@@ -781,6 +781,19 @@ export const SITEMAP_PATHS = [
   // path to the full indexable brand surface (and Google an internal-link
   // graph instead of sitemap-only orphan pages).
   "/brands",
+  // Issue #2067: /brands/<category> indexable per-category landing pages.
+  // One static entry per curated category — the pages read the same live
+  // brand records as /brands, so they render an honest empty 404 (never a
+  // noindex shell) when a category has zero brands. lastmod is deliberately
+  // omitted (same honesty rule as every other static path — no per-page
+  // content timestamp to claim).
+  "/brands/beauty-personal-care",
+  "/brands/e-commerce",
+  "/brands/optical-eyewear",
+  "/brands/saas-software",
+  "/brands/sport-footwear",
+  "/brands/wallet-accessories",
+  "/brands/wearables-health",
   // Issue #2143: /briefs/weekly publishes the last 7 days of stored offer
   // moves across sitemap-indexable brands. One static entry (like /brands):
   // the page renders an honest quiet state instead of noindexing when
@@ -910,6 +923,13 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/": { changefreq: "daily", priority: "1.0" },
   "/search": { changefreq: "weekly", priority: "0.9" },
   "/brands": { changefreq: "weekly", priority: "0.6" },
+  "/brands/beauty-personal-care": { changefreq: "weekly", priority: "0.6" },
+  "/brands/e-commerce": { changefreq: "weekly", priority: "0.6" },
+  "/brands/optical-eyewear": { changefreq: "weekly", priority: "0.6" },
+  "/brands/saas-software": { changefreq: "weekly", priority: "0.6" },
+  "/brands/sport-footwear": { changefreq: "weekly", priority: "0.6" },
+  "/brands/wallet-accessories": { changefreq: "weekly", priority: "0.6" },
+  "/brands/wearables-health": { changefreq: "weekly", priority: "0.6" },
   "/briefs/weekly": { changefreq: "weekly", priority: "0.6" },
   "/sample-brief": { changefreq: "weekly", priority: "0.6" },
   "/llms-full.txt": { changefreq: "daily", priority: "0.6" },

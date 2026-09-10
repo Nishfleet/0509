@@ -30,7 +30,7 @@ import {
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
-import { groupBrandRecordsByCategory } from "~/lib/brand-categories";
+import { categorySlugForLabel, groupBrandRecordsByCategory } from "~/lib/brand-categories";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 
 /** A brand-page link plus whether its `/timeline/:domain` is indexable. */
@@ -145,27 +145,40 @@ export default function BrandsHubRoute() {
           </p>
         ) : (
           <div className="ld-brands-groups">
-            {data.groups.map((group) => (
-              <section key={group.category} className="ld-brand-group" aria-labelledby={`brand-group-${group.category}`}>
-                <h2 id={`brand-group-${group.category}`}>{group.category}</h2>
-                <ul className="ld-brand-list">
-                  {group.items.map((link) => (
-                    <li key={link.domain}>
-                      <Link to={link.path}>{link.name}</Link>
-                      <span>&nbsp;·&nbsp;{link.domain}</span>
-                      {link.timelineIndexable && (
-                        <>
-                          <span>&nbsp;·&nbsp;</span>
-                          <Link to={`/timeline/${encodeURIComponent(link.domain)}`}>
-                            Offer timeline
-                          </Link>
-                        </>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+            {data.groups.map((group) => {
+              // Issue #2067 — each curated category section links to its own
+              // indexable /brands/<slug> landing page. "More brands" (the
+              // fallback bucket) has no dedicated page, so its heading stays
+              // plain text.
+              const categorySlug = categorySlugForLabel(group.category);
+              return (
+                <section key={group.category} className="ld-brand-group" aria-labelledby={`brand-group-${group.category}`}>
+                  <h2 id={`brand-group-${group.category}`}>
+                    {categorySlug ? (
+                      <Link to={`/brands/${categorySlug}`}>{group.category}</Link>
+                    ) : (
+                      group.category
+                    )}
+                  </h2>
+                  <ul className="ld-brand-list">
+                    {group.items.map((link) => (
+                      <li key={link.domain}>
+                        <Link to={link.path}>{link.name}</Link>
+                        <span>&nbsp;·&nbsp;{link.domain}</span>
+                        {link.timelineIndexable && (
+                          <>
+                            <span>&nbsp;·&nbsp;</span>
+                            <Link to={`/timeline/${encodeURIComponent(link.domain)}`}>
+                              Offer timeline
+                            </Link>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
           </div>
         )}
       </section>

@@ -38,6 +38,63 @@ export const BRAND_CATEGORIES: Readonly<Record<string, string>> = {
 export const BRAND_CATEGORY_OTHER = "More brands";
 
 /**
+ * Ordered list of the curated category labels (alphabetical, matching the
+ * order `groupBrandRecordsByCategory` emits). The "More brands" fallback is
+ * deliberately excluded — it stays on the /brands hub only (issue #2067).
+ */
+export const CURATED_CATEGORY_LABELS: readonly string[] = [
+  "Beauty & personal care",
+  "E-commerce",
+  "Optical & eyewear",
+  "SaaS & software",
+  "Sport & footwear",
+  "Wallet & accessories",
+  "Wearables & health",
+];
+
+/**
+ * URL slug for a curated category label. The mapping is explicit (not
+ * derived from the label text) so a label rename never silently changes a
+ * URL — the slug is the stable indexable identifier. The slugs match the
+ * issue #2067 verify block exactly.
+ */
+const CATEGORY_LABEL_TO_SLUG: Readonly<Record<string, string>> = {
+  "Beauty & personal care": "beauty-personal-care",
+  "E-commerce": "e-commerce",
+  "Optical & eyewear": "optical-eyewear",
+  "SaaS & software": "saas-software",
+  "Sport & footwear": "sport-footwear",
+  "Wallet & accessories": "wallet-accessories",
+  "Wearables & health": "wearables-health",
+};
+
+const CATEGORY_SLUG_TO_LABEL: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(CATEGORY_LABEL_TO_SLUG).map(([label, slug]) => [slug, label]),
+);
+
+/** Ordered list of the curated category slugs (matches CURATED_CATEGORY_LABELS). */
+export const CURATED_CATEGORY_SLUGS: readonly string[] = CURATED_CATEGORY_LABELS.map(
+  (label) => CATEGORY_LABEL_TO_SLUG[label]!,
+);
+
+/**
+ * The stable URL slug for a curated category label, or null when the label
+ * is not a curated category (e.g. BRAND_CATEGORY_OTHER / "More brands").
+ */
+export function categorySlugForLabel(label: string): string | null {
+  return CATEGORY_LABEL_TO_SLUG[label] ?? null;
+}
+
+/**
+ * The curated category label for a URL slug, or null when the slug does not
+ * map to a curated category. Used by the /brands/:categorySlug route to
+ * resolve the param and 404 unknown slugs.
+ */
+export function categoryLabelForSlug(slug: string): string | null {
+  return CATEGORY_SLUG_TO_LABEL[slug] ?? null;
+}
+
+/**
  * Category for a brand page domain. Normalizes the same way the brand-name
  * override map does (lowercase, www. stripped) so a cached `www.hm.com` never
  * escapes the map into the "More brands" bucket. Unknown domains degrade to
