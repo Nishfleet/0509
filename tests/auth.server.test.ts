@@ -1848,7 +1848,13 @@ describe("Better Auth routes", () => {
     let redirectResponse: Response | null = null;
     try {
       await action({
-        context: context(env({ E2E_TEST_MODE: "1" })),
+        context: context(
+          env({
+            E2E_TEST_MODE: "1",
+            APP_ORIGIN: "http://127.0.0.1:4179",
+            BETTER_AUTH_URL: "http://127.0.0.1:4179",
+          }),
+        ),
         params: {},
         pattern: "/auth/logout",
         request,
@@ -1892,7 +1898,14 @@ describe("Better Auth routes", () => {
     let redirectResponse: Response | null = null;
     try {
       await action({
-        context: context(env({ DB: dbWithE2ETestMode(true), E2E_TEST_MODE: "0" })),
+        context: context(
+          env({
+            DB: dbWithE2ETestMode(true),
+            E2E_TEST_MODE: "0",
+            APP_ORIGIN: "http://127.0.0.1:4179",
+            BETTER_AUTH_URL: "http://127.0.0.1:4179",
+          }),
+        ),
         params: {},
         pattern: "/auth/logout",
         request,

@@ -656,7 +656,6 @@ export function isSameOriginAuthFormPost(env: AppEnv, request: Request) {
       .map((value) => originFromUrl(value))
       .filter((value): value is string => Boolean(value)),
   );
-  allowedOrigins.add(new URL(request.url).origin);
   return allowedOrigins.has(presentedOrigin);
 }
 
@@ -771,7 +770,6 @@ function betterAuthTrustedOrigins(env: AppEnv, request: Request) {
   return [
     betterAuthBaseURL(env, request),
     appOrigin(env, request),
-    new URL(request.url).origin,
     ...parseOriginList(env.BETTER_AUTH_TRUSTED_ORIGINS),
   ]
     .map((value) => removeTrailingSlash(value))
