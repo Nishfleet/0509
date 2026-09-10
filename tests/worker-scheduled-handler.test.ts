@@ -90,6 +90,7 @@ async function loadWorker() {
     failed: 0,
   });
   const reportScheduledTaskFailure = vi.fn();
+  const cleanupRateLimitEvents = vi.fn().mockResolvedValue(undefined);
   const reconcileOrchestratedWatchlistRuns = vi.fn().mockResolvedValue({
     redispatched: 0,
     recovered: 0,
@@ -178,7 +179,10 @@ async function loadWorker() {
   vi.doMock("../workers/primary-domain", () => ({ primaryDomainRedirect: vi.fn().mockReturnValue(null) }));
   vi.doMock("../workers/security-headers", () => ({ withSecurityHeaders: vi.fn((response) => response) }));
   vi.doMock("../workers/monitoring-workflow", () => ({ MonitoringWorkflow: class MonitoringWorkflow {} }));
-  vi.doMock("../app/lib/rate-limit.server", () => ({ enforceRequestRateLimit: vi.fn().mockResolvedValue(null) }));
+  vi.doMock("../app/lib/rate-limit.server", () => ({
+    cleanupRateLimitEvents,
+    enforceRequestRateLimit: vi.fn().mockResolvedValue(null),
+  }));
 
   const worker = await import("../workers/app");
   return {
@@ -198,6 +202,7 @@ async function loadWorker() {
     scheduleDigestScheduleExhaustionRecovery,
     observeScheduledTask,
     reportScheduledTaskFailure,
+    cleanupRateLimitEvents,
     sendMonthlyCustomerRecaps,
     sendScheduledObservationGapAlert,
     recordScheduledObservationGapCheckHeartbeat,
@@ -752,5 +757,57 @@ describe("Worker scheduled handler", () => {
     // The demo-brand backfill still ran on the same rail — one sibling
     // failing must not poison the other's waitUntil.
     expect(loaded.runDemoBrandBackfill).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs the rate_limit_events cleanup on the daily 04:00 cron (issue #2402)", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+
+    await loaded.worker.scheduled(
+      { cron: DAILY_DIGEST_CRON, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    // The request-path lottery is gone; the daily rail is what keeps the
+    // table bounded now.
+    expect(loaded.cleanupRateLimitEvents).toHaveBeenCalledTimes(1);
+    // The daily digest cron still runs its normal monitoring/digest work.
+    expect(loaded.runScheduledMonitoring).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not run the rate_limit_events cleanup on the 3-hour or weekly crons (issue #2402)", async () => {
+    for (const cron of [REGULAR_MONITORING_CRON, WEEKLY_DIGEST_CRON]) {
+      const loaded = await loadWorker();
+      const { ctx, pending } = createContext();
+      await loaded.worker.scheduled(
+        { cron, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
+        {} as never,
+        ctx as never,
+      );
+      await Promise.all(pending);
+      expect(loaded.cleanupRateLimitEvents).not.toHaveBeenCalled();
+    }
+  });
+
+  it("pages the operator when the rate_limit_events cleanup throws (issue #2402)", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    const failure = new Error("rate_limit_events delete failed");
+    loaded.cleanupRateLimitEvents.mockRejectedValueOnce(failure);
+
+    await loaded.worker.scheduled(
+      { cron: DAILY_DIGEST_CRON, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      "rate_limit_events_cleanup",
+      failure,
+    );
   });
 });
