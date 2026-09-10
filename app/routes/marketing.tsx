@@ -677,9 +677,9 @@ export default function MarketingRoute() {
             {heroProofStrip}
 
             <p className="ld-deck-copy">
-              Then Five to Nine watches the offer behind those ads and emails you the
-              before-and-after screenshot when it changes.{" "}
-              <b>Weekly on Free, every 3 hours on Starter.</b>
+              Then Five to Nine keeps watching the offer behind those ads. When it moves, you get the
+              before-and-after with the page text and source link — plus a screenshot when the capture
+              includes one.
             </p>
 
             <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
