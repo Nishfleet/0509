@@ -33,6 +33,7 @@ import {
 import { fetchPreview } from "./dodo-pricing-canary.mjs";
 import {
   runCanary as runBillingCanary,
+  describeBillingCanaryResponse,
   validateBillingCanaryResult,
 } from "./dodo-billing-canary.mjs";
 import { runCanary as runProofCanary } from "./launch-readiness-canary.mjs";
@@ -577,7 +578,7 @@ export async function defaultPricing({ workerVersionId, token, attempts = 3, del
 }
 
 /** @param {{ workerVersionId: string, runId: string, token: string }} input */
-async function defaultBilling({ workerVersionId, runId, token }) {
+export async function defaultBilling({ workerVersionId, runId, token }) {
   const config = {
     baseUrl: "https://0509.io",
     json: true,
@@ -590,7 +591,15 @@ async function defaultBilling({ workerVersionId, runId, token }) {
     workerVersionId,
     gateRunId: runId,
   });
-  return { ok: verdict.ok, blocker: verdict.ok ? null : verdict.blocker };
+  // Record WHICH assertion failed. Without the status + the server's own
+  // blocker the journal only says `billing_canary_http_failure`, which made
+  // "the deploy is broken" and "the canary identity drifted" indistinguishable
+  // and cost ~24h of production delivery (issue #2646).
+  return {
+    ok: verdict.ok,
+    blocker: verdict.ok ? null : verdict.blocker,
+    ...describeBillingCanaryResponse(response, payload),
+  };
 }
 
 /** @param {{ workerVersionId: string, runId: string, token: string }} input */
