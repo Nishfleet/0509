@@ -68,10 +68,13 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Try the search preview");
     // The free-preview search target is chosen by the visitor's home market
     // (issue #2281) so the CTA shows a brand the visitor recognizes — never a
-    // hardcoded nykaa path for every visitor on Earth.
+    // hardcoded nykaa path for every visitor on Earth. The CTA still renders a
+    // real /search target: the path builder must produce the same
+    // query/mode/website shape the old hardcoded nykaa path used.
     expect(marketingRoute).toContain("publicSearchTrialPathFor");
     expect(marketingRoute).toContain("featuredDomain");
     expect(marketingRoute).toContain("Try with {featuredBrandName}");
+    expect(marketingRoute).toMatch(/\/search\?query=\$\{query\}&mode=advertiser&website=/);
     expect(marketingRoute).not.toContain(
       "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com",
     );

@@ -253,6 +253,39 @@ describe("home proof brief ↔ brand page count parity (#1468)", () => {
     expect(brief.adCount).toBeGreaterThan(12);
   });
 
+  it("home /api/demo-proof and /ads/nykaa.com report the same total for an Indian visitor (#2281)", { timeout: 30_000 }, async () => {
+    installMocks({ entry: cacheEntry("nykaa.com") });
+
+    const { loader: apiLoader } = await import("~/routes/api.demo-proof");
+    const apiResponse = await apiLoader({
+      request: new Request("https://0509.io/api/demo-proof", {
+        headers: { "cf-ipcountry": "IN" },
+      }),
+      context: createContext({ DB: {} }),
+    } as never);
+    const brief = (await apiResponse.json()) as {
+      status: string;
+      adCount: number;
+    };
+
+    const { loader: adsLoader } = await import("~/routes/ads.$domain");
+    const page = await adsLoader({
+      context: createContext({ DB: {} }),
+      params: { domain: "nykaa.com" },
+      request: new Request("https://0509.io/ads/nykaa.com", {
+        headers: { "cf-ipcountry": "IN" },
+      }),
+    } as never);
+
+    // Same parity contract as the nike case: home count == brand page total
+    // for the Indian visitor's featured brand (issue #2281 "per brand").
+    expect(brief.adCount).toBe(
+      page.verifiedLinkCount + page.unverifiedMatchCount,
+    );
+    expect(brief.adCount).toBe(page.ads.length);
+    expect(brief.adCount).toBeGreaterThan(12);
+  });
+
   it("home and brand page resolve the SAME cache row (same first discovery-cache lookup)", async () => {
     const mocks = installMocks({ entry: cacheEntry("nike.com") });
 

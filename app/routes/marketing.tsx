@@ -368,10 +368,11 @@ export default function MarketingRoute() {
   const proofBrief = routeData.proofBrief ?? null;
   const changeMark = routeData.changeMark ?? null;
   // The featured demo brand, chosen by the visitor's home market (issue
-  // #2281). Defaults to nykaa.com when the loader did not supply it (e.g. a
-  // test that mocks useLoaderData without the field) so the CTA and the
-  // featured /ads link stay consistent with the proof brief's default.
-  const featuredDomain = routeData.featuredDomain ?? "nykaa.com";
+  // #2281). Defaults to nike.com (the non-India default) when the loader did
+  // not supply it (e.g. a test that mocks useLoaderData without the field) so
+  // the CTA and the featured /ads link stay consistent with the proof brief's
+  // default.
+  const featuredDomain = routeData.featuredDomain ?? "nike.com";
   const publicSearchTrialPath = publicSearchTrialPathFor(featuredDomain);
   const featuredBrandName = displayNameFromDomain(featuredDomain);
   const featuredAdsLink = pickFeaturedAdsInternalLink(
