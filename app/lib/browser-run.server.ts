@@ -17,7 +17,7 @@ import {
   LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
 } from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
-import { normalizePublicHttpUrl, resolvePublicHttpUrl } from "~/lib/public-url.server";
+import { resolvePublicHttpUrl } from "~/lib/public-url.server";
 import {
   recordBrowserJobTelemetry,
   resolveSourceForRouteContext,
@@ -87,10 +87,6 @@ const QUICK_ACTION_RETRY_MAX_DELAY_MS = 1_000;
 const QUICK_ACTION_RETRY_DELAY_MS = 250;
 const BROWSER_RUN_QUICK_ACTION_TIMEOUT_MS = 30_000;
 const BROWSER_RUN_QUICK_ACTION_JSON_MAX_BYTES = 6_000_000;
-const DEFAULT_BROWSERLESS_PROOF_ALLOWED_ORIGINS = new Set([
-  "https://0509.io",
-  "https://www.0509.io",
-]);
 const BROWSERLESS_PROOF_SNAPSHOT_MUTATION = `
 mutation LandingPageProofFallback($url: String!, $userAgent: String!) {
   userAgent(userAgent: $userAgent) {
@@ -467,55 +463,6 @@ function isBrowserInternalUrl(value: string) {
   return /^(?:about|blob|data):/i.test(value);
 }
 
-function hostnameWithWwwApexPair(hostname: string): Set<string> {
-  const host = hostname.trim().toLowerCase().replace(/\.$/, "");
-  const pair = new Set<string>([host]);
-  if (host.startsWith("www.")) {
-    pair.add(host.slice(4));
-  } else {
-    pair.add(`www.${host}`);
-  }
-  return pair;
-}
-
-function isBrowserlessProofOriginAllowed(env: AppEnv, url: URL) {
-  const configuredOrigins = String(env.BROWSERLESS_PROOF_ALLOWLIST_ORIGINS ?? "")
-    .split(/[\s,]+/)
-    .map((origin) => normalizePublicHttpUrl(origin)?.origin)
-    .filter((origin): origin is string => Boolean(origin));
-  const allowedOrigins =
-    configuredOrigins.length > 0
-      ? new Set(configuredOrigins)
-      : DEFAULT_BROWSERLESS_PROOF_ALLOWED_ORIGINS;
-
-  if (allowedOrigins.has(url.origin)) {
-    return true;
-  }
-
-  // www and apex are the same site for allowlist purposes. mamaearth.com
-  // 301s www → apex; an allowlist that only named www.mamaearth.com used to
-  // skip the Browserless fallback after that hop (issue #1919).
-  const urlHosts = hostnameWithWwwApexPair(url.hostname);
-  for (const origin of allowedOrigins) {
-    let allowed: URL;
-    try {
-      allowed = new URL(origin);
-    } catch {
-      continue;
-    }
-    if (allowed.protocol !== url.protocol) {
-      continue;
-    }
-    const allowedHosts = hostnameWithWwwApexPair(allowed.hostname);
-    for (const host of urlHosts) {
-      if (allowedHosts.has(host)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 /**
  * Rendered capture chain: Browser Run session first, Browserless BQL second.
  *
@@ -554,8 +501,15 @@ export async function captureBrowserlessProofSnapshot(
   url: string,
   options: RenderedCaptureOptions = {},
 ): Promise<LandingPageSnapshotData | null> {
+  // The Browserless leg is the second rendered-proof attempt for ANY capture
+  // URL that clears the shared SSRF guard — a paying watchlist's own brand
+  // origin, not just the demo origins a baked-in allowlist named. When the
+  // Browser Run session is unavailable or the page is too heavy, proof must
+  // still land (issue #2366). The guard, not an origin list, is the bound: a
+  // URL that resolves to a private, loopback, or internal address still
+  // returns null here and never reaches the paid provider.
   const publicUrl = await resolvePublicHttpUrl(url);
-  if (!env.BROWSERLESS_TOKEN?.trim() || !publicUrl || !isBrowserlessProofOriginAllowed(env, publicUrl)) {
+  if (!env.BROWSERLESS_TOKEN?.trim() || !publicUrl) {
     return null;
   }
 
