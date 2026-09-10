@@ -27,6 +27,30 @@ describe("inferDestinationType", () => {
     );
   });
 
+  it("classifies an apps.apple.com App Store URL as app", () => {
+    expect(
+      inferDestinationType("https://apps.apple.com/us/app/example/id123456789"),
+    ).toBe("app");
+  });
+
+  it("classifies an itunes.apple.com App Store URL as app", () => {
+    expect(inferDestinationType("https://itunes.apple.com/app/id1")).toBe(
+      "app",
+    );
+  });
+
+  it("does not classify a competitor URL with apps.apple.com in the query as app", () => {
+    expect(inferDestinationType("https://evil.com/?apps.apple.com")).toBe(
+      "website",
+    );
+  });
+
+  it("does not classify a competitor URL with apps.apple.com as a subdomain as app", () => {
+    expect(inferDestinationType("https://apps.apple.com.evil.com/")).toBe(
+      "website",
+    );
+  });
+
   it("classifies a WhatsApp wa.me URL as whatsapp", () => {
     expect(inferDestinationType("https://wa.me/123")).toBe("whatsapp");
   });
