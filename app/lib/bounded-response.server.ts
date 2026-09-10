@@ -140,7 +140,34 @@ export function contentLengthExceeds(headers: Headers, maxBytes: number) {
   return Number.isFinite(length) && length > maxBytes;
 }
 
+const DATA_URL_BASE64_PREFIX = /^data:[^;,]*(?:;[^;,]*)*;base64,/i;
+
+/**
+ * Browserless and other screenshot providers wrap base64 at 76 columns,
+ * prefix a data URL, or emit URL-safe alphabet. `atob` throws
+ * InvalidCharacterError on any of those, which used to look like a missing
+ * screenshot (`screenshot_decode_failed`) even when the bytes were valid.
+ */
+export function normalizeBase64Payload(value: string) {
+  let normalized = value.trim();
+  const dataUrl = DATA_URL_BASE64_PREFIX.exec(normalized);
+  if (dataUrl) {
+    normalized = normalized.slice(dataUrl[0].length);
+  }
+  normalized = normalized.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  const pad = normalized.length % 4;
+  if (pad) {
+    normalized += "=".repeat(4 - pad);
+  }
+  return normalized;
+}
+
+export function decodeBase64ToUint8Array(value: string) {
+  const binary = atob(normalizeBase64Payload(value));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
 export function base64DecodedLengthExceeds(value: string, maxBytes: number) {
-  const normalizedLength = value.trim().replace(/=+$/, "").length;
+  const normalizedLength = normalizeBase64Payload(value).replace(/=+$/, "").length;
   return Math.floor((normalizedLength * 3) / 4) > maxBytes;
 }
