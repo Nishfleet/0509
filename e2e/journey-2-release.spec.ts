@@ -279,7 +279,7 @@ for (const viewport of viewports) {
     await expect(page.locator(".f9-watchdetail-detail")).toBeVisible();
     await expect(
       page.getByRole("navigation", { name: "Competitor sections" }).getByRole("link"),
-    ).toHaveCount(5);
+    ).toHaveCount(6);
     if (viewport.name === "mobile") {
       const [nameBox, contextBox] = await Promise.all([
         entityHeading.boundingBox(),
