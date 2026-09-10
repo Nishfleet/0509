@@ -13,6 +13,7 @@ import {
   digestReviewerLabel,
 } from "~/lib/change-intelligence";
 import type { WatchEventRecord } from "~/lib/types";
+import type { WeeklyPublicMove } from "~/lib/weekly-public-moves.server";
 import {
   buildDigestEmail,
   buildScanTroubleEmail,
@@ -185,6 +186,95 @@ describe("buildDigestEmail", () => {
     expect(email.html).toContain("All quiet");
     expect(email.text).toContain("3 checks across 2 competitors reviewed 42 ads");
     expect(email.text).not.toContain("proof-backed");
+  });
+
+  it("omits the Elsewhere line when no public move is supplied", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      items: [],
+      heartbeat: { runs: 7, watchlistsChecked: 4, adsSeen: 128 },
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+    });
+
+    expect(email.html).not.toContain("Elsewhere this week");
+    expect(email.text).not.toContain("Elsewhere this week");
+  });
+
+  it("renders the Elsewhere line with the newest public move and its link", () => {
+    const publicMove: WeeklyPublicMove = {
+      brand: "Nykaa",
+      domain: "nykaa.com",
+      field: "Offer / price",
+      beforeText: "₹999",
+      afterText: "₹799",
+      sourceUrl: "https://nykaa.com",
+      capturedAt: "2026-06-05T10:00:00.000Z",
+      adsPath: "/ads/nykaa.com",
+      timelinePath: null,
+    };
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      items: [],
+      heartbeat: { runs: 7, watchlistsChecked: 4, adsSeen: 128 },
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      publicMove,
+    });
+
+    expect(email.html).toContain("Elsewhere this week");
+    expect(email.html).toContain("changed Offer / price on 5 Jun 2026");
+    expect(email.html).toContain('href="/ads/nykaa.com"');
+    expect(email.text).toContain(
+      "Elsewhere this week: Nykaa changed Offer / price on 5 Jun 2026 — /ads/nykaa.com",
+    );
+  });
+
+  it("links the Elsewhere line to the timeline page when no ads page is indexable", () => {
+    const publicMove: WeeklyPublicMove = {
+      brand: "boAt",
+      domain: "boat-lifestyle.com",
+      field: "Headline",
+      beforeText: null,
+      afterText: "New launch",
+      sourceUrl: "https://boat-lifestyle.com",
+      capturedAt: "2026-06-06T09:00:00.000Z",
+      adsPath: null,
+      timelinePath: "/timeline/boat-lifestyle.com",
+    };
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      items: [],
+      heartbeat: { runs: 7, watchlistsChecked: 4, adsSeen: 128 },
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      publicMove,
+    });
+
+    expect(email.html).toContain("Elsewhere this week");
+    expect(email.html).toContain("changed Headline on 6 Jun 2026");
+    expect(email.html).toContain('href="/timeline/boat-lifestyle.com"');
   });
 
   it("keeps watchlist names header-safe in digest subjects", () => {
