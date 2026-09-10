@@ -236,7 +236,7 @@ describe("D1 remote restore evidence automation", () => {
   });
 
   // Structural surface for the D1 restore-evidence workflow YAML and the
-  // scripts it invokes; assertions are frozen at 221 (reccos#2382).
+  // scripts it invokes; the file's assertions are frozen at 221 (reccos#2382).
   it("pins the D1 restore-evidence surface end to end", () => {
     const script = readFileSync(
       "scripts/d1-remote-restore-evidence.mjs",
