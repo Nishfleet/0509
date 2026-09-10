@@ -108,4 +108,35 @@ describe("/brands hub — links every indexable /ads/:domain page (issue #1417)"
     // 410/empty timeline).
     expect(markup).not.toContain('href="/timeline/adidas.com"');
   });
+
+  it("emits an ItemList JSON-LD with one ListItem per tracked brand, each linking its /ads/:domain canonical URL (issue #2215)", async () => {
+    const markup = await render(grouped());
+
+    const blocks = [...markup.matchAll(/type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(
+      (match) => JSON.parse(match[1] ?? "") as Record<string, unknown>,
+    );
+
+    const itemLists = blocks.filter((block) => block["@type"] === "ItemList");
+    expect(itemLists).toHaveLength(1);
+
+    const itemList = itemLists[0] ?? {};
+    expect(itemList["@context"]).toBe("https://schema.org");
+    const elements = (itemList.itemListElement as Array<Record<string, unknown>>) ?? [];
+    expect(elements).toHaveLength(links.length);
+    expect(elements.map((e) => e["@type"])).toEqual(Array(links.length).fill("ListItem"));
+    expect(elements.map((e) => e["position"])).toEqual(links.map((_l, i) => i + 1));
+    expect(elements.map((e) => e["name"])).toEqual(links.map((l) => l.name));
+    expect(elements.map((e) => e["item"])).toEqual(
+      links.map((l) => `https://0509.io${l.path}`),
+    );
+
+    // The existing WebPage JSON-LD is unchanged.
+    const webPages = blocks.filter((block) => block["@type"] === "WebPage");
+    expect(webPages).toHaveLength(1);
+  });
+
+  it("omits the ItemList JSON-LD when no brand pages are indexed (nothing to enumerate)", async () => {
+    const markup = await render({ allCount: 0, groups: [] });
+    expect(markup).not.toContain('"@type":"ItemList"');
+  });
 });

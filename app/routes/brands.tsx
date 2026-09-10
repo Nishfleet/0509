@@ -25,6 +25,7 @@ import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
   canonicalLinks,
+  itemListJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
   webPageJsonLd,
@@ -96,6 +97,18 @@ export const meta: MetaFunction = () =>
 export default function BrandsHubRoute() {
   const data = useLoaderData<typeof loader>();
 
+  // Issue #2215 — the hub is a browsable brand collection, so emit an
+  // ItemList with one ListItem per tracked brand, each linking to its
+  // /ads/:domain canonical URL. Built from the SAME loader brand list (no
+  // new data source) so it can never drift from the visible links. Emitted
+  // only when brands are actually listed — an empty hub has nothing to
+  // enumerate.
+  const allItems = data.groups.flatMap((group) => group.items);
+  const itemList =
+    allItems.length > 0
+      ? itemListJsonLd(allItems.map((item) => ({ name: item.name, pathname: item.path })))
+      : null;
+
   return (
     <main className="f9-home f9-brands-page">
       <script
@@ -107,6 +120,7 @@ export default function BrandsHubRoute() {
           }),
         )}
       />
+      {itemList && <script {...jsonLdScriptProps(itemList)} />}
       <MarketingNav />
 
       <section className="ld-section" aria-labelledby="brands-hub-title">
