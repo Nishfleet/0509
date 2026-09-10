@@ -5,7 +5,7 @@
 ## Scope
 
 - `app/app.css`: restyle `.f9-growth-pricing` (bone ground, ink 2px top/bottom rules, no gradient overlays) and `.f9-commerce-card` (bone card on a 2px ink rule, square corners, `6px 6px 0 var(--ink)` offset shadow, ink text). Green (`var(--green)`) is reserved for the recommended card state (`.is-recommended`); the recommendation badge (`.f9-plan-badge`) uses the WP-A4 ink fill with bone text. Removed the `7s` float animation and its sole-use `@keyframes f9-card-float` (repo-wide grep confirms sole-use; the `prefers-reduced-motion` block now has nothing to disable and is dropped). The card-internal helpers (`.f9-plan-feature-list` bullet, `.f9-price-sync`, `.f9-plan-actions` buttons) move from the dark-glass palette to tokens as part of the cards' presentation.
-- `docs/design-system-ratchet.json`: NOT touched in this PR. The ratchet json is a gate-owned path (`gate_globs` in gate-integrity.yml) and any PR change to it fails gate-integrity without a repo-admin `gate-integrity-attest:` — which a worker must never emit. `ratchet-auto-tighten` is the json's single writer and lowers the ceilings on main after this lands: measured drops are `raw-hex-color` 258→246, `non-token-border-radius` 158→152, `css-gradient` 22→12 (`node scripts/design-system-ratchet.mjs --update` against this branch says the ceilings already match reality). The pricing/card class blocks contribute 0 of each marker on this tree.
+- `docs/design-system-ratchet.json`: regenerated via `node scripts/design-system-ratchet.mjs --update` (the issue's binding judge edits require this; never hand-edited). The CSS restyle lowered the real marker counts, so the ceilings tighten to match reality: `raw-hex-color` 258→246, `non-token-border-radius` 158→152, `css-gradient` 22→12. This is a ceiling *decrease* (tightening), which gate-integrity's `ratchet_weakened` check permits — only ceiling *raises* or deletions are blocked. The pricing/card class blocks now contribute 0 of each marker.
 
 The `.ld-*` shared landing classes, `.f9-cycle-toggle`, and the bundling/FAQ/table sections are out of scope and untouched.
 
@@ -17,18 +17,19 @@ The `.ld-*` shared landing classes, `.f9-cycle-toggle`, and the bundling/FAQ/tab
 
 ## Blast Radius
 
-Touches the pricing section styling on every landing page that renders PricingSection, plus the shared `.f9-plan-feature-list` / `.f9-plan-actions` helpers on `/app/billing`. No markup, copy, pricing, logic, or tests changed. The full node vitest suite (662 files / 7885 tests) is green, so nothing on the render paths regressed.
+Touches the pricing section styling on every landing page that renders PricingSection, plus the shared `.f9-plan-feature-list` / `.f9-plan-actions` helpers on `/app/billing`, plus the design-ratchet ceilings (tightened to match the lowered marker counts). No markup, copy, pricing, logic, or tests changed. The full node vitest suite (662 files / 7885 tests) is green, so nothing on the render paths regressed.
 
 ## Verification
 
 - `node scripts/design-system-ratchet.mjs` → `Ratchet clean. Remaining legacy markers: 443.` (exit 0). The three target markers inside `.f9-growth-pricing` / `.f9-commerce-card` are 0, and the 7s float is gone.
-- `node scripts/design-system-ratchet.mjs --update` (dry verification) → ceilings already match reality at the committed json; the committed ceilings are unchanged in this PR (see scope note) and the measured drops (raw-hex 258→246, radius 158→152, gradient 22→12) land via `ratchet-auto-tighten` on main after merge.
+- `node scripts/design-system-ratchet.mjs --update` → tightened `docs/design-system-ratchet.json`: `raw-hex-color` 258→246, `non-token-border-radius` 158→152, `css-gradient` 22→12 (ceiling decreases only; gate-integrity permits tightening).
+- `npx vitest run --configLoader runner --project node tests/design-system-ratchet.test.ts` → `Test Files 1 passed (1) / Tests 33 passed (33)` (the ratchet test that failed CI on the prior push now passes with the regenerated ceilings).
 - `bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project node` → `Test Files 662 passed (662) / Tests 7885 passed (7885)` (post-rebase onto origin/main `9ea94292`, conflict-resolved). (Workers project skipped per fleet memory budget — no `migrations/**` or `tests/integration/**` changed.)
 - `sgscan` → `No new security findings.`
 - `bin/fleet-no-agent-names-check --commit-range origin/main..HEAD` → `OK: no agent attribution detected`.
 - `crgate` could not run — CodeRabbit is not signed in on this VPS (environmental, not a code result).
 
-run-proof: node script design-system-ratchet.mjs exit 0 (443 remaining, ceilings verified against reality on this tree); `ci-vitest-run.sh -- project node` 662 files / 7885 tests pass (post-rebase, all green); no sgscan findings introduced (CSS-only).
+run-proof: `design-system-ratchet.mjs` exit 0 (443 remaining); `--update` tightened ceilings 258→246 / 158→152 / 22→12; `design-system-ratchet.test.ts` 33/33 pass (the test that failed CI on the prior push); `ci-vitest-run.sh -- project node` 662 files / 7885 tests pass; no sgscan findings introduced.
 
 research: no new `bin/` files introduced (CSS-only change), so `research-before-build-check` does not apply. help-first: no new CLI surface.
 
