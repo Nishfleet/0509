@@ -140,23 +140,20 @@ describe("locale buyer-surface layout (issue #1501)", () => {
 });
 
 describe("locale buyer-surface sitemap + worker wiring", () => {
-  it("excludes every buyer-surface locale subpath from the sitemap (issue #1570)", () => {
-    // The buyer-surface cluster serves byte-identical English copy with
-    // canonical -> EN. Sitemapping dozens of locale `<loc>` entries
-    // advertised them as dozens of indexable surfaces — a duplicate-content
-    // doorway pattern. They stay reachable (200, canonical->EN) but are no
-    // longer sitemapped.
+  it("lists every buyer-surface locale subpath in the sitemap (issue #2294)", () => {
+    // Issue #2294: the buyer-surface cluster serves 200 under every locale
+    // prefix, so each locale sitemap now advertises those paths (plus the
+    // compare/switch children and the /guides/* cluster). The genuinely
+    // translated sneaker-resale cluster stays for the locales that ship it
+    // (de, ja, pt-br).
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const body = buildLocaleSitemapXml(locale);
       expect(body).toContain("<urlset");
       for (const path of BUYER_SURFACE_PATHS) {
         if (path === "/" || path === "/sitemap.xml") continue;
         const expected = `<loc>https://0509.io/${locale}${path}</loc>`;
-        expect(body, `sitemap must not list ${expected}`).not.toContain(expected);
+        expect(body, `sitemap must list ${expected}`).toContain(expected);
       }
-      // The genuinely translated sneaker-resale cluster STAYS in the sitemap
-      // for the locales that ship it (de, ja, pt-br). fr/es have no
-      // sneaker-resale page, so their locale feed is empty of buyer surfaces.
       if (locale === "de" || locale === "ja" || locale === "pt-br") {
         expect(body).toContain(`<loc>https://0509.io/${locale}/sneaker-resale</loc>`);
       }
@@ -164,17 +161,14 @@ describe("locale buyer-surface sitemap + worker wiring", () => {
   });
 
   it("serves a LOCALE-SCOPED body for /<locale>/sitemap.xml, never the root body", () => {
-    // Issue #1561: the locale sitemaps used to mirror the root byte-for-byte
-    // (each listed all URLs with no locale filter), fragmenting crawl
-    // budget and splitting PageRank. Now each locale sitemap carries ONLY
-    // /<locale>/-prefixed URLs, and the root feed excludes them entirely.
-    // With issue #1570 the buyer-surface locale subpaths are gone from the
-    // sitemap entirely, so the locale feed carries only the translated
-    // sneaker-resale cluster.
+    // Issue #1561: each locale sitemap carries ONLY /<locale>/-prefixed URLs,
+    // and the root feed excludes them entirely. Issue #2294 adds the
+    // buyer-surface cluster to the locale feeds, so /de/pricing is now listed
+    // in the de sitemap (still never in the root).
     const de = buildLocaleSitemapXml("de");
     expect(de).toContain("<urlset");
     expect(de).toContain(`<loc>https://0509.io/de/sneaker-resale</loc>`);
-    expect(de).not.toContain(`<loc>https://0509.io/de/pricing</loc>`);
+    expect(de).toContain(`<loc>https://0509.io/de/pricing</loc>`);
     // The root body contains the EN (non-prefixed) /pricing, not /de/pricing.
     const root = publicSeoFileForPathname("/sitemap.xml")?.body ?? "";
     expect(root).toContain("<loc>https://0509.io/pricing</loc>");

@@ -84,17 +84,16 @@ describe("locale first-value search funnel (issue #1578)", () => {
     }
   });
 
-  it("does NOT list locale first-value URLs in any sitemap (byte-identical English, issue #1570)", () => {
-    // Issue #1570: first-value locale routes serve byte-identical English copy
-    // with lang="en" and canonical→EN, so they are excluded from both the root
-    // sitemap and the locale sitemaps to avoid a duplicate-content doorway
-    // pattern. They stay reachable (200, canonical→EN) but are not advertised
-    // as distinct indexable surfaces.
+  it("lists locale first-value URLs in each locale sitemap (issue #2294)", () => {
+    // Issue #2294: first-value locale routes serve 200 under every locale
+    // prefix, so they are now advertised in the locale sitemaps. They stay
+    // out of the root sitemap (issue #1561) — each lives only in its own
+    // /<locale>/sitemap.xml.
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const body = buildLocaleSitemapXml(locale);
       for (const route of LOCALE_FIRST_VALUE_ROUTES) {
         const loc = `<loc>https://0509.io/${locale}/${route}</loc>`;
-        expect(body, `locale sitemap should not list ${loc}`).not.toContain(loc);
+        expect(body, `locale sitemap should list ${loc}`).toContain(loc);
       }
     }
   });
