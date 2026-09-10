@@ -267,3 +267,76 @@ describe("hero wall live flag freshness gate (issue #2313)", () => {
     expect(markup).toContain("ld-flag");
   });
 });
+
+/** Clone the real proof brief, attaching a real captured creative thumbnail
+ *  URL to each proof-trail row so the hero shot cards can render real `<img>`. */
+function withCreativeImages(urls: Array<string | null>) {
+  return {
+    ...realProofBrief,
+    proofTrail: realProofBrief.proofTrail.map((row, i) => ({
+      ...row,
+      creativeImageUrl: urls[i] ?? null,
+    })),
+  };
+}
+
+describe("hero shot cards render the real captured creative (issue #2323)", () => {
+  it("renders a real <img> for each trail row that carries a creativeImageUrl, inside the ld-shot link", async () => {
+    mockReactRouter(
+      withCreativeImages([
+        "https://cdn.example.test/nykaa-creative-1.jpg",
+        "https://cdn.example.test/nykaa-creative-2.jpg",
+      ]),
+    );
+    const markup = await renderMarketing();
+
+    // The shot cards are the ld-shot links; each must wrap a real creative img.
+    const shotCards = markup.match(/<a[^>]*class="ld-shot"[^>]*>[\s\S]*?<\/a>/g) ?? [];
+    expect(shotCards.length).toBeGreaterThanOrEqual(1);
+    expect(markup).toContain('src="https://cdn.example.test/nykaa-creative-1.jpg"');
+    expect(markup).toContain('src="https://cdn.example.test/nykaa-creative-2.jpg"');
+    // The honest alt text names the brand the featured-proof loader resolved.
+    expect(markup).toContain('alt="Ad creative from Nykaa"');
+    // The existing "Open the same public page" link is preserved.
+    expect(markup).toContain("Open the same public page");
+    // The fake browser chrome (three-dot bar) is gone now that real creatives render.
+    expect(markup).not.toContain("ld-shot-bar");
+  });
+
+  it("loads the first hero card eager and the rest lazy so the LCP image is not deferred", async () => {
+    mockReactRouter(
+      withCreativeImages([
+        "https://cdn.example.test/nykaa-creative-1.jpg",
+        "https://cdn.example.test/nykaa-creative-2.jpg",
+      ]),
+    );
+    const markup = await renderMarketing();
+
+    const imgs = markup.match(/<img[^>]*f9-ads-thumb-img[^>]*>/g) ?? [];
+    expect(imgs.length).toBe(2);
+    expect(imgs[0]).toContain('loading="eager"');
+    expect(imgs[1]).toContain('loading="lazy"');
+  });
+
+  it("reserves fixed dimensions via the f9-ads-thumb aspect-ratio box so the creative never causes CLS", async () => {
+    mockReactRouter(
+      withCreativeImages(["https://cdn.example.test/nykaa-creative-1.jpg"]),
+    );
+    const markup = await renderMarketing();
+
+    // The thumbnail sits in the f9-ads-thumb box (aspect-ratio: 16/10 in CSS),
+    // which reserves space before the image bytes arrive — no layout shift.
+    expect(markup).toContain('class="f9-ads-thumb"');
+    expect(markup).toContain('class="f9-ads-thumb-img"');
+  });
+
+  it("renders the honest on-brand mock (no <img>) when a trail row has no captured creative", async () => {
+    mockReactRouter(withCreativeImages([null, null]));
+    const markup = await renderMarketing();
+
+    expect(markup).not.toContain("f9-ads-thumb-img");
+    // The mock still shows the real captured hook text, never a fake screenshot.
+    expect(markup).toContain("f9-ads-thumb-mock");
+    expect(markup).toContain("Routine-first bundle");
+  });
+});
