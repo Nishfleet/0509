@@ -1,5 +1,5 @@
-import { Form, Link } from "react-router";
-import type { LinksFunction, MetaFunction } from "react-router";
+import { Form, Link, redirect } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { Breadcrumbs } from "~/components/breadcrumbs";
@@ -26,16 +26,19 @@ import visualpingCitations from "~/data/compare/visualping-citations.json";
 
 const citations = visualpingCitations as CompareCitations;
 
-export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
-
 const pageDescription =
   "Visualping monitors public pages for visual, text, and element changes. Five to Nine is built around competitor ad and landing-page moves with source-backed proof.";
 
-// Duplicate of /compare/visualping-ad-libraries (#1481, #1548): the generic vs-page
-// canonicalizes to the narrower ad-library comparison and is absent from the
-// sitemap. The page still renders HTTP 200 so existing links never 404.
+// Duplicate of /compare/visualping-ad-libraries (#1481, #1548, #2085): the
+// generic vs-page 301-redirects to the narrower ad-library comparison (the
+// /ads alias canonical-redirect pattern) and is absent from the sitemap, so
+// the two identical <title> pages no longer both stay indexable.
 export const links: LinksFunction = () =>
   canonicalLinks(COMPARE_CANONICAL_TARGETS["/compare/visualping"]);
+
+export async function loader(_args: LoaderFunctionArgs) {
+  throw redirect(COMPARE_CANONICAL_TARGETS["/compare/visualping"], 301);
+}
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
