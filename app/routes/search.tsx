@@ -146,6 +146,7 @@ import { switchPageForDomain } from "~/lib/switch-pages";
 import { localeSearchPathname } from "~/lib/locale-markets";
 import type { AppEnv } from "~/lib/env.server";
 import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-suggested-loader.server";
+import type { CompetitorHandoffCandidate } from "~/lib/competitor-handoff.server";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
 
@@ -313,6 +314,32 @@ async function loadSearchCompetitorPreview(
   }
 }
 
+/**
+ * Issue #2174 — sign the competitor handoff token for a logged-out search
+ * preview. The token carries the searched domain + the top candidates so a
+ * visitor can select several and carry them through signup into onboarding.
+ * Returns null when signing is unavailable (no secret) so the search page
+ * degrades to the plain `?website=` prefill path.
+ */
+async function signSearchCompetitorHandoff(
+  env: AppEnv,
+  preview: SuggestedCompetitorsPanelData,
+  country: string,
+): Promise<string | null> {
+  const { signCompetitorHandoff } = await import("~/lib/competitor-handoff.server");
+  const candidates: CompetitorHandoffCandidate[] = preview.rows.map((row) => ({
+    advertiser: row.advertiser,
+    pageId: row.pageId,
+    landingPageUrl: row.landingPageUrl,
+    targetCountry: row.targetCountry,
+  }));
+  return signCompetitorHandoff(env, {
+    domain: preview.domain,
+    country,
+    candidates,
+  });
+}
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
@@ -412,6 +439,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       relevanceApplied: false,
       watchedWatchlist: null,
       competitorPreview: null,
+      competitorHandoff: null,
       ...navFlags,
     };
   }
@@ -444,6 +472,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       relevanceApplied: false,
       watchedWatchlist: null,
       competitorPreview: null,
+      competitorHandoff: null,
       ...navFlags,
     };
   }
@@ -637,6 +666,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           relevanceApplied: false,
           watchedWatchlist: null,
           competitorPreview: null,
+          competitorHandoff: null,
           ...navFlags,
         };
       }
@@ -667,6 +697,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       relevanceApplied: false,
       watchedWatchlist: null,
       competitorPreview: null,
+      competitorHandoff: null,
       ...navFlags,
     };
   }
@@ -886,6 +917,20 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         country: parsed.filters.country,
       });
 
+  // Issue #2174 — "DOMAIN IN, COMPETITORS WATCHED": when a logged-out
+  // domain search surfaces suggested competitors, sign a short-lived handoff
+  // token carrying the searched domain + the top candidates so the visitor
+  // can select several and carry them through signup into onboarding with
+  // zero re-entry. The token is signed (BETTER_AUTH_SECRET) and expires; the
+  // onboarding action re-validates every candidate against the plan cap and
+  // the existing watchlist-dedupe before creating anything. A missing secret
+  // or a discovery failure degrades to `null` and the section falls back to
+  // the plain `?website=` prefill path.
+  const competitorHandoff =
+    session || !competitorPreview || competitorPreview.rows.length === 0
+      ? null
+      : await signSearchCompetitorHandoff(env, competitorPreview, parsed.filters.country);
+
   const searchPayload = {
     mode: parsed.mode,
     filters: filtersForForms,
@@ -912,6 +957,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     inputError: null,
     watchedWatchlist,
     competitorPreview,
+    competitorHandoff,
     ...navFlags,
   };
   // Issue #1972 phase 1: when an anonymous visitor's very first search
@@ -2964,6 +3010,7 @@ export default function SearchRoute() {
               at rank2/rank3 so the band keeps the viewport's single fill. */}
           <SearchCompetitorPreviewSection
             preview={data.competitorPreview ?? null}
+            handoffToken={data.competitorHandoff ?? null}
             country={data.filters.country}
           />
 

@@ -17333,3 +17333,56 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
 .f9-breadcrumbs [aria-current="page"] {
   color: var(--ld-ink-soft, var(--ink-soft));
 }
+
+/* Issue #2174 — selectable competitor preview on logged-out /search. The
+   visitor checks the competitors they want to watch; the CTA carries the
+   signed handoff token + picked indexes into signup. */
+.f9-evidence-suggested-select {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.f9-evidence-suggested-select input[type="checkbox"] {
+  margin-top: 0.25rem;
+  accent-color: var(--ld-accent, var(--accent));
+}
+.f9-evidence-suggested-select .f9-evidence-suggested-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Issue #2174 — one-click handoff confirmation on the setup checklist. */
+.f9-evidence-setup-handoff {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--ld-line, var(--line));
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+.f9-evidence-setup-handoff-intro {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.f9-evidence-setup-handoff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.f9-evidence-setup-handoff-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--ld-line, var(--line));
+}
+.f9-evidence-setup-handoff-name {
+  font-weight: 600;
+}

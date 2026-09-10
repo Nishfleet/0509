@@ -406,6 +406,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       requestUrl.searchParams.get("competitor")?.trim() ||
       "",
     setupPrefillCountry: requestUrl.searchParams.get("country")?.trim() ?? "",
+    // Issue #2174 — "DOMAIN IN, COMPETITORS WATCHED": a visitor who picked
+    // competitors on the logged-out /search page lands here with a signed
+    // handoff token + the picked candidate indexes. The loader verifies the
+    // token and resolves the confirmed candidates so the setup checklist can
+    // render them for one-click confirmation. A missing/invalid/expired token
+    // resolves to null and the card falls back to the plain prefill path.
+    setupHandoff: await resolveSetupHandoff(env, requestUrl),
     setupCreatedCount: readSetupCreatedCount(requestUrl),
     firstScanStates,
     awaitingFirstScan: firstScanStates.some(
@@ -417,6 +424,60 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 function readSetupCreatedCount(requestUrl: URL) {
   const value = Number(requestUrl.searchParams.get("created"));
   return Number.isInteger(value) && value > 0 ? value : 0;
+}
+
+/**
+ * Issue #2174 — resolve the competitor handoff for the setup checklist.
+ * Verifies the signed token, filters the candidates to the picked indexes,
+ * and returns the confirmed set (or null when the token is missing, invalid,
+ * or expired). The pick is a comma-separated list of indexes into the token's
+ * candidate array; a tampered pick can only select a subset of the already-
+ * signed candidates, and the create action re-validates against the plan cap
+ * and the existing watchlist-dedupe before writing anything.
+ */
+async function resolveSetupHandoff(
+  env: AppEnv,
+  requestUrl: URL,
+): Promise<SetupHandoff | null> {
+  const token = requestUrl.searchParams.get("handoff")?.trim();
+  if (!token) {
+    return null;
+  }
+  const { verifyCompetitorHandoff } = await import("~/lib/competitor-handoff.server");
+  const result = await verifyCompetitorHandoff(env, token);
+  if (!result.ok) {
+    return null;
+  }
+  const pick = requestUrl.searchParams.get("pick")?.trim();
+  const pickedIndexes = new Set(
+    (pick ?? "")
+      .split(",")
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isInteger(value) && value >= 0),
+  );
+  const candidates = result.payload.candidates
+    .map((candidate, index) => ({ candidate, index }))
+    .filter(({ index }) => pickedIndexes.size === 0 || pickedIndexes.has(index))
+    .map(({ candidate }) => candidate);
+  if (candidates.length === 0) {
+    return null;
+  }
+  return {
+    domain: result.payload.domain,
+    country: result.payload.country,
+    candidates,
+  };
+}
+
+export interface SetupHandoff {
+  domain: string;
+  country: string;
+  candidates: Array<{
+    advertiser: string;
+    pageId: string | null;
+    landingPageUrl: string | null;
+    targetCountry: string | null;
+  }>;
 }
 
 export async function action(args: ActionFunctionArgs) {
@@ -899,6 +960,7 @@ export default function AppDashboardRoute() {
         <div className="f9-wk-sec">
           <SetupChecklistCard
             actionData={actionData}
+            handoff={data.setupHandoff ?? null}
             prefillCountry={data.setupPrefillCountry}
             prefillWebsite={data.setupPrefillWebsite}
             readiness={workspaceReadiness}
