@@ -30,7 +30,8 @@
  *     brands' captures.
  *
  * The module is deliberately small: it drives existing organs (capture
- * pipeline, D1 data layer, scheduled handler) and adds no schema.
+ * pipeline, D1 data layer, scheduled handler) and adds only its own
+ * per-domain backoff state table (migration 0091, issue #2364).
  */
 
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
