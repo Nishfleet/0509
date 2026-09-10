@@ -154,8 +154,10 @@ export interface BrandPageLoaderData {
    * Issue #2391: this is the ID LIST, not a second copy of the records. A
    * full `AdRecord[]` subset here serialized every verified creative twice
    * into the hydration payload. The client derives the subset with
-   * `verifiedLinkedAdsOf`, so the ids and the records can never disagree —
-   * they come from the same array the page renders.
+   * `verifiedLinkedAdsOf`, so it sees exactly the ids the loader computed
+   * from. The wall's own per-card badge and ordering read the
+   * `linkVerifiedDomain` the loader stamps from this same set — the two
+   * agree on any loader-built payload.
    */
   verifiedLinkedIds: string[];
   checkedAgo: string | null;
@@ -709,7 +711,9 @@ export function projectBrandPageAd(ad: AdRecord): BrandPageAd {
  * The verified-linked subset of the wall, derived from the loader's
  * `verifiedLinkedIds` (issue #2391). The loader used to hand the client a
  * second full copy of these records; the ids are the whole signal, and
- * filtering the array the page already has means the two can never drift.
+ * filtering the array the page already has means the subset always speaks
+ * about the creatives the wall renders. Both come from the loader's one
+ * verification pass.
  */
 export function verifiedLinkedAdsOf(data: {
   ads: BrandPageAd[];
