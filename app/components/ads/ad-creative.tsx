@@ -1,6 +1,9 @@
 import { useState } from "react";
 
-import { buildCreativeResourceUrl } from "~/lib/creative-edge-cache-url";
+import {
+  buildCreativeResourceUrl,
+  isEdgeCacheableCreativeUrl,
+} from "~/lib/creative-edge-cache-url";
 import type { AdRecord } from "~/lib/types";
 
 type AdCreativeAd = Pick<
@@ -17,11 +20,12 @@ type AdCreativeAd = Pick<
 
 /**
  * The creative rectangle for a wall card. The REAL captured creative image is
- * the primary path (`creativeImageUrl` — a scraped Ad Library thumbnail); when
- * it is absent or the CDN URL has expired, we fall back to a rich, on-brand
- * CSS mock (format-tinted backdrop + the ad's real headline overlaid + a format
- * chip) so a card is NEVER a flat gray box or a broken-image icon. The mock is
- * the FALLBACK only — the honest default is always the brand's real ad.
+ * the primary path — hotlinked fbcdn captures are served same-origin through
+ * the `/creative/:id` edge route (issue #2393) and never as a raw URL (issue
+ * #2401); when neither is available we fall back to a rich, on-brand CSS mock
+ * (format-tinted backdrop + the ad's real headline overlaid + a format chip)
+ * so a card is NEVER a flat gray box or a broken-image icon. The mock is the
+ * FALLBACK only — the honest default is always the brand's real ad.
  */
 export function AdCreative({
   ad,
@@ -40,25 +44,28 @@ export function AdCreative({
   loading?: "lazy" | "eager";
 }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const imageUrl = ad.creativeImageUrl?.trim() || null;
-  // Issue #2393: prefer the same-origin edge-cached route derived from the
-  // stored fbcdn URL, so the creative survives the ~4-day signature expiry
-  // and the page never pays a third-party TLS connection to fbcdn. Falls back
-  // to the raw URL only when no id/URL pair is available.
-  const edgeUrl = imageUrl ? buildCreativeResourceUrl(ad.metaAdId, imageUrl) : null;
+  const storedUrl = ad.creativeImageUrl?.trim() || null;
+  // Issue #2401: a raw fbcdn URL is never emitted — its `oe=` signature expires
+  // in ~4 days, it hands Meta a referrer and it bypasses every cache we control.
+  // A stored fbcdn creative goes through the `/creative/:id` route or renders
+  // the honest mock. Any other host is left as stored: it has none of those
+  // failure modes and the edge route is fbcdn-gated by design (no open proxy).
+  const src = isEdgeCacheableCreativeUrl(storedUrl)
+    ? buildCreativeResourceUrl(ad.metaAdId, storedUrl)
+    : storedUrl;
   const format = normalizeFormat(ad.format);
-  const showImage = Boolean(imageUrl) && !imageFailed;
+  const showImage = Boolean(src) && !imageFailed;
 
   return (
     <span className="f9-ads-thumb" data-format={format}>
-      {showImage ? (
+      {showImage && src ? (
         <img
           alt={`Ad creative from ${ad.advertiser?.trim() || "this advertiser"}`}
           className="f9-ads-thumb-img"
           loading={loading}
           onError={() => setImageFailed(true)}
           referrerPolicy="no-referrer"
-          src={edgeUrl ?? imageUrl ?? undefined}
+          src={src}
         />
       ) : (
         <span aria-hidden="true" className="f9-ads-thumb-mock">
