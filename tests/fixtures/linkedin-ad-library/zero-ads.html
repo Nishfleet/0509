@@ -4,9 +4,14 @@
 <body>
 <main>
 <h1>Ad Library results</h1>
-<div class="search-results">
-<p class="empty-state">No ads found for this advertiser.</p>
-</div>
+<!--
+  Zero ad cards for the tracked advertiser, with the library's "Promoted" label
+  present on the page. #2193 do:1 makes that the available empty-library result
+  ("no ads"); parse-break.html is the other branch (zero cards AND no
+  "Promoted" text), which is a parse break, not "no ads".
+-->
+<p class="results-note">No ads found for this advertiser. Ads in the Ad Library are marked Promoted.</p>
+<div class="search-results"></div>
 </main>
 </body>
 </html>
