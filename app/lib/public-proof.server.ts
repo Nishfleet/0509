@@ -32,6 +32,19 @@ import type { AdRecord } from "~/lib/types";
 
 /** The competitor featured on the homepage proof section. */
 export const PUBLIC_PROOF_FEATURED_WEBSITE = "nykaa.com";
+
+/**
+ * The flagship demo-brand set, split by the visitor's home market so the
+ * single most important proof moment shows a brand the visitor recognizes
+ * (issue #2281). Indian visitors get an Indian flagship (nykaa); everyone
+ * else (US/EU/unknown) gets a Western flagship (nike). Both are in the
+ * existing flagship set (`DEMO_BRAND_PAGE_DOMAINS`), so the featured brand
+ * is always a real tracked brand with a live `/ads/:domain` page — never a
+ * vendor-owned domain and never a screenshot fixture.
+ */
+export function featuredWebsiteForVisitorCountry(country: string): string {
+  return country === "India" ? "nykaa.com" : "nike.com";
+}
 /** Cap the source-trail rows rendered on the public surface. */
 export const PUBLIC_PROOF_MAX_TRAIL_ITEMS = 3;
 
@@ -102,10 +115,17 @@ export async function loadPublicProofBrief(
   options: PublicProofBriefLoadOptions = {},
 ): Promise<PublicProofBrief | null> {
   const now = options.now ?? new Date();
+  const visitorCountry = options.visitorCountry ?? ALL_COUNTRIES_VALUE;
+  // Pick the featured brand by the visitor's home market (issue #2281) so a
+  // US/EU visitor is not shown an Indian brand they have never heard of. The
+  // brand page the brief links to is the SAME featured domain, so the home
+  // and the /ads/:domain page still read the same cache row for the same
+  // visitor (issue #1468 parity contract).
+  const website = featuredWebsiteForVisitorCountry(visitorCountry);
   try {
     const snapshot = await loadBrandPageCacheSnapshot(env, {
-      domain: PUBLIC_PROOF_FEATURED_WEBSITE,
-      visitorCountry: options.visitorCountry ?? ALL_COUNTRIES_VALUE,
+      domain: website,
+      visitorCountry,
       now,
     });
     if (!snapshot) {
@@ -116,7 +136,7 @@ export async function loadPublicProofBrief(
       country: snapshot.country,
       freshForLiveClaim: snapshot.freshForLiveClaim,
       checkedAgoLabel: formatBrandPageCheckedAgo(snapshot.fetchedAt, now),
-      website: PUBLIC_PROOF_FEATURED_WEBSITE,
+      website,
       now,
     });
   } catch (error) {
