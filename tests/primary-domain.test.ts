@@ -65,20 +65,26 @@ describe("primary domain redirects", () => {
     ).toBeNull();
   });
 
-  it("lets legacy provider GET challenges reach their verification routes", () => {
-    expect(
-      primaryDomainRedirect(
-        new Request(
-          "https://0509.in/api/delivery-status/whatsapp?hub.mode=subscribe&hub.challenge=ok",
-        ),
+  it("no longer exempts the dormant WhatsApp delivery-status challenge (fleet-ops #2358)", () => {
+    // The WhatsApp delivery webhook route was removed while the channel is
+    // dormant. Its legacy-host challenge path must now follow the ordinary
+    // primary-domain redirect instead of reaching a live handler.
+    const legacyApex = primaryDomainRedirect(
+      new Request(
+        "https://0509.in/api/delivery-status/whatsapp?hub.mode=subscribe&hub.challenge=ok",
       ),
-    ).toBeNull();
-    expect(
-      primaryDomainRedirect(
-        new Request(
-          "https://api.0509.in/api/delivery-status/whatsapp?hub.mode=subscribe&hub.challenge=ok",
-        ),
+    );
+    expect(legacyApex?.status).toBe(308);
+    expect(legacyApex?.headers.get("location"))
+      .toBe("https://0509.io/api/delivery-status/whatsapp?hub.mode=subscribe&hub.challenge=ok");
+
+    const legacyApi = primaryDomainRedirect(
+      new Request(
+        "https://api.0509.in/api/delivery-status/whatsapp?hub.mode=subscribe&hub.challenge=ok",
       ),
-    ).toBeNull();
+    );
+    expect(legacyApi?.status).toBe(308);
+    expect(legacyApi?.headers.get("location"))
+      .toBe("https://api.0509.io/api/delivery-status/whatsapp?hub.mode=subscribe&hub.challenge=ok");
   });
 });
