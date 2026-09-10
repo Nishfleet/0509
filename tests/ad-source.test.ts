@@ -2287,6 +2287,7 @@ describe("searchAdsViaSourceResolver", () => {
       .fn()
       .mockRejectedValue(new MockMetaApiError("Error validating access token: Session has expired."));
     const upsertDiscoveryProviderState = vi.fn();
+    const createDiscoveryFetchLog = vi.fn();
 
     vi.doMock("~/lib/meta-library-browser.server", () => ({
       searchMetaLibraryByBrowser: browserSearch,
@@ -2303,7 +2304,7 @@ describe("searchAdsViaSourceResolver", () => {
       getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
       getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
       upsertDiscoveryCacheEntry: vi.fn(),
-      createDiscoveryFetchLog: vi.fn(),
+      createDiscoveryFetchLog,
       upsertDiscoveryProviderState,
     }));
 
@@ -2348,6 +2349,17 @@ describe("searchAdsViaSourceResolver", () => {
       (call) => call[1]?.provider,
     );
     expect(providerStateCalls).not.toContain("meta_api");
+    expect(providerStateCalls).toContain("meta_library_browser");
+    // The per-request fetch-log row is still written for the failed meta_api
+    // fallback (acceptance: keep the per-request fetch-log row).
+    expect(createDiscoveryFetchLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_api",
+        status: "failed",
+        failureClass: "login_wall",
+      }),
+    );
   });
 
   it("does not write shared provider state on a successful customer Meta API call", async () => {
@@ -2383,6 +2395,7 @@ describe("searchAdsViaSourceResolver", () => {
       cacheStatus: "miss",
     });
     const upsertDiscoveryProviderState = vi.fn();
+    const createDiscoveryFetchLog = vi.fn();
 
     vi.doMock("~/lib/meta-library-browser.server", () => ({
       searchMetaLibraryByBrowser: vi.fn(),
@@ -2399,7 +2412,7 @@ describe("searchAdsViaSourceResolver", () => {
       getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
       getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
       upsertDiscoveryCacheEntry: vi.fn(),
-      createDiscoveryFetchLog: vi.fn(),
+      createDiscoveryFetchLog,
       upsertDiscoveryProviderState,
     }));
 
@@ -2432,8 +2445,16 @@ describe("searchAdsViaSourceResolver", () => {
       discoveryStatus: "healthy",
     });
     // A customer-owned token must never write the shared meta_api provider
-    // state, even on success (fleet-ops#2209).
+    // state, even on success (fleet-ops#2209). The per-request fetch-log row
+    // is still written.
     expect(upsertDiscoveryProviderState).not.toHaveBeenCalled();
+    expect(createDiscoveryFetchLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_api",
+        status: "succeeded",
+      }),
+    );
   });
 
   it("uses Meta API fallback during browser cooldown when no cache exists", async () => {
