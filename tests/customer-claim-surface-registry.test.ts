@@ -331,7 +331,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/app/shares", "/app/source-access", "/app/support", "/app/team",
     "/app/watchlists", "/compare", "/help", "/pricing", "/search",
   ],
-  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms"],
+  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology", "/pricing", "/compare/magicbrief", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
   // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
   // 2026-08-09: the proof-backed /competitor-monitoring category page joined the

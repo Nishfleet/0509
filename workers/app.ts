@@ -35,7 +35,7 @@ import {
 import {
   isPublicMarkdownPage,
   buildLlmsText,
-  PUBLIC_MARKDOWN,
+  publicMarkdownForPath,
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
 import { publicSeoFileForPathname } from "../app/lib/seo";
@@ -237,7 +237,11 @@ export default {
       wantsPublicMarkdown(request) &&
       isPublicMarkdownPage(url.pathname)
     ) {
-      return markdownResponse(request, PUBLIC_MARKDOWN);
+      // Issue #2299: serve the per-page markdown body for /methodology,
+      // /pricing, and the /compare/* pages; the original ten pages keep the
+      // single PUBLIC_MARKDOWN body. publicMarkdownForPath falls back to
+      // PUBLIC_MARKDOWN for any path without a dedicated body.
+      return markdownResponse(request, publicMarkdownForPath(url.pathname));
     }
 
     const rateLimitResponse = await enforceRequestRateLimit(request, env, ctx);

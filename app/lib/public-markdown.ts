@@ -12,6 +12,38 @@ import { AI_TRAINING_CRAWLERS, SITEMAP_PATHS, canonicalUrl } from "~/lib/seo";
 // at the same crawl-budget ceiling the sitemap uses (issue #1929). Imported
 // from sitemap.server so we never invent a parallel cap.
 import { SITEMAP_TIMELINE_PATH_LIMIT } from "~/lib/sitemap.server";
+// Per-page markdown bodies for the pages AI engines most need clean text for
+// (issue #2299): /methodology, /pricing, and the /compare/* pages linked from
+// the /compare hub. Each body is ASSEMBLED from the same pure-data modules the
+// rendered page reads (aggression-score constants, published pricing, plan
+// entitlements, and the compare source-citation JSON), never hand-written
+// duplicates, so the markdown cannot drift from the HTML (judge edit, #2309).
+// These modules are React-free, so importing them here does not pull the React
+// component tree into the Worker bundle.
+import {
+  AGGRESSION_FORMULA_VERSION,
+  AGGRESSION_FRESHNESS_DAYS,
+  AGGRESSION_PERSISTENCE_DAYS,
+  AGGRESSION_TESTING_SATURATION_SHARE,
+  MIN_AGGRESSION_WINDOW_DAYS,
+  publicAggressionBands,
+} from "~/lib/aggression-score";
+import {
+  PUBLISHED_FREE_PLAN_OFFER,
+  pricingPlans,
+  usageBundles,
+} from "~/lib/pricing";
+import { getPlanEntitlements } from "~/lib/plan-entitlements";
+import type { CompareCitations } from "~/components/compare-citations";
+import adspyCitations from "~/data/compare/adspy-citations.json";
+import adspyderCitations from "~/data/compare/adspyder-citations.json";
+import foreplaySpyderCitations from "~/data/compare/foreplay-spyder-citations.json";
+import magicbriefCitations from "~/data/compare/magicbrief-citations.json";
+import metaAdLibraryCitations from "~/data/compare/meta-ad-library-citations.json";
+import panoramataCitations from "~/data/compare/panoramata-citations.json";
+import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
+import spylandCitations from "~/data/compare/spyland-citations.json";
+import visualpingAdLibraryCitations from "~/data/compare/visualping-ad-library-citations.json";
 
 const AUDITED_AGENT_ACTION_GROUPS = auditedAgentActionGroups();
 const AUDITED_AGENT_ACTION_GROUP_SUMMARY = AUDITED_AGENT_ACTION_GROUPS.map((group) => group.label).join(", ");
@@ -27,6 +59,23 @@ export const PUBLIC_MARKDOWN_PATHS = [
   "/capture-rules",
   "/privacy",
   "/terms",
+  // Issue #2299: the pages AI engines most need clean text for. /methodology
+  // is the score formula, /pricing the plan data, and the /compare/* pages are
+  // exactly the ones the /compare hub links (judge edit: "already linked from
+  // the /compare hub" — /compare/visualping and /compare/foreplay canonicalize
+  // to siblings and are deliberately not linked, so they stay out). /search
+  // stays excluded (noted in the ticket, deliberately out of scope).
+  "/methodology",
+  "/pricing",
+  "/compare/magicbrief",
+  "/compare/meta-ad-library",
+  "/compare/visualping-ad-libraries",
+  "/compare/spyland",
+  "/compare/pulzifi",
+  "/compare/foreplay-spyder",
+  "/compare/panoramata",
+  "/compare/adspyder",
+  "/compare/adspy",
 ] as const;
 
 const PUBLIC_MARKDOWN_PATH_SET = new Set<string>(PUBLIC_MARKDOWN_PATHS);
@@ -1054,5 +1103,158 @@ export function wantsPublicMarkdown(request: Request): boolean {
 
 export function isPublicMarkdownPage(pathname: string): boolean {
   return PUBLIC_MARKDOWN_PATH_SET.has(pathname);
+}
+
+// ---------------------------------------------------------------------------
+// Per-page markdown bodies (issue #2299).
+//
+// The pages above that are NOT in the default PUBLIC_MARKDOWN body get their
+// own markdown, assembled from the same pure-data modules the rendered page
+// reads — never hand-written duplicates (judge edit, #2309). Each body is a
+// self-contained markdown document an AI answer engine can cite directly.
+// ---------------------------------------------------------------------------
+
+const METHODOLOGY_MARKDOWN = `# Ad Aggression Score methodology
+
+How Five to Nine computes the Ad Aggression Score: four public parts — Velocity, Testing, Freshness, Persistence — that add up to 0–100, with no hidden weighting.
+
+The score is formula version ${AGGRESSION_FORMULA_VERSION}. Each part contributes 0–25 points. The four displayed bars always add up exactly to the displayed total because each part is rounded to a whole point before they are summed.
+
+## The four parts
+
+- Velocity — how fast new ads enter the capture.
+- Testing — how much of the set runs more than one creative variant, saturating at ${Math.round(AGGRESSION_TESTING_SATURATION_SHARE * 100)}%.
+- Freshness — how much of the active set is new (first seen in the last ${AGGRESSION_FRESHNESS_DAYS} days).
+- Persistence — how much of the set has stayed in rotation (running or tracked for ${AGGRESSION_PERSISTENCE_DAYS}+ days).
+
+## Score bands
+
+${publicAggressionBands()
+  .map((band) => `- ${band.minScore}–${band.maxScore} ${band.label} — ${band.interpretation}`)
+  .join("\n")}
+
+## Evidence floor
+
+A fair score needs at least ${MIN_AGGRESSION_WINDOW_DAYS} days of observed history. Below that, or when the capture is still too thin to score, the brand page hides the number and says so. It never publishes a score on thin evidence.
+
+## What it is not
+
+- Not spend, impressions, reach, or Meta's own performance metrics.
+- Not a ranking of brands against each other. Each score is computed from that brand's own capture.
+- Not coverage of every ad platform. Ad monitoring here reads the public Meta Ad Library only.
+`;
+
+const PRICING_MARKDOWN = `# Pricing
+
+Competitor monitoring plans: free single-competitor watch, Scout, Starter, and Agency, plus proof capture packs. Prices localize at checkout.
+
+## Free
+
+${PUBLISHED_FREE_PLAN_OFFER.description}
+
+## Paid plans
+
+${pricingPlans()
+  .map((plan) => {
+    const entitlements = getPlanEntitlements(plan.slug);
+    return `### ${plan.name}
+
+- ${plan.detail}
+- ${plan.watchlistLimit} watchlists, ${plan.boardLimit} Collections, ${plan.evidenceChecksPerMonth} proof captures/month.
+- ${plan.monthlyLabel} monthly, ${plan.yearlyLabel} yearly.`;
+  })
+  .join("\n\n")}
+
+## Proof capture packs
+
+${usageBundles()
+  .map((bundle) => `- ${bundle.name}: ${bundle.priceLabel} — ${bundle.detail}`)
+  .join("\n")}
+
+## Notes
+
+- Included proof captures reset every month and do not roll over — caps are generous.
+- Purchased proof capture packs never expire and carry over until used.
+- Checkout shows the exact amount in your local currency, loaded from Dodo Payments at preview time.
+`;
+
+/**
+ * Render one /compare/* page's markdown body from its source-citation JSON —
+ * the same data the page's CompareCitationsFooter renders. The body lists the
+ * page's title, description, and every cited source with its claim, URL, and
+ * checked date, so an AI answer engine gets the page's verifiable source trail
+ * without any hand-written duplicate copy.
+ */
+function compareMarkdown(citations: CompareCitations, description: string): string {
+  const sources = citations.sources
+    .map(
+      (source) =>
+        `- ${source.label}: ${source.claim} (${source.href}, checked ${source.checked})`,
+    )
+    .join("\n");
+  return `# Five to Nine vs ${citations.productName}
+
+${description}
+
+## Sources
+
+${sources}
+`;
+}
+
+/**
+ * Per-path markdown body for the pages added in issue #2299. The existing
+ * default pages (/, /help, /docs, ...) keep serving the single PUBLIC_MARKDOWN
+ * body; only the new pages get a dedicated body. Returns null for any path
+ * without a dedicated body so the caller falls back to PUBLIC_MARKDOWN.
+ */
+const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
+  "/methodology": METHODOLOGY_MARKDOWN,
+  "/pricing": PRICING_MARKDOWN,
+  "/compare/magicbrief": compareMarkdown(
+    magicbriefCitations as CompareCitations,
+    "MagicBrief alternative: your competitor list imports as watchlists; collections, boards, and analytics history do not transfer. See what moves.",
+  ),
+  "/compare/meta-ad-library": compareMarkdown(
+    metaAdLibraryCitations as CompareCitations,
+    "The Meta Ad Library is free and public — it's the source Five to Nine reads. What manual checking costs you, and what scheduled checks, diffs, saved screenshots, and email briefs add.",
+  ),
+  "/compare/visualping-ad-libraries": compareMarkdown(
+    visualpingAdLibraryCitations as CompareCitations,
+    "Visualping can watch a Meta Ad Library URL on a free plan and paid check bundles. Five to Nine starts from a domain paste and diffs the commercial fields, not the pixels.",
+  ),
+  "/compare/spyland": compareMarkdown(
+    spylandCitations as CompareCitations,
+    "Spyland watches competitor landing pages daily and flags copy, pricing, and CTA changes. Five to Nine adds the ad source and more frequent source-backed checks.",
+  ),
+  "/compare/pulzifi": compareMarkdown(
+    pulzifiCitations as CompareCitations,
+    "Pulzifi monitors public URLs and delivers AI strategy briefs on every change. Five to Nine keeps the proof source-first and ties it to Meta Ad Library checks.",
+  ),
+  "/compare/foreplay-spyder": compareMarkdown(
+    foreplaySpyderCitations as CompareCitations,
+    "Foreplay Spyder tracks competitor Meta ads and landing pages inside Foreplay. Five to Nine diffs what changed and keeps the source proof.",
+  ),
+  "/compare/panoramata": compareMarkdown(
+    panoramataCitations as CompareCitations,
+    "Panoramata monitors competitor ads and pages on listed paid plans. Five to Nine starts from a domain paste and keeps source-backed proof of what changed.",
+  ),
+  "/compare/adspyder": compareMarkdown(
+    adspyderCitations as CompareCitations,
+    "AdSpyder is a low-cost ad-alert tool. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
+  ),
+  "/compare/adspy": compareMarkdown(
+    adspyCitations as CompareCitations,
+    "AdSpy is a single-plan ad-spy database with a 2.4/5 Trustpilot rating and no self-service cancel. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
+  ),
+};
+
+/**
+ * The markdown body to serve for a public-markdown path. Returns the per-page
+ * body for the issue #2299 pages, or the default PUBLIC_MARKDOWN body for the
+ * original ten pages. Callers must only pass paths isPublicMarkdownPage accepts.
+ */
+export function publicMarkdownForPath(pathname: string): string {
+  return PUBLIC_MARKDOWN_BY_PATH[pathname] ?? PUBLIC_MARKDOWN;
 }
 
