@@ -81,7 +81,7 @@ const staleSignals = [
 const requiredSignals = [
   "Know when competitors change the offer.",
   "Stop finding out after the sales call.",
-  "Recommended launch plan",
+  "Recommended",
   "Start with Starter",
 ];
 
