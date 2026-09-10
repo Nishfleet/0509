@@ -20,6 +20,7 @@ import {
   loadIndexableTimelineEntries,
   timelineSitemapEntries,
 } from "~/lib/sitemap.server";
+import type { SitemapEntry } from "~/lib/seo";
 import type { AppEnv } from "~/lib/env.server";
 
 export async function loadIndexableAdsInternalLinks(env: AppEnv): Promise<IndexableAdsLink[]> {
@@ -104,14 +105,21 @@ export async function resolveIndexableBrandPageLinkForDomain(
  * Returns a `Set` of registrable domains (lowercased, no `www.` prefix) whose
  * timeline is indexable. Degrades to an empty set on any sitemap hiccup so a
  * timeline-link failure can never 500 a page — it just omits the cross-link.
+ *
+ * `brandEntries` lets a caller that has ALREADY read the indexable brand-page
+ * entries (one SELECT) reuse them instead of paying for a second read of the
+ * same rows (issue #2067 phase 6).
  */
-export async function loadIndexableTimelineDomains(env: AppEnv): Promise<Set<string>> {
+export async function loadIndexableTimelineDomains(
+  env: AppEnv,
+  brandEntries?: readonly SitemapEntry[],
+): Promise<Set<string>> {
   try {
-    const [brandEntries, timelineEntries] = await Promise.all([
-      loadIndexableBrandPageEntries(env),
+    const [resolvedBrandEntries, timelineEntries] = await Promise.all([
+      brandEntries ?? loadIndexableBrandPageEntries(env),
       loadIndexableTimelineEntries(env),
     ]);
-    const entries = timelineSitemapEntries(brandEntries, timelineEntries);
+    const entries = timelineSitemapEntries(resolvedBrandEntries, timelineEntries);
     const domains = new Set<string>();
     for (const entry of entries) {
       const domain = timelineDomainFromSitemapPath(entry.path);

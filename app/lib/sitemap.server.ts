@@ -96,6 +96,7 @@
 
 import {
   adHasVerifiedDomainLink,
+  computeBrandPageAggressionScore,
   deriveBrandPageLookupForCountry,
   isBrandPageAliasDomain,
   normalizeBrandPageDomain,
@@ -293,13 +294,19 @@ export function isIndexableBrandPageRow(row: SitemapCacheRow, now: Date): boolea
  * not-verified and does not single-handedly qualify a row — a false positive
  * would list a thin page that actually serves noindex.
  */
-export function brandPageRowVerifiedAdCount(row: SitemapCacheRow, domain: string): number {
+/** The row's non-demo cached ads that carry verified link evidence to `domain`. */
+function brandPageRowVerifiedAds(row: SitemapCacheRow, domain: string): AdRecord[] {
   const payload = parseSitemapCachePayload(row.payload_json);
   if (!payload) {
-    return 0;
+    return [];
   }
-  const ads = nonDemoAdsFromPayload(payload);
-  return ads.filter((ad) => adHasVerifiedDomainLink(ad as AdRecord, domain)).length;
+  return nonDemoAdsFromPayload(payload).filter((ad) =>
+    adHasVerifiedDomainLink(ad as AdRecord, domain),
+  ) as AdRecord[];
+}
+
+export function brandPageRowVerifiedAdCount(row: SitemapCacheRow, domain: string): number {
+  return brandPageRowVerifiedAds(row, domain).length;
 }
 
 export function brandPageRowHasVerifiedAds(row: SitemapCacheRow, domain: string): boolean {
@@ -394,8 +401,54 @@ export function indexableBrandPageEntriesFromRows(
   now: Date = new Date(),
   options: IndexableBrandPageRowOptions = {},
 ): SitemapEntry[] {
-  const seen = new Set<string>();
   const entries: SitemapEntry[] = [];
+  for (const { row, domain, adCount, verifiedAds } of indexableBrandPageRowMatches(
+    rows,
+    now,
+    options,
+  )) {
+    // isIndexableBrandPageRow already proved fetched_at parses and age >= 0.
+    const ageMs = now.getTime() - Date.parse(row.fetched_at);
+    entries.push({
+      path: `/ads/${domain}`,
+      lastmod: row.fetched_at.slice(0, 10),
+      changefreq: "weekly",
+      priority: brandPageEntryPriority(ageMs, verifiedAds.length),
+      adCount,
+      fetchedAt: row.fetched_at,
+    });
+  }
+  return entries;
+}
+
+/**
+ * The gate chain every indexable brand-page row must pass, shared by the
+ * sitemap entry core and the category-page stats core (issue #2067 phase 6)
+ * so the two can never disagree about which domains are listed or which ads
+ * back them. Yields deduped, domain-resolved rows newest-first (the input is
+ * ordered newest-first, so the first passing row for a domain wins), each with
+ * its non-demo ad count and its verified-linked ads. Bounded to
+ * SITEMAP_BRAND_PATH_LIMIT distinct domains, the same cap the SQL read uses.
+ *
+ * The gates, in order: indexable row (fresh, non-demo, public_search, ads
+ * present) → resolved provider → losslessly recovered domain → not an alias →
+ * the exact cache key the page derives → at least one verified-linked ad.
+ * The last gate is a content-thinness rule, not a score rule: a populated page
+ * (≥1 verified-linked ad) stays listed even when the Ad Aggression Score is
+ * deferred (issue #1442). Mirrors the loader's
+ * `verifiedLinkedAds.length === 0 → noindex` rule.
+ */
+function* indexableBrandPageRowMatches(
+  rows: readonly SitemapCacheRow[],
+  now: Date,
+  options: IndexableBrandPageRowOptions,
+): Generator<{
+  row: SitemapCacheRow;
+  domain: string;
+  adCount: number;
+  verifiedAds: AdRecord[];
+}> {
+  const seen = new Set<string>();
   for (const row of rows) {
     if (!isIndexableBrandPageRow(row, now)) {
       continue;
@@ -425,35 +478,76 @@ export function indexableBrandPageEntriesFromRows(
     if (!lookupKeys.has(row.cache_key)) {
       continue;
     }
-    // Indexability is a content-thinness rule, not a score rule: a populated
-    // page (≥1 verified-linked ad) is indexable even when the Ad Aggression
-    // Score is deferred, so a row is listed once it has verified link
-    // evidence — never list a wall with ZERO verified-linked ads (that page
-    // self-noindexes). Mirrors the loader's
-    // `verifiedLinkedAds.length === 0 → noindex` rule (issue #1442).
-    const verifiedAdCount = brandPageRowVerifiedAdCount(row, domain);
-    if (verifiedAdCount === 0) {
+    const verifiedAds = brandPageRowVerifiedAds(row, domain);
+    if (verifiedAds.length === 0) {
       continue;
     }
     seen.add(domain);
-    const fetchedDate = row.fetched_at.slice(0, 10);
     const payload = parseSitemapCachePayload(row.payload_json);
-    const adCount = payload ? nonDemoAdsFromPayload(payload).length : 0;
-    // isIndexableBrandPageRow already proved fetched_at parses and age >= 0.
-    const ageMs = now.getTime() - Date.parse(row.fetched_at);
-    entries.push({
-      path: `/ads/${domain}`,
-      lastmod: fetchedDate,
-      changefreq: "weekly",
-      priority: brandPageEntryPriority(ageMs, verifiedAdCount),
-      adCount,
-      fetchedAt: row.fetched_at,
-    });
-    if (entries.length >= SITEMAP_BRAND_PATH_LIMIT) {
-      break;
+    yield {
+      row,
+      domain,
+      adCount: payload ? nonDemoAdsFromPayload(payload).length : 0,
+      verifiedAds,
+    };
+    if (seen.size >= SITEMAP_BRAND_PATH_LIMIT) {
+      return;
     }
   }
-  return entries;
+}
+
+/**
+ * One listed brand's ad counts and Ad Aggression Score, keyed by registrable
+ * domain in `indexableBrandPageStatsFromRows`.
+ */
+export interface BrandPageRowStats {
+  /** Non-demo cached ads behind this brand's page (the wall it renders). */
+  adCount: number;
+  /** Of those, the ads carrying verified link evidence to the domain. */
+  verifiedAdCount: number;
+  /**
+   * Ad Aggression Score (0-100), or null while the score is deferred — the
+   * observed window is under the 14-day floor or no ad carries a first-seen
+   * date. Never fabricated: callers render an honest "not enough history yet"
+   * state instead.
+   */
+  aggressionScore: number | null;
+}
+
+/**
+ * Pure core: ad counts and Ad Aggression Score for the /brands/:categorySlug
+ * rows (issue #2067 phase 6), from the SAME cache rows the indexable
+ * /ads/:domain entries come from — one read backs both, and the entry core
+ * decides which domains appear here.
+ *
+ * The score is `computeBrandPageAggressionScore(verifiedLinkedAds, now)` —
+ * exactly the ads and the call the /ads/:domain page scores with — so the
+ * number a category row shows is the number that brand's own page shows. It
+ * is null when the observed window is shorter than
+ * MIN_AGGRESSION_WINDOW_DAYS or no ad carries a first-seen date, so a thin
+ * capture shows the pending state rather than a made-up number.
+ *
+ * Kept separate from the D1 read and from the env-resolved options so the
+ * whole thing is unit-testable without a database.
+ */
+export function indexableBrandPageStatsFromRows(
+  rows: readonly SitemapCacheRow[],
+  now: Date = new Date(),
+  options: IndexableBrandPageRowOptions = {},
+): Map<string, BrandPageRowStats> {
+  const stats = new Map<string, BrandPageRowStats>();
+  for (const { domain, adCount, verifiedAds } of indexableBrandPageRowMatches(
+    rows,
+    now,
+    options,
+  )) {
+    stats.set(domain, {
+      adCount,
+      verifiedAdCount: verifiedAds.length,
+      aggressionScore: computeBrandPageAggressionScore(verifiedAds, now)?.score ?? null,
+    });
+  }
+  return stats;
 }
 
 /**
@@ -515,35 +609,48 @@ export function indexableBrandCategoryEntriesFromBrandEntries(
 }
 
 /**
+ * The bounded candidate set of indexable brand-page cache rows plus the
+ * env-resolved options that narrow them (see IndexableBrandPageRowOptions).
+ * ONE SELECT, shared by every caller that needs these rows so a single render
+ * never pays for two reads of the same table.
+ */
+interface IndexableBrandPageRowSet {
+  rows: SitemapCacheRow[];
+  options: Required<IndexableBrandPageRowOptions>;
+}
+
+/**
  * Read the bounded candidate set of indexable brand-page cache rows.
  * Cache-only: one SELECT, never a live-provider call. Any hiccup (missing
- * table on a fresh D1, unparseable rows) degrades to the static sitemap,
- * never a 500.
+ * table on a fresh D1, unparseable rows) degrades to an empty set, never a
+ * 500.
  */
-export async function loadIndexableBrandPageEntries(
+async function loadIndexableBrandPageRowSet(
   env: AppEnv,
-  now: Date = new Date(),
-): Promise<SitemapEntry[]> {
-  if (!env.DB) {
-    return [];
-  }
-
+  now: Date,
+): Promise<IndexableBrandPageRowSet> {
   // Mirror the loader's first gate: in demo-provider environments the brand
   // page renders the shell (noindex) regardless of any leftover rows.
   const { resolveCommercialDiscoveryProvider } = await import("~/lib/ad-source.server");
   const provider = resolveCommercialDiscoveryProvider(env);
-  if (provider === "demo") {
-    return [];
-  }
-  // Emergency brake: every /ads/* page serves noindex — never sitemap it.
-  if (env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0") {
-    return [];
-  }
-
   // The rollout posture decides which key shape the page derives (search-v2
   // domain keys vs legacy fingerprint triples); the sitemap must mirror it or
   // it lists domains whose pages can never find their rows.
-  const useDomainV2 = shouldApplySearchV2(env);
+  const options: Required<IndexableBrandPageRowOptions> = {
+    provider,
+    useDomainV2: shouldApplySearchV2(env),
+  };
+
+  if (!env.DB) {
+    return { rows: [], options };
+  }
+  if (provider === "demo") {
+    return { rows: [], options };
+  }
+  // Emergency brake: every /ads/* page serves noindex — never list it.
+  if (env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0") {
+    return { rows: [], options };
+  }
 
   const cutoffIso = new Date(now.getTime() - BRAND_PAGE_FRESH_FOR_INDEXING_MS).toISOString();
   try {
@@ -562,13 +669,42 @@ export async function loadIndexableBrandPageEntries(
       cutoffIso,
       SITEMAP_BRAND_PATH_LIMIT,
     );
-    return indexableBrandPageEntriesFromRows(rows, now, { provider, useDomainV2 });
+    return { rows, options };
   } catch (error) {
     if (isMissingSitemapTableError(error)) {
-      return [];
+      return { rows: [], options };
     }
     throw error;
   }
+}
+
+/**
+ * The indexable /ads/:domain sitemap entries for the current cache state.
+ */
+export async function loadIndexableBrandPageEntries(
+  env: AppEnv,
+  now: Date = new Date(),
+): Promise<SitemapEntry[]> {
+  const { rows, options } = await loadIndexableBrandPageRowSet(env, now);
+  return indexableBrandPageEntriesFromRows(rows, now, options);
+}
+
+/**
+ * The same indexable brand-page entries PLUS the per-domain ad counts and Ad
+ * Aggression Scores from the same single read (issue #2067 phase 6) — what the
+ * /brands/:categorySlug rows need. Two reads of one table would be the cost of
+ * calling the two pure cores separately, so callers that need both get both
+ * from one SELECT here.
+ */
+export async function loadIndexableBrandPageEntriesWithStats(
+  env: AppEnv,
+  now: Date = new Date(),
+): Promise<{ entries: SitemapEntry[]; stats: Map<string, BrandPageRowStats> }> {
+  const { rows, options } = await loadIndexableBrandPageRowSet(env, now);
+  return {
+    entries: indexableBrandPageEntriesFromRows(rows, now, options),
+    stats: indexableBrandPageStatsFromRows(rows, now, options),
+  };
 }
 
 /** Degrade to the static sitemap when a fresh D1 has no discovery cache table. */

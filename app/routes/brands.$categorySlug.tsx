@@ -11,9 +11,18 @@
  * a dedicated landing page to land on.
  *
  * ZERO-COST CONSTRAINT (same as /brands): the loader reads ONLY from the
- * same sitemap indexability signal (`loadIndexableAdsInternalLinks`) the
- * /brands hub already uses. No D1 migration, no new data source, no live
- * provider call — a public request never triggers discovery or scraping.
+ * same sitemap indexability signal the /brands hub already uses — one SELECT
+ * over `discovery_cache_entry` (`loadIndexableBrandPageEntriesWithStats`),
+ * which also returns each listed domain's ad counts and Ad Aggression Score
+ * from the very rows that read returned (issue #2067 phase 6). No D1
+ * migration, no new data source, no second read, no live provider call — a
+ * public request never triggers discovery or scraping.
+ *
+ * SCORE HONESTY: the score is `computeBrandPageAggressionScore` over the same
+ * verified-linked ads the /ads/:domain page scores with, and it is null while
+ * the observed window is under the 14-day floor or no ad carries a first-seen
+ * date. A null score renders "not enough history yet" — the page never shows a
+ * fabricated number and never implies fewer ads than the brand's wall holds.
  *
  * EMPTY-GUARD: an unknown slug, or a curated category with zero brands,
  * returns a 404 (mirrors the /ads empty-guard from issue #1988). A category
@@ -43,11 +52,19 @@ import {
   categoryLabelForSlug,
   groupBrandRecordsByCategory,
 } from "~/lib/brand-categories";
-import type { IndexableAdsLink } from "~/lib/ads-internal-links";
-
-/** A brand-page link plus whether its `/timeline/:domain` is indexable. */
+import { indexableAdsLinkFromPath, type IndexableAdsLink } from "~/lib/ads-internal-links";
+import type { BrandPageRowStats } from "~/lib/sitemap.server";
+import type { SitemapEntry } from "~/lib/seo";
+/** A brand-page link plus its timeline indexability and its live ad numbers. */
 interface BrandCategoryItem extends IndexableAdsLink {
   timelineIndexable: boolean;
+  /**
+   * Ad counts + Ad Aggression Score for this domain, read from the SAME cache
+   * rows as the link itself (one SELECT). Absent only if the two cores ever
+   * disagreed about a domain, in which case the row renders without numbers
+   * rather than with a fabricated zero.
+   */
+  brandStats?: BrandPageRowStats;
 }
 
 interface BrandCategoryLoaderData {
@@ -71,26 +88,39 @@ export async function loader({
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
 
-  let links: IndexableAdsLink[] = [];
+  // ONE D1 read for both halves of the row: the /ads/:domain links and the
+  // per-domain ad counts + Ad Aggression Score they render. The same SELECT
+  // the /brands hub already pays for — no new data source, no second read.
+  let entries: SitemapEntry[] = [];
+  let stats = new Map<string, BrandPageRowStats>();
   try {
-    const { loadIndexableAdsInternalLinks } = await import(
-      "~/lib/ads-internal-links.server"
-    );
-    links = await loadIndexableAdsInternalLinks(env);
+    const { loadIndexableBrandPageEntriesWithStats } = await import("~/lib/sitemap.server");
+    ({ entries, stats } = await loadIndexableBrandPageEntriesWithStats(env));
   } catch (error) {
     console.warn("Brands category link load failed; rendering empty.", {
       errorName: error instanceof Error ? error.name : typeof error,
     });
-    links = [];
+    entries = [];
+    stats = new Map();
   }
 
-  // Issue #1931 — same timeline indexability signal as the /brands hub.
+  const links: IndexableAdsLink[] = [];
+  for (const entry of entries) {
+    const link = indexableAdsLinkFromPath(entry.path);
+    if (link) {
+      links.push(link);
+    }
+  }
+
+  // Issue #1931 — same timeline indexability signal as the /brands hub,
+  // computed from the brand entries already in hand instead of re-reading
+  // them.
   let timelineDomains = new Set<string>();
   try {
     const { loadIndexableTimelineDomains } = await import(
       "~/lib/ads-internal-links.server"
     );
-    timelineDomains = await loadIndexableTimelineDomains(env);
+    timelineDomains = await loadIndexableTimelineDomains(env, entries);
   } catch (error) {
     console.warn("Brands category timeline link load failed; omitting timeline links.", {
       errorName: error instanceof Error ? error.name : typeof error,
@@ -100,6 +130,7 @@ export async function loader({
   const items: BrandCategoryItem[] = links.map((link) => ({
     ...link,
     timelineIndexable: timelineDomains.has(link.domain),
+    brandStats: stats.get(link.domain),
   }));
 
   // Reuse the SAME grouping the /brands hub uses, then filter to this one
@@ -194,6 +225,17 @@ export default function BrandCategoryRoute() {
             <li key={link.domain}>
               <Link to={link.path}>{link.name}</Link>
               <span>&nbsp;·&nbsp;{link.domain}</span>
+              {link.brandStats && (
+                <>
+                  <span>&nbsp;·&nbsp;{link.brandStats.adCount} ads on record</span>
+                  <span>
+                    &nbsp;·&nbsp;
+                    {link.brandStats.aggressionScore === null
+                      ? "Ad Aggression Score: not enough history yet"
+                      : `Ad Aggression Score: ${link.brandStats.aggressionScore}/100`}
+                  </span>
+                </>
+              )}
               {link.timelineIndexable && (
                 <>
                   <span>&nbsp;·&nbsp;</span>
