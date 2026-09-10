@@ -80,6 +80,8 @@ function createCanaryDb(options: {
   let userPlan = { ...initialUserPlan };
   let watchlistRows = initialWatchlistRows.map((row) => ({ ...row }));
   const mutationKinds: string[] = [];
+  let dedicatedUserInserts = 0;
+  let dedicatedPlanInserts = 0;
   let creditGrant: {
     quantity_granted: number;
     status: string;
@@ -91,6 +93,12 @@ function createCanaryDb(options: {
     cleanedPlanPaymentIds,
     cleanedCreditPaymentIds,
     restoredWatchlistIds,
+    get dedicatedUserInserts() {
+      return dedicatedUserInserts;
+    },
+    get dedicatedPlanInserts() {
+      return dedicatedPlanInserts;
+    },
     get canaryLockOutcome() {
       return canaryLockOutcome;
     },
@@ -172,6 +180,14 @@ function createCanaryDb(options: {
               }
               if (options.creditCleanupThrows && sql.includes("DELETE FROM evidence_top_up_grant")) {
                 throw new Error("credit cleanup database secret owner@example.com");
+              }
+              if (sql.includes("INSERT OR IGNORE INTO user (")) {
+                dedicatedUserInserts += 1;
+                return { success: true, meta: { changes: 0 } };
+              }
+              if (sql.includes("INSERT OR IGNORE INTO user_plan (")) {
+                dedicatedPlanInserts += 1;
+                return { success: true, meta: { changes: 0 } };
               }
               let changes = 0;
               if (sql.includes("INSERT INTO dodo_webhook_event")) {
@@ -919,6 +935,32 @@ describe("Dodo billing canary route", () => {
       blocker: "billing_canary_duration_exceeded",
     });
     expect(webhookAction).not.toHaveBeenCalled();
+  });
+
+  it("defaults to the dedicated canary identity and self-provisions its baseline", async () => {
+    const env = createEnv();
+    const response = await invokeCanary({ env });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    // The dedicated identity is provisioned via INSERT OR IGNORE writes —
+    // the real LAUNCH_CANARY_EMAIL account is no longer touched at all.
+    expect(env.DB.dedicatedUserInserts).toBe(1);
+    expect(env.DB.dedicatedPlanInserts).toBe(1);
+  });
+
+  it("never provisions or repairs a real account reached through an email override", async () => {
+    const env = createEnv();
+    const response = await invokeCanary({
+      env,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "canary@example.com" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(env.DB.dedicatedUserInserts).toBe(0);
+    expect(env.DB.dedicatedPlanInserts).toBe(0);
   });
 
   it("rejects non-POST action requests before canary work", async () => {

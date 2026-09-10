@@ -102,6 +102,7 @@ export interface AppEnv {
    */
   R2_ORPHAN_RECONCILE_ENABLED?: string;
   LAUNCH_CANARY_EMAIL?: string;
+  BILLING_CANARY_EMAIL?: string;
   ALLOW_PLATFORM_META_API_FALLBACK?: string;
   META_AD_LIBRARY_TOKEN?: string;
   META_AD_LIBRARY_API_VERSION?: string;

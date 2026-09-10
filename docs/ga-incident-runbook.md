@@ -65,4 +65,8 @@ npm run deploy
 ## Contacts
 
 - Operator: Nish (`me@inish.in` launch canary email in wrangler vars)
+- The Dodo billing canary runs against a dedicated non-customer account
+  (`billing-canary@0509.internal`, self-provisioned on first use;
+  `BILLING_CANARY_EMAIL` overrides it). It no longer depends on the launch
+  account's live billing state (issue #2646).
 - Support customers: `support@0509.io`
