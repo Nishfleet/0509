@@ -941,20 +941,12 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     expect(del).not.toHaveBeenCalled();
   });
 
-  it("falls back to rendered capture when an oversized page's truncated head yields no usable signals", async () => {
-    // Issue #1538: an oversized body no longer bails on size alone — the
-    // reader keeps the first MAX_LANDING_PAGE_HTML_BYTES and the pipeline
-    // parses that head. The rendered fallback still rescues the case where
-    // the truncated head carries no visible signals (here: a 1.2MB JSON
-    // state blob with no real body copy, so the kept head is an empty shell).
+  it("falls back to rendered capture when fetched HTML is over the byte limit", async () => {
     mockFetchWithDns(
       vi.fn(async () =>
-        new Response(
-          `<!doctype html><title>Huge page</title><body><script type="application/json">${"A".repeat(1_200_000)}</script></body>`,
-          {
-            status: 200,
-          },
-        ),
+        new Response(`<!doctype html><title>Huge page</title>${"A".repeat(1_000_001)}`, {
+          status: 200,
+        }),
       ) as never,
     );
     const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
@@ -1333,7 +1325,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
 
     expect(onFailure).toHaveBeenCalledOnce();
     expect(onFailure).toHaveBeenCalledWith({
-      reasonCode: "landing_server_error",
+      reasonCode: "landing_http_error",
       metadata: { fetchStatus: 500 },
     });
     expect(warn).toHaveBeenCalledWith(

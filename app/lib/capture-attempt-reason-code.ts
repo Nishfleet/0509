@@ -60,7 +60,6 @@ export const CAPTURE_ATTEMPT_REASON_CODES: readonly CaptureAttemptReasonCode[] =
 const INTERNAL_TO_PUBLIC: Record<string, CaptureAttemptReasonCode> = {
   // Anti-bot / access walls.
   landing_blocked: "bot_wall",
-  landing_auth_required: "bot_wall",
   landing_challenge_page: "cloudflare_challenge",
   landing_redirect_blocked: "bot_wall",
 
@@ -72,12 +71,9 @@ const INTERNAL_TO_PUBLIC: Record<string, CaptureAttemptReasonCode> = {
 
   // Error and maintenance screens (the down leg of a takedown/restore
   // cycle lands here too; `takedown_restore` is reserved for the explicit
-  // restore signal below). The #1538 http splits keep the same bucket.
+  // restore signal below).
   landing_error_page: "error_page",
   landing_http_error: "error_page",
-  landing_not_found: "error_page",
-  landing_gone: "error_page",
-  landing_server_error: "error_page",
 
   // Could not reach the page in time.
   landing_rate_limited: "timeout",
@@ -85,10 +81,7 @@ const INTERNAL_TO_PUBLIC: Record<string, CaptureAttemptReasonCode> = {
   landing_redirect_limit: "timeout",
 
   // The page loaded but yielded no usable offer text.
-  // (`landing_content_empty_or_oversized` retired by #1538; the entry stays
-  // for rows written before the split.)
   landing_content_empty_or_oversized: "extraction_failed",
-  landing_content_empty: "extraction_failed",
   landing_content_signature_too_small: "extraction_failed",
   landing_url_invalid: "extraction_failed",
   landing_capture_retry_cooldown: "extraction_failed",
