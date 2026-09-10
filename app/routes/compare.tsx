@@ -4,8 +4,16 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { LiveBrandProof } from "~/components/live-brand-proof";
+import { COMPETITOR_PRICE_ANCHORS } from "~/components/pricing-section";
 import { isBuyerSurfaceLocaleId } from "~/lib/locale-markets";
-import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { PUBLISHED_PLAN_PRICES_USD } from "~/lib/pricing";
+import {
+  canonicalLinks,
+  itemListJsonLd,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 
 const pageDescription =
@@ -36,6 +44,112 @@ const COMPARE_PAGES = [
   { slug: "adspy", label: "Five to Nine vs AdSpy", href: "/compare/adspy" },
 ] as const;
 
+/**
+ * Issue #2301 — the /compare hub's side-by-side table. Every rival cell is
+ * grounded in a documented source, never invented from vendor marketing:
+ *
+ * - `listPrice` comes from docs/compare-pricing-sources.md via
+ *   COMPETITOR_PRICE_ANCHORS (the same source of truth the /pricing page's
+ *   "Price of knowing" table reads, kept in sync by a test). A rival with no
+ *   entry in that doc reads "not published".
+ * - The capability cells (ad-library coverage, landing-page diffs, proof
+ *   captures) are grounded in the linked /compare/* page's own source-verified
+ *   copy. A capability the page does not document reads "not published".
+ *
+ * Five to Nine's own row prices are imported from PUBLISHED_PLAN_PRICES_USD
+ * (the same source of truth as /pricing), never retyped here.
+ */
+type CompareTableRow = {
+  vendor: string;
+  href?: string;
+  adLibrary: string;
+  landingPageDiffs: string;
+  proofCaptures: string;
+  listPrice: string;
+};
+
+const NOT_PUBLISHED = "not published";
+
+/** Entry price for a rival vendor, from docs/compare-pricing-sources.md. */
+function rivalListPrice(vendorKey: string): string {
+  const anchor = COMPETITOR_PRICE_ANCHORS.find((a) => a.vendor === vendorKey);
+  return anchor ? anchor.price : NOT_PUBLISHED;
+}
+
+const COMPARE_TABLE: readonly CompareTableRow[] = [
+  {
+    vendor: "Five to Nine",
+    adLibrary: "Yes — reads the public Meta Ad Library",
+    landingPageDiffs: "Yes — offer, price, CTA, and hook diffs",
+    proofCaptures: "Yes — page text, source link, and screenshot",
+    listPrice: `From $${PUBLISHED_PLAN_PRICES_USD.scout.monthly}/mo (Scout)`,
+  },
+  {
+    vendor: "MagicBrief",
+    href: "/compare/magicbrief",
+    adLibrary: "Saved ad library (winding down)",
+    landingPageDiffs: NOT_PUBLISHED,
+    proofCaptures: NOT_PUBLISHED,
+    listPrice: NOT_PUBLISHED,
+  },
+  {
+    vendor: "Meta Ad Library (by hand)",
+    href: "/compare/meta-ad-library",
+    adLibrary: "Yes — the public Meta Ad Library itself",
+    landingPageDiffs: NOT_PUBLISHED,
+    proofCaptures: NOT_PUBLISHED,
+    listPrice: NOT_PUBLISHED,
+  },
+  {
+    vendor: "Visualping",
+    href: "/compare/visualping-ad-libraries",
+    adLibrary: "Yes — via a published Ad Library playbook",
+    landingPageDiffs: "Yes — visual, text, and element diffs",
+    proofCaptures: NOT_PUBLISHED,
+    listPrice: rivalListPrice("Visualping Personal 1K"),
+  },
+  {
+    vendor: "Spyland",
+    href: "/compare/spyland",
+    adLibrary: NOT_PUBLISHED,
+    landingPageDiffs: "Yes — daily checks, before/after screenshots",
+    proofCaptures: NOT_PUBLISHED,
+    listPrice: NOT_PUBLISHED,
+  },
+  {
+    vendor: "Pulzifi",
+    href: "/compare/pulzifi",
+    adLibrary: NOT_PUBLISHED,
+    landingPageDiffs: "Yes — visual and text diffs",
+    proofCaptures: NOT_PUBLISHED,
+    listPrice: NOT_PUBLISHED,
+  },
+  {
+    vendor: "Foreplay Spyder",
+    href: "/compare/foreplay-spyder",
+    adLibrary: "Yes — watches competitor Meta ads",
+    landingPageDiffs: NOT_PUBLISHED,
+    proofCaptures: NOT_PUBLISHED,
+    listPrice: rivalListPrice("Foreplay Basic"),
+  },
+  {
+    vendor: "Panoramata",
+    href: "/compare/panoramata",
+    adLibrary: "Yes — ads and pages",
+    landingPageDiffs: "Yes — side-by-side screenshots",
+    proofCaptures: NOT_PUBLISHED,
+    listPrice: rivalListPrice("Panoramata Startup"),
+  },
+  {
+    vendor: "AdSpyder",
+    href: "/compare/adspyder",
+    adLibrary: "Yes — new-ad alerts",
+    landingPageDiffs: NOT_PUBLISHED,
+    proofCaptures: NOT_PUBLISHED,
+    listPrice: rivalListPrice("AdSpyder Spy"),
+  },
+] as const;
+
 export default function CompareIndexRoute() {
   // The locale prefix is read inside the component, never passed in as a
   // prop: at build time `@react-router/dev` wraps every route module's
@@ -53,6 +167,18 @@ export default function CompareIndexRoute() {
       : undefined;
   const hrefFor = (page: (typeof COMPARE_PAGES)[number]) =>
     localePrefix ? `${localePrefix}${page.href}` : page.href;
+  const hrefForPath = (path: string) =>
+    localePrefix ? `${localePrefix}${path}` : path;
+
+  // Issue #2301 — the hub is a browsable collection of sibling /compare/*
+  // pages, so emit an ItemList with one ListItem per linked page. Built from
+  // the SAME COMPARE_PAGES list the hub renders (no new data source) so it
+  // can never drift from the visible links. ItemList carries only names and
+  // URLs — no prices — so it stays within the hub's no-pricing-in-JSON-LD
+  // contract (compare-hub.route.test.ts).
+  const itemList = itemListJsonLd(
+    COMPARE_PAGES.map((page) => ({ name: page.label, pathname: page.href })),
+  );
 
   return (
     <main className="f9-home">
@@ -65,6 +191,7 @@ export default function CompareIndexRoute() {
           }),
         )}
       />
+      <script {...jsonLdScriptProps(itemList)} />
       <MarketingNav />
 
       <section className="ld-hero">
@@ -96,6 +223,54 @@ export default function CompareIndexRoute() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="ld-quiet">
+        <div className="ld-section-head">
+          <span className="ld-kicker">At a glance</span>
+          <h2>How the tools compare.</h2>
+          <p>
+            Rival list prices come from docs/compare-pricing-sources.md (the same source the
+            /pricing page reads); capability cells are grounded in the linked compare page&rsquo;s
+            own source-verified copy. A cell with no documented value reads &ldquo;not
+            published&rdquo; — nothing is invented from vendor marketing. Read a row across to
+            see which tools cover the ad library, which diff landing pages, and which save proof.
+          </p>
+        </div>
+        <div className="f9-price-anchors" aria-label="Competitor monitoring tools compared">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Tool</th>
+                <th scope="col">Ad-library coverage</th>
+                <th scope="col">Landing-page diffs</th>
+                <th scope="col">Proof captures</th>
+                <th scope="col">List price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARE_TABLE.map((row) => (
+                <tr key={row.vendor}>
+                  <th scope="row">
+                    {row.href ? <Link to={hrefForPath(row.href)}>{row.vendor}</Link> : row.vendor}
+                  </th>
+                  <td>{row.adLibrary}</td>
+                  <td>{row.landingPageDiffs}</td>
+                  <td>{row.proofCaptures}</td>
+                  <td>{row.listPrice}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="ld-pricing-note">
+          The pattern to read: Five to Nine is the only row that pairs Meta Ad Library coverage
+          with landing-page diffs and saved, source-linked proof captures. Most rivals do one of
+          the three — a creative library, a page differ, or a new-ad alert — and leave the
+          before-and-after evidence to you. Where a rival&rsquo;s price is not listed here, it is
+          not published in docs/compare-pricing-sources.md; check the vendor&rsquo;s own pricing
+          page for current plans.
+        </p>
       </section>
 
       <section className="ld-final">
