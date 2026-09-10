@@ -104,9 +104,10 @@ describe("robots.txt advertises the non-empty locale sitemaps (issue #2017)", ()
         `/${locale}/sitemap.xml is advertised but empty`,
       ).toBeGreaterThan(0);
     }
-    // fr/es emit empty sitemaps (#1570) and must stay unadvertised.
-    for (const locale of ["fr", "es"]) {
-      expect(LOCALE_SITEMAP_LOCALES).not.toContain(locale);
+    // Issue #2294: every buyer-surface locale feed is non-empty, so all five
+    // locales (de, ja, pt-br, fr, es) are advertised.
+    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+      expect(LOCALE_SITEMAP_LOCALES).toContain(locale);
     }
   });
 });
