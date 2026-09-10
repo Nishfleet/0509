@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ADS_DOMAIN_PUBLISHER_CAP_DEFAULT,
@@ -179,4 +179,75 @@ describe("isSeededBrandDomain (issue #1306 retire-scope guard)", () => {
       expect(isSeededBrandDomain(domain)).toBe(false);
     },
   );
+});
+
+describe("publishSeedListDomain warming verdict (issue #2210)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.doUnmock("~/lib/ad-source.server");
+    vi.doUnmock("~/lib/ad-persistence.server");
+    vi.doUnmock("~/lib/search-rollout.server");
+    vi.doUnmock("~/lib/search-v2.server");
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it("classifies a resolver warming placeholder as warming, not skip, and counts it under warming in the run summary", async () => {
+    const warmingResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryProgress: "warming",
+      discoverySummary: "Commercial discovery is warming this query.",
+      discoveryFailureClass: null,
+    };
+
+    vi.doMock("~/lib/ad-source.server", () => ({
+      resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(warmingResult),
+    }));
+    vi.doMock("~/lib/ad-persistence.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: unknown[]) => ads),
+    }));
+    vi.doMock("~/lib/search-rollout.server", () => ({
+      shouldApplySearchV2: vi.fn(() => true),
+    }));
+    vi.doMock("~/lib/search-v2.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/search-v2.server")>(
+        "~/lib/search-v2.server",
+      );
+      return {
+        ...actual,
+        buildSearchV2Context: vi.fn().mockResolvedValue({
+          queryIntent: { intent: "domain", raw: "nike.com", normalized: "nike.com" },
+          scope: "exact",
+          displayDomain: "nike.com",
+          identityAliases: [],
+          domainAliases: [],
+          advertiserPageId: null,
+        }),
+      };
+    });
+
+    const { runAdsDomainPublisher } = await import("~/lib/ads-domain-publisher.server");
+    const summary = await runAdsDomainPublisher(
+      { DB: {} } as never,
+      { waitUntil: () => {} } as never,
+      { list: "sneaker-resale", cap: 1 },
+    );
+
+    expect(summary.warming).toBe(1);
+    expect(summary.skipped).toBe(0);
+    expect(summary.published).toBe(0);
+    expect(summary.outcomes).toHaveLength(1);
+    expect(summary.outcomes[0].verdict).toBe("warming");
+    expect(summary.outcomes[0].reason).not.toContain("No verified/likely coverage");
+    expect(summary.outcomes[0].reason).toContain("warming");
+  });
 });
