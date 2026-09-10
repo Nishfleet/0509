@@ -1,7 +1,10 @@
 import type { LoaderFunctionArgs } from "react-router";
 
 import { getCloudflareContext } from "~/lib/cloudflare-context";
-import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
+import {
+  mayReadReleaseIdentity,
+  readReleaseIdentity,
+} from "~/lib/canary-release-identity.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
   listScheduledObservationHealth,
@@ -28,7 +31,7 @@ type DeepHealthBody = {
      */
     scheduledGapCheck: ScheduledObservationGapCheckStatus;
   };
-  releaseIdentity: ReturnType<typeof readReleaseIdentity>;
+  releaseIdentity?: ReturnType<typeof readReleaseIdentity>;
 };
 
 async function probeD1(env: AppEnv): Promise<DependencyStatus> {
@@ -47,7 +50,7 @@ async function probeD1(env: AppEnv): Promise<DependencyStatus> {
 // Deep dependency probe for operators. Unauthenticated but rate-limited via
 // the normal /api/* api-read bucket (unlike /api/health, which stays edge-only
 // and rate-limit-exempt so uptime monitors stay green during a DB outage).
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ context, request }: LoaderFunctionArgs) {
   const cloudflare = getCloudflareContext(context);
   const env = cloudflare.env;
   const releaseIdentity = readReleaseIdentity(env);
@@ -74,6 +77,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
     d1 === "ok" &&
     scheduledWork === "ok" &&
     scheduledGapCheck.status === "ok";
+  const showReleaseIdentity = await mayReadReleaseIdentity(request, env);
 
   const body: DeepHealthBody = {
     status: healthy ? "ok" : "degraded",
@@ -85,7 +89,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
       scheduledWork,
       scheduledGapCheck: scheduledGapCheck.status,
     },
-    releaseIdentity,
+    ...(showReleaseIdentity ? { releaseIdentity } : {}),
   };
 
   return new Response(JSON.stringify(body), {

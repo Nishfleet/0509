@@ -68,19 +68,15 @@ smoke_probe() {
   [[ -s "${smoke_dir}/probes.jsonl" ]] || die "smoke probe wrote no evidence"
   python3 - "${smoke_dir}/probes.jsonl" <<'PY' || die "smoke probe evidence invalid"
 import json
-import os
-import re
 import sys
 
 with open(sys.argv[1], encoding="utf-8") as source:
     record = json.loads(source.readline())
 if record.get("ok") is not True:
     raise SystemExit("smoke probe record was not ok")
-worker_version = record.get("workerVersionId")
-if not worker_version or not isinstance(worker_version, str):
-    raise SystemExit("smoke probe record had no worker version")
-if not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", worker_version):
-    raise SystemExit("smoke probe worker version was unsafe")
+# releaseIdentity is gated behind the canary token and the probe is a no-secrets
+# DynamicUser unit, so it cannot read a worker version. Assert the public deep
+# checks instead; the tokened deploy canary owns the version identity assertion.
 if record.get("d1") != "ok" or record.get("scheduledWork") != "ok":
     raise SystemExit("smoke probe deep checks were not ok")
 PY

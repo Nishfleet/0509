@@ -192,7 +192,7 @@ function compareReleaseIdentity(actual, expectedWorkerVersionId, expectedSearchR
 }
 
 /**
- * @param {{ baseUrl?: string, expectedApp?: string | null, expectedWorkerVersionId?: string | null, expectedSearchRolloutMode?: string | null, fetchImpl?: typeof fetch }} [options]
+ * @param {{ baseUrl?: string, expectedApp?: string | null, expectedWorkerVersionId?: string | null, expectedSearchRolloutMode?: string | null, canaryBypassToken?: string, fetchImpl?: typeof fetch }} [options]
  * @returns {Promise<HealthCheckResult>}
  */
 export async function checkHealthEndpoint(options = {}) {
@@ -204,6 +204,7 @@ export async function checkHealthEndpoint(options = {}) {
   const expectedSearchRolloutMode = normalizeExpectedSearchRolloutMode(
     options.expectedSearchRolloutMode ?? process.env.CANARY_EXPECTED_SEARCH_ROLLOUT_MODE,
   );
+  const canaryBypassToken = options.canaryBypassToken ?? process.env.CANARY_BYPASS_TOKEN;
   const fetchImpl = options.fetchImpl ?? fetch;
   const url = new URL("/api/health", baseUrl).toString();
 
@@ -212,6 +213,9 @@ export async function checkHealthEndpoint(options = {}) {
       redirect: "manual",
       headers: {
         "user-agent": "0509-prod-canary/1.0",
+        ...(isConfiguredSecret(canaryBypassToken)
+          ? { "x-0509-canary-token": String(canaryBypassToken).trim() }
+          : {}),
       },
       signal: AbortSignal.timeout(10_000),
     });
@@ -444,6 +448,7 @@ export async function runProductionCanary(options = {}) {
           expectedApp,
           expectedWorkerVersionId,
           expectedSearchRolloutMode,
+          canaryBypassToken,
           fetchImpl: options.fetchImpl,
         }),
       ),
