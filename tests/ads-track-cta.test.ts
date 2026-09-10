@@ -71,6 +71,8 @@ function fixture(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoaderD
     timelineIndexable: false,
     adLibraryCountry: "all countries",
     relatedBrands: [],
+    brandCategory: "Sport & footwear",
+    sameCategoryBrands: [],
     noindex: false,
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,

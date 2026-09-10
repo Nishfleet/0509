@@ -84,6 +84,7 @@ import type {
 } from "~/lib/brand-page.server";
 import { brandOwnedAdIdSet } from "~/lib/brand-page.server";
 import { isSeededBrandDomain } from "~/lib/ads-domain-publisher.server";
+import { brandCategoryForDomain } from "~/lib/brand-categories";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 import type { CaptureFailuresSummary } from "~/lib/offer-timeline.server";
 import { formatCaptureAttemptReasonLabel } from "~/lib/capture-attempt-reason-code";
@@ -207,6 +208,26 @@ export interface BrandPageLoaderData {
    * every brand page also reaches the full list.
    */
   relatedBrands: IndexableAdsLink[];
+  /**
+   * The coarse buyer category this brand page belongs to (issue #2298), from
+   * the same registry the /brands hub groups by (`brandCategoryForDomain`).
+   * Drives the "Also tracked in <category>" module heading. Always computable
+   * for a populated page; unknown domains degrade to the honest "More brands"
+   * bucket (never invented).
+   */
+  brandCategory: string;
+  /**
+   * Other indexable /ads/:domain pages in the SAME buyer category as this
+   * brand (issue #2298). The /ads pages were lateral dead-ends — a buyer on
+   * /ads/nike.com could not reach /ads/adidas.com (both "Sport & footwear")
+   * without going back to search, and Google saw no category-level internal
+   * link equity between comparable brands. This deterministic set of
+   * same-category siblings (the current domain always excluded, see
+   * pickSameCategoryBrandLinks) restores the category cross-links. Empty when
+   * no other same-category brand is indexable — the module hides in that case
+   * (never an empty card).
+   */
+  sameCategoryBrands: IndexableAdsLink[];
   noindex: boolean;
   canonicalPath: string;
   /**
@@ -426,16 +447,28 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // bounded D1 read; a hiccup degrades to [] (the section hides) rather
   // than 500ing the brand page or triggering any paid operation.
   let relatedBrands: IndexableAdsLink[] = [];
+  let sameCategoryBrands: IndexableAdsLink[] = [];
   try {
     const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
     const { pickRelatedBrandLinks } = await import("~/lib/ads-internal-links");
     const allLinks = await loadIndexableAdsInternalLinks(env);
     relatedBrands = pickRelatedBrandLinks(allLinks, brand.domain);
+    // Issue #2298 — same-category siblings for the "Also tracked in <category>"
+    // module. Reuses the SAME sitemap-indexability-filtered set as the
+    // related brands, filtered to the current brand's buyer category (the
+    // same registry the /brands hub groups by). Cache-only; a hiccup degrades
+    // to [] (the module hides) rather than 500ing the page.
+    sameCategoryBrands = pickSameCategoryBrandLinks(
+      allLinks,
+      brand.domain,
+      brandCategoryForDomain(brand.domain),
+    );
   } catch (error) {
     console.warn("Brand page related-brands load failed; omitting cross-links.", {
       errorName: error instanceof Error ? error.name : typeof error,
     });
     relatedBrands = [];
+    sameCategoryBrands = [];
   }
 
   // Attribution analytics (score, teaser, change feed, ownership) derive ONLY
@@ -540,10 +573,51 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
     relatedBrands,
+    brandCategory: brandCategoryForDomain(brand.domain),
+    sameCategoryBrands,
     canonicalPath: `/ads/${brand.domain}`,
     captureFailuresSummary,
     recentWatchChanges,
   };
+}
+
+/**
+ * How many same-category sibling /ads/:domain cross-links the "Also tracked in
+ * <category>" module renders (issue #2298). The issue brief asks for 4-6
+ * same-category siblings; 6 is the top of that range so a deep category (e.g.
+ * Beauty & personal care) links a full row while a shallow one links whatever
+ * it has. The module hides entirely when no same-category sibling is
+ * indexable.
+ */
+export const SAME_CATEGORY_BRAND_LINK_COUNT = 6;
+
+/**
+ * Pick the "Also tracked in <category>" set for an /ads/:domain page (issue
+ * #2298): the other indexable /ads pages in the SAME buyer category as the
+ * current brand, so a buyer who lands on /ads/nike.com can reach
+ * /ads/adidas.com (both "Sport & footwear") without going back to search, and
+ * Google sees category-level internal link equity between comparable brands.
+ * The current domain is always excluded — a page must never link to itself.
+ * Selection is deterministic (stable across renders and crawls, so the
+ * internal-link set does not churn), capped at `count` (default
+ * SAME_CATEGORY_BRAND_LINK_COUNT). When fewer same-category siblings exist, it
+ * returns all of them; only a category with no other indexable brand yields an
+ * empty set, in which case the caller hides the module. Every returned link
+ * comes from the caller's sitemap-indexability-filtered set, so no dead
+ * (cache-miss /search-redirect) page is ever linked.
+ */
+export function pickSameCategoryBrandLinks(
+  links: readonly IndexableAdsLink[],
+  currentDomain: string,
+  category: string,
+  count = SAME_CATEGORY_BRAND_LINK_COUNT,
+): IndexableAdsLink[] {
+  const siblings = links
+    .filter((link) => link.domain !== currentDomain)
+    .filter((link) => brandCategoryForDomain(link.domain) === category)
+    .slice()
+    .sort((a, b) => a.domain.localeCompare(b.domain));
+  return siblings.slice(0, Math.max(0, count));
 }
 
 /**
@@ -1219,6 +1293,52 @@ function BrandBreadcrumbs({ data }: { data: BrandPageLoaderData }) {
   );
 }
 
+/**
+ * "Also tracked in <category>" — issue #2298. The /ads/:domain pages were
+ * lateral dead-ends: a buyer on /ads/nike.com could not reach /ads/adidas.com
+ * (both "Sport & footwear") without going back to search, and Google saw no
+ * category-level internal link equity between comparable brands. This module
+ * cross-links the current brand page to its same-category siblings (the
+ * current domain always excluded, see pickSameCategoryBrandLinks), so
+ * comparable brands sit together and the category cohort is internally linked.
+ * Hidden when no other same-category brand is indexable (never an empty card).
+ */
+function BrandSameCategory({
+  category,
+  links,
+}: {
+  category: string;
+  links: readonly IndexableAdsLink[];
+}) {
+  if (links.length === 0) {
+    return null;
+  }
+  const brandWord = links.length === 1 ? "brand" : "brands";
+  return (
+    <section className="f9-ads-sec" aria-labelledby="brand-same-category-title">
+      <div className="f9-container">
+        <div className="f9-ads-sec-head">
+          <div className="f9-ads-sec-head-left">
+            <span className="f9-ads-sec-eyebrow">Comparable brands</span>
+            <h2 id="brand-same-category-title">{`Also tracked in ${category}`}</h2>
+          </div>
+          <span className="f9-ads-sec-meta">
+            {`${links.length} ${brandWord} in ${category}`}
+          </span>
+        </div>
+        <ul className="f9-quiet-list" data-testid="ads-same-category">
+          {links.map((link) => (
+            <li key={link.domain} className="f9-quiet-list-item">
+              <Link to={link.path}>{link.name}</Link>
+              <span>&nbsp;·&nbsp;{link.domain}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 function BrandAdsResults({
   data,
   liveSearchPath,
@@ -1489,6 +1609,28 @@ function BrandAdsResults({
           brand. */}
       {data.verifiedLinkCount > 0 && data.relatedBrands.length > 0 ? (
         <BrowseTrackedCompetitors links={data.relatedBrands} heading="More tracked brands" />
+      ) : null}
+
+      {/* 6c. ALSO TRACKED IN <CATEGORY> — issue #2298. The /ads/:domain pages
+          were lateral dead-ends: a buyer on /ads/nike.com could not reach
+          /ads/adidas.com (both "Sport & footwear") without going back to
+          search, and Google saw no category-level internal link equity between
+          comparable brands. This module cross-links the current brand page to
+          its same-category siblings (the current domain always excluded), so
+          comparable brands sit together and the category cohort is internally
+          linked. Rendered via <BrandSameCategory> as the "Also tracked in
+          <category>" module. Hidden when there are no OTHER same-category
+          indexable brand pages (a single-brand category or a cache hiccup) OR
+          when this page itself has zero verified-linked ads — the same
+          combined conditional the related-brands cluster honors (issue #1454):
+          a populated page (verifiedLinkCount > 0) may carry both blocks, and a
+          verifiedLinkCount = 0 page must carry NEITHER. It never invents a
+          brand. */}
+      {data.verifiedLinkCount > 0 && data.sameCategoryBrands.length > 0 ? (
+        <BrandSameCategory
+          category={data.brandCategory}
+          links={data.sameCategoryBrands}
+        />
       ) : null}
 
       {/* 7. CLOSER */}

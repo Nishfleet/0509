@@ -139,6 +139,8 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     adLibraryCountry: "India",
     noindex: false,
     relatedBrands: [],
+    brandCategory: "Sport & footwear",
+    sameCategoryBrands: [],
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
     recentWatchChanges: [],
@@ -1455,5 +1457,105 @@ describe("brand categories — /brands hub grouping (issue #1417)", () => {
       "adidas.com",
       "nike.com",
     ]);
+  });
+});
+
+/**
+ * Issue #2298 — the /ads/:domain pages were lateral dead-ends: a buyer on
+ * /ads/nike.com could not reach /ads/adidas.com (both "Sport & footwear")
+ * without going back to search, and Google saw no category-level internal
+ * link equity between comparable brands. The "Also tracked in <category>"
+ * module cross-links each brand page to its same-category siblings.
+ */
+describe("Also tracked in <category> — same-category sibling module (issue #2298)", () => {
+  const sportSiblings = [
+    { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
+    { domain: "allbirds.com", path: "/ads/allbirds.com", name: "Allbirds" },
+  ];
+
+  it("renders the 'Also tracked in <category>' module linking same-category siblings", async () => {
+    const markup = await render(
+      populated({
+        brandCategory: "Sport & footwear",
+        sameCategoryBrands: sportSiblings,
+      }),
+    );
+
+    expect(markup).toContain("Also tracked in Sport");
+    expect(markup).toContain("&amp; footwear");
+    expect(markup).toContain('href="/ads/adidas.com"');
+    expect(markup).toContain('href="/ads/allbirds.com"');
+    // The current page never links to itself.
+    expect(markup).not.toContain('href="/ads/nike.com"');
+  });
+
+  it("hides the module when no other same-category brand is indexable", async () => {
+    const markup = await render(
+      populated({ brandCategory: "Sport & footwear", sameCategoryBrands: [] }),
+    );
+    expect(markup).not.toContain("Also tracked in");
+  });
+
+  it("hides the module on a page with zero verified-linked ads, even with same-category siblings present", async () => {
+    // Mirrors the combined conditional rule (issue #1454): a page with
+    // verifiedLinkCount = 0 self-noindexes and must not render the cross-link
+    // module, even when same-category siblings exist.
+    const markup = await render(
+      populated({
+        verifiedLinkedAds: [],
+        verifiedLinkCount: 0,
+        brandCategory: "Sport & footwear",
+        sameCategoryBrands: sportSiblings,
+        noindex: true,
+      }),
+    );
+    expect(markup).not.toContain("Also tracked in");
+  });
+});
+
+describe("pickSameCategoryBrandLinks — same-category sibling selection (issue #2298)", () => {
+  it("excludes the current domain, filters to the category, and caps at SAME_CATEGORY_BRAND_LINK_COUNT", async () => {
+    const { pickSameCategoryBrandLinks, SAME_CATEGORY_BRAND_LINK_COUNT } = await import(
+      "~/routes/ads.$domain"
+    );
+    const links = [
+      { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
+      { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
+      { domain: "allbirds.com", path: "/ads/allbirds.com", name: "Allbirds" },
+      { domain: "hm.com", path: "/ads/hm.com", name: "H&M" },
+      { domain: "asos.com", path: "/ads/asos.com", name: "ASOS" },
+    ];
+
+    const set = pickSameCategoryBrandLinks(links, "nike.com", "Sport & footwear");
+    // Only the same-category siblings (adidas, allbirds), never the current
+    // domain (nike) and never the E-commerce brands (hm, asos).
+    expect(set.map((link) => link.domain).sort()).toEqual(["adidas.com", "allbirds.com"]);
+    expect(set.some((link) => link.domain === "nike.com")).toBe(false);
+    // Deterministic across calls (stable internal-link set, no crawl churn).
+    expect(pickSameCategoryBrandLinks(links, "nike.com", "Sport & footwear")).toEqual(set);
+    // The cap is the top of the issue's 4-6 range.
+    expect(SAME_CATEGORY_BRAND_LINK_COUNT).toBeGreaterThanOrEqual(4);
+    expect(SAME_CATEGORY_BRAND_LINK_COUNT).toBeLessThanOrEqual(6);
+
+    // When fewer same-category siblings exist than the cap, every one is
+    // returned (the module links whatever the category has). The Sport &
+    // footwear registry has 3 brands, all returned for a non-member domain.
+    const allSport = pickSameCategoryBrandLinks(links, "hm.com", "Sport & footwear");
+    expect(allSport.map((link) => link.domain).sort()).toEqual([
+      "adidas.com",
+      "allbirds.com",
+      "nike.com",
+    ]);
+  });
+
+  it("returns an empty set when no other same-category brand is indexable", async () => {
+    const { pickSameCategoryBrandLinks } = await import("~/routes/ads.$domain");
+    const links = [
+      { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
+      { domain: "hm.com", path: "/ads/hm.com", name: "H&M" },
+    ];
+    // nike.com is the only Sport & footwear brand; hm.com is E-commerce.
+    const set = pickSameCategoryBrandLinks(links, "nike.com", "Sport & footwear");
+    expect(set).toEqual([]);
   });
 });
