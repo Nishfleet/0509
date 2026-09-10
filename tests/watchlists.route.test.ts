@@ -1191,9 +1191,11 @@ describe("watchlists route rendering", () => {
     expect(markup).not.toContain("f9-evidence-status-strip");
 
     // The tab bar is real navigation: six links, fixed order, the active one
-    // marked with aria-current and not by ink alone (brief §10). Archive is
-    // a real user section (#2173 / #2513), not leftover chrome.
+    // marked with aria-selected and not by ink alone (brief §10, WAI-ARIA
+    // tabs pattern). Archive is a real user section (#2173 / #2513), not
+    // leftover chrome.
     expect(markup).toContain('aria-label="Competitor sections"');
+    expect(markup).toContain('role="tablist"');
     for (const [label, href] of [
       ["What changed", "/app/watchlists?watchlist=watch-1"],
       ["Archive", "/app/watchlists?watchlist=watch-1&amp;tab=archive"],
@@ -1206,7 +1208,16 @@ describe("watchlists route rendering", () => {
       expect(markup).toContain(label);
     }
     expect(markup).toMatch(
-      /<a(?=[^>]*aria-current="page")(?=[^>]*class="f9-wk-tab is-on")(?=[^>]*href="\/app\/watchlists\?watchlist=watch-1")[^>]*><span>What changed<\/span><\/a>/,
+      /<a(?=[^>]*aria-selected="true")(?=[^>]*aria-controls="competitor-panel-changed")(?=[^>]*class="f9-wk-tab is-on")(?=[^>]*role="tab")(?=[^>]*href="\/app\/watchlists\?watchlist=watch-1")[^>]*><span>What changed<\/span><\/a>/,
+    );
+    // Roving tabindex: only the active tab sits in the Tab order; the rest
+    // are reached by arrow keys.
+    expect(markup).toMatch(
+      /<a(?=[^>]*aria-selected="false")(?=[^>]*role="tab")(?=[^>]*tabindex="-1")(?=[^>]*href="\/app\/watchlists\?watchlist=watch-1&amp;tab=evidence")/,
+    );
+    // The active panel is the tabpanel its tab names.
+    expect(markup).toContain(
+      'aria-labelledby="competitor-tab-changed" class="f9-watchdetail-main" id="competitor-panel-changed" role="tabpanel" tabindex="0"',
     );
 
     // The change feed is the default panel.
@@ -1652,5 +1663,53 @@ describe("watchlists route rendering", () => {
     expect(markup).not.toContain("Tracking path needs attention");
     expect(markup).not.toContain("The visual ad check could not start");
     expect(markup).not.toContain("Competitor ad checks degraded");
+  });
+
+  it("passes axe-core on the opened competitor surface (#2421)", async () => {
+    const markup = await renderWatchlistsRoute(selectedPanelLoaderData);
+
+    // axe-core is a browser bundle: it reads `window`/`document` at load
+    // time, so the happy-dom globals must exist before the import and be
+    // restored after (other suites share this process).
+    const { Window } = await import("happy-dom");
+    const globals = globalThis as Record<string, unknown>;
+    const previousWindow = globals.window;
+    const previousDocument = globals.document;
+    const win = new Window({ url: "https://0509.test/app/watchlists" });
+    globals.window = win;
+    globals.document = win.document;
+    try {
+      const axe = (await import("axe-core")).default;
+      win.document.body.innerHTML = markup;
+      const results = await axe.run(
+        win.document.documentElement as unknown as Element,
+        {
+          // This is the route's fragment, not the document: the html lang,
+          // title, skip link and landmark shell live in root.tsx and the
+          // app layout, which their own tests cover. `color-contrast`
+          // lands in `incomplete` under happy-dom (no layout engine) — the
+          // measured ratios for the changed tokens are recorded in the PR.
+          rules: {
+            bypass: { enabled: false },
+            "document-title": { enabled: false },
+            "html-has-lang": { enabled: false },
+            "landmark-one-main": { enabled: false },
+            "page-has-heading-one": { enabled: false },
+            region: { enabled: false },
+          },
+        },
+      );
+      expect(
+        results.violations.map((violation) => ({
+          id: violation.id,
+          nodes: violation.nodes.length,
+        })),
+      ).toEqual([]);
+    } finally {
+      if (previousWindow === undefined) delete globals.window;
+      else globals.window = previousWindow;
+      if (previousDocument === undefined) delete globals.document;
+      else globals.document = previousDocument;
+    }
   });
 });

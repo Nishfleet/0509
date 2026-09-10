@@ -2,7 +2,10 @@
   /* Canonical workspace tokens (bone / Vercel aesthetic). */
   --ink: #171611;
   --ink-soft: #55524a;
-  --ink-faint: #6e6a5e;
+  /* One step darker than the old faint tone: keeps the quiet voice while
+     clearing WCAG AA 4.5:1 on every ground it prints on — the sunk
+     row-hover ground was the failure at 4.33:1. */
+  --ink-faint: #6a665b;
   --line: #e0ddd4;
   --card: #fffdf8;
   --bone: #f4f1e8;
@@ -973,7 +976,7 @@ button[aria-busy="true"] {
   position: relative;
   display: grid;
   place-items: center;
-  min-height: 42px;
+  min-height: 44px;
   border-radius: 14px;
   color: var(--f9-search-muted);
   cursor: pointer;
@@ -6674,7 +6677,9 @@ one signal-green accent.
 [data-f9-theme="dark"] {
   --ink: #ece9e2;
   --ink-soft: #b5b1a6;
-  --ink-faint: #8a867c;
+  /* A half-step lighter than the old dark faint: clears AA 4.5:1 on
+     --card, the darkest ground it sits on (was 4.49:1). */
+  --ink-faint: #8c887e;
   --line: #33312c;
   --card: #21201c;
   --bone: #171611;
@@ -10095,7 +10100,9 @@ reds soften --- */
   --wk-band: #0d0c09;
   --wk-band-2: #201d17;
   --wk-on-band: #ece9e1;
-  --wk-on-band-dim: #89846f;
+  /* A half-step lighter than the old band dim: clears AA 4.5:1 on the
+     rail's hover ground --wk-band-2 (was 4.48:1). */
+  --wk-on-band-dim: #8d8873;
   --wk-band-rule: #2a2720;
   --wk-sunk: #211e18;
   --wk-fill: var(--ink);
@@ -10768,6 +10775,8 @@ a.f9-wk-btn {
 .f9-wk-row-confirm {
   display: inline-flex;
   align-items: center;
+  min-width: 44px;
+  min-height: 44px;
   gap: 4px;
   color: var(--ink);
   font-size: 13px;
