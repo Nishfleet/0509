@@ -58,7 +58,6 @@ export default [
   route("api/v1/:resourceType/:resourceId", "routes/api.v1.$resourceType.$resourceId.ts"),
   route("api/pricing-preview", "routes/api.pricing-preview.ts"),
   route("api/webhooks/dodo", "routes/api.webhooks.dodo.ts"),
-  route("api/delivery-status/:provider", "routes/api.delivery-status.$provider.ts"),
   route("api/health", "routes/api.health.ts"),
   route("api/health/deep", "routes/api.health.deep.ts"),
   route("api/release-soak", "routes/api.release-soak.ts"),
