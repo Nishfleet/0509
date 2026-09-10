@@ -269,6 +269,48 @@ async function getRuntimeWorkerEnv(): Promise<AppEnv | null> {
   return runtimeWorkerEnvPromise;
 }
 
+// The provider bindings rehydrated by resolveCommercialDiscoveryEnv below.
+// Adding a binding upstream means editing this list once, not the historical
+// four hand-copied 15-field spread blocks.
+const DISCOVERY_MERGE_FIELDS = [
+  "AI",
+  "BROWSERLESS_BQL_URL",
+  "BROWSERLESS_TOKEN",
+  "BROWSER_RUN_ACCOUNT_ID",
+  "BROWSER_RUN_API_TOKEN",
+  "DB",
+  "LANDING_PAGE_ARTIFACTS",
+  "MONITORING_WORKFLOW",
+] as const;
+type DiscoveryMergeField = (typeof DISCOVERY_MERGE_FIELDS)[number];
+
+/**
+ * Merge a discovered `base` env (request-carried or Worker runtime) with the
+ * request `overlay`, preferring overlay values but falling back to base on
+ * every provider binding. BROWSER is intentionally not re-merged here: the
+ * early `env.BROWSER` return above guarantees the overlay carries no binding,
+ * so the spread keeps the base's binding authoritative. Omit Browser Run
+ * credentials for the raw BROWSERLESS-only request env, which has no Quick
+ * Actions / runtime signal backing them.
+ */
+function mergeDiscoveryEnv(
+  base: AppEnv,
+  overlay: AppEnv,
+  options: { skipBrowserRunCredentials?: boolean } = {},
+): AppEnv {
+  const merged: AppEnv = { ...base, ...overlay };
+  for (const key of DISCOVERY_MERGE_FIELDS) {
+    if (
+      options.skipBrowserRunCredentials &&
+      (key === "BROWSER_RUN_ACCOUNT_ID" || key === "BROWSER_RUN_API_TOKEN")
+    ) {
+      continue;
+    }
+    (merged as Record<DiscoveryMergeField, unknown>)[key] = overlay[key] ?? base[key];
+  }
+  return merged;
+}
+
 async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
   // The deterministic local release harness deliberately removes provider
   // bindings. Never rehydrate them from the Worker runtime for that request.
@@ -281,72 +323,49 @@ async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
   }
 
   const requestEnv = (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ ?? null;
-  if (requestEnv?.BROWSER) {
-    return {
-      ...requestEnv,
-      ...env,
-      AI: env.AI ?? requestEnv.AI,
-      BROWSER: requestEnv.BROWSER,
-      BROWSERLESS_BQL_URL: env.BROWSERLESS_BQL_URL ?? requestEnv.BROWSERLESS_BQL_URL,
-      BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN ?? requestEnv.BROWSERLESS_TOKEN,
-      BROWSER_RUN_ACCOUNT_ID: env.BROWSER_RUN_ACCOUNT_ID ?? requestEnv.BROWSER_RUN_ACCOUNT_ID,
-      BROWSER_RUN_API_TOKEN: env.BROWSER_RUN_API_TOKEN ?? requestEnv.BROWSER_RUN_API_TOKEN,
-      DB: env.DB ?? requestEnv.DB,
-      LANDING_PAGE_ARTIFACTS: env.LANDING_PAGE_ARTIFACTS ?? requestEnv.LANDING_PAGE_ARTIFACTS,
-      MONITORING_WORKFLOW: env.MONITORING_WORKFLOW ?? requestEnv.MONITORING_WORKFLOW,
-    };
+
+  // Single ordered resolution list: each entry evaluates lazily, and the first
+  // matching provider signal owns the base env for the one merge below. The
+  // Worker-runtime entry is a last resort, so it is only resolved once the
+  // request-env branches have been exhausted (matching the original, which
+  // never read the runtime on a request-env path). A raw BROWSERLESS-only
+  // request env is the one shape that skips Browser Run credentials (no Quick
+  // Actions / runtime signal backing them).
+  const candidates: Array<
+    () =>
+      | { base: AppEnv; skipBrowserRunCredentials?: boolean }
+      | Promise<{ base: AppEnv; skipBrowserRunCredentials?: boolean } | null>
+      | null
+  > = [
+    () => (requestEnv?.BROWSER ? { base: requestEnv } : null),
+    () => (hasBrowserRunQuickActions(requestEnv) ? { base: requestEnv } : null),
+    () =>
+      requestEnv?.BROWSERLESS_TOKEN?.trim()
+        ? { base: requestEnv, skipBrowserRunCredentials: true }
+        : null,
+    async () => {
+      const runtimeEnv = (await getRuntimeWorkerEnv()) ?? null;
+      if (
+        !hasBrowserBinding(runtimeEnv?.BROWSER) &&
+        !hasBrowserRunQuickActions(runtimeEnv) &&
+        !runtimeEnv?.BROWSERLESS_TOKEN?.trim()
+      ) {
+        return null;
+      }
+      return { base: runtimeEnv };
+    },
+  ];
+
+  for (const resolveCandidate of candidates) {
+    const candidate = await resolveCandidate();
+    if (candidate) {
+      return mergeDiscoveryEnv(candidate.base, env, {
+        skipBrowserRunCredentials: candidate.skipBrowserRunCredentials,
+      });
+    }
   }
 
-  if (hasBrowserRunQuickActions(requestEnv)) {
-    return {
-      ...requestEnv,
-      ...env,
-      AI: env.AI ?? requestEnv.AI,
-      BROWSERLESS_BQL_URL: env.BROWSERLESS_BQL_URL ?? requestEnv.BROWSERLESS_BQL_URL,
-      BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN ?? requestEnv.BROWSERLESS_TOKEN,
-      BROWSER_RUN_ACCOUNT_ID: env.BROWSER_RUN_ACCOUNT_ID ?? requestEnv.BROWSER_RUN_ACCOUNT_ID,
-      BROWSER_RUN_API_TOKEN: env.BROWSER_RUN_API_TOKEN ?? requestEnv.BROWSER_RUN_API_TOKEN,
-      DB: env.DB ?? requestEnv.DB,
-      LANDING_PAGE_ARTIFACTS: env.LANDING_PAGE_ARTIFACTS ?? requestEnv.LANDING_PAGE_ARTIFACTS,
-      MONITORING_WORKFLOW: env.MONITORING_WORKFLOW ?? requestEnv.MONITORING_WORKFLOW,
-    };
-  }
-
-  if (requestEnv?.BROWSERLESS_TOKEN?.trim()) {
-    return {
-      ...requestEnv,
-      ...env,
-      AI: env.AI ?? requestEnv.AI,
-      BROWSERLESS_BQL_URL: env.BROWSERLESS_BQL_URL ?? requestEnv.BROWSERLESS_BQL_URL,
-      BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN ?? requestEnv.BROWSERLESS_TOKEN,
-      DB: env.DB ?? requestEnv.DB,
-      LANDING_PAGE_ARTIFACTS: env.LANDING_PAGE_ARTIFACTS ?? requestEnv.LANDING_PAGE_ARTIFACTS,
-      MONITORING_WORKFLOW: env.MONITORING_WORKFLOW ?? requestEnv.MONITORING_WORKFLOW,
-    };
-  }
-
-  const runtimeEnv = await getRuntimeWorkerEnv();
-  if (
-    !hasBrowserBinding(runtimeEnv?.BROWSER) &&
-    !hasBrowserRunQuickActions(runtimeEnv) &&
-    !runtimeEnv?.BROWSERLESS_TOKEN?.trim()
-  ) {
-    return env;
-  }
-
-  return {
-    ...runtimeEnv,
-    ...env,
-    AI: env.AI ?? runtimeEnv.AI,
-    BROWSER: hasBrowserBinding(env.BROWSER) ? env.BROWSER : runtimeEnv.BROWSER,
-    BROWSERLESS_BQL_URL: env.BROWSERLESS_BQL_URL ?? runtimeEnv.BROWSERLESS_BQL_URL,
-    BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN ?? runtimeEnv.BROWSERLESS_TOKEN,
-    BROWSER_RUN_ACCOUNT_ID: env.BROWSER_RUN_ACCOUNT_ID ?? runtimeEnv.BROWSER_RUN_ACCOUNT_ID,
-    BROWSER_RUN_API_TOKEN: env.BROWSER_RUN_API_TOKEN ?? runtimeEnv.BROWSER_RUN_API_TOKEN,
-    DB: env.DB ?? runtimeEnv.DB,
-    LANDING_PAGE_ARTIFACTS: env.LANDING_PAGE_ARTIFACTS ?? runtimeEnv.LANDING_PAGE_ARTIFACTS,
-    MONITORING_WORKFLOW: env.MONITORING_WORKFLOW ?? runtimeEnv.MONITORING_WORKFLOW,
-  };
+  return env;
 }
 
 export async function resolveCommercialAdSourceStatus(
