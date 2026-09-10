@@ -14,9 +14,12 @@ const NEW_AD_HOURS = 48;
 
 /**
  * The fields one wall card reads. Mirrors the loader's `BrandPageAd`
- * projection (issue #2391): the hydration payload ships only these fields, so
+ * projection (issue #2391): the hydration payload ships only those fields, so
  * typing the prop as this Pick keeps a newly added `ad.<field>` read here from
- * silently resolving to `undefined` in the browser.
+ * silently resolving to `undefined` in the browser. Any drift between the two
+ * lists — a field dropped from the loader projection that this adds back, or a
+ * field this reads that the loader stops shipping — fails to compile at the
+ * `<BrandAdWall ads={data.ads} />` call site, which is where the two meet.
  */
 type WallAd = Pick<
   AdRecord,

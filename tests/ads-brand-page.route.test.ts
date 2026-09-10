@@ -509,7 +509,8 @@ describe("/ads/:domain loader", () => {
     const { verifiedLinkedAdsOf } = await import("~/routes/ads.$domain");
 
     // The verified subset the client renders is derived from the payload's own
-    // ids — the same records the wall shows, so the two cannot drift.
+    // ids — the same records the wall shows, from the loader's one
+    // verification pass.
     expect(verifiedLinkedAdsOf(result).map((ad) => ad.metaAdId)).toEqual([
       "meta-verified-1",
       "meta-verified-2",
@@ -517,22 +518,77 @@ describe("/ads/:domain loader", () => {
 
     // Every creative is serialized ONCE: one `metaAdId` key per cached
     // creative. The pre-#2391 payload carried the verified-linked records a
-    // second time as `verifiedLinkedAds`, which roughly doubled the ad bytes
-    // in the hydration stream.
+    // second time as `verifiedLinkedAds`.
     const serialized = JSON.stringify(result);
     expect(result).not.toHaveProperty("verifiedLinkedAds");
     expect(serialized.split('"metaAdId"').length - 1).toBe(result.ads.length);
 
     // Fields no renderer reads never reach the browser at all (issue #2391
-    // projection; the full dropped list is in the loader comment).
+    // projection; the full dropped list is in the loader comment and the PR
+    // body). Names are distinct enough not to collide with a kept field
+    // (`active` is skipped: it matches `activeCount`/`activeStatusObserved`).
     for (const droppedField of [
       "analysisFields",
       "researchSummary",
       "adSnapshotUrl",
       "previewSubhead",
+      "bodySecondary",
+      "creativeTextMetadata",
+      "canonicalRevision",
+      "evidenceCapturedAt",
+      "domainMatch",
+      "destinationType",
+      "languageLabel",
     ]) {
       expect(serialized).not.toContain(`"${droppedField}"`);
     }
+  });
+
+  it("cuts the loader payload at least 40% against the pre-#2391 shape for a full-sized capture (issue #2391 accept)", async () => {
+    // The live view-source measurement for /ads/nike.com is in the PR body
+    // (a deployed page cannot be re-measured from a worker). This locks the
+    // mechanism as a regression detector: for one capture, the payload the
+    // loader returns now is compared against the exact shape it returned
+    // before — every record twice (wall + verified-linked copy) and every
+    // record carrying its discovery-time fields.
+    const fullAds: AdRecord[] = Array.from({ length: 24 }, (_v, i) => ({
+      ...baseAd,
+      metaAdId: `meta-ad-${i}`,
+      body: `${baseAd.body} Creative ${i} copy that the wall never renders.`,
+      previewSubhead: `Subhead ${i} the wall never renders either.`,
+      // The live discovery payload carries a populated analysis blob per
+      // creative; this is the field the issue's byte budget is about.
+      analysisFields: Array.from({ length: 6 }, (_f, f) => ({
+        scopeType: "ad",
+        fieldKey: `field-${f}`,
+        fieldValue: `Analyzed value ${f} for creative ${i}, never rendered on the wall.`,
+      })),
+    }));
+
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: fullAds,
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+    expect(result.ads).toHaveLength(fullAds.length);
+
+    // The pre-#2391 shape: the same two arrays, unprojected.
+    const beforeBytes = JSON.stringify({
+      ...result,
+      ads: fullAds,
+      verifiedLinkedAds: fullAds,
+    }).length;
+    const afterBytes = JSON.stringify(result).length;
+
+    expect(afterBytes).toBeLessThan(beforeBytes * 0.6);
   });
 
   it("reports zero brand-owned creatives when every cached ad is another advertiser's", async () => {
