@@ -24,9 +24,11 @@ import {
   flushDeferredInstantAlerts,
   runScheduledDiscoveryWarmup,
   runScheduledMonitoring,
+} from "../app/lib/monitoring.server";
+import {
   sendCustomerAtRiskAlert,
   sendWeeklyBusinessNumbers,
-} from "../app/lib/monitoring.server";
+} from "../app/lib/operator-metrics-emails.server";
 import { sendMonthlyCustomerRecaps } from "../app/lib/monthly-recap.server";
 import {
   runOnboardingNudgeSweep,
