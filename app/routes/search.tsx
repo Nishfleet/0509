@@ -524,11 +524,37 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         })
       : false;
 
+  // Anonymous warming re-polls must not burn the per-browser public-search
+  // budget: the loader reruns every 2s while the discovery cache warms, and
+  // each rerun would otherwise charge a fresh cold-search slot, self-429ing a
+  // single user-initiated search inside its own warming window. Mirror the
+  // signed-in warm-cache exemption: probe the same search key and skip the
+  // rate limit when a warming or complete cache entry exists. Charge the
+  // per-browser budget only on a genuine cold first search.
+  const anonymousWarmQueryForBudget =
+    !session &&
+    parsed.filters.query &&
+    !forceLive &&
+    !selectionServedFromCache &&
+    !url.searchParams.get("selected")
+      ? await (
+          await import("~/lib/search-execution.server")
+        ).hasWarmSearchCacheEntry({
+          env,
+          competitorWebsite,
+          parsed,
+          scope: searchScope,
+          cursor: url.searchParams.get("after"),
+          customerMetaAdLibraryToken,
+        })
+      : false;
+
   if (
     !session &&
     parsed.filters.query &&
     !forceLive &&
-    !selectionServedFromCache
+    !selectionServedFromCache &&
+    !anonymousWarmQueryForBudget
   ) {
     const { enforcePublicSearchRateLimit } =
       await import("~/lib/rate-limit.server");
