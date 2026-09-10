@@ -561,18 +561,27 @@ function normalizeRateLimitedPathname(pathname: string) {
 }
 
 async function requestKeyHash(request: Request, policy: RateLimitPolicy) {
-  const ip =
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "unknown";
+  // Only Cloudflare's `cf-connecting-ip` is trusted for the rate-limit key.
+  // `x-forwarded-for` is client-controlled: where `cf-connecting-ip` is absent
+  // (any future front-door change; the env layer is proxy-aware for that very
+  // reason) spoofing it would mint unlimited identities. Requests without a
+  // trusted client IP are keyed as `<scope>|unknown` with NO user-agent
+  // component, so all headerless requests — whatever XFF or user-agent they
+  // carry — share one bucket and the existing per-policy cap then applies
+  // collectively to that shared bucket.
+  const clientIp = request.headers.get("cf-connecting-ip");
   const userAgent = request.headers.get("user-agent") || "";
-  const input = new TextEncoder().encode(
-    policy.keySeed
-      ? `${policy.scope}|${policy.keySeed}`
-      : policy.keyByIpOnly
-        ? `${policy.scope}|${ip}`
-        : `${policy.scope}|${ip}|${userAgent}`,
-  );
+  let keyInput: string;
+  if (policy.keySeed) {
+    keyInput = `${policy.scope}|${policy.keySeed}`;
+  } else if (clientIp) {
+    keyInput = policy.keyByIpOnly
+      ? `${policy.scope}|${clientIp}`
+      : `${policy.scope}|${clientIp}|${userAgent}`;
+  } else {
+    keyInput = `${policy.scope}|unknown`;
+  }
+  const input = new TextEncoder().encode(keyInput);
   return sha256Hex(input);
 }
 
