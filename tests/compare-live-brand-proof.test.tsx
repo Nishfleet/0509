@@ -70,12 +70,21 @@ function extractAdsHrefs(markup: string): string[] {
   return [...markup.matchAll(/href="(\/ads\/[^"]+)"/g)].map((m) => m[1] ?? "");
 }
 
+function extractTimelineHrefs(markup: string): string[] {
+  return [...markup.matchAll(/href="(\/timeline\/[^"]+)"/g)].map((m) => m[1] ?? "");
+}
+
 describe("sitemap-canonical compare pages carry a live-brand worked example (issue 2124)", () => {
   it.each(SITEMAP_CANONICAL_COMPARE_PAGES)(
-    "/compare/%s renders at least one /ads/<domain> link to a tracked demo brand",
+    "/compare/%s renders the live-brand proof block with a tracked /ads/<domain> link and offer history",
     async (slug) => {
       const mod = await loadCompareModule(slug);
       const markup = renderToStaticMarkup(createElement(mod.default));
+
+      // The block must be present and labelled as the issue requires.
+      expect(markup, `/compare/${slug} must render the "See it on a live brand" block`).toContain(
+        "See it on a live brand",
+      );
 
       const adsHrefs = extractAdsHrefs(markup);
       expect(adsHrefs, `/compare/${slug} must link at least one /ads/:domain page`).not.toHaveLength(0);
@@ -86,12 +95,31 @@ describe("sitemap-canonical compare pages carry a live-brand worked example (iss
         trackedHrefs,
         `/compare/${slug} must link a tracked demo brand /ads/:domain page`,
       ).not.toHaveLength(0);
+
+      // The seed brand (nike.com) has a live /timeline/:domain offer-history
+      // page, so the block must include it as a second link labelled offer
+      // history (issue 2124 accept).
+      const timelineHrefs = extractTimelineHrefs(markup);
+      const trackedTimeline = timelineHrefs.filter((href) =>
+        DEMO_BRAND_PAGE_DOMAINS.some((domain) => href === `/timeline/${domain}`),
+      );
+      expect(
+        trackedTimeline,
+        `/compare/${slug} must link the tracked brand's /timeline/:domain offer history`,
+      ).not.toHaveLength(0);
+      expect(markup, `/compare/${slug} must label the timeline link as offer history`).toContain(
+        "offer history",
+      );
     },
   );
 
   it("the /compare hub also links a tracked demo brand /ads/:domain page", async () => {
     const { default: CompareIndexRoute } = await import("~/routes/compare");
     const markup = renderToStaticMarkup(createElement(CompareIndexRoute));
+
+    expect(markup, "/compare hub must render the \"See it on a live brand\" block").toContain(
+      "See it on a live brand",
+    );
 
     const adsHrefs = extractAdsHrefs(markup);
     const trackedDomains = DEMO_BRAND_PAGE_DOMAINS.map((domain) => `/ads/${domain}`);
