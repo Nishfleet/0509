@@ -84,6 +84,7 @@ import type {
 } from "~/lib/brand-page.server";
 import { brandOwnedAdIdSet } from "~/lib/brand-page.server";
 import { isSeededBrandDomain } from "~/lib/ads-domain-publisher.server";
+import { brandCategoryForDomain } from "~/lib/brand-categories";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 import type { CaptureFailuresSummary } from "~/lib/offer-timeline.server";
 import { formatCaptureAttemptReasonLabel } from "~/lib/capture-attempt-reason-code";
@@ -207,6 +208,22 @@ export interface BrandPageLoaderData {
    * every brand page also reaches the full list.
    */
   relatedBrands: IndexableAdsLink[];
+  /**
+   * Same-category sibling /ads/:domain pages for the "Also tracked in
+   * <category>" module (issue #2298). The /ads pages were lateral dead-ends
+   * for category browsing: the "More tracked brands" cluster (relatedBrands)
+   * links 12 alphabetical siblings, but a buyer on /ads/nike.com had no quick
+   * path to the OTHER Sport & footwear brands specifically. This set links up
+   * to 6 same-category siblings, read from the SAME category source /brands
+   * uses (`brandCategoryForDomain` in `~/lib/brand-categories` — never a
+   * second category list), in stable alphabetical order, limited to brands
+   * with live /ads pages (the sitemap indexability signal — no soft-404
+   * links). Null when no same-category sibling has a live /ads page, so the
+   * module omits entirely. Deterministic: identical HTML across deploys.
+   * Optional so existing fixtures that do not exercise it stay valid; the
+   * loader always sets it.
+   */
+  categorySiblings?: { category: string; links: IndexableAdsLink[] } | null;
   noindex: boolean;
   canonicalPath: string;
   /**
@@ -426,16 +443,38 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // bounded D1 read; a hiccup degrades to [] (the section hides) rather
   // than 500ing the brand page or triggering any paid operation.
   let relatedBrands: IndexableAdsLink[] = [];
+  let categorySiblings: { category: string; links: IndexableAdsLink[] } | null = null;
   try {
     const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
     const { pickRelatedBrandLinks } = await import("~/lib/ads-internal-links");
     const allLinks = await loadIndexableAdsInternalLinks(env);
     relatedBrands = pickRelatedBrandLinks(allLinks, brand.domain);
+    // Issue #2298 — "Also tracked in <category>" module: same-category
+    // siblings from the SAME category source /brands uses
+    // (`brandCategoryForDomain` in ~/lib/brand-categories — never a second
+    // list). Up to 6, stable alphabetical order, limited to brands with live
+    // /ads pages (allLinks is the sitemap indexability signal, so no soft-404
+    // link can ever ship). Omit the module when no same-category sibling has
+    // a live /ads page. Deterministic: the alphabetical sort + fixed cap keep
+    // the HTML identical across deploys.
+    const currentCategory = brandCategoryForDomain(brand.domain);
+    const siblings = allLinks
+      .filter(
+        (link) =>
+          link.domain !== brand.domain &&
+          brandCategoryForDomain(link.domain) === currentCategory,
+      )
+      .slice()
+      .sort((a, b) => a.domain.localeCompare(b.domain))
+      .slice(0, 6);
+    categorySiblings =
+      siblings.length > 0 ? { category: currentCategory, links: siblings } : null;
   } catch (error) {
     console.warn("Brand page related-brands load failed; omitting cross-links.", {
       errorName: error instanceof Error ? error.name : typeof error,
     });
     relatedBrands = [];
+    categorySiblings = null;
   }
 
   // Attribution analytics (score, teaser, change feed, ownership) derive ONLY
@@ -540,6 +579,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
     relatedBrands,
+    categorySiblings,
     canonicalPath: `/ads/${brand.domain}`,
     captureFailuresSummary,
     recentWatchChanges,
@@ -1482,6 +1522,50 @@ function BrandAdsResults({
           </section>
         );
       })()}
+
+      {/* 6a. ALSO TRACKED IN <CATEGORY> — issue #2298. The /ads pages were
+          lateral dead-ends for category browsing: the "More tracked brands"
+          cluster (6b) links 12 alphabetical siblings, but a buyer on
+          /ads/nike.com had no quick path to the OTHER Sport & footwear brands
+          specifically. This module links up to 6 same-category siblings, read
+          from the SAME category source /brands uses
+          (`brandCategoryForDomain` in ~/lib/brand-categories — never a second
+          list), in stable alphabetical order, limited to brands with live
+          /ads pages (the sitemap indexability signal — no soft-404 links).
+          Omitted when no same-category sibling has a live /ads page. Same
+          verifiedLinkCount > 0 gate as 6b (issue #1454): a thin page carries
+          no internal-link block. It never invents a brand. */}
+      {data.verifiedLinkCount > 0 &&
+      data.categorySiblings &&
+      data.categorySiblings.links.length > 0 ? (
+        <section className="ld-quiet" id="also-tracked-in-category">
+          <div className="ld-section-head">
+            <span className="ld-kicker">Public brand pages</span>
+            <h2>{`Also tracked in ${data.categorySiblings.category}`}</h2>
+            <p>
+              More brands we track in the same category, each with its own indexable Meta ad page.
+            </p>
+          </div>
+          <div
+            className="ld-quiet-grid"
+            aria-label={`Also tracked in ${data.categorySiblings.category}`}
+          >
+            {data.categorySiblings.links.map((link) => (
+              <article key={link.domain}>
+                <h3>
+                  <Link to={link.path}>{link.name}</Link>
+                </h3>
+                <p>See {link.domain} ads on Five to Nine.</p>
+              </article>
+            ))}
+          </div>
+          {/* Same /brands hub link as the "More tracked brands" cluster so a
+              visitor can always reach the full categorized list. */}
+          <p className="ld-quiet-cta">
+            <Link to="/brands">Browse all tracked brands →</Link>
+          </p>
+        </section>
+      ) : null}
 
       {/* 6b. RELATED BRANDS — issue #1417. The /ads/:domain pages were
           orphans: none linked to any other /ads page, so a buyer who landed
