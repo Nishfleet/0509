@@ -81,6 +81,25 @@ function createDbWithSentinelEnabled() {
   };
 }
 
+function createDbWithSentinelReadError() {
+  return {
+    prepare() {
+      return {
+        bind(id: string) {
+          return {
+            async all<T>() {
+              if (id === "local-authenticated") {
+                throw new Error("e2e_test_mode unreadable");
+              }
+              return { results: [] as T[] };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -185,7 +204,40 @@ describe("launch readiness canary route", () => {
     await expect(response.json()).resolves.toEqual({
       ok: false,
       blocker: "e2e_test_mode_enabled_in_production",
-      e2eTestModeSentinel: { enabled: true },
+      e2eTestModeSentinel: { enabled: true, readError: false },
+    });
+    expect(createWatchlistRun).not.toHaveBeenCalled();
+  });
+
+  it("turns the canary red when the e2e sentinel query cannot be answered", async () => {
+    const createWatchlistRun = vi.fn();
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithSentinelReadError(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-sentinel-error" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "e2e_test_mode_sentinel_unreadable",
+      e2eTestModeSentinel: { enabled: false, readError: true },
     });
     expect(createWatchlistRun).not.toHaveBeenCalled();
   });

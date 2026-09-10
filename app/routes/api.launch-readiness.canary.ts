@@ -93,7 +93,7 @@ const E2E_TEST_MODE_SENTINEL_BLOCKER = "e2e_test_mode_enabled_in_production";
 
 async function readE2ETestModeSentinel(env: { DB?: D1Database }) {
   if (!env.DB) {
-    return { enabled: false };
+    return { enabled: false, readError: false };
   }
 
   try {
@@ -104,9 +104,11 @@ async function readE2ETestModeSentinel(env: { DB?: D1Database }) {
       LIMIT 1
     `).bind(E2E_TEST_MODE_SENTINEL_ID).all<{ enabled: number | string | null }>();
     const enabled = result.results?.[0]?.enabled;
-    return { enabled: enabled === 1 || enabled === "1" };
+    return { enabled: enabled === 1 || enabled === "1", readError: false };
   } catch {
-    return { enabled: false };
+    // Fail closed: if we cannot answer the sentinel query we cannot assert the
+    // sentinel is off, so the canary must go red rather than silently green.
+    return { enabled: false, readError: true };
   }
 }
 
@@ -163,12 +165,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
   // the row turns the canary red (fail closed) and the check is surfaced in
   // every canary payload so the assertion is observable even when green.
   const e2eTestModeSentinel = await readE2ETestModeSentinel(env);
-  if (e2eTestModeSentinel.enabled) {
+  if (e2eTestModeSentinel.readError || e2eTestModeSentinel.enabled) {
+    const blocker = e2eTestModeSentinel.readError
+      ? "e2e_test_mode_sentinel_unreadable"
+      : E2E_TEST_MODE_SENTINEL_BLOCKER;
     return Response.json(
       {
         ok: false,
-        blocker: E2E_TEST_MODE_SENTINEL_BLOCKER,
-        e2eTestModeSentinel: { enabled: true },
+        blocker,
+        e2eTestModeSentinel: { enabled: e2eTestModeSentinel.enabled, readError: e2eTestModeSentinel.readError },
       },
       {
         status: 503,
