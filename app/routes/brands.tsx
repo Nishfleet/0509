@@ -30,7 +30,11 @@ import {
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
-import { groupBrandRecordsByCategory } from "~/lib/brand-categories";
+import {
+  brandCategoryFromSlug,
+  CURATED_BRAND_CATEGORY_SLUGS,
+  groupBrandRecordsByCategory,
+} from "~/lib/brand-categories";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 
 /** A brand-page link plus whether its `/timeline/:domain` is indexable. */
@@ -39,9 +43,18 @@ interface BrandHubItem extends IndexableAdsLink {
   timelineIndexable: boolean;
 }
 
+/** A non-empty curated category the hub links to its /brands/:slug page. */
+interface BrandCategoryLink {
+  slug: string;
+  label: string;
+  count: number;
+}
+
 interface BrandsLoaderData {
   groups: Array<{ category: string; items: BrandHubItem[] }>;
   allCount: number;
+  /** Non-empty curated categories, each linking to its /brands/:slug page. */
+  categoryLinks: BrandCategoryLink[];
 }
 
 export async function loader({ context }: LoaderFunctionArgs): Promise<BrandsLoaderData> {
@@ -79,7 +92,21 @@ export async function loader({ context }: LoaderFunctionArgs): Promise<BrandsLoa
   }));
 
   const groups = groupBrandRecordsByCategory(items);
-  return { groups, allCount: items.length };
+
+  // Issue #2067 — the hub links each NON-EMPTY curated category to its own
+  // /brands/:slug landing page, so the cluster is internally connected
+  // (hub → category → brand → hub). The set is derived from the curated slug
+  // registry + brandCategoryFromSlug, never hard-coded; a curated category
+  // with zero brands today gets no link (its page would 404).
+  const categoryLinks: BrandCategoryLink[] = CURATED_BRAND_CATEGORY_SLUGS.flatMap((slug) => {
+    const label = brandCategoryFromSlug(slug);
+    if (!label) return [];
+    const group = groups.find((g) => g.category === label);
+    if (!group || group.items.length === 0) return [];
+    return [{ slug, label, count: group.items.length }];
+  });
+
+  return { groups, allCount: items.length, categoryLinks };
 }
 
 const brandsDescription =
@@ -167,6 +194,18 @@ export default function BrandsHubRoute() {
               </section>
             ))}
           </div>
+        )}
+
+        {data.categoryLinks.length > 0 && (
+          <p className="ld-dim ld-browse-categories">
+            Browse by category:{" "}
+            {data.categoryLinks.map((category, index) => (
+              <span key={category.slug}>
+                {index > 0 && <span>&nbsp;·&nbsp;</span>}
+                <Link to={`/brands/${category.slug}`}>{category.label}</Link>
+              </span>
+            ))}
+          </p>
         )}
       </section>
 

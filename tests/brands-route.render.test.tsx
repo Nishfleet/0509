@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The default export reads `useLoaderData`; a mutable fixture lets each test
 // render the route with a specific loader payload.
-let currentData: { groups: Array<{ category: string; items: Array<{ domain: string; path: string; name: string; timelineIndexable?: boolean }> }>; allCount: number };
+let currentData: { groups: Array<{ category: string; items: Array<{ domain: string; path: string; name: string; timelineIndexable?: boolean }> }>; allCount: number; categoryLinks: Array<{ slug: string; label: string; count: number }> };
 
 beforeEach(() => {
   vi.resetModules();
@@ -51,6 +51,11 @@ function grouped() {
       { category: "SaaS & software", items: [links[4]] },
       { category: "More brands", items: [links[5]] },
     ],
+    categoryLinks: [
+      { slug: "sport-footwear", label: "Sport & footwear", count: 2 },
+      { slug: "e-commerce", label: "E-commerce", count: 2 },
+      { slug: "saas-software", label: "SaaS & software", count: 1 },
+    ],
   };
 }
 
@@ -81,7 +86,7 @@ describe("/brands hub — links every indexable /ads/:domain page (issue #1417)"
   });
 
   it("renders an honest empty state when no brand pages are indexed, never a broken grid", async () => {
-    const markup = await render({ allCount: 0, groups: [] });
+    const markup = await render({ allCount: 0, groups: [], categoryLinks: [] });
     expect(markup).toContain("No brand pages are indexed right now");
     expect(markup).not.toContain("ld-brands-groups");
   });
@@ -99,6 +104,9 @@ describe("/brands hub — links every indexable /ads/:domain page (issue #1417)"
             { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas", timelineIndexable: false },
           ],
         },
+      ],
+      categoryLinks: [
+        { slug: "sport-footwear", label: "Sport & footwear", count: 2 },
       ],
     });
 
@@ -136,7 +144,25 @@ describe("/brands hub — links every indexable /ads/:domain page (issue #1417)"
   });
 
   it("omits the ItemList JSON-LD when no brand pages are indexed (nothing to enumerate)", async () => {
-    const markup = await render({ allCount: 0, groups: [] });
+    const markup = await render({ allCount: 0, groups: [], categoryLinks: [] });
     expect(markup).not.toContain('"@type":"ItemList"');
+  });
+
+  it("links every non-empty curated category to its /brands/:slug page and never 'More brands' (issue #2067)", async () => {
+    const markup = await render(grouped());
+
+    expect(markup).toContain('href="/brands/sport-footwear"');
+    expect(markup).toContain('href="/brands/e-commerce"');
+    expect(markup).toContain('href="/brands/saas-software"');
+    // Labels render as the href text (escaped for &).
+    expect(markup).toContain(">Sport &amp; footwear</a>");
+    // The fallback bucket has no landing page — it must never be linked.
+    expect(markup).not.toContain('href="/brands/more-brands"');
+  });
+
+  it("omits the category-link row entirely when no curated category has brands (nothing to link)", async () => {
+    const markup = await render({ allCount: 0, groups: [], categoryLinks: [] });
+    expect(markup).not.toContain("Browse by category");
+    expect(markup).not.toContain('href="/brands/');
   });
 });
