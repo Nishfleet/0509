@@ -96,6 +96,13 @@ jobs:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
+      - name: Migration numbering gate
+        # Block a PR whose newly added migration does not sort after every
+        # migration on the base branch (detector for #2507). Runs before
+        # install: the script is dependency-free and only needs git + node.
+        # fetch-depth: 0 above makes origin/main available for the diff.
+        shell: bash
+        run: node scripts/check-migration-numbering.mjs
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
