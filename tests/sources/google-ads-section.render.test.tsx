@@ -122,6 +122,47 @@ describe("GoogleAdsSection render", () => {
     expect(emptyHtml).toContain("No Google Ads creatives found");
   });
 
+  it("skips a non-https previewUrl at render time", () => {
+    const snapshot = record({
+      domain: "nike.com",
+      fetchedAt: "2026-09-10T00:00:00.000Z",
+      truncated: false,
+      creatives: [
+        ...creatives({ creativeId: "CR1", previewUrl: "javascript:alert(1)" }),
+        ...creatives({
+          creativeId: "CR2",
+          previewUrl: "https://tpc.googlesyndication.com/archive/simgad/ok",
+        }),
+      ],
+      advertiserCount: 1,
+      formatMix: { text: 2, image: 0, video: 0, unknown: 0 },
+    });
+    const html = renderToStaticMarkup(createElement(GoogleAdsSection, { snapshot, diff: [] }));
+    expect(html).not.toContain("javascript:");
+    // Only the https creative yields an <img>.
+    expect(html.match(/<img /g) ?? []).toHaveLength(1);
+    expect(html).toContain('src="https://tpc.googlesyndication.com/archive/simgad/ok"');
+  });
+
+  it("renders at most 12 previews when more are supplied", () => {
+    const snapshot = record({
+      domain: "nike.com",
+      fetchedAt: "2026-09-10T00:00:00.000Z",
+      truncated: false,
+      creatives: Array.from({ length: 13 }, (_, i) =>
+        creatives({
+          creativeId: `CR${i + 1}`,
+          previewUrl: `https://tpc.googlesyndication.com/archive/simgad/${i + 1}`,
+        })[0],
+      ),
+      advertiserCount: 1,
+      formatMix: { text: 13, image: 0, video: 0, unknown: 0 },
+    });
+    const html = renderToStaticMarkup(createElement(GoogleAdsSection, { snapshot, diff: [] }));
+    expect(html.match(/<img /g) ?? []).toHaveLength(12);
+    expect(html).not.toContain("simgad/13");
+  });
+
   it("does not throw when a stored payload is missing formatMix", () => {
     const snapshot = record({
       domain: "nike.com",

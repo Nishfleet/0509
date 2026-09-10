@@ -11,14 +11,20 @@ function fixture(name: string): string {
 }
 
 /** Build a fetchImpl that returns fresh responses in sequence. Each factory
- * is called on every fetch call so the body is never consumed twice. */
-function sequenceFetch(factories: (() => Response)[]): typeof fetch {
+ * is called on every fetch call so the body is never consumed twice. When
+ * `bodies` is passed, every request body is recorded into it. */
+function sequenceFetch(factories: (() => Response)[], bodies?: string[]): typeof fetch {
   let i = 0;
-  const fn = vi.fn(async () => {
+  const fn = vi.fn(async (_url: unknown, init?: RequestInit) => {
+    if (bodies) bodies.push(String(init?.body ?? ""));
     const factory = factories[i++];
     return factory();
   });
   return fn as unknown as typeof fetch;
+}
+
+function requestFields(body: string): Record<string, unknown> {
+  return JSON.parse(new URLSearchParams(body).get("f.req") ?? "{}") as Record<string, unknown>;
 }
 
 function jsonFactory(body: string, status = 200): () => Response {
@@ -139,10 +145,11 @@ describe("google-ads-transparency fetchCreativesByDomain", () => {
 
   it("pages through results using the next-page token", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout"] });
-    const fetchImpl = sequenceFetch([
-      jsonFactory(fixture("nike.com-page1.json")),
-      jsonFactory(fixture("nike.com-page2.json")),
-    ]);
+    const bodies: string[] = [];
+    const fetchImpl = sequenceFetch(
+      [jsonFactory(fixture("nike.com-page1.json")), jsonFactory(fixture("nike.com-page2.json"))],
+      bodies,
+    );
 
     const pending = fetchCreativesByDomain("nike.com", { fetchImpl, maxCreatives: 9 });
     // advance the 1s inter-page delay
@@ -151,6 +158,30 @@ describe("google-ads-transparency fetchCreativesByDomain", () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(result.creatives).toHaveLength(9);
+    // The second request must carry page 1's next-page token under the RPC's
+    // `4` key; page 1 must not send the key at all.
+    const page1Token = (JSON.parse(fixture("nike.com-page1.json")) as { "2": string })["2"];
+    expect(page1Token).toBeTruthy();
+    expect(requestFields(bodies[1])["4"]).toBe(page1Token);
+    expect(requestFields(bodies[0])).not.toHaveProperty("4");
+  });
+
+  it("terminates when a page keeps returning a token but no usable creatives", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    // Every page carries a next-page token and zero rows, so `collected`
+    // never grows: without the page cap this loops forever.
+    const emptyPage = JSON.stringify({ "1": [], "2": "token-forever" });
+    const fetchImpl = sequenceFetch(Array.from({ length: 50 }, () => jsonFactory(emptyPage)));
+
+    const pending = fetchCreativesByDomain("nike.com", { fetchImpl, maxCreatives: 200 });
+    await vi.advanceTimersByTimeAsync(60_000);
+    const result = (await pending) as { creatives: unknown[]; truncated: boolean };
+
+    // maxPages = ceil(200 / 40) + 1 = 6.
+    expect(fetchImpl).toHaveBeenCalledTimes(6);
+    expect(result.creatives).toEqual([]);
+    // A token was still in hand when the walk stopped, so more exist.
+    expect(result.truncated).toBe(true);
   });
 
   it("stops at maxCreatives and marks truncated when more pages remain", async () => {
