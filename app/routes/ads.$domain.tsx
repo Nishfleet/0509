@@ -446,6 +446,11 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // pick this page's deterministic "Related brands" set. Cache-only: one
   // bounded D1 read; a hiccup degrades to [] (the section hides) rather
   // than 500ing the brand page or triggering any paid operation.
+  // Issue #2298 — this brand page's buyer category, read from the one
+  // registry the /brands hub groups by: `app/lib/brand-categories.ts`
+  // (`brandCategoryForDomain`, consumed there via
+  // `groupBrandRecordsByCategory`). No second category list exists.
+  const brandCategory = brandCategoryForDomain(brand.domain);
   let relatedBrands: IndexableAdsLink[] = [];
   let sameCategoryBrands: IndexableAdsLink[] = [];
   try {
@@ -455,14 +460,10 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     relatedBrands = pickRelatedBrandLinks(allLinks, brand.domain);
     // Issue #2298 — same-category siblings for the "Also tracked in <category>"
     // module. Reuses the SAME sitemap-indexability-filtered set as the
-    // related brands, filtered to the current brand's buyer category (the
-    // same registry the /brands hub groups by). Cache-only; a hiccup degrades
+    // related brands, filtered to this brand's buyer category (that same
+    // registry, `app/lib/brand-categories.ts`). Cache-only; a hiccup degrades
     // to [] (the module hides) rather than 500ing the page.
-    sameCategoryBrands = pickSameCategoryBrandLinks(
-      allLinks,
-      brand.domain,
-      brandCategoryForDomain(brand.domain),
-    );
+    sameCategoryBrands = pickSameCategoryBrandLinks(allLinks, brand.domain, brandCategory);
   } catch (error) {
     console.warn("Brand page related-brands load failed; omitting cross-links.", {
       errorName: error instanceof Error ? error.name : typeof error,
@@ -573,7 +574,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     adLibraryCountry: snapshot ? brandPageAdLibraryCountryLabel(snapshot.country) : null,
     noindex,
     relatedBrands,
-    brandCategory: brandCategoryForDomain(brand.domain),
+    brandCategory,
     sameCategoryBrands,
     canonicalPath: `/ads/${brand.domain}`,
     captureFailuresSummary,
@@ -616,8 +617,22 @@ export function pickSameCategoryBrandLinks(
     .filter((link) => link.domain !== currentDomain)
     .filter((link) => brandCategoryForDomain(link.domain) === category)
     .slice()
-    .sort((a, b) => a.domain.localeCompare(b.domain));
+    .sort(compareDomainsByCodeUnit);
   return siblings.slice(0, Math.max(0, count));
+}
+
+/**
+ * Ascending code-unit domain order (issue #2298). Hostnames are lowercase
+ * ASCII, so this IS plain alphabetical order for every real domain — but
+ * unlike `localeCompare` it cannot change with the host's locale, ICU data,
+ * or ICU version. The accept criterion for this module is identical HTML
+ * across deploys, so the tie-break must not depend on the rendering host's
+ * collation tables.
+ */
+function compareDomainsByCodeUnit(a: IndexableAdsLink, b: IndexableAdsLink): number {
+  if (a.domain < b.domain) return -1;
+  if (a.domain > b.domain) return 1;
+  return 0;
 }
 
 /**
