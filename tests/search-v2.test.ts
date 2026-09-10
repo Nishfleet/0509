@@ -477,6 +477,69 @@ describe("curated page-id scoping (issue #1982)", () => {
   });
 });
 
+describe("curated provider query (issue #2233)", () => {
+  // saucony.co.uk is a country storefront that redirects onto www.saucony.com,
+  // so Saucony's Meta ads never carry the .co.uk host. Asking Meta for the
+  // registrable domain (the #1999 rule) settles on a confirmed 0-row page for
+  // it; the brand name is the term Meta actually indexes. The curated term is
+  // narrow by design: it only applies to a domain listed in IDENTITY_OVERRIDES,
+  // so the #1999 registrable-domain contract stands everywhere else.
+  it("asks the provider the curated brand term for a curated country storefront", () => {
+    const sauconyUk = parseSearchInputFromWebsiteField("https://saucony.co.uk");
+    const query = buildSearchV2SavedQuery(sauconyUk, "exact", filters);
+
+    expect(query.filters.query).toBe("Saucony");
+  });
+
+  it("keeps the registrable domain for every domain without a curated term", () => {
+    // The .com sibling of the same brand has no curated term, and neither do
+    // the #1999 regression brands — their provider query must not move.
+    for (const [input, expected] of [
+      ["https://saucony.com", "saucony.com"],
+      ["https://goat.com", "goat.com"],
+      ["https://on.com", "on.com"],
+      ["https://zappos.com", "zappos.com"],
+      ["https://mamaearth.in", "mamaearth.in"],
+    ] as const) {
+      const query = buildSearchV2SavedQuery(
+        parseSearchInputFromWebsiteField(input),
+        "exact",
+        filters,
+      );
+      expect(query.filters.query).toBe(expected);
+    }
+  });
+
+  it("gives a curated provider term its own cache-key segment", () => {
+    // The stale 0-row page for saucony.co.uk was written to the cache under the
+    // registrable-domain key. If the curated term did not move the key, the
+    // empty page would keep being served and the fix would never be observable.
+    const sauconyUk = parseSearchInputFromWebsiteField("https://saucony.co.uk");
+    const key = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent: sauconyUk,
+      scope: "exact",
+      country: "all",
+    });
+
+    expect(key).toContain("q:saucony");
+    expect(key).toContain("page-1");
+  });
+
+  it("leaves cache keys without a curated term on the legacy shape", () => {
+    const saucony = parseSearchInputFromWebsiteField("https://saucony.com");
+    const key = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent: saucony,
+      scope: "exact",
+      country: "all",
+    });
+
+    expect(key).not.toContain("q:");
+    expect(key).toContain("page-1");
+  });
+});
+
 describe("website identity SSRF guard", () => {
   afterEach(() => {
     clearWebsiteIdentityCacheForTests();
