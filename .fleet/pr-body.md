@@ -1,64 +1,35 @@
-## Why
+## Stop leaking release identity to anonymous callers (issue #2352)
 
-Issue #2108 — generalize signup attribution beyond the six hardcoded strings. Production D1 ground truth: 15 users, 0 signups Jul-Sep, 0 real paying customers. The existing `signup_source` column (migration 0080) has a SQL `CHECK` that admits exactly five literals, so any new slug or `ref:<eTLD+1>` referer marker is rejected at write time. This PR opens the allowlist to lowercase slugs and referer-derived markers, in code and in the D1 schema, so signup attribution can grow without a migration per campaign.
+Gate the `releaseIdentity` field behind the `x-0509-canary-token` header (value: env `CANARY_BYPASS_TOKEN`) in both `app/routes/api.health.ts` and `app/routes/api.health.deep.ts`. Anonymous callers omit the field entirely; both status bodies stay public so the VPS liveness probe and uptime checks keep passing.
 
-This is the orchestrator re-spec (2026-09-09T16:43Z) — it overrides step 2's file list because the original `files:` scope could not meet the `accept:` criterion (the 0080 CHECK rejects any value outside the five literals; SQLite cannot ALTER a CHECK in place).
+### Changes
+- `app/routes/api.health.ts` / `app/routes/api.health.deep.ts`: only include `releaseIdentity` when the caller presents a matching `x-0509-canary-token` header. Status/app/checks/timestamp stay public.
+- `scripts/prod-canary.lib.mjs`: `checkHealthEndpoint` attaches the canary token so the tokened deploy canary (and gate-c-soak `verifyLiveIdentity`, which reuses it) still reads release identity for deploy-convergence.
+- `ops/liveness/0509-liveness-probe.sh`: drop the releaseIdentity assertions; keep asserting public `status`/`app` (shallow) and `status`/`d1`/`scheduledWork` (deep). The no-secrets DynamicUser probe tolerates a missing identity.
+- `.github/workflows/uptime-health.yml`: drop worker-version (releaseIdentity) assertions and persistence; assert public `status`/`app`/`checks` only. The workflow has `contents: read` and no secrets, so it cannot present the token. Deploy-convergence identity evidence now lives in the tokened canary path (`checkHealthEndpoint`/`gate-c-soak`).
+- Updated the route/liveness/uptime-workflow tests for anonymous-vs-tokened behavior.
 
-## Scope
+### Gate-path note
+This PR edits `.github/workflows/uptime-health.yml`, a gate-owned path. I am NOT posting any attestation comment; an admin must attest if required.
 
-- `migrations/0087_signup_source_open_allowlist.sql` (new) — rebuilds the `user` and `signup_source_pending` CHECK constraints (create-copy-drop-rename, so child FK references to `user` are never rewritten) so `signup_source` accepts: NULL, the five existing literals, `pricing-free`, `for_agencies`, and any value matching `length(signup_source) BETWEEN 1 AND 44 AND signup_source NOT GLOB '*[^a-z0-9:.-]*'` (lowercase slugs and `ref:<eTLD+1>`). Keeps NOT NULL on the pending table; recreates `idx_user_email_nocase` and `idx_signup_source_pending_expires`.
-- `app/lib/signup-source.ts` (modified) — `allowlistedSignupSource` now also accepts lowercase slugs (`/^[a-z0-9][a-z0-9-]{0,39}$/`) and `ref:<eTLD+1>` markers (`/^ref:[a-z0-9.-]{1,40}$/`); the six existing constants keep working. `signupSourceFromRequest` falls back to `ref:<eTLD+1>` derived from the `Referer` header (coarse domain only, never the full URL or query string).
-- `tests/signup-source.test.ts` (modified) — slug accepted, junk rejected, referer-derived value stored, cookie round-trip unchanged, and a shared fixture list asserted against both the code rule and the migration SQL.
-- `tests/integration/signup-source.integration.test.ts` (modified) — referer-derived `ref:example.com` persisted end to end on real D1, open slug persisted, 0087 CHECK accepts/rejects the same fixture list as the code rule, and the rebuilt `user` table keeps its email index and inbound foreign keys.
+### Verification (real runs)
+- `npx vitest run --configLoader runner --project node tests/api.health.route.test.ts tests/api.health.deep.route.test.ts tests/ops-liveness-probe.test.ts tests/uptime-health-workflow.test.ts tests/prod-canary.test.ts` → 5 files, 45 passed.
+- `--project node tests/verify-post-deploy-release.test.ts tests/gate-c-soak.test.ts tests/launch-readiness.route.test.ts` → 3 files, 61 passed.
+- `--project node --changed origin/main` → 7 files, 100 passed (run-proof: vitest run, `Test Files 7 passed / Tests 100 passed`).
 
-## D1 expand/contract
+run-proof: vitest node project — 100 passed (affected-tests mode, `--changed origin/main`) at 21:29:37Z.
 
-This is a single-phase schema change (rebuild the CHECK constraints). No `DROP COLUMN`, no `DROP TABLE` of a live table (the rebuild drops the old table only after copying into the replacement), no rename of a column, no `NOT NULL` without a DEFAULT. The migration is validated by the real-D1 integration tests (the `workers` vitest project applies the full migration set to local D1).
+### Test-reduction justification
+The uptime-engine `Worker-version` evidence steps and the liveness probe's `releaseIdentity`/version assertions were removed because release identity is now (by design, per the orchestrator decision) not served to anonymous callers: the no-secrets VPS probe and the `contents: read` uptime workflow cannot present the canary token and so must assert only the public `status`/`app`/`checks` contract. The worker-version identity assertion moved to the tokened canary path, which still passes. No assertion was weakened without this scope reason.
 
-## Verification
+### Reviewer round
+(reviewer seat filled after open — product repo)
 
-Real-D1 leg (workers vitest project, applies all migrations including 0087 to local D1):
+### Scope trappings
+- Stayed strictly inside the allowed files. No new mechanism/script/organ.
+- No secret provisioned onto the DynamicUser liveness unit.
+- Orchestrator decision (2026-09-10) applied: options resolved, `~~blocked-on: orchestrator~~` struck, `decision-resolved`.
 
-```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner tests/signup-source.test.ts tests/integration/signup-source.integration.test.ts
-```
+net-positive-because: the added lines are all test coverage (+159 across the four updated tests) for the new anonymous-vs-tokened gating branches; production files (routes/scripts/probe/workflow) are net-negative (-43) and purely remove identity exposure. No new machinery.
 
-→ 2 files, 23 tests passed (15 unit + 8 integration). The accept criterion is proven: a signup arriving with only `Referer: https://example.com/page` persists `ref:example.com` on `user.signup_source` (integration test "persists a referer-derived ref:<eTLD+1> marker end to end").
-
-Type check:
-
-```
-NODE_OPTIONS=--max-old-space-size=6144 npm run typecheck
-```
-
-→ exit 0.
-
-Regression (the `user` rebuild must keep child-table writes intact):
-
-```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner --project workers tests/integration/watch-event-writes.integration.test.ts tests/integration/saucony-watchlist.integration.test.ts tests/integration/signup-first-brief.integration.test.ts tests/integration/retention-sweep-state.integration.test.ts tests/integration/website-scan-baseline.integration.test.ts
-```
-
-→ 5 files, 32 tests passed.
-
-run-proof: tests/signup-source.test.ts (15 tests) + tests/integration/signup-source.integration.test.ts (8 tests, real D1) + 5 regression integration files (32 tests, real D1) all green in the same vitest workers-project run; `npm run typecheck` exit 0.
-
-net-positive-because: this is the issue's own acceptance — the open allowlist (code + D1 schema) is the load-bearing new code, and the rest is the required real-D1 integration proof plus the referer-derivation wiring. It is product work, not control-plane machinery.
-
-## Termination note (check-d1-migrations-synced.mjs)
-
-The issue's termination command ends with `node scripts/check-d1-migrations-synced.mjs`. That script is a **deploy-time** check (it runs in `scripts/deploy-production-plan.mjs` with `includeCloudflareCredentials: true`) that compares the local `migrations/` ledger against the **remote production D1** ledger via `wrangler d1 migrations list 0509 --remote`. It requires Cloudflare production credentials (`CLOUDFLARE_API_TOKEN` or OAuth) that do not exist on this worker VPS, and it is production-gated by repo rules. It would also report 0087 as pending (expected — the migration is applied at deploy time, not by the worker PR).
-
-The migration is instead validated by the real-D1 integration tests, which apply the full migration set (including 0087) to local D1 and assert both the READ and WRITE paths. This matches the precedent of migration PR #1964 (0086), which also validated via real-D1 integration tests and left the production sync check to deploy time.
-
-loose-ends: 0509#2108-check-d1-migrations-synced (deploy-time check requires Cloudflare prod credentials not present on the worker VPS; migration validated by real-D1 integration tests, production sync verified at deploy).
-
-## Reviewer round (cursor/cursor-grok-4.6-high)
-
-- **Act on** — `migrations/0087` CHECK literal lists omitted `for_agencies`, which the code allowlist accepts via the exact-match branch; the open shape `[a-z0-9:.-]` rejects the underscore, so a `for_agencies` signup was silently dropped at write time (violates step 2b "code and DB never disagree"). Fixed: added `for_agencies` to both CHECK literal lists and to the `ACCEPTED_BY_BOTH` fixture lists in both test files. Verified: `tests/signup-source.test.ts` (15), `tests/integration/signup-source.integration.test.ts` (8, real D1), `tests/for-agencies.route.test.ts` (8) all green; `npm run typecheck` exit 0.
-- **Consider** — the `ACCEPTED_BY_BOTH` fixture lists are duplicated across two test files with a "keep in sync" comment but no enforcement. Noted; a shared fixture module is a follow-up, not a blocker.
-- **Consider** — `isOwnDomain` hardcodes `0509.io`/`0509.in`, duplicating `signupSourceCookieDomain`. Noted; deriving both from one source is a follow-up.
-- **Noted** — referer fallback attributes any external referer as `ref:<domain>` (intended accept behavior); the §4 event allowlist is untouched per must-not.
-- **Noted** — `PRAGMA foreign_keys` toggle in 0087; the rename-into-place order preserves child references regardless.
-
-Closes #2108
+Closes #2352
