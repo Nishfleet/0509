@@ -44,22 +44,43 @@ export function normalizeSensitivityMode(
   return sensitivityMode === "auto" ? "balanced" : sensitivityMode;
 }
 
+// Quiet hours are not a preference any more: they are always 22:00-08:00 in the
+// captured timezone, and the only logic left is the tz conversion that
+// isInsideQuietHours already does. Written as a literal rather than read from a
+// row so a stale stored value cannot silently govern sends.
+export const DEFAULT_QUIET_HOURS: DeliveryQuietHours = { startHour: 22, endHour: 8 };
+
+/**
+ * The plan's single delivery default. Sensitivity is fixed ("auto" normalises
+ * to balanced), quiet hours are the 22:00-08:00 window above, and the timezone
+ * is whatever was captured from the browser at signup or on first app load.
+ *
+ * Channel switches and the timezone still come from the row because they have
+ * live writers (plan gates flip whatsapp/slack/teams, signup writes the tz).
+ * sensitivityMode, quietHours and the per-watchlist timezone override do NOT:
+ * the card that used to set them is gone, so a leftover stored value would make
+ * a deleted control keep changing behaviour — the exact thing this ticket is
+ * about. Existing rows keep their data; it is simply no longer read.
+ */
 export function resolveDeliveryConfig(input: {
   workspaceConfig: WorkspaceDeliveryConfigRecord;
   watchlistConfig: WatchlistDeliveryConfigRecord | null;
 }): EffectiveDeliveryConfig {
-  const source = input.watchlistConfig ?? input.workspaceConfig;
+  const { workspaceConfig } = input;
+  const channelSource = input.watchlistConfig ?? workspaceConfig;
 
   return {
-    sensitivityMode: normalizeSensitivityMode(source.sensitivityMode),
-    instantEnabled: source.instantEnabled,
-    digestEnabled: source.digestEnabled,
-    emailEnabled: source.emailEnabled,
-    whatsappEnabled: source.whatsappEnabled,
-    slackEnabled: source.slackEnabled,
-    teamsEnabled: source.teamsEnabled,
-    quietHours: source.quietHours,
-    timezone: source.timezone,
+    // "auto" is the intended default, so policy resolves it through the same
+    // normaliser the action uses rather than hardcoding a parallel literal.
+    sensitivityMode: normalizeSensitivityMode("auto"),
+    instantEnabled: channelSource.instantEnabled,
+    digestEnabled: channelSource.digestEnabled,
+    emailEnabled: channelSource.emailEnabled,
+    whatsappEnabled: channelSource.whatsappEnabled,
+    slackEnabled: channelSource.slackEnabled,
+    teamsEnabled: channelSource.teamsEnabled,
+    quietHours: DEFAULT_QUIET_HOURS,
+    timezone: safeTimeZone(workspaceConfig.timezone),
   };
 }
 

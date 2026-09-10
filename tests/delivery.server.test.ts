@@ -41,6 +41,12 @@ function mockAtomicEmailProvision() {
 beforeEach(() => {
   vi.resetModules();
   emailSend = vi.fn();
+  // Issue #2416: quiet hours are always 22:00-08:00 now, and these tests never
+  // passed `now`, so delivery policy read the wall clock — the suite's result
+  // depended on the hour it ran at. Pin it to a fixed midday instant. Tests
+  // that need a specific time still call vi.setSystemTime themselves.
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-08-01T12:00:00.000Z"));
   vi.doMock("~/lib/plan.server", () => ({
     getUserPlan: vi.fn().mockResolvedValue("starter"),
   }));
