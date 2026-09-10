@@ -1,3 +1,7 @@
+import {
+  brandCategoryForDomain,
+  BRAND_CATEGORY_OTHER,
+} from "~/lib/brand-categories";
 import { normalizeCompetitorWebsiteInput } from "~/lib/competitor-website";
 import type { DigestRecord, WatchEventType } from "~/lib/types";
 
@@ -309,9 +313,89 @@ export interface SignupFirstBriefPayload {
  * `useLoaderData<typeof loader>` infers the shape — a `Response` return
  * contributes `never` to the inferred data type.
  */
+/**
+ * Issue #2411: one adjacent already-tracked brand offered in the `no_ads`
+ * terminal state. Carries only what the suggestion needs to render and link —
+ * the display name, the public `/ads/:domain` path an evidence page already
+ * lives at, and the domain so the caller can filter the user's own competitor
+ * out. Every entry comes from the same sitemap-indexability set the public
+ * `/brands` hub uses, so a suggestion can never point at a page the route would
+ * refuse to serve.
+ */
+export interface SignupFirstBriefBrandSuggestion {
+  name: string;
+  domain: string;
+  path: string;
+}
+
+/**
+ * Issue #2411: how many adjacent brands the `no_ads` state offers. The issue
+ * asks for 2-3; three is the useful ceiling — enough for a real choice, few
+ * enough to stay a suggestion rather than a second browse surface.
+ */
+export const SIGNUP_FIRST_BRIEF_BRAND_SUGGESTION_COUNT = 3;
+
+/**
+ * Issue #2411: pick the adjacent brands offered when the activation scan finds
+ * no verified ads.
+ *
+ * "Adjacent" reuses the `/brands` hub's own category registry
+ * (`brandCategoryForDomain`, #1417) — the same coarse buyer category, so a
+ * beauty competitor suggests beauty brands. Unlike the hub's alphabetical
+ * `pickRelatedBrandLinks` this takes every same-category sibling first and only
+ * falls back to the rest when the category holds fewer than `count` brands, so
+ * a small category still fills the slot with real tracked brands instead of
+ * showing an empty cluster. The current target domain is always excluded, the
+ * order is deterministic (stable across renders), and an empty or single-brand
+ * indexable set yields an empty list — the caller then hides the section.
+ * Pure and cache-free: the caller supplies the already-loaded indexable set.
+ */
+export function pickSignupFirstBriefBrandSuggestions(
+  brands: readonly SignupFirstBriefBrandSuggestion[],
+  currentDomain: string | null,
+  count = SIGNUP_FIRST_BRIEF_BRAND_SUGGESTION_COUNT,
+): SignupFirstBriefBrandSuggestion[] {
+  const excluded = normalizeBrandDomain(currentDomain);
+  const others = brands
+    .filter((brand) => normalizeBrandDomain(brand.domain) !== excluded || !excluded)
+    .slice()
+    .sort((a, b) => {
+      const sameCategory =
+        Number(brandIsAdjacentTo(b, excluded)) - Number(brandIsAdjacentTo(a, excluded));
+      if (sameCategory !== 0) return sameCategory;
+      return a.domain.localeCompare(b.domain);
+    });
+  return others.slice(0, Math.max(0, count));
+}
+
+/** Normalize a domain the way the /brands category registry does. */
+function normalizeBrandDomain(domain: string | null | undefined): string {
+  return (domain ?? "").trim().toLowerCase().replace(/^www\./, "");
+}
+
+/**
+ * True when a suggested brand shares the current target's buyer category.
+ * A null/unknown current domain is never adjacent to anything, so the caller
+ * falls back to the deterministic alphabetical slice.
+ */
+function brandIsAdjacentTo(
+  brand: SignupFirstBriefBrandSuggestion,
+  currentDomain: string,
+): boolean {
+  if (!currentDomain) return false;
+  const currentCategory = brandCategoryForDomain(currentDomain);
+  if (currentCategory === BRAND_CATEGORY_OTHER) return false;
+  return brandCategoryForDomain(brand.domain) === currentCategory;
+}
+
 export type SignupFirstBriefLoaderData =
   | { step: "first-brief"; status: "waiting"; watchlistName: string | null }
-  | { step: "first-brief"; status: "no_ads"; watchlistName: string | null }
+  | {
+      step: "first-brief";
+      status: "no_ads";
+      watchlistName: string | null;
+      suggestedBrands: SignupFirstBriefBrandSuggestion[];
+    }
   | {
       step: "first-brief";
       status: "ready";

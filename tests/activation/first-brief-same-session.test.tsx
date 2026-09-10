@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { getPlanEntitlements } from "~/lib/plan-entitlements";
+import { pickSignupFirstBriefBrandSuggestions } from "~/lib/first-brief";
 import type { WatchEventRecord, WatchlistRecord } from "~/lib/types";
 import { mockReactRouter } from "../helpers/mock-react-router";
 
@@ -159,6 +161,18 @@ function mockNoAdsFirstBrief() {
   vi.doMock("~/lib/cron-failure-alert.server", () => ({
     reportScheduledTaskFailure: vi.fn(),
   }));
+  vi.doMock("~/lib/ads-internal-links.server", () => ({
+    loadIndexableAdsInternalLinks: vi.fn().mockResolvedValue([
+      // Same buyer category as Glowkart's `glowkart.example` fallback bucket
+      // is "More brands", so these are the deterministic alphabetical fallback
+      // — the property the issue's "already-tracked brands with live data"
+      // needs is that they come from the indexable /brands set at all.
+      { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
+      { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
+      { domain: "nykaa.com", path: "/ads/nykaa.com", name: "Nykaa" },
+      { domain: "hubspot.com", path: "/ads/hubspot.com", name: "HubSpot" },
+    ]),
+  }));
   return { createDigestRun, listDigests };
 }
 
@@ -224,6 +238,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/auth.server");
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/cron-failure-alert.server");
+  vi.doUnmock("~/lib/ads-internal-links.server");
   vi.doUnmock("react-router");
 });
 
@@ -315,6 +330,43 @@ describe("same-session first brief (issue #1487)", () => {
 
     // No digest was created because the scan produced no evidence-linked items.
     expect(createDigestRun).not.toHaveBeenCalled();
+  });
+
+  it("offers adjacent already-tracked brands and a landing-page capture in the no-ads state (issue #2411)", async () => {
+    mockNoAdsFirstBrief();
+    mockAuth();
+
+    const { loader } = await import("~/routes/app.onboard");
+    const data = (await loader({
+      context: { cloudflare: { env: { SIGNUP_FIRST_BRIEF_ENABLED: "1" } } },
+      params: {},
+      request: new Request("http://localhost/app/onboard?step=first-brief"),
+    } as never)) as Awaited<ReturnType<typeof loader>>;
+
+    if (!(typeof data === "object" && data !== null && "status" in data && data.status === "no_ads")) {
+      throw new Error("expected no_ads brief");
+    }
+
+    // (a) the loader resolved 2-3 adjacent brands from the same indexable set
+    // the /brands hub serves — never the user's own competitor, never a link
+    // the /ads/:domain route would refuse to serve.
+    expect(data.suggestedBrands.length).toBeGreaterThanOrEqual(2);
+    expect(data.suggestedBrands.length).toBeLessThanOrEqual(3);
+    for (const brand of data.suggestedBrands) {
+      expect(brand.path).toBe(`/ads/${brand.domain}`);
+      expect(brand.domain).not.toBe("glowkart.example");
+    }
+
+    // (b) the rendered surface links every suggested brand and offers the
+    // landing-page baseline capture, so the first session does not dead-end.
+    const { SignupFirstBriefView } = await import("~/components/signup-first-brief-view");
+    const markup = renderToStaticMarkup(<SignupFirstBriefView data={data} />);
+    for (const brand of data.suggestedBrands) {
+      expect(markup).toContain(`href="${brand.path}"`);
+    }
+    expect(markup).toContain("Capture a landing page");
+    // The quoted budget is read from the plan catalog, not hard-coded.
+    expect(markup).toContain(String(getPlanEntitlements("free").sitePageBudget));
   });
 
   it("keeps waiting when filing the first brief fails, so polling can retry", async () => {
