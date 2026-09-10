@@ -498,14 +498,6 @@
       "reason": "Local fixture and token-guarded canary routes are operator/test surfaces, not supported customer capabilities; their exclusion still requires route-guard and no-public-nav proof."
     },
     {
-      "claimId": "DAILY-MONITORING-ALIAS",
-      "classification": "duplicate",
-      "source": [
-        "workers/schedule.ts"
-      ],
-      "reason": "Deprecated schedule alias maps to the canonical digest job and is not a separate customer promise."
-    },
-    {
       "claimId": "NATIVE-APP-EDITING",
       "classification": "rejected",
       "source": [
