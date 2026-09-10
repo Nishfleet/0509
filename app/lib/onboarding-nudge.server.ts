@@ -17,7 +17,7 @@ import {
 } from "~/lib/delivery-email-core.server";
 import type { AppEnv } from "~/lib/env.server";
 import { queryAll } from "~/lib/data/d1.server";
-import { safeTimeZone } from "~/lib/safe-timezone";
+import { normalizeTimeZone } from "~/lib/safe-timezone";
 import { allowlistedSignupSource } from "~/lib/signup-source";
 import { SUPPORT_EMAIL } from "~/lib/support";
 
@@ -119,7 +119,11 @@ export function isWithinSendWindow(
   instant: Date,
   timezone: string | null | undefined,
 ): boolean {
-  const tz = safeTimeZone(timezone) ?? DEFAULT_TIMEZONE;
+  // Default to IST when the user's timezone is unknown or invalid (Nish's
+  // binding addition #7: "else IST"). normalizeTimeZone returns null for
+  // empty/invalid names, so the ?? fallback actually applies — safeTimeZone
+  // would silently return "UTC" and defeat the IST default.
+  const tz = normalizeTimeZone(timezone) ?? DEFAULT_TIMEZONE;
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: tz,
     hour: "2-digit",
@@ -154,7 +158,7 @@ function buildNudgeText(input: {
   return [
     greeting,
     "",
-    `Add a competitor and Five to Nine watches its Meta Ad Library ads and emails you the moment they change. We caught one this week: on ${PROOF_DATE}, ${PROOF_BRAND} ${PROOF_CHANGE}. That is the kind of alert you would get for your own competitors.`,
+    `Add a competitor and Five to Nine watches its Meta Ad Library ads and emails you the moment they change. We caught one this week: on ${PROOF_DATE}, ${PROOF_BRAND} ${PROOF_CHANGE}. Right now your competitors are making moves just like this. You just can't see them yet.`,
     "",
     `Add your first competitor: ${input.searchUrl}`,
     "",
@@ -174,7 +178,7 @@ function buildNudgeHtml(input: {
     <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
       <p style="margin: 0 0 12px;">${greeting}</p>
       <p style="margin: 0 0 16px;">
-        Add a competitor and Five to Nine watches its Meta Ad Library ads and emails you the moment they change. We caught one this week: on ${escapeHtml(PROOF_DATE)}, <strong>${escapeHtml(PROOF_BRAND)}</strong> ${escapeHtml(PROOF_CHANGE)}. That is the kind of alert you would get for your own competitors.
+        Add a competitor and Five to Nine watches its Meta Ad Library ads and emails you the moment they change. We caught one this week: on ${escapeHtml(PROOF_DATE)}, <strong>${escapeHtml(PROOF_BRAND)}</strong> ${escapeHtml(PROOF_CHANGE)}. Right now your competitors are making moves just like this. You just can't see them yet.
       </p>
       <p style="margin: 0 0 24px;">
         <a href="${escapeHtml(input.searchUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 15px;">Add your first competitor</a>
