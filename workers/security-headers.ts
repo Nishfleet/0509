@@ -134,7 +134,7 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/switch/visualping",
   "/methodology",
 ]);
-const PUBLIC_CACHEABLE_HTML_PREFIXES = ["/ads/"] as const;
+const PUBLIC_CACHEABLE_HTML_PREFIXES = ["/ads/", "/timeline/"] as const;
 
 function isPublicCacheableHtmlRequest(request: Request): boolean {
   if (request.method !== "GET" && request.method !== "HEAD") {
