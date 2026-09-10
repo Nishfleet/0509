@@ -952,6 +952,31 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/terms": { changefreq: "yearly", priority: "0.3" },
 };
 
+/**
+ * Dated entries on the public /changelog page, newest first (issue #2297).
+ * This is the data source for the /changelog sitemap `lastmod` — the sitemap
+ * derives the newest date here at render time instead of hardcoding one, so
+ * the sitemap stays fresh after the next changelog merge without a manual
+ * edit. It MUST stay in sync with the `<PublicDocBlock title="YYYY-MM-DD">`
+ * literals in app/routes/changelog.tsx; tests/changelog-staleness.test.ts
+ * enforces that the two never drift.
+ */
+export const CHANGELOG_ENTRY_DATES: readonly string[] = [
+  "2026-09-06",
+  "2026-09-05",
+  "2026-08-30",
+  "2026-08-29",
+  "2026-08-28",
+  "2026-08-27",
+  "2026-08-26",
+  "2026-08-25",
+  "2026-08-22",
+  "2026-08-10",
+  "2026-07-20",
+  "2026-06-15",
+  "2026-06-13",
+];
+
 export const SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] = SITEMAP_PATHS.map(
   (path) => ({
     path,

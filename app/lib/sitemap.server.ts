@@ -111,7 +111,7 @@ import {
 } from "~/lib/offer-timeline.server";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
-import { renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
+import { CHANGELOG_ENTRY_DATES, renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
 import {
   BUYER_SURFACE_CHILD_PATHS,
   BUYER_SURFACE_LOCALE_IDS,
@@ -594,6 +594,45 @@ export async function publicLocaleSitemapFile(
 }
 
 /**
+ * Newest changelog entry date (YYYY-MM-DD), or null when there are no dated
+ * entries. The /changelog sitemap `lastmod` is derived from this at render
+ * time so it tracks the page's real newest entry instead of a hardcoded
+ * value (issue #2297). `CHANGELOG_ENTRY_DATES` is kept in sync with the
+ * `<PublicDocBlock title="YYYY-MM-DD">` literals in app/routes/changelog.tsx
+ * by tests/changelog-staleness.test.ts.
+ */
+export function newestChangelogLastmod(
+  dates: readonly string[] = CHANGELOG_ENTRY_DATES,
+): string | null {
+  if (dates.length === 0) {
+    return null;
+  }
+  return dates.reduce((max, date) => (date > max ? date : max), dates[0]);
+}
+
+/**
+ * Stamp dated static sitemap entries with an honest `lastmod` derived from
+ * their content data at render time (issue #2297). /changelog gets the
+ * newest changelog entry date. /compare/* and /methodology have no per-page
+ * content date field, so they keep no `lastmod` — inventing one would be a
+ * false freshness claim Google then distrusts. Other static paths are
+ * unchanged.
+ */
+function staticEntriesWithDatedLastmod(
+  entries: readonly SitemapEntry[],
+): SitemapEntry[] {
+  const changelogLastmod = newestChangelogLastmod();
+  if (!changelogLastmod) {
+    return [...entries];
+  }
+  return entries.map((entry) =>
+    entry.path === "/changelog"
+      ? { ...entry, lastmod: changelogLastmod }
+      : entry,
+  );
+}
+
+/**
  * Full production sitemap body: static funnel entries first (with changefreq
  * and priority), then the dynamic indexable brand-page entries (with lastmod
  * from their cache fetched_at), then the dynamic indexable /timeline/:domain
@@ -601,14 +640,16 @@ export async function publicLocaleSitemapFile(
  * deliberately EXCLUDES every buyer-surface locale-prefixed path (those live
  * only in their own `/<locale>/sitemap.xml` — see
  * `ROOT_SITEMAP_STATIC_ENTRIES` in app/lib/seo.ts) so no URL is listed twice
- * across the root and locale sitemaps (issue #1561).
+ * across the root and locale sitemaps (issue #1561). The /changelog static
+ * entry carries a `lastmod` derived from the newest changelog entry date
+ * (issue #2297); the other static paths keep no `lastmod`.
  */
 export function buildSitemapXml(
   brandEntries: readonly SitemapEntry[],
   timelineEntries: readonly SitemapEntry[] = [],
 ): string {
   return renderSitemapXml([
-    ...ROOT_SITEMAP_STATIC_ENTRIES,
+    ...staticEntriesWithDatedLastmod(ROOT_SITEMAP_STATIC_ENTRIES),
     ...brandEntries,
     ...timelineEntries,
   ]);
