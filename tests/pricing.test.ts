@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { valueMathLabel, type LocalPricingPreview } from "~/components/pricing-section";
 import { dodoAnnualUnavailableCopy } from "~/lib/dodo-pricing-display";
 import {
   EVIDENCE_USAGE_CUSTOMER_COPY,
@@ -165,4 +166,43 @@ describe("pricingPlans", () => {
     expect(PUBLISHED_FREE_PLAN_OFFER.description).toContain("first brief");
     expect(PUBLISHED_FREE_PLAN_OFFER.description).toContain("Meta Ad Library only");
   });
+
+  it("displays per-day equal to monthly/30 within one cent for all three paid plans (#2309)", () => {
+    const preview: LocalPricingPreview = {
+      available: true,
+      prices: {
+        scout: { monthly: { display: "€10", amount: 1000, currency: "EUR" } },
+        starter: { monthly: { display: "€46", amount: 4600, currency: "EUR" } },
+        agency: { monthly: { display: "€136", amount: 13600, currency: "EUR" } },
+      },
+    };
+
+    for (const plan of ["scout", "starter", "agency"] as const) {
+      const label = valueMathLabel(preview, plan, "monthly", false);
+      expect(label).toMatch(/^About .+\/day$/);
+      const perDay = parsePerDayValue(label);
+      const monthlyMajor = Number(preview.prices![plan].monthly!.amount) / 100;
+      const expected = monthlyMajor / 30;
+      expect(Math.abs(perDay - expected)).toBeLessThan(0.01);
+    }
+  });
+
+  it("displays correct per-day on the USD fallback path when no live preview is present (#2309)", () => {
+    for (const plan of ["scout", "starter", "agency"] as const) {
+      const label = valueMathLabel(null, plan, "monthly", false);
+      expect(label).toMatch(/^About .+\/day$/);
+      const perDay = parsePerDayValue(label);
+      const expected = PUBLISHED_PLAN_PRICES_USD[plan].monthly / 30;
+      expect(Math.abs(perDay - expected)).toBeLessThan(0.01);
+    }
+  });
 });
+
+function parsePerDayValue(label: string): number {
+  const between = label.match(/About\s+(.+?)\/day$/)?.[1] ?? "";
+  const numeric = between.replace(/[^\d.,]/g, "");
+  if (numeric.includes(",") && !numeric.includes(".")) {
+    return Number(numeric.replace(",", "."));
+  }
+  return Number(numeric.replace(/,/g, ""));
+}
