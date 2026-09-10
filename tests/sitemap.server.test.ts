@@ -33,6 +33,7 @@ import {
 } from "~/lib/offer-timeline.server";
 import {
   brandDomainFromSitemapCacheRow,
+  brandCategorySitemapEntries,
   brandPageLookupCacheKeysForSitemap,
   brandPageRowHasVerifiedAds,
   brandPageRowVerifiedAdCount,
@@ -266,7 +267,7 @@ describe("indexableBrandPageEntriesFromRows", () => {
     ]);
   });
 
-  it("carries lastmod from fetched_at, and no changefreq/priority", () => {
+  it("carries lastmod from fetched_at", () => {
     const fetchedAt = isoAgo(2 * 60 * 60 * 1000);
     const rows = [cacheRow({ fetched_at: fetchedAt })];
 
@@ -274,8 +275,6 @@ describe("indexableBrandPageEntriesFromRows", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].path).toBe("/ads/nykaa.com");
     expect(entries[0].lastmod).toBe(fetchedAt.slice(0, 10));
-    expect("changefreq" in entries[0]).toBe(false);
-    expect("priority" in entries[0]).toBe(false);
   });
 
   it("skips rows that would not render an indexable page", () => {
@@ -732,9 +731,6 @@ describe("buildSitemapXml", () => {
     expect(xml).toContain("<loc>https://0509.io/search</loc>");
     expect(xml).toContain("<loc>https://0509.io/ads/nykaa.com</loc>");
     expect(xml).toContain("<loc>https://0509.io/ads/meesho.com</loc>");
-    // No changefreq/priority on any entry (Google ignores both).
-    expect(xml).not.toContain("<changefreq>");
-    expect(xml).not.toContain("<priority>");
     // Brand entries carry lastmod.
     expect(xml).toContain("<lastmod>2026-08-21</lastmod>");
     // Static list never carries a hardcoded /ads/ path.
@@ -928,8 +924,6 @@ describe("collectingTimelineEntries / timelineSitemapEntries (issue #2021)", () 
     ]);
     // No lastmod: nothing is captured yet, so there is no honest lastmod.
     expect(collecting[0].lastmod).toBeUndefined();
-    expect("changefreq" in collecting[0]).toBe(false);
-    expect("priority" in collecting[0]).toBe(false);
   });
 
   it("never invents a domain from a non-/ads or multi-segment path", () => {
@@ -986,8 +980,6 @@ describe("indexableTimelineEntriesFromRows", () => {
     const entries = indexableTimelineEntriesFromRows(rows);
     expect(entries.map((e) => e.path)).toEqual(["/timeline/nykaa.com"]);
     expect(entries[0].lastmod).toBe("2026-08-01");
-    expect("changefreq" in entries[0]).toBe(false);
-    expect("priority" in entries[0]).toBe(false);
   });
 
   it("does not list a zero-entry domain — rows without complete proof render the empty ledger (gone/noindex shell)", () => {
@@ -1261,11 +1253,9 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
     );
     expect(limit).toBe(SITEMAP_BRAND_PATH_LIMIT);
     expect(entries.map((e: { path: string }) => e.path)).toEqual(["/ads/nykaa.com", "/ads/meesho.com"]);
-    // Entries carry lastmod from fetched_at, and no changefreq/priority.
+    // Entries carry lastmod from fetched_at.
     for (const entry of entries) {
       expect(entry.lastmod).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect("changefreq" in entry).toBe(false);
-      expect("priority" in entry).toBe(false);
     }
   });
 
@@ -1507,9 +1497,6 @@ describe("SITEMAP_PATHS", () => {
       expect(rootPaths, `${path} dropped from root sitemap`).toContain(path);
       const entry = ROOT_SITEMAP_STATIC_ENTRIES.find((e) => e.path === path);
       expect(entry, `${path} missing from static entries`).toBeTruthy();
-      // Static entries carry no changefreq/priority (Google ignores both).
-      expect("changefreq" in entry!, `${path} still carries changefreq`).toBe(false);
-      expect("priority" in entry!, `${path} still carries priority`).toBe(false);
     }
 
     // The canonicalized losers never appear as distinct sitemap URLs.
@@ -1538,8 +1525,6 @@ describe("SITEMAP_PATHS", () => {
       );
       const entry = ROOT_SITEMAP_STATIC_ENTRIES.find((e) => e.path === page.pathname);
       expect(entry, `${page.pathname} missing from static entries`).toBeTruthy();
-      expect("changefreq" in entry!, `${page.pathname} still carries changefreq`).toBe(false);
-      expect("priority" in entry!, `${page.pathname} still carries priority`).toBe(false);
       expect(entry?.lastmod, `${page.pathname} fabricated lastmod`).toBeUndefined();
       expect(xml).toContain(`<loc>https://0509.io${page.pathname}</loc>`);
       expect(xml).not.toMatch(
@@ -1754,11 +1739,11 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
   });
 
   it("every buyer-surface path and compare/switch child is in SITEMAP_STATIC_ENTRIES (no silent drop)", () => {
-    // The derivation reuses the EN path set from SITEMAP_STATIC_ENTRIES and
-    // skips any path missing from it. A path added to BUYER_SURFACE_PATHS /
-    // BUYER_SURFACE_CHILD_PATHS but not to SITEMAP_PATHS would silently
-    // vanish from the locale sitemap — this cross-check makes that drift
-    // fail loudly.
+    // The derivation reuses the EN path set from
+    // SITEMAP_STATIC_ENTRIES and skips any path missing from it. A path
+    // added to BUYER_SURFACE_PATHS / BUYER_SURFACE_CHILD_PATHS but not to
+    // SITEMAP_PATHS would silently vanish from the locale sitemap — this
+    // cross-check makes that drift fail loudly.
     const staticPaths = new Set(SITEMAP_STATIC_ENTRIES.map((e) => e.path));
     const derived = [
       ...BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml"),
@@ -1767,6 +1752,94 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     ];
     for (const path of derived) {
       expect(staticPaths, `${path} missing from SITEMAP_STATIC_ENTRIES`).toContain(path);
+    }
+  });
+});
+
+describe("brandCategorySitemapEntries (issue #2067)", () => {
+  it("emits one /brands/:slug entry per NON-EMPTY curated category, with lastmod = newest brand lastmod", () => {
+    const brandEntries = [
+      // Beauty & personal care — two brands, newest lastmod 2026-08-21.
+      { path: "/ads/nykaa.com", lastmod: "2026-08-21" },
+      { path: "/ads/sugarcosmetics.com", lastmod: "2026-08-20" },
+      { path: "/ads/mcaffeine.com", lastmod: "2026-08-19" },
+      // Sport & footwear — one brand.
+      { path: "/ads/nike.com", lastmod: "2026-08-18" },
+      // Unclassified — falls into "More brands", has no landing page.
+      { path: "/ads/myexamplebrand.com", lastmod: "2026-08-16" },
+    ];
+
+    const entries = brandCategorySitemapEntries(brandEntries);
+    const byPath = (p: string) => entries.find((e) => e.path === p);
+
+    // Beauty aggregates both brands and takes the newest lastmod.
+    const beauty = byPath("/brands/beauty-personal-care");
+    expect(beauty).toBeDefined();
+    expect(beauty?.lastmod).toBe("2026-08-21");
+
+    const sport = byPath("/brands/sport-footwear");
+    expect(sport?.lastmod).toBe("2026-08-18");
+
+    // Every curated category with a brand gets an entry: exactly the 2 that
+    // have brands. The other 5 curated categories are empty and omitted.
+    expect(entries.map((e) => e.path).sort()).toEqual([
+      "/brands/beauty-personal-care",
+      "/brands/sport-footwear",
+    ]);
+    // "More brands" and any unclassified domain are never emitted.
+    expect(entries.some((e) => e.path.includes("more-brands"))).toBe(false);
+    expect(entries.some((e) => e.path.includes("myexamplebrand") || e.path.includes("/ads/"))).toBe(false);
+  });
+
+  it("omits every curated category when none has brands, and never emits the More-brands bucket", () => {
+    const entries = brandCategorySitemapEntries([
+      { path: "/ads/myexamplebrand.com", lastmod: "2026-08-16" },
+    ]);
+    expect(entries).toEqual([]);
+  });
+
+  it("omits lastmod when a category's brands carry no dated lastmod (never invents one)", () => {
+    const entries = brandCategorySitemapEntries([
+      { path: "/ads/nykaa.com" },
+      { path: "/ads/sugarcosmetics.com" },
+    ]);
+    const beauty = entries.find((e) => e.path === "/brands/beauty-personal-care");
+    expect(beauty).toBeDefined();
+    expect(beauty?.lastmod).toBeUndefined();
+  });
+
+  it("buildSitemapXml threads category entries so all 7 non-empty categories + the hub render (count >= 8)", () => {
+    // One brand per curated category so every curated slug has a page.
+    const brandEntries = [
+      { path: "/ads/nike.com", lastmod: "2026-08-01" }, // Sport & footwear
+      { path: "/ads/asos.com", lastmod: "2026-08-02" }, // E-commerce
+      { path: "/ads/nykaa.com", lastmod: "2026-08-03" }, // Beauty & personal care
+      { path: "/ads/lenskart.com", lastmod: "2026-08-04" }, // Optical & eyewear
+      { path: "/ads/hubspot.com", lastmod: "2026-08-05" }, // SaaS & software
+      { path: "/ads/ouraring.com", lastmod: "2026-08-06" }, // Wearables & health
+      { path: "/ads/ridgewallet.com", lastmod: "2026-08-07" }, // Wallet & accessories
+    ];
+
+    const categoryEntries = brandCategorySitemapEntries(brandEntries);
+    expect(categoryEntries).toHaveLength(7);
+
+    // /brands (the hub) is a static root entry — so the sitemap lists the
+    // hub plus all 7 category pages: >= 8 /brands* URLs.
+    const xml = buildSitemapXml(brandEntries, [], categoryEntries);
+    const brandPageUrls = [...xml.matchAll(/https:\/\/0509\.io\/brands[^<]*/g)].map((m) => m[0]);
+    const categoryUrls = brandPageUrls.filter((u) => /^https:\/\/0509\.io\/brands\/[a-z-]+$/.test(u));
+    expect(brandPageUrls).toContain("https://0509.io/brands");
+    expect(categoryUrls).toHaveLength(7);
+    for (const slug of [
+      "sport-footwear",
+      "e-commerce",
+      "beauty-personal-care",
+      "optical-eyewear",
+      "saas-software",
+      "wearables-health",
+      "wallet-accessories",
+    ]) {
+      expect(xml).toContain(`<loc>https://0509.io/brands/${slug}</loc>`);
     }
   });
 });
