@@ -213,6 +213,72 @@ describe("enforceRequestRateLimit", () => {
     ).resolves.toBeNull();
   });
 
+  it("keys all headerless requests into one shared unknown bucket (spoofed XFF cannot mint identities)", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+
+    // No cf-connecting-ip at all. Every one of these carries a DIFFERENT
+    // spoofed x-forwarded-for AND a different user-agent — under the old XFF
+    // fallback each minted its own identity. They must all land in the single
+    // `unknown` bucket and share the auth cap (20).
+    const spoofedIps = ["198.51.100.1", "203.0.113.9", "192.0.2.44"];
+    for (let index = 0; index < 20; index += 1) {
+      const request = new Request("https://0509.io/auth/login", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": spoofedIps[index % spoofedIps.length]!,
+          "user-agent": `spoofed-agent-${index}`,
+        },
+      });
+      await expect(enforceRequestRateLimit(request, env)).resolves.toBeNull();
+    }
+
+    // The 21st headerless request — a brand-new spoofed XFF and a brand-new
+    // user-agent — still shares the exhausted shared bucket.
+    const blocked = await enforceRequestRateLimit(
+      new Request("https://0509.io/auth/login", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": "198.51.100.77",
+          "user-agent": "brand-new-spoof",
+        },
+      }),
+      env,
+    );
+    expect(blocked?.status).toBe(429);
+  });
+
+  it("ignores spoofed x-forwarded-for when a real cf-connecting-ip is present", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+
+    // Same cf-connecting-ip and user-agent across every request, but a
+    // different spoofed x-forwarded-for each time. Keys must all collide on
+    // the trusted IP, so the x-forwarded-for value must not affect the bucket.
+    for (let index = 0; index < 20; index += 1) {
+      const request = new Request("https://0509.io/auth/login", {
+        method: "POST",
+        headers: {
+          "cf-connecting-ip": "203.0.113.50",
+          "x-forwarded-for": `1.2.3.${index}`,
+          "user-agent": "same-browser",
+        },
+      });
+      await expect(enforceRequestRateLimit(request, env)).resolves.toBeNull();
+    }
+
+    const blocked = await enforceRequestRateLimit(
+      new Request("https://0509.io/auth/login", {
+        method: "POST",
+        headers: {
+          "cf-connecting-ip": "203.0.113.50",
+          "x-forwarded-for": "9.9.9.9",
+          "user-agent": "same-browser",
+        },
+      }),
+      env,
+    );
+    expect(blocked?.status).toBe(429);
+  });
+
   it("keeps the per-IP public-search backstop throttling once the IP ceiling is exceeded", async () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
     const request = (userAgent: string) =>
