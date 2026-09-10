@@ -8,6 +8,7 @@ import {
   listPresenceSourceCoverage,
   presenceSourceCoverageForDocs,
 } from "~/lib/presence-source-coverage.server";
+import { SOURCES } from "~/lib/sources/registry.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { PresencePollCursorRecord, SourceTargetRecord } from "~/lib/presence-types";
 
@@ -322,9 +323,33 @@ describe("presence source coverage policy", () => {
     expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
   });
 
-  it("marks the five new seam sources as coming_soon (stubs)", async () => {
-    const newIds = ["google", "google_ads", "tiktok", "subdomains", "hiring"] as const;
-    for (const sourceId of newIds) {
+  // The five seam competitor-monitoring sources (#2218) report "configured"
+  // only once their adapter exports implemented: true AND requiresEnv(env) is
+  // true (the coverage policy mirrors that exactly). Everything else — a stub
+  // (implemented: false) or an implemented adapter whose credentials are
+  // absent — reports "coming_soon". Derive both sets from the registry so
+  // this stays correct as parallel source tickets (#2181/#2189/#2194/#2198/
+  // #2199) land one at a time.
+  const seamIds = (["google", "google_ads", "tiktok", "subdomains", "hiring"] as const).filter(
+    (id) => SOURCES.some((a) => a.id === id),
+  );
+  const configuredSeamIds = seamIds.filter((id) => {
+    const adapter = SOURCES.find((a) => a.id === id);
+    return Boolean(adapter?.implemented && adapter?.requiresEnv(baseEnv));
+  });
+  const comingSoonSeamIds = seamIds.filter((id) => !configuredSeamIds.includes(id));
+
+  it("marks every configured seam source as configured", async () => {
+    // #2198 implements subdomains (implemented: true, requiresEnv: () => true).
+    for (const sourceId of configuredSeamIds) {
+      const entry = await evaluatePresenceSourceCoverage(baseEnv, sourceId, "competitor");
+      expect(entry.status, sourceId).toBe("configured");
+      expect(entry.coverageLabel, sourceId).toBe("OFFICIAL_PUBLIC_API");
+    }
+  });
+
+  it("marks every not-yet-configured seam source as coming_soon", async () => {
+    for (const sourceId of comingSoonSeamIds) {
       const entry = await evaluatePresenceSourceCoverage(baseEnv, sourceId, "competitor");
       expect(entry.status, sourceId).toBe("coming_soon");
       expect(entry.reasonCode, sourceId).toBe("not_implemented");
@@ -332,10 +357,9 @@ describe("presence source coverage policy", () => {
     }
   });
 
-  it("lists the five new seam sources in the docs coverage table as coming_soon", () => {
+  it("lists every not-yet-configured seam source in the docs coverage table as coming_soon", () => {
     const docs = presenceSourceCoverageForDocs();
-    const newIds = ["google", "google_ads", "tiktok", "subdomains", "hiring"] as const;
-    for (const sourceId of newIds) {
+    for (const sourceId of comingSoonSeamIds) {
       const entry = docs.find((d) => d.sourceId === sourceId);
       expect(entry, sourceId).toBeDefined();
       expect(entry?.productionStatus, sourceId).toBe("coming_soon");
