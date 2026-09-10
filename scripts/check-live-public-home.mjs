@@ -46,6 +46,27 @@ const ACCEPTED_PUBLIC_HOME_CACHE_CONTROLS = new Set([
 // silently diverge again.
 export const EXPECTED_SCRIPT_SRC_BEACON_HOST = "https://static.cloudflareinsights.com/beacon.min.js";
 
+// Deploy-gate contract for the nonce-based CSP (issue #2348).
+//
+// The live site used to serve `script-src 'self' 'unsafe-inline' …` and
+// `connect-src 'self' https:`; the bare `https:` let one injected script post
+// session data to any host. Both are now gone. If either ever comes back — a
+// later edit reintroducing 'unsafe-inline', or a connect-src regression to the
+// scheme wildcard — deploys must fail rather than silently reopen the hole.
+// Coupled to the product policy by tests/worker-security-headers.test.ts so the
+// gate and the worker can never diverge.
+export const FORBIDDEN_SCRIPT_SRC_KEYWORD = "'unsafe-inline'";
+export const FORBIDDEN_CONNECT_SRC_WILDCARD = "https:";
+
+// Deploy-gate contract for the Google Fonts paths. The page loads its
+// stylesheet from fonts.googleapis.com (style-src) and the font files from
+// fonts.gstatic.com (font-src), and an inline FONT_SWAP_SCRIPT flips the
+// stylesheet to media="all" on load. If either host drops out of the live CSP,
+// fonts silently stop applying (display=swap keeps the text readable, so the
+// only symptom is a wrong typeface nobody files a bug about).
+export const EXPECTED_STYLE_SRC_FONTS_HOST = "https://fonts.googleapis.com";
+export const EXPECTED_FONT_SRC_FONTS_HOST = "https://fonts.gstatic.com";
+
 const staleSignals = [
   "The market moves after you log off",
   "After-hours market intelligence",
@@ -109,12 +130,64 @@ function varyIncludesCookie(varyHeader) {
  * @param {string} cspHeader the full content-security-policy header value
  * @returns {boolean} whether script-src allows the Cloudflare Web Analytics beacon
  */
-function cspAllowsBeacon(cspHeader) {
-  const scriptSrc = cspHeader
+/**
+ * @param {string} cspHeader the full content-security-policy header value
+ * @param {string} name directive name, e.g. "script-src"
+ * @returns {string} the directive source list ("" when the directive is absent)
+ */
+function cspDirective(cspHeader, name) {
+  const directive = cspHeader
     .split(";")
-    .map((directive) => directive.trim())
-    .find((directive) => directive.startsWith("script-src "));
-  return scriptSrc !== undefined && scriptSrc.includes(EXPECTED_SCRIPT_SRC_BEACON_HOST);
+    .map((part) => part.trim())
+    .find((part) => part === name || part.startsWith(`${name} `));
+  if (directive === undefined) return "";
+  return directive === name ? "" : directive.slice(name.length).trim();
+}
+
+/**
+ * Whether a directive's source list contains `source` as a whole token.
+ *
+ * Exact token matching, never a substring: `https://fonts.gstatic.com` must not
+ * be satisfied by `https://evil.example/?u=https://fonts.gstatic.com`, which a
+ * naive `includes()` would accept. (CodeQL js/incomplete-url-substring-sanitization
+ * flags the substring form for exactly this reason.)
+ * @param {string} directive the directive source list
+ * @param {string} source the source token to look for
+ * @returns {boolean} whether the source list contains the token
+ */
+function cspHasSource(directive, source) {
+  return directive.split(/\s+/).includes(source);
+}
+
+/**
+ * @param {string} cspHeader the full content-security-policy header value
+ * @returns {boolean} whether script-src allows the Cloudflare Web Analytics beacon
+ */
+function cspAllowsBeacon(cspHeader) {
+  return cspHasSource(cspDirective(cspHeader, "script-src"), EXPECTED_SCRIPT_SRC_BEACON_HOST);
+}
+
+/**
+ * Whether the live CSP satisfies the issue #2348 contract: no 'unsafe-inline'
+ * in script-src, no bare `https:` wildcard in connect-src, and both Google
+ * Fonts hosts still reachable from the directives that actually fetch them.
+ * @param {string} cspHeader the full content-security-policy header value
+ * @returns {{ unsafeInlineScriptSrc: boolean, connectSrcWildcard: boolean, fontsStyleSrc: boolean, fontsFontSrc: boolean }}
+ */
+export function cspContract(cspHeader) {
+  const scriptSrc = cspDirective(cspHeader, "script-src");
+  const connectSrc = cspDirective(cspHeader, "connect-src");
+  return {
+    // A violation is the PRESENCE of the forbidden token, so these are the
+    // inverse of "ok" — named for what they assert so the failure JSON reads
+    // plainly.
+    unsafeInlineScriptSrc: cspHasSource(scriptSrc, FORBIDDEN_SCRIPT_SRC_KEYWORD),
+    // Match the bare scheme token only: `https://fonts.gstatic.com` is a
+    // legitimate full-URL source and must not be mistaken for the wildcard.
+    connectSrcWildcard: cspHasSource(connectSrc, FORBIDDEN_CONNECT_SRC_WILDCARD),
+    fontsStyleSrc: cspHasSource(cspDirective(cspHeader, "style-src"), EXPECTED_STYLE_SRC_FONTS_HOST),
+    fontsFontSrc: cspHasSource(cspDirective(cspHeader, "font-src"), EXPECTED_FONT_SRC_FONTS_HOST),
+  };
 }
 
 /** @param {URL} url */
@@ -145,17 +218,31 @@ async function checkUrl(url) {
   // PR #610 contract: the live CSP must keep allowing the Cloudflare Web
   // Analytics beacon. Without this, analytics silently records zero page views
   // (blocked beacon, no error anywhere).
-  const cspAllowsBeaconSafe = cspAllowsBeacon(response.headers.get("content-security-policy") ?? "");
+  const cspHeader = response.headers.get("content-security-policy") ?? "";
+  const cspAllowsBeaconSafe = cspAllowsBeacon(cspHeader);
+
+  // Issue #2348 contract: no 'unsafe-inline' in script-src, no bare `https:`
+  // in connect-src, and both Google Fonts paths still reachable.
+  const csp = cspContract(cspHeader);
+  const cspContractSafe =
+    !csp.unsafeInlineScriptSrc && !csp.connectSrcWildcard && csp.fontsStyleSrc && csp.fontsFontSrc;
 
   return {
     url: url.toString(),
-    ok: response.ok && missing.length === 0 && stale.length === 0 && cacheSafe && cspAllowsBeaconSafe,
+    ok:
+      response.ok &&
+      missing.length === 0 &&
+      stale.length === 0 &&
+      cacheSafe &&
+      cspAllowsBeaconSafe &&
+      cspContractSafe,
     status: response.status,
     missing,
     stale,
     cacheControl,
     vary,
     cspAllowsBeacon: cspAllowsBeaconSafe,
+    cspContract: csp,
   };
 }
 

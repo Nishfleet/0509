@@ -181,6 +181,29 @@ describe("edge cache storability guards", () => {
       headers: { "content-type": "application/json", ...publicCacheControl },
     }))).toBe(false);
 
+    // Issue #2348: a document carrying a per-response CSP nonce must never be
+    // shared. The stored bytes would hand the SAME nonce and the SAME matching
+    // body to every visitor of this colo for the whole 300s lifetime, which is
+    // a static allowlist token anyone can read — the exact opposite of what a
+    // nonce is for. Asserted through the real security layer so the guard can
+    // never be satisfied by a hand-written header string.
+    const noncedRequest = anonymousRequest("/ads/edge-cache-nonce.example", "US");
+    const nonced = withSecurityHeaders(htmlResponse(), noncedRequest, "must-not-be-shared");
+    expect(nonced.headers.get("content-security-policy")).toContain("'nonce-must-not-be-shared'");
+    expect(isEdgeCacheableHtmlResponse(nonced)).toBe(false);
+
+    const { ctx: nonceCtx, waitUntilCalls: nonceWaitUntilCalls } = collectingContext();
+    const nonceReturned = storeEdgeCachedHtmlResponse(noncedRequest, nonced, nonceCtx);
+    expect(nonceReturned.headers.has(EDGE_CACHE_STATUS_HEADER)).toBe(false);
+    expect(nonceWaitUntilCalls).toHaveLength(0);
+    expect(await readEdgeCachedResponse(noncedRequest)).toBeNull();
+
+    // The SAME response without a nonce is still cacheable, so the guard is
+    // rejecting the nonce and not the route, the body, or the cache-control.
+    expect(isEdgeCacheableHtmlResponse(withSecurityHeaders(htmlResponse(), noncedRequest))).toBe(
+      true,
+    );
+
     // ...and the same request that stores a HTML document stores nothing for a
     // response the guards reject.
     const { ctx, waitUntilCalls } = collectingContext();

@@ -116,6 +116,7 @@ async function loadWorker() {
   }));
   vi.doMock("../workers/security-headers", () => ({
     withSecurityHeaders: vi.fn((response: Response) => response),
+    generateCspNonce: vi.fn(() => "test-nonce-abc"),
   }));
   vi.doMock("../app/lib/social-cards.server", () => ({
     publicSocialCardForRequest: () => null,
