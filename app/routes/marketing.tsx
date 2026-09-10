@@ -139,7 +139,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     );
   }
 
-  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain };
+  // The featured demo brand varies by the visitor's home market (issue
+  // #2281), so this path must also never be shared-cached: a cached nike
+  // variant for a US visitor would otherwise be served to an Indian visitor
+  // (and vice versa). Same private policy as the priced path above.
+  return Response.json(
+    { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain },
+    { headers: { "Cache-Control": "private, max-age=300", Vary: "cookie" } },
+  );
 }
 
 /**

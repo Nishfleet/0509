@@ -202,7 +202,7 @@ describe("home proof brief ↔ brand page count parity (#1468)", () => {
   // can push the 10s default; the repo's own 10s budget is per-file. Route
   // module transform is infra-time, not assertion-time (see ci-vitest-run.sh).
   it("loadPublicProofBrief with a frozen now counts the FULL snapshot, not a 12-ad subset", { timeout: 30_000 }, async () => {
-    installMocks({ entry: cacheEntry() });
+    installMocks({ entry: cacheEntry("nike.com") });
 
     const { loadPublicProofBrief } = await import("~/lib/public-proof.server");
     const brief = await loadPublicProofBrief({ DB: {} } as never, {

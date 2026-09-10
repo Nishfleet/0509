@@ -296,12 +296,12 @@ describe("public funnel loaders reuse the sitemap indexability filter", () => {
 
   it("puts only bare /ads/:domain sitemap paths on the homepage loader", async () => {
     const { loader } = await import("~/routes/marketing");
-    const result = await loader({
+    const result = (await loader({
       context: { cloudflare: { env: {} } },
       request: new Request("https://0509.io/"),
-    } as never);
+    } as never)) as Response;
 
-    expect(result).toEqual({
+    await expect(result.json()).resolves.toEqual({
       pricingPreview: { available: false },
       commercialLaunch,
       proofBrief: null,

@@ -100,12 +100,15 @@ describe("marketing pricing SSR", () => {
     } as never);
 
     await vi.advanceTimersByTimeAsync(2_500);
-    const result = await loading;
+    const result = (await loading) as Response;
 
     // The homepage document never blocks on a slow Dodo preview: it degrades
     // to the honest checkout-localized fallback and the client-side
     // /api/pricing-preview fetch takes over near the fold.
-    expect(result).toEqual({
+    // The featured brand varies by the visitor's home market (issue #2281),
+    // so the fallback is also browser-only, never shared-cached.
+    expect(result.headers.get("cache-control")).toBe("private, max-age=300");
+    await expect(result.json()).resolves.toEqual({
       pricingPreview: { available: false },
       commercialLaunch,
       proofBrief: null,
@@ -138,15 +141,18 @@ describe("marketing pricing SSR", () => {
 
     const { loader } = await import("~/routes/marketing");
     const start = Date.now();
-    const result = await loader({
+    const result = (await loader({
       context: { cloudflare: { env: {} } },
       request: new Request("https://0509.io/"),
-    } as never);
+    } as never)) as Response;
 
     // The document waits only the bounded SSR window (2.5s), then degrades to
     // the honest checkout-localized fallback instead of blocking the page.
     expect(Date.now() - start).toBeGreaterThanOrEqual(2300);
-    expect(result).toEqual({
+    // The featured brand varies by the visitor's home market (issue #2281), so
+    // the no-pricing fallback must also be browser-only, never shared-cached.
+    expect(result.headers.get("cache-control")).toBe("private, max-age=300");
+    await expect(result.json()).resolves.toEqual({
       pricingPreview: { available: false },
       commercialLaunch,
       proofBrief: null,
@@ -248,6 +254,39 @@ describe("marketing pricing SSR", () => {
     expect(data.pricingPreview.prices?.starter?.monthly?.display).toBe("$59");
     expect(data.pricingPreview.prices?.agency?.monthly?.display).toBe("$199");
     expect(data.commercialLaunch.scoutSaleOpen).toBe(true);
+  });
+
+  it("features a brand the visitor recognizes on the homepage: nike for US, nykaa for India (#2281)", async () => {
+    const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
+    vi.doMock("~/lib/dodo-pricing.server", () => ({
+      previewDodo0509PlanPrices: vi.fn().mockResolvedValue({ available: false }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
+    }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+    vi.doMock("~/lib/public-proof.server", () => ({
+      loadPublicProofBrief: vi.fn().mockResolvedValue(null),
+      featuredWebsiteForVisitorCountry: vi.fn((country: string) =>
+        country === "India" ? "nykaa.com" : "nike.com",
+      ),
+    }));
+
+    const { loader } = await import("~/routes/marketing");
+
+    // US visitor → Western flagship.
+    const us = (await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/", { headers: { "cf-ipcountry": "US" } }),
+    } as never)) as Response;
+    await expect(us.json()).resolves.toMatchObject({ featuredDomain: "nike.com" });
+
+    // Indian visitor → Indian flagship.
+    const inRes = (await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/", { headers: { "cf-ipcountry": "IN" } }),
+    } as never)) as Response;
+    await expect(inRes.json()).resolves.toMatchObject({ featuredDomain: "nykaa.com" });
   });
 });
 

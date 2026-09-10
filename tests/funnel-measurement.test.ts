@@ -753,13 +753,17 @@ describe("funnel measurement route boundaries", () => {
 
     logSpy.mockClear();
     env = {};
-    const disabledData = await loader({
+    const disabledData = (await loader({
       context: createContext(env),
       request: makeFunnelRequest("http://localhost/"),
-    } as never);
+    } as never)) as Response;
     expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
-    expect(disabledData).toEqual(enabledData);
-    expect(disabledData).toMatchObject({
+    // Both the enabled and disabled paths now return a Response (the featured
+    // brand varies by visitor country, so the no-pricing path is also
+    // browser-only). Compare the JSON payloads, not the Response wrappers.
+    const disabledJson = await disabledData.json();
+    expect(disabledJson).toEqual(await (enabledData as Response).json());
+    expect(disabledJson).toMatchObject({
       pricingPreview: { available: false },
       commercialLaunch: expect.objectContaining({ scoutSaleOpen: false, agencySaleOpen: false }),
     });
