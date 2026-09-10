@@ -149,6 +149,23 @@ describe("google-ads-snapshot diffGoogleAdsSnapshots", () => {
     expect((mix?.metadata as { prev: { text: number }; next: { text: number; image: number } }).next.image).toBe(1);
   });
 
+  it("does not throw when a stored payload is missing formatMix", () => {
+    // A partial/older stored payload may have no formatMix at all. The diff
+    // treats that as "no mix change" instead of throwing on `prev.formatMix`.
+    const prev = snapshot([creative()]);
+    delete (prev as { formatMix?: unknown }).formatMix;
+    const changes = diffGoogleAdsSnapshots(prev, snapshot([creative()]));
+    expect(
+      changes.find((c) => (c.metadata as { category?: string }).category === "format_mix_change"),
+    ).toBeUndefined();
+    expect(changes).toEqual([]);
+
+    // Same guard on the next side (a malformed fresh payload).
+    const next = snapshot([creative()]);
+    delete (next as { formatMix?: unknown }).formatMix;
+    expect(() => diffGoogleAdsSnapshots(snapshot([creative()]), next)).not.toThrow();
+  });
+
   it("emits all four change categories together when they co-occur", () => {
     const prev = snapshot([creative({ advertiserId: "AR1", creativeId: "CR1", format: "text" })]);
     const next = snapshot([
