@@ -50,6 +50,7 @@ import {
 } from "~/lib/digest-strategy";
 import type { AppEnv } from "~/lib/env.server";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
+import { safeTimeZone } from "~/lib/safe-timezone";
 import { planAllowsDigestCadence } from "~/lib/plan-entitlements";
 import { proofScreenshotAbsoluteUrl } from "~/lib/proof-screenshot.server";
 import type {
@@ -76,6 +77,75 @@ const DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS = 5;
 const DIGEST_SCHEDULE_JOB_LEASE_MS = 15 * 60 * 1000;
 const DIGEST_SCHEDULE_JOB_ALERT_LEASE_MS = 15 * 60 * 1000;
 const DAILY_HEARTBEAT_QUIET_STREAK = 3;
+const WEEKLY_DIGEST_LOCAL_START_HOUR = 5;
+const WEEKLY_DIGEST_LOCAL_END_HOUR = 8;
+
+/**
+ * True when `instant` sits inside the workspace-local Monday 05:00-08:00
+ * brief window (issue #2406). The three-hourly monitoring cron evaluates
+ * this per workspace at each tick; the window equals the tick spacing, so
+ * every timezone enters it exactly once per local Monday. Absent or invalid
+ * IANA names fall back to UTC — the product's global-first default.
+ */
+export function isWithinWeeklyDigestLocalWindow(
+  instant: Date,
+  timezone: string | null | undefined,
+): boolean {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: safeTimeZone(timezone),
+    weekday: "short",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(instant);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? NaN);
+  if (Number.isNaN(hour)) {
+    return false;
+  }
+  return (
+    parts.some((part) => part.type === "weekday" && part.value === "Mon") &&
+    hour >= WEEKLY_DIGEST_LOCAL_START_HOUR &&
+    hour < WEEKLY_DIGEST_LOCAL_END_HOUR
+  );
+}
+
+/**
+ * Workspaces whose local Monday brief window is open at `at`. Mirrors the
+ * strict-mock precedent in `loadDigestScreenshotPairs`: a test double
+ * without the catalog helper (or a throwing property lookup) yields an
+ * empty list so a weekly enqueue can never fire ungated on every
+ * three-hourly tick.
+ */
+async function listWeeklyDigestWindowUserIds(
+  env: AppEnv,
+  at: Date,
+): Promise<string[]> {
+  let listCandidates:
+    | typeof import("~/lib/data.server").listDigestScheduleJobTimezones
+    | undefined;
+  try {
+    listCandidates = (await import("~/lib/data.server"))
+      .listDigestScheduleJobTimezones;
+  } catch {
+    listCandidates = undefined;
+  }
+  if (typeof listCandidates !== "function") {
+    return [];
+  }
+  try {
+    const candidates = await listCandidates(env);
+    return candidates
+      .filter((candidate) =>
+        isWithinWeeklyDigestLocalWindow(at, candidate.timezone),
+      )
+      .map((candidate) => candidate.userId);
+  } catch (error) {
+    // A candidates-query failure must not take the hosting monitoring tick's
+    // scans down with it; log so the skipped enqueue is visible in worker
+    // logs instead of silently missing the week.
+    console.error("Weekly digest window candidate lookup failed.", error);
+    return [];
+  }
+}
 // Zero-noise triage sources: recent candidates carry the suppressed/detected
 // statuses that never become watch events, and recent proof captures carry
 // the failed/pending evidence states. Both are loaded newest-first with a
@@ -281,6 +351,13 @@ export async function runDigestDeliveryCycleDetailed(
 		cadence,
 		periodStart: periodStartIso,
 		periodEnd: periodEndIso,
+		// Weekly cadence files per workspace when its local Monday 05:00-08:00
+		// window opens (issue #2406); the hosting three-hourly tick evaluates
+		// the gate against the tick's scheduled time. Daily stays ungated.
+		onlyUserIds:
+			cadence === "weekly"
+				? await listWeeklyDigestWindowUserIds(env, periodEnd)
+				: undefined,
 	});
 
   const handledDigestRunIds = new Set<string>();
