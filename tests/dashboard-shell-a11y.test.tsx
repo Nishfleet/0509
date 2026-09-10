@@ -143,12 +143,14 @@ describe("DashboardShell accessibility (WP-43)", () => {
     }));
     const navLinks = links.filter(({ text }) => text !== "");
 
-    // Every public destination is reachable exactly once: Home, Search,
-    // Compare, Pricing and Help ride the icon rail; Docs, Sign in and Sign up
-    // ride the footer.
-    for (const href of ["/", "/search", "/compare", "/pricing", "/help", "/docs", "/auth/login", "/auth/signup"]) {
+    // Every public destination is reachable exactly once: Search preview,
+    // Compare, Pricing, Help, Docs and Status ride the icon rail; Sign in and
+    // Sign up ride the footer. Home is the wordmark/account block, not a rail
+    // item (issue #2324).
+    for (const href of ["/search", "/compare", "/pricing", "/help", "/docs", "/status", "/auth/login", "/auth/signup"]) {
       expect(navLinks.filter((link) => link.href === href)).toHaveLength(1);
     }
+    expect(navLinks.filter((link) => link.href === "/")).toHaveLength(0);
   });
 
   it("does not announce or steal focus during a StrictMode initial mount", async () => {
