@@ -4193,6 +4193,11 @@ describe("alert email content quality", () => {
     );
     expect(single.html).toContain("Before");
     expect(single.html).toContain("Now");
+    // BL-022: the screenshot pair carries the same stored capture timestamps
+    // as the text rows (never email-build time), so the visual diff answers
+    // "when was this true?" too.
+    expect(single.html).toContain("Captured 18 Apr 2026");
+    expect(single.html).toContain("Captured 19 Apr 2026");
   });
 
   it("keeps the alert text-only when no screenshot pair is resolved", async () => {

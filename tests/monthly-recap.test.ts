@@ -39,7 +39,7 @@ describe("monthly recap calendar helpers", () => {
 });
 
 describe("buildMonthlyRecapEmail", () => {
-  it("renders activity stats and billing link", () => {
+  it("renders activity stats and evidence link", () => {
     const model = buildMonthlyRecapEmail({
       userId: "user-1",
       email: "owner@example.com",
@@ -54,6 +54,7 @@ describe("buildMonthlyRecapEmail", () => {
       topCompetitorName: "Nykaa",
       topCompetitorChanges: 7,
       billingUrl: "https://0509.io/app/billing",
+      evidenceUrl: "https://0509.io/app/reports",
     });
 
     expect(model.subject).toContain("12 changes");
@@ -61,8 +62,10 @@ describe("buildMonthlyRecapEmail", () => {
     expect(model.html).toContain("4");
     expect(model.html).toContain("250");
     expect(model.html).toContain("Nykaa");
-    expect(model.html).toContain("https://0509.io/app/billing");
+    expect(model.html).toContain("https://0509.io/app/reports");
+    expect(model.html).toContain("Review this month's evidence");
     expect(model.text).toContain("Changes caught: 12");
+    expect(model.text).toContain("Review this month's evidence");
   });
 
   it("escapes scraped competitor names and user names (HTML injection proof)", () => {
@@ -81,6 +84,7 @@ describe("buildMonthlyRecapEmail", () => {
       topCompetitorName: '</strong><script>alert(document.cookie)</script>',
       topCompetitorChanges: 2,
       billingUrl: "https://0509.io/app/billing",
+      evidenceUrl: "https://0509.io/app/reports",
     });
 
     // Raw markup never reaches the rendered HTML.

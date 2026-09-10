@@ -303,6 +303,7 @@ describe("email render gallery", () => {
       topCompetitorName: "Glowkart",
       topCompetitorChanges: 14,
       billingUrl: "https://0509.io/app/billing",
+      evidenceUrl: "https://0509.io/app/reports",
     });
     record("monthly-recap", "Monthly recap", true, model.subject, model.html, UNSUB, "case-file");
     expect(model.html).toContain("Glowkart");
