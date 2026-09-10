@@ -490,6 +490,22 @@ export default {
     // WP-10: durable creative thumbnails for saved collection ads (R2).
     // MINOR: serve only after the request rate-limit gate; raster types only.
     if (request.method === "GET" || request.method === "HEAD") {
+      // Issue #2393: edge-cached copy of a captured ad creative, so a public
+      // /ads/:domain page keeps its images after the fbcdn signature expires.
+      // Same-origin, D1-resolved id, .fbcdn.net-only fetch, 404 unknown ids.
+      {
+        const { parseCreativeResourcePathname, serveCreativeResource } = await import(
+          "../app/lib/creative-edge-cache.server"
+        );
+        const creativeResourceId = parseCreativeResourcePathname(url.pathname);
+        if (creativeResourceId) {
+          const creativeResponse = await serveCreativeResource(env, request, creativeResourceId);
+          if (creativeResponse) {
+            return withSecurityHeaders(creativeResponse, request);
+          }
+        }
+      }
+
       const { parseCreativeArtifactPathname, serveCreativeArtifact } = await import(
         "../app/lib/creative-thumbnail.server"
       );

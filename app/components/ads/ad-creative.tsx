@@ -1,11 +1,19 @@
 import { useState } from "react";
 
+import { buildCreativeResourceUrl } from "~/lib/creative-edge-cache-url";
 import type { AdRecord } from "~/lib/types";
 
 type AdCreativeAd = Pick<
   AdRecord,
   "advertiser" | "format" | "previewHeadline" | "hook" | "creativeImageUrl"
->;
+> & {
+  /**
+   * Issue #2393: the ad id the `/creative/:id` edge route resolves. Optional —
+   * the static example cards have no real ad behind them and fall back to the
+   * honest mock.
+   */
+  metaAdId?: string | null;
+};
 
 /**
  * The creative rectangle for a wall card. The REAL captured creative image is
@@ -33,6 +41,11 @@ export function AdCreative({
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const imageUrl = ad.creativeImageUrl?.trim() || null;
+  // Issue #2393: prefer the same-origin edge-cached route derived from the
+  // stored fbcdn URL, so the creative survives the ~4-day signature expiry
+  // and the page never pays a third-party TLS connection to fbcdn. Falls back
+  // to the raw URL only when no id/URL pair is available.
+  const edgeUrl = imageUrl ? buildCreativeResourceUrl(ad.metaAdId, imageUrl) : null;
   const format = normalizeFormat(ad.format);
   const showImage = Boolean(imageUrl) && !imageFailed;
 
@@ -45,7 +58,7 @@ export function AdCreative({
           loading={loading}
           onError={() => setImageFailed(true)}
           referrerPolicy="no-referrer"
-          src={imageUrl ?? undefined}
+          src={edgeUrl ?? imageUrl ?? undefined}
         />
       ) : (
         <span aria-hidden="true" className="f9-ads-thumb-mock">
