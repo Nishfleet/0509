@@ -15,7 +15,18 @@ import {
   buildScanTroubleEmail,
   renderEmailAccountabilityBlock,
 } from "~/lib/digest-email.server";
-import { getPlanEntitlements, type ScheduledScanCadence } from "~/lib/plan-entitlements";
+import {
+  buildChangeLeadSubject,
+  changeBriefCriticalityLine,
+  changeBriefMeaningLine,
+  changeBriefNoScreenshotReason,
+  readChangeBriefCriticality,
+} from "~/lib/change-brief.server";
+import {
+  canUsePlanFeature,
+  getPlanEntitlements,
+  type ScheduledScanCadence,
+} from "~/lib/plan-entitlements";
 import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
@@ -87,9 +98,11 @@ import { proofScreenshotAbsoluteUrl } from "~/lib/proof-screenshot.server";
 import { buildUnsubscribeUrl } from "~/lib/unsubscribe.server";
 import type {
   AdRecord,
+  AppSession,
   DeliveryChannel,
   DeliveryAttemptRecord,
   DeliveryTargetRecord,
+  ShareResourceType,
   WatchEventRecord,
   WatchlistRecord,
   WatchlistDeliveryConfigRecord,
@@ -325,6 +338,21 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
       ? (await import("~/lib/pricing")).freeWeeklyDigestUpgradeNote()
       : null;
 
+  // Issue #2175 do-step 3: the brief's one-click forward link — a live share
+  // view of this digest via the existing share-link machinery. Plan-gated on
+  // `share_links` (Starter+); free-plan and internal-lane briefs render no
+  // forward line. Resolved once per digest run, reused across targets.
+  const digestForwardUrl =
+    lane === "customer" &&
+    emailTargets.length > 0 &&
+    canUsePlanFeature(entitledConfigs.plan, "share_links")
+      ? await resolveShareForwardUrl(env, {
+          userId: input.userId,
+          resourceType: "digest",
+          resourceId: input.digestRunId,
+        })
+      : null;
+
   for (const target of emailTargets) {
     attempts.push(
       await deliverDigestToEmailTarget(
@@ -335,6 +363,7 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
         digestTimeZone,
         upgradeNote,
         getPlanEntitlements(entitledConfigs.plan).scheduledScanCadence,
+        { forwardUrl: digestForwardUrl },
       ),
     );
   }
@@ -630,6 +659,21 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   // else the truthful "Workspace owner" fallback. Never the watchlist name.
   const reviewerLabel = digestReviewerLabel(input.userName);
 
+  // Issue #2175 do-step 3: the alert's one-click forward link — a live share
+  // view of this watchlist via the existing share-link machinery. Plan-gated
+  // on `share_links` (Starter+); free-plan and internal-lane alerts render no
+  // forward line. Resolved once per watchlist run, reused across batches.
+  const alertForwardUrl =
+    lane === "customer" &&
+    emailTargets.length > 0 &&
+    canUsePlanFeature(entitledConfigs.plan, "share_links")
+      ? await resolveShareForwardUrl(env, {
+          userId: input.userId,
+          resourceType: "watchlist",
+          resourceId: input.watchlist.id,
+        })
+      : null;
+
   for (const batch of batches) {
     const content = buildInstantAlertContent(
       input.watchlist,
@@ -640,6 +684,10 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
       reviewerLabel,
       alertEvidenceByEventId,
       alertScreenshotPairsByEventId,
+      {
+        forwardUrl: alertForwardUrl,
+        timeZone: entitledConfigs.workspaceConfig.timezone ?? null,
+      },
     );
 
     if (batch.allowedChannels.includes("email")) {
@@ -1039,6 +1087,9 @@ async function deliverDigestToEmailTarget(
   timeZone: string | null,
   upgradeNote: string | null = null,
   scanCadence: ScheduledScanCadence = "weekly",
+  briefExtras: {
+    forwardUrl?: string | null;
+  } = {},
 ): Promise<DigestAttemptSummary> {
   const targetValue = normalizeDeliveryEmailValue(target.targetValue);
   if (!targetValue) {
@@ -1102,6 +1153,7 @@ async function deliverDigestToEmailTarget(
     nextScanLabel: input.nextScanLabel ?? null,
     firstBrief: input.firstBrief === true,
     priceTierSwing,
+    forwardUrl: briefExtras.forwardUrl ?? null,
     publicMove,
   });
   const subject = input.proofEmailSubject ?? email.subject;
@@ -1376,6 +1428,7 @@ async function deliverInstantEmailBatch(
     email: input.deliveryTarget.targetValue,
     subject: input.content.subject,
     html: input.content.html,
+    text: input.content.text,
     unsubscribeUrl,
   });
 
@@ -2834,6 +2887,7 @@ function renderDigestEmail(
     nextScanLabel?: string | null;
     firstBrief?: boolean;
     priceTierSwing?: PriceTierSwing | null;
+    forwardUrl?: string | null;
     publicMove?: WeeklyPublicMove | null;
   },
 ): ReturnType<typeof buildDigestEmail> {
@@ -2865,6 +2919,7 @@ function renderDigestEmail(
     nextScanLabel: input.nextScanLabel ?? null,
     firstBrief: input.firstBrief === true,
     priceTierSwing: input.priceTierSwing ?? null,
+    forwardUrl: input.forwardUrl ?? null,
     publicMove: input.publicMove ?? null,
   });
 }
@@ -2895,6 +2950,7 @@ async function sendInstantEmail(
     email: string;
     subject: string;
     html: string;
+    text?: string | null;
     unsubscribeUrl: string | null;
   },
 ) {
@@ -2902,6 +2958,7 @@ async function sendInstantEmail(
     to: input.email,
     subject: input.subject,
     html: input.html,
+    text: input.text ?? undefined,
     tag: "instant-alert",
     unsubscribeUrl: input.unsubscribeUrl,
     theme: "case-file",
@@ -2934,6 +2991,60 @@ async function persistDeliveryTargetSuccess(
     providerIdentifier: target.providerIdentifier,
     metadata: target.metadata,
   });
+}
+
+/**
+ * Issue #2175 do-step 3: the one-click "forward to a teammate / client" URL
+ * behind every customer brief — the live share view of the digest (or, for
+ * instant alerts, the watchlist), produced by the existing share-link
+ * machinery. Reuse-first: an active link for the same resource is reused so
+ * re-sends never multiply links; otherwise one is created with the standard
+ * token shape and default TTL. The caller applies the plan gate
+ * (`share_links`) before invoking this. Any failure degrades to null — the
+ * brief simply omits the forward line, delivery is never blocked.
+ */
+async function resolveShareForwardUrl(
+  env: AppEnv,
+  input: {
+    userId: string;
+    resourceType: ShareResourceType;
+    resourceId: string;
+  },
+): Promise<string | null> {
+  try {
+    const listActive = deliveryData.listActiveShareLinks;
+    const createShare = deliveryData.createShareLink;
+    if (typeof listActive !== "function" || typeof createShare !== "function") {
+      return null;
+    }
+    const active = await listActive(env, input.userId, 50);
+    const existing = active.find(
+      (link) =>
+        link.resourceType === input.resourceType &&
+        link.resourceId === input.resourceId,
+    );
+    const token =
+      existing?.token ??
+      (
+        await createShare(env, systemShareSession(input.userId), {
+          resourceType: input.resourceType,
+          resourceId: input.resourceId,
+          isSnapshot: false,
+        })
+      ).token;
+    return `${appBaseUrl(env)}/share/${token}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Minimal session shape for system-actor share creation during delivery:
+ * `createShareLink` reads only `session.user.id` (the workspace owner the
+ * link belongs to). No request session exists in the cron/delivery context.
+ */
+function systemShareSession(userId: string): AppSession {
+  return { user: { id: userId } } as unknown as AppSession;
 }
 
 async function resolveEntitledDeliveryConfigs(
@@ -3546,6 +3657,12 @@ type InstantAlertContent = {
   shortChange: string;
   subject: string;
   html: string;
+  /**
+   * Issue #2175 do-step 3: plain-text part parity — every fact the HTML
+   * alert carries (mark, captures, criticality, meaning, proof state,
+   * forward link) also renders in the text part.
+   */
+  text: string;
   watchlistUrl: string | null;
   /** E2 alert increment: why this alert matters, derived never invented. */
   materialityReason: string;
@@ -3865,6 +3982,12 @@ export function buildInstantAlertContent(
     string,
     { beforeUrl: string; afterUrl: string }
   > | null,
+  briefOptions: {
+    /** Issue #2175 do-step 3: share-view forward link (plan-gated upstream). */
+    forwardUrl?: string | null;
+    /** Workspace delivery timezone for the subject's captured-at suffix. */
+    timeZone?: string | null;
+  } = {},
 ): InstantAlertContent {
   const primaryEvent = events[0];
   const competitor = readCompetitorLabel(primaryEvent) ?? watchlist.name;
@@ -3910,11 +4033,22 @@ export function buildInstantAlertContent(
   if (events.length === 1) {
     const isBaseline =
       ((primaryEvent.metadata ?? {}) as Record<string, unknown>).kind === "baseline";
+    // Issue #2175 do-step 2: a confirmed change alert leads with the change
+    // itself — competitor, what moved, when it was captured — never a count.
+    // Provisional and baseline alerts keep their own honest subjects.
     const subject = provisional
       ? `Possible change at ${competitor}`
       : isBaseline
         ? primaryEvent.title
-        : buildInstantSubject(primaryEvent.eventType, competitor, primaryEvent.title);
+        : buildChangeLeadSubject({
+            competitor,
+            eventType: primaryEvent.eventType,
+            title: primaryEvent.title,
+            metadata: (primaryEvent.metadata ?? {}) as Record<string, unknown>,
+            timeZone: briefOptions.timeZone,
+            capturedAtFallback:
+              primaryEvent.confirmedAt ?? primaryEvent.createdAt ?? null,
+          });
     const shortChange = provisional
       ? "Possible change detected"
       : primaryEvent.title;
@@ -3922,6 +4056,43 @@ export function buildInstantAlertContent(
     const advertiserNote = readCompetitorLabel(primaryEvent)
       ? `<p style="margin: 0 0 10px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">Advertiser: ${escapeHtml(competitor)}</p>`
       : "";
+    // Issue #2175 do-step 1: the alert row carries the criticality band with
+    // its reasons, one deterministic "what this usually means" line, and —
+    // when no before/after screenshot pair (or creative image) is shown — the
+    // honest reason why. All derived from stored facts, never invented.
+    const briefFactInput = {
+      eventType: primaryEvent.eventType,
+      metadata: (primaryEvent.metadata ?? {}) as Record<string, unknown>,
+      title: primaryEvent.title,
+    };
+    const diffHtml = renderEventDiffHtml(primaryEvent, primaryScreenshotPair);
+    const showsScreenshots = diffHtml.includes("<img");
+    const showsCreative = creativeImageHtml.length > 0;
+    const evidenceState = evidenceByEventId?.get(primaryEvent.id) ?? null;
+    const briefNoScreenshotReason =
+      showsScreenshots || showsCreative
+        ? null
+        : changeBriefNoScreenshotReason({
+            eventType: primaryEvent.eventType,
+            metadata: briefFactInput.metadata,
+            proofStatus:
+              evidenceState === "verified_change"
+                ? "verified_proof"
+                : evidenceState === "check_failed"
+                  ? "proof_failed"
+                  : null,
+            provisional: provisional || evidenceState === "provisional_signal",
+          });
+    const briefCriticalityText = changeBriefCriticalityLine(
+      readChangeBriefCriticality(briefFactInput),
+    );
+    const briefMeaningText = changeBriefMeaningLine(briefFactInput);
+    const briefFactsHtml = `
+          <p style="margin: 0 0 6px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(briefCriticalityText)}</p>
+          <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT}; font-size: 13px;"><em>${escapeHtml(briefMeaningText)}</em></p>
+          ${briefNoScreenshotReason ? `<p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT}; font-size: 12px;">${escapeHtml(briefNoScreenshotReason)}</p>` : ""}`;
+    const forwardHtml = renderInstantForwardHtml(briefOptions.forwardUrl);
+    const diffText = renderEventDiffText(primaryEvent);
 
     return {
       competitor,
@@ -3939,23 +4110,57 @@ export function buildInstantAlertContent(
           <p style="margin: 0 0 6px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(intelligence.priorityBand)}</p>
           <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK};"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
           ${accountabilityBlock}
-          ${renderEventDiffHtml(primaryEvent, primaryScreenshotPair)}
+          ${diffHtml}
           ${creativeImageHtml}
+          ${briefFactsHtml}
           ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}" style="${EMAIL_CASE_BUTTON_STYLE}">See the evidence</a></p>` : ""}
+          ${forwardHtml}
         </div>
       `,
+      text: [
+        subject,
+        "",
+        readCompetitorLabel(primaryEvent) ? `Advertiser: ${competitor}` : null,
+        primaryEvent.summary,
+        `Priority: ${intelligence.priorityBand}`,
+        `Suggested next action: ${intelligence.recommendedAction}`,
+        `Why this matters: ${materialityReason}`,
+        `Accountable reviewer: ${reviewer}`,
+        diffText ? `What changed${diffText}` : null,
+        briefCriticalityText,
+        `What this usually means: ${briefMeaningText}`,
+        briefNoScreenshotReason,
+        watchlistUrl ? `See the evidence: ${watchlistUrl}` : null,
+        briefOptions.forwardUrl
+          ? `Forward this change to a teammate or client: ${briefOptions.forwardUrl}`
+          : null,
+      ]
+        .filter((line): line is string => typeof line === "string" && line.length > 0)
+        .join("\n"),
     };
   }
 
+  // Issue #2175 do-step 2: a confirmed batch leads with its single most
+  // critical change (highest criticality score, first event breaks ties),
+  // never a count. Provisional batches keep their honest subject.
+  const leadEvent = mostCriticalAlertEvent(events);
   const subject = provisional
     ? `Possible changes at ${competitor}`
-    : `${competitor} made ${events.length} changes`;
+    : buildChangeLeadSubject({
+        competitor,
+        eventType: leadEvent.eventType,
+        title: leadEvent.title,
+        metadata: (leadEvent.metadata ?? {}) as Record<string, unknown>,
+        timeZone: briefOptions.timeZone,
+        capturedAtFallback: leadEvent.confirmedAt ?? leadEvent.createdAt ?? null,
+      });
 
   // Mirror the single-event gate: only claim an advertiser when real advertiser
   // metadata exists — never present the watchlist name as an advertiser.
   const batchedAdvertiserNote = readCompetitorLabel(primaryEvent)
     ? `<p style="margin: 0 0 12px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">Advertiser: ${escapeHtml(competitor)}</p>`
     : "";
+  const forwardHtml = renderInstantForwardHtml(briefOptions.forwardUrl);
 
   return {
     competitor,
@@ -3975,6 +4180,14 @@ export function buildInstantAlertContent(
           ${events
             .map((event, index) => {
               const intelligence = buildChangeIntelligenceSummary(event);
+              // Issue #2175 do-step 1: every batched change row carries its
+              // criticality band + reasons and the deterministic "what this
+              // usually means" line (stored facts only, no LLM).
+              const briefFactInput = {
+                eventType: event.eventType,
+                metadata: (event.metadata ?? {}) as Record<string, unknown>,
+                title: event.title,
+              };
               const dotted =
                 index < events.length - 1
                   ? `; border-bottom: 1px dotted ${EMAIL_CASE_LINE}`
@@ -3984,6 +4197,8 @@ export function buildInstantAlertContent(
                   <strong>${escapeHtml(event.title)}</strong>
                   <span style="display:block; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: ${EMAIL_CASE_INK_FAINT}; margin: 2px 0 4px;">${escapeHtml(intelligence.priorityBand)}</span>
                   <span style="color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(event.summary)}${escapeHtml(renderEventDiffText(event))}</span>
+                  <span style="display:block; margin-top: 4px; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(changeBriefCriticalityLine(readChangeBriefCriticality(briefFactInput)))}</span>
+                  <span style="display:block; margin-top: 4px; color: ${EMAIL_CASE_INK_SOFT};"><em>${escapeHtml(changeBriefMeaningLine(briefFactInput))}</em></span>
                   <span style="display:block; margin-top: 4px; color: ${EMAIL_CASE_INK};"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</span>
                 </div>
               `;
@@ -3991,9 +4206,69 @@ export function buildInstantAlertContent(
             .join("")}
         </div>
         ${watchlistUrl ? `<p style="margin: 20px 0 0;"><a href="${watchlistUrl}" style="${EMAIL_CASE_BUTTON_STYLE}">View watchlist</a></p>` : ""}
+        ${forwardHtml}
       </div>
     `,
+    text: [
+      subject,
+      "",
+      `Why this matters: ${materialityReason}`,
+      `Accountable reviewer: ${reviewer}`,
+      "",
+      ...events.flatMap((event, index) => {
+        const intelligence = buildChangeIntelligenceSummary(event);
+        const briefFactInput = {
+          eventType: event.eventType,
+          metadata: (event.metadata ?? {}) as Record<string, unknown>,
+          title: event.title,
+        };
+        return [
+          `${index + 1}. ${event.title} — ${event.summary}${renderEventDiffText(event)}`,
+          `   ${changeBriefCriticalityLine(readChangeBriefCriticality(briefFactInput))}`,
+          `   What this usually means: ${changeBriefMeaningLine(briefFactInput)}`,
+          `   Suggested next action: ${intelligence.recommendedAction}`,
+        ];
+      }),
+      "",
+      watchlistUrl ? `View watchlist: ${watchlistUrl}` : null,
+      briefOptions.forwardUrl
+        ? `Forward this change to a teammate or client: ${briefOptions.forwardUrl}`
+        : null,
+    ]
+      .filter((line): line is string => typeof line === "string")
+      .join("\n"),
   };
+}
+
+/**
+ * The batch's most critical event by the shared change-brief scorer (stored
+ * band wins for website-page events). Ties break to the earliest event so the
+ * subject is deterministic for identical batches.
+ */
+function mostCriticalAlertEvent(events: WatchEventRecord[]): WatchEventRecord {
+  let best = events[0];
+  let bestScore = -1;
+  for (const event of events) {
+    const criticality = readChangeBriefCriticality({
+      eventType: event.eventType,
+      metadata: (event.metadata ?? {}) as Record<string, unknown>,
+    });
+    const score = criticality.score ?? -1;
+    if (score > bestScore) {
+      best = event;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/** Issue #2175 do-step 3: the alert's one-click forward line (HTML part). */
+function renderInstantForwardHtml(forwardUrl: string | null | undefined) {
+  const url = forwardUrl?.trim();
+  if (!url) {
+    return "";
+  }
+  return `<p style="margin: 12px 0 0; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT};">Forward this change to a teammate or client: <a href="${escapeHtml(url)}" style="color: ${EMAIL_CASE_GREEN_INK}; font-weight: 700; text-decoration: underline;">open the share view →</a></p>`;
 }
 
 function renderInstantSlackText(content: InstantAlertContent, events: WatchEventRecord[]) {
@@ -4057,24 +4332,6 @@ function renderInstantTeamsText(content: InstantAlertContent, events: WatchEvent
   }
 
   return lines.join("\n");
-}
-
-function buildInstantSubject(eventType: WatchEventRecord["eventType"], competitor: string, fallbackTitle: string) {
-  switch (eventType) {
-    case "ad_new":
-      return `New ad from ${competitor}`;
-    case "ad_inactive":
-      return `${competitor} stopped running an ad`;
-    case "landing_page_url_changed":
-      return `${competitor} changed a landing page URL`;
-    case "landing_page_headline_changed":
-    case "landing_page_offer_changed":
-    case "landing_page_cta_changed":
-    case "landing_page_form_changed":
-      return `${competitor}: ${fallbackTitle}`;
-    default:
-      return `${competitor}: ${fallbackTitle}`;
-  }
 }
 
 function readCompetitorLabel(event: WatchEventRecord) {

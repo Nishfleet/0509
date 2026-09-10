@@ -186,7 +186,8 @@ describe("deliverWeeklyDigest", () => {
     expect(emailSendPayload(sendMock)).toMatchObject({
 from:{email:"alerts@0509.io",name:"Five to Nine"},
       to: "owner@example.com",
-      subject: "boAt watch made a competitor move worth seeing",
+      // Issue #2175: change-led subject — top-ranked change, never a count.
+      subject: "boAt watch changed a landing page offer — captured 05:30 GMT+5:30",
       html: expect.stringContaining("Five to Nine weekly digest"),
       text: expect.stringContaining("Top moves:"),
       headers: expect.objectContaining({
@@ -218,7 +219,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
         status: "pending",
         sentAt: null,
         payloadSnapshot: expect.objectContaining({
-          subject: "boAt watch made a competitor move worth seeing",
+          subject: "boAt watch changed a landing page offer — captured 05:30 GMT+5:30",
         }),
       }),
     );
@@ -1936,7 +1937,8 @@ describe("deliverWatchlistAlerts", () => {
     expect(emailSendPayload(sendMock)).toMatchObject({
 from:{email:"alerts@0509.io",name:"Five to Nine"},
       to: "owner@example.com",
-      subject: "Nykaa changed a landing page URL",
+      // Issue #2175: change-led subject with the event's own capture time.
+      subject: "Nykaa changed a landing page destination — captured 05:30 GMT+5:30",
       html: expect.stringContaining("Instant alert"),
       headers: expect.objectContaining({
         "X-0509-Tag": "instant-alert",
