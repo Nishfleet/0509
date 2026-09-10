@@ -767,11 +767,10 @@ export function betterAuthBaseURL(env: AppEnv, request: Request) {
   return removeTrailingSlash(env.BETTER_AUTH_URL?.trim() || appOrigin(env, request));
 }
 
-function betterAuthTrustedOrigins(env: AppEnv, request: Request) {
+export function betterAuthTrustedOrigins(env: AppEnv, request: Request) {
   return [
     betterAuthBaseURL(env, request),
     appOrigin(env, request),
-    new URL(request.url).origin,
     ...parseOriginList(env.BETTER_AUTH_TRUSTED_ORIGINS),
   ]
     .map((value) => removeTrailingSlash(value))
