@@ -12,11 +12,11 @@ Migration `migrations/0090_event_type_free_text.sql` (new) rebuilds `event_candi
 The judge edits (binding) pinned this as `migrations/0088_event_type_free_text.sql`, but `0088` is already taken by two applied migrations (`0088_competitor_source_fields.sql`, `0088_recreate_delivery_hot_path_indexes.sql`). Per the sibling issue's standing principle ("verify the next free migration number at run time; if taken, use the next and note it in the PR"), this lands as the next genuinely free number, `0090`. A duplicate `0088` would collide with D1's per-id migration bookkeeping on a fresh apply.
 
 ## Verification
-Ran `npm test` on this branch — full suite green against real D1:
-- `node` project: **662 test files / 7885 tests passed**
-- `workers` (real D1 + real migrations applied): **53 test files / 258 tests passed**, including the new `tests/integration/migrations/0090-event-type-free-text.integration.test.ts` (4 tests) and the updated `tests/integration/watch-event-writes.integration.test.ts`.
+Post-rebase runs on this branch against real D1:
+- `workers` project (real D1 + real migrations applied): **53 test files / 258 tests passed**, including the new `tests/integration/migrations/0090-event-type-free-text.integration.test.ts` (4 tests) and the updated `tests/integration/watch-event-writes.integration.test.ts` (11 tests).
+- `node` project: affected-tests mode (`--changed origin/main`) — only `tests/integration/**` changed relative to `origin/main`, which belongs to the `workers` project, so no `node` test file changed and it exited green.
 
-`run-proof: migrations/0090_event_type_free_text.sql applied to a fresh D1 in the workers project; tests/integration/migrations/0090-event-type-free-text.integration.test.ts (4 tests) + full `npm test` (node 662/7885, workers 53/258) green`
+`run-proof: migrations/0090_event_type_free_text.sql applied to a fresh D1 in the workers project; tests/integration/migrations/0090-event-type-free-text.integration.test.ts (4 tests) + full workers suite (53 files / 258 tests) green; node affected-tests (--changed origin/main) clean`
 
 ## Integration test (D1 schema rule)
 `tests/integration/migrations/0090-event-type-free-text.integration.test.ts` applies the repo's real migrations and asserts both the **READ** path (both tables expose `source_kind`; the `event_type` CHECK is gone from the live `sqlite_master` DDL; a legacy `ad_new` event_type round-trips unchanged with `source_kind` NULL) and the **WRITE** path (a brand-new `event_type` that the old CHECK never allowed, plus a `source_kind`, is accepted into both tables and read back).
@@ -31,5 +31,14 @@ The pre-existing `watch-event-writes.integration.test.ts` test `lets D1 reject a
 net-positive-because: a migration file plus its required real-D1 integration test necessarily add schema-lines; the added code is persistent intent (the free-text event_type contract #2334 demands), not a throwaway shim.
 
 loose-ends: legacy `watch_event`/`event_candidate` rows keep `source_kind` NULL; the column is populated by new sources going forward (code wiring lands with the #2333 adapter registry, out of scope here).
+
+## Senior reviewer round (seat: opencode`nemotron-3-ultra-free`)
+One round, diff `origin/main...HEAD` against the issue acceptance and the repo tests. Review-adjudication buckets:
+- **Act on:** none.
+- **Consider:** the migration test cannot assert a numeric pre/post row-count because migrations apply at setup before any test seeds rows; the rebuild is an unfiltered full-column `INSERT ... SELECT` (no WHERE/join, NULL literal for the one new column) so counts are structurally identical and it follows the 0077 precedent exactly.
+- **Noted:** column parity with 0077 is exact; `event_candidate` FK valid at CREATE under `PRAGMA foreign_keys = OFF/ON`; the test-honesty regex is sound; `source_kind` has zero production `.ts` references (all writes use explicit column lists so position 3 is safe); row-preservation is structural.
+- **Dismissed-with-reason:** "database validation removed without replacement" — removing the schema CHECK is exactly the #2334 contract; vocabulary moves to adapter-registry code in #2333.
+
+review: none blocked (`blocked-by-judge` not applicable — no gate/touch verifier weakened; `watch-event-writes` test replaced with same assertion count, no suite-count regression).
 
 Closes #2334
