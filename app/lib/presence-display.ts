@@ -32,6 +32,8 @@ const SOURCE_COVERAGE_STATUS_COPY: Record<PresenceSourceCoverageStatus, string> 
   limited: "Limited",
   unavailable: "Unavailable",
   degraded: "Degraded",
+  configured: "Configured",
+  coming_soon: "Coming soon",
 };
 
 const TRACKING_MODE_COPY: Record<PresenceTrackingMode, string> = {

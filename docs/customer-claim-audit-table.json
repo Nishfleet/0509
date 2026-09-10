@@ -152,7 +152,7 @@
       "surface": "homepage meta description, homepage hero deck, competitor-monitoring meta description, competitor-monitoring hero deck, pricing evidence-usage copy",
       "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts → honest screenshot copy (no unconditional 'saves the screenshots' / 'sends screenshot evidence'); tests/proof-screenshot.server.test.ts (key shape); tests/monitoring-landing-page-snapshot.test.ts (snapshot+artifact persistence). Live D1 (2026-08-27): 115/631 succeeded proof_capture rows carry screenshot_artifact_key (18%); 0/34 succeeded in the rolling 48h window. Copy matches that coverage.",
       "currentResult": "pass",
-      "resultDetail": "Public copy no longer promises a screenshot on every confirmed change. Live production D1 on 2026-08-27 still shows 115/631 succeeded rows with a screenshot key (18%) and 0/34 in the last 48h, so the sentence now says source-linked proof always and a screenshot only when the capture includes one. Code path tests still prove screenshotArtifactKey is persisted when the renderer produces one.",
+      "resultDetail": "Public copy no longer promises a screenshot on every confirmed change. Live production D1 on 2026-08-27 still shows 115/631 succeeded rows with a screenshot key (18%) and 0/34 in the last 48h, so the sentence now says source-linked proof always and a screenshot only when the capture includes one. The homepage hero deck was the last audited surface still promising an unconditional screenshot; it now reads the same capture-includes-one qualifier (issue #2308). Code path tests still prove screenshotArtifactKey is persisted when the renderer produces one.",
       "betOrCopyChange": "copy changed 2026-08-27 — scoped the screenshot promise to capture-includes-one until screenshot_artifact_key coverage is proven on new succeeded rows",
       "nishReserved": false
     },
@@ -243,11 +243,77 @@
       "resultDetail": "A mechanical test walks pricingPlans().features and requires each string to appear on a registry rows[] entry marked verified (sentence or advertisedCopy). Adding a new feature bullet without a verified registry entry fails CI.",
       "betOrCopyChange": "bet 10 (claim/reality reconciliation) — issue #2055 detector so public feature copy cannot outrun the registry",
       "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-SOURCE-GOOGLE-SEARCH-STUB",
+      "registryClaim": "PRESENCE-SOURCE-COVERAGE",
+      "text": "Google Search source is wired in as a stub and not live yet.",
+      "surface": "presence coverage (internal), competitor detail source slot",
+      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/google-search.server.ts → implemented: false",
+      "currentResult": "pass",
+      "resultDetail": "Seam #2218 registers the Google Search adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2181 lands the real adapter, #2188 flips the claim",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-SOURCE-GOOGLE-ADS-STUB",
+      "registryClaim": "PRESENCE-SOURCE-COVERAGE",
+      "text": "Google Ads (Transparency Center) source is wired in as a stub and not live yet.",
+      "surface": "presence coverage (internal), competitor detail source slot",
+      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/google-ads.server.ts → implemented: false",
+      "currentResult": "pass",
+      "resultDetail": "Seam #2218 registers the Google Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2189 lands the real adapter, #2188 flips the claim",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-SOURCE-LINKEDIN-ADS-STUB",
+      "registryClaim": "PRESENCE-SOURCE-COVERAGE",
+      "text": "LinkedIn Ads (Ad Library) source is wired in as a stub and not live yet.",
+      "surface": "presence coverage (internal), competitor detail source slot",
+      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/linkedin-ads.server.ts → implemented: false",
+      "currentResult": "pass",
+      "resultDetail": "Seam #2218 registers the LinkedIn Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2193 lands the real adapter, #2188 flips the claim",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-SOURCE-TIKTOK-ADS-STUB",
+      "registryClaim": "PRESENCE-SOURCE-COVERAGE",
+      "text": "TikTok Ads (Commercial Content Library, EU-shown) source is wired in as a stub and not live yet.",
+      "surface": "presence coverage (internal), competitor detail source slot",
+      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/tiktok-ads.server.ts → implemented: false",
+      "currentResult": "pass",
+      "resultDetail": "Seam #2218 registers the TikTok Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2194 lands the real adapter, #2188 flips the claim",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-SOURCE-SUBDOMAINS-STUB",
+      "registryClaim": "PRESENCE-SOURCE-COVERAGE",
+      "text": "New web addresses (subdomains via crt.sh) source is wired in as a stub and not live yet.",
+      "surface": "presence coverage (internal), competitor detail source slot",
+      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/subdomains.server.ts → implemented: false",
+      "currentResult": "pass",
+      "resultDetail": "Seam #2218 registers the subdomains adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2198 lands the real adapter, #2188 flips the claim",
+      "nishReserved": false
+    },
+    {
+      "claimId": "AUDIT-SOURCE-HIRING-STUB",
+      "registryClaim": "PRESENCE-SOURCE-COVERAGE",
+      "text": "Hiring (job boards) source is wired in as a stub and not live yet.",
+      "surface": "presence coverage (internal), competitor detail source slot",
+      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/hiring.server.ts → implemented: false",
+      "currentResult": "pass",
+      "resultDetail": "Seam #2218 registers the hiring adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2199 lands the real adapter, #2188 flips the claim",
+      "nishReserved": false
     }
   ],
   "summary": {
-    "totalClaims": 21,
-    "pass": 20,
+    "totalClaims": 27,
+    "pass": 26,
     "failCopyChangeNeeded": 0,
     "nishReserved": 1,
     "passCodeDataPending": 0,

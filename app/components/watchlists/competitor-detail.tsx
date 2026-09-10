@@ -6,6 +6,8 @@ import { ArchiveLedger } from "~/components/archive-ledger";
 import { CompetitorDossierPanel } from "~/components/competitor-dossier";
 import { CreativeWall } from "~/components/creative-wall";
 import { SecondaryAction, TertiaryAction } from "~/components/evidence/cta";
+import { SourceSections } from "~/components/sources/source-sections";
+import type { PlanFamily } from "~/lib/plan-entitlements";
 import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import { WatchlistTrends } from "~/components/watchlist-trends";
@@ -362,6 +364,12 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
             watchlistId={watchlist.id}
           />
         ) : null}
+        {/* Seam #2218: one slot for all competitor-monitoring source
+            sections. Stub sections render nothing, so on main no new
+            sections appear. The Meta block above is unchanged. `plan`
+            drives the plan-locked source lines (#2212); absent `sources`
+            entitlement means all sources, so on main no locked lines. */}
+        <SourceSections competitorId={watchlist.id} plan={props.data.plan as PlanFamily} />
         <div className="f9-panel-toolbar">
           <div>
             <p className="f9-evidence-micro">Evidence and delivery</p>

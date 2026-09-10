@@ -2334,6 +2334,25 @@ export async function runWatchlist(
       effectLease,
       recentWatchEvents,
     );
+    // Seam #2218: run the generic competitor-monitoring source path after
+    // scan-native events are persisted and before delivery, so source
+    // alerts flow through the same delivery path. All adapters are stubs on
+    // main, so this is a no-op (fetch returns unavailable). The plan is
+    // resolved from the watchlist owner; a lookup failure is non-blocking.
+    try {
+      const { runSources } = await import("~/lib/sources/run.server");
+      const plan = await getUserPlan(env, watchlist.userId);
+      await runSources(
+        env,
+        { watchlistId: watchlist.id, label: watchlist.targetLabel, runId },
+        plan,
+      );
+    } catch (sourceError) {
+      console.error(
+        `Source run failed for watchlist ${watchlist.id}; Meta scan unaffected.`,
+        sourceError,
+      );
+    }
     await assertOrchestratedWatchlistRunLease(env, runId, options);
     await reconcileStaleEvidenceBeforeScan(env);
     const proofEvaluation = await evaluateSelectiveProofCandidates(env, {
