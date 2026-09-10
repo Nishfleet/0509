@@ -112,7 +112,12 @@ import {
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
 import { renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
-import { BUYER_SURFACE_LOCALE_IDS, type BuyerSurfaceLocaleId } from "~/lib/locale-markets";
+import {
+  BUYER_SURFACE_CHILD_PATHS,
+  BUYER_SURFACE_LOCALE_IDS,
+  BUYER_SURFACE_PATHS,
+  type BuyerSurfaceLocaleId,
+} from "~/lib/locale-markets";
 import type { AdRecord } from "~/lib/types";
 
 /**
@@ -523,12 +528,46 @@ function isMissingSitemapTableError(error: unknown): boolean {
  * pure static feed — brand (`/ads/:domain`) and timeline (`/timeline/:domain`)
  * entries are EN-prefixed and belong to the root sitemap only, so they never
  * leak into a locale feed and can never duplicate a root `<loc>`.
+ *
+ * The locale feed is derived from the buyer-surface cluster that serves 200
+ * under every locale prefix (issue #2294): `BUYER_SURFACE_PATHS` plus the
+ * compare/switch children (`BUYER_SURFACE_CHILD_PATHS`) plus the `/guides/*`
+ * how-to cluster — the single source of truth in `app/lib/locale-markets.ts`
+ * (and the guide path in `SITEMAP_PATHS`). Each entry reuses the EN
+ * changefreq/priority from `SITEMAP_STATIC_ENTRIES` so the two can never
+ * drift. The bare `/{locale}` index and `/{locale}/sitemap.xml` are excluded
+ * — neither is a real page to advertise. The genuinely translated
+ * sneaker-resale cluster stays for the locales that ship it (de, ja, pt-br).
  */
 export function staticSitemapEntriesForLocale(
   locale: BuyerSurfaceLocaleId,
 ): readonly SitemapEntry[] {
   const prefix = `/${locale}/`;
-  return SITEMAP_STATIC_ENTRIES.filter((entry) => entry.path.startsWith(prefix));
+  const entryByPath = new Map(
+    SITEMAP_STATIC_ENTRIES.map((entry) => [entry.path, entry]),
+  );
+  const buyerSurfacePaths = [
+    ...BUYER_SURFACE_PATHS,
+    ...BUYER_SURFACE_CHILD_PATHS,
+    // Issue #2295: the /guides/* how-to cluster must not drop out of the
+    // locale sitemaps when the guide set grows.
+    "/guides/how-to-track-competitor-ads",
+  ].filter((path) => path !== "/" && path !== "/sitemap.xml");
+  const entries: SitemapEntry[] = [];
+  for (const path of buyerSurfacePaths) {
+    const en = entryByPath.get(path);
+    if (!en) continue;
+    entries.push({ ...en, path: `${prefix}${path.replace(/^\//, "")}` });
+  }
+  // The genuinely translated sneaker-resale cluster stays for the locales
+  // that ship it (de, ja, pt-br). fr/es have no sneaker-resale page.
+  if (locale === "de" || locale === "ja" || locale === "pt-br") {
+    const sneakerEn = entryByPath.get("/sneaker-resale");
+    if (sneakerEn) {
+      entries.push({ ...sneakerEn, path: `${prefix}sneaker-resale` });
+    }
+  }
+  return entries;
 }
 
 /**

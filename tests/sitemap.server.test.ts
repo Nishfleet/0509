@@ -19,6 +19,11 @@ import {
   SITEMAP_PATHS,
   SITEMAP_STATIC_ENTRIES,
 } from "~/lib/seo";
+import {
+  BUYER_SURFACE_CHILD_PATHS,
+  BUYER_SURFACE_LOCALE_IDS,
+  BUYER_SURFACE_PATHS,
+} from "~/lib/locale-markets";
 import { SWITCH_PAGES } from "~/lib/switch-pages";
 import routes from "~/routes";
 import {
@@ -35,6 +40,8 @@ import {
   BRAND_PAGE_PRIORITY_NEAR_EXPIRY_MS,
   BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS,
   buildSitemapXml,
+  buildLocaleSitemapXml,
+  staticSitemapEntriesForLocale,
   collectingTimelineEntries,
   indexableBrandPageEntriesFromRows,
   indexableTimelineEntriesFromRows,
@@ -1720,6 +1727,34 @@ describe("every dynamic sitemap URL carries an honest lastmod (issue #2031)", ()
     expect(staticUrls.length).toBeGreaterThan(0);
     for (const u of staticUrls) {
       expect(u.lastmod).toBeUndefined();
+    }
+  });
+});
+
+describe("locale sitemap feed count matches the buyer-surface derivation (issue #2294)", () => {
+  it("each locale feed count equals the BUYER_SURFACE_PATHS-derived count", () => {
+    // Issue #2294 accept: the locale feed is derived from BUYER_SURFACE_PATHS
+    // + compare/switch children + the /guides/* cluster (the single source of
+    // truth), not from filtering the static list. The bare index and
+    // /sitemap.xml are excluded — neither is a real page.
+    const derivedCount =
+      BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml").length +
+      BUYER_SURFACE_CHILD_PATHS.length +
+      1; // /guides/how-to-track-competitor-ads
+    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+      const entries = staticSitemapEntriesForLocale(locale);
+      const body = buildLocaleSitemapXml(locale);
+      const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1] ?? "");
+      // The genuinely translated sneaker-resale cluster adds one for the
+      // locales that ship it (de, ja, pt-br).
+      const expected = locale === "de" || locale === "ja" || locale === "pt-br"
+        ? derivedCount + 1
+        : derivedCount;
+      expect(entries.length).toBe(expected);
+      expect(locs.length).toBe(expected);
+      if (locale === "de" || locale === "ja" || locale === "pt-br") {
+        expect(locs).toContain(`https://0509.io/${locale}/sneaker-resale`);
+      }
     }
   });
 });

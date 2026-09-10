@@ -1069,17 +1069,16 @@ export const GROUNDING_ENGINES = [
 
 /**
  * Locales whose served `/<locale>/sitemap.xml` actually carries indexable
- * translated entries (issue #2017, Option A per the orchestrator decision on
- * #1561). robots.txt advertises ONLY these — fr/es emit an empty sitemap
- * (issue #1570: byte-identical English locale pages are not advertised), and
- * pointing crawlers at an empty sitemap wastes a discovery hop. Derived from
- * SITEMAP_STATIC_ENTRIES so a future translated locale cluster is advertised
- * automatically when its paths join the sitemap set.
+ * entries (issue #2017, Option A per the orchestrator decision on #1561).
+ * robots.txt advertises ONLY these. Since issue #2294 every buyer-surface
+ * locale feed is derived from the buyer-surface cluster that serves 200
+ * under every locale prefix, so all five locales (de, ja, pt-br, fr, es)
+ * carry a non-empty sitemap and are advertised. Derived from
+ * `BUYER_SURFACE_LOCALE_IDS` so a future locale is advertised automatically.
  */
-export const LOCALE_SITEMAP_LOCALES: readonly BuyerSurfaceLocaleId[] =
-  BUYER_SURFACE_LOCALE_IDS.filter((locale) =>
-    SITEMAP_STATIC_ENTRIES.some((entry) => entry.path.startsWith(`/${locale}/`)),
-  );
+export const LOCALE_SITEMAP_LOCALES: readonly BuyerSurfaceLocaleId[] = [
+  ...BUYER_SURFACE_LOCALE_IDS,
+];
 
 /**
  * Every sitemap URL robots.txt advertises: the root sitemap plus one
