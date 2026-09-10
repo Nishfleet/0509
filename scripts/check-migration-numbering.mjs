@@ -185,8 +185,11 @@ function diffMigrations(exec, baseRef) {
     );
   }
 
+  /** @param {string} p */
   const isMigration = (p) => p.startsWith(`${MIGRATIONS_PATH}/`);
+  /** @type {string[]} */
   const added = [];
+  /** @type {{ from: string, to: string }[]} */
   const renamed = [];
   for (const raw of result.stdout.split("\n")) {
     const line = raw.trim();
