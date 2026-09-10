@@ -361,6 +361,7 @@ describe("/ads/:domain meta stamps a branded og:image", () => {
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
     recentWatchChanges: [],
+    sourceSnapshots: [],
   };
 
   it("stamps a branded ads card URL with the brand name + score", async () => {
@@ -481,6 +482,7 @@ describe("/ads and /timeline sitemap cohort og:image:type matches served content
         canonicalPath: `/ads/${domain}`,
         captureFailuresSummary: null,
         recentWatchChanges: [],
+        sourceSnapshots: [],
       },
     });
     const image = ogImage(meta);
@@ -513,6 +515,7 @@ describe("/ads and /timeline sitemap cohort og:image:type matches served content
         asOfState: null,
         entries: [],
         archive: emptyDomainArchive(domain, new Date("2026-01-01T00:00:00Z")),
+        sourceEvents: [],
         noindex: false,
         collecting: false,
       },

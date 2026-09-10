@@ -157,6 +157,7 @@ function adsPageData(): BrandPageLoaderData {
     timelineIndexable: false,
     captureFailuresSummary: null,
     recentWatchChanges: [],
+    sourceSnapshots: [],
   };
 }
 
