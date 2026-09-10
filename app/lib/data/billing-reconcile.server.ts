@@ -617,7 +617,46 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
       status: input.status,
       planUpdatedAt,
     }),
-    buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
+    // Finalize the ledger based on the plan state at the end of the batch.
+    // The revoke either transitioned the plan to 'free' (matched) or left it
+    // unchanged (0 rows). When the plan is 'free' — whether the revoke just
+    // transitioned it or an earlier terminal event already did — the event is
+    // processed. When the plan is still paid (plan != 'free') the revoke
+    // matched 0 rows because the stored dodo_subscription_id is NULL or the
+    // extractor supplied a bogus id, so the event is finalized ignored with a
+    // distinct reason instead of processed: the state stays visible and
+    // retryable instead of Dodo stopping redelivery on a silent 200.
+    db.prepare(`
+      UPDATE dodo_webhook_event
+      SET outcome = 'processed',
+          processed_at = ?,
+          processing_started_at = NULL,
+          metadata_json = ?
+      WHERE event_id = ?
+        AND outcome = 'processing'
+        AND EXISTS (
+          SELECT 1 FROM user_plan
+          WHERE user_id = ? AND plan = 'free'
+        )
+    `).bind(processedAt, jsonValue(ledger.metadata), ledger.eventId, input.userId),
+    db.prepare(`
+      UPDATE dodo_webhook_event
+      SET outcome = 'ignored',
+          processed_at = ?,
+          processing_started_at = NULL,
+          metadata_json = ?
+      WHERE event_id = ?
+        AND outcome = 'processing'
+        AND EXISTS (
+          SELECT 1 FROM user_plan
+          WHERE user_id = ? AND plan != 'free'
+        )
+    `).bind(
+      processedAt,
+      jsonValue({ ...ledger.metadata, ignoredReason: "subscription_id_mismatch" }),
+      ledger.eventId,
+      input.userId,
+    ),
   );
   const results = await db.batch(statements);
 
