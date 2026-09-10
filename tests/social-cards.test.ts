@@ -13,6 +13,7 @@ import {
 } from "~/lib/seo";
 import type { BrandPageLoaderData } from "~/routes/ads.$domain";
 import type { OfferTimelineLoaderData } from "~/routes/timeline.$domain";
+import { emptyDomainArchive } from "~/lib/archive";
 
 type MetaEntry = { property?: string; name?: string; content?: string; title?: string };
 
@@ -471,6 +472,7 @@ describe("/ads and /timeline sitemap cohort og:image:type matches served content
         asOf: null,
         asOfState: null,
         entries: [],
+        archive: emptyDomainArchive(domain, new Date("2026-01-01T00:00:00Z")),
         noindex: false,
         collecting: false,
       },
