@@ -9,30 +9,35 @@ const NEW_COMPARE_PAGES = [
     title: "Five to Nine vs Panoramata",
     pricing: ["€99", "€379"],
     competitor: "Panoramata",
+    claims: [],
   },
   {
     slug: "foreplay-spyder",
     title: "Five to Nine vs Foreplay Spyder",
     pricing: ["$59", "$459"],
     competitor: "Foreplay Spyder",
+    claims: [],
   },
   {
     slug: "adspyder",
     title: "Five to Nine vs AdSpyder",
     pricing: ["$10", "$99"],
     competitor: "AdSpyder",
+    claims: [],
   },
   {
     slug: "adspy",
     title: "Five to Nine vs AdSpy",
     pricing: ["$149"],
     competitor: "AdSpy",
+    claims: ["2.4", "self-service cancel"],
   },
   {
     slug: "visualping-ad-libraries",
     title: "Five to Nine vs Visualping for ad libraries",
     pricing: ["free", "$350"],
     competitor: "Visualping",
+    claims: [],
   },
 ] as const;
 
@@ -78,7 +83,7 @@ async function loadCompareModule(slug: string) {
 describe("new compare pages (issue 1107)", () => {
   it.each(NEW_COMPARE_PAGES)(
     "$slug is registered, returns comparison markup, has one plain h1, and emits JSON-LD",
-    async ({ slug, title, pricing, competitor }) => {
+    async ({ slug, title, pricing, competitor, claims }) => {
       const routes = readFileSync("app/routes.ts", "utf8");
       expect(routes).toContain(`route("compare/${slug}", "routes/compare.${slug}.tsx")`);
 
@@ -94,6 +99,9 @@ describe("new compare pages (issue 1107)", () => {
       expect(markup).toContain(competitor);
       for (const fragment of pricing) {
         expect(markup).toContain(fragment);
+      }
+      for (const claim of claims ?? []) {
+        expect(markup).toContain(claim);
       }
 
       const ldBlocks = [...markup.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
