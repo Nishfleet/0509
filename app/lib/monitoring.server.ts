@@ -218,6 +218,7 @@ import {
   dispatchFirstWatchlistScanWorkflow,
   finishOrchestratedWatchlistRun,
   FIRST_SCAN_MAX_ATTEMPTS,
+  SCHEDULED_SCAN_MAX_ATTEMPTS,
   hasActiveScheduledWatchlistRun,
   hasOrchestratedRunBlockingInlineScan,
   isFanoutEnabledForWorkspace,
@@ -1540,6 +1541,7 @@ export async function runWatchlistWorkflowJob(
   const claim = await claimOrchestratedWatchlistRun(env, {
     runId: params.runId,
     leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
+    maxAttempts: SCHEDULED_SCAN_MAX_ATTEMPTS,
   });
   if (!claim.claimed) {
     return {
