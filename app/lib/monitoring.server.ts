@@ -1691,6 +1691,15 @@ export async function runWatchlistWorkflowJob(
           error instanceof Error ? error.message : "Retryable scan failure.",
         retryAfterIso: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       });
+      // The run is already requeued above (status -> pending, retry_after set).
+      // Rethrowing would also make the Workflow step retry the same failure
+      // (retries.limit: 3) — double browser spend. Return a completed step
+      // result so only the requeue path retries.
+      return {
+        requeued: true as const,
+        reason: "retryable_scan_failure",
+        runId: params.runId,
+      };
     }
     throw error;
   }
