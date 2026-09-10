@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   DAILY_DIGEST_CRON,
-  DAILY_MONITORING_CRON,
   DISCOVERY_WARMUP_CRON,
   REGULAR_MONITORING_CRON,
   WEEKLY_DIGEST_CRON,
@@ -40,7 +39,6 @@ describe("worker schedule", () => {
       digestCadence: "daily",
       digestLookbackDays: 1,
     });
-    expect(resolveScheduledTask(DAILY_MONITORING_CRON)).toEqual(resolveScheduledTask(DAILY_DIGEST_CRON));
     expect(resolveScheduledTask("0 5 * * MON-FRI")).toEqual({
       kind: "monitoring",
       includeScans: true,
