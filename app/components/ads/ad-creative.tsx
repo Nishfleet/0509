@@ -18,9 +18,18 @@ type AdCreativeAd = Pick<
 export function AdCreative({
   ad,
   savedLabel,
+  loading = "lazy",
 }: {
   ad: AdCreativeAd;
   savedLabel: string | null;
+  /**
+   * `loading` attr on the captured creative `<img>`. Defaults to `"lazy"` (the
+   * `/ads/:domain` wall and example cards are below the fold). Callers that
+   * place the thumbnail in the hero LCP area pass `"eager"` for the first card
+   * so the largest paint is not deferred, with fixed dimensions reserved by
+   * the `f9-ads-thumb` aspect-ratio box so eager/lazy never causes CLS.
+   */
+  loading?: "lazy" | "eager";
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const imageUrl = ad.creativeImageUrl?.trim() || null;
@@ -33,7 +42,7 @@ export function AdCreative({
         <img
           alt={`Ad creative from ${ad.advertiser?.trim() || "this advertiser"}`}
           className="f9-ads-thumb-img"
-          loading="lazy"
+          loading={loading}
           onError={() => setImageFailed(true)}
           referrerPolicy="no-referrer"
           src={imageUrl ?? undefined}
