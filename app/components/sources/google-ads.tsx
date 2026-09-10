@@ -68,7 +68,15 @@ export function GoogleAdsSection({
   const advertiserNames = Array.from(
     new Set(creatives.map((c) => c.advertiserName).filter((n) => n)),
   ).slice(0, 4);
-  const previews = creatives.filter((c) => c.previewUrl).slice(0, MAX_PREVIEWS);
+  // Render-time guard: the fetch path already rejects non-https preview
+  // URLs, but a stored/malformed payload could still carry javascript:/data:.
+  // Only an https URL is ever used as an <img src>.
+  const previews = creatives
+    .filter(
+      (c): c is Creative & { previewUrl: string } =>
+        typeof c.previewUrl === "string" && /^https:\/\//i.test(c.previewUrl),
+    )
+    .slice(0, MAX_PREVIEWS);
   // Guard a malformed/older stored payload: a missing formatMix must not
   // throw and take down the evidence tab.
   const fm = payload?.formatMix ?? { text: 0, image: 0, video: 0, unknown: 0 };
@@ -114,7 +122,7 @@ export function GoogleAdsSection({
               style={{ display: "block" }}
             >
               <img
-                src={c.previewUrl ?? undefined}
+                src={c.previewUrl}
                 alt={`Google Ad creative ${c.creativeId} by ${c.advertiserName || "unknown advertiser"}`}
                 loading="lazy"
                 style={{ width: "100%", height: "auto", borderRadius: "0.25rem", display: "block" }}

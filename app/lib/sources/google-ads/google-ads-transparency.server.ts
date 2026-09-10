@@ -21,6 +21,11 @@
  * - stores previewUrl only (extracted from the img html); never stores the
  *   img html itself
  *
+ * Field `13` is a numeric per-creative value (observed 30–1115 across the
+ * captured fixtures). It is observed-but-unused: the fixtures do not let us
+ * prove what it means, and nothing in the #2189 contract needs it, so it is
+ * deliberately not normalized onto GoogleAdsCreative.
+ *
  * Format is NOT derived from the creative's `4` field. Across the fixtures
  * captured for three domains (nike.com, notion.so, a zero-ad domain) the `4`
  * key took every of the values 1/2/3 on BOTH image creatives and non-image
@@ -235,16 +240,24 @@ export async function fetchCreativesByDomain(
 ): Promise<GoogleAdsFetchResult | GoogleAdsUnavailable> {
   const maxCreatives = options.maxCreatives ?? 200;
   const fetchImpl = options.fetchImpl ?? fetch;
+  // Hard page cap, derived from the request. A page can carry a next-page
+  // token and still yield zero usable creatives (every row dropped by
+  // normalizeCreative), in which case `collected.length` never grows and the
+  // loop below would page forever. PAGE_SIZE rows per page means this many
+  // pages already covers the cap; the +1 absorbs a short final page.
+  const maxPages = Math.ceil(maxCreatives / PAGE_SIZE) + 1;
 
   const collected: GoogleAdsCreative[] = [];
   let pageToken: string | null = null;
   let isFirstPage = true;
+  let pagesFetched = 0;
 
-  while (collected.length < maxCreatives) {
+  while (collected.length < maxCreatives && pagesFetched < maxPages) {
     if (!isFirstPage) {
       await sleep(INTER_PAGE_DELAY_MS);
     }
     isFirstPage = false;
+    pagesFetched += 1;
 
     const page = await fetchPage(domain, pageToken, fetchImpl);
     if ("unavailable" in page) {
@@ -261,6 +274,8 @@ export async function fetchCreativesByDomain(
     if (!pageToken) break;
   }
 
-  const truncated = collected.length >= maxCreatives && pageToken !== null;
+  // Stopping with a next-page token still in hand means more pages exist —
+  // either the creative cap or the page cap cut the walk short.
+  const truncated = pageToken !== null;
   return { creatives: collected, truncated };
 }
