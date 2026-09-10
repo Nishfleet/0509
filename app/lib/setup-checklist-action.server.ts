@@ -288,6 +288,19 @@ export async function handleSetupChecklistAction(
     throw redirect(`/app?setup=market-desk&created=${createdCount}`);
   }
 
+  if (intent === "create-handoff-watchlists") {
+    return handleCreateHandoffWatchlists({
+      env,
+      scanEnv,
+      cloudflare,
+      request,
+      session,
+      workspaceUserId,
+      formData,
+      saveOptionalBrandWebsite,
+    });
+  }
+
   if (intent === "create-watchlist") {
     if (hasInvalidCompetitorWebsite(competitorWebsite)) {
       return {
@@ -431,6 +444,241 @@ export async function handleSetupChecklistAction(
     message: "We couldn't complete that action. Refresh the page and try again.",
   };
 }
+
+/**
+ * Issue #2174 — "create-handoff-watchlists".
+ *
+ * One click from the setup checklist confirms every competitor a visitor
+ * picked on the logged-out /search page (carried here by the signed handoff
+ * token). The action:
+ *
+ *   1. Re-reads the candidates from the form (the same set the token carried;
+ *      the token itself is validated on load).
+ *   2. Creates each watchlist within the current plan cap, deduping against
+ *      existing watchlists — a candidate that already fits or already exists
+ *      is never double-created.
+ *   3. Triggers the first proof capture for each newly created watchlist
+ *      through the existing queue primitives (idempotent per watchlist: the
+ *      in-flight guard + execution-key idempotency mean one watchlist never
+ *      gets two concurrent scans).
+ *   4. Completes onboarding and routes to the same-session first brief so
+ *      the first email fires as soon as the first capture completes.
+ */
+async function handleCreateHandoffWatchlists(input: {
+  env: AppEnv;
+  scanEnv: AppEnv;
+  cloudflare: ReturnType<typeof import("~/lib/cloudflare-context").getOptionalCloudflareContext>;
+  request: Request;
+  session: { user: { id: string } };
+  workspaceUserId: string;
+  formData: FormData;
+  saveOptionalBrandWebsite: () => Promise<void>;
+}) {
+  const { env, scanEnv, cloudflare, request, session, workspaceUserId, formData, saveOptionalBrandWebsite } =
+    input;
+  const {
+    requireVerifiedEmailForRetention,
+    emailUnverifiedActionResult,
+  } = await import("~/lib/email-verification.server");
+  const verification = await requireVerifiedEmailForRetention(env, workspaceUserId);
+  if (!verification.ok) {
+    return {
+      ...emailUnverifiedActionResult(),
+      intent: "create-handoff-watchlists",
+    };
+  }
+
+  const candidates = parseHandoffCandidates(formData.getAll("candidate"));
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      intent: "create-handoff-watchlists",
+      message: "No competitors were carried from your search. Add a competitor below.",
+    };
+  }
+
+  const { checkPlanLimit } = await import("~/lib/plan.server");
+  const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
+  if (watchlistLimit.limit < 1) {
+    return {
+      ok: false,
+      intent: "create-handoff-watchlists",
+      error: "plan_limit_exceeded",
+      limit: watchlistLimit.limit,
+      current: watchlistLimit.current,
+      message: "Competitor monitoring isn't included on this plan. Upgrade to create watchlists.",
+      upgradePath: "/app/billing?source=onboarding#plans",
+    };
+  }
+
+  const {
+    createWatchlistWithinLimit,
+    completeUserOnboarding,
+  } = await import("~/lib/data.server");
+  const {
+    queueFirstWatchlistScan,
+    queueFirstWatchlistScanForSignupFirstBrief,
+  } = await import("~/lib/monitoring.server");
+  const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
+  const { defaultCountryForVisitor } = await import("~/lib/countries");
+  const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
+
+  const visitorCountry = defaultCountryForVisitor(
+    cloudflare?.country ?? request.headers.get("cf-ipcountry"),
+  );
+  const requestedCountry = String(formData.get("country") ?? "").trim();
+  const country =
+    requestedCountry &&
+    requestedCountry.toLowerCase() !== ALL_COUNTRIES_VALUE &&
+    isoFromCountryName(requestedCountry)
+      ? requestedCountry
+      : visitorCountry;
+
+  let createdCount = 0;
+  let existingCount = 0;
+  const queued = new Set<string>();
+  const rejected: Array<{ advertiser: string; reason: string }> = [];
+  for (const candidate of candidates) {
+    const website = candidate.landingPageUrl || candidate.advertiser;
+    const competitorWebsite = normalizeCompetitorWebsiteInput(website);
+    if (hasInvalidCompetitorWebsite(competitorWebsite) && !candidate.landingPageUrl) {
+      rejected.push({
+        advertiser: candidate.advertiser,
+        reason: "could not resolve its website",
+      });
+      continue;
+    }
+    const normalizedQuery = normalizeSavedQuery("advertiser", {
+      query: competitorWebsite.searchTerm || candidate.advertiser,
+      country,
+    });
+    const targetFingerprint = watchlistFingerprint(normalizedQuery, competitorWebsite);
+    // `createWatchlistWithinLimit` dedupes against existing watchlists by
+    // fingerprint and enforces the plan cap atomically — a candidate that is
+    // already watched returns `existing` (never double-created, never a second
+    // scan), and an over-cap candidate returns `over_cap`. We rely on that
+    // single source of truth rather than re-deriving fingerprints here.
+    const result = await createWatchlistWithinLimit(env, workspaceUserId, {
+      name: `${competitorWebsite.displayName ?? candidate.advertiser} watch`,
+      targetType: "advertiser" as const,
+      targetId: competitorWebsite.normalizedUrl || competitorWebsite.searchTerm || candidate.advertiser,
+      targetFingerprint,
+      targetLabel: competitorWebsite.displayName ?? candidate.advertiser,
+      targetCountry: normalizedQuery.filters.country,
+      trackingRole: "competitor" as const,
+    }, watchlistLimit.limit);
+    if (result.status === "over_cap") {
+      rejected.push({
+        advertiser: candidate.advertiser,
+        reason: "hit your plan limit",
+      });
+      continue;
+    }
+    if (result.status === "existing") {
+      // Already watched — never double-create, never a second scan.
+      existingCount += 1;
+      continue;
+    }
+    if (result.status === "created" && !queued.has(result.watchlist.id)) {
+      queued.add(result.watchlist.id);
+      createdCount += 1;
+      if (signupFirstBriefEnabled) {
+        await queueFirstWatchlistScanForSignupFirstBrief(scanEnv, cloudflare?.ctx, result.watchlist);
+      } else {
+        await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, result.watchlist);
+      }
+    }
+  }
+
+  if (createdCount === 0 && rejected.length > 0) {
+    const allPlanCap = rejected.every((entry) => entry.reason === "hit your plan limit");
+    if (allPlanCap) {
+      return {
+        ok: false,
+        intent: "create-handoff-watchlists",
+        error: "plan_limit_exceeded",
+        limit: watchlistLimit.limit,
+        current: watchlistLimit.current,
+        message:
+          watchlistLimit.limit <= 1
+            ? "Free includes 1 watchlist, 1 Collection, and a weekly proof-backed brief. Upgrade for more competitors, scheduled scans, and digests."
+            : "You've reached your competitor monitoring limit.",
+        upgradePath: "/app/billing?source=onboarding#plans",
+      };
+    }
+    return {
+      ok: false,
+      intent: "create-handoff-watchlists",
+      message:
+        rejected.length === 1
+          ? `We couldn't create ${rejected[0].advertiser}: ${rejected[0].reason} (they may already be watched or exceed your plan).`
+          : `${rejected.length} competitors couldn't be created (plan limit or already watched).`,
+    };
+  }
+
+  if (createdCount === 0) {
+    if (existingCount > 0 && rejected.length === 0) {
+      // Every picked competitor is already watched — nothing to create, but
+      // the visitor's intent is satisfied. Complete onboarding and route to
+      // the first brief / dashboard rather than showing an error.
+      await saveOptionalBrandWebsite();
+      await completeUserOnboarding(env, session.user.id);
+      if (signupFirstBriefEnabled) {
+        throw redirect(`/app/onboard?step=first-brief`);
+      }
+      throw redirect(`/app?setup=watchlist&created=0`);
+    }
+    return {
+      ok: false,
+      intent: "create-handoff-watchlists",
+      message: "Those competitors are already being tracked. Add a new competitor or pick a different set.",
+    };
+  }
+
+  if (signupFirstBriefEnabled) {
+    const { emitFunnelActivationScanStarted } = await import("~/lib/funnel-measurement.server");
+    emitFunnelActivationScanStarted(env, request);
+  }
+
+  await saveOptionalBrandWebsite();
+  await completeUserOnboarding(env, session.user.id);
+
+  if (signupFirstBriefEnabled) {
+    throw redirect(`/app/onboard?step=first-brief`);
+  }
+  throw redirect(`/app?setup=watchlist&created=${createdCount}`);
+}
+
+function parseHandoffCandidates(values: FormDataEntryValue[]): Array<{
+  advertiser: string;
+  pageId: string | null;
+  landingPageUrl: string | null;
+  targetCountry: string | null;
+}> {
+  const out: Array<{
+    advertiser: string;
+    pageId: string | null;
+    landingPageUrl: string | null;
+    targetCountry: string | null;
+  }> = [];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    try {
+      const parsed = JSON.parse(value) as Record<string, unknown>;
+      if (typeof parsed.advertiser !== "string" || !parsed.advertiser.trim()) continue;
+      out.push({
+        advertiser: parsed.advertiser,
+        pageId: typeof parsed.pageId === "string" ? parsed.pageId : null,
+        landingPageUrl: typeof parsed.landingPageUrl === "string" ? parsed.landingPageUrl : null,
+        targetCountry: typeof parsed.targetCountry === "string" ? parsed.targetCountry : null,
+      });
+    } catch {
+      // A malformed candidate row is skipped — never a hard failure.
+    }
+  }
+  return out;
+}
+
 
 export function oversizedMultipartImportMessage(request: Request, maxBytes: number) {
   const contentType = request.headers.get("content-type") ?? "";

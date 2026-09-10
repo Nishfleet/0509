@@ -1,4 +1,5 @@
 import { Form, Link } from "react-router";
+import { useState } from "react";
 
 import { SubmitButton } from "~/components/submit-button";
 import type { SuggestedCompetitorRow } from "~/lib/auto-competitor-suggested-loader.server";
@@ -180,6 +181,14 @@ export function SuggestedCompetitorPreviewPanel(props: {
   signupPath: string;
   /** Per-row signup path carrying THAT competitor's domain. */
   signupPathForRow: (row: SuggestedCompetitorRow) => string;
+  /**
+   * Issue #2174 — signed handoff token carrying the searched domain + the
+   * top candidates. When present, the visitor can select several candidates
+   * and carry them through signup into onboarding with zero re-entry. When
+   * null (no secret, or discovery failed), the panel falls back to the
+   * single-domain signup links.
+   */
+  handoffToken: string | null;
 }) {
   if (props.rows.length === 0) {
     return null;
@@ -197,6 +206,125 @@ export function SuggestedCompetitorPreviewPanel(props: {
         </p>
       </header>
 
+      {props.handoffToken ? (
+        <CompetitorPreviewSelectable
+          rows={props.rows}
+          handoffToken={props.handoffToken}
+          signupPath={props.signupPath}
+        />
+      ) : (
+        <CompetitorPreviewLinks
+          rows={props.rows}
+          signupPath={props.signupPath}
+          signupPathForRow={props.signupPathForRow}
+        />
+      )}
+    </section>
+  );
+}
+
+/**
+ * Issue #2174 — the selectable preview. The visitor checks the competitors
+ * they want to watch; the CTA carries the signed handoff token plus the
+ * picked candidate indexes into signup, so onboarding can confirm exactly
+ * the chosen set with zero re-entry. All rows start checked (the panel's
+ * promise is "watch these N competitors"); unchecking narrows the set.
+ */
+function CompetitorPreviewSelectable(props: {
+  rows: readonly SuggestedCompetitorRow[];
+  handoffToken: string;
+  signupPath: string;
+}) {
+  const [selected, setSelected] = useState<ReadonlySet<number>>(
+    () => new Set(props.rows.map((_, index) => index)),
+  );
+  const toggle = (index: number) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+  const selectedCount = selected.size;
+  const pick = Array.from(selected)
+    .sort((left, right) => left - right)
+    .join(",");
+  const signupPath = buildHandoffSignupPath(props.handoffToken, pick, props.signupPath);
+  return (
+    <>
+      <ul className="f9-evidence-suggested-list" data-test="competitor-preview-list">
+        {props.rows.map((row, index) => (
+          <li
+            key={row.candidateId}
+            className="f9-evidence-suggested-row"
+            data-test="competitor-preview-row"
+            data-candidate-type={row.type}
+          >
+            <label className="f9-evidence-suggested-select">
+              <input
+                type="checkbox"
+                data-test="competitor-preview-select"
+                data-candidate-index={index}
+                checked={selected.has(index)}
+                onChange={() => toggle(index)}
+              />
+              <span className="f9-evidence-suggested-meta">
+                <span className="f9-evidence-suggested-name">
+                  <span
+                    className="f9-evidence-suggested-marker"
+                    data-test="competitor-preview-marker"
+                  >
+                    Suggested · unverified
+                  </span>
+                  <span className="f9-evidence-suggested-brand">{row.advertiser}</span>
+                </span>
+                <span className="f9-evidence-micro f9-evidence-suggested-provenance" data-test="competitor-preview-provenance">
+                  {row.provenance}
+                </span>
+                <span
+                  className="f9-evidence-micro f9-evidence-suggested-score"
+                  data-overlap-score={row.overlapScore}
+                >
+                  Overlap {formatOverlapScore(row.overlapScore)}
+                  {row.targetCountry ? ` · ${row.targetCountry}` : ""}
+                </span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+
+      <div className="f9-evidence-action-row">
+        <Link
+          className="f9-evidence-cta f9-evidence-cta--rank2"
+          data-test="competitor-preview-cta"
+          to={signupPath}
+        >
+          {selectedCount === 0
+            ? "Create a free account to watch competitors"
+            : `Create a free account to watch ${selectedCount} ${selectedCount === 1 ? "competitor" : "competitors"}`}
+        </Link>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The non-handoff fallback: per-row "Watch <advertiser>" links plus the
+ * panel-level signup CTA, each carrying a single domain into post-signup
+ * setup (the pre-#2174 behavior).
+ */
+function CompetitorPreviewLinks(props: {
+  rows: readonly SuggestedCompetitorRow[];
+  signupPath: string;
+  signupPathForRow: (row: SuggestedCompetitorRow) => string;
+}) {
+  return (
+    <>
       <ul className="f9-evidence-suggested-list" data-test="competitor-preview-list">
         {props.rows.map((row) => (
           <li
@@ -249,6 +377,30 @@ export function SuggestedCompetitorPreviewPanel(props: {
           {`Create a free account to watch these ${props.rows.length} competitors`}
         </Link>
       </div>
-    </section>
+    </>
   );
+}
+
+/**
+ * Build the signup path that carries the handoff token + the picked
+ * candidate indexes. The token is signed and short-lived; the pick is a
+ * comma-separated list of indexes into the token's candidate array, so a
+ * tampered pick can only select a subset of the already-signed candidates.
+ * The onboarding action re-validates every candidate against the plan cap
+ * and the existing watchlist-dedupe before creating anything.
+ */
+function buildHandoffSignupPath(
+  handoffToken: string,
+  pick: string,
+  fallbackSignupPath: string,
+): string {
+  const url = new URL(fallbackSignupPath, "https://f9.invalid");
+  const redirectTo = url.searchParams.get("redirectTo") ?? "/app#setup-checklist";
+  const appUrl = new URL(redirectTo, "https://f9.invalid");
+  appUrl.searchParams.set("handoff", handoffToken);
+  if (pick) {
+    appUrl.searchParams.set("pick", pick);
+  }
+  url.searchParams.set("redirectTo", `${appUrl.pathname}${appUrl.search}${appUrl.hash}`);
+  return `${url.pathname}${url.search}`;
 }
