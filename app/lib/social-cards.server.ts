@@ -27,6 +27,8 @@
  * `og-image.png`.
  */
 
+import { categoryLabelForSlug } from "~/lib/brand-categories";
+
 const SITE_NAME = "Five to Nine";
 
 /** Gradient reused from the site-wide `SOCIAL_CARD_SVG` in seo.ts. */
@@ -112,7 +114,7 @@ const CLUSTER_HEADLINES: Readonly<Record<string, { headline: string; subline: st
   },
 };
 
-export type SocialCardKind = "ads" | "timeline" | "compare" | "switch" | "cluster";
+export type SocialCardKind = "ads" | "timeline" | "compare" | "switch" | "cluster" | "brands";
 
 export interface ParsedSocialCardPath {
   kind: SocialCardKind;
@@ -153,6 +155,14 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   const clusterMatch = rest.match(/^([^/]+)\.svg$/);
   if (clusterMatch && CLUSTER_HEADLINES[clusterMatch[1]]) {
     return { kind: "cluster", slug: clusterMatch[1] };
+  }
+
+  // Issue #2067: per-category cards for /brands/:categorySlug. The slug is
+  // validated against the curated category registry (single source of truth
+  // in brand-categories.ts) so an unknown slug never renders a card.
+  const brandsMatch = rest.match(/^brands\/([^/]+)\.svg$/);
+  if (brandsMatch && categoryLabelForSlug(brandsMatch[1])) {
+    return { kind: "brands", slug: brandsMatch[1] };
   }
 
   return null;
@@ -201,6 +211,18 @@ function renderSocialCard(parsed: ParsedSocialCardPath, request: Request): strin
     return renderCard({
       headline: `Switch from ${product}`,
       subline: `Move to ${SITE_NAME}`,
+    });
+  }
+
+  if (parsed.kind === "brands") {
+    // Issue #2067: stateless per-category card. The headline is the curated
+    // category label (resolved from the slug via the registry, never a
+    // duplicate map); the subline names the surface. No D1 read.
+    const headline = categoryLabelForSlug(parsed.slug);
+    if (!headline) return null;
+    return renderCard({
+      headline,
+      subline: `competitor Meta ads · ${SITE_NAME}`,
     });
   }
 

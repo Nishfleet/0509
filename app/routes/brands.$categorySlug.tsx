@@ -32,6 +32,7 @@ import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import {
+  brandsSocialCardUrl,
   canonicalUrl,
   itemListJsonLd,
   jsonLdScriptProps,
@@ -128,11 +129,15 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   }
   const title = `${loaderData.categoryLabel} competitor Meta ads | Five to Nine`;
   const description = `Browse every tracked ${loaderData.categoryLabel.toLowerCase()} brand on Five to Nine — indexable public pages showing the real Meta ads that run for, or link to, each domain in this category.`;
+  const ogImageUrl = brandsSocialCardUrl(loaderData.categorySlug);
+  const ogImageAlt = `${loaderData.categoryLabel} competitor Meta ads — Five to Nine`;
   return [
     ...publicSeoMeta({
       title,
       description,
       pathname: pathname(loaderData.categorySlug),
+      ogImageUrl,
+      ogImageAlt,
     }),
     // links() cannot see route params in this router version, so the
     // canonical tag ships as a meta-descriptor link instead (same pattern as
@@ -143,16 +148,11 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 
 export default function BrandCategoryRoute() {
   const data = useLoaderData<typeof loader>();
+  const categoryPath = pathname(data.categorySlug);
 
   const itemList = itemListJsonLd(
     data.items.map((item) => ({ name: item.name, pathname: item.path })),
   );
-
-  const breadcrumbItems = [
-    { name: "Five to Nine", pathname: "/" },
-    { name: "Brands", pathname: "/brands" },
-    { name: data.categoryLabel, pathname: pathname(data.categorySlug) },
-  ];
 
   return (
     <main className="f9-home f9-brands-page f9-brands-category-page">
@@ -161,14 +161,20 @@ export default function BrandCategoryRoute() {
           webPageJsonLd({
             name: `${data.categoryLabel} competitor Meta ads | Five to Nine`,
             description: `Browse every tracked ${data.categoryLabel.toLowerCase()} brand on Five to Nine.`,
-            pathname: pathname(data.categorySlug),
+            pathname: categoryPath,
           }),
         )}
       />
       <script {...jsonLdScriptProps(itemList)} />
       <MarketingNav />
 
-      <Breadcrumbs items={breadcrumbItems} />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Brands", pathname: "/brands" },
+          { name: data.categoryLabel, pathname: categoryPath },
+        ]}
+      />
 
       <section className="ld-section" aria-labelledby="brands-category-title">
         <div className="ld-section-head">
@@ -201,7 +207,7 @@ export default function BrandCategoryRoute() {
         </ul>
 
         <p className="ld-dim">
-          <Link to="/brands">Browse all categories</Link>
+          <Link to="/brands">Browse all tracked brands</Link>
         </p>
       </section>
 

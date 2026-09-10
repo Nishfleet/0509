@@ -77,6 +77,11 @@ export default [
   route("ops", "routes/ops.tsx"),
   route("ads/:domain", "routes/ads.$domain.tsx"),
   route("brands", "routes/brands.tsx"),
+  // Issue #2067: indexable per-category landing pages split off the /brands
+  // hub's in-page sections onto their own URLs so a category-intent query
+  // has a dedicated indexable page. Reuses the same brand-records read the
+  // hub uses; an unknown slug or an empty curated category 404s.
+  route("brands/:categorySlug", "routes/brands.$categorySlug.tsx"),
   // Public weekly brief of stored offer moves across sitemap-indexable
   // brands (issue #2143). Stored rows only — never triggers live scraping.
   route("briefs/weekly", "routes/briefs.weekly.tsx"),
