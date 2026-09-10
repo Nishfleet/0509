@@ -3510,6 +3510,12 @@ one signal-green accent.
   color: var(--ld-ink);
   overflow-wrap: anywhere;
   text-wrap: balance;
+  /* Issue #2389: the published anchor label is replaced by the visitor's
+     localized price once the client-side /api/pricing-preview fetch lands,
+     and the resolved type is taller than the `is-loading-price` type it
+     replaces. Reserve the resolved line box (2rem at the 0.98 line-height
+     above) in both states, so the swap can never change the card's height. */
+  min-height: calc(2rem * 0.98);
 }
 
 .f9-home .f9-commerce-card h3.is-loading-price {
@@ -4025,6 +4031,7 @@ one signal-green accent.
 
   .f9-home .f9-commerce-card h3 {
     font-size: 1.75rem;
+    min-height: calc(1.75rem * 0.98);
   }
 
   .f9-home .f9-commerce-card h3.is-loading-price {
