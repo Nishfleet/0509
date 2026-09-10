@@ -34,7 +34,7 @@ async function expectMarketingPrimaryNavigation(page: Page): Promise<void> {
   const navigation = page.getByRole("navigation", { name: "Primary", exact: true });
   await expect(navigation).toBeVisible();
 
-  for (const label of ["Search preview", "Proof brief", "Pricing"] as const) {
+  for (const label of ["Search preview", "Compare", "Pricing"] as const) {
     const link = navigation.getByRole("link", { name: label, exact: true });
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute("href", /\S+/u);
@@ -49,7 +49,7 @@ async function expectPublicSearchNavigation(page: Page): Promise<void> {
 
   const viewport = page.viewportSize();
   const requireTouchTargets = Boolean(viewport && viewport.width <= 900);
-  for (const label of ["Home", "Search", "Pricing", "Help"] as const) {
+  for (const label of ["Search preview", "Compare", "Pricing", "Help", "Docs", "Status"] as const) {
     const link = navigation.getByRole("link", { name: label, exact: true });
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute("href", /\S+/u);
@@ -191,16 +191,25 @@ for (const viewport of viewports) {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: /See the Meta ads.*any competitor is.*running.*right now/i })).toBeVisible();
     await expect(page.getByText("No account needed.", { exact: true })).toBeVisible();
-    const trialLink = page.getByRole("link", { name: "Try with Nykaa" });
+    // The "Try with <brand>" CTA shows the geo featured brand the homepage
+    // renders (issue #2281: nike.com for US/EU/unknown, nykaa.com for India).
+    // Match the link the homepage actually renders instead of hardcoding a
+    // brand, so the test follows the geo selection rather than fixing one.
+    const trialLink = page.getByRole("link", { name: /^Try with \S+/ });
     await expect(trialLink).toBeVisible();
     const trialHref = await trialLink.getAttribute("href");
-    expect(trialHref).toBe("/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com");
+    expect(trialHref, "Try-with CTA must link to a /search preview").toMatch(/^\/search\?/);
+    const trialHrefUrl = new URL(`http://localhost${trialHref}`);
+    expect(trialHrefUrl.pathname).toBe("/search");
+    expect(trialHrefUrl.searchParams.get("mode")).toBe("advertiser");
+    expect(trialHrefUrl.searchParams.get("website")).toMatch(/^https:\/\/[^\s]+$/);
+    expect(trialHrefUrl.searchParams.get("query")).toBeTruthy();
     await trialLink.click();
-    await expect(page).toHaveURL(/\/search\?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa\.com/);
+    await expect(page).toHaveURL(/\/search\?.*mode=advertiser/);
     const trialUrl = new URL(page.url());
-    expect(trialUrl.searchParams.get("query")).toBe("nykaa");
     expect(trialUrl.searchParams.get("mode")).toBe("advertiser");
-    expect(trialUrl.searchParams.get("website")).toBe("https://nykaa.com");
+    expect(trialUrl.searchParams.get("website")).toBe(trialHrefUrl.searchParams.get("website"));
+    expect(trialUrl.searchParams.get("query")).toBe(trialHrefUrl.searchParams.get("query"));
     await page.goto("/");
     for (const surface of publicTruthSurfaces) {
       await expectPublicTruthSurface(page, testInfo, surface);
