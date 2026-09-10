@@ -83,6 +83,7 @@ async function loadWorker() {
     reason: "healthy",
     health: [],
   });
+  const recordScheduledObservationGapCheckHeartbeat = vi.fn().mockResolvedValue(true);
   const sendMonthlyCustomerRecaps = vi.fn().mockResolvedValue({
     sent: 0,
     skipped: 0,
@@ -131,6 +132,7 @@ async function loadWorker() {
   vi.doMock("../app/lib/monthly-recap.server", () => ({ sendMonthlyCustomerRecaps }));
   vi.doMock("../app/lib/scheduled-observation-health.server", () => ({
     SCHEDULED_OBSERVATION_GAP_CHECK_CRON: GAP_CHECK_CRON,
+    recordScheduledObservationGapCheckHeartbeat,
     sendScheduledObservationGapAlert,
   }));
   vi.doMock("../app/lib/release-scheduled-observation.server", () => ({ observeScheduledTask }));
@@ -198,6 +200,7 @@ async function loadWorker() {
     reportScheduledTaskFailure,
     sendMonthlyCustomerRecaps,
     sendScheduledObservationGapAlert,
+    recordScheduledObservationGapCheckHeartbeat,
     reconcileOrchestratedWatchlistRuns,
   };
 }
@@ -227,6 +230,7 @@ describe("Worker scheduled handler", () => {
     await Promise.all(pending);
 
     expect(loaded.sendScheduledObservationGapAlert).toHaveBeenCalledTimes(1);
+    expect(loaded.recordScheduledObservationGapCheckHeartbeat).toHaveBeenCalledTimes(1);
     expect(loaded.runScheduledMonitoring).not.toHaveBeenCalled();
     expect(loaded.runDemoBrandBackfill).not.toHaveBeenCalled();
     expect(loaded.runDemoBrandProofHoleCatchUp).toHaveBeenCalledTimes(1);

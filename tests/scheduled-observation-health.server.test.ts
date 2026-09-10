@@ -5,8 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   formatScheduledObservationHealthLines,
   listScheduledObservationHealth,
+  readScheduledObservationGapCheckHealth,
+  recordScheduledObservationGapCheckHeartbeat,
   SCHEDULED_OBSERVATION_DEADLINES,
   SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
+  SCHEDULED_OBSERVATION_GAP_CHECK_HEARTBEAT_KEY,
+  SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS,
   sendScheduledObservationGapAlert,
 } from "~/lib/scheduled-observation-health.server";
 
@@ -347,6 +351,137 @@ describe("scheduled observation gap check", () => {
       });
     } finally {
       harness.close();
+    }
+  });
+});
+
+function heartbeatBucket(initial: string | null = null, options: { readThrows?: boolean } = {}) {
+  const objects = new Map<string, string>();
+  if (initial !== null) objects.set(SCHEDULED_OBSERVATION_GAP_CHECK_HEARTBEAT_KEY, initial);
+  return {
+    objects,
+    put: vi.fn(async (key: string, body: string) => {
+      objects.set(key, body);
+    }),
+    get: vi.fn(async (key: string) => {
+      if (options.readThrows) throw new Error("object storage unavailable");
+      const body = objects.get(key);
+      return body === undefined ? null : { json: async () => JSON.parse(body) };
+    }),
+  };
+}
+
+describe("scheduled observation gap-check heartbeat", () => {
+  const now = new Date("2026-09-10T12:13:00.000Z");
+
+  it("records the run and reports it fresh", async () => {
+    const bucket = heartbeatBucket();
+    await expect(
+      recordScheduledObservationGapCheckHeartbeat({ LANDING_PAGE_ARTIFACTS: bucket } as never, {
+        now,
+      }),
+    ).resolves.toBe(true);
+
+    expect(bucket.put).toHaveBeenCalledWith(
+      SCHEDULED_OBSERVATION_GAP_CHECK_HEARTBEAT_KEY,
+      JSON.stringify({ lastRunAt: now.toISOString() }),
+      { httpMetadata: { contentType: "application/json" } },
+    );
+    await expect(
+      readScheduledObservationGapCheckHealth({ LANDING_PAGE_ARTIFACTS: bucket } as never, {
+        now: new Date(now.getTime() + 60 * 1000),
+      }),
+    ).resolves.toEqual({
+      status: "ok",
+      lastRunAt: now.toISOString(),
+      maxAgeMs: SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS,
+    });
+  });
+
+  it("degrades when the recorded run is older than the max age", async () => {
+    const bucket = heartbeatBucket(
+      JSON.stringify({ lastRunAt: now.toISOString() }),
+    );
+    const health = await readScheduledObservationGapCheckHealth(
+      { LANDING_PAGE_ARTIFACTS: bucket } as never,
+      { now: new Date(now.getTime() + SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS + 1) },
+    );
+
+    expect(health).toMatchObject({ status: "degraded", lastRunAt: now.toISOString() });
+  });
+
+  it("degrades quarantined future evidence", async () => {
+    const bucket = heartbeatBucket(
+      JSON.stringify({ lastRunAt: new Date(now.getTime() + 60 * 60 * 1000).toISOString() }),
+    );
+    const health = await readScheduledObservationGapCheckHealth(
+      { LANDING_PAGE_ARTIFACTS: bucket } as never,
+      { now },
+    );
+
+    expect(health.status).toBe("degraded");
+  });
+
+  it("gives a version younger than one cadence a grace window instead of paging", async () => {
+    const fresh = await readScheduledObservationGapCheckHealth(
+      { LANDING_PAGE_ARTIFACTS: heartbeatBucket() } as never,
+      { now, deployedAt: new Date(now.getTime() - 60 * 1000).toISOString() },
+    );
+    expect(fresh).toMatchObject({ status: "ok", lastRunAt: null });
+
+    const stale = await readScheduledObservationGapCheckHealth(
+      { LANDING_PAGE_ARTIFACTS: heartbeatBucket() } as never,
+      {
+        now,
+        deployedAt: new Date(
+          now.getTime() - SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS - 1,
+        ).toISOString(),
+      },
+    );
+    expect(stale).toMatchObject({ status: "degraded", lastRunAt: null });
+  });
+
+  it("treats an unbound bucket as missing and a read failure as an absent heartbeat", async () => {
+    await expect(readScheduledObservationGapCheckHealth({} as never, { now })).resolves.toMatchObject(
+      { status: "missing", lastRunAt: null },
+    );
+
+    const unreadable = await readScheduledObservationGapCheckHealth(
+      { LANDING_PAGE_ARTIFACTS: heartbeatBucket(null, { readThrows: true }) } as never,
+      { now, deployedAt: now.toISOString() },
+    );
+    expect(unreadable.status).toBe("ok");
+
+    const unreadableAndOld = await readScheduledObservationGapCheckHealth(
+      { LANDING_PAGE_ARTIFACTS: heartbeatBucket(null, { readThrows: true }) } as never,
+      {
+        now,
+        deployedAt: new Date(
+          now.getTime() - SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS - 1,
+        ).toISOString(),
+      },
+    );
+    expect(unreadableAndOld.status).toBe("degraded");
+  });
+
+  it("never throws when the heartbeat write fails", async () => {
+    const bucket = {
+      put: vi.fn(async () => {
+        throw new Error("bucket write denied");
+      }),
+      get: vi.fn(async () => null),
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await expect(
+        recordScheduledObservationGapCheckHeartbeat(
+          { LANDING_PAGE_ARTIFACTS: bucket } as never,
+          { now },
+        ),
+      ).resolves.toBe(false);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
     }
   });
 });
