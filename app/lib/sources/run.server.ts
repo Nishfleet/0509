@@ -3,7 +3,7 @@ import { createStableId, nowIso, type JsonRecord } from "~/lib/data/helpers.serv
 import { ensureDb } from "~/lib/data/d1.server";
 import { createWatchEvent } from "~/lib/data/watch-events.server";
 import type { PlanFamily } from "~/lib/plan-entitlements";
-import { getEnabledSources } from "~/lib/sources/registry";
+import { getEnabledSources } from "~/lib/sources/registry.server";
 import type {
   SourceAdapter,
   SourceChange,

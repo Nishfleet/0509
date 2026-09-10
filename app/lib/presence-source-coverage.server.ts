@@ -3,7 +3,7 @@ import {
   connectorHasCustomerPollPath,
   evaluateConnectorAccessGate,
 } from "~/lib/presence-access-gates.server";
-import { getSourceAdapter } from "~/lib/sources/registry";
+import { getSourceAdapter } from "~/lib/sources/registry.server";
 import { SOURCE_IDS } from "~/lib/sources/types";
 import type {
   PresenceConnectorId,

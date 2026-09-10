@@ -30,6 +30,8 @@ const baseEntitlements = {
   metaSourceStatus: "unavailable",
   sitePageBudget: 0,
   features: new Set(),
+  briefs: "first_only" as const,
+  sources: "all" as const,
 } satisfies PlanEntitlements;
 
 vi.mock("~/lib/plan-entitlements", async (importOriginal) => {
@@ -38,8 +40,7 @@ vi.mock("~/lib/plan-entitlements", async (importOriginal) => {
     ...actual,
     getPlanEntitlements: (_plan: PlanFamily): PlanEntitlements => ({
       ...baseEntitlements,
-      // `sources` is added by #2212; not on PlanEntitlements yet.
-      ...(mockSources !== undefined ? ({ sources: mockSources } as object) : {}),
+      ...(mockSources !== undefined ? { sources: mockSources } : {}),
     }),
   };
 });

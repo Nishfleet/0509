@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SOURCES, getEnabledSources, getSourceAdapter } from "~/lib/sources/registry";
+import { SOURCES, getEnabledSources, getSourceAdapter } from "~/lib/sources/registry.server";
 import { SOURCE_IDS } from "~/lib/sources/types";
 import type { AppEnv } from "~/lib/env.server";
 import type { PlanFamily } from "~/lib/plan-entitlements";

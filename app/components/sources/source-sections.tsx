@@ -1,4 +1,11 @@
-import { SOURCES } from "~/lib/sources/registry";
+import type { ComponentType } from "react";
+
+import { GoogleSearchSection } from "~/components/sources/google-search";
+import { GoogleAdsSection } from "~/components/sources/google-ads";
+import { LinkedinAdsSection } from "~/components/sources/linkedin-ads";
+import { TiktokAdsSection } from "~/components/sources/tiktok-ads";
+import { SubdomainsSection } from "~/components/sources/subdomains";
+import { HiringSection } from "~/components/sources/hiring";
 import { getPlanEntitlements, type PlanFamily } from "~/lib/plan-entitlements";
 import type { SourceChange, SourceId, SourceSnapshotRecord } from "~/lib/sources/types";
 
@@ -18,6 +25,12 @@ import type { SourceChange, SourceId, SourceSnapshotRecord } from "~/lib/sources
  * every source NOT in that list renders one locked line here. Until #2212
  * adds the field it is absent → "all sources" → no locked lines, so the seam
  * on main renders nothing extra.
+ *
+ * This component is client-safe: it imports only the Section `.tsx`
+ * components and the static labels, never the `.server.ts` adapter modules.
+ * The server-side registry (`registry.server.ts`) owns the adapter array
+ * with `fetch`/`diff`/`requiresEnv`; this map mirrors only the rendering
+ * surface (id, label, Section component).
  */
 
 export interface SourceSectionsProps {
@@ -26,6 +39,26 @@ export interface SourceSectionsProps {
   /** The competitor owner's plan family; drives plan-locked source lines. */
   plan?: PlanFamily;
 }
+
+interface SourceSectionEntry {
+  id: SourceId;
+  label: string;
+  Section: ComponentType<{ snapshot: SourceSnapshotRecord | null; diff: SourceChange[] }>;
+}
+
+/**
+ * Client-side source section entries — one per registered source. Labels
+ * mirror the adapter labels in the `.server.ts` stubs; the source tickets
+ * that replace the stubs keep the same labels.
+ */
+const SOURCE_SECTION_ENTRIES: readonly SourceSectionEntry[] = [
+  { id: "google", label: "Google Search", Section: GoogleSearchSection },
+  { id: "google_ads", label: "Google Ads (Transparency Center)", Section: GoogleAdsSection },
+  { id: "linkedin", label: "LinkedIn Ads (Ad Library)", Section: LinkedinAdsSection },
+  { id: "tiktok", label: "TikTok Ads (Commercial Content Library, EU-shown)", Section: TiktokAdsSection },
+  { id: "subdomains", label: "New web addresses", Section: SubdomainsSection },
+  { id: "hiring", label: "Hiring", Section: HiringSection },
+];
 
 export function SourceSections({ competitorId: _competitorId, snapshots, plan }: SourceSectionsProps) {
   const entries = snapshots ?? {};
@@ -36,20 +69,20 @@ export function SourceSections({ competitorId: _competitorId, snapshots, plan }:
 
   return (
     <>
-      {SOURCES.map((adapter) => {
-        const entry = entries[adapter.id];
-        const Section = adapter.Section;
+      {SOURCE_SECTION_ENTRIES.map((entry) => {
+        const data = entries[entry.id];
+        const Section = entry.Section;
         return (
           <Section
-            key={adapter.id}
-            snapshot={entry?.snapshot ?? null}
-            diff={entry?.diff ?? []}
+            key={entry.id}
+            snapshot={data?.snapshot ?? null}
+            diff={data?.diff ?? []}
           />
         );
       })}
-      {lockedSources.map((adapter) => (
-        <p key={`locked-${adapter.id}`} className="f9-source-locked-line">
-          {adapter.label} is not available on your plan.
+      {lockedSources.map((source) => (
+        <p key={`locked-${source.id}`} className="f9-source-locked-line">
+          {source.label} is not available on your plan.
         </p>
       ))}
     </>
@@ -66,8 +99,8 @@ function planDisabledSources(plan: PlanFamily): { id: SourceId; label: string }[
   const allowed = entitlements.sources;
   if (!allowed || allowed === "all") return [];
   const allowedSet = new Set(allowed);
-  return SOURCES.filter((adapter) => !allowedSet.has(adapter.id)).map((adapter) => ({
-    id: adapter.id,
-    label: adapter.label,
+  return SOURCE_SECTION_ENTRIES.filter((entry) => !allowedSet.has(entry.id)).map((entry) => ({
+    id: entry.id,
+    label: entry.label,
   }));
 }
