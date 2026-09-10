@@ -1,3 +1,4 @@
+// surface frozen: no new assertions without deleting one (reccos#2382)
 import { spawn } from "node:child_process";
 import {
   existsSync,
@@ -234,7 +235,9 @@ describe("D1 remote restore evidence automation", () => {
     }
   });
 
-  it("wires exact-R2 retrieval and independent exact-run cleanup into Actions", () => {
+  // Structural surface for the D1 restore-evidence workflow YAML and the
+  // scripts it invokes; assertions are frozen at 221 (reccos#2382).
+  it("pins the D1 restore-evidence surface end to end", () => {
     const script = readFileSync(
       "scripts/d1-remote-restore-evidence.mjs",
       "utf8",
@@ -243,12 +246,11 @@ describe("D1 remote restore evidence automation", () => {
       "scripts/d1-remote-restore-evidence-core.mjs",
       "utf8",
     );
-    const workflow = parse(
-      readFileSync(
-        ".github/workflows/d1-remote-restore-evidence.yml",
-        "utf8",
-      ),
-    ) as {
+    const manualWorkflow = readFileSync(
+      ".github/workflows/d1-remote-restore-evidence.yml",
+      "utf8",
+    );
+    const workflow = parse(manualWorkflow) as {
       on?: {
         workflow_dispatch?: {
           inputs?: Record<string, {
@@ -539,19 +541,13 @@ describe("D1 remote restore evidence automation", () => {
     expect(JSON.stringify(workflow.jobs?.cleanup)).not.toContain(
       "--sweep-stale",
     );
-  });
 
-  it("retains and reuses private evidence without mutating GitHub secrets", () => {
     const deployWorkflow = readFileSync(
       ".github/workflows/deploy-production.yml",
       "utf8",
     );
     const prepareScript = readFileSync(
       "scripts/ci-prepare-remote-restore-evidence.sh",
-      "utf8",
-    );
-    const manualWorkflow = readFileSync(
-      ".github/workflows/d1-remote-restore-evidence.yml",
       "utf8",
     );
     const backupWorkflow = readFileSync(
