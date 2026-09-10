@@ -498,6 +498,7 @@ export default function MarketingRoute() {
     proofBrief && heroTopHook ? (
       <aside
         className="ld-proof-strip"
+        data-proof-state={heroProofLive ? "live" : "on-record"}
         aria-label={
           heroProofLive
             ? "Live proof brief"
@@ -551,7 +552,7 @@ export default function MarketingRoute() {
         </div>
       </aside>
     ) : (
-      <aside className="ld-proof-strip" aria-label="Live proof brief">
+      <aside className="ld-proof-strip" data-proof-state="empty" aria-label="Live proof brief">
         <div className="ld-proof-strip-head">
           <span className="ld-proof-live">Live proof</span>
           <b>No live proof yet</b>
