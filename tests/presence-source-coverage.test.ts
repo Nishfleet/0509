@@ -139,6 +139,11 @@ describe("presence source coverage policy", () => {
       "youtube",
       "amazon",
       "context_dev",
+      "google",
+      "google_ads",
+      "tiktok",
+      "subdomains",
+      "hiring",
     ]);
   });
 
@@ -315,5 +320,25 @@ describe("presence source coverage policy", () => {
     expect(docs.find((entry) => entry.sourceId === "youtube")?.productionStatus).toBe("planned");
     expect(docs.find((entry) => entry.sourceId === "amazon")?.productionStatus).toBe("manual_only");
     expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
+  });
+
+  it("marks the five new seam sources as coming_soon (stubs)", async () => {
+    const newIds = ["google", "google_ads", "tiktok", "subdomains", "hiring"] as const;
+    for (const sourceId of newIds) {
+      const entry = await evaluatePresenceSourceCoverage(baseEnv, sourceId, "competitor");
+      expect(entry.status, sourceId).toBe("coming_soon");
+      expect(entry.reasonCode, sourceId).toBe("not_implemented");
+      expect(entry.coverageLabel, sourceId).toBe("UNAVAILABLE");
+    }
+  });
+
+  it("lists the five new seam sources in the docs coverage table as coming_soon", () => {
+    const docs = presenceSourceCoverageForDocs();
+    const newIds = ["google", "google_ads", "tiktok", "subdomains", "hiring"] as const;
+    for (const sourceId of newIds) {
+      const entry = docs.find((d) => d.sourceId === sourceId);
+      expect(entry, sourceId).toBeDefined();
+      expect(entry?.productionStatus, sourceId).toBe("coming_soon");
+    }
   });
 });

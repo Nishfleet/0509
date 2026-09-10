@@ -322,7 +322,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "presence_self_tracking", "presence_website_sources", "presence_social_connect",
     "presence_digest_alerts",
   ],
-  presenceSources: ["website", "x", "reddit", "linkedin", "rss", "youtube", "amazon", "context_dev"],
+  presenceSources: ["website", "x", "reddit", "linkedin", "rss", "youtube", "amazon", "context_dev", "google", "google_ads", "tiktok", "subdomains", "hiring"],
   // PR-5a: the rail carries five destinations; Deliver and Settings own
   // their member pages. Presence left the nav (it lives inside Watch).
   customerNavPaths: [
