@@ -64,6 +64,7 @@ import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
 import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
 import { primaryDomainRedirect } from "./primary-domain";
 import {
+  isScanFailureRateExceeded,
   resolveOperationalRiskAlertIdempotencyKey,
   resolveScheduledTask,
   WEEKLY_DIGEST_CRON,
@@ -727,7 +728,12 @@ export default {
             result.skippedForBudget > 0 ||
             result.dispatchFailures > 0 ||
             result.inlineFailures > 0 ||
-            result.digestFailures > 0
+            result.digestFailures > 0 ||
+            isScanFailureRateExceeded(
+              result.scanFailed ?? 0,
+              result.scanRetrying ?? 0,
+              result.scanSucceeded ?? 0,
+            )
           ) {
             const scheduledDay = new Date(controller.scheduledTime).toISOString().slice(0, 10);
             const operationalIdempotencyKey = resolveOperationalRiskAlertIdempotencyKey(
@@ -737,6 +743,9 @@ export default {
                 dispatchFailures: result.dispatchFailures,
                 inlineFailures: result.inlineFailures,
                 digestFailures: result.digestFailures,
+                scanFailed: result.scanFailed,
+                scanRetrying: result.scanRetrying,
+                scanSucceeded: result.scanSucceeded,
               },
             );
             try {
