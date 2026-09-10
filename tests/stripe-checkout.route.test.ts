@@ -188,9 +188,9 @@ describe("marketing route", () => {
     expect(markup).toContain("$499");
     expect(markup).toContain("f9-toggle-savings");
     expect(markup).toContain("4 months free");
-    expect(markup).toContain("About $2/day");
+    expect(markup).toContain("About $1.97/day");
     expect(markup).not.toContain("INR");
-    expect(markup).toContain("Recommended launch plan");
+    expect(markup).toContain("<span>Recommended</span>");
     expect(markup).toContain("Start with Starter");
     expect(markup).toContain("Proof capture packs");
     expect(markup).toContain("500 extra proof captures");

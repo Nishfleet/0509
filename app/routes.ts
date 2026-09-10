@@ -81,6 +81,10 @@ export default [
   route("ops", "routes/ops.tsx"),
   route("ads/:domain", "routes/ads.$domain.tsx"),
   route("brands", "routes/brands.tsx"),
+  // Indexable per-category brand landing pages (issue #2067). Each curated
+  // category gets its own /brands/:slug page listing exactly the brands that
+  // fall into it, linked from the /brands hub and listed in the sitemap.
+  route("brands/:category", "routes/brands.$category.tsx"),
   // Public weekly brief of stored offer moves across sitemap-indexable
   // brands (issue #2143). Stored rows only — never triggers live scraping.
   route("briefs/weekly", "routes/briefs.weekly.tsx"),

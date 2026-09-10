@@ -60,6 +60,13 @@ export interface PublicProofTrailItem {
   sourceUrl: string | null;
   /** Real capture clock (last seen, else first seen, else cache fetchedAt). */
   capturedAt: string | null;
+  /**
+   * The real captured creative thumbnail URL (the same `creativeImageUrl`
+   * `/ads/:domain` renders via `AdCreative`), surfaced from the ad record the
+   * featured-proof loader already loads. Null when the cache row has no
+   * captured creative for this ad — callers render the honest fallback.
+   */
+  creativeImageUrl: string | null;
 }
 
 export interface PublicProofBrief {
@@ -321,6 +328,7 @@ function buildProofTrail(ads: AdRecord[], fetchedAt: string): PublicProofTrailIt
       source: trailSource(ad),
       sourceUrl: trailSourceUrl(ad),
       capturedAt: trailCapturedAt(ad, fetchedAt),
+      creativeImageUrl: ad.creativeImageUrl?.trim() || null,
     });
   }
   return items;

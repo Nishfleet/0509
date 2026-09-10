@@ -107,6 +107,8 @@ async function loadWorker() {
     flushDeferredInstantAlerts,
     runScheduledDiscoveryWarmup,
     runScheduledMonitoring,
+  }));
+  vi.doMock("../app/lib/operator-metrics-emails.server", () => ({
     sendCustomerAtRiskAlert,
     sendWeeklyBusinessNumbers,
   }));

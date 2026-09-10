@@ -1,42 +1,44 @@
-## Why
+**Issue #2334** — Replace the `event_type` CHECK constraints with a lookup/free-text column in one final table rebuild.
 
-`.f9-growth-pricing` was a dark navy band (`#0b1530`) with purple/teal radial gradients, and `.f9-commerce-card` was glassmorphism: 22px radius, translucent white gradients, 72px soft shadows, white text, and a 7s infinite float. That is a second, un-ratified design system sitting on the money section — the exact "two different products" complaint the 2026-07-27 audit abolished. This PR restyles the pricing band and commerce cards onto the ratified v4 token system (`--bone` / `--ink` / `--card` / `--line` / `--green`).
+## What changed
+Migration `migrations/0090_event_type_free_text.sql` (new) rebuilds `event_candidate` and `watch_event` one final time:
 
-## Scope
+- `event_type` becomes unconstrained free text (the inline `CHECK (... IN (...))` is dropped from both tables) — vocabulary validation moves from the schema to code (the source adapter registry from #2333).
+- A new nullable `source_kind TEXT` column is added to both tables.
+- Rebuild uses the established `_next` → `INSERT ... SELECT` → `DROP` → `RENAME` convention (0077:40-135 for `watch_event`, 0077:146-250 for `event_candidate`) with `PRAGMA foreign_keys = OFF/ON`, preserving every existing column, value, and row and recreating the same indexes. Row counts are unchanged by the rebuild.
+- Apply is one-way (D1 has no down-migrations); the pre-0090 event types remain valid free text, so reverting the code does not depend on re-imposing a CHECK. One phase only: this is the final table rebuild. (`Relates to #2333` — the adapter-registry code validation is that issue's scope.)
 
-- `app/app.css`: restyle `.f9-growth-pricing` (bone ground, ink 2px top/bottom rules, no gradient overlays) and `.f9-commerce-card` (bone card on a 2px ink rule, square corners, `6px 6px 0 var(--ink)` offset shadow, ink text). Green (`var(--green)`) is reserved for the recommended card state (`.is-recommended`); the recommendation badge (`.f9-plan-badge`) uses the WP-A4 ink fill with bone text. Removed the `7s` float animation and its sole-use `@keyframes f9-card-float` (repo-wide grep confirms sole-use; the `prefers-reduced-motion` block now has nothing to disable and is dropped). The card-internal helpers (`.f9-plan-feature-list` bullet, `.f9-price-sync`, `.f9-plan-actions` buttons) move from the dark-glass palette to tokens as part of the cards' presentation.
-- `docs/design-system-ratchet.json`: regenerated via `node scripts/design-system-ratchet.mjs --update` (the issue's binding judge edits require this; never hand-edited). The CSS restyle lowered the real marker counts, so the ceilings tighten to match reality: `raw-hex-color` 258→246, `non-token-border-radius` 158→152, `css-gradient` 22→12. This is a ceiling *decrease* (tightening), which gate-integrity's `ratchet_weakened` check permits — only ceiling *raises* or deletions are blocked. The pricing/card class blocks now contribute 0 of each marker.
-
-The `.ld-*` shared landing classes, `.f9-cycle-toggle`, and the bundling/FAQ/table sections are out of scope and untouched.
-
-## Tradeoffs
-
-- **Green for the recommended state.** Per WP-A4 the recommendation *badge* is ink-filled (never green) and green marks state. The `.is-recommended` card gets the green border + offset shadow as the state accent; the ink "Recommended" badge carries the label, so no single-colour reliance (WCAG 1.4.1).
-- **Shared helpers.** `.f9-plan-feature-list` and `.f9-plan-actions` are also used on billing. Billing's own rule `.f9-wk-plan-card .f9-plan-actions button` (higher specificity) still wins for its buttons, and the shared helpers moving to tokens pulls billing toward the same v4 system rather than away.
-- **Two adjacent `.f9-growth-pricing` blocks kept** (one for background/colour, one for padding/rules) to minimise diff churn; a later cleanup may merge them.
-
-## Blast Radius
-
-Touches the pricing section styling on every landing page that renders PricingSection, plus the shared `.f9-plan-feature-list` / `.f9-plan-actions` helpers on `/app/billing`, plus the design-ratchet ceilings (tightened to match the lowered marker counts). No markup, copy, pricing, logic, or tests changed. The full node vitest suite (662 files / 7885 tests) is green, so nothing on the render paths regressed.
+## Migration numbering note
+The judge edits (binding) pinned this as `migrations/0088_event_type_free_text.sql`, but `0088` is already taken by two applied migrations (`0088_competitor_source_fields.sql`, `0088_recreate_delivery_hot_path_indexes.sql`). Per the sibling issue's standing principle ("verify the next free migration number at run time; if taken, use the next and note it in the PR"), this lands as the next genuinely free number, `0090`. A duplicate `0088` would collide with D1's per-id migration bookkeeping on a fresh apply.
 
 ## Verification
+Post-rebase runs on this branch against real D1:
+- `workers` project (real D1 + real migrations applied): **53 test files / 258 tests passed**, including the new `tests/integration/migrations/0090-event-type-free-text.integration.test.ts` (4 tests) and the updated `tests/integration/watch-event-writes.integration.test.ts` (11 tests).
+- `node` project: affected-tests mode (`--changed origin/main`) — only `tests/integration/**` changed relative to `origin/main`, which belongs to the `workers` project, so no `node` test file changed and it exited green.
 
-- `node scripts/design-system-ratchet.mjs` → `Ratchet clean. Remaining legacy markers: 443.` (exit 0). The three target markers inside `.f9-growth-pricing` / `.f9-commerce-card` are 0, and the 7s float is gone.
-- `node scripts/design-system-ratchet.mjs --update` → tightened `docs/design-system-ratchet.json`: `raw-hex-color` 258→246, `non-token-border-radius` 158→152, `css-gradient` 22→12 (ceiling decreases only; gate-integrity permits tightening).
-- `npx vitest run --configLoader runner --project node tests/design-system-ratchet.test.ts` → `Test Files 1 passed (1) / Tests 33 passed (33)` (the ratchet test that failed CI on the prior push now passes with the regenerated ceilings).
-- `bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project node` → `Test Files 662 passed (662) / Tests 7885 passed (7885)` (post-rebase onto origin/main `9ea94292`, conflict-resolved). (Workers project skipped per fleet memory budget — no `migrations/**` or `tests/integration/**` changed.)
-- `sgscan` → `No new security findings.`
-- `bin/fleet-no-agent-names-check --commit-range origin/main..HEAD` → `OK: no agent attribution detected`.
-- `crgate` could not run — CodeRabbit is not signed in on this VPS (environmental, not a code result).
+`run-proof: migrations/0090_event_type_free_text.sql applied to a fresh D1 in the workers project; tests/integration/migrations/0090-event-type-free-text.integration.test.ts (4 tests) + full workers suite (53 files / 258 tests) green; node affected-tests (--changed origin/main) clean`
 
-run-proof: `design-system-ratchet.mjs` exit 0 (443 remaining); `--update` tightened ceilings 258→246 / 158→152 / 22→12; `design-system-ratchet.test.ts` 33/33 pass (the test that failed CI on the prior push); `ci-vitest-run.sh -- project node` 662 files / 7885 tests pass; no sgscan findings introduced.
+## Integration test (D1 schema rule)
+`tests/integration/migrations/0090-event-type-free-text.integration.test.ts` applies the repo's real migrations and asserts both the **READ** path (both tables expose `source_kind`; the `event_type` CHECK is gone from the live `sqlite_master` DDL; a legacy `ad_new` event_type round-trips unchanged with `source_kind` NULL) and the **WRITE** path (a brand-new `event_type` that the old CHECK never allowed, plus a `source_kind`, is accepted into both tables and read back).
 
-research: no new `bin/` files introduced (CSS-only change), so `research-before-build-check` does not apply. help-first: no new CLI surface.
+The pre-existing `watch-event-writes.integration.test.ts` test `lets D1 reject an event_type outside the schema's CHECK vocabulary` pinned the schema as the enforcement point — precisely the behavior #2334 removes. It is updated (same assertion count) to assert the new contract: D1 accepts free-text `event_type`, with `test-removal-justified:` on the commit. It touches no gate-owned path and removes no test.
 
-## Review (product-repo round, seat `opencode|nemotron-3-ultra-free`)
+## Scope checks
+- `research:` — no `bin/` files added (migration + test only); `research-before-build-check` not applicable.
+- `help-first:` — not applicable (no new `bin/` files).
+- rebuild/masking diffs: none.
+- organ diffs: none (`organ-heartbeat:` not-an-organ — `watch_event`/`event_candidate` are data tables, not organs; no organ files touched).
+net-positive-because: a migration file plus its required real-D1 integration test necessarily add schema-lines; the added code is persistent intent (the free-text event_type contract #2334 demands), not a throwaway shim.
 
+loose-ends: legacy `watch_event`/`event_candidate` rows keep `source_kind` NULL; the column is populated by new sources going forward (code wiring lands with the #2333 adapter registry, out of scope here).
+
+## Senior reviewer round (seat: opencode`nemotron-3-ultra-free`)
+One round, diff `origin/main...HEAD` against the issue acceptance and the repo tests. Review-adjudication buckets:
 - **Act on:** none.
-- **Consider:** reviewer suggested merging the two adjacent `.f9-growth-pricing` blocks; left as-is to minimise the diff, acceptance does not require it.
-- **Noted / Dismissed-with-reason:** reviewer asked to WCAG-check `var(--green)` border on `var(--bone)`. Dismissed: green is a decorative border/shadow accent (not text), the "Recommended" semantic is redundantly carried by the ink badge, and green-on-bone borders are an established v4 accent in `app.css` (e.g. `.f9-ads-watch-btn`), so there is no single-colour reliance.
+- **Consider:** the migration test cannot assert a numeric pre/post row-count because migrations apply at setup before any test seeds rows; the rebuild is an unfiltered full-column `INSERT ... SELECT` (no WHERE/join, NULL literal for the one new column) so counts are structurally identical and it follows the 0077 precedent exactly.
+- **Noted:** column parity with 0077 is exact; `event_candidate` FK valid at CREATE under `PRAGMA foreign_keys = OFF/ON`; the test-honesty regex is sound; `source_kind` has zero production `.ts` references (all writes use explicit column lists so position 3 is safe); row-preservation is structural.
+- **Dismissed-with-reason:** "database validation removed without replacement" — removing the schema CHECK is exactly the #2334 contract; vocabulary moves to adapter-registry code in #2333.
 
-Closes #2318
+review: none blocked (`blocked-by-judge` not applicable — no gate/touch verifier weakened; `watch-event-writes` test replaced with same assertion count, no suite-count regression).
+
+Closes #2334

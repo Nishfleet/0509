@@ -101,6 +101,11 @@ import {
   normalizeBrandPageDomain,
   BRAND_PAGE_FRESH_FOR_INDEXING_MS,
 } from "~/lib/brand-page.server";
+import {
+  brandCategoryForDomain,
+  brandCategoryFromSlug,
+  CURATED_BRAND_CATEGORY_SLUGS,
+} from "~/lib/brand-categories";
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
 import { queryAll } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -587,10 +592,63 @@ function staticEntriesWithDatedLastmod(
 }
 
 /**
- * Full production sitemap body: static funnel entries first, then the dynamic
- * indexable brand-page entries (with lastmod
- * from their cache fetched_at), then the dynamic indexable /timeline/:domain
- * entries (with lastmod from their newest snapshot capture). The root feed
+ * Dynamic sitemap entries for the curated /brands/:slug category pages
+ * (issue #2067). One entry per NON-EMPTY curated category, derived from the
+ * same indexable brand-page set the hub and category routes read — a category
+ * page is never listed unless it would actually render brands (it 404s when
+ * empty, so listing it would point crawlers at a 404). "More brands" (the
+ * fallback bucket with no landing page) is never a curated slug and never
+ * emitted. Each entry's `lastmod` is the newest brand lastmod in that
+ * category (the honest freshness signal — when we last saw real ads for the
+ * freshest brand in the set); a category with no dated brand entries ships
+ * without a `lastmod` rather than inventing one. Pure, so the rule is
+ * unit-testable without a database.
+ */
+export function brandCategorySitemapEntries(
+  brandEntries: readonly SitemapEntry[],
+): SitemapEntry[] {
+  const entries: SitemapEntry[] = [];
+  for (const slug of CURATED_BRAND_CATEGORY_SLUGS) {
+    const label = brandCategoryFromSlug(slug);
+    if (!label) {
+      continue;
+    }
+    let newestLastmod: string | null = null;
+    let count = 0;
+    for (const entry of brandEntries) {
+      if (!entry.path.startsWith("/ads/")) {
+        continue;
+      }
+      const domain = entry.path.slice("/ads/".length);
+      if (!domain || domain.includes("/") || domain.includes("?")) {
+        continue;
+      }
+      if (brandCategoryForDomain(domain) !== label) {
+        continue;
+      }
+      count += 1;
+      if (entry.lastmod && (newestLastmod === null || entry.lastmod > newestLastmod)) {
+        newestLastmod = entry.lastmod;
+      }
+    }
+    // Empty curated category — its page 404s, so never list it.
+    if (count === 0) {
+      continue;
+    }
+    entries.push({
+      path: `/brands/${slug}`,
+      lastmod: newestLastmod ?? undefined,
+    });
+  }
+  return entries;
+}
+
+/**
+ * Full production sitemap body: static funnel entries first, then the
+ * dynamic indexable brand-page entries (with lastmod from their cache
+ * fetched_at), then the dynamic curated /brands/:slug category entries
+ * (issue #2067), then the dynamic indexable /timeline/:domain entries (with
+ * lastmod from their newest snapshot capture). The root feed
  * deliberately EXCLUDES every buyer-surface locale-prefixed path (those live
  * only in their own `/<locale>/sitemap.xml` — see
  * `ROOT_SITEMAP_STATIC_ENTRIES` in app/lib/seo.ts) so no URL is listed twice
@@ -601,10 +659,12 @@ function staticEntriesWithDatedLastmod(
 export function buildSitemapXml(
   brandEntries: readonly SitemapEntry[],
   timelineEntries: readonly SitemapEntry[] = [],
+  categoryEntries: readonly SitemapEntry[] = [],
 ): string {
   return renderSitemapXml([
     ...staticEntriesWithDatedLastmod(ROOT_SITEMAP_STATIC_ENTRIES),
     ...brandEntries,
+    ...categoryEntries,
     ...timelineEntries,
   ]);
 }
@@ -670,8 +730,8 @@ export function timelineDomainFromSnapshotRow(row: TimelineSitemapRow): string |
  * timeline ledger renders indexable regardless of capture age. Each entry's
  * `lastmod` is the newest passing row's captured_at within the window
  * ("newest" = last in the ASC-ordered window). Capped at
- * `SITEMAP_TIMELINE_PATH_LIMIT` distinct domains. Kept separate from the D1
- * read so the filtering rules are unit-testable without a database.
+ * `SITEMAP_TIMELINE_PATH_LIMIT` distinct domains. Kept separate from the
+ * D1 read so the filtering rules are unit-testable without a database.
  */
 export function indexableTimelineEntriesFromRows(
   rows: readonly TimelineSitemapRow[],
@@ -879,8 +939,13 @@ export async function publicSitemapFile(env: AppEnv): Promise<{
     loadIndexableBrandPageEntries(env),
     loadIndexableTimelineEntries(env),
   ]);
+  const categoryEntries = brandCategorySitemapEntries(brandEntries);
   return {
-    body: buildSitemapXml(brandEntries, timelineSitemapEntries(brandEntries, timelineEntries)),
+    body: buildSitemapXml(
+      brandEntries,
+      timelineSitemapEntries(brandEntries, timelineEntries),
+      categoryEntries,
+    ),
     contentType: "application/xml; charset=utf-8",
     cacheControl: "public, max-age=3600",
   };
