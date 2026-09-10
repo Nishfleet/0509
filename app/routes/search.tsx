@@ -523,11 +523,35 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         })
       : false;
 
+  // Anonymous warming polls rerun this loader with no `selected` param, so
+  // selectionServedFromCache is false and the public-search gate below would
+  // charge the per-browser budget on every 2s revalidate() poll. A single
+  // cold search plus 20 polls hits the 20/600s limit ~40s into a 60s warming
+  // window and self-429s (issue #2262). Mirror the signed-in path's warm-cache
+  // exemption (warmQueryForBudget at the signed-in gate below): probe
+  // hasWarmSearchCacheEntry for the same search key and skip the per-browser
+  // limiter when a warming or complete cache entry already exists, so only a
+  // genuine cold first search charges the budget.
+  const anonymousWarmQueryExempt =
+    !session && parsed.filters.query && !forceLive && !selectionServedFromCache
+      ? await (
+          await import("~/lib/search-execution.server")
+        ).hasWarmSearchCacheEntry({
+          env,
+          competitorWebsite,
+          parsed,
+          scope: searchScope,
+          cursor: url.searchParams.get("after"),
+          customerMetaAdLibraryToken,
+        })
+      : false;
+
   if (
     !session &&
     parsed.filters.query &&
     !forceLive &&
-    !selectionServedFromCache
+    !selectionServedFromCache &&
+    !anonymousWarmQueryExempt
   ) {
     const { enforcePublicSearchRateLimit } =
       await import("~/lib/rate-limit.server");
