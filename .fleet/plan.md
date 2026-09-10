@@ -53,3 +53,11 @@ Payload key contract (seam-owned public brand page reads these exact keys —
 `{ domain, fetchedAt, sponsoredAdvertisers: string[], organic: [{ position, url, title, prevPosition }] }`.
 `prevPosition` is filled by the adapter from the previous stored snapshot (one bounded read via
 the seam's `getLatestSourceSnapshot`) so the public page's delta rendering is live.
+
+## Resume note (pi-issue-0509-2181, run 2, 2026-09-11)
+Inherited salvage commits 6993001a + b21194fa: snapshot/diff module, adapter,
+adapter+snapshot+serp tests, registry.test.ts guard line. Phases 3 and 4 are
+IMPLEMENTED and tested (77 google-search tests green) but had no reviewer round
+yet — the final reviewer pass covers them together with phase 5.
+Phase 5 delegated to a fresh worker subagent with this file + the module
+headers as the handoff.
