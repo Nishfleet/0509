@@ -62,6 +62,46 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Indexable public brand pages showing the real Meta ads that run for, or link to, each tracked domain, grouped by category.",
   },
+  // Issue #2067: the /brands/<category> per-category landing pages. Each is
+  // in SITEMAP_PATHS, so each needs a title/description here or the
+  // _llmsDetailsCoverSitemap type fails. The copy states only what the page
+  // shows (category name + competitor Meta ads + Five to Nine) — no
+  // unsourced search-volume or demand claims.
+  "/brands/beauty-personal-care": {
+    title: "Beauty & personal care competitor Meta ads",
+    description:
+      "Indexable public brand pages for every tracked beauty & personal care brand on Five to Nine — the real Meta ads that run for, or link to, each domain in this category.",
+  },
+  "/brands/e-commerce": {
+    title: "E-commerce competitor Meta ads",
+    description:
+      "Indexable public brand pages for every tracked e-commerce brand on Five to Nine — the real Meta ads that run for, or link to, each domain in this category.",
+  },
+  "/brands/optical-eyewear": {
+    title: "Optical & eyewear competitor Meta ads",
+    description:
+      "Indexable public brand pages for every tracked optical & eyewear brand on Five to Nine — the real Meta ads that run for, or link to, each domain in this category.",
+  },
+  "/brands/saas-software": {
+    title: "SaaS & software competitor Meta ads",
+    description:
+      "Indexable public brand pages for every tracked SaaS & software brand on Five to Nine — the real Meta ads that run for, or link to, each domain in this category.",
+  },
+  "/brands/sport-footwear": {
+    title: "Sport & footwear competitor Meta ads",
+    description:
+      "Indexable public brand pages for every tracked sport & footwear brand on Five to Nine — the real Meta ads that run for, or link to, each domain in this category.",
+  },
+  "/brands/wallet-accessories": {
+    title: "Wallet & accessories competitor Meta ads",
+    description:
+      "Indexable public brand pages for every tracked wallet & accessories brand on Five to Nine — the real Meta ads that run for, or link to, each domain in this category.",
+  },
+  "/brands/wearables-health": {
+    title: "Wearables & health competitor Meta ads",
+    description:
+      "Indexable public brand pages for every tracked wearables & health brand on Five to Nine — the real Meta ads that run for, or link to, each domain in this category.",
+  },
   // Issue #2143: the weekly brief lists the last 7 days of stored offer
   // moves across sitemap-indexable brands. In SITEMAP_PATHS, so it needs a
   // title/description here or the _llmsDetailsCoverSitemap type fails.

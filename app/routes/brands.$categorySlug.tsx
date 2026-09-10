@@ -26,13 +26,13 @@
  */
 
 import { Link, useLoaderData } from "react-router";
-import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import {
-  canonicalLinks,
+  canonicalUrl,
   itemListJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -122,20 +122,23 @@ export async function loader({
 
 const pathname = (slug: string) => `/brands/${slug}`;
 
-export const links: LinksFunction = ({ params }) =>
-  canonicalLinks(pathname(params.categorySlug ?? ""));
-
-export const meta: MetaFunction<typeof loader> = ({ data, params }) => {
-  if (!data) {
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+  if (!loaderData) {
     return [{ title: "Brand category | Five to Nine" }];
   }
-  const title = `${data.categoryLabel} competitor Meta ads | Five to Nine`;
-  const description = `Browse every tracked ${data.categoryLabel.toLowerCase()} brand on Five to Nine — indexable public pages showing the real Meta ads that run for, or link to, each domain in this category.`;
-  return publicSeoMeta({
-    title,
-    description,
-    pathname: pathname(data.categorySlug),
-  });
+  const title = `${loaderData.categoryLabel} competitor Meta ads | Five to Nine`;
+  const description = `Browse every tracked ${loaderData.categoryLabel.toLowerCase()} brand on Five to Nine — indexable public pages showing the real Meta ads that run for, or link to, each domain in this category.`;
+  return [
+    ...publicSeoMeta({
+      title,
+      description,
+      pathname: pathname(loaderData.categorySlug),
+    }),
+    // links() cannot see route params in this router version, so the
+    // canonical tag ships as a meta-descriptor link instead (same pattern as
+    // the /ads/:domain route).
+    { tagName: "link", rel: "canonical", href: canonicalUrl(pathname(loaderData.categorySlug)) },
+  ];
 };
 
 export default function BrandCategoryRoute() {
