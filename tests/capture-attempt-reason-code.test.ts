@@ -68,6 +68,11 @@ describe("toPublicReasonCode", () => {
     expect(toPublicReasonCode("landing_fetch_failed")).toBe("timeout");
     expect(toPublicReasonCode("landing_redirect_limit")).toBe("timeout");
     expect(toPublicReasonCode("landing_content_empty_or_oversized")).toBe("extraction_failed");
+    expect(toPublicReasonCode("landing_content_empty")).toBe("extraction_failed");
+    expect(toPublicReasonCode("landing_auth_required")).toBe("bot_wall");
+    expect(toPublicReasonCode("landing_not_found")).toBe("error_page");
+    expect(toPublicReasonCode("landing_gone")).toBe("error_page");
+    expect(toPublicReasonCode("landing_server_error")).toBe("error_page");
     expect(toPublicReasonCode("landing_url_invalid")).toBe("extraction_failed");
     expect(toPublicReasonCode("proof_capture_failed")).toBe("extraction_failed");
   });

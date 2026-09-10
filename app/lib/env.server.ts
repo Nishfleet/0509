@@ -102,6 +102,13 @@ export interface AppEnv {
    */
   R2_ORPHAN_RECONCILE_ENABLED?: string;
   LAUNCH_CANARY_EMAIL?: string;
+  /**
+   * Optional override for the Gate C billing canary's *dedicated* identity
+   * (issue #2646). The billing canary never borrows LAUNCH_CANARY_EMAIL: it
+   * runs on its own non-customer account so the release gate cannot be held
+   * red by the live billing state of a real customer.
+   */
+  BILLING_CANARY_EMAIL?: string;
   ALLOW_PLATFORM_META_API_FALLBACK?: string;
   META_AD_LIBRARY_TOKEN?: string;
   META_AD_LIBRARY_API_VERSION?: string;

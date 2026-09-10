@@ -56,6 +56,7 @@ import {
 } from "../app/lib/release-scheduled-observation.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
 import {
+  recordScheduledObservationGapCheckHeartbeat,
   sendScheduledObservationGapAlert,
   SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
 } from "../app/lib/scheduled-observation-health.server";
@@ -363,7 +364,14 @@ export default {
       // Preserve the shared outbox drain without trying to record this check
       // cron in the release-soak observation table, whose contract intentionally
       // accepts only the four production workload schedules.
+      // Issue #2368: this check cron is itself unobserved — the soak table
+      // accepts only the four workload crons, so a selective loss of just this
+      // trigger left deep health green while the gap alerter was already dead.
+      // Record our own heartbeat and let /api/health/deep report its freshness.
+      // The key sits outside `landing-pages/`, so the R2 orphan reconciliation
+      // sweep (app/lib/retention.server.ts) can never delete it.
       scheduleBillingLifecycleEmailRecovery(env, ctx);
+      ctx.waitUntil(recordScheduledObservationGapCheckHeartbeat(env));
       ctx.waitUntil(
         sendScheduledObservationGapAlert(env).then(
           (result) => {
@@ -650,13 +658,18 @@ export default {
     // domain cap (ADS_DOMAIN_PUBLISHER_CAP, default 60) bounds the nightly
     // provider spend; a per-domain failure is logged and counted, never
     // thrown, and a whole-run failure surfaces through the same scheduled-
-    // task alert channel as the backfill.
+    // task alert channel as the backfill. The run iterates ALL SEED_LISTS as
+    // one queue, stops starting new scrapes at a ~10-minute internal
+    // deadline (issue #2361), persists a last_offset cursor so the next
+    // night resumes where this one stopped, and emits truncated:true when
+    // the deadline bites — so a wall-clock kill no longer restarts at domain
+    // #1 and silently starves tail domains.
     if (scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily") {
       const publisherRun = runAdsDomainPublisher(env, ctx);
       ctx.waitUntil(
         publisherRun.then(
           (result) => {
-            if (result.attempted > 0) {
+            if (result.attempted > 0 || result.truncated) {
               console.log("ads domain publisher completed", {
                 list: result.list,
                 gate: result.gate,
@@ -666,6 +679,7 @@ export default {
                 warming: result.warming,
                 failed: result.failed,
                 invalid: result.invalid,
+                truncated: result.truncated,
               });
             }
           },

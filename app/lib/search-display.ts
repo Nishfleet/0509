@@ -404,6 +404,12 @@ const LANDING_PAGE_CAPTURE_GAPS: Record<
     factValue: "Blocked by the site",
     proofLabel: "Landing page blocked the check",
   },
+  landing_auth_required: {
+    headline: "This page asked us to sign in first",
+    detail: "Open the link below to sign in and read the offer yourself.",
+    factValue: "Sign-in required",
+    proofLabel: "Landing page requires sign-in",
+  },
   landing_challenge_page: {
     headline: "This page blocked the automated check",
     detail: "Open the landing-page link below to read the offer yourself.",
@@ -452,6 +458,24 @@ const LANDING_PAGE_CAPTURE_GAPS: Record<
     factValue: "Site returned an error",
     proofLabel: "Landing page returned an error",
   },
+  landing_not_found: {
+    headline: "This landing page is no longer up",
+    detail: "The ad's link now returns not found — the campaign may have ended. Open the link below to check.",
+    factValue: "Page not found",
+    proofLabel: "Landing page not found",
+  },
+  landing_gone: {
+    headline: "This landing page was taken down for good",
+    detail: "The ad's link says the page is permanently gone — the campaign may have ended.",
+    factValue: "Page removed",
+    proofLabel: "Landing page is gone",
+  },
+  landing_server_error: {
+    headline: "The live site is having server trouble",
+    detail: "Try this ad again in a minute, or open the link below.",
+    factValue: "Site server error",
+    proofLabel: "Landing page hit a server error",
+  },
   landing_fetch_failed: {
     headline: "We could not reach this landing page just now",
     detail: "Try this ad again in a minute, or open the link below.",
@@ -469,6 +493,12 @@ const LANDING_PAGE_CAPTURE_GAPS: Record<
     detail: "Open the link below to read the live offer.",
     factValue: "No usable text",
     proofLabel: "Landing page had no usable text",
+  },
+  landing_content_empty: {
+    headline: "This page returned no readable text",
+    detail: "Open the link below to read the live offer.",
+    factValue: "Empty page",
+    proofLabel: "Landing page returned an empty body",
   },
   landing_content_signature_too_small: {
     headline: "This page did not return enough text to read the offer",

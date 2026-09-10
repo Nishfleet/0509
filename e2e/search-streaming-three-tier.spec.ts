@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 
 const specDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(specDir, "../..");
+const repoRoot = path.resolve(specDir, "..");
 
 // BET 2 (issue 1482): the /search route streams results and renders every
 // row with a visible three-tier badge. The route-render assertions (first

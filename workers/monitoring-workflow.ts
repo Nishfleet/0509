@@ -10,11 +10,11 @@ import {
   buildMonitoringWorkflowCapacitySleepStepName,
   buildMonitoringWorkflowConcurrencyStepName,
   claimMonitoringConcurrencySlot,
-  MONITORING_CONCURRENCY_WAIT_MAX_ROUNDS,
   MONITORING_WORKFLOW_SCAN_TIMEOUT_MS,
   releaseMonitoringConcurrencySlot,
   resolveMonitoringConcurrencySlotLeaseMs,
   resolveMonitoringFanoutMode,
+  resolveMonitoringOrchestrationMaxAgeMs,
   type MonitoringWorkflowParams,
   type ScheduledMonitoringWorkflowParams,
 } from "../app/lib/monitoring-fanout.server";
@@ -29,6 +29,12 @@ import {
 // (with MONITORING_FANOUT_GLOBAL=1). Do not delete this as "dead code" — the
 // inline path is only the unset-var fallback in resolveMonitoringFanoutMode().
 
+// The longest capacity sleep is 2 minutes (see the last branch of
+// concurrencySleepDuration below). Capping the wait at
+// MONITORING_ORCHESTRATION_MAX_AGE_MS means a queued run can never keep waiting
+// past the age at which the reconciler cancels it as stale.
+const CONCURRENCY_WAIT_LONGEST_SLEEP_MS = 2 * 60 * 1000;
+
 function concurrencySleepDuration(waitRound: number) {
   if (waitRound < 10) {
     return "30 seconds";
@@ -37,6 +43,13 @@ function concurrencySleepDuration(waitRound: number) {
     return "60 seconds";
   }
   return "2 minutes";
+}
+
+function resolveMonitoringConcurrencyWaitMaxRounds(env: AppEnv) {
+  return Math.max(
+    1,
+    Math.ceil(resolveMonitoringOrchestrationMaxAgeMs(env) / CONCURRENCY_WAIT_LONGEST_SLEEP_MS),
+  );
 }
 
 export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWorkflowParams> {
@@ -104,8 +117,9 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
       return preflight;
     }
 
+    const maxWaitRounds = resolveMonitoringConcurrencyWaitMaxRounds(this.env);
     let permitToken: string | undefined;
-    for (let waitRound = 0; waitRound < MONITORING_CONCURRENCY_WAIT_MAX_ROUNDS; waitRound += 1) {
+    for (let waitRound = 0; waitRound < maxWaitRounds; waitRound += 1) {
       if (resolveMonitoringFanoutMode(this.env) === "inline") {
         throw new NonRetryableError("fanout_disabled");
       }
@@ -120,6 +134,18 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
       if (claim.claimed) {
         permitToken = claim.token;
         break;
+      }
+
+      if ("reason" in claim && claim.reason === "run_inactive") {
+        // The run finished or was stale-cancelled while this instance waited,
+        // so it can never become eligible again. Stop now instead of sleeping
+        // for hours on a run that is already terminal.
+        return {
+          status: "cancelled" as const,
+          reason: "concurrency_wait_run_inactive" as const,
+          watchlistId: scheduledPayload.watchlistId,
+          runId: scheduledPayload.runId,
+        };
       }
 
       await step.sleep(
