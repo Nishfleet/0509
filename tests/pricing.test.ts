@@ -181,7 +181,7 @@ describe("pricingPlans", () => {
       const label = valueMathLabel(preview, plan, "monthly", false);
       expect(label).toMatch(/^About .+\/day$/);
       const perDay = parsePerDayValue(label);
-      const monthlyMajor = Number(preview.prices![plan].monthly!.amount) / 100;
+      const monthlyMajor = Number(preview.prices![plan].monthly!.amount!) / 100;
       const expected = monthlyMajor / 30;
       expect(Math.abs(perDay - expected)).toBeLessThan(0.01);
     }
