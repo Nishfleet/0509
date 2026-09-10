@@ -44,3 +44,11 @@ The 7 curated slugs (must match the issue verify exactly):
 - Per-brand score enrichment — bounded (≤5 brands/category), must degrade to honest deferred `null`, never a 500.
 - `links()` can't see params — canonical ships as a meta-descriptor `link` in `meta` (mirror `/ads`).
 - No migrations, no typecheck, no `--project workers`.
+## Reviewer round (manager, step 8)
+- seat: `cursor/cursor-grok-4.6-high` (first usable entry of `senior_seats_in_order`; `bin/fleet-review-arm-check` exit 0). One round only.
+- verdict: NOTHING BLOCKING. All 6 acceptance bullets confirmed against the real code; route registration confirmed (`app/routes.ts:87`); per-category social card confirmed live (not a dead og:image); loader confirmed 404-not-500 on a cache hiccup; no collision with `/brands` or `/ads/:domain`.
+- Act on: none (no blocking finding).
+- Consider: (a) visible breadcrumb missing, JSON-LD only (`brands.$category.tsx:247-257`); (b) no test for `loadIndexableBrandPageEntries` throw -> 404 not 500. Both queued as follow-up issues, not re-delegated.
+- Noted: membership predicate vs `groupBrandRecordsByCategory`; score-lookup cap 5; `visitorCountry: "all"` only; dead empty-list UI; SVG og:image preview limits (tracked by #2089); hub `<h2>`s not links.
+- Dismissed-with-reason: `tests/routes-manifest.test.ts` only mounts `api.*` — a canary gap outside this issue's scope.
+- Manager run proof: 8 files / 178 tests green, then `--changed origin/main` 259 files / 3122 tests green.
