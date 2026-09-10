@@ -162,8 +162,10 @@ describe("homepage short-portrait first viewport (#2090)", () => {
 describe("homepage fold canary (#2090 termination)", () => {
   it("checks 375x667 as well as 390x844", () => {
     const script = readFileSync("scripts/check-homepage-mobile-fold.mjs", "utf8");
-    expect(script).toContain("width: 390, height: 844");
-    expect(script).toContain("width: 375, height: 667");
-    expect(script).toContain("stripHidden");
+    // Structural: the canary reads both viewport sizes from the script source
+    // and exercises the strip-hidden case, without pinning an exact literal.
+    expect(script).toMatch(/width:\s*390,\s*height:\s*844/);
+    expect(script).toMatch(/width:\s*375,\s*height:\s*667/);
+    expect(script).toMatch(/\bstripHidden\b/);
   });
 });
