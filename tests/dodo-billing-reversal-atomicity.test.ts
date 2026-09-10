@@ -979,4 +979,101 @@ describe("Dodo billing atomicity (sqlite)", () => {
 		).toMatchObject({ outcome: "processed" });
 	});
 
+	it("leaves the ledger non-processed with a reason when the revoke matches no subscription id", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
+			INSERT INTO user_plan (
+				user_id, plan, dodo_payment_id, dodo_subscription_id, dodo_customer_id, dodo_status, plan_updated_at
+			) VALUES ('user-1', 'starter', 'pay-1', NULL, 'cus_1', 'active', '2026-06-01T00:00:00.000Z');
+		`);
+
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-revoke-mismatch",
+			eventType: "subscription.cancelled",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
+
+		const result = await applyDodoPlanRevokeWithWatchlistReconcile(
+			env,
+			{
+				userId: "user-1",
+				providerSubscriptionId: "sub_1",
+				status: "subscription.cancelled",
+				revokedAt: "2026-07-01T00:00:00.000Z",
+			},
+			0,
+			{
+				eventId: "evt-revoke-mismatch",
+				outcome: "processed",
+				metadata: { action: "revoke" },
+			},
+		);
+
+		// The revoke matched 0 rows (stored dodo_subscription_id is NULL, the
+		// extractor supplied sub_1), so the plan must stay starter and the
+		// ledger must NOT be finalized processed.
+		expect(result).toEqual({ changed: false, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
+				.get("user-1"),
+		).toMatchObject({ plan: "starter", dodo_status: "active" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT outcome, metadata_json FROM dodo_webhook_event WHERE event_id = ?")
+				.get("evt-revoke-mismatch"),
+		).toMatchObject({
+			outcome: "ignored",
+			metadata_json: JSON.stringify({
+				action: "revoke",
+				ignoredReason: "subscription_id_mismatch",
+			}),
+		});
+	});
+
+	it("still revokes and finalizes processed when the subscription id matches", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
+			INSERT INTO user_plan (
+				user_id, plan, dodo_payment_id, dodo_subscription_id, dodo_customer_id, dodo_status, plan_updated_at
+			) VALUES ('user-1', 'starter', 'pay-1', 'sub_1', 'cus_1', 'active', '2026-06-01T00:00:00.000Z');
+		`);
+
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-revoke-match",
+			eventType: "subscription.cancelled",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
+
+		const result = await applyDodoPlanRevokeWithWatchlistReconcile(
+			env,
+			{
+				userId: "user-1",
+				providerSubscriptionId: "sub_1",
+				status: "subscription.cancelled",
+				revokedAt: "2026-07-01T00:00:00.000Z",
+			},
+			0,
+			{
+				eventId: "evt-revoke-match",
+				outcome: "processed",
+				metadata: { action: "revoke" },
+			},
+		);
+
+		expect(result).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
+				.get("user-1"),
+		).toMatchObject({ plan: "free", dodo_status: "subscription.cancelled" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+				.get("evt-revoke-match"),
+		).toMatchObject({ outcome: "processed" });
+	});
+
 });
