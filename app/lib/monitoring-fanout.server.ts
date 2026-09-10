@@ -5,6 +5,7 @@ import { logAppEvent } from "~/lib/log.server";
 import { getWatchlist } from "~/lib/data.server";
 import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
 import type { WatchlistRecord, WatchlistRunRecord } from "~/lib/types";
+import { reportConsecutiveWatchlistFailure } from "~/lib/watchlist-failure-alert.server";
 import type {
   FirstWatchlistScanRunDescriptor,
   FirstWatchlistScanWorkflowParams,
@@ -559,6 +560,7 @@ const RETRYABLE_FIRST_SCAN_ERROR_CODES = new Set([
   "workflow_binding_missing",
 ]);
 export const FIRST_SCAN_MAX_ATTEMPTS = 4;
+export const SCHEDULED_SCAN_MAX_ATTEMPTS = 8;
 
 export async function ensureOrchestratedWatchlistRun(
   env: AppEnv,
@@ -2103,6 +2105,43 @@ export async function reconcileOrchestratedWatchlistRuns(
         message: "Scheduled fan-out is not enabled for this workspace.",
       });
       cancelled += 1;
+      continue;
+    }
+
+    // A scheduled run that has hit the bounded attempt cap must terminally
+    // fail instead of being redispatched forever by reconciliation. The
+    // customer-visible terminal state keeps the run off the reconciliation
+    // redispatch list so a permanently-flaky target stops being scraped.
+    if (row.attempt_count >= SCHEDULED_SCAN_MAX_ATTEMPTS) {
+      const timestamp = nowIso();
+      await runStatement(
+        env,
+        `
+          UPDATE watchlist_run
+          SET status = 'failed',
+              finished_at = COALESCE(finished_at, ?),
+              error_code = 'unmonitorable_target',
+              error_message = 'This competitor could not be monitored for scanning after repeated attempts.',
+              retry_after = NULL,
+              processing_token = NULL,
+              processing_started_at = NULL,
+              updated_at = ?
+          WHERE id = ?
+            AND attempt_count >= ?
+            AND status IN ('pending', 'running')
+        `,
+        timestamp,
+        timestamp,
+        row.id,
+        SCHEDULED_SCAN_MAX_ATTEMPTS,
+      );
+      const exhaustedWatchlist = await getWatchlist(env, row.watchlist_id);
+      await reportConsecutiveWatchlistFailure(env, {
+        watchlistId: row.watchlist_id,
+        watchlistName: exhaustedWatchlist?.name ?? "Unknown watchlist",
+        runId: row.id,
+        triggerType: "scheduled",
+      });
       continue;
     }
 
