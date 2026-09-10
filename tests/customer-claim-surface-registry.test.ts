@@ -23,7 +23,7 @@ import {
 } from "~/lib/plan-entitlements";
 import { PRESENCE_SOURCE_IDS } from "~/lib/presence-types";
 import { pricingPlans } from "~/lib/pricing";
-import { PUBLIC_MARKDOWN_PATHS } from "~/lib/public-markdown";
+import { LLMS_TEXT, PUBLIC_MARKDOWN_PATHS } from "~/lib/public-markdown";
 import { SITEMAP_PATHS, NOINDEX_ACTION_SURFACES } from "~/lib/seo";
 
 type RegistryEntry = {
@@ -641,5 +641,57 @@ describe("G11 claim-surface registry", () => {
     expect(bulletRow, "AUDIT-PRICING-FEATURE-BULLETS registry row").toBeTruthy();
     expect(bulletRow!.verified).toBe(true);
     expect(new Set(bulletRow!.advertisedCopy ?? [])).toEqual(new Set(advertised));
+  });
+
+  it("resolves every llms.txt claim string to a verified registry row (issue #2311)", () => {
+    // llms.txt is the copy answer engines quote — the hardest surface to
+    // retract (issue #2311). Extract the claim strings the live file
+    // advertises: the intro paragraph plus the "Current product truth:"
+    // bullets, evaluated from buildLlmsText, never hand-copied from source.
+    const intro = (LLMS_TEXT.split("\n\n")[1] ?? "").trim();
+    const truthSection =
+      LLMS_TEXT.split("Current product truth:\n")[1]?.split("\n\nCore layers:")[0] ?? "";
+    const truthBullets = truthSection
+      .split("\n")
+      .filter((line) => line.startsWith("- "))
+      .map((line) => line.slice(2).trim());
+    const advertised = [intro, ...truthBullets].filter((text) => text.length > 0);
+    expect(advertised.length).toBeGreaterThan(0);
+
+    const verifiedCopy = new Set<string>();
+    for (const row of registry.rows) {
+      if (row.verified !== true) continue;
+      if (typeof row.sentence === "string" && row.sentence.trim()) {
+        verifiedCopy.add(row.sentence);
+      }
+      for (const copy of row.advertisedCopy ?? []) {
+        if (typeof copy === "string" && copy.trim()) verifiedCopy.add(copy);
+      }
+    }
+
+    for (const claim of advertised) {
+      const resolved =
+        verifiedCopy.has(claim) || [...verifiedCopy].some((text) => text.includes(claim));
+      expect(resolved, `unverified llms.txt claim: ${JSON.stringify(claim)}`).toBe(true);
+    }
+
+    const llmsRow = registry.rows.find((row) => row.claimId === "AUDIT-LLMS-TXT-CLAIMS");
+    expect(llmsRow, "AUDIT-LLMS-TXT-CLAIMS registry row").toBeTruthy();
+    expect(llmsRow!.verified).toBe(true);
+    expect(new Set(llmsRow!.advertisedCopy ?? [])).toEqual(new Set(advertised));
+  });
+
+  it("does not advertise disabled Presence Desk sources as proof-backed briefs (issue #2311)", () => {
+    // Detector: PRESENCE_DIGEST/X/REDDIT/LINKEDIN are "disabled" in
+    // wrangler.jsonc. The unqualified llms.txt sentence that promised
+    // "proof-backed briefs" across declared sources was deleted in issue
+    // #2311; this fails closed if any disabled-source claim returns.
+    expect(LLMS_TEXT).not.toContain(
+      "Presence Desk tracks your brand and competitors across declared sources with proof-backed briefs",
+    );
+    // The qualified truth stays: website/open-web is the active GA source.
+    expect(LLMS_TEXT).toContain(
+      "Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval",
+    );
   });
 });
