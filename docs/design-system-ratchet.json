@@ -17,10 +17,10 @@
   "DashboardPageHeader": 0,
   "components/empty-state": 0,
   "style={": 0,
-  "raw-hex-color": 258,
+  "raw-hex-color": 246,
   "non-token-font-family": 7,
-  "non-token-border-radius": 158,
-  "css-gradient": 22,
+  "non-token-border-radius": 152,
+  "css-gradient": 12,
   "css-important": 26,
   "tailwind-arbitrary-value": 0
 }
