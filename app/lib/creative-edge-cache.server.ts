@@ -18,7 +18,8 @@
  *     the stored URL from D1 by ad id, and fetches it only when the host ends
  *     in `.fbcdn.net`. On a cache miss it tries the stored URL once; a fbcdn
  *     4xx marks the creative dead and serves a cached 1x1 placeholder so the
- *     page renders a frame instead of a broken-image icon.
+ *     page renders a frame instead of a broken-image icon. A 5xx or a timeout
+ *     is NOT dead — it serves the placeholder uncached and tries again later.
  *
  * Security contract (judge edit, binding):
  *  - the URL is never read from query params — only from the D1 row for `:id`;
@@ -26,6 +27,9 @@
  *  - a stored URL whose host does not end in `.fbcdn.net` is refused.
  */
 
+import {
+  readResponseBytesWithinLimit,
+} from "~/lib/bounded-response.server";
 import {
   isEdgeCacheableCreativeUrl,
   normalizeCreativeId,
@@ -35,10 +39,18 @@ import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 
 export const CREATIVE_CACHE_NAME = "creative-v1";
+/**
+ * 30 days, per the ticket. Cache API entries are evictable before their TTL
+ * and there is no eviction control here, so a miss is expected and costs one
+ * guarded re-fetch (the *dead*-creative placeholder is what stops a gone id
+ * from re-fetching forever). If eviction turns out to cause visible misses
+ * before day 30, the fix is the R2-on-capture follow-up named on issue #2393 —
+ * do not widen this route to cover it.
+ */
 export const CREATIVE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const MAX_EDGE_CREATIVE_BYTES = 2_000_000;
 const CREATIVE_FETCH_TIMEOUT_MS = 12_000;
-const FB_SIGNATURE_PARAM_PATTERN = /[?&]oe=/i;
+const MAX_CREATIVE_FETCH_REDIRECTS = 5;
 
 /** The raster types we are willing to store and re-serve. Never SVG. */
 const ALLOWED_RASTER_TYPES = new Set([
@@ -50,6 +62,11 @@ const ALLOWED_RASTER_TYPES = new Set([
   "image/avif",
 ]);
 
+/**
+ * A 1x1 transparent PNG. Served (and cached) when fbcdn answers 4xx, so the
+ * creative renders an empty frame rather than a broken-image icon and no
+ * further request ever reaches fbcdn for that id.
+ */
 /**
  * A 1x1 transparent PNG. Served (and cached) when fbcdn answers 4xx, so the
  * creative renders an empty frame rather than a broken-image icon and no
@@ -98,24 +115,17 @@ export async function lookupStoredCreativeUrl(
   return value || null;
 }
 
-interface ResolvedCreativeUrl {
-  url: string;
-  /** True when the stored URL still carries an `oe=` signature. */
-  signed: boolean;
-}
-
 /**
  * Resolve a stored URL to something we are willing to fetch, or null.
  * Rejects non-https, non-`.fbcdn.net`, and malformed URLs.
  */
-export function resolveFetchableCreativeUrl(stored: string | null): ResolvedCreativeUrl | null {
+export function resolveFetchableCreativeUrl(stored: string | null): string | null {
   const raw = stored?.trim() ?? "";
   if (!isEdgeCacheableCreativeUrl(raw)) {
     return null;
   }
   try {
-    const url = new URL(raw);
-    return { url: url.toString(), signed: FB_SIGNATURE_PARAM_PATTERN.test(url.search) };
+    return new URL(raw).toString();
   } catch {
     return null;
   }
@@ -140,60 +150,95 @@ function placeholderResponse(): Response {
   return imageResponse(DEAD_CREATIVE_PLACEHOLDER_PNG, "image/png");
 }
 
-async function readBytesWithinLimit(response: Response, limit: number): Promise<Uint8Array | null> {
-  const declared = Number.parseInt(response.headers.get("content-length") ?? "", 10);
-  if (Number.isFinite(declared) && declared > limit) {
-    releaseFetchTimeout(response);
-    return null;
-  }
-  const buffer = await response.arrayBuffer();
-  releaseFetchTimeout(response);
-  if (buffer.byteLength === 0 || buffer.byteLength > limit) {
-    return null;
-  }
-  return new Uint8Array(buffer);
-}
+/**
+ * A fbcdn answer, classified. Only `dead` (a real 4xx) may be cached: a 5xx, a
+ * timeout, or a redirect loop is transient, and caching those for 30 days with
+ * `immutable` would blank one ad's creative for a month off a single wobble.
+ */
+type CreativeFetchOutcome =
+  | { kind: "ok"; bytes: Uint8Array; contentType: string }
+  | { kind: "dead" }
+  | { kind: "transient" };
 
 /**
- * Fetch one fbcdn creative, single attempt, no redirect following (a redirect
- * off fbcdn would escape the host gate). Returns null on anything unusable.
+ * Fetch one fbcdn creative, following fbcdn-internal redirects up to the cap
+ * and re-applying the `.fbcdn.net` host gate on EVERY hop, so a redirect can
+ * never carry the fetch off fbcdn. Single pass, no retry loop.
  */
-async function fetchFbcdnCreative(
-  url: string,
-): Promise<{ bytes: Uint8Array; contentType: string } | null> {
-  let response: Response;
-  try {
-    response = await fetchWithTimeout(
-      url,
-      {
-        redirect: "manual",
-        headers: {
-          "user-agent": "0509-bot/1.0 (+https://0509.io)",
-          accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+async function fetchFbcdnCreative(url: string): Promise<CreativeFetchOutcome> {
+  let currentUrl = url;
+
+  for (let hop = 0; hop <= MAX_CREATIVE_FETCH_REDIRECTS; hop += 1) {
+    if (!isEdgeCacheableCreativeUrl(currentUrl)) {
+      return { kind: "transient" };
+    }
+
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(
+        currentUrl,
+        {
+          redirect: "manual",
+          headers: {
+            "user-agent": "0509-bot/1.0 (+https://0509.io)",
+            accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+          },
         },
-      },
-      { timeoutMs: CREATIVE_FETCH_TIMEOUT_MS },
-    );
-  } catch {
-    return null;
+        { timeoutMs: CREATIVE_FETCH_TIMEOUT_MS },
+      );
+    } catch {
+      // Network error, abort, or 12s timeout — never a dead creative.
+      return { kind: "transient" };
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      releaseFetchTimeout(response);
+      if (!location) {
+        return { kind: "transient" };
+      }
+      try {
+        currentUrl = new URL(location, currentUrl).toString();
+      } catch {
+        return { kind: "transient" };
+      }
+      continue;
+    }
+
+    if (response.status >= 400 && response.status < 500) {
+      // The signature expired, or the asset is gone. Permanently dead.
+      releaseFetchTimeout(response);
+      return { kind: "dead" };
+    }
+
+    if (!response.ok) {
+      releaseFetchTimeout(response);
+      return { kind: "transient" };
+    }
+
+    const contentType =
+      (response.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+    if (!ALLOWED_RASTER_TYPES.has(contentType)) {
+      releaseFetchTimeout(response);
+      return { kind: "transient" };
+    }
+
+    // The shared streaming reader caps the read, so a chunked fbcdn response
+    // with no content-length cannot be buffered past the limit. It owns the
+    // timeout release.
+    const bytes = await readResponseBytesWithinLimit(response, MAX_EDGE_CREATIVE_BYTES);
+    if (!bytes) {
+      return { kind: "transient" };
+    }
+    return {
+      kind: "ok",
+      bytes,
+      contentType: contentType === "image/jpg" ? "image/jpeg" : contentType,
+    };
   }
 
-  if (!response.ok) {
-    releaseFetchTimeout(response);
-    return null;
-  }
-
-  const contentType = (response.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
-  if (!ALLOWED_RASTER_TYPES.has(contentType)) {
-    releaseFetchTimeout(response);
-    return null;
-  }
-
-  const bytes = await readBytesWithinLimit(response, MAX_EDGE_CREATIVE_BYTES);
-  if (!bytes) {
-    return null;
-  }
-  return { bytes, contentType: contentType === "image/jpg" ? "image/jpeg" : contentType };
+  // Redirect cap exhausted.
+  return { kind: "transient" };
 }
 
 /**
@@ -204,6 +249,8 @@ async function fetchFbcdnCreative(
  */
 export async function primeCreativeEdgeCache(env: AppEnv, adId: string): Promise<boolean> {
   const id = normalizeCreativeId(adId);
+  // No Cache API (local node tests, a non-Worker caller): the prime is a
+  // no-op. The route still fetches on demand, so the page renders either way.
   if (!id || typeof caches === "undefined") {
     return false;
   }
@@ -221,23 +268,37 @@ export async function primeCreativeEdgeCache(env: AppEnv, adId: string): Promise
       return true;
     }
 
-    const fetched = await fetchFbcdnCreative(resolved.url);
+    const outcome = await fetchFbcdnCreative(resolved);
+    if (outcome.kind === "transient") {
+      // Do not write a 30-day immutable placeholder for a wobble.
+      return false;
+    }
     // A dead creative is cached as the placeholder, so no later request
     // re-hits fbcdn. There is no retry loop here or anywhere downstream.
     await cache.put(
       key,
-      fetched ? imageResponse(fetched.bytes, fetched.contentType) : placeholderResponse(),
+      outcome.kind === "ok"
+        ? imageResponse(outcome.bytes, outcome.contentType)
+        : placeholderResponse(),
     );
-    return Boolean(fetched);
+    return outcome.kind === "ok";
   } catch {
     return false;
   }
+}
+
+/** A HEAD reply must keep the same caching headers as the GET it mirrors. */
+function headOf(response: Response): Response {
+  return new Response(null, { status: response.status, headers: response.headers });
 }
 
 /**
  * `/creative/:id` handler. Returns null when the path is not a creative route
  * (so the caller falls through), a 404 for an unknown or unfetchable id, and
  * an image response otherwise.
+ *
+ * Never throws: the Cache API and D1 both sit on a public request path, and a
+ * cache or lookup failure must degrade to a render, not a 500.
  */
 export async function serveCreativeResource(
   env: AppEnv,
@@ -253,34 +314,52 @@ export async function serveCreativeResource(
     return new Response("Method Not Allowed", { status: 405 });
   }
 
-  const key = creativeCacheKey(id);
-  const cache = typeof caches === "undefined" ? null : await caches.open(CREATIVE_CACHE_NAME);
+  try {
+    const key = creativeCacheKey(id);
+    const cache = typeof caches === "undefined" ? null : await caches.open(CREATIVE_CACHE_NAME);
 
-  const cached = await cache?.match(key);
-  if (cached) {
-    return request.method === "HEAD" ? new Response(null, cached) : cached;
-  }
+    const cached = await cache?.match(key);
+    if (cached) {
+      return request.method === "HEAD" ? headOf(cached) : cached;
+    }
 
-  if (!env.DB) {
+    if (!env.DB) {
+      return new Response("Not Found", { status: 404 });
+    }
+
+    const stored = await lookupStoredCreativeUrl(env, id);
+    const resolved = resolveFetchableCreativeUrl(stored);
+    if (resolved === null) {
+      return new Response("Not Found", { status: 404 });
+    }
+
+    const outcome = await fetchFbcdnCreative(resolved);
+    if (outcome.kind === "transient") {
+      // Serve the placeholder without caching it or claiming 30-day
+      // freshness — the next request is free to try fbcdn again.
+      const transient = new Response(DEAD_CREATIVE_PLACEHOLDER_PNG, {
+        status: 200,
+        headers: {
+          "content-type": "image/png",
+          "cache-control": "public, max-age=60",
+          "x-content-type-options": "nosniff",
+        },
+      });
+      return request.method === "HEAD" ? headOf(transient) : transient;
+    }
+
+    const response =
+      outcome.kind === "ok"
+        ? imageResponse(outcome.bytes, outcome.contentType)
+        : placeholderResponse();
+
+    // Cache even the placeholder: the dead creative must not be re-fetched.
+    await cache?.put(key, response.clone());
+    return request.method === "HEAD" ? headOf(response) : response;
+  } catch {
+    // A cache or D1 failure is not a reason to fail the page. Fall through to
+    // the raw capture is impossible here, so answer 404 and let AdCreative's
+    // own onError mock take over.
     return new Response("Not Found", { status: 404 });
   }
-
-  const stored = await lookupStoredCreativeUrl(env, id);
-  if (stored === null) {
-    return new Response("Not Found", { status: 404 });
-  }
-
-  const resolved = resolveFetchableCreativeUrl(stored);
-  if (!resolved) {
-    return new Response("Not Found", { status: 404 });
-  }
-
-  const fetched = await fetchFbcdnCreative(resolved.url);
-  const response = fetched
-    ? imageResponse(fetched.bytes, fetched.contentType)
-    : placeholderResponse();
-
-  // Cache even the placeholder: the dead creative must not be re-fetched.
-  await cache?.put(key, response.clone());
-  return request.method === "HEAD" ? new Response(null, response) : response;
 }
