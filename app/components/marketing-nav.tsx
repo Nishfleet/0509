@@ -48,12 +48,11 @@ export interface MarketingNavProps {
  * not just the landing route.
  *
  * The signup CTA is the pill so an anonymous visitor can reach /auth/signup
- * from any public page without scrolling or detouring through Sign in. On the
- * compact ≤860px row, Open app is hidden (app.css) so Sign in + Sign up stay
- * one ≥44px touch-target row and the homepage live-search stays above the fold.
- * Open app is auth-aware: signed-in visitors get /app directly, anonymous
- * visitors (and crawlers) get /auth/login?redirectTo=%2Fapp — the same final
- * URL the app guard would redirect to, without the redirect hop.
+ * from any public page without scrolling or detouring through Sign in.
+ * Open app is rendered only when a session is present: signed-in visitors get
+ * /app directly, while anonymous visitors see no duplicate auth action (Sign in
+ * + Sign up only), so the compact ≤860px row never carries a second link to the
+ * same login destination.
  */
 export function MarketingNav({ showSwitchLinks = true }: MarketingNavProps) {
   const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
@@ -86,12 +85,14 @@ export function MarketingNav({ showSwitchLinks = true }: MarketingNavProps) {
         <Link className="f9-link-arrow" to="/auth/login">
           Sign in
         </Link>
-        <Link
-          className="f9-link-arrow ld-nav-open-app"
-          to={appLinkTarget("/app", rootData?.session)}
-        >
-          Open app
-        </Link>
+        {rootData?.session ? (
+          <Link
+            className="f9-link-arrow ld-nav-open-app"
+            to={appLinkTarget("/app", rootData.session)}
+          >
+            Open app
+          </Link>
+        ) : null}
         <Link className="ld-nav-pill" to="/auth/signup">
           Sign up
         </Link>

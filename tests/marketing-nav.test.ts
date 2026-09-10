@@ -26,9 +26,9 @@ const SHARED_LINKS = [
 	{ href: "/docs", label: "Docs" },
 	{ href: "/status", label: "Status" },
 	{ href: "/auth/login", label: "Sign in" },
-	// Open app is auth-aware: anonymous visitors (and crawlers) get the login
-	// destination directly so no internal link on a public page redirects.
-	{ href: "/auth/login?redirectTo=%2Fapp", label: "Open app" },
+	// Open app is rendered only for signed-in visitors, so anonymous nav has
+	// exactly one auth action (Sign in) plus the Sign up CTA — no second link
+	// to the same login destination.
 	// Signup CTA: anonymous visitors can reach /auth/signup from the nav.
 	{ href: "/auth/signup", label: "Sign up" },
 ];
@@ -46,13 +46,14 @@ describe("MarketingNav (shared public nav)", () => {
 		expect(MARKETING_TAGLINE).toBe("Competitor change monitoring");
 		expect(markup).toContain(MARKETING_TAGLINE);
 		// The signup CTA is the pill: one primary action for anonymous
-		// visitors, linking straight to /auth/signup. Sign in and Open app
-		// stay in the markup as account links; Open app is CSS-hidden at
-		// ≤860px so the compact header stays a single action row.
+		// visitors, linking straight to /auth/signup. Anonymous nav carries
+		// Sign in + Sign up only — Open app is not rendered because there is
+		// no session, so there is one auth action per state.
 		expect(markup).toContain("class=\"ld-nav-pill\"");
-		expect(markup).toContain("class=\"f9-link-arrow ld-nav-open-app\"");
 		expect(markup).toContain("href=\"/auth/signup\"");
 		expect(markup).toContain(">Sign up</a>");
+		expect(markup).not.toContain(">Open app</a>");
+		expect(markup).not.toContain("ld-nav-open-app");
 	});
 
 	it("points Open app straight at /app for signed-in visitors", async () => {
@@ -64,14 +65,14 @@ describe("MarketingNav (shared public nav)", () => {
 		expect(markup).toContain(">Open app</a>");
 	});
 
-	it("hides Open app on the compact ≤860px nav so the fold stays clear", () => {
+	it("has no mobile-hide rule for Open app (it is gated on the session, not CSS)", () => {
 		const css = readFileSync("app/app.css", "utf8");
 		const compact = css.split("@media (max-width: 860px)")[1] ?? "";
-		expect(compact).toContain(".f9-home .ld-nav-actions .ld-nav-open-app");
-		expect(compact).toContain(".f9-legal-page .ld-nav-actions .ld-nav-open-app");
-		expect(compact).toMatch(
-			/\.f9-home\s+\.ld-nav-actions\s+\.ld-nav-open-app,\s*\.f9-legal-page\s+\.ld-nav-actions\s+\.ld-nav-open-app\s*\{\s*display:\s*none;/,
-		);
+		// The old ≤860px rule hid Open app for anonymous visitors via
+		// display:none. Open app now only renders when a session exists, so
+		// that block is dead and the CSS must not reference it anymore.
+		expect(compact).not.toContain("ld-nav-open-app");
+		// The compact anonymous row still keeps Sign in + Sign up nowrap.
 		expect(compact).toMatch(/\.ld-nav-actions\s*\{[^}]*flex-wrap:\s*nowrap;/s);
 	});
 
