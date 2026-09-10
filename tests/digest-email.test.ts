@@ -13,6 +13,7 @@ import {
   digestReviewerLabel,
 } from "~/lib/change-intelligence";
 import type { WatchEventRecord } from "~/lib/types";
+import type { WeeklyPublicMove } from "~/lib/weekly-public-moves.server";
 import {
   buildDigestEmail,
   buildScanTroubleEmail,
@@ -59,6 +60,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "Asia/Kolkata",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -143,6 +145,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -175,6 +178,7 @@ describe("buildDigestEmail", () => {
       items: [],
       heartbeat: { runs: 3, watchlistsChecked: 2, adsSeen: 42 },
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -187,6 +191,164 @@ describe("buildDigestEmail", () => {
     expect(email.text).not.toContain("proof-backed");
   });
 
+  it("omits the Elsewhere line when no public move is supplied", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      items: [],
+      heartbeat: { runs: 7, watchlistsChecked: 4, adsSeen: 128 },
+      fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+    });
+
+    expect(email.html).not.toContain("Elsewhere this week");
+    expect(email.text).not.toContain("Elsewhere this week");
+  });
+
+  it("renders the Elsewhere line with the newest public move and its link", () => {
+    const publicMove: WeeklyPublicMove = {
+      brand: "Nykaa",
+      domain: "nykaa.com",
+      field: "Offer / price",
+      beforeText: "₹999",
+      afterText: "₹799",
+      sourceUrl: "https://nykaa.com",
+      capturedAt: "2026-06-05T10:00:00.000Z",
+      adsPath: "/ads/nykaa.com",
+      timelinePath: null,
+    };
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      items: [],
+      heartbeat: { runs: 7, watchlistsChecked: 4, adsSeen: 128 },
+      fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      publicMove,
+    });
+
+    expect(email.html).toContain("Elsewhere this week");
+    expect(email.html).toContain("changed Offer / price on 5 Jun 2026");
+    expect(email.html).toContain('href="https://0509.io/ads/nykaa.com"');
+    expect(email.text).toContain(
+      "Elsewhere this week: Nykaa changed Offer / price on 5 Jun 2026 — https://0509.io/ads/nykaa.com",
+    );
+  });
+
+  it("links the Elsewhere line to the timeline page when no ads page is indexable", () => {
+    const publicMove: WeeklyPublicMove = {
+      brand: "boAt",
+      domain: "boat-lifestyle.com",
+      field: "Headline",
+      beforeText: null,
+      afterText: "New launch",
+      sourceUrl: "https://boat-lifestyle.com",
+      capturedAt: "2026-06-06T09:00:00.000Z",
+      adsPath: null,
+      timelinePath: "/timeline/boat-lifestyle.com",
+    };
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      items: [],
+      heartbeat: { runs: 7, watchlistsChecked: 4, adsSeen: 128 },
+      fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      publicMove,
+    });
+
+    expect(email.html).toContain("Elsewhere this week");
+    expect(email.html).toContain("changed Headline on 6 Jun 2026");
+    expect(email.html).toContain('href="https://0509.io/timeline/boat-lifestyle.com"');
+  });
+
+  it("omits the Elsewhere line when the public move has no indexable path", () => {
+    const publicMove: WeeklyPublicMove = {
+      brand: "Nykaa",
+      domain: "nykaa.com",
+      field: "Offer / price",
+      beforeText: "₹999",
+      afterText: "₹799",
+      sourceUrl: "https://nykaa.com",
+      capturedAt: "2026-06-05T10:00:00.000Z",
+      adsPath: null,
+      timelinePath: null,
+    };
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      items: [],
+      heartbeat: { runs: 7, watchlistsChecked: 4, adsSeen: 128 },
+      fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      publicMove,
+    });
+
+    expect(email.html).not.toContain("Elsewhere this week");
+    expect(email.text).not.toContain("Elsewhere this week");
+  });
+
+  it("does not render the Elsewhere line in a non-quiet brief", () => {
+    const publicMove: WeeklyPublicMove = {
+      brand: "Nykaa",
+      domain: "nykaa.com",
+      field: "Offer / price",
+      beforeText: "₹999",
+      afterText: "₹799",
+      sourceUrl: "https://nykaa.com",
+      capturedAt: "2026-06-05T10:00:00.000Z",
+      adsPath: "/ads/nykaa.com",
+      timelinePath: null,
+    };
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      items: [digestItem("Nykaa", "Nykaa changed its offer", 95, "proof_backed")],
+      heartbeat: { runs: 7, watchlistsChecked: 4, adsSeen: 128 },
+      fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      publicMove,
+    });
+
+    expect(email.html).not.toContain("Elsewhere this week");
+    expect(email.text).not.toContain("Elsewhere this week");
+  });
+
   it("keeps watchlist names header-safe in digest subjects", () => {
     const email = buildDigestEmail({
       name: "Owner",
@@ -195,6 +357,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -224,6 +387,7 @@ describe("buildDigestEmail", () => {
       items: [],
       heartbeat: { runs: 7, watchlistsChecked: 4, adsSeen: 128 },
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -246,6 +410,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -314,6 +479,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -371,6 +537,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -412,6 +579,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -441,6 +609,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -472,6 +641,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -503,6 +673,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -547,6 +718,7 @@ describe("buildDigestEmail", () => {
       cadence: "daily",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -570,6 +742,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -599,6 +772,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -623,6 +797,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -651,6 +826,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -677,6 +853,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -723,6 +900,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -743,6 +921,7 @@ describe("buildDigestEmail", () => {
       cadence: "daily",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -818,6 +997,7 @@ describe("buildDigestEmail", () => {
 			items: [],
 			heartbeat: { runs: 3, watchlistsChecked: 2, adsSeen: 42 },
 			fullDigestUrl: "https://0509.io/app/digests",
+			baseUrl: "https://0509.io",
 			manageFrequencyUrl: "https://0509.io/app/notifications",
 			supportEmail: "support@0509.io",
 			supportMailto: "mailto:support@0509.io",
@@ -842,6 +1022,7 @@ describe("zero-noise triage digest emails (2026-08-06)", () => {
 			items: [],
 			heartbeat,
 			fullDigestUrl: "https://0509.io/app/digests",
+			baseUrl: "https://0509.io",
 			manageFrequencyUrl: "https://0509.io/app/notifications",
 			supportEmail: "support@0509.io",
 			supportMailto: "mailto:support@0509.io",
@@ -992,6 +1173,7 @@ describe("zero-noise triage digest emails (2026-08-06)", () => {
 				digestItem("boAt", "CTA changed", 80, "scan_backed"),
 			],
 			fullDigestUrl: "https://0509.io/app/digests",
+			baseUrl: "https://0509.io",
 			manageFrequencyUrl: "https://0509.io/app/notifications",
 			supportEmail: "support@0509.io",
 			supportMailto: "mailto:support@0509.io",
@@ -1020,6 +1202,7 @@ describe("named owner, materiality reason, and next action (E2 2026-08-08)", () 
 			timeZone: "UTC",
 			items: [digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed")],
 			fullDigestUrl: "https://0509.io/app/digests",
+			baseUrl: "https://0509.io",
 			manageFrequencyUrl: "https://0509.io/app/notifications",
 			supportEmail: "support@0509.io",
 			supportMailto: "mailto:support@0509.io",
@@ -1578,6 +1761,7 @@ describe("brief emails carry confidence and freshness (E3 2026-08-11)", () => {
 			timeZone: "UTC",
 			items: [digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed")],
 			fullDigestUrl: "https://0509.io/app/digests",
+			baseUrl: "https://0509.io",
 			manageFrequencyUrl: "https://0509.io/app/notifications",
 			supportEmail: "support@0509.io",
 			supportMailto: "mailto:support@0509.io",
@@ -1965,6 +2149,7 @@ function strategyEmailInput() {
 		cadence: "weekly" as const,
 		timeZone: "UTC",
 		fullDigestUrl: "https://0509.io/app/digests",
+		baseUrl: "https://0509.io",
 		manageFrequencyUrl: "https://0509.io/app/notifications",
 		supportEmail: "support@0509.io",
 		supportMailto: "mailto:support@0509.io",
@@ -2015,6 +2200,7 @@ describe("buildDigestEmail — brief retention frame (lane 1)", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -2052,6 +2238,7 @@ describe("buildDigestEmail — brief retention frame (lane 1)", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -2074,6 +2261,7 @@ describe("buildDigestEmail — brief retention frame (lane 1)", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
@@ -2104,6 +2292,7 @@ describe("value-tier swing section (issue #1976)", () => {
     periodEnd: "2026-06-08T00:00:00.000Z",
     cadence: "daily" as const,
     fullDigestUrl: "https://0509.io/app/digests",
+    baseUrl: "https://0509.io",
     manageFrequencyUrl: "https://0509.io/app/notifications",
     supportEmail: "support@0509.io",
     supportMailto: "mailto:support@0509.io",
