@@ -11,6 +11,7 @@ import {
   hasEvidenceLinkedItem,
   isFirstBriefDigest,
   marketDeskItemsFromFirstBrief,
+  pickSignupFirstBriefBrandSuggestions,
   resolveEvidenceUrl,
   shouldEnsureFirstBrief,
   watchlistDomainForExistingHistory,
@@ -189,5 +190,76 @@ describe("first brief helpers", () => {
         targetLabel: "Pending Labs",
       }),
     ).toBeNull();
+  });
+});
+
+/**
+ * Issue #2411 — the `no_ads` terminal state offers adjacent already-tracked
+ * brands instead of dead-ending. These lock the picker's three properties:
+ * same-category siblings come first, the user's own competitor is never
+ * suggested, and the result is deterministic and bounded.
+ */
+describe("pickSignupFirstBriefBrandSuggestions (issue #2411)", () => {
+  const brands = [
+    { name: "Nike", domain: "nike.com", path: "/ads/nike.com" },
+    { name: "Adidas", domain: "adidas.com", path: "/ads/adidas.com" },
+    { name: "HubSpot", domain: "hubspot.com", path: "/ads/hubspot.com" },
+    { name: "Nykaa", domain: "nykaa.com", path: "/ads/nykaa.com" },
+    { name: "Mamaearth", domain: "mamaearth.com", path: "/ads/mamaearth.com" },
+  ];
+
+  it("prefers brands in the same buyer category as the current competitor", () => {
+    // adidas.com is "Sport & footwear"; nike.com and allbirds.com share it.
+    const picked = pickSignupFirstBriefBrandSuggestions(brands, "nike.com");
+    expect(picked.map((brand) => brand.domain)).toEqual([
+      "adidas.com",
+      "hubspot.com",
+      "mamaearth.com",
+    ]);
+    // The user's own competitor is never suggested.
+    expect(picked.map((brand) => brand.domain)).not.toContain("nike.com");
+  });
+
+  it("fills the slot with same-category siblings before falling back", () => {
+    const picked = pickSignupFirstBriefBrandSuggestions(brands, "nykaa.com");
+    // Nykaa is "Beauty & personal care" — mamaearth.com is the only other
+    // member in this fixture, so it leads and the rest fill deterministically.
+    expect(picked.map((brand) => brand.domain)).toEqual([
+      "mamaearth.com",
+      "adidas.com",
+      "hubspot.com",
+    ]);
+  });
+
+  it("is bounded to three and deterministic across calls", () => {
+    const first = pickSignupFirstBriefBrandSuggestions(brands, "nike.com");
+    const second = pickSignupFirstBriefBrandSuggestions(brands, "nike.com");
+    expect(first).toHaveLength(3);
+    expect(first).toEqual(second);
+  });
+
+  it("degrades to the deterministic slice for an unknown or absent competitor", () => {
+    // glowkart.example is in the "More brands" fallback bucket, and a null
+    // competitor has no category at all — both must still produce real tracked
+    // brands rather than an empty cluster or an invented one.
+    for (const current of ["glowkart.example", null]) {
+      const picked = pickSignupFirstBriefBrandSuggestions(brands, current);
+      expect(picked).toHaveLength(3);
+      expect(picked.map((brand) => brand.domain)).toEqual([
+        "adidas.com",
+        "hubspot.com",
+        "mamaearth.com",
+      ]);
+    }
+  });
+
+  it("returns an empty list when nothing else is tracked", () => {
+    expect(
+      pickSignupFirstBriefBrandSuggestions(
+        [{ name: "Nike", domain: "nike.com", path: "/ads/nike.com" }],
+        "nike.com",
+      ),
+    ).toEqual([]);
+    expect(pickSignupFirstBriefBrandSuggestions([], "nike.com")).toEqual([]);
   });
 });
