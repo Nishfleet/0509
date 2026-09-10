@@ -14,6 +14,7 @@ const {
   checkMigrationNumbering,
   listBaseMigrations,
   listAddedMigrations,
+  listRenamedMigrations,
   baseTopPrefix,
   migrationPrefix,
 } = await import("../scripts/check-migration-numbering.mjs");
@@ -37,8 +38,14 @@ const baseMigrations = (files: string[]): [RegExp, any] => [
 ];
 
 const addedMigrations = (files: string[]): [RegExp, any] => [
-  /^git diff --name-only/u,
-  { status: 0, stdout: files.join("\n") },
+  /^git diff --name-status/u,
+  { status: 0, stdout: files.map((f) => `A\t${f}`).join("\n") },
+];
+
+/** Rename pairs, rendered as the `R100\tfrom\tto` lines git emits under `-M`. */
+const renamedMigrations = (pairs: Array<[string, string]>): [RegExp, any] => [
+  /^git diff --name-status/u,
+  { status: 0, stdout: pairs.map(([from, to]) => `R100\t${from}\t${to}`).join("\n") },
 ];
 
 describe("migrationPrefix", () => {
@@ -90,19 +97,19 @@ describe("listAddedMigrations", () => {
     let seen: string[] | undefined;
     const exec = (command: string, args: string[]) => {
       seen = [command, ...args];
-      return { status: 0, stdout: "migrations/0090_new.sql", stderr: "" };
+      return { status: 0, stdout: "A\tmigrations/0090_new.sql", stderr: "" };
     };
     listAddedMigrations(exec);
     expect(seen).toEqual([
       "git",
-      "diff", "--name-only", "--diff-filter=A", "origin/main...HEAD", "--", "migrations",
+      "diff", "--name-status", "-M", "--diff-filter=AR", "origin/main...HEAD", "--", "migrations",
     ]);
   });
 
   it("refuses when the diff fails", () => {
     expect(() =>
       listAddedMigrations(
-        execFrom([[/^git diff --name-only/u, { status: 128, stderr: "boom" }]]),
+        execFrom([[/^git diff --name-status/u, { status: 128, stderr: "boom" }]]),
       ),
     ).toThrow(/Could not list migrations added/u);
   });
@@ -253,5 +260,66 @@ describe("checkMigrationNumbering", () => {
         execFrom([[/^git ls-tree/u, { status: 128, stderr: "no ref" }]]),
       ),
     ).toThrow(GateRefusal);
+  });
+
+  it("fails a migration renamed to a lower number", () => {
+    // A rename is invisible to `--diff-filter=A`, so without the rename rule
+    // this PR would plant a 0001 migration and the gate would say OK.
+    let refusal: any;
+    try {
+      checkMigrationNumbering(
+        execFrom([
+          baseMigrations(["migrations/0089_org_scoped_ownership.sql"]),
+          renamedMigrations([
+            ["migrations/0089_org_scoped_ownership.sql", "migrations/0001_renamed.sql"],
+          ]),
+        ]),
+      );
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toBeInstanceOf(GateRefusal);
+    expect(refusal.detail).toContain("migrations/0001_renamed.sql");
+    expect(refusal.detail).toMatch(/renamed to a lower number/iu);
+  });
+
+  it("passes a migration renamed to a higher number", () => {
+    // Tidying a filename upward is legitimate and must not be blocked.
+    expect(
+      checkMigrationNumbering(
+        execFrom([
+          baseMigrations(["migrations/0089_org_scoped_ownership.sql"]),
+          renamedMigrations([
+            ["migrations/0089_org_scoped_ownership.sql", "migrations/0090_tidied.sql"],
+          ]),
+        ]),
+      ),
+    ).toEqual({ ok: true, added: [], baseTop: 89 });
+  });
+
+  it("passes a migration renamed while keeping its number", () => {
+    expect(
+      checkMigrationNumbering(
+        execFrom([
+          baseMigrations(["migrations/0089_org_scoped_ownership.sql"]),
+          renamedMigrations([
+            ["migrations/0089_org_scoped_ownership.sql", "migrations/0089_org_scoped_owner.sql"],
+          ]),
+        ]),
+      ),
+    ).toEqual({ ok: true, added: [], baseTop: 89 });
+  });
+
+  it("ignores a rename that moves a file out of migrations/", () => {
+    expect(
+      checkMigrationNumbering(
+        execFrom([
+          baseMigrations(["migrations/0089_org_scoped_ownership.sql"]),
+          renamedMigrations([
+            ["migrations/0089_org_scoped_ownership.sql", "docs/0089_note.sql"],
+          ]),
+        ]),
+      ),
+    ).toEqual({ ok: true, added: [], baseTop: 89 });
   });
 });

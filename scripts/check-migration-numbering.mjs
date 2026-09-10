@@ -138,8 +138,39 @@ export function baseTopPrefix(exec = defaultExec, baseRef = BASE_REF) {
  * @returns {string[]}
  */
 export function listAddedMigrations(exec = defaultExec, baseRef = BASE_REF) {
+  return diffMigrations(exec, baseRef).added;
+}
+
+/**
+ * Migrations renamed in this PR, as `{ from, to }` pairs, relative to the
+ * merge base with the base branch.
+ *
+ * A rename is not "added" (`--diff-filter=A` skips it), so a PR that renames
+ * `0090_old.sql` to `0001_new.sql` would otherwise slip a low-numbered
+ * migration past this gate — the exact incident class it exists to catch. The
+ * gate compares the rename's before/after prefixes instead of ignoring it.
+ *
+ * @param {Exec} [exec]
+ * @param {string} [baseRef]
+ * @returns {{ from: string, to: string }[]}
+ */
+export function listRenamedMigrations(exec = defaultExec, baseRef = BASE_REF) {
+  return diffMigrations(exec, baseRef).renamed;
+}
+
+/**
+ * One `git diff --name-status -M` against the merge base, split into added
+ * paths and rename pairs. `-M` makes git report a rename as a rename rather
+ * than a delete+add, so the gate can judge the new prefix against the old one.
+ *
+ * @param {Exec} exec
+ * @param {string} baseRef
+ * @returns {{ added: string[], renamed: { from: string, to: string }[] }}
+ */
+function diffMigrations(exec, baseRef) {
   const result = exec("git", [
-    "diff", "--name-only", "--diff-filter=A", `${baseRef}...HEAD`, "--", MIGRATIONS_PATH,
+    "diff", "--name-status", "-M", "--diff-filter=AR", `${baseRef}...HEAD`,
+    "--", MIGRATIONS_PATH,
   ]);
   if (result.status !== 0) {
     throw new GateRefusal(
@@ -147,10 +178,25 @@ export function listAddedMigrations(exec = defaultExec, baseRef = BASE_REF) {
       `Could not list migrations added in this PR (diff against ${baseRef}).\n${result.stderr}`,
     );
   }
-  return result.stdout
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith(`${MIGRATIONS_PATH}/`));
+
+  const isMigration = (p) => p.startsWith(`${MIGRATIONS_PATH}/`);
+  const added = [];
+  const renamed = [];
+  for (const raw of result.stdout.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const parts = line.split("\t");
+    const status = parts[0] ?? "";
+    if (status.startsWith("A") && parts[1] && isMigration(parts[1])) {
+      added.push(parts[1]);
+    } else if (status.startsWith("R") && parts[1] && parts[2]) {
+      // Only a rename that stays inside migrations/ concerns this gate.
+      if (isMigration(parts[1]) && isMigration(parts[2])) {
+        renamed.push({ from: parts[1], to: parts[2] });
+      }
+    }
+  }
+  return { added, renamed };
 }
 
 /**
@@ -163,7 +209,7 @@ export function listAddedMigrations(exec = defaultExec, baseRef = BASE_REF) {
  */
 export function checkMigrationNumbering(exec = defaultExec, baseRef = BASE_REF) {
   const baseTop = baseTopPrefix(exec, baseRef);
-  const added = listAddedMigrations(exec, baseRef);
+  const { added, renamed } = diffMigrations(exec, baseRef);
 
   /** @param {number} n */
   const pad = (n) => String(n).padStart(4, "0");
@@ -213,6 +259,33 @@ export function checkMigrationNumbering(exec = defaultExec, baseRef = BASE_REF) 
             (d) =>
               `  ${pad(d.number)} used by both:\n` +
               d.paths.map((p) => `    - ${p}`).join("\n"),
+          )
+          .join("\n"),
+    );
+  }
+
+  // A rename that LOWERS a migration's prefix plants a low-numbered file just
+  // as surely as adding one, and `--diff-filter=A` cannot see it. A rename
+  // that keeps or raises the prefix is legitimate (tidying a filename) and
+  // must keep passing, which is why this compares old vs new rather than
+  // applying the blanket `<= baseTop` rule to the new path.
+  const loweringRenames = [];
+  for (const { from, to } of renamed) {
+    const before = migrationPrefix(from);
+    const after = migrationPrefix(to);
+    if (before === null || after === null) continue;
+    if (after < before) loweringRenames.push({ from, to, before, after });
+  }
+  if (loweringRenames.length > 0) {
+    messages.push(
+      "A migration must not be renamed to a lower number. A rename is not " +
+        "\"added\" for diff purposes, so it would otherwise plant a " +
+        "low-numbered migration without this gate seeing it.\n\n" +
+        `Renamed to a lower prefix:\n` +
+        loweringRenames
+          .map(
+            (r) =>
+              `  ${r.from} (${pad(r.before)}) -> ${r.to} (${pad(r.after)})`,
           )
           .join("\n"),
     );
