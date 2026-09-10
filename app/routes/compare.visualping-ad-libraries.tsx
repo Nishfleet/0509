@@ -234,7 +234,7 @@ export default function CompareVisualpingAdLibraryRoute() {
         </p>
       </section>
 
-      <LiveBrandProof domain={LIVE_BRAND_PROOF_DOMAIN} brandName="Nike" />
+      <LiveBrandProof domain={LIVE_BRAND_PROOF_DOMAIN} />
 
       <CompareCitationsFooter citations={citations} />
 

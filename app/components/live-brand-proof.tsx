@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 
+import { displayNameFromDomain } from "~/lib/ads-internal-links";
 import type { DemoBrandPageDomain } from "~/lib/demo-brand-pages";
 
 /**
@@ -18,13 +19,16 @@ import type { DemoBrandPageDomain } from "~/lib/demo-brand-pages";
  */
 export function LiveBrandProof({
   domain,
-  brandName,
   hasTimeline = true,
 }: {
   domain: DemoBrandPageDomain;
-  brandName: string;
   hasTimeline?: boolean;
 }) {
+  // Derive the visible brand name from the domain (the same helper every
+  // public /ads/:domain surface uses) so the label can never drift from the
+  // linked domain — a hardcoded literal next to a separately-sourced domain
+  // would keep saying "Nike" if the seed ever changed to nykaa.com.
+  const brandName = displayNameFromDomain(domain);
   return (
     <section className="ld-quiet">
       <div className="ld-section-head">
