@@ -23,6 +23,8 @@ import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import type { DomainArchive } from "~/lib/archive";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
+import type { TimelineSourceEvent } from "~/components/brand-page/timeline-source-events.server";
+import { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
 import {
   breadcrumbJsonLd,
   canonicalUrl,
@@ -45,6 +47,15 @@ export interface OfferTimelineLoaderData {
   entries: OfferLedgerEntry[];
   /** The public proof archive (issue #2173) — public-ad facts only. */
   archive: DomainArchive;
+  /**
+   * Issue #2200 — recent events from the new competitor-monitoring source
+   * diffs (a new Google creative, a new LinkedIn ad, a new public subdomain,
+   * roles opened, etc.), projected from the same watch_event stream the
+   * offer timeline reads. Only events tagged with a LIVE source's
+   * `sourceId` surface. Empty when no watchlist tracks the domain, no live
+   * source exists, or no source event landed — the section hides.
+   */
+  sourceEvents: TimelineSourceEvent[];
   noindex: boolean;
   /**
    * True when the ledger is empty but this domain is a tracked, sitemap-listed
@@ -143,6 +154,23 @@ export async function loader({
     }
   }
 
+  // Issue #2200 — recent source-diff events (new Google creative, new
+  // LinkedIn ad, new public subdomain, roles opened, etc.) from the same
+  // watch_event stream, gated to live sources. Read-only; a hiccup degrades
+  // to [] (the section hides) rather than 500ing the page.
+  let sourceEvents: TimelineSourceEvent[] = [];
+  try {
+    const { loadTimelineSourceEvents } = await import(
+      "~/components/brand-page/timeline-source-events.server"
+    );
+    sourceEvents = await loadTimelineSourceEvents(env, brand.domain);
+  } catch (error) {
+    console.warn("Timeline source events read failed; hiding the section.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    sourceEvents = [];
+  }
+
   const canonicalPath = `/timeline/${brand.domain}`;
   const sharePath = asOf ? `${canonicalPath}?asOf=${asOf}` : canonicalPath;
   const shareUrl = asOf
@@ -161,6 +189,7 @@ export async function loader({
     asOfState: loaded.asOfState,
     entries: loaded.entries,
     archive: loaded.archive,
+    sourceEvents,
     noindex,
     collecting,
   };
@@ -380,7 +409,60 @@ export default function OfferTimelineRoute() {
         </div>
       </section>
 
+      {/*
+       * Issue #2200 — competitor-monitoring source events. Recent diffs from
+       * the new sources (a new Google creative, a new LinkedIn ad, a new
+       * public subdomain, roles opened, etc.) projected from the same
+       * watch_event stream, gated to live sources. Same public projection
+       * shape as the /ads "changed in the last 7 days" strip: event type +
+       * change mark + capture date + the source label. No account data.
+       * Hidden when empty (never an empty card).
+       */}
+      {(data.sourceEvents ?? []).length > 0 ? (
+        <section className="f9-timeline-section" aria-labelledby="offer-timeline-source-events-title">
+          <div className="f9-container">
+            <h2 className="f9-timeline-section-title" id="offer-timeline-source-events-title">
+              Recent source changes
+            </h2>
+            <ul className="f9-quiet-list" data-testid="timeline-source-events">
+              {data.sourceEvents.map((event, index) => (
+                <li
+                  key={`${event.sourceId}:${event.eventType}:${event.capturedAt}:${index}`}
+                  className="f9-quiet-list-item"
+                >
+                  <span className="f9-quiet-list-copy">
+                    {`${event.sourceLabel} · ${formatWatchEventTypeLabel(event.eventType)}`}
+                    {event.changeMark ? (
+                      <>
+                        {" — "}
+                        <s>{event.changeMark.from}</s>
+                        <span aria-hidden="true"> → </span>
+                        <ins>{event.changeMark.to}</ins>
+                      </>
+                    ) : null}
+                    {` · captured ${formatTimelineSourceDate(event.capturedAt)}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
       <MarketingFooter />
     </main>
   );
+}
+
+const TIMELINE_SOURCE_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeZone: "UTC",
+});
+
+function formatTimelineSourceDate(iso: string): string {
+  try {
+    return TIMELINE_SOURCE_DATE_FORMATTER.format(new Date(iso));
+  } catch {
+    return iso;
+  }
 }
