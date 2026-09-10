@@ -25,6 +25,7 @@ export function BrandStatLine({
   movesThisWeek,
   freshnessLabel,
   fresh,
+  brandOwnedAdCount,
 }: {
   teaser: BrandIntelTeaser;
   aggression: BrandPageAggression | null;
@@ -32,9 +33,12 @@ export function BrandStatLine({
   movesThisWeek: number;
   freshnessLabel: string | null;
   fresh: boolean;
+  brandOwnedAdCount: number;
 }) {
   const testedCount = ads.filter((ad) => (ad.variantCount ?? 0) > 1).length;
   const cells: StatCell[] = [];
+  // A one-ad capture must read "1 ad active", never "1 ads active".
+  const adWord = teaser.activeCount === 1 ? "ad" : "ads";
 
   cells.push({
     key: "ads-live",
@@ -44,9 +48,16 @@ export function BrandStatLine({
     // (ad_active_status), never a viewer's marking — that is signed-in
     // language. Stale captures read "at the last check", mirroring the
     // page's past-tense honesty convention.
+    // Two different live counts must never collide on the proof page (issue
+    // #2319): the H1 owns the brand-owned count, so this strip names BOTH
+    // numbers the loader derives from different fields — activeCount (ads
+    // live at the capture) and brandOwnedAdCount (brand-owned among all the
+    // verified-linked creatives) — each with a label, so a visitor can't
+    // read them as one quantity. Both come from real loader fields, never
+    // hardcoded figures, and pluralize so a one-ad capture reads "1 ad".
     context: fresh
-      ? `${teaser.activeCount} active`
-      : `${teaser.activeCount} active at last check`,
+      ? `${teaser.activeCount} ${adWord} active (${brandOwnedAdCount} brand-owned)`
+      : `${teaser.activeCount} ${adWord} active at last check (${brandOwnedAdCount} brand-owned)`,
   });
 
   if (aggression) {
