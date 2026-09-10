@@ -1954,6 +1954,29 @@ async function assertOrchestratedWatchlistRunLease(
   }
 }
 
+/**
+ * Run `fn` while holding the orchestrated watchlist run lease. The lease is
+ * re-asserted just before and just after `fn` runs, so a reclaimed run cannot
+ * persist, notify, or finalize between its own effects without the guard being
+ * re-checked on both sides — the hand-threaded asserts no longer need to be
+ * interleaved manually between every DB effect.
+ */
+async function withRunLease<T>(
+  env: AppEnv,
+  runId: string,
+  token: string | null | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  await assertOrchestratedWatchlistRunLease(env, runId, {
+    orchestrationToken: token,
+  });
+  const result = await fn();
+  await assertOrchestratedWatchlistRunLease(env, runId, {
+    orchestrationToken: token,
+  });
+  return result;
+}
+
 function isRetryableMonitoringFailure(error: unknown) {
   if (error instanceof MonitoringConcurrencyLimitError) {
     return true;
@@ -3072,30 +3095,23 @@ async function persistCheapScanObservations(
   lease?: { runId: string; processingToken: string },
 ) {
   for (const ad of ads) {
-    await assertOrchestratedWatchlistRunLease(env, runId, {
-      orchestrationToken: lease?.processingToken,
-    });
-    const enrichedAd = await enrichAdForCheapScan(env, ad);
-    await assertOrchestratedWatchlistRunLease(env, runId, {
-      orchestrationToken: lease?.processingToken,
-    });
-    await upsertAd(env, enrichedAd);
+    await withRunLease(env, runId, lease?.processingToken, async () => {
+      const enrichedAd = await enrichAdForCheapScan(env, ad);
+      await upsertAd(env, enrichedAd);
 
-    await assertOrchestratedWatchlistRunLease(env, runId, {
-      orchestrationToken: lease?.processingToken,
-    });
-    await createAdObservation(env, {
-      adId: enrichedAd.metaAdId,
-      watchlistRunId: runId,
-      landingPageSnapshotId: null,
-      landingPageUrl: enrichedAd.landingPageUrl,
-      seenAt: new Date().toISOString(),
-      isActive: enrichedAd.active,
-      metadata: {
-        advertiser: enrichedAd.advertiser,
-        hook: enrichedAd.hook,
-        offer: enrichedAd.offer,
-      },
+      await createAdObservation(env, {
+        adId: enrichedAd.metaAdId,
+        watchlistRunId: runId,
+        landingPageSnapshotId: null,
+        landingPageUrl: enrichedAd.landingPageUrl,
+        seenAt: new Date().toISOString(),
+        isActive: enrichedAd.active,
+        metadata: {
+          advertiser: enrichedAd.advertiser,
+          hook: enrichedAd.hook,
+          offer: enrichedAd.offer,
+        },
+      });
     });
   }
 }
@@ -3119,59 +3135,61 @@ async function persistScanNativeEvents(
   );
 
   for (const draft of draftsToPersist) {
-    await assertOrchestratedWatchlistRunLease(env, runId, {
-      orchestrationToken: lease?.processingToken,
-    });
-    const importanceScore = getScanNativeImportanceScore(draft.eventType);
-    const candidateId = await createEventCandidate(env, {
-      watchlistId,
+    const eventId = await withRunLease(
+      env,
       runId,
-      eventType: draft.eventType,
-      status: "confirmed",
-      importanceScore,
-      adId: draft.adId,
-      title: draft.title,
-      summary: draft.summary,
-      metadata: draft.metadata,
-      proofRequired: false,
-      lastEvaluatedAt: new Date().toISOString(),
-    });
+      lease?.processingToken,
+      async () => {
+        const importanceScore = getScanNativeImportanceScore(draft.eventType);
+        const candidateId = await createEventCandidate(env, {
+          watchlistId,
+          runId,
+          eventType: draft.eventType,
+          status: "confirmed",
+          importanceScore,
+          adId: draft.adId,
+          title: draft.title,
+          summary: draft.summary,
+          metadata: draft.metadata,
+          proofRequired: false,
+          lastEvaluatedAt: new Date().toISOString(),
+        });
 
-    await assertOrchestratedWatchlistRunLease(env, runId, {
-      orchestrationToken: lease?.processingToken,
-    });
-    const eventId = await createWatchEvent(env, {
-      watchlistId,
-      runId,
-      eventType: draft.eventType,
-      adId: draft.adId,
-      baselineFromRunId,
-      candidateId,
-      importanceScore,
-      title: draft.title,
-      summary: draft.summary,
-      metadata: draft.metadata,
-    });
-    createdEvents.push({
-      id: eventId,
-      watchlistId,
-      runId,
-      eventType: draft.eventType,
-      status: "confirmed",
-      importanceScore,
-      adId: draft.adId,
-      baselineFromRunId,
-      candidateId,
-      proofCaptureId: null,
-      title: draft.title,
-      summary: draft.summary,
-      metadata: draft.metadata,
-      confirmedAt: null,
-      suppressedAt: null,
-      invalidatedAt: null,
-      lastEvaluatedAt: null,
-      createdAt: new Date().toISOString(),
-    });
+        const createdEventId = await createWatchEvent(env, {
+          watchlistId,
+          runId,
+          eventType: draft.eventType,
+          adId: draft.adId,
+          baselineFromRunId,
+          candidateId,
+          importanceScore,
+          title: draft.title,
+          summary: draft.summary,
+          metadata: draft.metadata,
+        });
+        createdEvents.push({
+          id: createdEventId,
+          watchlistId,
+          runId,
+          eventType: draft.eventType,
+          status: "confirmed",
+          importanceScore,
+          adId: draft.adId,
+          baselineFromRunId,
+          candidateId,
+          proofCaptureId: null,
+          title: draft.title,
+          summary: draft.summary,
+          metadata: draft.metadata,
+          confirmedAt: null,
+          suppressedAt: null,
+          invalidatedAt: null,
+          lastEvaluatedAt: null,
+          createdAt: new Date().toISOString(),
+        });
+        return createdEventId;
+      },
+    );
   }
 
   return createdEvents;
