@@ -209,9 +209,9 @@ describe("marketing pricing preview fetch timing", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false });
     vi.stubGlobal("fetch", fetchMock);
     installFakeIntersectionObserver();
-    // The loader now publishes the Dodo preview server-side (bounded); a
-    // hydrated page with those prices must never re-fetch the preview client
-    // side, and the real price renders instead of the checkout-localized
+    // A hydrated pricing section that already holds resolved prices — the
+    // loader-data path /pricing still uses — must never re-fetch the preview
+    // client side, and the real price renders instead of the checkout-localized
     // fallback.
     loaderData.pricingPreview = {
       available: true,
