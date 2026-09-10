@@ -63,7 +63,8 @@ export function DeliverySettingsCard(props: {
           <label className="f9-field">
             <span>Quiet hours start</span>
             <input
-              defaultValue={data.effectiveDeliveryConfig.quietHours?.startHour ?? 22}
+              defaultValue={data.effectiveDeliveryConfig.quietHours?.startHour}
+              placeholder="22"
               name="quietHoursStart"
               type="number"
             />
@@ -71,7 +72,8 @@ export function DeliverySettingsCard(props: {
           <label className="f9-field">
             <span>Quiet hours end</span>
             <input
-              defaultValue={data.effectiveDeliveryConfig.quietHours?.endHour ?? 8}
+              defaultValue={data.effectiveDeliveryConfig.quietHours?.endHour}
+              placeholder="8"
               name="quietHoursEnd"
               type="number"
             />
