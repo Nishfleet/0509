@@ -120,6 +120,46 @@ function loaderContext(envOverrides: Record<string, unknown> = {}) {
   return { cloudflare: { env: { ...appEnv, ...envOverrides } } };
 }
 
+/**
+ * Issue #2407: the WP-25 activation-result email claims this exact idempotency
+ * key (`~/lib/delivery-account-emails.server`), so a row here is the only
+ * durable proof that the email left the building.
+ */
+async function seedActivationResultAttempt(options: {
+  userId: string;
+  watchlistId: string;
+  status: "sent" | "pending" | "failed";
+  watchlistIdInKey?: string;
+}) {
+  const webhookStatus =
+    options.status === "sent"
+      ? "provider_unknown"
+      : options.status === "failed"
+        ? "failed"
+        : "pending";
+  await db()
+    .prepare(
+      `INSERT INTO delivery_attempt (
+        id, user_id, watchlist_id, lane, channel, provider, status,
+        webhook_status, target_value, event_ids_json, payload_snapshot_json,
+        idempotency_key, sent_at, created_at, updated_at
+      ) VALUES (?, ?, ?, 'customer', 'email', 'cloudflare', ?, ?, ?, '[]', '{}', ?, ?, ?, ?)`,
+    )
+    .bind(
+      uid("da"),
+      options.userId,
+      options.watchlistId,
+      options.status,
+      webhookStatus,
+      `${options.userId}@example.test`,
+      `activation-result:${options.userId}:${options.watchlistIdInKey ?? options.watchlistId}`,
+      options.status === "sent" ? ISO_T0 : null,
+      ISO_T0,
+      ISO_T0,
+    )
+    .run();
+}
+
 async function callOnboardLoader(
   envOverrides: Record<string, unknown> = {},
   url = "http://localhost/app/onboard?step=first-brief",
@@ -191,6 +231,10 @@ describe("/app/onboard?step=first-brief against real D1 (issue #1276)", () => {
     expect(data.brief.evidenceUrl).toBe(EVIDENCE_URL);
     expect(data.brief.whatChanged).toContain("baseline");
 
+    // Issue #2407: no activation-result attempt row was seeded, so the ready
+    // state must not claim the email was sent.
+    expect(data.activationEmailSent).toBe(false);
+
     // The funnel event must be emitted exactly once.
     const funnelCalls = (logSpy.mock.calls as unknown[][])
       .map((call) => call[0])
@@ -256,6 +300,58 @@ describe("/app/onboard?step=first-brief against real D1 (issue #1276)", () => {
     if (result.kind !== "response") throw new Error("expected redirect");
     expect(result.response.status).toBe(301);
     expect(result.response.headers.get("Location")).toContain("/app");
+  });
+
+  it.each([
+    ["sent", true],
+    ["pending", false],
+    ["failed", false],
+  ] as const)(
+    "gates the activation email claim on a %s delivery_attempt row (issue #2407)",
+    async (status, expected) => {
+      const seeded = await seedCompleteFirstBrief();
+      seededUserId = seeded.userId;
+      await seedActivationResultAttempt({
+        userId: seeded.userId,
+        watchlistId: seeded.watchlistId,
+        status,
+      });
+
+      const result = await callOnboardLoader({
+        SIGNUP_FIRST_BRIEF_ENABLED: "1",
+        FUNNEL_MEASUREMENT_ENABLED: "1",
+      });
+
+      expect(result.kind).toBe("data");
+      if (result.kind !== "data") throw new Error("expected data, not redirect");
+      const data = result.data as SignupFirstBriefLoaderData;
+      expect(data.status).toBe("ready");
+      if (data.status !== "ready") throw new Error("expected ready brief");
+      expect(data.activationEmailSent).toBe(expected);
+    },
+  );
+
+  it("reads the attempt row for this watchlist only, not another watchlist's (issue #2407)", async () => {
+    const seeded = await seedCompleteFirstBrief();
+    seededUserId = seeded.userId;
+    // A `sent` row under a different watchlist id must not license the claim.
+    await seedActivationResultAttempt({
+      userId: seeded.userId,
+      watchlistId: seeded.watchlistId,
+      watchlistIdInKey: `${seeded.watchlistId}-other`,
+      status: "sent",
+    });
+
+    const result = await callOnboardLoader({
+      SIGNUP_FIRST_BRIEF_ENABLED: "1",
+      FUNNEL_MEASUREMENT_ENABLED: "1",
+    });
+
+    expect(result.kind).toBe("data");
+    if (result.kind !== "data") throw new Error("expected data, not redirect");
+    const data = result.data as SignupFirstBriefLoaderData;
+    if (data.status !== "ready") throw new Error("expected ready brief");
+    expect(data.activationEmailSent).toBe(false);
   });
 
   it("buildSignupFirstBriefPayload resolves ad enrichment from real D1", async () => {
