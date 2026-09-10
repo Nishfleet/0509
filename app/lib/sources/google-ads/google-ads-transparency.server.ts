@@ -16,11 +16,18 @@
  * - ONE attempt per page (no retry loop)
  * - returns normalized creatives, or { unavailable: true, reason } on
  *   non-200 / parse failure / HTML response
- * - any format enum not mapped -> 'unknown'; never block on an unmapped value
  * - when maxCreatives is hit, the caller records truncated: true (200 is never
  *   the full count for big advertisers)
  * - stores previewUrl only (extracted from the img html); never stores the
  *   img html itself
+ *
+ * Format is NOT derived from the creative's `4` field. Across the fixtures
+ * captured for three domains (nike.com, notion.so, a zero-ad domain) the `4`
+ * key took every of the values 1/2/3 on BOTH image creatives and non-image
+ * creatives alike, so it is not a reliable text/image/video enum (it is not
+ * the format field the reference LookupCreative maps as 1=Text/2=Image/
+ * 3=Video). Instead format is derived from the preview structure, which
+ * cleanly separates the two kinds actually present in SearchCreatives.
  */
 
 const ENDPOINT =
@@ -69,22 +76,32 @@ export interface FetchCreativesOptions {
    * global fetch is used in production.
    */
   fetchImpl?: typeof fetch;
-  /** Injectable clock for the inter-page delay (tests). */
-  now?: () => number;
 }
 
 /**
- * Format enum mapping, derived from fixtures captured across three domains
- * (nike.com, notion.so, a zero-ad domain) and confirmed against the
- * GoogleAdsTransparencyScraper reference, which maps the LookupCreative
- * format field the same way: 1 = Text, 2 = Image, 3 = Video. The
- * SearchCreatives creative carries the same enum at key `4`. Any value
- * outside {1,2,3} -> 'unknown'; the caller never blocks on an unmapped value.
+ * Detect the ad format from the preview object. Because the SearchCreatives
+ * `4` key is not a reliable text/image/video enum (see header), format is
+ * derived from which preview sub-structure is present:
+ *  - preview.3.2 carries the `&lt;img …&gt;` html  -> image
+ *  - preview.1.4 carries the content.js renderer URL (text / responsive
+ *    display; video is not distinguishable from the SearchCreatives body
+ *    without the forbidden N+1 LookupCreative call, so these read "text")
+ *  - anything else -> unknown (never blocks the caller)
  */
-function mapFormat(value: unknown): GoogleAdsCreativeFormat {
-  if (value === 1) return "text";
-  if (value === 2) return "image";
-  if (value === 3) return "video";
+function detectFormat(preview: unknown): GoogleAdsCreativeFormat {
+  const p = preview as Record<string, unknown>;
+  if (p && typeof p === "object") {
+    const imgChild = p["3"] as Record<string, unknown> | undefined;
+    if (imgChild && typeof imgChild === "object" && typeof imgChild["2"] === "string") {
+      return "image";
+    }
+    if (typeof p["1"] === "object" && p["1"] !== null) {
+      const contentChild = p["1"] as Record<string, unknown>;
+      if (typeof contentChild["4"] === "string") {
+        return "text";
+      }
+    }
+  }
   return "unknown";
 }
 
@@ -107,7 +124,12 @@ function extractPreviewUrl(preview: unknown): string | null {
   for (const raw of candidates) {
     if (typeof raw !== "string") continue;
     const match = raw.match(/<img[^>]*\bsrc=["']([^"']+)["']/i);
-    if (match) return match[1];
+    if (!match) continue;
+    // Only a real https URL is usable as the preview src. These URLs come
+    // from Google's own preview HTML (displayads-formats.googleusercontent
+    // .com / tpc.googlesyndication.com), but an https-only guard keeps a
+    // javascript:/data: src out of the page's <img> outright.
+    if (/^https:\/\//i.test(match[1])) return match[1];
   }
   return null;
 }
@@ -131,7 +153,7 @@ function normalizeCreative(raw: Record<string, unknown>): GoogleAdsCreative | nu
     advertiserId,
     advertiserName: typeof raw["12"] === "string" ? raw["12"] : "",
     creativeId,
-    format: mapFormat(raw["4"]),
+    format: detectFormat(raw["3"]),
     domain: typeof raw["14"] === "string" ? raw["14"] : "",
     firstShownAt: epochToIso(firstShown?.["1"]),
     lastShownAt: epochToIso(lastShown?.["1"]),
@@ -139,7 +161,7 @@ function normalizeCreative(raw: Record<string, unknown>): GoogleAdsCreative | nu
   };
 }
 
-function sleep(ms: number, now: () => number): Promise<void> {
+function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(() => resolve(), ms));
 }
 
@@ -213,7 +235,6 @@ export async function fetchCreativesByDomain(
 ): Promise<GoogleAdsFetchResult | GoogleAdsUnavailable> {
   const maxCreatives = options.maxCreatives ?? 200;
   const fetchImpl = options.fetchImpl ?? fetch;
-  const now = options.now ?? Date.now;
 
   const collected: GoogleAdsCreative[] = [];
   let pageToken: string | null = null;
@@ -221,7 +242,7 @@ export async function fetchCreativesByDomain(
 
   while (collected.length < maxCreatives) {
     if (!isFirstPage) {
-      await sleep(INTER_PAGE_DELAY_MS, now);
+      await sleep(INTER_PAGE_DELAY_MS);
     }
     isFirstPage = false;
 

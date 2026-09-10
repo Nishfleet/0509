@@ -15,7 +15,9 @@ function creative(overrides: Partial<GoogleAdsCreative> = {}): GoogleAdsCreative
     format: overrides.format ?? "text",
     domain: overrides.domain ?? "acme.com",
     firstShownAt: overrides.firstShownAt ?? "2026-01-01T00:00:00.000Z",
-    lastShownAt: overrides.lastShownAt ?? "2026-09-01T00:00:00.000Z",
+    // Recent lastShown (same day as the default fetchedAt) so the default
+    // creative never accidentally trips the 7-day paused-stale rule.
+    lastShownAt: overrides.lastShownAt ?? "2026-09-10T00:00:00.000Z",
     previewUrl: overrides.previewUrl ?? null,
   };
 }
@@ -68,10 +70,13 @@ describe("google-ads-snapshot diffGoogleAdsSnapshots", () => {
   });
 
   it("detects a paused creative (lastShownAt stopped advancing 7+ days)", () => {
-    const staleLastShown = new Date(Date.parse("2026-09-10T00:00:00.000Z") - 9 * DAY).toISOString();
-    const prev = snapshot([creative({ creativeId: "CR1", lastShownAt: staleLastShown })], "2026-09-10T00:00:00.000Z");
-    // next snapshot 1 day later; lastShownAt did not advance
-    const next = snapshot([creative({ creativeId: "CR1", lastShownAt: staleLastShown })], "2026-09-11T00:00:00.000Z");
+    // lastShown froze at exactly 7 days before `next` (>= 7 -> paused) but
+    // only 6 days before `prev` (< 7 -> not yet paused), so this creative
+    // becomes paused in this transition and is emitted once.
+    const nextFetched = Date.parse("2026-09-11T00:00:00.000Z");
+    const lastShown = new Date(nextFetched - 7 * DAY).toISOString();
+    const prev = snapshot([creative({ creativeId: "CR1", lastShownAt: lastShown })], "2026-09-10T00:00:00.000Z");
+    const next = snapshot([creative({ creativeId: "CR1", lastShownAt: lastShown })], "2026-09-11T00:00:00.000Z");
     const changes = diffGoogleAdsSnapshots(prev, next);
     const paused = changes.find((c) => (c.metadata as { category?: string }).category === "paused_creatives");
     expect(paused).toBeDefined();
@@ -98,6 +103,18 @@ describe("google-ads-snapshot diffGoogleAdsSnapshots", () => {
     const next = snapshot([creative({ creativeId: "CR1", lastShownAt: lastShown })], "2026-09-10T00:00:00.001Z");
     const changes = diffGoogleAdsSnapshots(prev, next);
     expect(changes.find((c) => (c.metadata as { category?: string }).category === "paused_creatives")).toBeUndefined();
+  });
+
+  it("does not re-emit a paused creative that was already paused last check", () => {
+    const staleLastShown = new Date(Date.parse("2026-08-30T00:00:00.000Z")).toISOString();
+    const prev = snapshot([creative({ creativeId: "CR1", lastShownAt: staleLastShown })], "2026-09-10T00:00:00.000Z");
+    // next snapshot: lastShownAt still stale (not advancing) — already paused
+    const next = snapshot([creative({ creativeId: "CR1", lastShownAt: staleLastShown })], "2026-09-11T00:00:00.000Z");
+    const changes = diffGoogleAdsSnapshots(prev, next);
+    expect(
+      changes.find((c) => (c.metadata as { category?: string }).category === "paused_creatives"),
+    ).toBeUndefined();
+    expect(changes).toEqual([]);
   });
 
   it("detects new advertiser ids on the domain", () => {

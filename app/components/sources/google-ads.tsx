@@ -69,7 +69,9 @@ export function GoogleAdsSection({
     new Set(creatives.map((c) => c.advertiserName).filter((n) => n)),
   ).slice(0, 4);
   const previews = creatives.filter((c) => c.previewUrl).slice(0, MAX_PREVIEWS);
-  const fm = payload.formatMix;
+  // Guard a malformed/older stored payload: a missing formatMix must not
+  // throw and take down the evidence tab.
+  const fm = payload?.formatMix ?? { text: 0, image: 0, video: 0, unknown: 0 };
   const sinceLast = newCreativeCount(diff);
 
   return (
