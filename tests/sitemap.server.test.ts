@@ -853,6 +853,21 @@ describe("llms.txt parity with dynamic sitemap brand paths", () => {
       cache_key: "search-v2:domain:nike.com:exact:meta_library_browser:all:page-1",
       payload: { ...basePayload, displayDomain: "nike.com", ads: [nikeAd] },
     });
+    // A brand with >=3 live Meta Ad Library ads stays in llms.txt (issue
+    // #2307); one- and two-ad pages are dropped from llms.txt but remain in
+    // the sitemap.
+    const threeAd = cacheRow({
+      cache_key: "search-v2:domain:adidas.com:exact:meta_library_browser:all:page-1",
+      payload: {
+        ...basePayload,
+        displayDomain: "adidas.com",
+        ads: [
+          { ...verifiedAd, metaAdId: "meta-adidas-1" },
+          { ...verifiedAd, metaAdId: "meta-adidas-2" },
+          { ...verifiedAd, metaAdId: "meta-adidas-3" },
+        ],
+      },
+    });
     const stale = cacheRow({
       cache_key: "search-v2:domain:stale.com:exact:meta_library_browser:all:page-1",
       payload: { ...basePayload, displayDomain: "stale.com" },
@@ -868,7 +883,7 @@ describe("llms.txt parity with dynamic sitemap brand paths", () => {
     });
 
     const brandEntries = indexableBrandPageEntriesFromRows(
-      [indexable, stale, demo, otherCountry, cacheRow()],
+      [indexable, threeAd, stale, demo, otherCountry, cacheRow()],
       now,
     );
     const sitemapAds = [...buildSitemapXml(brandEntries).matchAll(/https:\/\/0509\.io\/ads\/[^<]+/g)].map(
@@ -878,8 +893,16 @@ describe("llms.txt parity with dynamic sitemap brand paths", () => {
       (match) => match[0],
     );
 
-    expect(sitemapAds).toEqual(["https://0509.io/ads/nike.com", "https://0509.io/ads/nykaa.com"]);
-    expect(llmsAds).toEqual(sitemapAds);
+    expect(sitemapAds).toEqual([
+      "https://0509.io/ads/nike.com",
+      "https://0509.io/ads/adidas.com",
+      "https://0509.io/ads/nykaa.com",
+    ]);
+    // llms.txt keeps only the >=3-ad brand (issue #2307); the 1-ad nike.com
+    // and nykaa.com pages stay in the sitemap but are dropped from llms.txt.
+    expect(llmsAds).toEqual(["https://0509.io/ads/adidas.com"]);
+    expect(llmsAds).not.toContain("https://0509.io/ads/nike.com");
+    expect(llmsAds).not.toContain("https://0509.io/ads/nykaa.com");
     expect(llmsAds).not.toContain("https://0509.io/ads/stale.com");
     expect(llmsAds).not.toContain("https://0509.io/ads/demo.com");
     expect(llmsAds).not.toContain("https://0509.io/ads/myntra.com");

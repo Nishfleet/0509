@@ -1032,6 +1032,14 @@ export function buildLlmsText(
   timelineEntries: readonly { path: string; lastmod?: string }[] = [],
 ): string {
   const brandPages = brandEntries.flatMap((entry) => {
+    // Issue #2307: a brand entry needs >=3 live Meta Ad Library ads to be
+    // worth citing — one- and two-ad pages are the weakest possible citation
+    // and dilute the file's authority. The count is the same one already
+    // rendered in each llms.txt line (adCount). Entries with no count
+    // (undefined) are unaffected.
+    if (entry.adCount !== undefined && entry.adCount < 3) {
+      return [];
+    }
     const page = llmsPageForBrandPath(entry.path, entry.adCount, entry.fetchedAt);
     return page ? [page] : [];
   });
