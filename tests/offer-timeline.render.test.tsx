@@ -125,6 +125,7 @@ function data(overrides: Partial<OfferTimelineLoaderData> = {}): OfferTimelineLo
       offerHistory: [],
       monthSummary: null,
     },
+    sourceEvents: [],
     noindex: false,
     collecting: false,
     ...overrides,

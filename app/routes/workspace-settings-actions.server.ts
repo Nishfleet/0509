@@ -3,7 +3,7 @@ import { redirect, type ActionFunctionArgs } from "react-router";
 import {
   action as developerAccessAction,
   handlesDeveloperAccessIntent,
-} from "~/routes/app.developer-access";
+} from "~/routes/app.api";
 import {
   action as notificationsAction,
   handlesNotificationIntent,

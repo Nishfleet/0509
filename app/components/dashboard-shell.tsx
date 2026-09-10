@@ -43,6 +43,23 @@ function navLinkClassName({ isActive, isPending }: { isActive: boolean; isPendin
 }
 
 /**
+ * Route diet phase 1 (#2213) — the row's OWN path is active, before member
+ * ownership is applied. React Router's NavLink only knows that answer, so a
+ * destination reached through a member page used to style itself active while
+ * carrying no `aria-current` at all: sighted users saw the current row, screen
+ * readers heard none. One function answers both, like the member resolver.
+ */
+function isDestinationOwnActive(item: DashboardNavItem, pathname: string) {
+  return item.end
+    ? pathname === item.to
+    : pathname === item.to || pathname.startsWith(`${item.to}/`);
+}
+
+function isDestinationActive(item: DashboardNavItem, pathname: string) {
+  return isDestinationOwnActive(item, pathname) || isDestinationMemberActive(item, pathname);
+}
+
+/**
  * BL-030 — a rail row. Text only: the concept's rail carries no icons, no
  * mono caps and no boxes, so a row is a label and (when the caller has one)
  * a count. Green never appears here — the rail is monochrome by rule, and
@@ -50,24 +67,29 @@ function navLinkClassName({ isActive, isPending }: { isActive: boolean; isPendin
  */
 function WorkspaceNavLink({ item }: { item: DashboardNavItem }) {
   const location = useLocation();
-  // A destination owns its member pages: Settings is the active row on
-  // /app/billing, Deliver on /app/digests — the customer is never nowhere.
-  const memberActive = isDestinationMemberActive(item, location.pathname);
+  const navigation = useNavigation();
+  // A destination owns its member pages: Account & Billing is the active row on
+  // /app/billing, Competitors on /app/watchlists — the customer is never
+  // nowhere, and `aria-current="page"` says the same thing the styling does.
+  const active = isDestinationActive(item, location.pathname);
   return (
-    <NavLink
-      className={(state) => {
-        const base = navLinkClassName({
-          ...state,
-          isActive: state.isActive || memberActive,
-        });
-        return ["f9-dash-nav-link", "f9-wk-nav-a", base].filter(Boolean).join(" ");
-      }}
-      end={item.end}
+    <Link
+      aria-current={active ? "page" : undefined}
+      className={[
+        "f9-dash-nav-link",
+        "f9-wk-nav-a",
+        navLinkClassName({
+          isActive: active,
+          isPending: navigation.state !== "idle" && navigation.location?.pathname === item.to,
+        }),
+      ]
+        .filter(Boolean)
+        .join(" ")}
       prefetch="intent"
       to={item.to}
     >
       <span>{item.label}</span>
-    </NavLink>
+    </Link>
   );
 }
 
@@ -255,24 +277,24 @@ export function DashboardShell({
             ref={mobilePrimaryRef}
           >
             {mobileNav.map((item) => {
-              // Same member-page ownership as the rail: Settings stays the
-              // active mobile row on /app/billing (PR-5a review, Grok 2).
-              const memberActive = isDestinationMemberActive(item, location.pathname);
+              // Same member-page ownership as the rail: Account & Billing stays
+              // the active mobile row on /app/billing, and it carries
+              // aria-current while it does (route diet phase 1, #2213).
+              const active = isDestinationActive(item, location.pathname);
               return (
-                <NavLink
-                  className={(state) =>
-                    navLinkClassName({
-                      ...state,
-                      isActive: state.isActive || memberActive,
-                    })
-                  }
-                  end={item.end}
+                <Link
+                  aria-current={active ? "page" : undefined}
+                  className={navLinkClassName({
+                    isActive: active,
+                    isPending:
+                      navigation.state !== "idle" && navigation.location?.pathname === item.to,
+                  })}
                   key={item.to}
                   prefetch="intent"
                   to={item.to}
                 >
                   {item.label}
-                </NavLink>
+                </Link>
               );
             })}
             <SignOutButton />
