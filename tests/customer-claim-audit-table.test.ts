@@ -231,6 +231,7 @@ describe("BET 10 claim-by-claim audit table", () => {
     const banned = [
       "saves the screenshots",
       "sends screenshot evidence",
+      "before-and-after screenshot",
       "Landing-page change history with screenshots",
       "Every change keeps a screenshot",
       "Every alert includes the screenshot",
