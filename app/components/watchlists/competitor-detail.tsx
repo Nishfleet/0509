@@ -55,7 +55,7 @@ import {
  * The detail used to be one 9,814px mobile scroll that stacked the change
  * feed, creative wall, trends, intelligence, glossary, evidence cards,
  * delivery forms, recipient lists, run history and the setup form. It is now
- * five URL-addressable surfaces plus a rail of exactly three objects.
+ * six URL-addressable surfaces plus a rail of exactly three objects.
  *
  * Everything that is page STATE — the first-scan arc and a run of failed
  * checks — stays above the tab bar, because state is not a section you can

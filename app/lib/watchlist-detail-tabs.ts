@@ -4,7 +4,7 @@
  * The opened competitor used to be ONE 9,814px mobile scroll: change feed,
  * creative wall, trends, intelligence, glossary, evidence cards, delivery
  * forms, target lists, run history and the setup form, all stacked. §6.4
- * breaks that into five real surfaces in a fixed order.
+ * breaks that into six real surfaces in a fixed order.
  *
  * Everything here is pure and URL-shaped on purpose: the tab bar is
  * navigation, not state (brief §11 — "the tab bar is URL-driven, not

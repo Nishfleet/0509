@@ -679,7 +679,7 @@ test.describe("BL-035 competitor detail live proof", () => {
           await expect(page.locator(".f9-wk-board")).toHaveCount(0);
           await expect(
             page.getByRole("navigation", { name: "Competitor sections" }).getByRole("link"),
-          ).toHaveCount(5);
+          ).toHaveCount(6);
 
           const measured = await measure(page);
           const paint = await auditGreen(page);
