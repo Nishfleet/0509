@@ -408,6 +408,11 @@ export function itemListJsonLd(entries: ReadonlyArray<ItemListJsonLdEntry>) {
  * - `dateModified`: the ISO timestamp of the last content update the page
  *   visibly stamps (e.g. the cached-check time on /ads/:domain). Omitted when
  *   the page has no such stamp — never invented.
+ * - `datePublished`: the ISO timestamp of the FIRST stored snapshot for the
+ *   page's subject (the day the record opened — e.g. the oldest
+ *   `landing_page_snapshot.captured_at` the /ads/:domain page already renders
+ *   in its Offer Timeline section). Omitted when nothing is stored, so a page
+ *   with zero snapshots never claims a publication date.
  * - `aboutName`: the subject of the page when it is about a specific brand
  *   (e.g. the /ads/:domain brand pages). Must match a name the page shows.
  * - `comparedProductName`: the competitor product a `/compare/*` page is
@@ -419,6 +424,7 @@ export function webPageJsonLd(input: {
   description: string;
   pathname: string;
   dateModified?: string;
+  datePublished?: string;
   aboutName?: string;
   comparedProductName?: string;
   /**
@@ -436,6 +442,7 @@ export function webPageJsonLd(input: {
     name: input.name,
     description: input.description,
     url: canonicalUrl(input.pathname),
+    ...(input.datePublished ? { datePublished: input.datePublished } : {}),
     ...(input.dateModified ? { dateModified: input.dateModified } : {}),
     ...(input.aboutName
       ? { about: { "@type": "Organization", name: input.aboutName } }

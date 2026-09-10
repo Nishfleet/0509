@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BrandPageLoaderData } from "~/routes/ads.$domain";
 import type { AdRecord } from "~/lib/types";
+import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 
 let currentData: BrandPageLoaderData;
 
@@ -120,6 +121,25 @@ function cachedIndexable(overrides: Partial<BrandPageLoaderData> = {}): BrandPag
   };
 }
 
+/** One stored landing-page snapshot row, as the /ads loader ships it. */
+function ledgerEntry(id: string, capturedAt: string): OfferLedgerEntry {
+  return {
+    id,
+    capturedAt,
+    dateLabel: capturedAt.slice(0, 10),
+    canonicalUrl: "https://www.nike.com/",
+    headline: "Nike. Just Do It.",
+    ctaText: "Shop Now",
+    priceText: null,
+    formPresent: false,
+    screenshotHref: null,
+    pageTextHref: null,
+    evidenceNote: null,
+    transition: null,
+    runExtentLabel: null,
+  };
+}
+
 describe("adsPageServiceJsonLd", () => {
   it("describes the per-competitor watch offer with brand, URL, and Five to Nine as provider", async () => {
     const { adsPageServiceJsonLd } = await import("~/lib/seo");
@@ -218,6 +238,37 @@ describe("/ads/:domain JSON-LD", () => {
     expect(serialized).not.toMatch(/aggregateRating|reviewCount|ratingValue/i);
     expect(serialized).not.toContain('"@type":"Offer"');
     expect(serialized).not.toMatch(/[$₹€£]\s?\d/);
+  }, 20_000);
+
+  it("emits datePublished as the domain's earliest stored snapshot, alongside dateModified (issue #2303)", async () => {
+    const earliest = "2026-01-01T00:00:00.000Z";
+    const data = cachedIndexable({
+      offerTimelineEntries: [
+        ledgerEntry("snap-nike-20260101", earliest),
+        ledgerEntry("snap-nike-20260601", "2026-06-01T00:00:00.000Z"),
+        ledgerEntry("snap-nike-20260825", "2026-08-25T00:00:00.000Z"),
+      ],
+    });
+    const markup = await render(data);
+
+    const webPage = parseLdJsonBlocks(markup).find((block) => block["@type"] === "WebPage") ?? {};
+    // First-seen and last-checked side by side. datePublished is the EARLIEST
+    // stored snapshot (`landing_page_snapshot.captured_at`) — the same row and
+    // column /timeline/:domain already emits as its Dataset datePublished —
+    // never the newest one.
+    expect(webPage.datePublished).toBe(earliest);
+    expect(webPage.dateModified).toBe("2026-08-09T10:00:00.000Z");
+  }, 20_000);
+
+  it("omits datePublished entirely when the domain has zero stored snapshots (issue #2303)", async () => {
+    // Default cachedIndexable() has offerTimelineEntries: [] — nothing stored,
+    // no dated ledger on the page, so no publication date is claimed.
+    const markup = await render(cachedIndexable());
+
+    const webPage = parseLdJsonBlocks(markup).find((block) => block["@type"] === "WebPage") ?? {};
+    expect(webPage).not.toHaveProperty("datePublished");
+    // dateModified still rides the visible "Last checked" stamp.
+    expect(webPage.dateModified).toBe("2026-08-09T10:00:00.000Z");
   }, 20_000);
 
   it("omits Service and WebPage JSON-LD on the noindex honest shell", async () => {
