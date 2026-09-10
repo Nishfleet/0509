@@ -486,6 +486,9 @@ export default function MarketingRoute() {
   // Issue #2170: the first viewport leads with the free, no-account live
   // Meta ad search — the acquisition asset. The wall is the same with or
   // without live proof; the proof strip under it stays the evidence layer.
+  // The "live" flag must hold the same freshness discipline as /search
+  // (AUDIT-SEARCH-PREVIEW-FRESHNESS): it only renders when heroProofLive is
+  // true, so a stale/on-record proof never claims "right now".
   const heroWall = (
     <h1 className="ld-wall">
       <span className="ld-row">See the Meta ads</span>
@@ -493,7 +496,8 @@ export default function MarketingRoute() {
       <span className="ld-row ld-row-indent">
         running{" "}
         <ins className="ld-ins">
-          right now.<i className="ld-flag">live</i>
+          right now.
+          {heroProofLive ? <i className="ld-flag">live</i> : null}
         </ins>
       </span>
       <span className="ld-row">Free, no account.</span>
@@ -674,14 +678,6 @@ export default function MarketingRoute() {
           <div className="ld-hero-copy">
             {heroWall}
 
-            {heroProofStrip}
-
-            <p className="ld-deck-copy">
-              Then Five to Nine keeps watching the offer behind those ads. When it moves, you get the
-              before-and-after with the page text and source link — plus a screenshot when the capture
-              includes one.
-            </p>
-
             <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
               <input
                 aria-label="Competitor website"
@@ -696,6 +692,14 @@ export default function MarketingRoute() {
                 Preview available ads <span aria-hidden="true">→</span>
               </button>
             </Form>
+
+            {heroProofStrip}
+
+            <p className="ld-deck-copy">
+              Then Five to Nine keeps watching the offer behind those ads. When it moves, you get the
+              before-and-after with the page text and source link — plus a screenshot when the capture
+              includes one.
+            </p>
 
             <div className="f9-hero-proof-actions" aria-label="Proof brief before signup">
               <Link to={publicSearchTrialPath}>Try with {featuredBrandName}</Link>
@@ -924,7 +928,7 @@ export default function MarketingRoute() {
                 <p className="ld-export">
                   {proofBrief.decision.subject}
                   {"\n"}Priority: {proofBrief.decision.priority}
-                  {"\n"}Proof: {proofBrief.adCount} real captures — {proofBrief.fetchedAt}
+                  {"\n"}Proof: {proofBrief.adCount} real captures — {proofTimeLabel(proofBrief.fetchedAt)}
                 </p>
               </article>
             </div>

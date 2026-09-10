@@ -1391,6 +1391,7 @@ function BrandAdsResults({
         <BrandStatLine
           ads={data.verifiedLinkedAds}
           aggression={data.aggression}
+          brandOwnedAdCount={data.brandOwnedAdCount}
           freshnessLabel={data.checkedAgo}
           fresh={data.freshForLiveClaim}
           movesThisWeek={data.changeEvents.length}
