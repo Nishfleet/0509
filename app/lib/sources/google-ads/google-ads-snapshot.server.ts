@@ -33,7 +33,14 @@ export interface GoogleAdsSnapshotPayload extends JsonRecord {
   truncated: boolean;
   creatives: GoogleAdsCreative[];
   advertiserCount: number;
-  formatMix: { text: number; image: number; video: number; unknown: number };
+  formatMix: FormatMix;
+}
+
+export interface FormatMix {
+  text: number;
+  image: number;
+  video: number;
+  unknown: number;
 }
 
 export interface GoogleAdsSnapshotInput {
@@ -74,11 +81,18 @@ function creativeMap(creatives: GoogleAdsCreative[]): Map<string, GoogleAdsCreat
   return map;
 }
 
-function formatMixEqual(
-  a: { text: number; image: number; video: number; unknown: number },
-  b: { text: number; image: number; video: number; unknown: number },
-): boolean {
+function formatMixEqual(a: FormatMix, b: FormatMix): boolean {
   return a.text === b.text && a.image === b.image && a.video === b.video && a.unknown === b.unknown;
+}
+
+/**
+ * Read the format mix off a stored payload. A partial/older payload may carry
+ * no `formatMix` at all; that reads as null here rather than throwing.
+ */
+function readFormatMix(payload: GoogleAdsSnapshotPayload | null): FormatMix | null {
+  const mix = payload?.formatMix;
+  if (!mix || typeof mix !== "object") return null;
+  return mix;
 }
 
 /**
@@ -167,13 +181,18 @@ export function diffGoogleAdsSnapshots(
     });
   }
 
-  // Format mix change.
-  if (!formatMixEqual(prev.formatMix, next.formatMix)) {
+  // Format mix change. A partial/older stored payload may have no formatMix
+  // (the Section is hardened the same way): the documented choice is to treat
+  // that as "no mix change" and stay silent rather than throw or invent a
+  // baseline.
+  const prevMix = readFormatMix(prev);
+  const nextMix = readFormatMix(next);
+  if (prevMix && nextMix && !formatMixEqual(prevMix, nextMix)) {
     changes.push({
       eventType: "website_page_changed",
       title: `Google Ads format mix changed on ${next.domain}`,
-      summary: `Creative format mix shifted from text:${prev.formatMix.text}/image:${prev.formatMix.image}/video:${prev.formatMix.video}/unknown:${prev.formatMix.unknown} to text:${next.formatMix.text}/image:${next.formatMix.image}/video:${next.formatMix.video}/unknown:${next.formatMix.unknown}.`,
-      metadata: { category: "format_mix_change", prev: prev.formatMix, next: next.formatMix },
+      summary: `Creative format mix shifted from text:${prevMix.text}/image:${prevMix.image}/video:${prevMix.video}/unknown:${prevMix.unknown} to text:${nextMix.text}/image:${nextMix.image}/video:${nextMix.video}/unknown:${nextMix.unknown}.`,
+      metadata: { category: "format_mix_change", prev: prevMix, next: nextMix },
     });
   }
 
