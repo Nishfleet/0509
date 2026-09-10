@@ -3911,11 +3911,6 @@ one signal-green accent.
 
   .f9-home .ld-nav-links {
     overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .f9-home .ld-nav-links::-webkit-scrollbar {
-    display: none;
   }
 
   /* Every link in the compact nav row stays a real ≥44px touch target

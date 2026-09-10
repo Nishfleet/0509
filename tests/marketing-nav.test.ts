@@ -91,7 +91,13 @@ describe("MarketingNav (shared public nav)", () => {
 		expect(compact).toMatch(/\.ld-nav-links\s*\{[^}]*flex-wrap:\s*nowrap/s);
 		expect(compact).toMatch(/\.f9-legal-page \.ld-nav-links\s*\{[^}]*flex-wrap:\s*wrap/s);
 		expect(compact).toMatch(/\.f9-home \.ld-nav-links\s*\{[^}]*overflow-x:\s*auto/s);
-		expect(compact).toMatch(/\.f9-home \.ld-nav-links\s*\{[^}]*scrollbar-width:\s*none/s);
+		// The compact home nav keeps a VISIBLE native scrollbar. The prior hidden-
+		// scrollbar rules made the horizontal-overflow row look static with no
+		// scroll affordance; the orchestrator decision (2026-09-10) removed them so
+		// the existing overflow-x:auto row shows its scrollbar at 375px. Guard that
+		// the hide rules stay gone and the row stays scrollable.
+		expect(compact).not.toMatch(/\.f9-home \.ld-nav-links\s*\{[^}]*scrollbar-width:\s*none/s);
+		expect(compact).not.toContain(".f9-home .ld-nav-links::-webkit-scrollbar");
 	});
 
 	it("is the header used by landing, all compare pages, switch pages, and the legal doc shell", async () => {
