@@ -363,6 +363,12 @@ VALUES
 
 const DATABASE_NAME = "0509";
 
+/**
+ * Apply a seed SQL script to the 0509 D1 database via `wrangler d1 execute`.
+ *
+ * @param {string} sql full executable SQL to run against the database
+ * @param {"local" | "remote"} target which D1 environment to target
+ */
 function runWranglerD1(sql, target) {
   const result = spawnSync(
     "npx",
