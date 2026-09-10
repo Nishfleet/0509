@@ -110,10 +110,21 @@ export function pickFeaturedAdsInternalLink(
   // `loadIndexableBrandPageEntries`, which returns only captures within the
   // brand-page fresh-for-indexing window (`BRAND_PAGE_FRESH_FOR_INDEXING_MS`,
   // 7 days) — so any brand present here is a fresh capture, and an absent
-  // brand means its capture is stale or missing. No country→brand mapping:
-  // the same fixed order serves every visitor. Nykaa is a fallback only when
-  // none of the priority brands has a fresh capture.
+  // brand means its capture is stale or missing. No country→brand mapping is
+  // invented here: the same fixed order serves every visitor, and Nykaa is a
+  // fallback only when none of the priority brands has a fresh capture.
   const byDomain = new Map(links.map((link) => [link.domain, link]));
+  // Honor a caller that pinned a priority sneaker brand (e.g. the homepage's
+  // country-derived nike) so a lower-priority sneaker never displaces the
+  // brand the proof brief and the rest of that surface already name — the
+  // home must not show one brand in its brief/CTA and a different one in the
+  // featured /ads link (issue #2281 home contract; regression guard #2314).
+  if (preferredDomain && FEATURED_PROOF_BRAND_PRIORITY.includes(preferredDomain)) {
+    const pinned = byDomain.get(preferredDomain);
+    if (pinned) {
+      return pinned;
+    }
+  }
   for (const domain of FEATURED_PROOF_BRAND_PRIORITY) {
     const candidate = byDomain.get(domain);
     if (candidate) {
