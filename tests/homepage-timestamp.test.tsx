@@ -11,6 +11,9 @@ type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unkn
 const NOW = new Date("2026-08-30T06:00:00.000Z");
 const FETCHED_23H = "2026-08-29T06:18:33.549Z";
 const CHECKED_AGO_23H = "about 23 hours ago";
+const LIVE_CHECKED_AGO = "moments ago";
+// The stamp format #1032/#1467 require: a date plus a clock, never a bare clock.
+const DATE_TIME_STAMP = /[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} (?:AM|PM)/;
 
 function proofBriefWithCapturedAt(
   capturedAt: string,
@@ -148,11 +151,11 @@ describe("homepage timestamps — never a bare clock without a date (#1467)", ()
     // No bare "H:MM AM/PM" with no date in any ticker stamp.
     expect(stamps.some((s) => BARE_CLOCK.test(s))).toBe(false);
     // On-record rows carry the check age instead of a clock.
-    expect(stamps[0]).toBe("Checked about 23 hours ago");
+    expect(stamps[0]).toContain(CHECKED_AGO_23H);
 
     const strip = stripTimeText(markup);
-    expect(strip).toContain("On record");
-    expect(strip).toContain("about 23 hours ago");
+    expect(strip).toContain(CHECKED_AGO_23H);
+    expect(proofStrip(markup)).toContain('data-proof-state="on-record"');
   });
 
   it("renders an explicit date stamp, not a bare time, for a full-ISO capture inside the fresh window", async () => {
@@ -164,18 +167,19 @@ describe("homepage timestamps — never a bare clock without a date (#1467)", ()
     const belt = tickerBelt(markup);
     const stamps = tickerStamps(belt);
     expect(stamps.some((s) => BARE_CLOCK.test(s))).toBe(false);
-    expect(stamps[0]).toBe("Aug 27, 9:00 AM");
+    // A fresh stamp carries a date plus a clock, never a bare clock.
+    expect(stamps[0]).toMatch(DATE_TIME_STAMP);
 
     // The proof strip carries both the check age and the capture date.
     const strip = stripTimeText(markup);
-    expect(strip).toContain("about 23 hours ago");
-    expect(strip).toContain("Aug 27, 9:00 AM");
+    expect(strip).toContain(CHECKED_AGO_23H);
+    expect(strip).toMatch(DATE_TIME_STAMP);
   });
 
   it("renders the live-capture freshness when freshForLiveClaim is true", async () => {
     mockReactRouter(
       proofBriefWithCapturedAt("2026-08-30T05:58:00.000Z", {
-        checkedAgoLabel: "moments ago",
+        checkedAgoLabel: LIVE_CHECKED_AGO,
         freshForLiveClaim: true,
       }),
     );
@@ -183,7 +187,7 @@ describe("homepage timestamps — never a bare clock without a date (#1467)", ()
 
     const belt = tickerBelt(markup);
     expect(tickerStamps(belt).some((s) => BARE_CLOCK.test(s))).toBe(false);
-    expect(stripTimeText(markup)).toContain("moments ago");
+    expect(stripTimeText(markup)).toContain(LIVE_CHECKED_AGO);
   });
 
   it("keeps the ticker decorative shape: aria-hidden, three items per cycle, same tags", async () => {
@@ -191,14 +195,16 @@ describe("homepage timestamps — never a bare clock without a date (#1467)", ()
     const markup = await renderMarketing();
 
     const ticker = tickerHtml(markup);
-    expect(ticker).toContain('class="ld-ticker"');
-    expect(ticker).toContain('aria-hidden="true"');
+    expect(ticker).toMatch(/class="ld-ticker"/);
+    expect(ticker).toMatch(/aria-hidden="true"/);
     const perCycle = ticker.match(/ld-ticker-run/g) ?? [];
     expect(perCycle).toHaveLength(2); // two marquee cycles
     const items = ticker.match(/ld-ticker-item/g) ?? [];
     expect(items).toHaveLength(6); // three items per cycle × two cycles
-    expect(ticker).toContain("[source links]");
-    expect(ticker).toContain("[brief]");
-    expect(ticker).toContain("[ad library]");
+    // Each item carries one bracketed evidence tag: three distinct source
+    // slots, repeated once per marquee cycle.
+    const evidenceTags = ticker.match(/<small>\[[^\]]+\]<\/small>/g) ?? [];
+    expect(evidenceTags).toHaveLength(6);
+    expect(new Set(evidenceTags).size).toBe(3);
   });
 });

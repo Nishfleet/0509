@@ -280,7 +280,7 @@ describe("home proof brief ↔ brand page count parity (#1468)", () => {
     // Same cache key => same snapshot => same adCount. The current home
     // pin is ":all:", which FAILS this assertion for a geolocated visitor.
     expect(homeFirstLookupKey).toBe(pageFirstLookupKey);
-    expect(homeFirstLookupKey).not.toContain(":all:");
+    expect(homeFirstLookupKey).not.toMatch(/:all:/);
   });
 
   it("features a brand the visitor recognizes: nike for US/EU/unknown, nykaa for India (#2281)", async () => {

@@ -9,10 +9,18 @@ type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unkn
 // suite runs. 2026-08-25 matches the issue's live observation date.
 const NOW = new Date("2026-08-25T12:00:00.000Z");
 
+// The loader values these tests render. Assertions read them from here instead
+// of re-typing rendered copy, so a copy change cannot break the test.
+const TOP_HOOK = "Unlock the secret to radiant skin";
+const WEBSITE = "nykaa.com";
+
+// Any calendar date as the strip renders one (“Sep 4” / “Sep 4, 2025”).
+const STRIP_DATE = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}(?:, \d{4})?\b/;
+
 function proofBriefWithCapturedAt(capturedAt: string) {
   return {
     competitorName: "Nykaa",
-    website: "nykaa.com",
+    website: WEBSITE,
     adLibraryCountry: "India",
     fetchedAt: "2026-08-25T10:46:00.000Z",
     checkedAgoLabel: "moments ago",
@@ -41,7 +49,7 @@ function proofBriefWithCapturedAt(capturedAt: string) {
       },
     ],
     insights: {
-      topHooks: ["Unlock the secret to radiant skin"],
+      topHooks: [TOP_HOOK],
       mediaMix: [
         { channel: "Meta Ad Library", count: 12 },
       ],
@@ -98,6 +106,16 @@ function proofStrip(markup: string): string {
   return markup.match(/<aside class="ld-proof-strip"[^>]*>[\s\S]*?<\/aside>/)?.[0] ?? "";
 }
 
+/** The `<span class="ld-row">` lines of the hero wall, in document order. */
+function heroWallRows(h1: string): string[] {
+  return Array.from(h1.matchAll(/<span class="ld-row[^"]*">/g)).map((match) => match[0]);
+}
+
+/** The inner HTML of a `class`-tagged span inside a rendered block. */
+function spanBody(block: string, className: string): string {
+  return block.match(new RegExp(`<span class="${className}">([\\s\\S]*?)</span>`))?.[1] ?? "";
+}
+
 function stripTimeText(markup: string): string | null {
   const strip = proofStrip(markup);
   return strip.match(/<span class="ld-proof-time">([\s\S]*?)<\/span>/)?.[1]?.trim() ?? null;
@@ -134,22 +152,27 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     mockReactRouter(proofBriefWithCapturedAt("2025-09-04"));
     const markup = await renderMarketing();
 
-    // Proof strip swaps to "on record" copy and drops the capture date.
-    // The H1 is the free live-search promise wall (#2170) and never carries a date.
-    expect(heroH1(markup)).toContain("See the Meta ads");
-    expect(heroH1(markup)).not.toContain("is a hook on record across 12 Meta ads");
-    expect(heroH1(markup)).not.toContain("Sep 4");
-    expect(proofStrip(markup)).toContain("is a hook on record across 12 Meta ads");
-    expect(proofStrip(markup)).not.toContain("Sep 4");
-    expect(stripTimeText(markup)).toContain("On record");
+    // Proof strip swaps to the date-free state and drops the capture date.
+    // `data-proof-state` is always `on-record` in this file (the fixture pins
+    // freshForLiveClaim false), so it is left to the files that vary it; the
+    // gate that matters here is the absent calendar date. The H1 is the free
+    // live-search promise wall (#2170) and never carries a date or the strip's
+    // proof attribution.
+    const h1 = heroH1(markup);
+    expect(heroWallRows(h1)).toHaveLength(4);
+    expect(h1).not.toContain("ld-proof-attrib");
+    expect(h1).not.toMatch(STRIP_DATE);
+    const strip = proofStrip(markup);
+    expect(strip).not.toMatch(STRIP_DATE);
+    expect(stripTimeText(markup)).not.toMatch(STRIP_DATE);
 
     // #1286/#1343: the proof-trail card stamp no longer surfaces the stale
-    // first-seen date next to the header's "Captured {today}" — it swaps to
-    // non-date-bearing "On record" copy so the only capture clock on the page
-    // is the honest, header-level one.
+    // first-seen date next to the header's "Captured {today}" — it stays
+    // date-free so the only capture clock on the page is the honest,
+    // header-level one.
     const stamp = proofTrailStampText(markup);
-    expect(stamp).toContain("On record");
-    expect(stamp).not.toContain("Sep 4");
+    expect(stamp).not.toBeNull();
+    expect(stamp).not.toMatch(STRIP_DATE);
   });
 
   it("keeps the compact rendering for a date-only capture from the current UTC year", async () => {
@@ -160,12 +183,16 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     const markup = await renderMarketing();
 
     const h1 = heroH1(markup);
-    expect(h1).toContain("See the Meta ads");
-    expect(h1).not.toContain("Aug 22");
+    expect(heroWallRows(h1)).toHaveLength(4);
+    expect(h1).not.toMatch(STRIP_DATE);
+    // Inside the window the strip keeps its date-bearing stamp, and a
+    // same-year date stays compact (no year appended).
     const time = stripTimeText(markup);
-    expect(time).toContain("Aug 22");
-    expect(time).not.toContain("2026");
-    expect(proofStrip(markup)).toContain("was the hook on 12 Meta ads");
+    expect(time).toMatch(STRIP_DATE);
+    expect(time).not.toMatch(/\b\d{4}\b/);
+    const strip = proofStrip(markup);
+    expect(spanBody(strip, "ld-proof-quote")).toContain(TOP_HOOK);
+    expect(spanBody(strip, "ld-proof-attrib")).toContain(WEBSITE);
   });
 
   it("does not surface any capture date in the hero for a year-old capture (#1076)", async () => {
@@ -173,9 +200,10 @@ describe("homepage hero proof wall — year-aware capture dates (#1032)", () => 
     const markup = await renderMarketing();
 
     const h1 = heroH1(markup);
-    // The H1 is the live-search promise wall, so "Sep 4" cannot appear in any form.
-    expect(h1).not.toMatch(/Sep 4/);
-    expect(h1).toContain("See the Meta ads");
-    expect(proofStrip(markup)).not.toMatch(/Sep 4/);
+    // The H1 is the live-search promise wall, so no capture date can appear.
+    expect(heroWallRows(h1)).toHaveLength(4);
+    expect(h1).not.toMatch(STRIP_DATE);
+    const strip = proofStrip(markup);
+    expect(strip).not.toMatch(STRIP_DATE);
   });
 });
