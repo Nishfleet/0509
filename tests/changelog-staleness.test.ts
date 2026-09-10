@@ -3,6 +3,8 @@ import { spawnSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
 
+import { CHANGELOG_ENTRY_DATES } from "~/lib/seo";
+
 // The /changelog page is a public trust surface for a product whose pitch is
 // "we tell you what changed." A stale changelog undercuts that promise. This
 // test fails when the latest dated entry in app/routes/changelog.tsx falls
@@ -13,13 +15,18 @@ const CHANGELOG_PATH = "app/routes/changelog.tsx";
 const STALE_DAYS = 7;
 const DATE_RE = /<PublicDocBlock\s+title="(\d{4}-\d{2}-\d{2})">/g;
 
-function latestChangelogDate(): Date {
+function changelogDatesFromSource(): string[] {
   const source = readFileSync(CHANGELOG_PATH, "utf8");
   const dates: string[] = [];
   let match: RegExpExecArray | null;
   while ((match = DATE_RE.exec(source)) !== null) {
     dates.push(match[1]);
   }
+  return dates;
+}
+
+function latestChangelogDate(): Date {
+  const dates = changelogDatesFromSource();
   if (dates.length === 0) {
     throw new Error(
       `No <PublicDocBlock title="YYYY-MM-DD"> entries found in ${CHANGELOG_PATH}`,
@@ -72,5 +79,28 @@ describe("changelog staleness", () => {
 
   it("the changelog carries at least one dated entry", () => {
     expect(latestChangelogDate().toString()).not.toBe("Invalid Date");
+  });
+});
+
+// The /changelog sitemap lastmod is derived from CHANGELOG_ENTRY_DATES in
+// app/lib/seo.ts (issue #2297), while the /changelog page renders the
+// <PublicDocBlock title="YYYY-MM-DD"> literals in app/routes/changelog.tsx.
+// Those two representations MUST stay in sync: if a dated entry is added to
+// the page but not to CHANGELOG_ENTRY_DATES, the sitemap lastmod goes stale
+// and tells Google the page is older than it is. This guard fails the build
+// the moment the two drift.
+describe("changelog sitemap lastmod source", () => {
+  it("CHANGELOG_ENTRY_DATES matches the dated PublicDocBlock entries in the route", () => {
+    const sourceDates = changelogDatesFromSource().slice().sort();
+    const exportedDates = CHANGELOG_ENTRY_DATES.slice().sort();
+
+    expect(
+      exportedDates,
+      `CHANGELOG_ENTRY_DATES in app/lib/seo.ts must list every dated ` +
+        `<PublicDocBlock title="YYYY-MM-DD"> in ${CHANGELOG_PATH} and no ` +
+        `others, so the /changelog sitemap lastmod tracks the real newest ` +
+        `entry. Source dates: [${sourceDates.join(", ")}]. Exported dates: ` +
+        `[${exportedDates.join(", ")}].`,
+    ).toEqual(sourceDates);
   });
 });

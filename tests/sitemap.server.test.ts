@@ -48,6 +48,7 @@ import {
   indexableTimelineEntriesFromRows,
   isIndexableBrandPageRow,
   loadIndexableTimelineEntries,
+  newestChangelogLastmod,
   SITEMAP_BRAND_PATH_LIMIT,
   SITEMAP_TIMELINE_PATH_LIMIT,
   SITEMAP_TIMELINE_READ_LIMIT,
@@ -832,6 +833,33 @@ describe("buildSitemapXml", () => {
     const { buildLlmsText } = await import("~/lib/public-markdown");
     const llms = buildLlmsText([], []);
     expect(llms).toContain("https://0509.io/mcp/setup");
+  });
+
+  it("stamps /changelog with a lastmod derived from the newest changelog entry date (issue #2297)", () => {
+    const xml = buildSitemapXml([]);
+    const expected = newestChangelogLastmod();
+    expect(expected).not.toBeNull();
+
+    // The /changelog <url> block carries a <lastmod> equal to the newest
+    // changelog entry date — the acceptance bar for issue #2297.
+    const changelogLine = xml
+      .split("\n")
+      .find((line) => line.includes("<loc>https://0509.io/changelog</loc>"));
+    expect(changelogLine).toBeDefined();
+    expect(changelogLine).toContain(`<lastmod>${expected}</lastmod>`);
+  });
+
+  it("omits lastmod on /compare/* and /methodology — no per-page content date exists (issue #2297)", () => {
+    const xml = buildSitemapXml([]);
+    const lines = xml.split("\n");
+
+    // /compare/* and /methodology have no existing per-page date field, so
+    // they must NOT carry an invented <lastmod> (the judge edit on #2297).
+    for (const path of ["/methodology", "/compare", "/compare/meta-ad-library"]) {
+      const line = lines.find((l) => l.includes(`<loc>https://0509.io${path}</loc>`));
+      expect(line, `expected a sitemap <url> line for ${path}`).toBeDefined();
+      expect(line).not.toContain("<lastmod>");
+    }
   });
 });
 
@@ -1751,9 +1779,14 @@ describe("every dynamic sitemap URL carries an honest lastmod (issue #2031)", ()
     // Static pages (/, /search, /compare/*, ...) have no per-page content
     // timestamp. The issue forbids build-time or invented dates, so they must
     // stay lastmod-less rather than claim a freshness they cannot back.
+    // /changelog is the one exception (issue #2297): it carries a real
+    // lastmod derived from its newest dated entry, so it is excluded here.
     const xml = buildSitemapXml([]);
     const staticUrls = sitemapUrls(xml).filter(
-      (u) => !u.loc.includes("/ads/") && !u.loc.includes("/timeline/"),
+      (u) =>
+        !u.loc.includes("/ads/") &&
+        !u.loc.includes("/timeline/") &&
+        u.loc !== "https://0509.io/changelog",
     );
     expect(staticUrls.length).toBeGreaterThan(0);
     for (const u of staticUrls) {
