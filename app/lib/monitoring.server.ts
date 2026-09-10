@@ -226,6 +226,7 @@ import {
   markOrchestratedRunCancelled,
   markOrchestratedRunDispatched,
   markOrchestratedDispatchFailure,
+  MONITORING_WORKFLOW_SCAN_TIMEOUT_MS,
   reconcileOrchestratedWatchlistRuns,
   releaseMonitoringConcurrencySlot,
   renewMonitoringConcurrencySlot,
@@ -2013,7 +2014,9 @@ export async function runWatchlist(
   // "Refresh now" click, and the regular cron can otherwise overlap — double
   // Browser Rendering spend and duplicate baseline events.
   if (!options.existingRunId) {
-    const inFlightCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const inFlightCutoff = new Date(
+      Date.now() - MONITORING_WORKFLOW_SCAN_TIMEOUT_MS,
+    ).toISOString();
     if (await hasInFlightWatchlistRun(env, watchlist.id, inFlightCutoff)) {
       throw new Error(
         "A scan for this watchlist is already running. Fresh results appear when it completes.",
