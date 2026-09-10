@@ -88,7 +88,6 @@ async function loadWorker() {
     flushDeferredInstantAlerts: vi.fn(),
     runScheduledDiscoveryWarmup: vi.fn(),
     runScheduledMonitoring: vi.fn(),
-    sendCustomerAtRiskAlert: vi.fn(),
     sendWeeklyBusinessNumbers: vi.fn(),
   }));
   vi.doMock("../app/lib/monthly-recap.server", () => ({

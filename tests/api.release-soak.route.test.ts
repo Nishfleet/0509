@@ -78,7 +78,6 @@ function completeWindow(): Observation[] {
   for (const task of monitoringTasks) {
     rows.push(row("0 4 * * *", task, "2026-07-18T04:00:00.000Z"));
   }
-  rows.push(row("0 4 * * *", "customer_at_risk_alert", "2026-07-18T04:00:00.000Z"));
   const regular = rows.find((entry) =>
     entry.cron === "0 */3 * * *" && entry.task_name === "scheduled_monitoring"
   )!;
@@ -166,8 +165,8 @@ describe("release scheduled soak evaluator", () => {
     expect(result).toMatchObject({
       passed: true,
       blockers: [],
-      expectedObservations: 51,
-      observedObservations: 51,
+      expectedObservations: 50,
+      observedObservations: 50,
       maxTaskDurationMs: 1_000,
       regularScanSuccesses: 1,
       dailyDigestSuccesses: 1,
@@ -182,7 +181,6 @@ describe("release scheduled soak evaluator", () => {
       ["stale", (rows) => { rows[0].completed_at = new Date(Date.parse(rows[0].scheduled_at) + 900_001).toISOString(); }, "task_freshness_slo_failed"],
       ["unsafe metrics", (rows) => { rows[0].metrics_json = JSON.stringify({ email: "customer@example.com" }); }, "unsafe_task_metrics"],
       ["unexpected", (rows) => { rows.push(row("0 */3 * * *", "scheduled_monitoring", "2026-07-18T01:00:00.000Z")); }, "unexpected_scheduled_task_observation"],
-      ["unexpected alert", (rows) => { rows.push(row("0 */3 * * *", "customer_at_risk_alert", "2026-07-18T01:00:00.000Z")); }, "unexpected_scheduled_task_observation"],
       ["unsafe cron", (rows) => { rows.push(row("1 * * * *", "scheduled_monitoring", "2026-07-18T01:01:00.000Z")); }, "unsafe_task_cron"],
     ];
     for (const [, mutate, blocker] of cases) {
@@ -194,13 +192,15 @@ describe("release scheduled soak evaluator", () => {
     }
   });
 
-  it("requires the daily alert and exposes duplicate platform attempts", () => {
+  it("requires the daily scheduled scan and exposes duplicate platform attempts", () => {
     const rows = completeWindow();
-    const alertIndex = rows.findIndex((entry) => entry.task_name === "customer_at_risk_alert");
-    const [alert] = rows.splice(alertIndex, 1);
+    const dailyIndex = rows.findIndex((entry) =>
+      entry.cron === "0 4 * * *" && entry.task_name === "scheduled_monitoring"
+    );
+    const [daily] = rows.splice(dailyIndex, 1);
     expect(evaluateReleaseSoak(rows, windowInput(), healthyRunSlo(), healthyDigestJobSlo()).blockers)
       .toContain("scheduled_task_observation_missing");
-    const duplicate = evaluateReleaseSoak([...rows, alert, { ...alert }], windowInput(), healthyRunSlo(), healthyDigestJobSlo());
+    const duplicate = evaluateReleaseSoak([...rows, daily, { ...daily }], windowInput(), healthyRunSlo(), healthyDigestJobSlo());
     expect(duplicate.blockers).toContain("scheduled_task_duplicate_attempt");
   });
 
@@ -233,7 +233,7 @@ describe("release scheduled soak evaluator", () => {
     }
     const result = evaluateReleaseSoak(shifted, { startedAtMs, endedAtMs }, healthyRunSlo(), healthyDigestJobSlo());
     expect(result.passed).toBe(true);
-    expect(result.expectedObservations).toBe(54);
+    expect(result.expectedObservations).toBe(53);
   });
 
   it("requires every scheduled scan to finish successfully without degradation or staleness", () => {

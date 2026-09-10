@@ -8,7 +8,6 @@ import {
   DISCOVERY_WARMUP_CRON,
   REGULAR_MONITORING_CRON,
   WEEKLY_DIGEST_CRON,
-  resolveOperationalRiskAlertIdempotencyKey,
   resolveScheduledTask,
 } from "../workers/schedule";
 
@@ -31,7 +30,6 @@ describe("worker schedule", () => {
       includeDigests: false,
       includeMentionResweep: true,
       includeAutoCompetitorResweep: false,
-      includeRiskAlert: false,
     });
     expect(resolveScheduledTask(DAILY_DIGEST_CRON)).toEqual({
       kind: "monitoring",
@@ -39,7 +37,6 @@ describe("worker schedule", () => {
       includeDigests: true,
       includeMentionResweep: false,
       includeAutoCompetitorResweep: true,
-      includeRiskAlert: true,
       digestCadence: "daily",
       digestLookbackDays: 1,
     });
@@ -50,7 +47,6 @@ describe("worker schedule", () => {
       includeDigests: false,
       includeMentionResweep: true,
       includeAutoCompetitorResweep: false,
-      includeRiskAlert: false,
     });
   });
 
@@ -61,54 +57,8 @@ describe("worker schedule", () => {
       includeDigests: true,
       includeMentionResweep: false,
       includeAutoCompetitorResweep: false,
-      includeRiskAlert: false,
       digestCadence: "weekly",
       digestLookbackDays: 7,
     });
-  });
-
-  it("keeps operational risk alert idempotency distinct by failure type", () => {
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 2,
-      dispatchFailures: 0,
-    })).toBe("operator-alert:scan-budget:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 0,
-      dispatchFailures: 1,
-    })).toBe("operator-alert:fanout-dispatch:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 2,
-      dispatchFailures: 1,
-    })).toBe("operator-alert:scan-budget-and-fanout-dispatch:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-    })).toBeNull();
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-      inlineFailures: 1,
-      digestFailures: 0,
-    })).toBe("operator-alert:scheduled-degraded-inline:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-      inlineFailures: 0,
-      digestFailures: 1,
-    })).toBe("operator-alert:scheduled-degraded-digest:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-      inlineFailures: 1,
-      digestFailures: 1,
-    })).toBe("operator-alert:scheduled-degraded-inline-and-digest:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 2,
-      dispatchFailures: 1,
-      inlineFailures: 1,
-      digestFailures: 1,
-    })).toBe(
-      "operator-alert:scheduled-degraded-scan-budget-and-fanout-dispatch-and-inline-and-digest:2026-07-03",
-    );
   });
 });
