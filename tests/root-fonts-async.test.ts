@@ -5,6 +5,11 @@ import type { LinkDescriptor } from "react-router";
 
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
+// Root loader data returned by the mocked useRouteLoaderData (issue #2348 made
+// this configurable so a test can prove the CSP nonce reaches the inline boot
+// scripts). Reset in beforeEach.
+let mockRootLoaderData: Record<string, unknown> | undefined;
+
 const GOOGLE_FONTS_HOST = "https://fonts.googleapis.com";
 
 function htmlDescriptors(descriptors: LinkDescriptor[]) {
@@ -16,6 +21,7 @@ function htmlDescriptors(descriptors: LinkDescriptor[]) {
 
 beforeEach(() => {
   vi.resetModules();
+  mockRootLoaderData = undefined;
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
@@ -29,7 +35,7 @@ beforeEach(() => {
       Scripts: () => null,
       ScrollRestoration: () => null,
       useLocation: () => ({ pathname: "/" }),
-      useRouteLoaderData: () => undefined,
+      useRouteLoaderData: () => mockRootLoaderData,
     };
   });
 });
@@ -127,5 +133,94 @@ describe("Google Fonts stylesheet loading (dogfood da0f9f345221)", () => {
         expect(link, "no render-blocking font stylesheet may remain").toContain('media="print"');
       }
     }
+  });
+});
+
+describe("CSP nonce threading into inline boot scripts (issue #2348)", () => {
+  it("the real root loader copies the context nonce onto the loader data", async () => {
+    // The gap this closes: every other test in this file (and the worker-level
+    // suite) either mocks useRouteLoaderData or stubs the React Router handler,
+    // so deleting `cspNonce: cloudflare.cspNonce` from the loader in app/root.tsx
+    // would leave the whole suite green while prod shipped a CSP whose
+    // script-src authorised a nonce no <script> carried. That drift is silent:
+    // the browser blocks the theme boot script and the font-swap script with no
+    // server error and nothing in the logs. This drives the REAL loader.
+    const { RouterContextProvider } = await import("react-router");
+    const { cloudflareRuntimeContext } = await import("~/lib/cloudflare-context");
+    const { loader } = await import("~/root");
+
+    const context = new RouterContextProvider();
+    context.set(cloudflareRuntimeContext, {
+      env: {},
+      ctx: {} as ExecutionContext,
+      country: "IN",
+      cspNonce: "nonce-from-cloudflare-context",
+    });
+    const data = (await loader({
+      context,
+      request: new Request("https://0509.io/"),
+      params: {},
+    } as never)) as { cspNonce?: string };
+    expect(data.cspNonce).toBe("nonce-from-cloudflare-context");
+
+    // ...and with no nonce on the context it must be absent, not "" — React
+    // renders `nonce=""` for an empty string, an invalid attribute.
+    const bare = new RouterContextProvider();
+    bare.set(cloudflareRuntimeContext, {
+      env: {},
+      ctx: {} as ExecutionContext,
+      country: "IN",
+    });
+    const bareData = (await loader({
+      context: bare,
+      request: new Request("https://0509.io/"),
+      params: {},
+    } as never)) as { cspNonce?: string };
+    expect(bareData.cspNonce).toBeUndefined();
+  });
+
+  it("stamps the root loader's cspNonce onto both inline scripts in Layout", async () => {
+    // Dropping 'unsafe-inline' from script-src is only safe if every inline
+    // script the server emits carries the SAME nonce as the CSP header. If
+    // either half drifts, the browser blocks the theme boot script (flash of
+    // wrong theme) or the font-swap script (stylesheet never applies) with no
+    // server-side error. This renders the real Layout and asserts the nonce
+    // reaches both inline scripts — the unit test on withSecurityHeaders alone
+    // cannot see this, because it only knows about the header.
+    mockRootLoaderData = { cspNonce: "nonce-from-root-loader-xyz" };
+    const { Layout } = await import("~/root");
+    const markup = renderToStaticMarkup(
+      createElement(Layout, null, createElement("main", null, "content")),
+    );
+    const inlineScripts = markup.match(/<script nonce="[^"]*"[^>]*>/g) ?? [];
+    // Both inline scripts (theme boot in <head>, font-swap in GoogleFontsStylesheet).
+    expect(inlineScripts.length).toBeGreaterThanOrEqual(2);
+    for (const tag of inlineScripts) {
+      expect(tag).toContain('nonce="nonce-from-root-loader-xyz"');
+    }
+    // No un-nonced executable inline script may remain: that is exactly the
+    // shape 'unsafe-inline' used to authorize, and the browser would block it.
+    // `i` because HTML tag and attribute names are case-insensitive: an
+    // uppercased <SCRIPT SRC=...> is the same element to a browser, and a
+    // case-sensitive scan would wave an un-nonced inline script straight
+    // through the assertion below.
+    const allScripts = markup.match(/<script[^>]*>/gi) ?? [];
+    for (const tag of allScripts) {
+      // Only inline scripts (no src) execute under script-src; JSON-LD blocks
+      // carry type="application/ld+json" and are data, not executable.
+      const tagLower = tag.toLowerCase();
+      if (tagLower.includes("src=") || tagLower.includes("application/ld+json")) continue;
+      expect(tag, `inline script missing nonce: ${tag}`).toContain("nonce=");
+    }
+  });
+
+  it("omits the nonce attribute when the loader supplies none instead of emitting nonce=\"\"", async () => {
+    // A stray nonce="" attribute is invalid and would fail hydration checks.
+    // With no loader data at all the scripts render without a nonce attribute;
+    // that path is only reachable in tests, but it must not emit broken markup.
+    mockRootLoaderData = undefined;
+    const { GoogleFontsStylesheet } = await import("~/root");
+    const markup = renderToStaticMarkup(createElement(GoogleFontsStylesheet));
+    expect(markup).not.toContain('nonce=""');
   });
 });
