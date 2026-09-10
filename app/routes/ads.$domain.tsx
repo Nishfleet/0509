@@ -807,7 +807,9 @@ export default function BrandAdsRoute() {
        * best and a freshness lie at worst. Every field mirrors the visible
        * page: the meta title/description, the canonical URL, the on-screen
        * "Last checked" stamp (dateModified), the brand the page is about,
-       * the Track {domain} offer with Five to Nine as the provider, the
+       * the oldest stored offer snapshot the page's own Offer Timeline
+       * section renders (datePublished, issue #2303), the Track {domain}
+       * offer with Five to Nine as the provider, the
        * breadcrumb trail rendered as the visible nav (issue #1418), and the
        * brand-specific FAQ rendered from the same array further down the
        * page.
@@ -827,6 +829,18 @@ export default function BrandAdsRoute() {
                 name: brandPageTitle(data),
                 description: brandPageDescription(data),
                 pathname: data.canonicalPath,
+                // Issue #2303: answer engines quoting an "as of" date got
+                // only the last-check stamp, never the first-seen one. The
+                // first-seen date is the domain's earliest stored snapshot
+                // (`landing_page_snapshot.captured_at`, ascending order) —
+                // the exact row and column `/timeline/:domain` already emits
+                // as its Dataset `datePublished`. It is the same array the
+                // page's own Offer Timeline section below renders, so
+                // datePublished is always a date the visible page shows.
+                // Omitted entirely when the domain has zero stored
+                // snapshots (no Offer Timeline ledger): a page with nothing
+                // stored never claims a publication date.
+                datePublished: data.offerTimelineEntries[0]?.capturedAt ?? undefined,
                 dateModified: data.lastCheckedAt ?? undefined,
                 aboutName: data.brandName,
                 // Issue 964: link this brand page to its citable Offer
