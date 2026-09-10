@@ -576,8 +576,23 @@ export async function defaultPricing({ workerVersionId, token, attempts = 3, del
   return { ok: results.every((result) => result.ok), results };
 }
 
-/** @param {{ workerVersionId: string, runId: string, token: string }} input */
-async function defaultBilling({ workerVersionId, runId, token }) {
+/**
+ * The billing canary gets the same bounded retry as pricing: a single request
+ * can hit a straggler isolate still serving the previous version (409
+ * worker_version_mismatch) or a just-expiring canary lock left by a killed
+ * earlier run (409 billing_canary_in_progress /
+ * billing_canary_lock_unavailable), and neither is a real release defect.
+ * Deterministic blockers still fail all attempts and block the release.
+ *
+ * The step detail carries the HTTP status and the server's own `blocker`
+ * field — without it every non-2xx collapses into the opaque
+ * `billing_canary_http_failure` and the gate-c evidence cannot say which
+ * assertion actually failed (issue #2646).
+ *
+ * @param {{ workerVersionId: string, runId: string, token: string, attempts?: number, delayMs?: number, sleeper?: (ms: number) => Promise<void>, fetcher?: typeof fetch }} input
+ */
+export async function defaultBilling({ workerVersionId, runId, token, attempts = 3, delayMs = 15_000, sleeper, fetcher }) {
+  const wait = sleeper ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const config = {
     baseUrl: "https://0509.io",
     json: true,
@@ -585,12 +600,33 @@ async function defaultBilling({ workerVersionId, runId, token }) {
     expectedWorkerVersionId: workerVersionId,
     gateRunId: runId,
   };
-  const { payload, response } = await runBillingCanary({ config, token });
-  const verdict = validateBillingCanaryResult(payload, response, {
-    workerVersionId,
-    gateRunId: runId,
-  });
-  return { ok: verdict.ok, blocker: verdict.ok ? null : verdict.blocker };
+  let last = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const { payload, response } = await runBillingCanary({ config, token, fetchImpl: fetcher });
+      const verdict = validateBillingCanaryResult(payload, response, {
+        workerVersionId,
+        gateRunId: runId,
+      });
+      last = {
+        ok: verdict.ok,
+        blocker: verdict.ok ? null : verdict.blocker,
+        status: response.status,
+        serverBlocker: typeof payload?.blocker === "string" ? payload.blocker : null,
+      };
+    } catch (error) {
+      last = {
+        ok: false,
+        blocker: "billing_canary_fetch_failure",
+        status: 0,
+        serverBlocker: null,
+        reason: `fetch_failed:${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`,
+      };
+    }
+    if (last.ok || attempt >= attempts) return { ...last, attempt };
+    await wait(delayMs);
+  }
+  return { ...last, attempt: attempts };
 }
 
 /** @param {{ workerVersionId: string, runId: string, token: string }} input */

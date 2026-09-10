@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
 
 const deployPlanModule = await import("../scripts/deploy-production-plan.mjs");
@@ -591,6 +591,179 @@ process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
       "rollback ambiguous deploy attempt",
       "--yes",
     ]);
+  });
+
+  it("resolves the last gated release sha from the GitHub deploy runs", async () => {
+    const sha = "a".repeat(40);
+    const seenUrls: string[] = [];
+    const fetchImpl = vi.fn(async (url: URL) => {
+      seenUrls.push(String(url));
+      return new Response(
+        JSON.stringify({
+          workflow_runs: [{ head_sha: sha }, { head_sha: "b".repeat(40) }],
+        }),
+        { status: 200 },
+      );
+    });
+    const resolved = await rollbackTargetModule.resolveLastGatedReleaseSha({
+      repository: "Nishfleet/0509",
+      token: "token",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(resolved).toBe(sha);
+    expect(seenUrls[0]).toContain("/actions/workflows/deploy-production.yml/runs");
+    expect(seenUrls[0]).toContain("status=success");
+    expect(seenUrls[0]).toContain("branch=main");
+
+    const empty = await rollbackTargetModule.resolveLastGatedReleaseSha({
+      repository: "Nishfleet/0509",
+      token: "token",
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ workflow_runs: [{ head_sha: "not-a-sha" }] }), {
+          status: 200,
+        })) as unknown as typeof fetch,
+    });
+    expect(empty).toBeNull();
+
+    await expect(
+      rollbackTargetModule.resolveLastGatedReleaseSha({
+        repository: "Nishfleet/0509",
+        token: "token",
+        fetchImpl: (async () => new Response("denied", { status: 403 })) as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow("github_deploy_runs_unavailable");
+  });
+
+  it("builds the bounded source-redeploy rollback steps for a release sha", () => {
+    const sha = "c".repeat(40);
+    const steps = rollbackTargetModule.buildWorkerSourceRollbackSteps({
+      sha,
+      worktreeDir: "/tmp/rollback-src",
+      wranglerBin: "/tmp/rollback-src/node_modules/.bin/wrangler",
+    });
+    expect(steps.map((step: { id: string }) => step.id)).toEqual([
+      "rollback_ancestor_guard",
+      "rollback_checkout_release",
+      "rollback_install_release",
+      "rollback_build_release",
+      "rollback_deploy_release",
+    ]);
+    expect(steps[1].args).toEqual(["worktree", "add", "--detach", "/tmp/rollback-src", sha]);
+    expect(steps[2]).toMatchObject({
+      command: "npm",
+      args: ["ci", "--ignore-scripts"],
+      cwd: "/tmp/rollback-src",
+    });
+    expect(steps[4]).toMatchObject({
+      command: "/tmp/rollback-src/node_modules/.bin/wrangler",
+      args: ["deploy"],
+      cwd: "/tmp/rollback-src",
+    });
+
+    expect(() =>
+      rollbackTargetModule.buildWorkerSourceRollbackSteps({
+        sha: "not-a-sha",
+        worktreeDir: "/tmp/rollback-src",
+      }),
+    ).toThrow("worker_rollback_sha_invalid");
+    expect(() =>
+      rollbackTargetModule.buildWorkerSourceRollbackSteps({
+        sha,
+        worktreeDir: "",
+      }),
+    ).toThrow("worker_rollback_worktree_invalid");
+  });
+
+  it("falls back to a source redeploy of the last gated release when the versioned rollback fails", () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-worker-rollback-fallback-"));
+    roots.push(root);
+    const stubBin = join(root, "bin");
+    mkdirSync(stubBin, { recursive: true });
+    const targetPath = join(root, "rollback-target.json");
+    const wranglerOutputPath = join(root, "wrangler-output.jsonl");
+    const releaseSha = "d".repeat(40);
+
+    writeFileSync(
+      targetPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        capturedAt: "2026-07-18T12:00:00.000Z",
+        source: "wrangler deployments status --json",
+        deploymentId: "deployment-stable",
+        versionId: "worker-version-prior",
+        percentage: 100,
+      }),
+    );
+    writeFileSync(
+      wranglerOutputPath,
+      `${JSON.stringify({ type: "deploy", version: 1, version_id: "worker-version-failed" })}\n`,
+    );
+
+    // Fake wrangler: the versioned `rollback` fails (aged-out target), the
+    // worktree `deploy` succeeds, and `deployments status` reports the live
+    // version moved off the failed release.
+    const fakeWranglerPath = join(stubBin, "wrangler");
+    writeFileSync(
+      fakeWranglerPath,
+      `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "rollback") process.exit(1);
+if (args[0] === "deployments" && args[1] === "status") {
+  process.stdout.write(JSON.stringify({
+    id: "deployment-restored",
+    versions: [{ version_id: "worker-version-restored", percentage: 100 }],
+  }));
+  process.exit(0);
+}
+process.exit(0);
+`,
+    );
+    // Fake git: the ancestor guard passes and `worktree add` materializes the
+    // scratch dir so the stubbed npm steps have a real cwd.
+    const fakeGitPath = join(stubBin, "git");
+    writeFileSync(
+      fakeGitPath,
+      `#!/usr/bin/env node
+import { mkdirSync } from "node:fs";
+const args = process.argv.slice(2);
+if (args[0] === "worktree" && args[1] === "add") mkdirSync(args[3], { recursive: true });
+process.exit(0);
+`,
+    );
+    writeFileSync(join(stubBin, "npm"), `#!/usr/bin/env node\nprocess.exit(0);\n`);
+    chmodSync(fakeWranglerPath, 0o755);
+    chmodSync(fakeGitPath, 0o755);
+    chmodSync(join(stubBin, "npm"), 0o755);
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        resolve("scripts/rollback-production.mjs"),
+        "--target",
+        targetPath,
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          PATH: `${stubBin}:${process.env.PATH}`,
+          WRANGLER_BIN: fakeWranglerPath,
+          WORKER_ROLLBACK_RELEASE_SHA: releaseSha,
+        },
+        encoding: "utf8",
+      },
+    );
+
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout.trim().split("\n").at(-1) ?? "{}");
+    expect(report).toMatchObject({
+      ok: true,
+      rollback: "source_redeploy",
+      sha: releaseSha,
+      liveVersionId: "worker-version-restored",
+    });
   });
 
   it("retries the classic canary token secret put until the version is marked deployed", () => {

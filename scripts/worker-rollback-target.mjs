@@ -84,3 +84,107 @@ export function buildWorkerRollbackCommand(versionId, deployedVersionId) {
     ],
   };
 }
+
+const SAFE_DEPLOY_SHA = /^[a-f0-9]{40}$/u;
+const GITHUB_API_VERSION = "2022-11-28";
+
+/**
+ * `wrangler rollback <version-id>` can only target versions still inside
+ * Cloudflare's deployable window. Per-PR `wrangler versions upload` preview
+ * traffic churns that window far faster than deploys do, so a target captured
+ * pre-deploy can be undeployable by rollback time (run 34499830797: the
+ * version still read fine, but POST /deployments rejected it with
+ * "Invalid deployment: Version not found" [code 10210]).
+ *
+ * The retention-independent recovery is redeploying the last fully gated
+ * release commit: a fresh `wrangler deploy` of that SHA creates a NEW version
+ * running known-good code at 100% traffic.
+ *
+ * Resolve that commit as the head SHA of the most recent successful
+ * deploy-production run on main.
+ *
+ * @param {{ repository?: string, token?: string, workflow?: string, fetchImpl?: typeof fetch }} [input]
+ * @returns {Promise<string | null>}
+ */
+export async function resolveLastGatedReleaseSha({
+  repository = process.env.GITHUB_REPOSITORY?.trim() || "Nishfleet/0509",
+  token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? "",
+  workflow = "deploy-production.yml",
+  fetchImpl = fetch,
+} = {}) {
+  const url = new URL(
+    `https://api.github.com/repos/${repository}/actions/workflows/${workflow}/runs`,
+  );
+  url.searchParams.set("branch", "main");
+  url.searchParams.set("status", "success");
+  url.searchParams.set("per_page", "5");
+  /** @type {Record<string, string>} */
+  const headers = {
+    accept: "application/vnd.github+json",
+    "user-agent": "0509-rollback-production",
+    "x-github-api-version": GITHUB_API_VERSION,
+  };
+  if (token) headers.authorization = `Bearer ${token}`;
+  const response = await fetchImpl(url, { headers, redirect: "error" });
+  if (!response.ok) throw new Error("github_deploy_runs_unavailable");
+  const payload = await response.json();
+  const runs = Array.isArray(payload?.workflow_runs) ? payload.workflow_runs : [];
+  for (const run of runs) {
+    const sha = typeof run?.head_sha === "string" ? run.head_sha.trim() : "";
+    if (SAFE_DEPLOY_SHA.test(sha)) return sha;
+  }
+  return null;
+}
+
+/**
+ * The ordered commands that turn a release SHA back into the live Worker:
+ * pin it into a scratch worktree (never touching the deploy checkout), npm ci
+ * + build it there, then `wrangler deploy`. `wrangler` resolves to the
+ * worktree's own pinned binary so the rollback builds with the toolchain the
+ * release was cut against.
+ *
+ * @param {{ sha: string, worktreeDir: string, wranglerBin?: string }} input
+ */
+export function buildWorkerSourceRollbackSteps({ sha, worktreeDir, wranglerBin }) {
+  const normalizedSha = typeof sha === "string" ? sha.trim() : "";
+  if (!SAFE_DEPLOY_SHA.test(normalizedSha)) {
+    throw new Error("worker_rollback_sha_invalid");
+  }
+  if (typeof worktreeDir !== "string" || !worktreeDir.trim()) {
+    throw new Error("worker_rollback_worktree_invalid");
+  }
+  const wrangler =
+    typeof wranglerBin === "string" && wranglerBin.trim()
+      ? wranglerBin
+      : `${worktreeDir}/node_modules/.bin/wrangler`;
+  return [
+    {
+      id: "rollback_ancestor_guard",
+      command: "git",
+      args: ["merge-base", "--is-ancestor", normalizedSha, "HEAD"],
+    },
+    {
+      id: "rollback_checkout_release",
+      command: "git",
+      args: ["worktree", "add", "--detach", worktreeDir, normalizedSha],
+    },
+    {
+      id: "rollback_install_release",
+      command: "npm",
+      args: ["ci", "--ignore-scripts"],
+      cwd: worktreeDir,
+    },
+    {
+      id: "rollback_build_release",
+      command: "npm",
+      args: ["run", "build"],
+      cwd: worktreeDir,
+    },
+    {
+      id: "rollback_deploy_release",
+      command: wrangler,
+      args: ["deploy"],
+      cwd: worktreeDir,
+    },
+  ];
+}

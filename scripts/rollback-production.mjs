@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { readDeployedWorkerVersionId } from "./deploy-production-plan.mjs";
 import {
   buildWorkerRollbackCommand,
+  buildWorkerSourceRollbackSteps,
+  parseWorkerDeploymentStatus,
+  resolveLastGatedReleaseSha,
   validateWorkerRollbackEvidence,
 } from "./worker-rollback-target.mjs";
 
@@ -38,4 +42,74 @@ const result = spawnSync(process.env.WRANGLER_BIN || rollback.command, rollback.
   stdio: "inherit",
 });
 if (result.error) throw result.error;
-if (result.status !== 0) throw new Error("worker_rollback_failed");
+
+function runStep(step) {
+  const stepResult = spawnSync(step.command, step.args, {
+    cwd: step.cwd ?? process.cwd(),
+    env: process.env,
+    stdio: "inherit",
+  });
+  if (stepResult.error) throw stepResult.error;
+  if (stepResult.status !== 0) throw new Error(`worker_rollback_step_failed:${step.id}`);
+}
+
+/**
+ * Versioned rollback failed — almost always because the captured target aged
+ * out of Cloudflare's deployable window before this ran (code 10210; per-PR
+ * preview uploads churn that window hourly at fleet merge velocity). Restore
+ * the last fully gated release instead: check out its commit in a scratch
+ * worktree, install + build + `wrangler deploy` it there, then prove the live
+ * deployment moved off the failed version.
+ */
+async function rollbackViaSourceRedeploy() {
+  const override = process.env.WORKER_ROLLBACK_RELEASE_SHA?.trim();
+  const sha = override || (await resolveLastGatedReleaseSha());
+  if (!sha) throw new Error("worker_rollback_no_gated_release");
+  const parent = mkdtempSync(join(tmpdir(), "0509-rollback-release-"));
+  const worktreeDir = join(parent, "src");
+  try {
+    const wranglerBin =
+      process.env.WRANGLER_BIN || join(worktreeDir, "node_modules", ".bin", "wrangler");
+    for (const step of buildWorkerSourceRollbackSteps({ sha, worktreeDir, wranglerBin })) {
+      runStep(step);
+    }
+    const status = spawnSync(wranglerBin, ["deployments", "status", "--json"], {
+      cwd: worktreeDir,
+      env: process.env,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    if (status.error) throw status.error;
+    if (status.status !== 0) throw new Error("worker_deployment_status_failed");
+    const live = parseWorkerDeploymentStatus(status.stdout);
+    if (deployedVersionId && live.versionId === deployedVersionId) {
+      throw new Error("worker_rollback_version_unchanged");
+    }
+    process.stdout.write(
+      `${JSON.stringify({
+        ok: true,
+        rollback: "source_redeploy",
+        sha,
+        liveVersionId: live.versionId,
+      })}\n`,
+    );
+  } finally {
+    spawnSync("git", ["worktree", "remove", "--force", worktreeDir], {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: "inherit",
+    });
+    rmSync(parent, { recursive: true, force: true });
+  }
+}
+
+if (result.status !== 0) {
+  process.stderr.write(
+    "versioned rollback failed — redeploying the last gated release commit instead\n",
+  );
+  try {
+    await rollbackViaSourceRedeploy();
+  } catch (fallbackError) {
+    throw new Error("worker_rollback_failed", { cause: fallbackError });
+  }
+}

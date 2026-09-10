@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { runVersionBoundGateC, sanitizeProofDiagnostics, defaultHealthAnchor } = await import("../scripts/verify-post-deploy-release.mjs");
+const { runVersionBoundGateC, sanitizeProofDiagnostics, defaultHealthAnchor, defaultBilling } = await import("../scripts/verify-post-deploy-release.mjs");
 const { createDeferredBackupDisposition } = await import(
   "../scripts/deploy-production-plan.mjs"
 );
@@ -1006,6 +1006,88 @@ describe("defaultPricing bounded retry (run 29852903771 rollback class)", () => 
     });
     expect(result.ok).toBe(true);
     expect(threw).toBe(1);
+  });
+});
+
+describe("defaultBilling bounded retry + blocker surfacing (issue #2646)", () => {
+  const billingSuccessPayload = {
+    ok: true,
+    workerVersionId: "worker-v1",
+    gateRunId: "gate-c-worker-v1",
+    webhook: { plan: { status: 200 }, proofCredits: { status: 200 } },
+    grants: {
+      paidPlanUnlocked: true,
+      planCleanupOk: true,
+      watchlistCleanupOk: true,
+      proofCreditsGranted: true,
+      proofCreditCleanupOk: true,
+      credits: 500,
+    },
+  };
+  const jsonResponse = (body: unknown, status: number) =>
+    new Response(JSON.stringify(body), { status });
+
+  it("passes when a transient 409 conflict clears on retry", async () => {
+    let calls = 0;
+    const fetcher = vi.fn(async () => {
+      calls += 1;
+      return calls === 1
+        ? jsonResponse({ ok: false, blocker: "worker_version_mismatch" }, 409)
+        : jsonResponse(billingSuccessPayload, 200);
+    });
+    const result = await defaultBilling({
+      workerVersionId: "worker-v1",
+      runId: "gate-c-worker-v1",
+      token: "token",
+      fetcher,
+      sleeper: async () => {},
+    });
+    expect(result).toMatchObject({ ok: true, attempt: 2 });
+    expect(calls).toBe(2);
+  });
+
+  it("fails closed on a persistent server blocker and surfaces it for the journal", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({ ok: false, blocker: "billing_canary_account_not_stable" }, 503));
+    const result = await defaultBilling({
+      workerVersionId: "worker-v1",
+      runId: "gate-c-worker-v1",
+      token: "token",
+      fetcher,
+      sleeper: async () => {},
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      blocker: "billing_canary_http_failure",
+      status: 503,
+      serverBlocker: "billing_canary_account_not_stable",
+      attempt: 3,
+    });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries a thrown fetch and still reports a non-JSON 404 body", async () => {
+    let calls = 0;
+    const fetcher = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("socket hang up");
+      return new Response("Not found", { status: 404 });
+    });
+    const result = await defaultBilling({
+      workerVersionId: "worker-v1",
+      runId: "gate-c-worker-v1",
+      token: "token",
+      fetcher,
+      sleeper: async () => {},
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      blocker: "billing_canary_http_failure",
+      status: 404,
+      serverBlocker: null,
+      attempt: 3,
+    });
+    expect(calls).toBe(3);
   });
 });
 
