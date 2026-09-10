@@ -1,64 +1,48 @@
 ## Why
 
-Issue #2108 — generalize signup attribution beyond the six hardcoded strings. Production D1 ground truth: 15 users, 0 signups Jul-Sep, 0 real paying customers. The existing `signup_source` column (migration 0080) has a SQL `CHECK` that admits exactly five literals, so any new slug or `ref:<eTLD+1>` referer marker is rejected at write time. This PR opens the allowlist to lowercase slugs and referer-derived markers, in code and in the D1 schema, so signup attribution can grow without a migration per campaign.
-
-This is the orchestrator re-spec (2026-09-09T16:43Z) — it overrides step 2's file list because the original `files:` scope could not meet the `accept:` criterion (the 0080 CHECK rejects any value outside the five literals; SQLite cannot ALTER a CHECK in place).
+Issue #2109 — audit attribution-marker coverage on every public signup CTA across the compare/switch/locale routes. The Fable + Kimi K3 conference on 0509 acquisition found 0 signups Jul-Sep and 0 real paying customers; every public SEO page's signup CTA must carry an allowlisted `source=` marker so funnel measurement can attribute the signup start to the page that drove it.
 
 ## Scope
 
-- `migrations/0087_signup_source_open_allowlist.sql` (new) — rebuilds the `user` and `signup_source_pending` CHECK constraints (create-copy-drop-rename, so child FK references to `user` are never rewritten) so `signup_source` accepts: NULL, the five existing literals, `pricing-free`, `for_agencies`, and any value matching `length(signup_source) BETWEEN 1 AND 44 AND signup_source NOT GLOB '*[^a-z0-9:.-]*'` (lowercase slugs and `ref:<eTLD+1>`). Keeps NOT NULL on the pending table; recreates `idx_user_email_nocase` and `idx_signup_source_pending_expires`.
-- `app/lib/signup-source.ts` (modified) — `allowlistedSignupSource` now also accepts lowercase slugs (`/^[a-z0-9][a-z0-9-]{0,39}$/`) and `ref:<eTLD+1>` markers (`/^ref:[a-z0-9.-]{1,40}$/`); the six existing constants keep working. `signupSourceFromRequest` falls back to `ref:<eTLD+1>` derived from the `Referer` header (coarse domain only, never the full URL or query string).
-- `tests/signup-source.test.ts` (modified) — slug accepted, junk rejected, referer-derived value stored, cookie round-trip unchanged, and a shared fixture list asserted against both the code rule and the migration SQL.
-- `tests/integration/signup-source.integration.test.ts` (modified) — referer-derived `ref:example.com` persisted end to end on real D1, open slug persisted, 0087 CHECK accepts/rejects the same fixture list as the code rule, and the rebuilt `user` table keeps its email index and inbound foreign keys.
+- `tests/signup-source.test.ts` (modified) — new describe block that renders every compare/switch/locale route and asserts that every page-specific signup link carries an allowlisted `source=` marker. The shared header "Sign up" pill (class `ld-nav-pill`) is a global nav element, not a page-specific CTA, so it is excluded; any page-specific signup link that drops its marker fails the test before it can ship an unattributed CTA.
 
-## D1 expand/contract
+## Audit result (step 1: enumerate every signup CTA href)
 
-This is a single-phase schema change (rebuild the CHECK constraints). No `DROP COLUMN`, no `DROP TABLE` of a live table (the rebuild drops the old table only after copying into the replacement), no rename of a column, no `NOT NULL` without a DEFAULT. The migration is validated by the real-D1 integration tests (the `workers` vitest project applies the full migration set to local D1).
+The page-specific signup CTAs across the compare/switch/locale routes, and their markers:
+
+| Route | Signup CTA | Marker |
+|---|---|---|
+| `compare.magicbrief` | `MIGRATION_SIGNUP_PATH` | `source=magicbrief-migration` ✓ |
+| `$locale.sneaker-resale` (via `SneakerResaleLanding`) | `sneakerResaleSignupPath(locale)` | `source=locale-*-sneaker-resale` ✓ |
+| `$locale.pricing` (re-exports EN pricing) | `PricingSection` Free card CTA | `source=pricing-free` ✓ |
+
+Every other compare/switch/locale route has no page-specific signup CTA (their only CTA is the free search preview, which is not a signup). The shared header "Sign up" pill (`/auth/signup`, no marker) is a global nav element used across all public routes, not a page-specific CTA, so it is out of scope for this issue's compare/switch/locale route audit.
+
+Step 2 (add the route's allowlisted `source=` marker where missing): no page-specific signup CTA in scope was missing a marker — all three already carry an allowlisted marker. No new marker strings were invented (per must-not).
+
+Step 3 (test): the new describe block in `tests/signup-source.test.ts` renders all 37 compare/switch/locale routes and asserts every page-specific signup link carries an allowlisted marker. Verified it fails when a marker is dropped (temporarily removed `source=magicbrief-migration` from `compare.magicbrief` → the test failed on `/compare.magicbrief` and `/$locale.compare.magicbrief`).
 
 ## Verification
 
-Real-D1 leg (workers vitest project, applies all migrations including 0087 to local D1):
-
-```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner tests/signup-source.test.ts tests/integration/signup-source.integration.test.ts
-```
-
-→ 2 files, 23 tests passed (15 unit + 8 integration). The accept criterion is proven: a signup arriving with only `Referer: https://example.com/page` persists `ref:example.com` on `user.signup_source` (integration test "persists a referer-derived ref:<eTLD+1> marker end to end").
-
-Type check:
+Termination command (`npm run typecheck && npx vitest run tests/signup-source.test.ts`):
 
 ```
 NODE_OPTIONS=--max-old-space-size=6144 npm run typecheck
+→ exit 0
+
+NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner --project node tests/signup-source.test.ts
+→ 1 file, 16 tests passed
 ```
 
-→ exit 0.
-
-Regression (the `user` rebuild must keep child-table writes intact):
+Related route tests (sneaker-resale, pricing, for-agencies, compare-pages-sources, signup-source):
 
 ```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner --project workers tests/integration/watch-event-writes.integration.test.ts tests/integration/saucony-watchlist.integration.test.ts tests/integration/signup-first-brief.integration.test.ts tests/integration/retention-sweep-state.integration.test.ts tests/integration/website-scan-baseline.integration.test.ts
+NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner --project node tests/sneaker-resale.route.test.ts tests/pricing.route.test.ts tests/for-agencies.route.test.ts tests/compare-pages-sources.test.ts tests/signup-source.test.ts
+→ 5 files, 69 tests passed
 ```
 
-→ 5 files, 32 tests passed.
+run-proof: `npm run typecheck` exit 0; `tests/signup-source.test.ts` 16 tests green; related route tests 69 green in the same vitest node-project run.
 
-run-proof: tests/signup-source.test.ts (15 tests) + tests/integration/signup-source.integration.test.ts (8 tests, real D1) + 5 regression integration files (32 tests, real D1) all green in the same vitest workers-project run; `npm run typecheck` exit 0.
+net-positive-because: this is the issue's own acceptance — the test is the load-bearing new code (a detector that every compare/switch/locale route's signup CTA carries an allowlisted marker), and the audit confirms the page-specific CTAs in scope already carry markers. It is product work, not control-plane machinery.
 
-net-positive-because: this is the issue's own acceptance — the open allowlist (code + D1 schema) is the load-bearing new code, and the rest is the required real-D1 integration proof plus the referer-derivation wiring. It is product work, not control-plane machinery.
-
-## Termination note (check-d1-migrations-synced.mjs)
-
-The issue's termination command ends with `node scripts/check-d1-migrations-synced.mjs`. That script is a **deploy-time** check (it runs in `scripts/deploy-production-plan.mjs` with `includeCloudflareCredentials: true`) that compares the local `migrations/` ledger against the **remote production D1** ledger via `wrangler d1 migrations list 0509 --remote`. It requires Cloudflare production credentials (`CLOUDFLARE_API_TOKEN` or OAuth) that do not exist on this worker VPS, and it is production-gated by repo rules. It would also report 0087 as pending (expected — the migration is applied at deploy time, not by the worker PR).
-
-The migration is instead validated by the real-D1 integration tests, which apply the full migration set (including 0087) to local D1 and assert both the READ and WRITE paths. This matches the precedent of migration PR #1964 (0086), which also validated via real-D1 integration tests and left the production sync check to deploy time.
-
-loose-ends: 0509#2108-check-d1-migrations-synced (deploy-time check requires Cloudflare prod credentials not present on the worker VPS; migration validated by real-D1 integration tests, production sync verified at deploy).
-
-## Reviewer round (cursor/cursor-grok-4.6-high)
-
-- **Act on** — `migrations/0087` CHECK literal lists omitted `for_agencies`, which the code allowlist accepts via the exact-match branch; the open shape `[a-z0-9:.-]` rejects the underscore, so a `for_agencies` signup was silently dropped at write time (violates step 2b "code and DB never disagree"). Fixed: added `for_agencies` to both CHECK literal lists and to the `ACCEPTED_BY_BOTH` fixture lists in both test files. Verified: `tests/signup-source.test.ts` (15), `tests/integration/signup-source.integration.test.ts` (8, real D1), `tests/for-agencies.route.test.ts` (8) all green; `npm run typecheck` exit 0.
-- **Consider** — the `ACCEPTED_BY_BOTH` fixture lists are duplicated across two test files with a "keep in sync" comment but no enforcement. Noted; a shared fixture module is a follow-up, not a blocker.
-- **Consider** — `isOwnDomain` hardcodes `0509.io`/`0509.in`, duplicating `signupSourceCookieDomain`. Noted; deriving both from one source is a follow-up.
-- **Noted** — referer fallback attributes any external referer as `ref:<domain>` (intended accept behavior); the §4 event allowlist is untouched per must-not.
-- **Noted** — `PRAGMA foreign_keys` toggle in 0087; the rename-into-place order preserves child references regardless.
-
-Closes #2108
+Closes #2109
