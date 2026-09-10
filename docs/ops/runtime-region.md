@@ -27,21 +27,32 @@ plus the decision boundary; this file grants no permission to change anything.
 The D1 primary is in the Cloudflare **APAC** region. Read replication is
 **disabled**. `wrangler.jsonc` sets `"placement": { "mode": "smart" }`.
 
-Live headers seen from European edges (same check, `curl -D -`):
+Live headers, captured from European edges with
+`curl -sS -o /dev/null -D - --max-time 25` (same check):
 
-| URL | `cf-ray` edge | `cf-placement` |
-| --- | --- | --- |
-| `https://0509.io/` | `-HAM` | `local-` |
-| `https://0509.io/ads/adidas.com` | `-FRA` | `remote-NRT` |
+```
+$ curl -sS -o /dev/null -D - --max-time 25 https://0509.io/ads/adidas.com
+HTTP/2 200
+cf-placement: remote-NRT
+cf-ray: a3918b62a9ccb71e-FRA
 
-So a D1-touching route (for example `/ads/*`) is executed **in Tokyo (NRT)**
-even when the visitor's edge is in Europe, because Smart Placement parks compute
-next to the APAC-primary database. Routes that do not reach D1 still run at the
-edge (`local-`).
+$ curl -sS -o /dev/null -D - --max-time 25 https://0509.io/
+HTTP/2 200
+cf-placement: local-
+cf-ray: a3918b47a9c0b1e5-HAM
+```
 
-These two facts together — APAC primary, Smart Placement on — are the whole
-reason `cf-placement: remote-NRT` appears on public HTML. Any cache hit served
-at the edge never reaches the Worker, so it does not pay the APAC round trip.
+What those two captures show: the `/ads/adidas.com` response was executed **in
+Tokyo (NRT)** while its visitor's edge was in Europe, and the `/` response was
+not (`local-`). They are two captured URLs, not a rule about every route.
+
+Inferred, not proven here: Smart Placement parks compute next to the backend a
+Worker talks to, so the APAC-primary database is what pulls these requests to
+NRT. The correlation between the two facts above is the inference; the facts
+are the two blocks of output.
+
+Any cache hit served at the edge never reaches the Worker, so it does not pay
+the APAC round trip.
 
 ## Decision boundary (binding)
 
@@ -54,8 +65,10 @@ wanted.
 ## How to re-check
 
 ```bash
-# token lives outside the repo; never commit or print it
-set -a && . ~/.config/cloudflare/deploy.env && set +a
+# A Cloudflare token must already be in the environment; the repo's own scripts
+# read CLOUDFLARE_API_TOKEN (see scripts/d1-backup-lifecycle-canary.mjs,
+# scripts/verify-post-deploy-release.mjs) and CLOUDFLARE_ACCOUNT_ID. This file
+# does not say where to get them, and they are never committed or printed.
 npx wrangler d1 info 0509            # human table
 npx wrangler d1 info 0509 --json     # machine-readable
 curl -sS -o /dev/null -D - --max-time 25 https://0509.io/ads/adidas.com | grep -i cf-placement
