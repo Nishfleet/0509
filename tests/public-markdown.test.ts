@@ -305,10 +305,30 @@ describe("public markdown", () => {
     ]);
 
     expect(rendered).toContain("3 live Meta Ad Library ads for nykaa.com from public search, captured on 2026-08-26.");
-    expect(rendered).toContain("1 live Meta Ad Library ad for nike.com from public search, captured on 2026-08-25.");
+    expect(rendered).not.toContain("1 live Meta Ad Library ad for nike.com");
+    expect(rendered).not.toContain("https://0509.io/ads/nike.com");
     expect(rendered).toContain("Listed only while the capture is fresh enough to index (within 7 days)");
     expect(rendered).toMatch(/Not a worldwide/i);
     expect(rendered).not.toMatch(/worldwide coverage/i);
+  });
+
+  it("drops brand entries with fewer than 3 live Meta Ad Library ads (issue #2307)", () => {
+    // One- and two-ad pages are the weakest possible citation and dilute the
+    // file's authority. A brand entry is only listed once it has >=3 live
+    // Meta Ad Library ads (the same count rendered in each llms.txt line).
+    const rendered = buildLlmsText([
+      { path: "/ads/nykaa.com", adCount: 3, fetchedAt: "2026-08-26T14:40:00.000Z" },
+      { path: "/ads/nike.com", adCount: 2, fetchedAt: "2026-08-25T10:00:00.000Z" },
+      { path: "/ads/puma.com", adCount: 1, fetchedAt: "2026-08-25T10:00:00.000Z" },
+      { path: "/ads/adidas.com", adCount: 0, fetchedAt: "2026-08-25T10:00:00.000Z" },
+    ]);
+
+    expect(rendered).toContain("https://0509.io/ads/nykaa.com");
+    expect(rendered).not.toContain("https://0509.io/ads/nike.com");
+    expect(rendered).not.toContain("https://0509.io/ads/puma.com");
+    expect(rendered).not.toContain("https://0509.io/ads/adidas.com");
+    expect(rendered).not.toMatch(/1 live Meta Ad Library ad/);
+    expect(rendered).not.toMatch(/2 live Meta Ad Library ads/);
   });
 
   it("does not list noindex /ads shells or non-brand paths in llms.txt", () => {
