@@ -106,6 +106,14 @@ describe("fetchAdsByAccountOwner", () => {
     expect(body).toMatchObject({ target: "universal", proxy_pool: "standard" });
     expect(body.url).toContain("accountOwner=Notion");
     expect(body.url).toContain("geo=United+States");
+    // must-not: JS rendering (`headless`) and the premium pool. Asserted on the
+    // serialized body so an added `headless` key fails here, not in production.
+    expect(JSON.stringify(body)).not.toContain("headless");
+    expect(body.proxy_pool).toBe("standard");
+    // Page 1 only (start=0): no pagination parameter may reach the upstream URL.
+    expect(body.url).not.toContain("start=");
+    // One attempt: the request carries a timeout signal and no retry options.
+    expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal);
   });
 
   it("keeps only exact case-insensitive name matches and flags ambiguous", async () => {
@@ -135,12 +143,11 @@ describe("fetchAdsByAccountOwner", () => {
     expect(result).toEqual({ unavailable: true, reason: "parse_break" });
   });
 
-  it("returns an empty (available) list for zero ads with Promoted text on the page", async () => {
-    // The zero-ads fixture has no cards and no "Promoted" text, so it is a
-    // parse break. Build a page that has "Promoted" but zero cards: a genuine
-    // no-ads result is still available with an empty list.
-    const html = `<html><body><span class="promoted-label">Promoted</span><div class="search-results"><p>No ads found.</p></div></body></html>`;
-    fetchMock.mockResolvedValueOnce(decodoOk(html));
+  it("returns an empty (available) list for the zero-ads fixture", async () => {
+    // zero-ads.html has zero cards and carries the "Promoted" label, so it is
+    // the available empty-library branch of do:1, not the parse break that
+    // parse-break.html encodes (zero cards AND no "Promoted" text).
+    fetchMock.mockResolvedValueOnce(decodoOk(fixture("zero-ads.html")));
     const result = await fetchAdsByAccountOwner(baseEnv, "Notion");
     if ("unavailable" in result) throw new Error("expected available");
     expect(result.totalAds).toBe(0);

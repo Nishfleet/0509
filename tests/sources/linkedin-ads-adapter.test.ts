@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AppEnv } from "~/lib/env.server";
 import type { SourceSnapshotRecord, SourceSnapshotInput } from "~/lib/sources/types";
-import type { LinkedInAdCard, LinkedInAdLibraryFetchResult } from "~/lib/sources/linkedin-ads/linkedin-ad-library.server";
+import { fetchAdsByAccountOwner, type LinkedInAdCard, type LinkedInAdLibraryFetchResult } from "~/lib/sources/linkedin-ads/linkedin-ad-library.server";
 
 /**
  * Mock the Decodo budget helper so the adapter's budget gate is controllable
@@ -70,6 +70,7 @@ describe("linkedinAdsAdapter.fetch", () => {
   beforeEach(() => {
     budgetOk = true;
     fetchResult = { unavailable: true, reason: "no_credentials" };
+    vi.mocked(fetchAdsByAccountOwner).mockClear();
   });
 
   it("returns unavailable quota when the Decodo budget denies", async () => {
@@ -79,6 +80,8 @@ describe("linkedinAdsAdapter.fetch", () => {
       competitorLabel: "Notion",
     });
     expect(result).toEqual({ unavailable: true, reason: "quota" });
+    // The budget check runs BEFORE the request: a deny must not scrape.
+    expect(vi.mocked(fetchAdsByAccountOwner)).not.toHaveBeenCalled();
   });
 
   it("passes the competitor label through as the account owner", async () => {
@@ -97,6 +100,10 @@ describe("linkedinAdsAdapter.fetch", () => {
     expect(payload.totalAds).toBe(1);
     expect(payload.ads).toHaveLength(1);
     expect(payload.ads[0]!.id).toBe("1001");
+    // Account owner = the tracked competitor's display name, page 1, maxAds 25.
+    expect(vi.mocked(fetchAdsByAccountOwner)).toHaveBeenCalledWith(envWithAuth, "Notion", {
+      maxAds: 25,
+    });
   });
 
   it("propagates unavailable from the fetch module (e.g. 613)", async () => {
