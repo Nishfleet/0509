@@ -20,6 +20,7 @@ const COMPARE_PAGES = [
   "compare/foreplay-spyder",
   "compare/panoramata",
   "compare/adspyder",
+  "compare/adspy",
 ] as const;
 
 beforeEach(() => {

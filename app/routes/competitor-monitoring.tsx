@@ -212,6 +212,12 @@ const compareVendors = [
     oneLiner: "AdSpyder's searchable creative library against a change-evidence trail with source links.",
   },
   {
+    name: "AdSpy",
+    path: "/compare/adspy",
+    label: "Five to Nine vs AdSpy",
+    oneLiner: "AdSpy's ad-spy database and weak Trustpilot rating against source-backed change proof you can cancel.",
+  },
+  {
     name: "Visualping",
     path: "/compare/visualping-ad-libraries",
     label: "Five to Nine vs Visualping for ad libraries",

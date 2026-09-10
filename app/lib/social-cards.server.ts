@@ -88,6 +88,7 @@ const COMPARE_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   spyland: "Spyland",
   pulzifi: "Pulzifi",
   adspyder: "AdSpyder",
+  adspy: "AdSpy",
   foreplay: "Foreplay",
   visualping: "Visualping",
   "visualping-ad-library": "Visualping Ad Library",

@@ -17,6 +17,7 @@ const REMAINING_COMPARE_ROUTES = [
   "compare.spyland",
   "compare.foreplay",
   "compare.adspyder",
+  "compare.adspy",
 ] as const;
 
 const HONEST_SCREENSHOT_QUALIFIER = "screenshot when the capture includes one";

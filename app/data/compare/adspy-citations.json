@@ -1,0 +1,20 @@
+{
+  "competitor": "adspy",
+  "productName": "AdSpy",
+  "sources": [
+    {
+      "id": "adspy-pricing",
+      "href": "https://www.adspy.com/",
+      "label": "AdSpy home",
+      "checked": "2026-09-10",
+      "claim": "AdSpy lists a single $149/month plan on its home page."
+    },
+    {
+      "id": "adspy-trustpilot",
+      "href": "https://www.trustpilot.com/review/adspy.com",
+      "label": "AdSpy on Trustpilot",
+      "checked": "2026-09-10",
+      "claim": "AdSpy's Trustpilot rating is 2.4/5, with a large share of one-star reviews, and reviewers report being charged after they tried to cancel."
+    }
+  ]
+}
