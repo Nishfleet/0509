@@ -67,7 +67,22 @@ import {
   WEEKLY_DIGEST_CRON,
 } from "./schedule";
 import { withSecurityHeaders } from "./security-headers";
+import {
+  hasSiteRepAuthCookie,
+  isSiteRepWidgetIsolatedPath,
+} from "../app/lib/siterep-widget";
 export { MonitoringWorkflow } from "./monitoring-workflow";
+
+// Content-Signal (issue #2302): the AI-use reservation robots.txt declares once
+// per crawl, and that markdownResponse already stamps on /llms.txt and the
+// public markdown pages, carried by the public HTML documents it protects.
+// robots.txt is not re-read per fetched page, so a grounding crawler that lands
+// directly on a page sees no reservation at all; the signal has to travel with
+// the page. Public routes only — withSecurityHeaders also covers authed
+// documents and API responses, and an AI-training reservation on logged-in
+// traffic would be wrong. Value must stay identical to the robots.txt posture
+// in app/lib/seo.ts (docs/ai-crawler-policy.md).
+export const CONTENT_SIGNAL = "search=yes, ai-input=yes, ai-train=no, use=reference";
 
 type GlobalEnvCarrier = typeof globalThis & {
   __APP_REQUEST_ENV__?: Env;
@@ -86,11 +101,50 @@ function markdownResponse(request: Request, body: string): Response {
       headers: {
         "content-type": "text/markdown; charset=utf-8",
         "vary": "Accept",
-        "content-signal": "search=yes, ai-input=yes, ai-train=no, use=reference",
+        "content-signal": CONTENT_SIGNAL,
       },
     }),
     request,
   );
+}
+
+/**
+ * Stamps the Content-Signal reservation on a PUBLIC HTML document response and
+ * leaves every other response untouched:
+ *
+ * - GET/HEAD only, HTML responses only — API/JSON and asset responses never
+ *   carry a crawl reservation.
+ * - Anonymous requests only (no better-auth cookie).
+ * - Outside the private prefixes robots.txt disallows or marks noindex
+ *   (/app, /auth, /api/, /export/, /team/, /share/, /unsubscribe,
+ *   /.well-known/) — the same surfaces isSiteRepWidgetIsolatedPath covers.
+ * - A content-signal the app set itself wins.
+ */
+function withPublicContentSignal(response: Response, request: Request): Response {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return response;
+  }
+  const headers = response.headers;
+  if (headers.has("content-signal")) {
+    return response;
+  }
+  const contentType = headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("text/html")) {
+    return response;
+  }
+  if (hasSiteRepAuthCookie(request)) {
+    return response;
+  }
+  if (isSiteRepWidgetIsolatedPath(new URL(request.url).pathname)) {
+    return response;
+  }
+  const stamped = new Headers(headers);
+  stamped.set("content-signal", CONTENT_SIGNAL);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: stamped,
+  });
 }
 
 function publicFileResponse(
@@ -295,7 +349,7 @@ export default {
       country: request.headers.get("cf-ipcountry"),
     });
     const response = await requestHandler(request, routerContext);
-    return withSecurityHeaders(response, request);
+    return withSecurityHeaders(withPublicContentSignal(response, request), request);
   },
   async scheduled(controller, env, ctx) {
     const observationContext = Object.freeze({
