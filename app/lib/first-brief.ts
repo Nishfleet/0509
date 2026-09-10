@@ -357,7 +357,7 @@ export function pickSignupFirstBriefBrandSuggestions(
 ): SignupFirstBriefBrandSuggestion[] {
   const excluded = normalizeBrandDomain(currentDomain);
   const others = brands
-    .filter((brand) => normalizeBrandDomain(brand.domain) !== excluded || !excluded)
+    .filter((brand) => (excluded ? normalizeBrandDomain(brand.domain) !== excluded : true))
     .slice()
     .sort((a, b) => {
       const sameCategory =
@@ -393,6 +393,15 @@ export type SignupFirstBriefLoaderData =
   | {
       step: "first-brief";
       status: "no_ads";
+      /**
+       * The scanned watchlist's own id, so the `no_ads` capture offer can deep
+       * link the user to the competitor already being watched instead of the
+       * create-competitor form. Issue #2411: free is `watchlists: 1`, so the
+       * activation watchlist has already consumed the only slot — offering a
+       * second watchlist would land the user this state exists for on a plan
+       * limit, not a capture. Null when no active watchlist is resolvable.
+       */
+      watchlistId: string | null;
       watchlistName: string | null;
       suggestedBrands: SignupFirstBriefBrandSuggestion[];
     }

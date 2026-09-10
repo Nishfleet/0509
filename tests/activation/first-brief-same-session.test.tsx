@@ -167,6 +167,11 @@ function mockNoAdsFirstBrief() {
       // is "More brands", so these are the deterministic alphabetical fallback
       // — the property the issue's "already-tracked brands with live data"
       // needs is that they come from the indexable /brands set at all.
+      //
+      // `glowkart.example` is deliberately present: it is the user's own
+      // scanned competitor, so a regression in the exclusion is caught by the
+      // test rather than silently passing against an absent domain.
+      { domain: "glowkart.example", path: "/ads/glowkart.example", name: "Glowkart" },
       { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
       { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
       { domain: "nykaa.com", path: "/ads/nykaa.com", name: "Nykaa" },
@@ -352,21 +357,41 @@ describe("same-session first brief (issue #1487)", () => {
     // the /ads/:domain route would refuse to serve.
     expect(data.suggestedBrands.length).toBeGreaterThanOrEqual(2);
     expect(data.suggestedBrands.length).toBeLessThanOrEqual(3);
+    // The mock indexable set below deliberately INCLUDES the user's own
+    // competitor domain, so this assertion can actually fail if the exclusion
+    // regresses (it used to assert against a domain absent from the fixture).
     for (const brand of data.suggestedBrands) {
       expect(brand.path).toBe(`/ads/${brand.domain}`);
       expect(brand.domain).not.toBe("glowkart.example");
     }
+    expect(data.suggestedBrands.map((b) => b.domain)).not.toContain(
+      "glowkart.example",
+    );
 
     // (b) the rendered surface links every suggested brand and offers the
-    // landing-page baseline capture, so the first session does not dead-end.
+    // landing-page capture, so the first session does not dead-end.
     const { SignupFirstBriefView } = await import("~/components/signup-first-brief-view");
     const markup = renderToStaticMarkup(<SignupFirstBriefView data={data} />);
     for (const brand of data.suggestedBrands) {
       expect(markup).toContain(`href="${brand.path}"`);
     }
-    expect(markup).toContain("Capture a landing page");
-    // The quoted budget is read from the plan catalog, not hard-coded.
-    expect(markup).toContain(String(getPlanEntitlements("free").sitePageBudget));
+    // The capture offer must deep link the EXISTING watchlist (by id), never
+    // the create-competitor form: free is `watchlists: 1`, so the activation
+    // watchlist has already spent the only slot and a second-watchlist offer
+    // would land the user this state exists for on a plan limit instead of a
+    // capture. A display label in the `website` field is also rejected by the
+    // site's own domain validator, which disables the submit button.
+    expect(markup).toContain(
+      `href="/app/watchlists/${encodeURIComponent("watch-1")}"`,
+    );
+    expect(markup).not.toContain("competitor=Glowkart");
+    // The offer must not quote the Full-Site Watch page budget: it is gated by
+    // FULLSITE_WATCH_ENABLED (default off), so a free user may not have it and
+    // the sentence would be an unsourced claim. It must also never route the
+    // display label into the `website` field, which the site's own domain
+    // validator rejects (disabling the submit button).
+    expect(markup).not.toContain("page checks");
+    expect(markup).toContain("Add a page to capture instead");
   });
 
   it("keeps waiting when filing the first brief fails, so polling can retry", async () => {

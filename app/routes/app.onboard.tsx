@@ -197,6 +197,7 @@ async function firstBriefLoader(
       return {
         step: "first-brief",
         status: "no_ads",
+        watchlistId: scanned.id ?? null,
         watchlistName: scanned.targetLabel ?? null,
         // Issue #2411: a brand-new user's first product impression used to be
         // a dead end. Offer the nearest real value instead — 2-3 adjacent
