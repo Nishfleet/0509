@@ -21,6 +21,12 @@
  * Fails closed: if the base branch or the added-files list cannot be resolved,
  * the gate exits non-zero — "I could not check" must never read as "safe" on
  * the guard in front of a deploy.
+ *
+ * A rename is also covered. `--diff-filter=A` cannot see `git mv`, so renaming
+ * `0090_old.sql` to `0001_new.sql` would plant a low-numbered migration with
+ * the gate reporting OK. The diff is read with `--name-status -M` and a rename
+ * fails when the prefix DROPS. A rename that keeps or raises its prefix (tidying
+ * a filename) stays legal.
  */
 import { spawnSync } from "node:child_process";
 import { dirname } from "node:path";
