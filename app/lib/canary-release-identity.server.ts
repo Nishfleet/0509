@@ -1,6 +1,9 @@
 import type { AppEnv } from "~/lib/env.server";
+import { constantTimeTokenEqual } from "~/lib/constant-time-token.server";
 
 export const EXPECTED_WORKER_VERSION_HEADER = "x-0509-expected-worker-version";
+
+export const CANARY_TOKEN_HEADER = "x-0509-canary-token";
 
 const SAFE_VERSION_ID = /^[A-Za-z0-9._-]{1,128}$/u;
 const SAFE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/u;
@@ -30,6 +33,27 @@ export function readReleaseIdentity(env: AppEnv) {
     timestamp: normalizeTimestamp(env.CF_VERSION_METADATA?.timestamp),
     searchRolloutMode: normalizeMode(env.SEARCH_ROLLOUT_MODE),
   };
+}
+
+/**
+ * Release identity (worker version id, tag, timestamp, search rollout mode) is
+ * free recon for timing deploy windows and knowing when monitoring is degraded.
+ * Only a caller presenting the canary token may read it; anonymous monitors keep
+ * the public status/app/checks body. Gate the field, keep the body public.
+ *
+ * Fail-closed: no configured token means no caller may read the field.
+ *
+ * Shared by /api/health and /api/health/deep so a token-gate change lands once.
+ */
+export async function mayReadReleaseIdentity(request: Request, env: AppEnv) {
+  const configured = env.CANARY_BYPASS_TOKEN?.trim();
+  if (!configured) {
+    return false;
+  }
+  return constantTimeTokenEqual(
+    request.headers.get(CANARY_TOKEN_HEADER),
+    configured,
+  );
 }
 
 /**

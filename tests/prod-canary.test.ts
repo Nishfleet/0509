@@ -102,6 +102,53 @@ describe("production canary", () => {
     );
   });
 
+  it("attaches the canary token to the health read only when one is configured", async () => {
+    const tokenedFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "0509",
+        releaseIdentity: {
+          workerVersionId: EXPECTED_WORKER_VERSION_ID,
+          searchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+        },
+      }),
+    });
+    const anonymousFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: "ok", app: "0509" }),
+    });
+
+    const tokened = await checkHealthEndpoint({
+      baseUrl: "https://0509.io",
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+      expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+      canaryBypassToken: "  canary-secret  ",
+      fetchImpl: tokenedFetch,
+    });
+    const anonymous = await checkHealthEndpoint({
+      baseUrl: "https://0509.io",
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+      expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+      canaryBypassToken: "   ",
+      fetchImpl: anonymousFetch,
+    });
+
+    // releaseIdentity is gated behind the header, so the deploy canary must send
+    // the token to converge on the running worker version.
+    expect(tokenedFetch.mock.calls[0][1]?.headers).toMatchObject({
+      "x-0509-canary-token": "canary-secret",
+    });
+    expect(tokened).toMatchObject({ ok: true, releaseIdentityOk: true });
+
+    // An unconfigured token must not be sent, and the anonymous body alone is not
+    // enough for deploy convergence.
+    expect(anonymousFetch.mock.calls[0][1]?.headers).not.toHaveProperty("x-0509-canary-token");
+    expect(anonymous).toMatchObject({ ok: false, releaseIdentityOk: false });
+  });
+
   it("fails closed instead of following a redirect to another health alias", async () => {
     const fetchImpl = vi.fn(async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       if (init?.redirect === "manual") {
