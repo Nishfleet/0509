@@ -1,7 +1,15 @@
 export const PRESENCE_CONNECTOR_IDS = ["website", "x", "reddit", "linkedin", "rss"] as const;
 export type PresenceConnectorId = (typeof PRESENCE_CONNECTOR_IDS)[number];
 
-/** Catalog sources include live connectors plus planned/manual-only entries. */
+/**
+ * Catalog sources include live connectors plus planned/manual-only entries.
+ *
+ * The five competitor-monitoring source ids (google, google_ads, tiktok,
+ * subdomains, hiring) are added by the seam (#2218) as "coming soon" stubs —
+ * their adapters export `implemented: false` until the source tickets
+ * (#2181/#2189/#2193/#2194/#2198/#2199) land. `linkedin` already existed as a
+ * presence connector; the linkedin-ads adapter reuses that id.
+ */
 export const PRESENCE_SOURCE_IDS = [
   "website",
   "x",
@@ -11,6 +19,11 @@ export const PRESENCE_SOURCE_IDS = [
   "youtube",
   "amazon",
   "context_dev",
+  "google",
+  "google_ads",
+  "tiktok",
+  "subdomains",
+  "hiring",
 ] as const;
 export type PresenceSourceId = (typeof PRESENCE_SOURCE_IDS)[number];
 
@@ -24,6 +37,12 @@ export const PRESENCE_SOURCE_COVERAGE_STATUSES = [
   "limited",
   "unavailable",
   "degraded",
+  // Seam (#2218): competitor-monitoring source coverage. A source is
+  // "configured" only when its adapter exports implemented: true AND
+  // requiresEnv(env) is true. Stubs (implemented: false) report
+  // "coming_soon" — never "configured".
+  "configured",
+  "coming_soon",
 ] as const;
 export type PresenceSourceCoverageStatus = (typeof PRESENCE_SOURCE_COVERAGE_STATUSES)[number];
 
