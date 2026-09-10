@@ -561,7 +561,7 @@ describe("Dodo checkout route", () => {
     );
   });
 
-  it("does not clear a still-payable plan checkout from the unsigned cancel return", async () => {
+  it("clears the session user's pending plan checkout from the cancel return", async () => {
     const { clearDodoPlanCheckout } = mockCheckoutDependencies("free");
 
     const { loader } = await import("~/routes/api.billing.dodo.cancel");
@@ -582,10 +582,12 @@ describe("Dodo checkout route", () => {
       );
     }
 
-    expect(clearDodoPlanCheckout).not.toHaveBeenCalled();
+    expect(clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      checkoutId: "checkout_123",
+    });
   });
 
-  it("does not let workspace members clear the owner's cancelled checkout lock", async () => {
+  it("clears only the member's own lock, never the workspace owner's, on cancel", async () => {
     const { clearDodoPlanCheckout } = mockCheckoutDependencies("free", {
       workspace: {
         workspaceUserId: "owner-1",
@@ -608,7 +610,14 @@ describe("Dodo checkout route", () => {
       );
     });
 
-    expect(clearDodoPlanCheckout).not.toHaveBeenCalled();
+    // The cancel loader clears for the session user only, never the workspace
+    // owner, so a member's cancel cannot touch the owner's checkout lock.
+    expect(clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      checkoutId: "checkout_123",
+    });
+    expect(clearDodoPlanCheckout).not.toHaveBeenCalledWith(expect.anything(), "owner-1", {
+      checkoutId: "checkout_123",
+    });
   });
 
   it("blocks a second pending Dodo plan checkout before opening another session", async () => {
