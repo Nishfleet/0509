@@ -64,10 +64,9 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain(
       "<loc>https://0509.io/methodology</loc>",
     );
-    // Metadata: static entries carry changefreq and priority.
-    expect(sitemap?.body).toContain("<changefreq>daily</changefreq>");
-    expect(sitemap?.body).toContain("<priority>1.0</priority>");
-    expect(sitemap?.body).toContain("<changefreq>yearly</changefreq>");
+    // Static entries carry no changefreq/priority (Google ignores both).
+    expect(sitemap?.body).not.toContain("<changefreq>");
+    expect(sitemap?.body).not.toContain("<priority>");
   });
 
 	it("disallows auth-only surfaces in robots.txt but keeps /share crawlable", () => {

@@ -211,7 +211,7 @@ const LLMS_PAGE_DETAILS = {
   "/sneaker-resale": {
     title: "Sneaker resale competitor ads",
     description:
-      "English default in the sneaker-resale locale cluster: watch Meta ads and landing-page changes with saved screenshots.",
+      "English default in the sneaker-resale locale cluster: watch Meta ads and landing-page changes with source-linked proof.",
   },
   "/de/sneaker-resale": {
     title: "Sneaker-Reseller Konkurrenzanzeigen (Deutsch)",
@@ -1010,7 +1010,7 @@ export function buildLlmsText(
       : "";
   return `# Five to Nine
 
-Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence. Presence Desk tracks your brand and competitors across declared sources with proof-backed briefs.
+Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence.
 
 ${pagesSection}${timelineSection}
 

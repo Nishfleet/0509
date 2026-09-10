@@ -33,13 +33,9 @@ import {
 } from "~/lib/offer-timeline.server";
 import {
   brandDomainFromSitemapCacheRow,
-  brandPageEntryPriority,
   brandPageLookupCacheKeysForSitemap,
   brandPageRowHasVerifiedAds,
   brandPageRowVerifiedAdCount,
-  BRAND_PAGE_PRIORITY_FRESH_MS,
-  BRAND_PAGE_PRIORITY_NEAR_EXPIRY_MS,
-  BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS,
   buildSitemapXml,
   buildLocaleSitemapXml,
   staticSitemapEntriesForLocale,
@@ -270,7 +266,7 @@ describe("indexableBrandPageEntriesFromRows", () => {
     ]);
   });
 
-  it("carries lastmod from fetched_at, plus changefreq and priority", () => {
+  it("carries lastmod from fetched_at, and no changefreq/priority", () => {
     const fetchedAt = isoAgo(2 * 60 * 60 * 1000);
     const rows = [cacheRow({ fetched_at: fetchedAt })];
 
@@ -278,8 +274,8 @@ describe("indexableBrandPageEntriesFromRows", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].path).toBe("/ads/nykaa.com");
     expect(entries[0].lastmod).toBe(fetchedAt.slice(0, 10));
-    expect(entries[0].changefreq).toBe("weekly");
-    expect(entries[0].priority).toBe("0.6");
+    expect("changefreq" in entries[0]).toBe(false);
+    expect("priority" in entries[0]).toBe(false);
   });
 
   it("skips rows that would not render an indexable page", () => {
@@ -304,74 +300,6 @@ describe("indexableBrandPageEntriesFromRows", () => {
     );
 
     expect(indexableBrandPageEntriesFromRows(rows)).toHaveLength(SITEMAP_BRAND_PATH_LIMIT);
-  });
-});
-
-describe("brandPageEntryPriority — freshness + evidence bands (issue #966)", () => {
-  it("gives 0.7 to a fresh capture with strong verified evidence", () => {
-    expect(brandPageEntryPriority(60 * 60 * 1000, BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS)).toBe("0.7");
-    expect(brandPageEntryPriority(BRAND_PAGE_PRIORITY_FRESH_MS, 10)).toBe("0.7");
-  });
-
-  it("gives 0.6 to a fresh capture with thin evidence (the default band)", () => {
-    expect(brandPageEntryPriority(2 * 60 * 60 * 1000, 1)).toBe("0.6");
-    expect(brandPageEntryPriority(3 * DAY_MS, 2)).toBe("0.6");
-  });
-
-  it("gives 0.5 to a capture nearing the 7-day noindex expiry, whatever its evidence", () => {
-    expect(brandPageEntryPriority(BRAND_PAGE_PRIORITY_NEAR_EXPIRY_MS, 1)).toBe("0.5");
-    expect(brandPageEntryPriority(6 * DAY_MS, 50)).toBe("0.5");
-  });
-
-  it("gives 0.5 to an aging capture whose evidence is thin", () => {
-    expect(brandPageEntryPriority(3 * DAY_MS, 1)).toBe("0.5");
-    // Exact boundary: age == 2d with 1 verified ad is already the thin band.
-    expect(brandPageEntryPriority(BRAND_PAGE_PRIORITY_FRESH_MS, 1)).toBe("0.5");
-  });
-
-  it("never gives 0.7 to strong evidence on an aging capture", () => {
-    expect(brandPageEntryPriority(BRAND_PAGE_PRIORITY_FRESH_MS + 1, 100)).toBe("0.6");
-  });
-});
-
-describe("priority tiers flow through indexableBrandPageEntriesFromRows (issue #966)", () => {
-  const now = new Date();
-  const strongPayload = {
-    ...basePayload,
-    ads: [
-      verifiedAd,
-      { ...verifiedAd, metaAdId: "meta-nykaa-2" },
-      { ...verifiedAd, metaAdId: "meta-nykaa-3" },
-    ],
-  };
-
-  it("lists a strong fresh capture with priority 0.7", () => {
-    const entries = indexableBrandPageEntriesFromRows(
-      [cacheRow({ payload: strongPayload, fetched_at: isoAgo(60 * 60 * 1000) })],
-      now,
-    );
-    expect(entries).toHaveLength(1);
-    expect(entries[0].priority).toBe("0.7");
-  });
-
-  it("lists a near-expiry capture with priority 0.5 and its honest lastmod", () => {
-    const fetchedAt = isoAgo(6 * DAY_MS);
-    const entries = indexableBrandPageEntriesFromRows(
-      [cacheRow({ payload: strongPayload, fetched_at: fetchedAt })],
-      now,
-    );
-    expect(entries).toHaveLength(1);
-    expect(entries[0].priority).toBe("0.5");
-    expect(entries[0].lastmod).toBe(fetchedAt.slice(0, 10));
-  });
-
-  it("lists an aging thin-evidence capture with priority 0.5", () => {
-    const entries = indexableBrandPageEntriesFromRows(
-      [cacheRow({ fetched_at: isoAgo(3 * DAY_MS) })],
-      now,
-    );
-    expect(entries).toHaveLength(1);
-    expect(entries[0].priority).toBe("0.5");
   });
 });
 
@@ -796,17 +724,17 @@ describe("deriveBrandPageLookupForCountry", () => {
 describe("buildSitemapXml", () => {
   it("keeps the static funnel paths first, then appends dynamic brand pages", () => {
     const xml = buildSitemapXml([
-      { path: "/ads/nykaa.com", lastmod: "2026-08-21", changefreq: "weekly", priority: "0.6" },
-      { path: "/ads/meesho.com", lastmod: "2026-08-20", changefreq: "weekly", priority: "0.6" },
+      { path: "/ads/nykaa.com", lastmod: "2026-08-21" },
+      { path: "/ads/meesho.com", lastmod: "2026-08-20" },
     ]);
 
     expect(xml).toContain("<loc>https://0509.io/</loc>");
     expect(xml).toContain("<loc>https://0509.io/search</loc>");
     expect(xml).toContain("<loc>https://0509.io/ads/nykaa.com</loc>");
     expect(xml).toContain("<loc>https://0509.io/ads/meesho.com</loc>");
-    // Static entries carry changefreq and priority.
-    expect(xml).toContain("<changefreq>daily</changefreq>");
-    expect(xml).toContain("<priority>1.0</priority>");
+    // No changefreq/priority on any entry (Google ignores both).
+    expect(xml).not.toContain("<changefreq>");
+    expect(xml).not.toContain("<priority>");
     // Brand entries carry lastmod.
     expect(xml).toContain("<lastmod>2026-08-21</lastmod>");
     // Static list never carries a hardcoded /ads/ path.
@@ -1000,8 +928,8 @@ describe("collectingTimelineEntries / timelineSitemapEntries (issue #2021)", () 
     ]);
     // No lastmod: nothing is captured yet, so there is no honest lastmod.
     expect(collecting[0].lastmod).toBeUndefined();
-    expect(collecting[0].changefreq).toBe("weekly");
-    expect(collecting[0].priority).toBe("0.3");
+    expect("changefreq" in collecting[0]).toBe(false);
+    expect("priority" in collecting[0]).toBe(false);
   });
 
   it("never invents a domain from a non-/ads or multi-segment path", () => {
@@ -1058,8 +986,8 @@ describe("indexableTimelineEntriesFromRows", () => {
     const entries = indexableTimelineEntriesFromRows(rows);
     expect(entries.map((e) => e.path)).toEqual(["/timeline/nykaa.com"]);
     expect(entries[0].lastmod).toBe("2026-08-01");
-    expect(entries[0].changefreq).toBe("weekly");
-    expect(entries[0].priority).toBe("0.5");
+    expect("changefreq" in entries[0]).toBe(false);
+    expect("priority" in entries[0]).toBe(false);
   });
 
   it("does not list a zero-entry domain — rows without complete proof render the empty ledger (gone/noindex shell)", () => {
@@ -1212,8 +1140,6 @@ describe("indexableTimelineEntriesFromRows", () => {
       {
         path: "/timeline/hubspot.com",
         lastmod: "2026-08-10",
-        changefreq: "weekly",
-        priority: "0.5",
       },
     ]);
   });
@@ -1335,13 +1261,11 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
     );
     expect(limit).toBe(SITEMAP_BRAND_PATH_LIMIT);
     expect(entries.map((e: { path: string }) => e.path)).toEqual(["/ads/nykaa.com", "/ads/meesho.com"]);
-    // Entries carry lastmod from fetched_at.
+    // Entries carry lastmod from fetched_at, and no changefreq/priority.
     for (const entry of entries) {
       expect(entry.lastmod).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(entry.changefreq).toBe("weekly");
-      // Priority is tiered by freshness/evidence (issue #966); the exact band
-      // for the default fixture is pinned in the brandPageEntryPriority suite.
-      expect(["0.5", "0.6", "0.7"]).toContain(entry.priority);
+      expect("changefreq" in entry).toBe(false);
+      expect("priority" in entry).toBe(false);
     }
   });
 
@@ -1380,11 +1304,11 @@ describe("loadIndexableBrandPageEntries (D1 read)", () => {
 describe("buildSitemapXml with timeline entries", () => {
   it("appends timeline locs after brand pages; static entries stay first", () => {
     const brand = [
-      { path: "/ads/nykaa.com", lastmod: "2026-08-21", changefreq: "weekly" as const, priority: "0.6" },
+      { path: "/ads/nykaa.com", lastmod: "2026-08-21" },
     ];
     const timeline = [
-      { path: "/timeline/nykaa.com", lastmod: "2026-08-10", changefreq: "weekly" as const, priority: "0.5" },
-      { path: "/timeline/meesho.com", lastmod: "2026-08-02", changefreq: "weekly" as const, priority: "0.5" },
+      { path: "/timeline/nykaa.com", lastmod: "2026-08-10" },
+      { path: "/timeline/meesho.com", lastmod: "2026-08-02" },
     ];
 
     const xml = buildSitemapXml(brand, timeline);
@@ -1555,20 +1479,17 @@ describe("SITEMAP_PATHS", () => {
     expect(SITEMAP_PATHS).toContain("/brands");
     const entry = SITEMAP_STATIC_ENTRIES.find((e) => e.path === "/brands");
     expect(entry).toBeTruthy();
-    expect(entry?.changefreq).toBe("weekly");
-    expect(entry?.priority).toBe("0.6");
+    expect(entry?.lastmod).toBeUndefined();
     const xml = buildSitemapXml([], []);
     expect(xml).toContain("<loc>https://0509.io/brands</loc>");
   });
 
-  it("keeps every indexable /compare/* winner in the sitemap with changefreq and priority (issue #1878)", () => {
+  it("keeps every indexable /compare/* winner in the sitemap (issue #1878)", () => {
     // The issue asked to surface all built /compare/* pages (the 4 that were
     // missing) and all indexable /ads/:domain pages. Duplicate /compare pairs
     // (visualping, foreplay) are canonicalized to their more specific winners
     // (issue #1481/#1548); the winners below are the distinct indexable URLs
-    // that must never regress out of the static sitemap. Each must carry an
-    // honest changefreq and priority, matching the /ads/:domain entries that
-    // the dynamic reader appends beside them.
+    // that must never regress out of the static sitemap.
     const compareWinners = [
       "/compare",
       "/compare/meta-ad-library",
@@ -1586,14 +1507,9 @@ describe("SITEMAP_PATHS", () => {
       expect(rootPaths, `${path} dropped from root sitemap`).toContain(path);
       const entry = ROOT_SITEMAP_STATIC_ENTRIES.find((e) => e.path === path);
       expect(entry, `${path} missing from static entries`).toBeTruthy();
-      // Exact tiers, not mere presence, so a future edit can't silently
-      // flatten the honest freshness/importance signal of a comparison page
-      // (matches the sibling /brands test's exact-value style).
-      expect(entry?.changefreq, `${path} wrong changefreq`).toBe("weekly");
-      // The /compare hub sits one tier above its children (0.8 vs 0.7).
-      expect(entry?.priority, `${path} wrong priority`).toBe(
-        path === "/compare" ? "0.8" : "0.7",
-      );
+      // Static entries carry no changefreq/priority (Google ignores both).
+      expect("changefreq" in entry!, `${path} still carries changefreq`).toBe(false);
+      expect("priority" in entry!, `${path} still carries priority`).toBe(false);
     }
 
     // The canonicalized losers never appear as distinct sitemap URLs.
@@ -1622,8 +1538,8 @@ describe("SITEMAP_PATHS", () => {
       );
       const entry = ROOT_SITEMAP_STATIC_ENTRIES.find((e) => e.path === page.pathname);
       expect(entry, `${page.pathname} missing from static entries`).toBeTruthy();
-      expect(entry?.changefreq, `${page.pathname} wrong changefreq`).toBe("weekly");
-      expect(entry?.priority, `${page.pathname} wrong priority`).toBe("0.7");
+      expect("changefreq" in entry!, `${page.pathname} still carries changefreq`).toBe(false);
+      expect("priority" in entry!, `${page.pathname} still carries priority`).toBe(false);
       expect(entry?.lastmod, `${page.pathname} fabricated lastmod`).toBeUndefined();
       expect(xml).toContain(`<loc>https://0509.io${page.pathname}</loc>`);
       expect(xml).not.toMatch(
@@ -1647,24 +1563,18 @@ describe("SITEMAP_PATHS", () => {
       {
         path: "/ads/nykaa.com",
         lastmod: "2026-08-21",
-        changefreq: "weekly",
-        priority: "0.6",
         adCount: 3,
         fetchedAt: "2026-08-21T10:00:00.000Z",
       },
       {
         path: "/ads/meesho.com",
         lastmod: "2026-08-20",
-        changefreq: "weekly",
-        priority: "0.6",
         adCount: 2,
         fetchedAt: "2026-08-20T10:00:00.000Z",
       },
       {
         path: "/ads/mamaearth.in",
         lastmod: "2026-08-19",
-        changefreq: "weekly",
-        priority: "0.6",
         adCount: 4,
         fetchedAt: "2026-08-19T10:00:00.000Z",
       },
@@ -1844,11 +1754,11 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
   });
 
   it("every buyer-surface path and compare/switch child is in SITEMAP_STATIC_ENTRIES (no silent drop)", () => {
-    // The derivation reuses the EN changefreq/priority from
-    // SITEMAP_STATIC_ENTRIES and skips any path missing from it. A path
-    // added to BUYER_SURFACE_PATHS / BUYER_SURFACE_CHILD_PATHS but not to
-    // SITEMAP_PATHS would silently vanish from the locale sitemap — this
-    // cross-check makes that drift fail loudly.
+    // The derivation reuses the EN path set from SITEMAP_STATIC_ENTRIES and
+    // skips any path missing from it. A path added to BUYER_SURFACE_PATHS /
+    // BUYER_SURFACE_CHILD_PATHS but not to SITEMAP_PATHS would silently
+    // vanish from the locale sitemap — this cross-check makes that drift
+    // fail loudly.
     const staticPaths = new Set(SITEMAP_STATIC_ENTRIES.map((e) => e.path));
     const derived = [
       ...BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml"),
