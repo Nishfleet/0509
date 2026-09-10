@@ -1261,6 +1261,31 @@ export async function isWatchlistEligibleForScheduledScan(
   return { eligible: true as const, plan: access.plan };
 }
 
+/**
+ * True when a free workspace has already reserved its one activation scan
+ * (firstScanQuotaReserved on the first-scan run). Free is barebones: the
+ * activation scan files the one first brief, then no further scan is
+ * scheduled. The fanout skips free workspaces after this flag so a free
+ * workspace never receives a recurring scheduled scan.
+ */
+export async function hasFreeWorkspaceReservedFirstScan(
+  env: AppEnv,
+  userId: string,
+): Promise<boolean> {
+  const row = await one<{ reserved: number }>(
+    env,
+    `
+      SELECT COALESCE(MAX(json_extract(wr.summary_json, '$.firstScanQuotaReserved')), 0) AS reserved
+      FROM watchlist_run wr
+      INNER JOIN watchlist w ON w.id = wr.watchlist_id
+      WHERE w.user_id = ?
+        AND wr.idempotency_key LIKE 'watchlist-run:first-scan:%'
+    `,
+    userId,
+  );
+  return Number(row?.reserved ?? 0) === 1;
+}
+
 type WorkflowBinding = Workflow<MonitoringWorkflowParams> & {
   createBatch?: (
     batch: Array<{ id: string; params: MonitoringWorkflowParams }>,
@@ -1872,6 +1897,16 @@ export async function scheduleWatchlistFanout(
         continue;
       }
 
+      // Free is barebones: the activation scan files the one first brief,
+      // then no further scan is scheduled. Skip free workspaces that have
+      // already reserved their first scan.
+      if (
+        eligibility.plan === "free" &&
+        (await hasFreeWorkspaceReservedFirstScan(env, watchlist.userId))
+      ) {
+        continue;
+      }
+
       if (!isFanoutEnabledForWorkspace(env, watchlist.userId)) {
         continue;
       }
@@ -2029,6 +2064,22 @@ export async function reconcileOrchestratedWatchlistRuns(
         runId: row.id,
         reason: access.reason,
         message: "Scheduled scans paused for this workspace.",
+      });
+      cancelled += 1;
+      continue;
+    }
+
+    // Free is barebones: the activation scan files the one first brief, then
+    // no further scan is scheduled. Cancel any queued scheduled run for a
+    // free workspace that has already reserved its first scan.
+    if (
+      access.plan === "free" &&
+      (await hasFreeWorkspaceReservedFirstScan(env, watchlist.user_id))
+    ) {
+      await markOrchestratedRunCancelled(env, {
+        runId: row.id,
+        reason: "free_first_scan_used",
+        message: "Free includes one first check; further scheduled scans are paid.",
       });
       cancelled += 1;
       continue;

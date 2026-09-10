@@ -476,7 +476,7 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
       ? {
           ok: true,
           message: plan === "free"
-            ? "Watchlist resumed. It rejoins the next weekly check; paid plans check every 3–6 hours."
+            ? "Watchlist resumed. Free includes one first check; further scheduled checks are paid."
             : "Watchlist resumed. It rejoins the next scheduled scan.",
         }
       : { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
