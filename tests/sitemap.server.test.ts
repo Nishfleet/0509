@@ -1520,6 +1520,7 @@ describe("SITEMAP_PATHS", () => {
       "/compare/foreplay-spyder",
       "/compare/panoramata",
       "/compare/adspyder",
+      "/compare/adspy",
     ] as const;
 
     const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);

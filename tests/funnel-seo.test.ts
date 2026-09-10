@@ -186,6 +186,7 @@ describe("shared marketing footer", () => {
       "/compare/foreplay-spyder",
       "/compare/panoramata",
       "/compare/adspyder",
+      "/compare/adspy",
       "/switch/magicbrief",
       "/switch/panoramata",
       "/switch/visualping",
@@ -213,6 +214,7 @@ describe("shared marketing footer", () => {
       "app/routes/compare.foreplay-spyder.tsx",
       "app/routes/compare.panoramata.tsx",
       "app/routes/compare.adspyder.tsx",
+      "app/routes/compare.adspy.tsx",
       "app/components/switch-landing.tsx",
       "app/components/sneaker-resale-landing.tsx",
     ]) {
