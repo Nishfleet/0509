@@ -1,3 +1,4 @@
+import type { DomainArchive } from "~/lib/archive";
 import {
   buildChangeIntelligenceSummary,
   readDigestIntelligence,
@@ -170,6 +171,60 @@ export function watchlistExportResponse(
       ]),
     ],
   );
+}
+
+/**
+ * The proof archive export (issue #2173): CSV + JSON of everything the
+ * account captured for one watched domain. Same gating door as every other
+ * export (`requireExportFeature` in the route); the payload carries the
+ * capture method and timestamp on every row — the archive's honesty rule
+ * holds in the export too.
+ */
+export function archiveExportResponse(archive: DomainArchive, format: ExportFormat) {
+  if (format === "json") {
+    return jsonResponse("archive.json", {
+      resourceType: "archive",
+      schemaVersion: CLIENT_READY_EXPORT_SCHEMA,
+      exportPolicy: redactedExportPolicy("full_archive_rows_with_capture_receipts"),
+      generatedAt: archive.generatedAt,
+      archive,
+    });
+  }
+
+  return csvResponse("archive.csv", [
+    [
+      "captured_at",
+      "kind",
+      "field",
+      "from",
+      "to",
+      "criticality_band",
+      "criticality_score",
+      "capture_method",
+      "status",
+      "before_screenshot_url",
+      "after_screenshot_url",
+      "page_text_url",
+      "source_url",
+      "evidence_note",
+    ],
+    ...archive.entries.map((entry) => [
+      entry.capturedAt,
+      entry.kind,
+      entry.fieldLabel,
+      entry.beforeValue ?? "",
+      entry.afterValue ?? "",
+      entry.criticality?.band ?? "",
+      entry.criticality ? String(entry.criticality.score) : "",
+      entry.captureMethod ?? "",
+      entry.eventStatus ?? "",
+      entry.beforeScreenshotHref ?? "",
+      entry.afterScreenshotHref ?? "",
+      entry.pageTextHref ?? "",
+      entry.sourceUrl ?? "",
+      entry.evidenceNote ?? "",
+    ]),
+  ]);
 }
 
 export function digestExportResponse(digest: DigestRecord, format: ExportFormat) {

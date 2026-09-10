@@ -24,6 +24,7 @@ export interface WatchlistDetailTabDefinition {
 
 export type WatchlistDetailTabId =
   | "changed"
+  | "archive"
   | "evidence"
   | "creative"
   | "delivery"
@@ -32,6 +33,8 @@ export type WatchlistDetailTabId =
 /** Fixed order, brief §6.4. Never reordered per plan, per state or per user. */
 export const WATCHLIST_DETAIL_TABS: readonly WatchlistDetailTabDefinition[] = [
   { id: "changed", label: "What changed", panelLabel: "What changed" },
+  // Issue #2173: the proof archive — the full dated record behind the feed.
+  { id: "archive", label: "Archive", panelLabel: "Archive" },
   { id: "evidence", label: "Evidence", panelLabel: "Evidence" },
   { id: "creative", label: "Creative", panelLabel: "Creative" },
   { id: "delivery", label: "Delivery", panelLabel: "Delivery" },
