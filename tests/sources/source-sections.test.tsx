@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PlanEntitlements, PlanFamily } from "~/lib/plan-entitlements";
+import type { PlanEntitlements, PlanFamily, PlanSourceId } from "~/lib/plan-entitlements";
 
 /**
  * Seam #2218 — SourceSections locked-source renderer.
@@ -15,7 +15,7 @@ import type { PlanEntitlements, PlanFamily } from "~/lib/plan-entitlements";
  */
 
 // Mutable per-test entitlement the mocked getPlanEntitlements returns.
-let mockSources: string[] | "all" | undefined;
+let mockSources: PlanSourceId[] | "all" | undefined;
 
 const baseEntitlements = {
   planFamily: "free",
