@@ -172,8 +172,6 @@ describe("dashboard v2 shell", () => {
       // Pure redirect stubs (route diet phase 1, #2213).
       "app.collections.tsx",
       "app.deliver.tsx",
-      "app.watchlists.tsx",
-      "app.watchlists.$watchlistId.tsx",
       "app.clients.tsx",
       "app.shares.tsx",
       "app.billing.tsx",
@@ -184,9 +182,12 @@ describe("dashboard v2 shell", () => {
       "app.reports.tsx",
       "app.source-access.tsx",
       "app.developer-access.tsx",
+      "app.watchlists.$watchlistId.tsx",
       // UI-shell re-exports / pure redirects.
       "app.sources.tsx",
       "app.api.tsx",
+      // Re-exports the board's own detail screen (route diet phase 1, #2213).
+      "app.c.$id.tsx",
     ]);
     const missing = PRIMARY_APP_ROUTE_FILES.filter((file) => {
       if (file === "ops.tsx") return false;

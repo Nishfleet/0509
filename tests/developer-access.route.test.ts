@@ -67,7 +67,7 @@ describe("developer access route action", () => {
       listCustomerApiKeys: vi.fn().mockResolvedValue([]),
     }));
 
-    const { loader } = await import("~/routes/app.developer-access");
+    const { loader } = await import("~/routes/app.api");
     const result = await loader({
       context: createContext({ DB: {} }),
       request: new Request("http://localhost/app/developer-access"),
@@ -111,7 +111,7 @@ describe("developer access route action", () => {
       listCustomerApiKeys,
     }));
 
-    const { loader } = await import("~/routes/app.developer-access");
+    const { loader } = await import("~/routes/app.api");
     const result = await loader({
       context: createContext({ DB: {} }),
       request: new Request("http://localhost/app/developer-access"),
@@ -154,7 +154,7 @@ describe("developer access route action", () => {
       createCustomerApiKey,
     }));
 
-    const { action } = await import("~/routes/app.developer-access");
+    const { action } = await import("~/routes/app.api");
     const formData = new FormData();
     formData.set("intent", "create-api-key");
     formData.set("apiKeyName", "Claude workflow");
@@ -255,7 +255,7 @@ describe("developer access route action", () => {
         revokeCustomerApiKey,
       }));
 
-      const { action } = await import("~/routes/app.developer-access");
+      const { action } = await import("~/routes/app.api");
       const formData = new FormData();
       formData.set("intent", intent);
       formData.set("apiKeyName", "Member-created key");
@@ -303,7 +303,7 @@ describe("developer access route action", () => {
       revokeCustomerApiKey,
     }));
 
-    const { action } = await import("~/routes/app.developer-access");
+    const { action } = await import("~/routes/app.api");
     const formData = new FormData();
     formData.set("intent", "revoke-api-key");
     formData.set("apiKeyId", "api-key-1");

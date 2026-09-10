@@ -76,7 +76,7 @@ describe("digests customer presentation", () => {
 			}),
 		);
 
-		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const { default: DigestsRoute } = await import("~/routes/app.briefs");
 		const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 		expect(markup).toContain("AI summary of the week");
@@ -96,7 +96,7 @@ describe("digests customer presentation", () => {
 			plan: "free",
 		});
 
-		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const { default: DigestsRoute } = await import("~/routes/app.briefs");
 		const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 		// Free is barebones: the first brief is on file, and weekly briefs are
@@ -113,7 +113,7 @@ describe("digests customer presentation", () => {
 	])("does not render an AI summary for an absent or invalid %s", async (_label, summary) => {
 		await mockRoute(digestData(summary));
 
-		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const { default: DigestsRoute } = await import("~/routes/app.briefs");
 		const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 		expect(markup).not.toContain("AI summary of the week");
@@ -126,7 +126,7 @@ describe("digests customer presentation", () => {
 	])("renders %s cohort feedback", async (_label, total, included, omitted, expected) => {
 		await mockRoute(digestData({ totalEligibleEvents: total, includedEvents: included, omittedEvents: omitted }));
 
-		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const { default: DigestsRoute } = await import("~/routes/app.briefs");
 		const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 		expect(markup).toContain(`Showing ${included} of ${total} eligible changes; ${expected} from this digest.`);
@@ -136,7 +136,7 @@ describe("digests customer presentation", () => {
 		"renders one designed brief and retires the separate first-run front page for %s",
 		async (search) => {
 			await mockRoute(digestData(null), search);
-			const { default: DigestsRoute } = await import("~/routes/app.digests");
+			const { default: DigestsRoute } = await import("~/routes/app.briefs");
 			const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 			expect(markup).toContain('class="f9-wk-brief"');
@@ -144,7 +144,7 @@ describe("digests customer presentation", () => {
 			expect(markup).toContain("Showing 1 recent brief on file.");
 			expect(markup).toContain('id="first-brief-detail"');
 			expect(markup).toContain(
-				'href="/app/digests?digest=digest-1#first-brief-detail"',
+				'href="/app/briefs?digest=digest-1#first-brief-detail"',
 			);
 			expect(markup).toContain("2026-07-15T09:14:00.000Z");
 			expect(markup).not.toContain("f9-wire-frontpage");
@@ -163,7 +163,7 @@ describe("digests customer presentation", () => {
 		});
 		await mockRoute(data);
 
-		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const { default: DigestsRoute } = await import("~/routes/app.briefs");
 		const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 		expect(markup).toMatch(
@@ -180,7 +180,7 @@ describe("digests customer presentation", () => {
 		]) {
 			vi.resetModules();
 			await mockRoute(digestData(summary));
-			const { default: DigestsRoute } = await import("~/routes/app.digests");
+			const { default: DigestsRoute } = await import("~/routes/app.briefs");
 			const markup = renderToStaticMarkup(createElement(DigestsRoute));
 			expect(markup).not.toContain("eligible changes;");
 		}
@@ -200,7 +200,7 @@ describe("digests customer presentation", () => {
 			}]),
 		);
 
-		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const { default: DigestsRoute } = await import("~/routes/app.briefs");
 		const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 		expect(markup).toContain("Delivery unconfirmed");
@@ -230,7 +230,7 @@ describe("digests customer presentation", () => {
 				}]),
 			);
 
-			const { default: DigestsRoute } = await import("~/routes/app.digests");
+			const { default: DigestsRoute } = await import("~/routes/app.briefs");
 			const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 			expect(markup).toContain("Delivery unconfirmed");
@@ -253,7 +253,7 @@ describe("digests customer presentation", () => {
 			}]),
 		);
 
-		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const { default: DigestsRoute } = await import("~/routes/app.briefs");
 		const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 		expect(markup).toContain("WhatsApp delivered");

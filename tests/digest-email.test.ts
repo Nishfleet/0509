@@ -1967,7 +1967,7 @@ describe("authenticated briefs route accountability (E2 2026-08-08)", () => {
 
 	async function renderDigestsRoute(loaderData: unknown) {
 		await mockDigestsRoute(loaderData);
-		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const { default: DigestsRoute } = await import("~/routes/app.briefs");
 		return renderToStaticMarkup(createElement(DigestsRoute));
 	}
 
