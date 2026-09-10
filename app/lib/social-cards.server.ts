@@ -27,6 +27,8 @@
  * `og-image.png`.
  */
 
+import { brandCategoryFromSlug } from "~/lib/brand-categories";
+
 const SITE_NAME = "Five to Nine";
 
 /** Gradient reused from the site-wide `SOCIAL_CARD_SVG` in seo.ts. */
@@ -111,11 +113,17 @@ const CLUSTER_HEADLINES: Readonly<Record<string, { headline: string; subline: st
   },
 };
 
-export type SocialCardKind = "ads" | "timeline" | "compare" | "switch" | "cluster";
+export type SocialCardKind =
+  | "ads"
+  | "timeline"
+  | "compare"
+  | "switch"
+  | "cluster"
+  | "brand";
 
 export interface ParsedSocialCardPath {
   kind: SocialCardKind;
-  /** `domain` for ads/timeline, tool slug for compare/switch, cluster slug for cluster. */
+  /** `domain` for ads/timeline, tool slug for compare/switch, cluster slug for cluster, category slug for brand. */
   slug: string;
 }
 
@@ -124,7 +132,8 @@ export interface ParsedSocialCardPath {
  * `null` when the pathname is not a social card path. The ads/timeline card
  * slugs are the raw `:domain` segment (may contain dots, e.g. `nike.com`);
  * compare/switch slugs are single segments; cluster slugs are the two
- * standalone surfaces.
+ * standalone surfaces; brand slugs are the `/brands/:category` landing
+ * pages (resolved via `brandCategoryFromSlug` in renderSocialCard).
  */
 export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath | null {
   if (!pathname.startsWith("/social-card/")) return null;
@@ -148,6 +157,9 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
 
   const switchMatch = rest.match(/^switch\/([^/]+)\.svg$/);
   if (switchMatch) return { kind: "switch", slug: switchMatch[1] };
+
+  const brandMatch = rest.match(/^brand\/([^/]+)\.svg$/);
+  if (brandMatch) return { kind: "brand", slug: brandMatch[1] };
 
   const clusterMatch = rest.match(/^([^/]+)\.svg$/);
   if (clusterMatch && CLUSTER_HEADLINES[clusterMatch[1]]) {
@@ -200,6 +212,19 @@ function renderSocialCard(parsed: ParsedSocialCardPath, request: Request): strin
     return renderCard({
       headline: `Switch from ${product}`,
       subline: `Move to ${SITE_NAME}`,
+    });
+  }
+
+  if (parsed.kind === "brand") {
+    // Resolve the curated label from the category slug. Unknown or the
+    // "More brands" placeholder resolve to null here, so the card 404s the
+    // same way the /brands/:category route will (the unclassified fallback
+    // bucket has no landing page).
+    const category = brandCategoryFromSlug(parsed.slug);
+    if (!category) return null;
+    return renderCard({
+      headline: `${category} Meta ads`,
+      subline: `Competitor Meta ad libraries \u00b7 ${SITE_NAME}`,
     });
   }
 
