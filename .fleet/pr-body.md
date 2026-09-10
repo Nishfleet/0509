@@ -1,64 +1,62 @@
-## Why
+# Disable the workers.dev duplicate origin and pin Better Auth trusted origins
 
-Issue #2108 — generalize signup attribution beyond the six hardcoded strings. Production D1 ground truth: 15 users, 0 signups Jul-Sep, 0 real paying customers. The existing `signup_source` column (migration 0080) has a SQL `CHECK` that admits exactly five literals, so any new slug or `ref:<eTLD+1>` referer marker is rejected at write time. This PR opens the allowlist to lowercase slugs and referer-derived markers, in code and in the D1 schema, so signup attribution can grow without a migration per campaign.
+## Summary
 
-This is the orchestrator re-spec (2026-09-09T16:43Z) — it overrides step 2's file list because the original `files:` scope could not meet the `accept:` criterion (the 0080 CHECK rejects any value outside the five literals; SQLite cannot ALTER a CHECK in place).
+Closes #2350
 
-## Scope
+1. **`wrangler.jsonc`** — add `"workers_dev": false`. The Worker routes six
+   custom domains (`0509.io/.in` + `www.`/`api.`) but previously had no
+   `workers_dev` key, so the unassigned
+   `<account-subdomain>.workers.dev` hostname could still serve the full app.
+   Disabling the workers.dev route means that origin is no longer served, so
+   it cannot be auto-trusted.
+2. **`app/lib/better-auth.server.ts`** — remove the unconditional
+   `new URL(request.url).origin` entry from `betterAuthTrustedOrigins`.
+   The trusted list is now pinned to the canonical origin list only:
+   `BETTER_AUTH_URL`/`APP_ORIGIN` plus any explicitly configured
+   `BETTER_AUTH_TRUSTED_ORIGINS`. An arbitrary caller-supplied request origin
+   (e.g. a workers.dev host) is never folded in for auth redirects/CORS.
+   `betterAuthTrustedOrigins` is exported so the list can be pinned by a test.
+3. **`tests/auth.server.test.ts`** — add a unit test pinning trusted origins
+   to the canonical list and asserting an unlisted request host
+   (e.g. `0509.example.workers.dev`) is never auto-trusted.
 
-- `migrations/0087_signup_source_open_allowlist.sql` (new) — rebuilds the `user` and `signup_source_pending` CHECK constraints (create-copy-drop-rename, so child FK references to `user` are never rewritten) so `signup_source` accepts: NULL, the five existing literals, `pricing-free`, `for_agencies`, and any value matching `length(signup_source) BETWEEN 1 AND 44 AND signup_source NOT GLOB '*[^a-z0-9:.-]*'` (lowercase slugs and `ref:<eTLD+1>`). Keeps NOT NULL on the pending table; recreates `idx_user_email_nocase` and `idx_signup_source_pending_expires`.
-- `app/lib/signup-source.ts` (modified) — `allowlistedSignupSource` now also accepts lowercase slugs (`/^[a-z0-9][a-z0-9-]{0,39}$/`) and `ref:<eTLD+1>` markers (`/^ref:[a-z0-9.-]{1,40}$/`); the six existing constants keep working. `signupSourceFromRequest` falls back to `ref:<eTLD+1>` derived from the `Referer` header (coarse domain only, never the full URL or query string).
-- `tests/signup-source.test.ts` (modified) — slug accepted, junk rejected, referer-derived value stored, cookie round-trip unchanged, and a shared fixture list asserted against both the code rule and the migration SQL.
-- `tests/integration/signup-source.integration.test.ts` (modified) — referer-derived `ref:example.com` persisted end to end on real D1, open slug persisted, 0087 CHECK accepts/rejects the same fixture list as the code rule, and the rebuilt `user` table keeps its email index and inbound foreign keys.
+## Termination
 
-## D1 expand/contract
-
-This is a single-phase schema change (rebuild the CHECK constraints). No `DROP COLUMN`, no `DROP TABLE` of a live table (the rebuild drops the old table only after copying into the replacement), no rename of a column, no `NOT NULL` without a DEFAULT. The migration is validated by the real-D1 integration tests (the `workers` vitest project applies the full migration set to local D1).
+`npm test` standalone (node project below; the `workers` project is skipped
+because the diff does not touch `migrations/**` or `tests/integration/**`).
 
 ## Verification
 
-Real-D1 leg (workers vitest project, applies all migrations including 0087 to local D1):
+- `npx vitest run --configLoader runner --project node --changed origin/main`
+  → `Test Files 182 passed (182)` / `Tests 2246 passed (2246)`.
+- `npx vitest run --configLoader runner --project node tests/auth.server.test.ts`
+  → `Test Files 1 passed (1)` / `Tests 48 passed (48)`, including the new
+  "pins trusted origins to the canonical list without the request origin".
+- `wrangler.jsonc` `workers_dev` key validated against
+  `node_modules/wrangler/config-schema.json`.
 
-```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner tests/signup-source.test.ts tests/integration/signup-source.integration.test.ts
-```
+run-proof: vitest node project, 182 files / 2246 tests, 2026-09-10
+net-positive-because: the +23 net lines are the new pinned trusted-origins
+  unit test; the production change is net-zero (`workers_dev: false` row plus
+  removal of one request-origin entry from the trusted list).
 
-→ 2 files, 23 tests passed (15 unit + 8 integration). The accept criterion is proven: a signup arriving with only `Referer: https://example.com/page` persists `ref:example.com` on `user.signup_source` (integration test "persists a referer-derived ref:<eTLD+1> marker end to end").
+## Note on the curl probe
 
-Type check:
+The issue asked to resolve the workers.dev hostname via `wrangler whoami` and
+`curl -I` it. The worker environment has no durable wrangler/Cloudflare
+credentials (`wrangler whoami` → "not authenticated"), so the exact account
+subdomain cannot be resolved from this unit. The durable fix is
+`workers_dev: false`, which deterministically disables the workers.dev route
+(the workers.dev URL then answers with an error instead of serving the app),
+and the added unit test pins the auth-side trusted list to the canonical
+origin list. This satisfies the acceptance criteria without a live probe.
+## Review
 
-```
-NODE_OPTIONS=--max-old-space-size=6144 npm run typecheck
-```
+Reviewer seat: `cursor/cursor-grok-4.6-high` (reviewer-senior, one round).
 
-→ exit 0.
-
-Regression (the `user` rebuild must keep child-table writes intact):
-
-```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner --project workers tests/integration/watch-event-writes.integration.test.ts tests/integration/saucony-watchlist.integration.test.ts tests/integration/signup-first-brief.integration.test.ts tests/integration/retention-sweep-state.integration.test.ts tests/integration/website-scan-baseline.integration.test.ts
-```
-
-→ 5 files, 32 tests passed.
-
-run-proof: tests/signup-source.test.ts (15 tests) + tests/integration/signup-source.integration.test.ts (8 tests, real D1) + 5 regression integration files (32 tests, real D1) all green in the same vitest workers-project run; `npm run typecheck` exit 0.
-
-net-positive-because: this is the issue's own acceptance — the open allowlist (code + D1 schema) is the load-bearing new code, and the rest is the required real-D1 integration proof plus the referer-derivation wiring. It is product work, not control-plane machinery.
-
-## Termination note (check-d1-migrations-synced.mjs)
-
-The issue's termination command ends with `node scripts/check-d1-migrations-synced.mjs`. That script is a **deploy-time** check (it runs in `scripts/deploy-production-plan.mjs` with `includeCloudflareCredentials: true`) that compares the local `migrations/` ledger against the **remote production D1** ledger via `wrangler d1 migrations list 0509 --remote`. It requires Cloudflare production credentials (`CLOUDFLARE_API_TOKEN` or OAuth) that do not exist on this worker VPS, and it is production-gated by repo rules. It would also report 0087 as pending (expected — the migration is applied at deploy time, not by the worker PR).
-
-The migration is instead validated by the real-D1 integration tests, which apply the full migration set (including 0087) to local D1 and assert both the READ and WRITE paths. This matches the precedent of migration PR #1964 (0086), which also validated via real-D1 integration tests and left the production sync check to deploy time.
-
-loose-ends: 0509#2108-check-d1-migrations-synced (deploy-time check requires Cloudflare prod credentials not present on the worker VPS; migration validated by real-D1 integration tests, production sync verified at deploy).
-
-## Reviewer round (cursor/cursor-grok-4.6-high)
-
-- **Act on** — `migrations/0087` CHECK literal lists omitted `for_agencies`, which the code allowlist accepts via the exact-match branch; the open shape `[a-z0-9:.-]` rejects the underscore, so a `for_agencies` signup was silently dropped at write time (violates step 2b "code and DB never disagree"). Fixed: added `for_agencies` to both CHECK literal lists and to the `ACCEPTED_BY_BOTH` fixture lists in both test files. Verified: `tests/signup-source.test.ts` (15), `tests/integration/signup-source.integration.test.ts` (8, real D1), `tests/for-agencies.route.test.ts` (8) all green; `npm run typecheck` exit 0.
-- **Consider** — the `ACCEPTED_BY_BOTH` fixture lists are duplicated across two test files with a "keep in sync" comment but no enforcement. Noted; a shared fixture module is a follow-up, not a blocker.
-- **Consider** — `isOwnDomain` hardcodes `0509.io`/`0509.in`, duplicating `signupSourceCookieDomain`. Noted; deriving both from one source is a follow-up.
-- **Noted** — referer fallback attributes any external referer as `ref:<domain>` (intended accept behavior); the §4 event allowlist is untouched per must-not.
-- **Noted** — `PRAGMA foreign_keys` toggle in 0087; the rename-into-place order preserves child references regardless.
-
-Closes #2108
+Review-adjudication buckets:
+- **Act on** — none. No Critical findings.
+- **Consider** — `betterAuthTrustedOrigins` still includes `appOrigin()`, which falls back to `new URL(request.url).origin` only when both `APP_ORIGIN` and `BETTER_AUTH_URL` are unset. Not a prod hole: `wrangler.jsonc` always sets both, and `isBetterAuthConfigured` already gates Better Auth on one of them. Not changed; a test asserting the pin under that misconfiguration would fail by design.
+- **Noted** — workers.dev URL not live-probed (no durable wrangler credentials in the worker; `workers_dev: false` is the deterministic switch; post-deploy check remains the real proof). `isSameOriginAuthFormPost` keeps its request-origin line (correct CSRF behavior, separate from CORS/redirect trust). `workers/primary-domain.ts` correctly unchanged (the judge's "or 308 it" was resolved to `workers_dev: false`; a workers.dev 308 would never run once the hostname is unassigned).
+- **Dismissed-with-reason** — none.
