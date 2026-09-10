@@ -12,7 +12,10 @@ import viteConfig from "../vite.config";
  * losing it is a diff-coverage gate that silently reports nothing months later.
  *
  * These assertions pin the contract a coverage consumer depends on: an lcov
- * report, written where it is expected, produced by the default `npm run test`.
+ * report, written where it is expected, produced unconditionally by the CI
+ * Test step and by `npm run test:coverage`. `npm test` itself is coverage-free
+ * on purpose (fleet-ops#4891): coverage forks cost ~0.8 GB each on the 16 GB
+ * fleet box and were pricing every autonomous worker at 2 GB of admission.
  */
 const root = join(__dirname, "..");
 
@@ -54,14 +57,25 @@ describe("coverage instrumentation", () => {
     expect(coverage.exclude).toContain("**/*.test.{ts,tsx}");
   });
 
-  it("is produced by the default test command, not an opt-in flag", () => {
-    // If coverage only ran under a separate script, CI would keep passing while
-    // producing no data at all — the failure mode this test exists to block.
+  it("is produced unconditionally by the CI Test step and by test:coverage", () => {
+    // If coverage only ran under an opt-in script nobody invokes, CI would keep
+    // passing while producing no data at all — the failure mode this test
+    // exists to block. `npm test` is deliberately coverage-free (fleet-ops#4891),
+    // so the pin moves to where coverage actually runs: the ci.yml Test step
+    // passes --coverage to the node project itself, and test:coverage keeps the
+    // local lcov path alive.
     const packageJson = JSON.parse(
       readFileSync(join(root, "package.json"), "utf8"),
     ) as { scripts: Record<string, string>; devDependencies: Record<string, string> };
+    const ciWorkflow = readFileSync(
+      join(root, ".github", "workflows", "ci.yml"),
+      "utf8",
+    );
 
-    expect(packageJson.scripts.test).toContain("--coverage");
+    expect(packageJson.scripts["test:coverage"]).toContain("--coverage");
+    expect(packageJson.scripts["test:coverage"]).toContain("--project node");
+    expect(packageJson.scripts.test).not.toContain("--coverage");
+    expect(ciWorkflow).toMatch(/--project node --coverage/);
     expect(packageJson.devDependencies["@vitest/coverage-v8"]).toBeTruthy();
   });
 
