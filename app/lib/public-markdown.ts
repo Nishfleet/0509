@@ -140,6 +140,11 @@ const LLMS_PAGE_DETAILS = {
     title: "Five to Nine vs AdSpyder",
     description: "How Five to Nine's source-backed proof compares with AdSpyder's ad alerts.",
   },
+  "/compare/adspy": {
+    title: "Five to Nine vs AdSpy",
+    description:
+      "How Five to Nine's source-backed change proof compares with AdSpy's $149/mo ad-spy database and its 2.4/5 Trustpilot rating.",
+  },
   "/switch/magicbrief": {
     title: "MagicBrief alternative",
     description:

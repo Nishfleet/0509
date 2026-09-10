@@ -783,6 +783,7 @@ export const SITEMAP_PATHS = [
   "/compare/foreplay-spyder",
   "/compare/panoramata",
   "/compare/adspyder",
+  "/compare/adspy",
   // BET 8 switch/intent pages (issue #2081). Production /sitemap.xml is
   // buildSitemapXml → ROOT_SITEMAP_STATIC_ENTRIES, which is this list minus
   // locale prefixes. lastmod is deliberately omitted: these pages have no
@@ -896,6 +897,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/compare/foreplay-spyder": { changefreq: "weekly", priority: "0.7" },
   "/compare/panoramata": { changefreq: "weekly", priority: "0.7" },
   "/compare/adspyder": { changefreq: "weekly", priority: "0.7" },
+  "/compare/adspy": { changefreq: "weekly", priority: "0.7" },
   "/switch/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/switch/panoramata": { changefreq: "weekly", priority: "0.7" },
   "/switch/visualping": { changefreq: "weekly", priority: "0.7" },

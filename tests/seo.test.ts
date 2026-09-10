@@ -53,6 +53,7 @@ describe("public SEO files", () => {
     );
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/panoramata</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/compare/adspyder</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/compare/adspy</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/magicbrief</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/panoramata</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/visualping</loc>");
