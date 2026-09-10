@@ -160,6 +160,10 @@ export async function enqueueDigestScheduleJobs(
 		cadence: DigestScheduleJob["cadence"];
 		periodStart: string;
 		periodEnd: string;
+		// When present, only these workspaces get a job. The weekly window gate
+		// (issue #2406) passes the workspaces whose local time is inside the
+		// Monday 05:00-08:00 send window; undefined keeps the all-active insert.
+		onlyUserIds?: string[];
 	},
 ) {
 	const createdAt = nowIso();
@@ -183,6 +187,7 @@ export async function enqueueDigestScheduleJobs(
 			FROM user
 			INNER JOIN watchlist ON watchlist.user_id = user.id
 			WHERE watchlist.is_active = 1
+			${input.onlyUserIds ? "AND user.id IN (SELECT value FROM json_each(?))" : ""}
 			GROUP BY user.id
 		`,
 		input.cadence,
@@ -192,8 +197,51 @@ export async function enqueueDigestScheduleJobs(
 		input.periodEnd,
 		createdAt,
 		createdAt,
+		...(input.onlyUserIds ? [JSON.stringify(input.onlyUserIds)] : []),
 	);
 	return Number(result.meta?.changes ?? 0);
+}
+
+/**
+ * Weekly-window candidates (issue #2406): every workspace with at least one
+ * active watchlist, plus the timezone its weekly brief files against — the
+ * workspace delivery timezone when one is set, else the earliest configured
+ * watchlist delivery timezone, else null so callers fall back to UTC (the
+ * product's global-first default). The workspace row leads because the brief
+ * is a workspace-level send: deliverWeeklyDigest resolves its effective
+ * config with watchlistConfig: null, so the watchlist row is only a fallback
+ * signal, not an override.
+ */
+export async function listDigestScheduleJobTimezones(env: AppEnv) {
+	const rows = await many<{ user_id: string; timezone: string | null }>(
+		env,
+		`
+			SELECT
+				user.id AS user_id,
+				COALESCE(
+					workspace_delivery_config.timezone,
+					(
+						SELECT watchlist_delivery_config.timezone
+						FROM watchlist_delivery_config
+						INNER JOIN watchlist
+							ON watchlist.id = watchlist_delivery_config.watchlist_id
+							AND watchlist.is_active = 1
+						WHERE watchlist_delivery_config.user_id = user.id
+							AND watchlist_delivery_config.timezone IS NOT NULL
+						ORDER BY watchlist_delivery_config.created_at ASC,
+							watchlist_delivery_config.id ASC
+						LIMIT 1
+					)
+				) AS timezone
+			FROM user
+			INNER JOIN watchlist ON watchlist.user_id = user.id
+			LEFT JOIN workspace_delivery_config
+				ON workspace_delivery_config.user_id = user.id
+			WHERE watchlist.is_active = 1
+			GROUP BY user.id
+		`,
+	);
+	return rows.map((row) => ({ userId: row.user_id, timezone: row.timezone }));
 }
 
 export async function listRetryableDigestScheduleJobs(
