@@ -252,7 +252,9 @@ describe("publicSocialCardForRequest", () => {
       new Request("https://0509.io/social-card/brands/sport-footwear.svg"),
     );
     expect(res?.contentType).toBe("image/svg+xml; charset=utf-8");
-    expect(res?.body).toContain("Sport & footwear");
+    // The headline is XML-escaped in the SVG (& → &), so assert the
+    // escaped form — the card renders "Sport & footwear" visually.
+    expect(res?.body).toContain("Sport &amp; footwear");
     expect(res?.body).toContain("competitor Meta ads");
     expect(res?.body).toContain("Five to Nine");
     expect(res?.cacheControl).toBe("public, max-age=86400");

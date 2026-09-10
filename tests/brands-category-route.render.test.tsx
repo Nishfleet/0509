@@ -97,7 +97,12 @@ describe("/brands/:category route (issue #2067)", () => {
 
   it("stamps a per-category social card og:image via meta", async () => {
     const { meta } = await import("~/routes/brands.$category");
-    const entries = meta({ loaderData: sportData }) as ReadonlyArray<{
+    const entries = meta({
+      loaderData: sportData,
+      params: {},
+      location: { pathname: "/brands/sport-footwear" } as never,
+      matches: [],
+    }) as ReadonlyArray<{
       property?: string;
       content?: string;
     }>;
@@ -109,7 +114,12 @@ describe("/brands/:category route (issue #2067)", () => {
 
   it("meta title targets the category-intent query and description names the category", async () => {
     const { meta } = await import("~/routes/brands.$category");
-    const entries = meta({ loaderData: sportData }) as ReadonlyArray<{
+    const entries = meta({
+      loaderData: sportData,
+      params: {},
+      location: { pathname: "/brands/sport-footwear" } as never,
+      matches: [],
+    }) as ReadonlyArray<{
       title?: string;
       name?: string;
       content?: string;
