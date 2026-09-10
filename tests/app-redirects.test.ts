@@ -17,7 +17,7 @@ import * as supportRoute from "~/routes/app.support";
  */
 
 type RouteLoader = (args: { request: Request }) => Promise<Response>;
-type RouteAction = () => Promise<Response>;
+type RouteAction = (args: { request: Request }) => Promise<Response>;
 
 const routeConfig = readFileSync("app/routes.ts", "utf8");
 const routeDietDoc = readFileSync("docs/route-diet.md", "utf8");
@@ -75,9 +75,14 @@ describe("route diet phase 1 redirects", () => {
   });
 
   it.each(SHIPPED_FOLDS)("$name answers a POST with 307, never 405", async (fold) => {
-    const response = await (fold.module as unknown as { action: RouteAction }).action();
+    const action = (fold.module as unknown as { action: RouteAction }).action;
+    const response = await action({
+      request: new Request(`https://five-to-nine.test${fold.oldPath}?tab=archive`, {
+        method: "POST",
+      }),
+    });
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe(fold.newPath);
+    expect(response.headers.get("location")).toBe(`${fold.newPath}?tab=archive`);
   });
 
   it.each(SHIPPED_FOLDS)("$name still has both its old and its new route file", (fold) => {
