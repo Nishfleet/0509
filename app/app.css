@@ -543,7 +543,6 @@ img {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     0 28px 72px rgba(0, 0, 0, 0.26);
-  animation: f9-card-float 7s ease-in-out infinite alternate;
 }
 
 .f9-commerce-card:nth-child(2) {
@@ -691,22 +690,6 @@ img {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   box-shadow: none;
-}
-
-@keyframes f9-card-float {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    transform: translateY(-8px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .f9-growth-pricing::after,
-  .f9-commerce-card {
-    animation: none;
-  }
 }
 
 @media (max-width: 1120px) {
