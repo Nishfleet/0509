@@ -5,8 +5,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
-  await requireSession(env, request);
+  const session = await requireSession(env, request);
+  // A user who backs out of Dodo's hosted checkout never triggers a
+  // payment.failed/subscription.failed webhook, so the checkout_pending lock
+  // would otherwise pin them out of a new checkout for 24h. Clear it for the
+  // session user only (never a workspace owner) before redirecting. The
+  // clear's own WHERE clause keeps it scoped to dodo_status='checkout_pending'
+  // on a free plan, so a genuinely active subscription is never touched.
+  const { clearDodoPlanCheckout } = await import("~/lib/data.server");
   const url = new URL(request.url);
+  const checkoutId = url.searchParams.get("checkout_id");
+  await clearDodoPlanCheckout(env, session.user.id, {
+    ...(checkoutId ? { checkoutId } : {}),
+  });
   const plan = cleanPlan(url.searchParams.get("plan"));
   const cycle = cleanCycle(url.searchParams.get("cycle"));
   const source = cleanSourceParam(url.searchParams.get("source"));
