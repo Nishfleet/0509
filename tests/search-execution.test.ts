@@ -16,6 +16,9 @@ beforeEach(() => {
   }));
   vi.doMock("~/lib/website-identity.server", () => ({
     resolveWebsiteIdentity: vi.fn().mockResolvedValue(null),
+    // No curated provider term: these fixtures exercise the #1999
+    // registrable-domain query, so the curated rail stays empty (issue #2233).
+    getCuratedProviderQuery: vi.fn().mockReturnValue(null),
   }));
   vi.doMock("~/lib/ad-persistence.server", () => ({
     hydrateAdsWithPersistedCreatives,
