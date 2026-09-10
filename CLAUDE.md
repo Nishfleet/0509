@@ -191,7 +191,7 @@ Audit-program, incident, and verification history: `docs/PROJECT-HISTORY.md`.
 - `0509.in`, `www.0509.in`, and `api.0509.in` are redirect compatibility routes only. Do not introduce new `.in` product copy, auth origins, SEO links, or support addresses.
 - Cloudflare deploy state is represented by `wrangler.jsonc`: D1 database `0509`, R2 bucket binding `LANDING_PAGE_ARTIFACTS`, Browser Rendering, Workers AI, Cloudflare Email Service, and `MonitoringWorkflow` bindings are configured there. `wrangler.jsonc` sets `MONITORING_FANOUT_MODE: "fanout"` and `MONITORING_FANOUT_GLOBAL: "1"` (max 8 in-flight via `MONITORING_FANOUT_MAX_INFLIGHT`).
 - Remote D1 migrations: remote D1 and the repo migration chain are through `0070_release_scheduled_observations.sql`. The post-deploy cleanup allowlist in `scripts/d1-migration-sync-check.lib.mjs` is empty.
-- Crons: `17 */6 * * *` (warmup), `0 4 * * *` (daily monitoring), and `0 5 * * MON` (weekly cadence).
+- Crons: `13 * * * *` (hourly observation-gap check), `17 */6 * * *` (discovery warmup), `0 */3 * * *` (monitoring scans), `0 4 * * *` (daily digest), and `0 5 * * MON` (weekly digest).
 - scheduled monitoring runs via the `MonitoringWorkflow` fan-out path (not inline). The real gate is `resolveMonitoringFanoutMode()` in `app/lib/monitoring-fanout.server.ts` — inline is only the unset-var default/fallback. There is no `shouldRunScheduledMonitoringInline` helper.
 - auth/origin logic should stay proxy-aware for Cloudflare and any future front-door changes:
   - `app/lib/env.server.ts` must respect `Forwarded` and `x-forwarded-*` headers

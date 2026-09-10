@@ -42,14 +42,24 @@ const IDENTITY_FETCH_TIMEOUT_MS = 10_000;
  *
  * These are NOT synthetic Meta coverage — they never classify a row as
  * verified. They only feed discovery so the search-v2 pipeline can ask the
- * provider the right question (the brand/site name) and connect ads that land
- * on the brand's alias host to the searched domain. A brand that genuinely
- * runs no Meta ads still renders no verified/likely rows and never ships a
- * page — the "never force a page" rule is preserved by the matcher.
+ * provider the right question and connect ads that land on the brand's alias
+ * host to the searched domain. A brand that genuinely runs no Meta ads still
+ * renders no verified/likely rows and never ships a page — the "never force a
+ * page" rule is preserved by the matcher.
+ *
+ * The provider question itself is the registrable domain (issue #1999) unless
+ * an entry curates `providerQuery`, which is only needed when the registrable
+ * domain is not a term Meta indexes at all (a country storefront that
+ * redirects onto the brand's primary host, issue #2233).
  */
 const IDENTITY_OVERRIDES: Record<
   string,
-  { siteName?: string; domainAliases?: string[]; advertiserPageId?: string }
+  {
+    siteName?: string;
+    domainAliases?: string[];
+    advertiserPageId?: string;
+    providerQuery?: string;
+  }
 > = {
   // GOAT's marketplace CDN returns 403 to scripted fetches regardless of the
   // user-agent (even a full browser UA), so live identity resolution cannot
@@ -123,6 +133,28 @@ const IDENTITY_OVERRIDES: Record<
   // post-fetch classifier uses; the provider query is the registrable domain
   // zappos.com (issue #1999), not this alias.
   "zappos.com": { siteName: "Zappos", domainAliases: ["www.zappos.com"] },
+  // Saucony UK (issue #2233). saucony.co.uk is the buyer-typed UK storefront,
+  // but it 302s onto the US host (https://saucony.co.uk ->
+  // https://www.saucony.com/UK/en_GB/home/), so the brand's Meta ads land on
+  // saucony.com and never on the .co.uk host itself.
+  //
+  // The #1999 rule asks Meta for the registrable domain, which is the right
+  // question for a .com brand that prints its domain in its ads. It is the
+  // wrong question when the registrable domain is a country storefront Meta
+  // has never indexed: live 2026-09-10, website=saucony.co.uk asked Meta for
+  // "saucony.co.uk" and settled on a confirmed "No verified ads found for
+  // saucony.co.uk" (0 rows) while q=saucony returned 9 verified rows. The
+  // canary was green on saucony.co.uk (8-9 verified rows) in all 39 runs
+  // before #1999 shipped and red on it in every run after.
+  //
+  // The curated brand term is the query Meta actually indexes, exactly as
+  // ridge.com/zappos.com curate the alias facts that connect their ads. It
+  // does not loosen the matcher: a row is still verified only by its landing
+  // page. No alias or site name is curated here because none is needed —
+  // www.saucony.com and saucony.co.uk share the folded label "saucony", which
+  // hostnamesMatchBrandCollapsedLabel already connects, and the live redirect
+  // chain supplies saucony.com as a resolved alias as well.
+  "saucony.co.uk": { providerQuery: "Saucony" },
 };
 
 const identityCache = new Map<string, { expiresAt: number; identity: WebsiteIdentity | null }>();
@@ -163,9 +195,9 @@ export async function resolveWebsiteIdentity(domainUrl: string): Promise<Website
  * a bot-blocked CDN (goat.com) or any other unreachable homepage — a curated
  * site name still gives the post-fetch classifier the right matching alias.
  * The Meta provider query is the registrable domain (issue #1999), not the
- * site name. Curated facts never fabricate a verified row; the brand must
- * genuinely run Meta ads landing on its own domain for the matcher to
- * classify one.
+ * site name, except where an entry curates `providerQuery` (issue #2233).
+ * Curated facts never fabricate a verified row; the brand must genuinely run
+ * Meta ads landing on its own domain for the matcher to classify one.
  */
 function applyIdentityOverride(
   live: WebsiteIdentity | null,
@@ -183,7 +215,8 @@ function applyIdentityOverride(
   // The curated name wins as the matching alias: on.com's live og:site_name
   // is "On Shop" — a shop label, not the advertiser page. A live site name
   // must not displace the curated brand term (issue #1993). The Meta query
-  // itself is the registrable domain (issue #1999), not this alias.
+  // itself is the registrable domain (issue #1999), or the entry's curated
+  // providerQuery — not this alias.
   const siteName = overrideSiteName ?? live?.siteName ?? null;
   if (!live && !siteName && mergedDomainAliases.length === 0) {
     return null;
@@ -221,6 +254,19 @@ export function clearWebsiteIdentityCacheForTests() {
  */
 export function getCuratedAdvertiserPageId(registrableDomain: string): string | null {
   return IDENTITY_OVERRIDES[registrableDomain]?.advertiserPageId ?? null;
+}
+
+/**
+ * Sync lookup of a curated Meta Ad Library query term for a registrable
+ * domain, without a network fetch. Used by the search-v2 query builder so a
+ * country storefront Meta has never indexed (saucony.co.uk) still asks the
+ * provider the term it indexes (the brand name) instead of its own host,
+ * which returns nothing (issue #2233). Returns null when no curated term
+ * exists — the common case, where the registrable domain is the right
+ * question (issue #1999).
+ */
+export function getCuratedProviderQuery(registrableDomain: string): string | null {
+  return IDENTITY_OVERRIDES[registrableDomain]?.providerQuery ?? null;
 }
 
 async function fetchWebsiteIdentity(safeUrl: URL, registrableDomain: string): Promise<WebsiteIdentity | null> {

@@ -37,6 +37,13 @@ function createCanaryDb(options: {
   planUpdateChanges?: number;
   watchlistUpdateChanges?: number;
   creditDeleteChanges?: number;
+  /**
+   * Model the Gate C billing canary's dedicated self-provisioning identity
+   * (issue #2646). When enabled the `user`/`user_plan` reads honour the bound
+   * email and the two provisioning INSERTs are recorded instead of being
+   * accepted as no-ops.
+   */
+  dedicatedIdentity?: boolean;
   snapshotReadThrows?: boolean;
   planCleanupThrows?: boolean;
   watchlistCleanupThrows?: boolean;
@@ -78,6 +85,8 @@ function createCanaryDb(options: {
     evidence_entitlement_anchor_source: "provider",
   };
   let userPlan = { ...initialUserPlan };
+  let provisionedIdentity: { userId: string; email: string; plan: string } | null = null;
+  const provisioningWrites: string[] = [];
   let watchlistRows = initialWatchlistRows.map((row) => ({ ...row }));
   const mutationKinds: string[] = [];
   let creditGrant: {
@@ -88,6 +97,10 @@ function createCanaryDb(options: {
   } | null = null;
 
   return {
+    get provisionedIdentity() {
+      return provisionedIdentity;
+    },
+    provisioningWrites,
     cleanedPlanPaymentIds,
     cleanedCreditPaymentIds,
     restoredWatchlistIds,
@@ -283,6 +296,47 @@ function createCanaryDb(options: {
                   watchlist.updated_at = String(bindings[2]);
                 }
               }
+              if (
+                sql.includes("INSERT OR IGNORE INTO user") &&
+                !sql.includes("INSERT OR IGNORE INTO user_plan")
+              ) {
+                provisioningWrites.push("user");
+                provisionedIdentity = {
+                  userId: String(bindings[0]),
+                  email: String(bindings[2]),
+                  plan: provisionedIdentity?.plan ?? "scout",
+                };
+                return { success: true, meta: { changes: 1 } };
+              }
+              if (sql.includes("INSERT OR IGNORE INTO user_plan")) {
+                provisioningWrites.push("user_plan");
+                // Only dedicated mode owns the plan state. The legacy mock
+                // models a pre-existing real account, whose plan/status the
+                // provisioning write must not overwrite.
+                if (options.dedicatedIdentity) {
+                  userPlan = {
+                    ...initialUserPlan,
+                    user_id: String(bindings[0]),
+                    plan: "scout",
+                    plan_updated_at: String(bindings[1]),
+                    dodo_payment_id: null,
+                    dodo_product_id: null,
+                    dodo_plan_change_product_id: null,
+                    dodo_status: "payment.succeeded",
+                    dodo_subscription_id: null,
+                    dodo_customer_id: null,
+                    dodo_next_billing_at: null,
+                    evidence_entitlement_anchor: null,
+                    evidence_entitlement_anchor_source: null,
+                  };
+                  provisionedIdentity = {
+                    userId: String(bindings[0]),
+                    email: provisionedIdentity?.email ?? "",
+                    plan: "scout",
+                  };
+                }
+                return { success: true, meta: { changes: 1 } };
+              }
               return { success: true, meta: { changes } };
             },
             async all<T>() {
@@ -309,6 +363,20 @@ function createCanaryDb(options: {
                 } as { results: T[] };
               }
               if (sql.includes("FROM user") && sql.includes("LEFT JOIN user_plan")) {
+                if (options.dedicatedIdentity) {
+                  const email = String(bindings[0] ?? "").toLowerCase();
+                  const known = provisionedIdentity?.email?.toLowerCase();
+                  return {
+                    results: (known && known === email
+                      ? [{
+                          id: provisionedIdentity!.userId,
+                          email: provisionedIdentity!.email,
+                          name: "Billing Canary",
+                          plan: userPlan.plan,
+                        }]
+                      : []) as T[],
+                  };
+                }
                 return {
                   results: [
                     {
@@ -338,7 +406,12 @@ function createCanaryDb(options: {
                 }
 
                 return {
-                  results: userPlan.dodo_payment_id ? [userPlan as T] : [],
+                  // A real account always has a payment id; the dedicated
+                  // canary identity is provisioned without one and must still
+                  // produce a snapshot (the real query does not filter on it).
+                  results: userPlan.dodo_payment_id || options.dedicatedIdentity
+                    ? [userPlan as T]
+                    : [],
                 };
               }
 
@@ -535,6 +608,55 @@ describe("Dodo billing canary route", () => {
         paused_reason: "plan_limit",
       }),
     ]);
+  });
+
+  it("runs the canary on its own provisioned identity, not the launch owner's account", async () => {
+    // LAUNCH_CANARY_EMAIL is still set (createEnv) — it must not be consulted.
+    const env = createEnv({ dedicatedIdentity: true }, "worker-v1");
+    const response = await invokeCanary({
+      env,
+      webhookAction: vi.fn(async () => Response.json({ ok: true })),
+      headers: { "x-0509-expected-worker-version": "worker-v1" },
+    });
+
+    console.log("DEBUG_BODY", JSON.stringify(await response.clone().json()));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ok: true });
+    expect(env.DB.provisioningWrites).toEqual(["user", "user_plan"]);
+    expect(env.DB.provisionedIdentity).toMatchObject({
+      userId: "billing-canary-0509",
+      email: "billing-canary@0509.internal",
+      plan: "scout",
+    });
+  });
+
+  it("normalises an explicit BILLING_CANARY_EMAIL override for the dedicated identity", async () => {
+    const env = {
+      ...createEnv({ dedicatedIdentity: true }, "worker-v1"),
+      BILLING_CANARY_EMAIL: "Billing-Canary-Alt@0509.INTERNAL",
+    };
+    const response = await invokeCanary({
+      env,
+      webhookAction: vi.fn(async () => Response.json({ ok: true })),
+      headers: { "x-0509-expected-worker-version": "worker-v1" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(env.DB.provisionedIdentity?.email).toBe("billing-canary-alt@0509.internal");
+  });
+
+  it("never provisions or repairs a real account reached through an email override", async () => {
+    const env = createEnv();
+    const response = await invokeCanary({
+      env,
+      webhookAction: vi.fn(async () => Response.json({ ok: true })),
+      body: JSON.stringify({ email: "owner@example.com", gateRunId: "gate-c-override" }),
+      headers: { "content-type": "application/json" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(env.DB.provisioningWrites).toEqual([]);
+    expect(env.DB.provisionedIdentity).toBeNull();
   });
 
   it("posts signed plan and proof-credit events through the real webhook route", async () => {

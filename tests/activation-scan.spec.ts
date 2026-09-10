@@ -19,7 +19,7 @@ const repoRoot = path.resolve(specDir, "..");
 // acceptance gate that proves the termination command: it runs the real-D1
 // workers-project integration test (tests/integration/signup-first-brief
 // .integration.test.ts) as a subprocess — the same pattern as
-// tests/e2e/search-streaming-three-tier.spec.ts — and adds a DOM assertion on
+// e2e/search-streaming-three-tier.spec.ts — and adds a DOM assertion on
 // the on-screen brief markup contract so the gate also pins the rendered
 // surface, not just the loader data path.
 

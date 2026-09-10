@@ -89,7 +89,7 @@ export default defineConfig({
   projects: [
     {
       name: "search-landing-page-capture",
-      testDir: "./tests/e2e",
+      testDir: "./e2e",
       testMatch: /search-landing-page-capture\.spec\.ts/,
       timeout: 60_000,
       use: {
@@ -101,7 +101,7 @@ export default defineConfig({
       // regression test as a subprocess and asserts the tier-badge markup
       // contract on synthetic DOM. Same pattern as search-landing-page-capture.
       name: "search-streaming-three-tier",
-      testDir: "./tests/e2e",
+      testDir: "./e2e",
       testMatch: /search-streaming-three-tier\.spec\.ts/,
       timeout: 60_000,
       use: {
@@ -132,7 +132,7 @@ export default defineConfig({
       // its own isolated dev server (the shared webServer never sets
       // SIGNUP_FIRST_BRIEF_ENABLED, so the surface under test would be dark).
       name: "workspace",
-      testDir: "./tests/e2e",
+      testDir: "./e2e",
       testMatch: /(watchlist-run-history|activation-first-brief)\.spec\.ts/,
       timeout: 60_000,
       use: {

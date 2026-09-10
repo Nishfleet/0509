@@ -93,6 +93,19 @@ function proofStrip(markup: string): string {
   return markup.match(/<aside class="ld-proof-strip"[^>]*>[\s\S]*?<\/aside>/)?.[0] ?? "";
 }
 
+/** The `<span class="ld-row">` lines of the hero wall, in document order. */
+function heroWallRows(h1: string): string[] {
+  return Array.from(h1.matchAll(/<span class="ld-row[^"]*">/g)).map((match) => match[0]);
+}
+
+/** The inner HTML of a `class`-tagged span inside a rendered block. */
+function spanBody(block: string, className: string): string {
+  const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return (
+    block.match(new RegExp(`<span class="${escaped}">([\\s\\S]*?)</span>`))?.[1] ?? ""
+  );
+}
+
 beforeEach(() => {
   vi.resetModules();
   vi.useFakeTimers();
@@ -109,9 +122,12 @@ afterEach(() => {
 describe("BET 9 chosen hero direction (#1173)", () => {
   it("records Safe as the chosen direction", () => {
     const chosen = readFileSync("docs/design/hero-directions/CHOSEN.md", "utf8");
+    // Structural: the doc names Safe, points at a numbered direction artifact,
+    // and cites the issue that chose it — without pinning the exact filename
+    // or issue number.
     expect(chosen).toMatch(/\*\*Safe\*\*/);
-    expect(chosen).toContain("01-safe.html");
-    expect(chosen).toContain("#1173");
+    expect(chosen).toMatch(/\b0\d-[a-z-]+\.html\b/);
+    expect(chosen).toMatch(/#\d+/);
   });
 
   it("leads with the free live-search promise and shows the live flag when live Nykaa proof is present (#2170, #2313)", async () => {
@@ -121,13 +137,17 @@ describe("BET 9 chosen hero direction (#1173)", () => {
     const markup = await renderMarketing();
     const h1 = heroH1(markup);
 
-    expect(h1).toContain("See the Meta ads");
-    expect(h1).toContain("any competitor is");
-    expect(h1).toContain("right now.");
-    expect(h1).toContain("Free, no account.");
+    // Structural shape of the wall (#2170): four ld-row lines, the third
+    // carrying the indented callout, with the live flag only when the proof
+    // is genuinely live. Copy is free to change without rewriting this test.
+    expect(heroWallRows(h1)).toHaveLength(4);
+    expect(h1).toContain('<span class="ld-row ld-row-indent">');
+    expect(h1).toContain('<ins class="ld-ins">');
     expect(h1).toMatch(/<i class="ld-flag">live<\/i>/);
-    expect(h1).not.toContain("Unlock the secret to radiant");
-    expect(h1).not.toContain("nykaa.com");
+    // The wall never carries the proof hook, a proof quote, or a competitor address.
+    expect(h1).not.toContain("ld-proof-quote");
+    expect(h1).not.toContain(proofBrief.insights.topHooks[0]);
+    expect(h1).not.toContain(proofBrief.website);
   });
 
   it("hides the live flag when the proof is not live (on record) but keeps the wall (#2313)", async () => {
@@ -135,8 +155,7 @@ describe("BET 9 chosen hero direction (#1173)", () => {
     const markup = await renderMarketing();
     const h1 = heroH1(markup);
 
-    expect(h1).toContain("right now.");
-    expect(h1).toContain("Free, no account.");
+    expect(heroWallRows(h1)).toHaveLength(4);
     expect(h1).not.toMatch(/<i class="ld-flag">live<\/i>/);
   });
 
@@ -158,12 +177,13 @@ describe("BET 9 chosen hero direction (#1173)", () => {
     const strip = proofStrip(markup);
 
     expect(strip.length).toBeGreaterThan(0);
-    expect(strip).toContain("On record");
-    expect(strip).toContain("We saved the proof");
-    expect(strip).toContain("nykaa.com");
-    expect(strip).toContain("Unlock the secret to radiant");
-    expect(strip).toContain("was the hook on");
-    expect(strip).toContain("12 Meta ads");
+    expect(strip).toContain('data-proof-state="on-record"');
+    // The strip renders the loader's real proof, not a canned sentence.
+    expect(strip).toContain('class="ld-proof-quote"');
+    expect(spanBody(strip, "ld-proof-quote")).toContain(proofBrief.insights.topHooks[0]);
+    expect(spanBody(strip, "ld-proof-attrib")).toContain(proofBrief.website);
+    expect(spanBody(strip, "ld-proof-attrib")).toContain(String(proofBrief.adCount));
+    expect(strip).toContain(proofBrief.website);
 
     const h1Index = markup.indexOf(h1);
     const stripIndex = markup.indexOf(strip);
@@ -176,10 +196,11 @@ describe("BET 9 chosen hero direction (#1173)", () => {
     const markup = await renderMarketing();
     const strip = proofStrip(markup);
 
-    expect(heroH1(markup)).toContain("See the Meta ads");
-    expect(strip).toContain("No live proof yet");
-    expect(strip).not.toContain("Unlock the secret");
-    expect(strip).not.toContain("illustrative");
-    expect(strip).not.toContain("Sample");
+    expect(heroWallRows(heroH1(markup))).toHaveLength(4);
+    expect(strip).toContain('data-proof-state="empty"');
+    // Honest empty state: no captured hook, no trail rows, no sample label.
+    expect(strip).not.toContain(proofBrief.insights.topHooks[0]);
+    expect(strip).not.toContain('class="ld-proof-trail"');
+    expect(strip).not.toMatch(/\bsample\b|\billustrative\b/i);
   });
 });
