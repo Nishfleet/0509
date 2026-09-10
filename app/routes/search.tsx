@@ -89,6 +89,7 @@ import {
   SEARCH_KEYBOARD_HINTS,
 } from "~/lib/search-keyboard";
 import {
+  ANONYMOUS_DEFAULT_SEARCH_RESULT_SORT,
   DEFAULT_SEARCH_RESULT_SORT,
   parseSearchResultSort,
   sortAdsForSearchDisplay,
@@ -1306,7 +1307,13 @@ export default function SearchRoute() {
   const [resultSort, setResultSort] = useState<SearchResultSort>(
     () =>
       parseSearchResultSort(locationSearchParams.get("sort")) ||
-      DEFAULT_SEARCH_RESULT_SORT,
+      // Issue #2289: anonymous /search defaults to verified-first so the
+      // public preview leads with rows it has actually verified, not the
+      // "Likely" leads it is not sure belong to the competitor. A signed-in
+      // visitor keeps the active-first default; an explicit ?sort= always wins.
+      (data.session
+        ? DEFAULT_SEARCH_RESULT_SORT
+        : ANONYMOUS_DEFAULT_SEARCH_RESULT_SORT),
   );
   const [warmingPollCount, setWarmingPollCount] = useState(0);
   const [
@@ -2336,6 +2343,9 @@ export default function SearchRoute() {
                             Longest running
                           </option>
                           <option value="newest">Newest</option>
+                          <option value="verified_first">
+                            Verified first
+                          </option>
                         </select>
                       </label>
                     ) : null}
