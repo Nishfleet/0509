@@ -3,6 +3,8 @@
  * Customer jobs, not backend modules.
  */
 
+import { MARKETING_PRIMARY_LINKS } from "~/components/marketing-nav";
+
 export interface DashboardNavItem {
   label: string;
   to: string;
@@ -121,16 +123,20 @@ export function isSettingsNavPath(pathname: string) {
   );
 }
 
-export const PUBLIC_SEARCH_NAV: DashboardNavItem[] = [
-  { label: "Home", to: "/" },
-  { label: "Search", to: "/search", end: true },
-  { label: "Compare", to: "/compare" },
-  { label: "Pricing", to: "/pricing" },
-  { label: "Help", to: "/help" },
-];
+/**
+ * The one shared public destination list, consumed from MarketingNav so the
+ * /search rail and the landing header can never drift (issue #2324). Home is
+ * intentionally absent: the brand wordmark/account block is Home.
+ */
+export const PUBLIC_SEARCH_NAV: DashboardNavItem[] = MARKETING_PRIMARY_LINKS.map(
+  (link) => ({
+    label: link.label,
+    to: link.to,
+    end: link.to === "/search",
+  }),
+);
 
 export const PUBLIC_SEARCH_FOOTER: DashboardNavItem[] = [
-  { label: "Docs", to: "/docs" },
   { label: "Sign in", to: "/auth/login" },
   { label: "Sign up", to: "/auth/signup" },
 ];

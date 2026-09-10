@@ -326,11 +326,12 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // PR-5a: the rail carries five destinations; Deliver and Settings own
   // their member pages. Presence left the nav (it lives inside Watch).
   customerNavPaths: [
-    "/", "/app", "/app/account", "/app/billing", "/app/clients",
+    "/app", "/app/account", "/app/billing", "/app/clients",
     "/app/collections", "/app/deliver", "/app/developer-access", "/app/digests",
     "/app/notifications", "/app/presence", "/app/reports", "/app/settings",
     "/app/shares", "/app/source-access", "/app/support", "/app/team",
-    "/app/watchlists", "/compare", "/help", "/pricing", "/search",
+    "/app/watchlists", "/compare", "/docs", "/help", "/pricing", "/search",
+    "/status",
   ],
   publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology", "/pricing", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
