@@ -1124,4 +1124,35 @@ describe("gate step failure detail (evidence diagnosability)", () => {
     expect(journal.steps.pricing.status).toBe("failed");
     expect(journal.steps.pricing.detail).toEqual(pricingFailure);
   });
+
+  it("copies a failed billing step's server blocker into journal errors", async () => {
+    const path = evidencePath();
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: path,
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        backupLifecycleRecheck: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        backupLifecycleCleanup: vi.fn(async () => ({ ok: true })),
+        pricing: vi.fn(async () => ({ ok: true, results: [] })),
+        billing: vi.fn(async () => ({
+          ok: false,
+          blocker: "billing_canary_not_attempted",
+          status: 503,
+          serverBlocker: "billing_canary_account_not_stable",
+        })),
+        proof: vi.fn(async () => ({ ok: true, payload: proofPayload() })),
+        cleanup: vi.fn(async () => ({ ok: true })),
+        productionCanary: vi.fn(async () => ({ ok: true, report: "ok" })),
+      },
+    });
+    expect(result.passed).toBe(false);
+    const journal = JSON.parse(readFileSync(path, "utf8"));
+    // `billing_failed` alone is what made the incident undiagnosable from the
+    // workflow log — the endpoint's own blocker rides along in errors now.
+    expect(journal.errors).toContain("billing_failed");
+    expect(journal.errors).toContain("billing_canary_account_not_stable");
+  });
 });

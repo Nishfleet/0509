@@ -152,9 +152,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const dedicatedCanaryEmail =
     (env.BILLING_CANARY_EMAIL?.trim() || BILLING_CANARY_USER_EMAIL).toLowerCase();
   const canaryEmail = canaryInput.email ?? dedicatedCanaryEmail;
-  if (!canaryEmail) {
-    return canaryFailure("missing_launch_canary_email");
-  }
 
   let user: BillingCanaryUserRow | null;
   try {
@@ -578,13 +575,16 @@ async function postSignedWebhook({
  * `payment.succeeded`) so the canary's grant → verify → restore loop always
  * has a snapshot target. Both inserts are `INSERT OR IGNORE` — an existing
  * row is never clobbered, so drift on the dedicated identity still fails the
- * stability check loudly instead of being silently repaired.
+ * stability check loudly instead of being silently repaired. The user row is
+ * marked `signup_source='billing-canary'` for provenance, and
+ * customer-facing paid-user surfaces (monthly recap, ops metrics) exclude
+ * the fixed id `billing-canary-0509` outright.
  */
 async function ensureDedicatedBillingCanaryUser(env: AppEnv, email: string) {
   const now = new Date().toISOString();
   await env.DB!.prepare(`
-      INSERT OR IGNORE INTO user (id, name, email, emailVerified, createdAt, updatedAt)
-      VALUES (?, ?, ?, 1, ?, ?)
+      INSERT OR IGNORE INTO user (id, name, email, emailVerified, createdAt, updatedAt, signup_source)
+      VALUES (?, ?, ?, 1, ?, ?, 'billing-canary')
     `)
     .bind(BILLING_CANARY_USER_ID, "Billing Canary", email, now, now)
     .run();

@@ -68,5 +68,8 @@ npm run deploy
 - The Dodo billing canary runs against a dedicated non-customer account
   (`billing-canary@0509.internal`, self-provisioned on first use;
   `BILLING_CANARY_EMAIL` overrides it). It no longer depends on the launch
-  account's live billing state (issue #2646).
+  account's live billing state (issue #2646). Its `user` row carries
+  `signup_source='billing-canary'` for provenance, and the fixed id
+  `billing-canary-0509` is excluded from customer-facing paid-user surfaces
+  (monthly recap, ops paid-plan counts).
 - Support customers: `support@0509.io`

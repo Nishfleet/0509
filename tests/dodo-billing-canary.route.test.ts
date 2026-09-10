@@ -88,6 +88,16 @@ function createCanaryDb(options: {
     granted_at: string;
     provider_payment_id: string;
   } | null = null;
+  // The dedicated canary identity gets its own mock state so the tests prove
+  // the provisioned user — not user-1 — is the account the canary mutates.
+  let dedicatedUser: { id: string; name: string; email: string } | null = null;
+  let dedicatedPlan: CanaryUserPlan | null = null;
+  let dedicatedCreditGrant: {
+    quantity_granted: number;
+    status: string;
+    granted_at: string;
+    provider_payment_id: string;
+  } | null = null;
 
   return {
     cleanedPlanPaymentIds,
@@ -98,6 +108,15 @@ function createCanaryDb(options: {
     },
     get dedicatedPlanInserts() {
       return dedicatedPlanInserts;
+    },
+    get dedicatedUserState() {
+      return dedicatedUser ? { ...dedicatedUser } : null;
+    },
+    get dedicatedPlanState() {
+      return dedicatedPlan ? { ...dedicatedPlan } : null;
+    },
+    get dedicatedCreditGrantState() {
+      return dedicatedCreditGrant ? { ...dedicatedCreditGrant } : null;
     },
     get canaryLockOutcome() {
       return canaryLockOutcome;
@@ -128,35 +147,43 @@ function createCanaryDb(options: {
     applyCanaryMutation(payload: {
       payment_id?: string;
       updated_at?: string;
-      metadata?: { target_kind?: string };
+      metadata?: { target_kind?: string; user_id?: string };
       product_cart?: Array<{ product_id?: string }>;
     }) {
       const paymentId = String(payload.payment_id ?? "");
       const updatedAt = String(payload.updated_at ?? "2026-07-15T00:00:00.000Z");
+      const forDedicated = dedicatedUser !== null && payload.metadata?.user_id === dedicatedUser.id;
+      const planTarget = forDedicated ? dedicatedPlan : userPlan;
       if (payload.metadata?.target_kind === "plan") {
         mutationKinds.push("plan");
-        userPlan = {
-          ...userPlan,
-          plan_updated_at: updatedAt,
-          dodo_payment_id: paymentId,
-          dodo_product_id: String(payload.product_cart?.[0]?.product_id ?? ""),
-          dodo_status: "payment.succeeded",
-        };
-        watchlistRows = watchlistRows.map((row) => ({
-          ...row,
-          is_active: 1,
-          paused_reason: null,
-          updated_at: updatedAt,
-        }));
+        if (planTarget) {
+          const mutated = {
+            ...planTarget,
+            plan_updated_at: updatedAt,
+            dodo_payment_id: paymentId,
+            dodo_product_id: String(payload.product_cart?.[0]?.product_id ?? ""),
+            dodo_status: "payment.succeeded",
+          };
+          if (forDedicated) dedicatedPlan = mutated; else userPlan = mutated;
+        }
+        if (!forDedicated) {
+          watchlistRows = watchlistRows.map((row) => ({
+            ...row,
+            is_active: 1,
+            paused_reason: null,
+            updated_at: updatedAt,
+          }));
+        }
       }
       if (payload.metadata?.target_kind === "usage_bundle") {
         mutationKinds.push("usage_bundle");
-        creditGrant = {
+        const grant = {
           quantity_granted: 500,
           status: "active",
           granted_at: "2026-07-15T00:00:00.000Z",
           provider_payment_id: paymentId,
         };
+        if (forDedicated) dedicatedCreditGrant = grant; else creditGrant = grant;
       }
     },
     prepare(sql: string) {
@@ -183,10 +210,35 @@ function createCanaryDb(options: {
               }
               if (sql.includes("INSERT OR IGNORE INTO user (")) {
                 dedicatedUserInserts += 1;
+                if (!dedicatedUser) {
+                  dedicatedUser = {
+                    id: String(bindings[0]),
+                    name: String(bindings[1]),
+                    email: String(bindings[2]),
+                  };
+                  return { success: true, meta: { changes: 1 } };
+                }
                 return { success: true, meta: { changes: 0 } };
               }
               if (sql.includes("INSERT OR IGNORE INTO user_plan (")) {
                 dedicatedPlanInserts += 1;
+                if (dedicatedUser && !dedicatedPlan && String(bindings[0]) === dedicatedUser.id) {
+                  dedicatedPlan = {
+                    user_id: dedicatedUser.id,
+                    plan: "scout",
+                    plan_updated_at: String(bindings[1]),
+                    dodo_payment_id: null,
+                    dodo_product_id: null,
+                    dodo_plan_change_product_id: null,
+                    dodo_status: "payment.succeeded",
+                    dodo_subscription_id: null,
+                    dodo_customer_id: null,
+                    dodo_next_billing_at: null,
+                    evidence_entitlement_anchor: null,
+                    evidence_entitlement_anchor_source: null,
+                  };
+                  return { success: true, meta: { changes: 1 } };
+                }
                 return { success: true, meta: { changes: 0 } };
               }
               let changes = 0;
@@ -223,21 +275,24 @@ function createCanaryDb(options: {
                 return { success: true, meta: { changes } };
               }
               if (sql.includes("UPDATE user_plan") && sql.includes("SET plan = ?")) {
+                const forDedicated = dedicatedUser !== null && String(bindings[11]) === dedicatedUser.id;
+                const planTarget = forDedicated ? dedicatedPlan : userPlan;
                 const paymentId = String(bindings[14]);
                 const markerMatches =
-                  userPlan.user_id === String(bindings[11]) &&
-                  userPlan.dodo_payment_id === paymentId &&
-                  userPlan.plan_updated_at === String(bindings[13]) &&
-                  userPlan.plan === String(bindings[12]) &&
-                  userPlan.dodo_product_id === String(bindings[15]) &&
-                  userPlan.dodo_plan_change_product_id === (bindings[16] as string | null) &&
-                  userPlan.dodo_status === "payment.succeeded";
+                  planTarget !== null &&
+                  planTarget.user_id === String(bindings[11]) &&
+                  planTarget.dodo_payment_id === paymentId &&
+                  planTarget.plan_updated_at === String(bindings[13]) &&
+                  planTarget.plan === String(bindings[12]) &&
+                  planTarget.dodo_product_id === String(bindings[15]) &&
+                  planTarget.dodo_plan_change_product_id === (bindings[16] as string | null) &&
+                  planTarget.dodo_status === "payment.succeeded";
                 changes = markerMatches
                   ? options.planUpdateChanges ?? 1
                   : 0;
                 if (changes > 0) {
                   cleanedPlanPaymentIds.add(paymentId);
-                  userPlan = {
+                  const restored = {
                     user_id: String(bindings[11]),
                     plan: String(bindings[0]),
                     plan_updated_at: String(bindings[1]),
@@ -251,38 +306,45 @@ function createCanaryDb(options: {
                     evidence_entitlement_anchor: bindings[9] as string | null,
                     evidence_entitlement_anchor_source: bindings[10] as string | null,
                   };
+                  if (forDedicated) dedicatedPlan = restored; else userPlan = restored;
                 }
               }
               if (sql.includes("UPDATE user_plan") && sql.includes("SET dodo_payment_id = CASE")) {
+                const forDedicated = dedicatedUser !== null && String(bindings[11]) === dedicatedUser.id;
+                const planTarget = forDedicated ? dedicatedPlan : userPlan;
                 const canaryPaymentId = String(bindings[0]);
                 const ownsCanaryStatus =
-                  userPlan.dodo_payment_id === canaryPaymentId &&
-                  userPlan.plan_updated_at === String(bindings[6]) &&
-                  userPlan.dodo_status === "payment.succeeded";
-                changes = userPlan.dodo_payment_id === canaryPaymentId ? 1 : 0;
-                if (changes > 0) {
+                  planTarget !== null &&
+                  planTarget.dodo_payment_id === canaryPaymentId &&
+                  planTarget.plan_updated_at === String(bindings[6]) &&
+                  planTarget.dodo_status === "payment.succeeded";
+                changes = planTarget?.dodo_payment_id === canaryPaymentId ? 1 : 0;
+                if (changes > 0 && planTarget) {
                   cleanedPlanPaymentIds.add(canaryPaymentId);
-                  userPlan = {
-                    ...userPlan,
+                  const swept = {
+                    ...planTarget,
                     dodo_payment_id: bindings[1] as string | null,
                     dodo_product_id: bindings[4] as string | null,
                     dodo_status: ownsCanaryStatus
                       ? bindings[7] as string | null
-                      : userPlan.dodo_status,
+                      : planTarget.dodo_status,
                     plan_updated_at: ownsCanaryStatus
                       ? String(bindings[10])
-                      : userPlan.plan_updated_at,
+                      : planTarget.plan_updated_at,
                   };
+                  if (forDedicated) dedicatedPlan = swept; else userPlan = swept;
                 }
               }
               if (sql.includes("DELETE FROM evidence_top_up_grant")) {
+                const forDedicated = dedicatedUser !== null && String(bindings[0]) === dedicatedUser.id;
+                const grantTarget = forDedicated ? dedicatedCreditGrant : creditGrant;
                 const paymentId = String(bindings[1]);
-                changes = creditGrant?.provider_payment_id === paymentId
+                changes = grantTarget?.provider_payment_id === paymentId
                   ? options.creditDeleteChanges ?? 1
                   : 0;
                 if (changes > 0) {
                   cleanedCreditPaymentIds.add(paymentId);
-                  creditGrant = null;
+                  if (forDedicated) dedicatedCreditGrant = null; else creditGrant = null;
                 }
               }
               if (sql.includes("UPDATE watchlist") && sql.includes("paused_reason = ?")) {
@@ -325,6 +387,19 @@ function createCanaryDb(options: {
                 } as { results: T[] };
               }
               if (sql.includes("FROM user") && sql.includes("LEFT JOIN user_plan")) {
+                const requestedEmail = String(bindings[0] ?? "").toLowerCase();
+                if (dedicatedUser && requestedEmail === dedicatedUser.email.toLowerCase()) {
+                  return {
+                    results: [
+                      {
+                        id: dedicatedUser.id,
+                        email: dedicatedUser.email,
+                        name: dedicatedUser.name,
+                        plan: dedicatedPlan?.plan ?? null,
+                      },
+                    ] as T[],
+                  };
+                }
                 return {
                   results: [
                     {
@@ -339,6 +414,9 @@ function createCanaryDb(options: {
 
               if (sql.includes("FROM watchlist")) {
                 watchlistQueryCount += 1;
+                if (dedicatedUser && String(bindings[0]) === dedicatedUser.id) {
+                  return { results: [] as T[] };
+                }
                 return {
                   results: (watchlistQueryCount > 1 && options.watchlistRowsAfterCleanup !== undefined
                     ? options.watchlistRowsAfterCleanup
@@ -347,20 +425,26 @@ function createCanaryDb(options: {
               }
 
               if (sql.includes("FROM user_plan") && sql.includes("LIMIT 1")) {
+                const forDedicated = dedicatedUser !== null && String(bindings[0]) === dedicatedUser.id;
+                const planTarget = forDedicated ? dedicatedPlan : userPlan;
                 if (sql.includes("AND dodo_payment_id = ?")) {
-                  return userPlan.dodo_payment_id === String(bindings[1])
-                    ? { results: [{ plan: userPlan.plan, dodo_payment_id: bindings[1] }] as T[] }
+                  return planTarget && planTarget.dodo_payment_id === String(bindings[1])
+                    ? { results: [{ plan: planTarget.plan, dodo_payment_id: bindings[1] }] as T[] }
                     : { results: [] as T[] };
                 }
-
+                if (forDedicated) {
+                  return { results: (dedicatedPlan ? [dedicatedPlan] : []) as T[] };
+                }
                 return {
                   results: userPlan.dodo_payment_id ? [userPlan as T] : [],
                 };
               }
 
               if (sql.includes("FROM evidence_top_up_grant")) {
-                return creditGrant?.provider_payment_id === String(bindings[1])
-                  ? { results: [creditGrant as T] }
+                const forDedicated = dedicatedUser !== null && String(bindings[0]) === dedicatedUser.id;
+                const grantTarget = forDedicated ? dedicatedCreditGrant : creditGrant;
+                return grantTarget?.provider_payment_id === String(bindings[1])
+                  ? { results: [grantTarget as T] }
                   : { results: [] as T[] };
               }
 
@@ -376,12 +460,17 @@ function createCanaryDb(options: {
       }
       if (options.concurrentPlanUpdateBeforeCleanup) {
         options.concurrentPlanUpdateBeforeCleanup = false;
-        userPlan = {
-          ...userPlan,
+        const concurrent = {
           plan_updated_at: "2026-07-16T00:00:00.000Z",
           dodo_status: "cancellation_scheduled",
           dodo_next_billing_at: "2026-09-01T00:00:00.000Z",
         };
+        // The concurrent write lands on whichever account the canary is using.
+        if (dedicatedUser && dedicatedPlan) {
+          dedicatedPlan = { ...dedicatedPlan, ...concurrent };
+        } else {
+          userPlan = { ...userPlan, ...concurrent };
+        }
       }
       return Promise.all(statements.map((statement) => statement.run()));
     },
@@ -404,6 +493,14 @@ function createEnv(
     LAUNCH_CANARY_EMAIL: "owner@example.com",
   };
 }
+
+// Tests that exercise real-account semantics (watchlists, owner plan rows)
+// reach a non-provisioned account through an explicit @example.com override —
+// the default canary path now uses the dedicated self-provisioning identity.
+const REAL_ACCOUNT_REQUEST = {
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: "canary@example.com" }),
+};
 
 async function invokeCanary({
   env = createEnv(),
@@ -543,6 +640,16 @@ describe("Dodo billing canary route", () => {
     });
     expect(webhookAction).toHaveBeenCalledTimes(2);
     expect([...env.DB.mutationKinds].sort()).toEqual(["plan", "usage_bundle"]);
+    // The grant ran against the dedicated identity — its payment id names the
+    // provisioned user — and the restore put the scout baseline back.
+    expect([...env.DB.cleanedPlanPaymentIds][0]).toContain("billing-canary-0509");
+    expect(env.DB.dedicatedPlanState).toMatchObject({
+      user_id: "billing-canary-0509",
+      plan: "scout",
+      dodo_payment_id: null,
+      dodo_status: "payment.succeeded",
+    });
+    // The real account (and its watchlist) was never touched.
     expect(env.DB.userPlanState.dodo_payment_id).toBe("real-payment-1");
     expect(env.DB.watchlistState).toEqual([
       expect.objectContaining({
@@ -590,7 +697,9 @@ describe("Dodo billing canary route", () => {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",
+          ...REAL_ACCOUNT_REQUEST.headers,
         },
+        body: REAL_ACCOUNT_REQUEST.body,
       }),
     } as never);
 
@@ -657,7 +766,7 @@ describe("Dodo billing canary route", () => {
       return Response.json({ ok: true });
     });
     const env = createEnv();
-    const response = await invokeCanary({ env, webhookAction });
+    const response = await invokeCanary({ env, webhookAction, ...REAL_ACCOUNT_REQUEST });
     const body = await response.json();
 
     expect(response.status).toBe(503);
@@ -692,11 +801,12 @@ describe("Dodo billing canary route", () => {
       },
     });
     expect(env.DB.userPlanState.dodo_payment_id).toBe("real-payment-1");
+    expect(env.DB.dedicatedPlanState?.dodo_payment_id).toBeNull();
   });
 
   it("preserves a newer provider lifecycle update instead of restoring a stale canary snapshot", async () => {
     const env = createEnv({ concurrentPlanUpdateBeforeCleanup: true });
-    const response = await invokeCanary({ env });
+    const response = await invokeCanary({ env, ...REAL_ACCOUNT_REQUEST });
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -732,7 +842,7 @@ describe("Dodo billing canary route", () => {
         proofCreditCleanupOk: false,
       },
     });
-    expect(env.DB.creditGrantState).toMatchObject({
+    expect(env.DB.dedicatedCreditGrantState).toMatchObject({
       provider_payment_id: expect.stringContaining("-proof-500"),
       quantity_granted: 500,
       status: "active",
@@ -750,7 +860,7 @@ describe("Dodo billing canary route", () => {
       body: JSON.stringify({ gateRunId: "recovery-first" }),
     });
     expect(first.status).toBe(503);
-    expect(env.DB.creditGrantState).not.toBeNull();
+    expect(env.DB.dedicatedCreditGrantState).not.toBeNull();
     expect(env.DB.canaryLockOutcome).toBe("processing");
 
     env.DB.expireCanaryLockForRecovery();
@@ -762,14 +872,14 @@ describe("Dodo billing canary route", () => {
     });
 
     expect(second.status).toBe(200);
-    expect(env.DB.creditGrantState).toBeNull();
+    expect(env.DB.dedicatedCreditGrantState).toBeNull();
     expect(env.DB.cleanedCreditPaymentIds.size).toBe(2);
     expect(env.DB.canaryLockOutcome).toBe("failed");
   });
 
   it("fails closed when watchlist restoration changes zero rows", async () => {
     const env = createEnv({ watchlistUpdateChanges: 0 });
-    const response = await invokeCanary({ env });
+    const response = await invokeCanary({ env, ...REAL_ACCOUNT_REQUEST });
     const body = await response.json();
 
     expect(response.status).toBe(503);
@@ -801,7 +911,7 @@ describe("Dodo billing canary route", () => {
     ],
   ])("fails closed when %s cleanup throws", async (_kind, options, cleanupFlags) => {
     const env = createEnv(options);
-    const response = await invokeCanary({ env });
+    const response = await invokeCanary({ env, ...REAL_ACCOUNT_REQUEST });
     const body = await response.json();
 
     expect(response.status).toBe(503);
@@ -860,7 +970,7 @@ describe("Dodo billing canary route", () => {
     ],
   ])("fails closed when a watchlist is %s after cleanup", async (_label, watchlistRowsAfterCleanup) => {
     const env = createEnv({ watchlistRowsAfterCleanup });
-    const response = await invokeCanary({ env });
+    const response = await invokeCanary({ env, ...REAL_ACCOUNT_REQUEST });
     const body = await response.json();
 
     expect(response.status).toBe(503);
@@ -886,7 +996,10 @@ describe("Dodo billing canary route", () => {
   });
 
   it("fails closed when the canary user has no supported plan", async () => {
-    const response = await invokeCanary({ env: createEnv({ plan: null }) });
+    const response = await invokeCanary({
+      env: createEnv({ plan: null }),
+      ...REAL_ACCOUNT_REQUEST,
+    });
     const body = await response.json();
 
     expect(response.status).toBe(503);
@@ -948,6 +1061,21 @@ describe("Dodo billing canary route", () => {
     // the real LAUNCH_CANARY_EMAIL account is no longer touched at all.
     expect(env.DB.dedicatedUserInserts).toBe(1);
     expect(env.DB.dedicatedPlanInserts).toBe(1);
+    expect(env.DB.dedicatedUserState).toMatchObject({
+      id: "billing-canary-0509",
+      email: "billing-canary@0509.internal",
+    });
+    // And the canary's grant/restore loop ran on that provisioned identity:
+    // the synthetic payment id carries the dedicated user id, the scout
+    // baseline was restored, and user-1 was never mutated.
+    expect([...env.DB.cleanedPlanPaymentIds][0]).toContain("billing-canary-0509");
+    expect(env.DB.dedicatedPlanState).toMatchObject({
+      plan: "scout",
+      dodo_payment_id: null,
+      dodo_status: "payment.succeeded",
+    });
+    expect(env.DB.dedicatedCreditGrantState).toBeNull();
+    expect(env.DB.userPlanState.dodo_payment_id).toBe("real-payment-1");
   });
 
   it("never provisions or repairs a real account reached through an email override", async () => {

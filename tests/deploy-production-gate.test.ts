@@ -600,7 +600,10 @@ process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
       seenUrls.push(String(url));
       return new Response(
         JSON.stringify({
-          workflow_runs: [{ head_sha: sha }, { head_sha: "b".repeat(40) }],
+          workflow_runs: [
+            { id: 1, head_sha: sha, conclusion: "success" },
+            { id: 2, head_sha: "b".repeat(40), conclusion: "success" },
+          ],
         }),
         { status: 200 },
       );
@@ -609,11 +612,46 @@ process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
       repository: "Nishfleet/0509",
       token: "token",
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      env: {},
     });
     expect(resolved).toBe(sha);
     expect(seenUrls[0]).toContain("/actions/workflows/deploy-production.yml/runs");
     expect(seenUrls[0]).toContain("status=success");
     expect(seenUrls[0]).toContain("branch=main");
+
+    // The run executing this rollback is never its own recovery target, and a
+    // run that merely reached status=success in the filter but reports a
+    // different conclusion is skipped.
+    const skipped = await rollbackTargetModule.resolveLastGatedReleaseSha({
+      repository: "Nishfleet/0509",
+      token: "token",
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            workflow_runs: [
+              { id: 42, head_sha: sha, conclusion: "success" },
+              { id: 7, head_sha: "c".repeat(40), conclusion: "failure" },
+              { id: 8, head_sha: "d".repeat(40), conclusion: "success" },
+            ],
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+      env: { GITHUB_RUN_ID: "42" },
+    });
+    expect(skipped).toBe("d".repeat(40));
+
+    // No recorded success at all: the operator bootstrap anchor is the last
+    // resort, and a non-40-hex value is rejected the same way a bad run sha is.
+    const bootstrapped = await rollbackTargetModule.resolveLastGatedReleaseSha({
+      repository: "Nishfleet/0509",
+      token: "token",
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ workflow_runs: [] }), {
+          status: 200,
+        })) as unknown as typeof fetch,
+      env: { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: "e".repeat(40) },
+    });
+    expect(bootstrapped).toBe("e".repeat(40));
 
     const empty = await rollbackTargetModule.resolveLastGatedReleaseSha({
       repository: "Nishfleet/0509",
@@ -622,6 +660,7 @@ process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
         new Response(JSON.stringify({ workflow_runs: [{ head_sha: "not-a-sha" }] }), {
           status: 200,
         })) as unknown as typeof fetch,
+      env: {},
     });
     expect(empty).toBeNull();
 
@@ -630,6 +669,7 @@ process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
         repository: "Nishfleet/0509",
         token: "token",
         fetchImpl: (async () => new Response("denied", { status: 403 })) as unknown as typeof fetch,
+        env: {},
       }),
     ).rejects.toThrow("github_deploy_runs_unavailable");
   });
@@ -659,6 +699,15 @@ process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
       args: ["deploy"],
       cwd: "/tmp/rollback-src",
     });
+    // The named-worker form pins the deploy onto the same worker the
+    // versioned rollback targeted instead of trusting the release commit's
+    // wrangler config name.
+    const named = rollbackTargetModule.buildWorkerSourceRollbackSteps({
+      sha,
+      worktreeDir: "/tmp/rollback-src",
+      workerName: "0509",
+    });
+    expect(named[4].args).toEqual(["deploy", "--name", "0509"]);
 
     expect(() =>
       rollbackTargetModule.buildWorkerSourceRollbackSteps({
@@ -700,18 +749,22 @@ process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
     );
 
     // Fake wrangler: the versioned `rollback` fails (aged-out target), the
-    // worktree `deploy` succeeds, and `deployments status` reports the live
-    // version moved off the failed release.
+    // worktree `deploy` succeeds, and `deployments status` flips from the
+    // failed release to the restored one once `deploy` has run — so the
+    // pre/post proof compares real movement, not a fixed answer.
     const fakeWranglerPath = join(stubBin, "wrangler");
     writeFileSync(
       fakeWranglerPath,
       `#!/usr/bin/env node
+import { existsSync, writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
+const marker = ${JSON.stringify(join(root, "deployed.marker"))};
 if (args[0] === "rollback") process.exit(1);
+if (args[0] === "deploy") { writeFileSync(marker, "1"); process.exit(0); }
 if (args[0] === "deployments" && args[1] === "status") {
   process.stdout.write(JSON.stringify({
     id: "deployment-restored",
-    versions: [{ version_id: "worker-version-restored", percentage: 100 }],
+    versions: [{ version_id: existsSync(marker) ? "worker-version-restored" : "worker-version-failed", percentage: 100 }],
   }));
   process.exit(0);
 }
@@ -764,6 +817,88 @@ process.exit(0);
       sha: releaseSha,
       liveVersionId: "worker-version-restored",
     });
+  });
+
+  it("fails the source redeploy when the live version never moves off the failed release", () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-worker-rollback-unchanged-"));
+    roots.push(root);
+    const stubBin = join(root, "bin");
+    mkdirSync(stubBin, { recursive: true });
+    const targetPath = join(root, "rollback-target.json");
+    const wranglerOutputPath = join(root, "wrangler-output.jsonl");
+
+    writeFileSync(
+      targetPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        capturedAt: "2026-07-18T12:00:00.000Z",
+        source: "wrangler deployments status --json",
+        deploymentId: "deployment-stable",
+        versionId: "worker-version-prior",
+        percentage: 100,
+      }),
+    );
+    writeFileSync(
+      wranglerOutputPath,
+      `${JSON.stringify({ type: "deploy", version: 1, version_id: "worker-version-failed" })}\n`,
+    );
+
+    // `deploy` exits 0 but the live version never changes — a no-op or
+    // wrong-worker redeploy must fail closed, never report a clean rollback.
+    const fakeWranglerPath = join(stubBin, "wrangler");
+    writeFileSync(
+      fakeWranglerPath,
+      `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "rollback") process.exit(1);
+if (args[0] === "deployments" && args[1] === "status") {
+  process.stdout.write(JSON.stringify({
+    id: "deployment-same",
+    versions: [{ version_id: "worker-version-failed", percentage: 100 }],
+  }));
+  process.exit(0);
+}
+process.exit(0);
+`,
+    );
+    const fakeGitPath = join(stubBin, "git");
+    writeFileSync(
+      fakeGitPath,
+      `#!/usr/bin/env node
+import { mkdirSync } from "node:fs";
+const args = process.argv.slice(2);
+if (args[0] === "worktree" && args[1] === "add") mkdirSync(args[3], { recursive: true });
+process.exit(0);
+`,
+    );
+    writeFileSync(join(stubBin, "npm"), `#!/usr/bin/env node\nprocess.exit(0);\n`);
+    chmodSync(fakeWranglerPath, 0o755);
+    chmodSync(fakeGitPath, 0o755);
+    chmodSync(join(stubBin, "npm"), 0o755);
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        resolve("scripts/rollback-production.mjs"),
+        "--target",
+        targetPath,
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          PATH: `${stubBin}:${process.env.PATH}`,
+          WRANGLER_BIN: fakeWranglerPath,
+          WORKER_ROLLBACK_RELEASE_SHA: "d".repeat(40),
+        },
+        encoding: "utf8",
+      },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("worker_rollback_failed");
   });
 
   it("retries the classic canary token secret put until the version is marked deployed", () => {

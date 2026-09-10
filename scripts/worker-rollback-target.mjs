@@ -101,9 +101,13 @@ const GITHUB_API_VERSION = "2022-11-28";
  * running known-good code at 100% traffic.
  *
  * Resolve that commit as the head SHA of the most recent successful
- * deploy-production run on main.
+ * deploy-production run on main, excluding the run that is executing this
+ * rollback (GITHUB_RUN_ID). When no successful run is recorded at all, the
+ * operator bootstrap anchor `BOOTSTRAP_PREVIOUS_SUCCESS_SHA` (carried in the
+ * deploy workflow env) is the last resort — the ancestor guard in
+ * buildWorkerSourceRollbackSteps still has to accept whatever is returned.
  *
- * @param {{ repository?: string, token?: string, workflow?: string, fetchImpl?: typeof fetch }} [input]
+ * @param {{ repository?: string, token?: string, workflow?: string, fetchImpl?: typeof fetch, env?: Record<string, string | undefined> }} [input]
  * @returns {Promise<string | null>}
  */
 export async function resolveLastGatedReleaseSha({
@@ -111,6 +115,7 @@ export async function resolveLastGatedReleaseSha({
   token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? "",
   workflow = "deploy-production.yml",
   fetchImpl = fetch,
+  env = process.env,
 } = {}) {
   const url = new URL(
     `https://api.github.com/repos/${repository}/actions/workflows/${workflow}/runs`,
@@ -129,11 +134,16 @@ export async function resolveLastGatedReleaseSha({
   if (!response.ok) throw new Error("github_deploy_runs_unavailable");
   const payload = await response.json();
   const runs = Array.isArray(payload?.workflow_runs) ? payload.workflow_runs : [];
+  const currentRunId = Number(env.GITHUB_RUN_ID ?? "");
   for (const run of runs) {
     const sha = typeof run?.head_sha === "string" ? run.head_sha.trim() : "";
-    if (SAFE_DEPLOY_SHA.test(sha)) return sha;
+    if (!SAFE_DEPLOY_SHA.test(sha)) continue;
+    if (run?.conclusion !== "success") continue;
+    if (Number.isFinite(currentRunId) && Number(run?.id) === currentRunId) continue;
+    return sha;
   }
-  return null;
+  const bootstrap = env.BOOTSTRAP_PREVIOUS_SUCCESS_SHA?.trim() ?? "";
+  return SAFE_DEPLOY_SHA.test(bootstrap) ? bootstrap : null;
 }
 
 /**
@@ -143,9 +153,9 @@ export async function resolveLastGatedReleaseSha({
  * worktree's own pinned binary so the rollback builds with the toolchain the
  * release was cut against.
  *
- * @param {{ sha: string, worktreeDir: string, wranglerBin?: string }} input
+ * @param {{ sha: string, worktreeDir: string, wranglerBin?: string, workerName?: string }} input
  */
-export function buildWorkerSourceRollbackSteps({ sha, worktreeDir, wranglerBin }) {
+export function buildWorkerSourceRollbackSteps({ sha, worktreeDir, wranglerBin, workerName }) {
   const normalizedSha = typeof sha === "string" ? sha.trim() : "";
   if (!SAFE_DEPLOY_SHA.test(normalizedSha)) {
     throw new Error("worker_rollback_sha_invalid");
@@ -183,7 +193,12 @@ export function buildWorkerSourceRollbackSteps({ sha, worktreeDir, wranglerBin }
     {
       id: "rollback_deploy_release",
       command: wrangler,
-      args: ["deploy"],
+      args: [
+        "deploy",
+        ...(typeof workerName === "string" && workerName.trim()
+          ? ["--name", workerName.trim()]
+          : []),
+      ],
       cwd: worktreeDir,
     },
   ];

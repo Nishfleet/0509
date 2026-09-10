@@ -872,6 +872,19 @@ export async function runVersionBoundGateC({
     journal.productionSummary = formatProductionSummary(live.report);
   } catch (error) {
     journal.errors.push(error instanceof Error ? error.message : "gate_c_primary_failed");
+    // Surface the endpoint's own blocker in the run-log errors array too —
+    // `billing_failed` alone is what made issue #2646 undiagnosable from the
+    // workflow output.
+    for (const record of Object.values(journal.steps)) {
+      if (record.status !== "failed") continue;
+      const blocker =
+        record.detail && typeof record.detail === "object" && !Array.isArray(record.detail)
+          ? /** @type {{ serverBlocker?: unknown }} */ (record.detail).serverBlocker
+          : null;
+      if (typeof blocker === "string" && blocker && !journal.errors.includes(blocker)) {
+        journal.errors.push(blocker);
+      }
+    }
   } finally {
     if (journal.steps.proof_email) {
       try {

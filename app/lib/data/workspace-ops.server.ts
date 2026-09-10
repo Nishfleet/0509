@@ -84,7 +84,7 @@ export async function getWeeklyBusinessSummary(env: AppEnv): Promise<WeeklyBusin
       ),
       many<{ plan: string; count: number }>(
         env,
-        `SELECT plan, COUNT(*) AS count FROM user_plan WHERE plan != 'free' GROUP BY plan ORDER BY plan`,
+        `SELECT plan, COUNT(*) AS count FROM user_plan WHERE plan != 'free' AND user_id != 'billing-canary-0509' GROUP BY plan ORDER BY plan`,
       ),
       one<{ count: number }>(
         env,

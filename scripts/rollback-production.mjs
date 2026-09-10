@@ -65,12 +65,40 @@ async function rollbackViaSourceRedeploy() {
   const override = process.env.WORKER_ROLLBACK_RELEASE_SHA?.trim();
   const sha = override || (await resolveLastGatedReleaseSha());
   if (!sha) throw new Error("worker_rollback_no_gated_release");
+  const nameIndex = rollback.args.indexOf("--name");
+  const workerName = nameIndex >= 0 ? rollback.args[nameIndex + 1] : undefined;
   const parent = mkdtempSync(join(tmpdir(), "0509-rollback-release-"));
   const worktreeDir = join(parent, "src");
   try {
+    // The post-redeploy proof must compare against a KNOWN-bad version: the
+    // failed deploy's id when the wrangler output carried it, else whatever is
+    // live right now. With neither, a no-op or wrong-worker redeploy would
+    // still read as success — refuse instead.
+    let liveBefore = null;
+    const preStatus = spawnSync(
+      process.env.WRANGLER_BIN || "wrangler",
+      ["deployments", "status", "--json"],
+      {
+        cwd: process.cwd(),
+        env: process.env,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "inherit"],
+      },
+    );
+    if (!preStatus.error && preStatus.status === 0) {
+      try {
+        liveBefore = parseWorkerDeploymentStatus(preStatus.stdout).versionId;
+      } catch {
+        // An unparseable status is treated as unknown, not as proof.
+      }
+    }
+    const knownBadVersionId = deployedVersionId ?? liveBefore;
+    if (!knownBadVersionId) {
+      throw new Error("worker_rollback_live_version_unknown");
+    }
     const wranglerBin =
       process.env.WRANGLER_BIN || join(worktreeDir, "node_modules", ".bin", "wrangler");
-    for (const step of buildWorkerSourceRollbackSteps({ sha, worktreeDir, wranglerBin })) {
+    for (const step of buildWorkerSourceRollbackSteps({ sha, worktreeDir, wranglerBin, workerName })) {
       runStep(step);
     }
     const status = spawnSync(wranglerBin, ["deployments", "status", "--json"], {
@@ -82,7 +110,10 @@ async function rollbackViaSourceRedeploy() {
     if (status.error) throw status.error;
     if (status.status !== 0) throw new Error("worker_deployment_status_failed");
     const live = parseWorkerDeploymentStatus(status.stdout);
-    if (deployedVersionId && live.versionId === deployedVersionId) {
+    if (
+      live.versionId === knownBadVersionId ||
+      (liveBefore && live.versionId === liveBefore)
+    ) {
       throw new Error("worker_rollback_version_unchanged");
     }
     process.stdout.write(

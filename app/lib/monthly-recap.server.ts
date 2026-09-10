@@ -169,6 +169,7 @@ export async function listPaidUsersForRecap(env: AppEnv): Promise<
       WHERE user_plan.plan IN ('scout', 'starter', 'agency')
         AND user.email IS NOT NULL
         AND TRIM(user.email) != ''
+        AND user.id != 'billing-canary-0509'
       ORDER BY user_plan.user_id ASC
     `,
   );
