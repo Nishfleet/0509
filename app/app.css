@@ -3352,6 +3352,44 @@ one signal-green accent.
 
 .f9-home .ld-pricing-note a { color: var(--ld-ink); text-decoration: underline; }
 
+/* Issue #2221 — the "Price of knowing" comparison table (5 columns) has no
+   width constraint, so its min-content width (~398px) overflows the 375px
+   mobile viewport by 71px. Fix the layout cause: force the table to the
+   container width with a fixed layout so columns share the available space
+   and long cell text wraps instead of forcing the page wider. The scroll
+   container is a safety net for any residual unbreakable content — it is
+   not overflow:hidden (which the issue forbids); content stays reachable. */
+.f9-price-anchors {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.f9-price-anchors table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.f9-price-anchors th,
+.f9-price-anchors td {
+  overflow-wrap: anywhere;
+}
+
+/* The "Source" links in the table render at text height (~17px), below the
+   44x44px phone touch-target floor (WCAG 2.5.5). The overflow gate masked this
+   until #2221 fixed the width; give the links a real tap area on phone widths
+   (PHONE_MAX_WIDTH = 600px in e2e/helpers/release-experience.ts). inline-block
+   keeps the "· checked <date>" text on the same line. */
+@media (max-width: 600px) {
+  .f9-price-anchors a {
+    display: inline-block;
+    min-height: 44px;
+    padding: 12px 6px;
+    box-sizing: border-box;
+    line-height: 20px;
+    vertical-align: middle;
+  }
+}
+
 .f9-home .f9-cycle-toggle {
   display: flex;
   width: min(100%, 440px);
