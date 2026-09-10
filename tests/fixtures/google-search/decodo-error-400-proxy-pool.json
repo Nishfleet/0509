@@ -1,0 +1,1 @@
+{"status":"failed","message":"Bad request","errors":[{"parameter":"proxy_pool","message":"\"proxy_pool\" parameter customization is only supported in the Universal Web Scraping target."}]}
