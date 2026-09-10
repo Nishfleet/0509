@@ -162,6 +162,7 @@ describe("pricingPlans", () => {
     expect(PUBLISHED_FREE_PLAN_OFFER.name).toBe("Free");
     expect(PUBLISHED_FREE_PLAN_OFFER.offerPriceEUR).toBe(0);
     expect(PUBLISHED_FREE_PLAN_OFFER.description).toContain("1 competitor");
-    expect(PUBLISHED_FREE_PLAN_OFFER.description).toContain("Collection");
+    expect(PUBLISHED_FREE_PLAN_OFFER.description).toContain("first brief");
+    expect(PUBLISHED_FREE_PLAN_OFFER.description).toContain("Meta Ad Library only");
   });
 });

@@ -468,6 +468,65 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
     expect(createBatch.mock.calls[0]?.[0]).toHaveLength(88);
   });
 
+  it("skips free workspaces after their first scan is reserved (barebones)", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    sqlite.prepare("INSERT INTO user_plan (user_id, plan) VALUES (?, 'free')").run("free-owner");
+    const watchlist = buildWatchlist(1, "free-owner");
+    sqlite
+      .prepare(
+        `INSERT INTO watchlist (id, user_id, name, target_type, target_id, target_fingerprint, target_label, target_country, is_active, last_scanned_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z')`,
+      )
+      .run(
+        watchlist.id,
+        watchlist.userId,
+        watchlist.name,
+        watchlist.targetType,
+        watchlist.targetId,
+        watchlist.targetFingerprint,
+        watchlist.targetLabel,
+      );
+    // The activation scan already ran and reserved the free workspace's one
+    // first check.
+    sqlite
+      .prepare(
+        `INSERT INTO watchlist_run (
+          id, watchlist_id, trigger_type, status, page_budget, pages_scanned,
+          baseline_from_run_id, summary_json, started_at, finished_at, error_code,
+          error_message, created_at, updated_at, idempotency_key, workflow_instance_id,
+          processing_token, processing_started_at, queued_at, attempt_count, retry_after,
+          queue_priority
+        ) VALUES (?, ?, 'manual', 'succeeded', 2, 0, NULL, ?, ?, NULL, NULL, NULL, ?, ?, ?, NULL, NULL, NULL, NULL, 0, NULL, 2)`,
+      )
+      .run(
+        "first-scan-run",
+        watchlist.id,
+        JSON.stringify({ firstScanQuotaReserved: 1 }),
+        "2026-06-01T00:00:00.000Z",
+        "2026-06-01T00:00:00.000Z",
+        "2026-06-01T00:00:00.000Z",
+        "watchlist-run:first-scan:watch-1",
+      );
+
+    const createBatch = vi.fn(async (batch: Array<{ id: string }>) =>
+      batch.map((item) => ({ id: item.id })),
+    );
+    const env = workflowEnv(db, createBatch);
+    const result = await scheduleWatchlistFanout(env, {
+      watchlists: [watchlist],
+      scheduledTime: Date.parse("2026-06-23T04:00:00.000Z"),
+      cron: "0 4 * * *",
+      mode: "fanout",
+    });
+
+    // Free has already used its one first check; no further scan is scheduled.
+    expect(result.queued).toBe(0);
+    const row = sqlite.prepare("SELECT COUNT(*) AS count FROM watchlist_run").get() as { count: number };
+    expect(row.count).toBe(1); // only the first-scan run, no scheduled run
+    expect(createBatch).not.toHaveBeenCalled();
+  });
+
   it("deduplicates duplicate cron delivery for the same window", async () => {
     const { db, sqlite } = createSqliteD1();
     await seedFanoutSchema(sqlite);

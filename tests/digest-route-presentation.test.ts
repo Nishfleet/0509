@@ -90,6 +90,21 @@ describe("digests customer presentation", () => {
 		expect(summaryAt).toBeGreaterThan(checkedSectionAt);
 	});
 
+	it("shows the briefs-locked note for a free workspace with its first brief", async () => {
+		await mockRoute({
+			...digestData({ kind: "first_brief" }),
+			plan: "free",
+		});
+
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+		// Free is barebones: the first brief is on file, and weekly briefs are
+		// paid.
+		expect(markup).toContain("Your first brief is here");
+		expect(markup).toContain("Weekly briefs are paid.");
+	});
+
 	it.each([
 		["null summary", null],
 		["missing strategy paragraph", {}],

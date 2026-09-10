@@ -87,7 +87,7 @@ export interface PublishedFreePlanOffer {
 export const PUBLISHED_FREE_PLAN_OFFER: PublishedFreePlanOffer = {
   name: "Free",
   description:
-    "Free Five to Nine plan: watch 1 competitor with instant first scan, a weekly proof-backed brief, and 1 Collection. No card required.",
+    "Free Five to Nine plan: watch 1 competitor with one first check and one first brief, Meta Ad Library only. No card required.",
   offerPriceEUR: 0,
 };
 
@@ -217,7 +217,7 @@ export function freeWeeklyDigestUpgradeNote(): string {
       : scout.scheduledScanCadence === "every_6h"
         ? "checks every 6 hours"
         : "checks weekly";
-  return `Your free watch includes an instant first scan, one proof-backed brief, and one saved Collection. Scout ${cadenceLabel} and unlocks ${scout.collections} Collections across ${scout.watchlists} competitors.`;
+  return `Your free watch includes one first check and one first brief. Scout ${cadenceLabel} and unlocks ${scout.collections} Collections across ${scout.watchlists} competitors.`;
 }
 
 export const EVIDENCE_USAGE_CUSTOMER_COPY =
