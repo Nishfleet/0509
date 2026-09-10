@@ -66,7 +66,13 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("provider canaries");
     expect(marketingRoute).not.toContain("Readiness-gated");
     expect(marketingRoute).toContain("Try the search preview");
-    expect(marketingRoute).toContain(
+    // The free-preview search target is chosen by the visitor's home market
+    // (issue #2281) so the CTA shows a brand the visitor recognizes — never a
+    // hardcoded nykaa path for every visitor on Earth.
+    expect(marketingRoute).toContain("publicSearchTrialPathFor");
+    expect(marketingRoute).toContain("featuredDomain");
+    expect(marketingRoute).toContain("Try with {featuredBrandName}");
+    expect(marketingRoute).not.toContain(
       "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com",
     );
     expect(marketingRoute).toContain('id="demo"');

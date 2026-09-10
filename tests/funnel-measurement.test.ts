@@ -738,6 +738,7 @@ describe("funnel measurement route boundaries", () => {
     }));
     vi.doMock("~/lib/public-proof.server", () => ({
       loadPublicProofBrief: vi.fn().mockResolvedValue(null),
+      featuredWebsiteForVisitorCountry: vi.fn(() => "nike.com"),
     }));
 
     const { loader } = await import("~/routes/marketing");
