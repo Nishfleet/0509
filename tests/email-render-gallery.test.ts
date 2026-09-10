@@ -389,7 +389,11 @@ describe("email render gallery", () => {
       env,
     );
     record("instant-batched", "Instant alert (batched, 3 changes)", true, content.subject, content.html, UNSUB, "case-file");
-    expect(content.subject).toContain("3 changes");
+    // Issue #2175: the batch subject leads with the single most critical
+    // change (the offer move), never a count.
+    expect(content.subject).toBe(
+      "Glowkart changed the offer to 40% off everything this weekend — captured 06:30 UTC",
+    );
   });
 
   it("billing — payment issue (dunning)", () => {
@@ -521,5 +525,115 @@ describe("email render gallery", () => {
     );
 
     expect(gallery.length).toBeGreaterThanOrEqual(20);
+  });
+});
+
+describe("instant alert change brief (issue #2175)", () => {
+  it("single confirmed alert: change-led subject, brief facts, forward link, text parity", () => {
+    const content = buildInstantAlertContent(
+      { id: "wl1", name: "Glowkart" },
+      [makeEvent({})],
+      false,
+      env,
+      undefined,
+      "Priya",
+      null,
+      null,
+      {
+        forwardUrl: "https://0509.io/share/alert-token-1",
+        timeZone: "UTC",
+      },
+    );
+
+    // Subject leads with the change itself, never a count.
+    expect(content.subject).toBe(
+      "Glowkart changed the offer to 40% off everything this weekend — captured 06:30 UTC",
+    );
+    // Criticality band + reasons and the deterministic meaning line.
+    expect(content.html).toContain("Criticality:");
+    expect(content.html).toContain("price or offer terms moved");
+    expect(content.html).toContain("discount pressure");
+    // The honest no-screenshot line (no pair, no creative in this fixture).
+    expect(content.html).toContain("No screenshot");
+    // One-click forward link.
+    expect(content.html).toContain("Forward this change to a teammate or client:");
+    expect(content.html).toContain("https://0509.io/share/alert-token-1");
+    // Plain-text part parity.
+    expect(content.text).toContain(content.subject);
+    expect(content.text).toContain("Criticality:");
+    expect(content.text).toContain("What this usually means:");
+    expect(content.text).toContain(
+      "Forward this change to a teammate or client: https://0509.io/share/alert-token-1",
+    );
+    expect(content.text).toContain(
+      "See the evidence: https://0509.io/app/watchlists?watchlist=wl1&event=evt1",
+    );
+  });
+
+  it("single alert without a forward URL renders no forward line (plan-gated)", () => {
+    const content = buildInstantAlertContent(
+      { id: "wl1", name: "Glowkart" },
+      [makeEvent({})],
+      false,
+      env,
+    );
+    expect(content.html).not.toContain("Forward this change");
+    expect(content.text).not.toContain("Forward this change");
+  });
+
+  it("baseline and provisional alerts keep their honest subjects", () => {
+    const baseline = buildInstantAlertContent(
+      { id: "wl1", name: "Glowkart" },
+      [makeEvent({ metadata: { kind: "baseline" } })],
+      false,
+      env,
+    );
+    expect(baseline.subject).toBe("Landing page offer changed");
+    expect(baseline.text).toContain("starting snapshot");
+
+    const provisional = buildInstantAlertContent(
+      { id: "wl1", name: "Glowkart" },
+      [makeEvent({})],
+      true,
+      env,
+    );
+    expect(provisional.subject).toBe("Possible change at Glowkart");
+    expect(provisional.html).toContain("still unconfirmed");
+  });
+
+  it("batched alert rows each carry criticality and meaning lines, with text parity", () => {
+    const content = buildInstantAlertContent(
+      { id: "wl1", name: "Glowkart" },
+      [
+        makeEvent({ id: "e1" }),
+        makeEvent({
+          id: "e2",
+          eventType: "landing_page_cta_changed",
+          title: "Changed the lander CTA to sampling",
+          summary: "The landing page button changed.",
+          metadata: { from: "Shop now", to: "Get 2 free samples" },
+        }),
+      ],
+      false,
+      env,
+      undefined,
+      null,
+      null,
+      null,
+      { forwardUrl: "https://0509.io/share/alert-token-2", timeZone: "UTC" },
+    );
+    // Batch subject leads with the most critical change, never a count.
+    expect(content.subject).toContain("Glowkart changed the offer");
+    expect(content.subject).not.toContain("2 changes");
+    // Each row carries the brief facts.
+    expect(content.html.match(/Criticality:/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(content.html.match(/What this usually means|<em>/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(content.text).toContain("1. ");
+    expect(content.text).toContain("2. ");
+    expect(content.text.match(/Criticality:/g)?.length).toBe(2);
+    expect(content.text.match(/What this usually means:/g)?.length).toBe(2);
+    expect(content.text).toContain(
+      "Forward this change to a teammate or client: https://0509.io/share/alert-token-2",
+    );
   });
 });
